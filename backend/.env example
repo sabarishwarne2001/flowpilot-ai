@@ -1,0 +1,19 @@
+# Project Metadata
+PROJECT_NAME="FlowPilot AI"
+APP_VERSION=1.0.0
+API_TITLE=FlowPilot AI API
+
+ENVIRONMENT=development
+API_V1_STR=/api/v1
+
+# Server Settings
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=INFO
+
+# Security Settings
+# Provide a comma-separated list of allowed origins.
+# For local development with a frontend:
+# http://localhost:5173,http://127.0.0.1:5173
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173
