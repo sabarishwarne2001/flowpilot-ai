@@ -12,10 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
+from app.utils import initialize_storage
 
 # Initialize early logging configuration before booting the ASGI application instance
 setup_logging()
 logger = logging.getLogger("app.main")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,11 +27,20 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting FlowPilot AI Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
-    logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
+    logger.info(f"Parsed Allowed Origin Domains: {settings.CORS_ORIGINS}")
+    
+    # Ensure physical upload directories are built and active on host storage on startup
+    try:
+        initialize_storage()
+        logger.info(f"Target file upload directory initialized at path: '{settings.UPLOAD_DIR}'")
+    except Exception as error:
+        logger.critical(f"Critical startup failure: Failed to initialize file storage: {str(error)}")
+        raise error
     
     yield  # Application runtime serves incoming HTTP requests
     
     logger.info("Stopping FlowPilot AI Backend Core...")
+
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -43,7 +54,7 @@ app = FastAPI(
 if settings.CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

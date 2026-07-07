@@ -1,12 +1,22 @@
 """
 Database representation of the system User entity for FlowPilot AI.
 
-Defines account credentials, authentication indexes, and platform authorization flags.
+Defines account credentials, authentication indexes, platform authorization flags, 
+and bidirectional relationship mappings targeting work items, rules, notifications, 
+and conversational memory blocks.
 """
 
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, UUIDMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.work_item import WorkItem
+    from app.models.automation import AutomationRule
+    from app.models.notification import Notification
+    from app.models.assistant import Conversation
+
 
 class User(Base, UUIDMixin, TimestampMixin):
     """
@@ -35,4 +45,36 @@ class User(Base, UUIDMixin, TimestampMixin):
         Boolean,
         default=False,
         nullable=False
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping child Work Item entities
+    work_items: Mapped[list["WorkItem"]] = relationship(
+        "WorkItem",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping child Automation Rules
+    automation_rules: Mapped[list["AutomationRule"]] = relationship(
+        "AutomationRule",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping child in-app Notifications
+    notifications: Mapped[list["Notification"]] = relationship(
+        "Notification",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping child Conversation sessions
+    conversations: Mapped[list["Conversation"]] = relationship(
+        "Conversation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True 
     )

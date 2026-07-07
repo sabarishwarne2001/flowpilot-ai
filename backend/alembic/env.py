@@ -28,7 +28,7 @@ def run_migrations_offline() -> None:
     Generates SQL scripts directly to output files without maintaining 
     an active transactional connection pool.
     """
-    url = settings.database_url
+    url = settings.sqlalchemy_database_uri
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -50,7 +50,7 @@ def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section) or {}
     
     # Override standard ini settings with our validated runtime connection string
-    configuration["sqlalchemy.url"] = settings.database_url
+    configuration["sqlalchemy.url"] = settings.sqlalchemy_database_uri
 
     connectable = engine_from_config(
         configuration,

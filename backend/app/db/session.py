@@ -11,7 +11,7 @@ from app.core.config import settings
 
 # Initialize the SQLAlchemy Database Engine with production pooling parameters
 engine = create_engine(
-    settings.database_url,
+    settings.sqlalchemy_database_uri,
     pool_pre_ping=True,  # Validates connection viability before pulling from the pool
     pool_size=10,        # Keeps up to 10 persistent connections warm
     max_overflow=20,     # Scales up to 20 additional concurrent connections under load
