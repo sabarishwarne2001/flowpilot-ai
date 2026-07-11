@@ -8,7 +8,7 @@ and triggers background pipeline execution and manual retry reprocessing tasks.
 import uuid
 from pathlib import Path
 from typing import Any
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, BackgroundTasks
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from app import crud
 from app import utils
@@ -16,8 +16,9 @@ from app.api import deps
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.job import JobCreate, JobUpdate, JobResponse
-from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemStatus, WorkItemUpdate
+from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemListResponse, WorkItemStatus, WorkItemUpdate
 from app.services import process_document_pipeline
+from app.schemas.work_item import WorkItemStatus
 
 router = APIRouter(tags=["Work Items"])
 
@@ -112,23 +113,49 @@ async def upload_document(
     return work_item
 
 
-@router.get("", response_model=list[WorkItemResponse])
+@router.get("", response_model=WorkItemListResponse)
 async def list_work_items(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 100
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(10, ge=1, le=100),
+    search: str | None = Query(None),
+    status: WorkItemStatus | None = Query(None),
+    sortBy: str = Query("created_at"),
+    sortOrder: str = Query("desc"),
 ) -> Any:
     """
     Retrieves a paginated list of WorkItems belonging to the authenticated user.
     """
+
+    skip = (page - 1) * pageSize
+
     work_items = crud.get_work_items_for_user(
-        db, 
-        user_id=current_user.id, 
-        skip=skip, 
-        limit=limit
+        db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=pageSize,
+        search=search,
+        status=status,
+        sort_by=sortBy,
+        sort_order=sortOrder,
     )
-    return work_items
+
+    total_items = len(work_items)
+
+    total_pages = (
+        (total_items + pageSize - 1) // pageSize
+        if total_items > 0
+        else 1
+    )
+
+    return WorkItemListResponse(
+        items=work_items,
+        page=page,
+        pageSize=pageSize,
+        totalItems=total_items,
+        totalPages=total_pages,
+    )
 
 
 @router.get("/{work_item_id}", response_model=WorkItemResponse)

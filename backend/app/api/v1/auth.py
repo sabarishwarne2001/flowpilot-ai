@@ -78,3 +78,17 @@ async def login(
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+)
+async def get_me(
+    current_user=Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Returns the currently authenticated user.
+
+    Requires a valid Bearer JWT token.
+    """
+    return current_user

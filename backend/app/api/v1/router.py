@@ -13,23 +13,24 @@ from app.api.v1.work_items import router as work_items_router
 from app.api.v1.automation import router as automation_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.assistant import router as assistant_router
+from app.api.v1.dashboard import router as dashboard_router
 
 api_router = APIRouter()
 
-# Register core system diagnostic sub-router
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 
-# Register platform authentication sub-router
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 
-# Register document ingestion and Work Items sub-router
+api_router.include_router(
+    dashboard_router,
+    prefix="/dashboard",
+    tags=["Dashboard"],
+)
+
 api_router.include_router(work_items_router, prefix="/work-items", tags=["Work Items"])
 
-# Register post-processing business Automation Rules sub-router
 api_router.include_router(automation_router, prefix="/automation", tags=["Automation"])
 
-# Register in-app Notification center alerts sub-router
 api_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 
-# Register conversational RAG AI Assistant sub-router
 api_router.include_router(assistant_router, prefix="/assistant", tags=["AI Assistant"])

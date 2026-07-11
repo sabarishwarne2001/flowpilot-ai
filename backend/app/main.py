@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting FlowPilot AI Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
-    logger.info(f"Parsed Allowed Origin Domains: {settings.CORS_ORIGINS}")
+    logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
     
     # Ensure physical upload directories are built and active on host storage on startup
     try:
@@ -51,10 +51,10 @@ app = FastAPI(
 )
 
 # Apply CORS middleware properties to protect network pathways
-if settings.CORS_ORIGINS:
+if settings.cors_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

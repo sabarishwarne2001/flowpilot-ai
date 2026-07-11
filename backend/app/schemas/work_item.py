@@ -89,3 +89,18 @@ class WorkItemResponse(WorkItemBase):
     model_config = {
         "from_attributes": True  # Enables direct mapping from SQLAlchemy 2.0 ORM objects
     }
+
+class WorkItemListResponse(BaseModel):
+    """
+    Paginated list of Work Items returned to the frontend.
+    """
+
+    items: list[WorkItemResponse]
+
+    page: int
+
+    pageSize: int
+
+    totalItems: int
+
+    totalPages: int

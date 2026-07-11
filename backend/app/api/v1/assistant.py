@@ -365,7 +365,7 @@ async def post_chat_query(
         )
 
         logger.info(
-            "Assistant response generated for conversation %s.",
+            " response generated for conversation %s.",
             conversation_id,
         )
 

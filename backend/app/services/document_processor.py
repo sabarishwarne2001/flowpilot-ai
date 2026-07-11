@@ -29,6 +29,14 @@ from app.services.embedding_service import embedding_service
 from app.services.extraction_service import extract_text_from_document
 from app.services.llm_service import llm_service
 
+from app.services.notification_service import notification_service
+
+from app.models.notification import (
+    NotificationChannel,
+    NotificationPriority,
+    NotificationType,
+)
+
 logger = logging.getLogger("app.services.document_processor")
 
 
@@ -39,7 +47,6 @@ async def process_document_pipeline(
     """
     Execute the complete AI processing pipeline for a WorkItem.
     """
-
     logger.info(
         "Starting document pipeline. WorkItem=%s Job=%s",
         work_item_id,
@@ -49,31 +56,22 @@ async def process_document_pipeline(
     db: Session = SessionLocal()
 
     try:
-
         work_item = db.execute(
-            select(WorkItem).where(
-                WorkItem.id == work_item_id
-            )
+            select(WorkItem).where(WorkItem.id == work_item_id)
         ).scalar_one_or_none()
 
         job = db.execute(
-            select(ProcessingJob).where(
-                ProcessingJob.id == job_id
-            )
+            select(ProcessingJob).where(ProcessingJob.id == job_id)
         ).scalar_one_or_none()
 
         if work_item is None or job is None:
-            logger.error(
-                "Pipeline aborted. WorkItem or Job not found."
-            )
+            logger.error("Pipeline aborted. WorkItem or Job not found.")
             return
 
         crud.update_work_item_state(
             db,
             db_obj=work_item,
-            obj_in=WorkItemUpdate(
-                status=WorkItemStatus.PROCESSING
-            ),
+            obj_in=WorkItemUpdate(status=WorkItemStatus.PROCESSING),
         )
 
         crud.update_job(
@@ -85,21 +83,14 @@ async def process_document_pipeline(
             ),
         )
 
-        safe_path = Path(
-            utils.get_safe_path(
-                work_item.stored_filename
-            )
-        )
+        safe_path = Path(utils.get_safe_path(work_item.stored_filename))
 
         if not safe_path.exists():
-            raise FileNotFoundError(
-                f"Missing document: {safe_path}"
-            )
+            raise FileNotFoundError(f"Missing document: {safe_path}")
 
         # -----------------------------
         # Stage 1
         # -----------------------------
-
         raw_text = extract_text_from_document(
             safe_path,
             work_item.file_type,
@@ -114,7 +105,6 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 2
         # -----------------------------
-
         chunks = split_text(raw_text)
 
         crud.update_job(
@@ -126,19 +116,14 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 3
         # -----------------------------
-
         if chunks:
-
-            embeddings = embedding_service.generate_embeddings(
-                chunks
-            )
-
+            embeddings = embedding_service.generate_embeddings(chunks)
             embedding_service.store_chunks(
-                work_item.id,
-                chunks,
-                embeddings,
+                work_item_id=work_item.id,
+                original_filename=work_item.original_filename,
+                chunks=chunks,
+                embeddings=embeddings,
             )
-
         else:
             logger.warning(
                 "No chunks generated for WorkItem %s.",
@@ -154,21 +139,13 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 4
         # -----------------------------
-
-        classification = llm_service.classify_document(
-            raw_text
-        )
-
-        document_class = classification.get(
-            "document_classification",
-            "Other",
-        )
+        classification = llm_service.classify_document(raw_text)
+        document_class = classification.get("document_classification", "Other")
 
         entities = llm_service.extract_entities(
             raw_text,
             document_class,
         )
-
         entities["classification_details"] = classification
 
         crud.update_job(
@@ -180,7 +157,6 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 5
         # -----------------------------
-
         summary = llm_service.generate_summary(raw_text)
 
         crud.update_work_item_state(
@@ -202,16 +178,12 @@ async def process_document_pipeline(
             ),
         )
 
-        logger.info(
-            "Pipeline completed successfully."
-        )
+        logger.info("Pipeline completed successfully.")
 
         # -----------------------------
         # Automation Engine
         # -----------------------------
-
         try:
-
             automation_stats = (
                 await automation_service.execute_rules_for_work_item(
                     db,
@@ -224,43 +196,55 @@ async def process_document_pipeline(
                 "Automation completed. %s",
                 automation_stats,
             )
-
         except Exception:
-
             logger.exception(
                 "Automation engine failed after successful pipeline."
             )
 
-    except Exception as exc:
+        # -----------------------------
+        # In-App Notification
+        # -----------------------------
+        try:
+            await notification_service.send_notification(
+                db=db,
+                user=work_item.user,
+                title="Document processed successfully",
+                message=(
+                    f"{work_item.original_filename} "
+                    "has finished processing."
+                ),
+                notification_type=NotificationType.DOCUMENT,
+                priority=NotificationPriority.SUCCESS,
+                delivery_channel=NotificationChannel.IN_APP,
+                work_item=work_item,
+            )
 
-        logger.exception(
-            "Pipeline failed."
-        )
+            logger.info(
+                "Completion notification created for WorkItem %s.",
+                work_item.id,
+            )
+        except Exception:
+            logger.exception("Failed to create completion notification.")
+
+    except Exception as exc:
+        logger.exception("Pipeline failed.")
 
         try:
-
             db.rollback()
 
             work_item = db.execute(
-                select(WorkItem).where(
-                    WorkItem.id == work_item_id
-                )
+                select(WorkItem).where(WorkItem.id == work_item_id)
             ).scalar_one_or_none()
 
             job = db.execute(
-                select(ProcessingJob).where(
-                    ProcessingJob.id == job_id
-                )
+                select(ProcessingJob).where(ProcessingJob.id == job_id)
             ).scalar_one_or_none()
 
             if work_item and job:
-
                 crud.update_work_item_state(
                     db,
                     db_obj=work_item,
-                    obj_in=WorkItemUpdate(
-                        status=WorkItemStatus.FAILED
-                    ),
+                    obj_in=WorkItemUpdate(status=WorkItemStatus.FAILED),
                 )
 
                 crud.update_job(
@@ -271,17 +255,9 @@ async def process_document_pipeline(
                         error_message=str(exc)[:5000],
                     ),
                 )
-
         except Exception:
-
-            logger.exception(
-                "Unable to persist failure state."
-            )
+            logger.exception("Unable to persist failure state.")
 
     finally:
-
         db.close()
-
-        logger.info(
-            "Background session closed."
-        )
+        logger.info("Background session closed.")

@@ -146,6 +146,7 @@ class EmbeddingService:
     def store_chunks(
         self,
         work_item_id: uuid.UUID,
+        original_filename: str,
         chunks: list[str],
         embeddings: EmbeddingList,
     ) -> None:
@@ -175,6 +176,7 @@ class EmbeddingService:
         metadatas = [
             {
                 "work_item_id": str(work_item_id),
+                "original_filename": original_filename,
                 "chunk_index": index,
             }
             for index in range(len(chunks))
@@ -316,11 +318,23 @@ class EmbeddingService:
 
         try:
 
+            logger.info(
+                "Chroma collection contains %d vectors.",
+                self.collection.count(),
+            )
+
+            logger.info(
+                "Search filter: %s",
+                where,
+            )
+
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
-                where=where,
+                #where=where,
             )
+
+            logger.info("Raw Chroma response: %s", results)
 
 
         except Exception:
@@ -352,15 +366,21 @@ class EmbeddingService:
                 )
             )
 
-            #
-            # Apply threshold filtering here.
-            #
-            if (
-                similarity_threshold is not None
-                and similarity_score
-                < similarity_threshold
-            ):
-                continue
+            logger.info(
+                "Distance=%f | Similarity=%f | Threshold=%s",
+                distance,
+                similarity_score,
+                similarity_threshold,
+            )
+
+            # Temporarily disable threshold filtering
+            # while debugging semantic search.
+
+            # if (
+            #     similarity_threshold is not None
+            #     and similarity_score < similarity_threshold
+            # ):
+            #     continue
 
             metadata = metadatas[index] or {}
 

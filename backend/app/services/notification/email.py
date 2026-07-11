@@ -50,7 +50,21 @@ class EmailNotificationProvider(NotificationProvider):
         message["Subject"] = title
         message["From"] = settings.SMTP_FROM_EMAIL
         message["To"] = recipient
+
         message.set_content(body)
+
+        message.add_alternative(
+            f"""
+            <html>
+                <body>
+                    <pre style="font-family:Arial,sans-serif;">
+        {body}
+                    </pre>
+                </body>
+            </html>
+            """,
+            subtype="html",
+        )
 
         password = (
             settings.SMTP_PASSWORD.get_secret_value()
@@ -74,7 +88,7 @@ class EmailNotificationProvider(NotificationProvider):
                     server.ehlo()
 
                 if settings.SMTP_USERNAME:
-                    logger.info("Authenticating SMTP user.")
+                    logger.info("Authenticating SMTP user '%s'.", settings.SMTP_USERNAME)
                     server.login(
                         settings.SMTP_USERNAME,
                         password,
@@ -83,6 +97,7 @@ class EmailNotificationProvider(NotificationProvider):
                 server.send_message(message)
 
             logger.info("Email successfully delivered to '%s'.", recipient)
+            logger.info("SMTP transaction completed successfully.")
             return True
 
         except smtplib.SMTPException as exc:

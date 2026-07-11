@@ -1,0 +1,19 @@
+# EditorConfig standard configuration for FlowPilot AI
+root = true
+
+# Primary global default configurations
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python backend specific formatting overrides (Align to PEP 8 standard)
+[*.py]
+indent_size = 4
+
+# Markdown specific overrides to allow manual trailing double spaces for linebreaks
+[*.md]
+trim_trailing_whitespace = false

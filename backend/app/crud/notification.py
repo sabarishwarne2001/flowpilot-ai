@@ -1,44 +1,60 @@
 """
-Database CRUD (Create, Read, Update, Delete) repository layer for in-app
-Notifications.
+Database CRUD repository for FlowPilot AI notifications.
 
-Provides database access for user notifications while enforcing user ownership
-and keeping business logic outside the repository layer.
+Responsible only for persistence operations.
+Business rules remain inside the notification service.
 """
+
+from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
+from app.models.notification import NotificationStatus
+from app.schemas.notification import NotificationCreate
 
+
+# ============================================================================
+# Create
+# ============================================================================
 
 def create_notification(
     db: Session,
     *,
-    user_id: uuid.UUID,
-    title: str,
-    message: str,
-    work_item_id: uuid.UUID | None = None,
+    notification_in: NotificationCreate,
 ) -> Notification:
     """
-    Create and persist a new notification.
+    Persist a new notification.
     """
-    db_obj = Notification(
-        user_id=user_id,
-        title=title,
-        message=message,
-        work_item_id=work_item_id,
-        is_read=False,
+
+    notification = Notification(
+        user_id=notification_in.user_id,
+        work_item_id=notification_in.work_item_id,
+        title=notification_in.title,
+        message=notification_in.message,
+        notification_type=notification_in.notification_type,
+        priority=notification_in.priority,
+        delivery_channel=notification_in.delivery_channel,
+        delivery_status=notification_in.delivery_status,
+        retry_count=notification_in.retry_count,
+        failure_reason=notification_in.failure_reason,
+        is_read=notification_in.is_read,
     )
 
-    db.add(db_obj)
+    db.add(notification)
     db.commit()
-    db.refresh(db_obj)
+    db.refresh(notification)
 
-    return db_obj
+    return notification
 
+
+# ============================================================================
+# Read
+# ============================================================================
 
 def get_notification_by_id(
     db: Session,
@@ -47,8 +63,9 @@ def get_notification_by_id(
     user_id: uuid.UUID,
 ) -> Notification | None:
     """
-    Retrieve a notification owned by a user.
+    Retrieve a notification belonging to a user.
     """
+
     statement = select(Notification).where(
         Notification.id == notification_id,
         Notification.user_id == user_id,
@@ -66,10 +83,9 @@ def get_notifications_for_user(
     limit: int = 100,
 ) -> list[Notification]:
     """
-    Retrieve paginated notifications for a user.
-
-    Optionally filter by read/unread status.
+    Retrieve notifications for a user ordered newest-first.
     """
+
     statement = select(Notification).where(
         Notification.user_id == user_id
     )
@@ -86,25 +102,56 @@ def get_notifications_for_user(
         .limit(limit)
     )
 
-    return list(db.execute(statement).scalars().all())
+    return list(
+        db.execute(statement).scalars().all()
+    )
 
+
+# ============================================================================
+# Update
+# ============================================================================
 
 def update_notification_read_status(
     db: Session,
     *,
-    db_obj: Notification,
+    notification: Notification,
     is_read: bool,
 ) -> Notification:
     """
-    Update the read/unread status of a notification.
+    Update read/unread state.
     """
-    db_obj.is_read = is_read
 
-    db.add(db_obj)
+    notification.is_read = is_read
+
     db.commit()
-    db.refresh(db_obj)
+    db.refresh(notification)
 
-    return db_obj
+    return notification
+
+
+def update_notification_delivery_status(
+    db: Session,
+    *,
+    notification: Notification,
+    delivery_status: NotificationStatus,
+    retry_count: int | None = None,
+    failure_reason: str | None = None,
+) -> Notification:
+    """
+    Update notification delivery metadata.
+    """
+
+    notification.delivery_status = delivery_status
+
+    if retry_count is not None:
+        notification.retry_count = retry_count
+
+    notification.failure_reason = failure_reason
+
+    db.commit()
+    db.refresh(notification)
+
+    return notification
 
 
 def mark_all_notifications_as_read(
@@ -113,34 +160,39 @@ def mark_all_notifications_as_read(
     user_id: uuid.UUID,
 ) -> int:
     """
-    Mark all unread notifications for a user as read.
-
-    Returns the number of updated rows.
+    Mark every unread notification as read.
     """
+
     statement = (
         update(Notification)
         .where(
             Notification.user_id == user_id,
             Notification.is_read.is_(False),
         )
-        .values(is_read=True)
+        .values(
+            is_read=True,
+        )
     )
 
     result = db.execute(statement)
+
     db.commit()
 
     return result.rowcount or 0
 
 
+# ============================================================================
+# Delete
+# ============================================================================
+
 def delete_notification(
     db: Session,
     *,
-    db_obj: Notification,
-) -> bool:
+    notification: Notification,
+) -> None:
     """
     Delete a notification.
     """
-    db.delete(db_obj)
-    db.commit()
 
-    return True
+    db.delete(notification)
+    db.commit()
