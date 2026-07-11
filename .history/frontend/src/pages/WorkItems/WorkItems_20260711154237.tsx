@@ -632,7 +632,7 @@ export const WorkItems: React.FC = () => {
                         {item.status === "FAILED" && (
                           <button
                             type="button"
-                            disabled={reprocessMutation.isPending}
+                            disabled={isReprocessing}
                             onClick={() => triggerReprocess(item.id)}
                             title="Retry Processing"
                             className="
@@ -649,11 +649,7 @@ export const WorkItems: React.FC = () => {
                               disabled:opacity-50
                             "
                           >
-                            <RefreshCw
-                              className={`h-4 w-4 ${
-                                reprocessMutation.isPending ? "animate-spin" : ""
-                              }`}
-                            />
+                            <RefreshCw className="h-4 w-4" />
                           </button>
                         )}
 
@@ -766,20 +762,20 @@ export const WorkItems: React.FC = () => {
         </footer>
       )}
       <ConfirmDialog
-        open={reprocessDialogOpen}
-        title="Reprocess Document"
-        message="This will queue the document for processing again. Existing extracted results may be replaced after processing completes."
-        confirmText="Reprocess"
-        cancelText="Cancel"
-        loading={reprocessMutation.isPending}
-        onConfirm={confirmReprocess}
-        onCancel={() => {
-          if (!reprocessMutation.isPending) {
-            setReprocessDialogOpen(false);
-            setSelectedReprocessWorkItemId(null);
-          }
-        }}
-      />
+  open={reprocessDialogOpen}
+  title="Reprocess Document"
+  message="This will queue the document for processing again. Existing extracted results may be replaced after processing completes."
+  confirmText="Reprocess"
+  cancelText="Cancel"
+  loading={reprocessMutation.isPending}
+  onConfirm={confirmReprocess}
+  onCancel={() => {
+    if (!reprocessMutation.isPending) {
+      setReprocessDialogOpen(false);
+      setSelectedReprocessWorkItemId(null);
+    }
+  }}
+/>
       <ConfirmDialog
         open={deleteDialogOpen}
         title="Delete Document"

@@ -650,10 +650,10 @@ export const WorkItems: React.FC = () => {
                             "
                           >
                             <RefreshCw
-                              className={`h-4 w-4 ${
-                                reprocessMutation.isPending ? "animate-spin" : ""
-                              }`}
-                            />
+  className={`h-4 w-4 ${
+    reprocessMutation.isPending ? "animate-spin" : ""
+  }`}
+/>
                           </button>
                         )}
 

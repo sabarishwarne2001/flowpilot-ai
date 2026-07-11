@@ -208,36 +208,6 @@ class EmbeddingService:
             )
             raise
 
-    def delete_chunks(
-        self,
-        work_item_id: uuid.UUID,
-    ) -> None:
-        """
-        Delete every vector belonging to a WorkItem.
-        """
-
-        logger.info(
-            "Deleting vectors for WorkItem %s.",
-            work_item_id,
-        )
-
-        try:
-            self.collection.delete(
-                where={
-                    "work_item_id": str(work_item_id),
-                }
-            )
-
-            logger.info(
-                "Vectors deleted successfully."
-            )
-
-        except Exception:
-            logger.exception(
-                "Failed to delete vectors."
-            )
-            raise
-
     def _normalize_similarity_score(
         self,
         distance: float,

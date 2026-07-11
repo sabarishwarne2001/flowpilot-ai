@@ -269,7 +269,6 @@ def get_processing_status(
 
     return queued, processing
 
-
 def get_completion_statistics(
     db: Session,
     *,

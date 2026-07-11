@@ -298,10 +298,7 @@ async def delete_work_item(
 
     if file_path.exists():
         file_path.unlink()
-
-    embedding_service.delete_chunks(
-        work_item.id
-    )
+        
 
     crud.delete_work_item(
         db,

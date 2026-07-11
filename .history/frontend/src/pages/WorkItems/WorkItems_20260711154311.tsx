@@ -649,11 +649,7 @@ export const WorkItems: React.FC = () => {
                               disabled:opacity-50
                             "
                           >
-                            <RefreshCw
-                              className={`h-4 w-4 ${
-                                reprocessMutation.isPending ? "animate-spin" : ""
-                              }`}
-                            />
+                            <RefreshCw className="h-4 w-4" />
                           </button>
                         )}
 

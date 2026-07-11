@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemListResponse, WorkItemStatus, WorkItemUpdate
-from app.services import process_document_pipeline, embedding_service
+from app.services import process_document_pipeline
 from app.schemas.work_item import WorkItemStatus
 
 router = APIRouter(tags=["Work Items"])
@@ -298,10 +298,6 @@ async def delete_work_item(
 
     if file_path.exists():
         file_path.unlink()
-
-    embedding_service.delete_chunks(
-        work_item.id
-    )
 
     crud.delete_work_item(
         db,

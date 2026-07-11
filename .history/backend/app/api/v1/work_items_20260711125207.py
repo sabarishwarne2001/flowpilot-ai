@@ -12,13 +12,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status,
 from sqlalchemy.orm import Session
 from app import crud
 from app import utils
-from app.utils import file_utils as utils
 from app.api import deps
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemListResponse, WorkItemStatus, WorkItemUpdate
-from app.services import process_document_pipeline, embedding_service
+from app.services import process_document_pipeline
 from app.schemas.work_item import WorkItemStatus
 
 router = APIRouter(tags=["Work Items"])
@@ -266,44 +265,3 @@ async def reprocess_work_item(
 
     return new_job
 
-
-@router.delete(
-    "/{work_item_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_work_item(
-    work_item_id: uuid.UUID,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-) -> None:
-    """
-    Permanently deletes a work item.
-    """
-
-    work_item = crud.get_work_item_by_id(
-        db,
-        work_item_id=work_item_id,
-        user_id=current_user.id,
-    )
-
-    if work_item is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Work item not found.",
-        )
-
-    file_path = Path(
-        utils.get_safe_path(work_item.stored_filename)
-    )
-
-    if file_path.exists():
-        file_path.unlink()
-
-    embedding_service.delete_chunks(
-        work_item.id
-    )
-
-    crud.delete_work_item(
-        db,
-        db_obj=work_item,
-    )

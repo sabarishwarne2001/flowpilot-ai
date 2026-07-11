@@ -90,11 +90,6 @@ export const WorkItems: React.FC = () => {
   const [selectedWorkItemId, setSelectedWorkItemId] =
     useState<string | null>(null);
 
-  const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
-
-  const [selectedReprocessWorkItemId, setSelectedReprocessWorkItemId] =
-    useState<string | null>(null);
-
   /* ==========================================================================
        Pagination
     ========================================================================== */
@@ -178,98 +173,76 @@ export const WorkItems: React.FC = () => {
   });
 
   /* ==========================================================================
-    Reprocess Mutation
-  ========================================================================== */
+   Reprocess Mutation
+========================================================================== */
 
-  const reprocessMutation = useMutation({
-    mutationFn: workItemApi.reprocessWorkItem,
+const { mutate: triggerReprocess, isPending: isReprocessing } = useMutation({
+  mutationFn: workItemApi.reprocessWorkItem,
 
-    onSuccess: async () => {
-      setReprocessDialogOpen(false);
-      setSelectedReprocessWorkItemId(null);
+  onSuccess: async () => {
+    toast.success("Document has been queued for reprocessing.");
 
-      toast.success("Document queued for reprocessing.");
+    await queryClient.invalidateQueries({
+      queryKey: WORK_ITEMS_QUERY_KEY,
+    });
+  },
 
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: WORK_ITEMS_QUERY_KEY,
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: ["dashboard-overview"],
-        }),
-      ]);
-    },
-
-    onError: (error: unknown) => {
-      if (error instanceof ApiError) {
-        toast.error(error.message ?? "Unable to reprocess document.");
-        return;
-      }
-
-      toast.error("Unexpected network error.");
-    },
-  });
-
-  const triggerReprocess = (workItemId: string): void => {
-    setSelectedReprocessWorkItemId(workItemId);
-    setReprocessDialogOpen(true);
-  };
-
-  const confirmReprocess = (): void => {
-    if (!selectedReprocessWorkItemId) {
+  onError: (error: unknown) => {
+    if (error instanceof ApiError) {
+      toast.error(error.message ?? "Unable to schedule reprocessing.");
       return;
     }
 
-    reprocessMutation.mutate(selectedReprocessWorkItemId);
-  };
+    toast.error("Unexpected network error.");
+  },
+});
 
 /* ==========================================================================
    Delete Mutation
 ========================================================================== */
 
-  const deleteMutation = useMutation({
-    mutationFn: workItemApi.deleteWorkItem,
+const deleteMutation = useMutation({
+  mutationFn: workItemApi.deleteWorkItem,
 
-    onSuccess: async () => {
-      setDeleteDialogOpen(false);
-      setSelectedWorkItemId(null);
+  onSuccess: async () => {
+    setDeleteDialogOpen(false);
+    setSelectedWorkItemId(null);
 
-      toast.success("Document deleted successfully.");
+    toast.success("Document deleted successfully.");
 
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: WORK_ITEMS_QUERY_KEY,
-        }),
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: WORK_ITEMS_QUERY_KEY,
+      }),
 
-        queryClient.invalidateQueries({
-          queryKey: ["dashboard-overview"],
-        }),
-      ]);
-    },
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-overview"],
+      }),
+    ]);
+  },
 
-    onError: (error: unknown) => {
-      if (error instanceof ApiError) {
-        toast.error(error.message ?? "Unable to delete document.");
-        return;
-      }
-
-      toast.error("Unexpected network error.");
-    },
-  });
-
-  const triggerDelete = (workItemId: string): void => {
-    setSelectedWorkItemId(workItemId);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = (): void => {
-    if (!selectedWorkItemId) {
+  onError: (error: unknown) => {
+    if (error instanceof ApiError) {
+      toast.error(error.message ?? "Unable to delete document.");
       return;
     }
 
-    deleteMutation.mutate(selectedWorkItemId);
-  };
+    toast.error("Unexpected network error.");
+  },
+});
+
+const triggerDelete = (workItemId: string): void => {
+  setSelectedWorkItemId(workItemId);
+  setDeleteDialogOpen(true);
+};
+
+const confirmDelete = (): void => {
+  if (!selectedWorkItemId) {
+    return;
+  }
+
+  deleteMutation.mutate(selectedWorkItemId);
+};
 
   /* ==========================================================================
        Filter Form
@@ -632,7 +605,7 @@ export const WorkItems: React.FC = () => {
                         {item.status === "FAILED" && (
                           <button
                             type="button"
-                            disabled={reprocessMutation.isPending}
+                            disabled={isReprocessing}
                             onClick={() => triggerReprocess(item.id)}
                             title="Retry Processing"
                             className="
@@ -649,11 +622,7 @@ export const WorkItems: React.FC = () => {
                               disabled:opacity-50
                             "
                           >
-                            <RefreshCw
-                              className={`h-4 w-4 ${
-                                reprocessMutation.isPending ? "animate-spin" : ""
-                              }`}
-                            />
+                            <RefreshCw className="h-4 w-4" />
                           </button>
                         )}
 
@@ -679,7 +648,6 @@ export const WorkItems: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => triggerDelete(item.id)}
-                          disabled={deleteMutation.isPending}
                           title="Delete Document"
                           className="
                             rounded-md
@@ -765,36 +733,6 @@ export const WorkItems: React.FC = () => {
           </div>
         </footer>
       )}
-      <ConfirmDialog
-        open={reprocessDialogOpen}
-        title="Reprocess Document"
-        message="This will queue the document for processing again. Existing extracted results may be replaced after processing completes."
-        confirmText="Reprocess"
-        cancelText="Cancel"
-        loading={reprocessMutation.isPending}
-        onConfirm={confirmReprocess}
-        onCancel={() => {
-          if (!reprocessMutation.isPending) {
-            setReprocessDialogOpen(false);
-            setSelectedReprocessWorkItemId(null);
-          }
-        }}
-      />
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        title="Delete Document"
-        message="This will permanently delete the uploaded file, extracted data, embeddings, and all related processing history. This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        loading={deleteMutation.isPending}
-        onConfirm={confirmDelete}
-        onCancel={() => {
-          if (!deleteMutation.isPending) {
-            setDeleteDialogOpen(false);
-            setSelectedWorkItemId(null);
-          }
-        }}
-      />
     </div>
   );
 };

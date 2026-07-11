@@ -60,7 +60,6 @@ __all__ = [
     "get_work_items_for_user",
     "create_work_item",
     "update_work_item_state",
-    "delete_work_item",
     "get_job_by_id",
     "get_jobs_for_work_item",
     "create_job",

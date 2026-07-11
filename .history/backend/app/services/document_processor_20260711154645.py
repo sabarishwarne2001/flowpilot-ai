@@ -177,6 +177,7 @@ async def process_document_pipeline(
                 progress=100,
             ),
         )
+        
         logger.info("Pipeline completed successfully.")
 
         # -----------------------------

@@ -182,19 +182,6 @@ def update_work_item_state(
     return db_obj
 
 
-def delete_work_item(
-    db: Session,
-    *,
-    db_obj: WorkItem,
-) -> None:
-    """
-    Permanently deletes a work item.
-    """
-
-    db.delete(db_obj)
-    db.commit()
-
-
 def get_document_type_distribution(
     db: Session,
     *,
@@ -215,7 +202,6 @@ def get_document_type_distribution(
 
     return list(db.execute(statement).all())
 
-
 def get_recent_work_items(
     db: Session,
     *,
@@ -234,7 +220,6 @@ def get_recent_work_items(
     )
 
     return list(db.execute(statement).scalars().all())
-
 
 def get_processing_status(
     db: Session,
@@ -268,7 +253,6 @@ def get_processing_status(
     processing = db.scalar(processing_statement) or 0
 
     return queued, processing
-
 
 def get_completion_statistics(
     db: Session,
