@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.automation import AutomationRule
     from app.models.notification import Notification
     from app.models.assistant import Conversation
+    from app.models.email_settings import EmailSettings
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -69,6 +70,15 @@ class User(Base, UUIDMixin, TimestampMixin):
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping user SMTP configuration
+    email_settings: Mapped["EmailSettings | None"] = relationship(
+        "EmailSettings",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
     )
 
     # Bidirectional SQLAlchemy relationship mapping child Conversation sessions

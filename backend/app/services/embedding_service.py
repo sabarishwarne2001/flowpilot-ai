@@ -361,10 +361,8 @@ class EmbeddingService:
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
-                #where=where,
+                where=where,
             )
-
-            logger.info("Raw Chroma response: %s", results)
 
 
         except Exception:
@@ -403,32 +401,64 @@ class EmbeddingService:
                 similarity_threshold,
             )
 
-            # Temporarily disable threshold filtering
-            # while debugging semantic search.
-
-            # if (
-            #     similarity_threshold is not None
-            #     and similarity_score < similarity_threshold
-            # ):
-            #     continue
+            if (
+                similarity_threshold is not None
+                and similarity_score < similarity_threshold
+            ):
+                continue
 
             metadata = metadatas[index] or {}
 
             formatted_results.append(
                 {
+                    # ----------------------------------------------------------
+                    # Retrieval
+                    # ----------------------------------------------------------
                     "id": ids[index],
                     "text": documents[index],
-                    "metadata": metadata,
+
+                    # ----------------------------------------------------------
+                    # Citation Information
+                    # ----------------------------------------------------------
+                    "document_name": metadata.get(
+                        "original_filename",
+                        "Unknown Document",
+                    ),
+
+                    "work_item_id": metadata.get(
+                        "work_item_id",
+                    ),
+
+                    "chunk_index": metadata.get(
+                        "chunk_index",
+                    ),
 
                     #
-                    # Keep both values.
+                    # Reserved for Production Hardening.
                     #
-                    # distance is useful for debugging.
-                    # similarity_score is useful for business logic.
-                    #
+                    "page_number": metadata.get(
+                        "page_number",
+                    ),
+
+                    # ----------------------------------------------------------
+                    # Metadata
+                    # ----------------------------------------------------------
+                    "metadata": metadata,
+
+                    # ----------------------------------------------------------
+                    # Retrieval Metrics
+                    # ----------------------------------------------------------
                     "distance": distance,
+
                     "similarity_score": similarity_score,
                 }
+            )
+
+            logger.debug(
+                "Retrieved '%s' | Chunk=%s | Similarity=%.3f",
+                metadata.get("original_filename"),
+                metadata.get("chunk_index"),
+                similarity_score,
             )
 
         logger.info(

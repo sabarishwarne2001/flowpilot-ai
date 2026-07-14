@@ -60,6 +60,25 @@ export const createConversation = async (
 };
 
 /**
+ * Returns the existing conversation for a document.
+ *
+ * If no conversation exists, the backend automatically
+ * creates one and returns it.
+ */
+export const getDocumentConversation = async (
+  workItemId: string
+): Promise<ConversationSummary> => {
+  const response = await apiClient.get<ConversationSummary>(
+    `/assistant/documents/${workItemId}/conversation`,
+    {
+      headers: JSON_HEADERS,
+    }
+  );
+
+  return response.data;
+};
+
+/**
  * Retrieves every active conversation owned by
  * the authenticated user.
  */
@@ -216,6 +235,7 @@ export const deleteConversation = async (
 
 export const assistantApi = {
   createConversation,
+  getDocumentConversation,
   getConversations,
   getConversationHistory,
   sendChatMessage,

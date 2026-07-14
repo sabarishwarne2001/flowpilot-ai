@@ -76,9 +76,12 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     SMTP_TIMEOUT: int = 10
 
+    # SMTP Password Encryption
+    EMAIL_ENCRYPTION_KEY: SecretStr
+
     # Sprint 5: AI Assistant & RAG Parameter Configurations
     RAG_TOP_K: int = 5
-    RAG_SIMILARITY_THRESHOLD: float = 0.4  # Discards chunks with low relevance scores
+    RAG_SIMILARITY_THRESHOLD: float = 0.20  # Discards chunks with low relevance scores
     RAG_MAX_CONTEXT_LENGTH: int = 15000    # Maximum context characters to pass to prompts
     MAX_CONVERSATION_MESSAGES: int = 10    # Maximum historical messages loaded for chat memory
     MAX_CONVERSATION_TITLE_LENGTH: int = 150

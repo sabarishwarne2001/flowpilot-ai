@@ -178,6 +178,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setActiveCitation(null);
     setIsDrawerOpen(false);
   }, []);
+
   /* ==========================================================================
      Message Submission
   ========================================================================== */
@@ -252,11 +253,36 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         previous.filter((message) => !message.id.startsWith("optimistic-"))
       );
 
-      if (error instanceof ApiError) {
-        toast.error(error.message ?? "Failed to send message.");
-      } else {
-        toast.error("Unexpected network error.");
+     if (error instanceof ApiError) {
+      switch (error.status) {
+        case 429:
+          toast.error(
+            error.detail ?? "The AI service is temporarily busy."
+          );
+          break;
+
+        case 503:
+          toast.error(
+            "The AI service is temporarily unavailable. Please try again later."
+          );
+          break;
+
+        case 500:
+          toast.error(
+            "An unexpected server error occurred."
+          );
+          break;
+
+        default:
+          toast.error(
+            error.message ?? "Failed to send message."
+          );
       }
+    } else {
+      toast.error(
+        "Unable to reach the server."
+      );
+    }
     }
   };
 

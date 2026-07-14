@@ -14,6 +14,7 @@ from app.api.v1.automation import router as automation_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.assistant import router as assistant_router
 from app.api.v1.dashboard import router as dashboard_router
+from app.api.v1.email_settings import router as email_settings_router
 
 api_router = APIRouter()
 
@@ -34,3 +35,9 @@ api_router.include_router(automation_router, prefix="/automation", tags=["Automa
 api_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 
 api_router.include_router(assistant_router, prefix="/assistant", tags=["AI Assistant"])
+
+api_router.include_router(
+    email_settings_router,
+    prefix="/email-settings",
+    tags=["Email Settings"],
+)

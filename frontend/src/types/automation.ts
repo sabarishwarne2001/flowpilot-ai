@@ -142,18 +142,17 @@ export interface AutomationLog {
 
   readonly work_item_id: string;
 
-  readonly status: AutomationExecutionStatus;
+  readonly rule_name: string;
+
+  readonly document_name: string;
+
+  readonly action_type: string;
+
+  readonly status: "SUCCESS" | "FAILED";
 
   readonly log_message: string | null;
 
   readonly created_at: string;
+
   readonly updated_at: string;
-
-  /**
-   * Optional hydrated fields.
-   * Returned by joined queries when available.
-   */
-  readonly rule_name?: string;
-
-  readonly work_item_filename?: string;
 }

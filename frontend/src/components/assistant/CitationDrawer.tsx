@@ -281,7 +281,9 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                 </p>
 
                 <p className="mt-1 text-[10px] font-bold text-muted-foreground">
-                  Chunk #{citation.chunk_index}
+                  {citation.page_number != null
+                    ? `Page ${citation.page_number} • Chunk ${citation.chunk_index}`
+                    : `Chunk ${citation.chunk_index}`}
                 </p>
               </div>
             </div>
@@ -316,7 +318,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
               </div>
 
               <p className="text-xl font-black tracking-tight">
-                {citation.page_number !== null
+                {citation.page_number != null
                   ? `Page ${citation.page_number}`
                   : "Text Segment"}
               </p>
@@ -387,14 +389,6 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                   <dd className="text-sm font-semibold">
                     {citation.chunk_index}
                   </dd>
-                </div>
-
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    Similarity
-                  </dt>
-
-                  <dd className="text-sm font-semibold">{similarityScore}</dd>
                 </div>
               </dl>
             </div>

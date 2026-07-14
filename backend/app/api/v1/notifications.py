@@ -189,7 +189,7 @@ async def update_notification(
         notification = (
             crud.update_notification_read_status(
                 db,
-                db_obj=notification,
+                notification=notification,
                 is_read=notification_in.is_read,
             )
         )
@@ -269,7 +269,7 @@ async def delete_notification(
 
     crud.delete_notification(
         db,
-        db_obj=notification,
+        notification=notification,
     )
 
     logger.info(

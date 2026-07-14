@@ -94,9 +94,23 @@ export const Dashboard: React.FC = () => {
     onSuccess: async () => {
       toast.success("Document scheduled for reprocessing.");
 
-      await queryClient.invalidateQueries({
-        queryKey: DASHBOARD_QUERY_KEY,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: DASHBOARD_QUERY_KEY,
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["automation-logs"],
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["automation-rules"],
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["notifications"],
+        }),
+      ]);
     },
 
     onError: (error: unknown) => {
@@ -126,7 +140,6 @@ export const Dashboard: React.FC = () => {
       }),
     ]);
   }, [queryClient]);
-
 
   /* ==========================================================================
        Loading State

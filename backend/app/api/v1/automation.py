@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.models.user import User
-from app.schemas.automation import AutomationRuleCreate, AutomationRuleUpdate, AutomationRuleResponse
+from app.schemas.automation import (
+    AutomationRuleCreate,
+    AutomationRuleUpdate,
+    AutomationRuleResponse,
+    AutomationLogResponse,
+)
+
 
 router = APIRouter(tags=["Automation"])
 logger = logging.getLogger("app.api.v1.automation")
@@ -58,6 +64,66 @@ async def list_rules(
     """
     rules = crud.get_rules_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
     return rules
+
+
+@router.get(
+    "/logs",
+    response_model=list[AutomationLogResponse],
+    summary="List Automation Execution Logs",
+    response_description="Execution history for all automation rules owned by the authenticated user.",
+)
+async def list_rule_logs(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(
+        deps.get_current_active_user,
+    ),
+    skip: int = Query(
+        default=0,
+        ge=0,
+    ),
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=100,
+    ),
+) -> list[AutomationLogResponse]:
+    """
+    Retrieve automation execution history for the authenticated user.
+    """
+
+    logs = crud.get_logs_by_user(
+        db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+    )
+
+    response: list[AutomationLogResponse] = []
+
+    for log in logs:
+
+        response.append(
+            AutomationLogResponse(
+                id=log.id,
+                rule_id=log.rule_id,
+                work_item_id=log.work_item_id,
+                rule_name=log.rule_name,
+                document_name=log.document_name,
+                action_type=log.action_type,
+                status=log.status,
+                log_message=log.log_message,
+                created_at=log.created_at,
+                updated_at=log.updated_at,
+            )
+        )
+
+    logger.info(
+        "Returned %d automation logs for user %s.",
+        len(response),
+        current_user.id,
+    )
+
+    return response
 
 
 @router.get(

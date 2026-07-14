@@ -11,6 +11,7 @@ import logging
 
 from app.services.notification.base import NotificationProvider
 from app.services.notification.email import email_notification_provider
+from app.models.email_settings import EmailSettings
 
 logger = logging.getLogger("app.services.notification.dispatcher")
 
@@ -60,7 +61,9 @@ class NotificationDispatcher:
 
     async def send(
         self,
+        *,
         action_type: str,
+        settings: EmailSettings,
         recipient: str,
         title: str,
         body: str,
@@ -89,6 +92,7 @@ class NotificationDispatcher:
 
         try:
             success = await provider.send(
+                settings=settings,
                 recipient=recipient,
                 title=title,
                 body=body,

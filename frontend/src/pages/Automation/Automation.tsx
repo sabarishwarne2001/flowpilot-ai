@@ -21,6 +21,7 @@ import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { AutomationRule } from "@/types/automation";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 // Centralized Query Cache Keys matching our approved system configurations
 const RULES_QUERY_KEY = ["automation-rules"] as const;
@@ -38,6 +39,7 @@ export const Automation: React.FC = () => {
   // Dialog overlay controller states
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [ruleToEdit, setRuleToEdit] = useState<AutomationRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<AutomationRule | null>(null);
 
   // 1. Query user-configured Rules lists
   const {
@@ -59,12 +61,20 @@ export const Automation: React.FC = () => {
   } = useQuery({
     queryKey: LOGS_QUERY_KEY,
     queryFn: automationApi.getAutomationLogs,
-    staleTime: 1000 * 15,
+
+    staleTime: 5000,
+
+    refetchInterval: 5000,
+
+    refetchOnWindowFocus: true,
+
+    refetchOnReconnect: true,
+
     placeholderData: (previousData) => previousData,
   });
 
   // 3. Register rule deletion mutation
-  const { mutate: triggerDelete } = useMutation({
+  const { mutate: triggerDelete, isPending: isDeletingRule } = useMutation({
     mutationFn: automationApi.deleteAutomationRule,
     onSuccess: async () => {
       toast.success("Automation rule removed from PostgreSQL.");
@@ -82,21 +92,57 @@ export const Automation: React.FC = () => {
   });
 
   // 4. Register toggles mutation to modify active states dynamically
-  const { mutate: triggerToggleActive } = useMutation({
-    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-      automationApi.updateAutomationRule(id, { is_active }),
-    onSuccess: async () => {
-      toast.success("Rule status updated.");
-      await queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
-    },
-    onError: (err: unknown) => {
-      if (err instanceof ApiError) {
-        toast.error(err.message || "Failed to toggle rule state.");
-      } else {
-        toast.error("An unexpected network failure occurred.");
-      }
-    },
-  });
+  const { mutate: triggerToggleActive, isPending: isUpdatingRule } =
+    useMutation({
+      mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+        automationApi.updateAutomationRule(id, { is_active }),
+
+      onMutate: async (updatedRule) => {
+        await queryClient.cancelQueries({
+          queryKey: RULES_QUERY_KEY,
+        });
+
+        const previousRules =
+          queryClient.getQueryData<AutomationRule[]>(RULES_QUERY_KEY);
+
+        queryClient.setQueryData<AutomationRule[]>(
+          RULES_QUERY_KEY,
+          (old = []) =>
+            old.map((rule) =>
+              rule.id === updatedRule.id
+                ? {
+                    ...rule,
+                    is_active: updatedRule.is_active,
+                  }
+                : rule
+            )
+        );
+
+        return { previousRules };
+      },
+
+      onError: (err, _, context) => {
+        if (context?.previousRules) {
+          queryClient.setQueryData(RULES_QUERY_KEY, context.previousRules);
+        }
+
+        if (err instanceof ApiError) {
+          toast.error(err.message);
+        } else {
+          toast.error("Failed to update rule.");
+        }
+      },
+
+      onSuccess: () => {
+        toast.success("Rule status updated.");
+      },
+
+      onSettled: () => {
+        queryClient.invalidateQueries({
+          queryKey: RULES_QUERY_KEY,
+        });
+      },
+    });
 
   // --- Click Handler Callbacks (Memoized to preserve React.memo benefits in child elements) ---
 
@@ -192,7 +238,8 @@ export const Automation: React.FC = () => {
         <button
           type="button"
           onClick={handleOpenCreateForm}
-          className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98]"
+          disabled={isDeletingRule || isUpdatingRule}
+          className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-4 w-4 mr-1.5 flex-shrink-0" />
           Create New Rule
@@ -248,10 +295,11 @@ export const Automation: React.FC = () => {
                           is_active: !rule.is_active,
                         })
                       }
-                      className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                      className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
                         rule.is_active ? "Deactivate rule" : "Activate rule"
                       }
+                      disabled={isDeletingRule || isUpdatingRule}
                     >
                       {rule.is_active ? (
                         <ToggleRight className="h-7 w-7 text-emerald-500 fill-emerald-500" />
@@ -284,8 +332,9 @@ export const Automation: React.FC = () => {
                   <div className="flex items-center justify-end space-x-2 pt-2 border-t border-border/10">
                     <button
                       type="button"
+                      disabled={isDeletingRule || isUpdatingRule}
                       onClick={() => handleOpenEditForm(rule)}
-                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Edit rule configurations"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
@@ -293,17 +342,10 @@ export const Automation: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const confirmed = window.confirm(
-                          "Delete this automation rule?"
-                        );
-
-                        if (!confirmed) {
-                          return;
-                        }
-
-                        triggerDelete(rule.id);
+                        setRuleToDelete(rule);
                       }}
-                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all"
+                      disabled={isDeletingRule || isUpdatingRule}
+                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete automation rule"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -339,45 +381,75 @@ export const Automation: React.FC = () => {
               logs.map((log) => (
                 <div
                   key={log.id}
-                  className="p-4 bg-background border border-border/40 rounded-xl shadow-sm flex items-start space-x-3.5 transition-all hover:border-border/80"
+                  className="rounded-xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-border/80"
                 >
-                  {/* Status Indicator circle icon */}
-                  <div className="flex-shrink-0 mt-0.5 select-none">
-                    {log.status === "SUCCESS" ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-500/10" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-destructive fill-destructive/10" />
-                    )}
-                  </div>
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-bold text-foreground">
+                        {log.rule_name}
+                      </h4>
 
-                  <div className="flex-1 min-w-0 space-y-2">
-                    {/* Log Details header */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-1 sm:space-y-0">
-                      <span className="text-xs font-extrabold truncate text-foreground/90 leading-tight">
-                        Rule ID: {log.rule_id.slice(0, 8)}... (WorkItem:{" "}
-                        {log.work_item_id.slice(0, 8)}...)
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-bold leading-none select-none">
-                        {formatDateTime(log.created_at)}
-                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {log.document_name}
+                      </p>
                     </div>
 
-                    {/* Output string logs */}
-                    {log.log_message && (
-                      <div className="relative">
-                        <pre
-                          className={`text-[10px] font-mono p-3 rounded-lg border border-border/40 overflow-x-auto leading-relaxed max-h-24 scrollbar select-text
-                          ${
-                            log.status === "FAILED"
-                              ? "bg-destructive/5 text-destructive/90"
-                              : "bg-muted/30 text-muted-foreground"
-                          }`}
-                        >
-                          {log.log_message}
-                        </pre>
-                      </div>
-                    )}
+                    <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+                      {formatDateTime(log.created_at)}
+                    </span>
                   </div>
+
+                  {/* Action + Status */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
+                      {log.action_type}
+                    </span>
+
+                    <span
+                      className={`rounded-md px-2 py-1 text-[10px] font-bold ${
+                        log.status === "SUCCESS"
+                          ? "bg-emerald-500/10 text-emerald-500"
+                          : "bg-destructive/10 text-destructive"
+                      }`}
+                    >
+                      {log.status}
+                    </span>
+                  </div>
+
+                  {/* Log Message */}
+                  {log.log_message && (
+                    <div className="mt-3">
+                      <pre
+                        className={`overflow-x-auto rounded-lg border p-3 text-[11px] font-mono leading-relaxed ${
+                          log.status === "FAILED"
+                            ? "border-destructive/20 bg-destructive/5 text-destructive"
+                            : "border-border/40 bg-muted/30 text-muted-foreground"
+                        }`}
+                      >
+                        {log.log_message}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Copy Error */}
+                  {log.status === "FAILED" && log.log_message && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!log.log_message) return;
+
+                          navigator.clipboard.writeText(log.log_message);
+
+                          toast.success("Error copied.");
+                        }}
+                        className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted"
+                      >
+                        Copy Error
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -391,6 +463,26 @@ export const Automation: React.FC = () => {
         onClose={handleFormClose}
         onSaveSuccess={handleSaveSuccessCallback}
         ruleToEdit={ruleToEdit}
+      />
+      <ConfirmDialog
+        open={ruleToDelete !== null}
+        title="Delete Automation Rule"
+        message={
+          ruleToDelete
+            ? `Are you sure you want to delete "${ruleToDelete.name}"? This action cannot be undone.`
+            : ""
+        }
+        confirmText="Delete Rule"
+        cancelText="Cancel"
+        loading={isDeletingRule}
+        onCancel={() => setRuleToDelete(null)}
+        onConfirm={() => {
+          if (!ruleToDelete) return;
+
+          triggerDelete(ruleToDelete.id);
+
+          setRuleToDelete(null);
+        }}
       />
     </div>
   );

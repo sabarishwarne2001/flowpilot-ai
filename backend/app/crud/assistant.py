@@ -62,6 +62,33 @@ def get_conversation_by_id(
     return db.execute(statement).scalar_one_or_none()
 
 
+def get_document_conversation(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    work_item_id: uuid.UUID,
+) -> Conversation | None:
+    """
+    Return the existing conversation associated with
+    a document for the specified user.
+
+    Used by the Document Assistant so reopening
+    a document continues the previous conversation.
+    """
+
+    statement = (
+        select(Conversation)
+        .where(
+            Conversation.user_id == user_id,
+            Conversation.work_item_id == work_item_id,
+        )
+        .order_by(Conversation.created_at.desc())
+        .limit(1)
+    )
+
+    return db.execute(statement).scalar_one_or_none()
+
+
 def get_user_conversations(
     db: Session,
     *,

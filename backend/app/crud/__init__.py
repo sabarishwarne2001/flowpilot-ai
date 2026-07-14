@@ -31,6 +31,7 @@ from app.crud.automation import (
     delete_automation_rule,
     create_automation_log,
     get_logs_by_rule,
+    get_logs_by_user,
 )
 from app.crud.notification import (
     create_notification,
@@ -41,8 +42,16 @@ from app.crud.notification import (
     mark_all_notifications_as_read,
     delete_notification,
 )
+from app.crud.email_settings import (
+    create_email_settings,
+    get_email_settings,
+    update_email_settings,
+    delete_email_settings,
+    upsert_email_settings,
+)
 from app.crud.assistant import (
     create_conversation,
+    get_document_conversation,
     get_conversation_by_id,
     get_user_conversations,
     update_conversation_title,
@@ -73,14 +82,21 @@ __all__ = [
     "delete_automation_rule",
     "create_automation_log",
     "get_logs_by_rule",
+    "get_logs_by_user",
     "create_notification",
     "get_notification_by_id",
     "get_notifications_for_user",
     "update_notification_read_status",
     "mark_all_notifications_as_read",
     "delete_notification",
+    "create_email_settings",
+    "get_email_settings",
+    "update_email_settings",
+    "delete_email_settings",
+    "upsert_email_settings",
     "create_conversation",
     "get_conversation_by_id",
+    "get_document_conversation",
     "get_user_conversations",
     "update_conversation_title",
     "delete_conversation",

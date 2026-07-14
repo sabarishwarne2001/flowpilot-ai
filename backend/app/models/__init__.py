@@ -13,6 +13,8 @@ from app.models.job import ProcessingJob
 from app.models.automation import AutomationRule, AutomationLog
 from app.models.notification import Notification
 from app.models.assistant import Conversation, ConversationMessage
+from app.models.email_settings import EmailSettings
+from app.models.email_settings import EmailEncryption
 
 # All database schemas are imported here so that Base.metadata can 
 # detect them when compiling Alembic migration revisions.
@@ -27,4 +29,6 @@ __all__ = [
     "Notification",
     "Conversation",
     "ConversationMessage",
+    "EmailSettings",
+    "EmailEncryption",
 ]

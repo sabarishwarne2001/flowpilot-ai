@@ -12,6 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.automation import AutomationLog, AutomationRule
+from app.models.work_item import WorkItem
+
 from app.schemas.automation import AutomationRuleCreate, AutomationRuleUpdate
 
 
@@ -191,4 +193,51 @@ def get_logs_by_rule(
         .limit(limit)
     )
 
-    return list(db.execute(statement).scalars().all())
+
+def get_logs_by_user(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[AutomationLog]:
+    """
+    Retrieve all automation execution logs belonging to a user.
+
+    Enrich each log with rule metadata and document metadata
+    required by the frontend audit timeline.
+    """
+
+    statement = (
+        select(AutomationLog)
+        .join(
+            AutomationRule,
+            AutomationLog.rule_id == AutomationRule.id,
+        )
+        .join(
+            WorkItem,
+            AutomationLog.work_item_id == WorkItem.id,
+        )
+        .where(
+            AutomationRule.user_id == user_id,
+        )
+        .order_by(
+            AutomationLog.created_at.desc(),
+        )
+        .offset(skip)
+        .limit(limit)
+    )
+
+    logs = list(
+        db.execute(statement).scalars().all()
+    )
+
+    #
+    # Attach additional frontend fields.
+    #
+    for log in logs:
+        log.rule_name = log.rule.name
+        log.document_name = log.work_item.original_filename
+        log.action_type = log.rule.action_type
+
+    return logs

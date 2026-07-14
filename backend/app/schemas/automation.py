@@ -141,11 +141,23 @@ class AutomationLogResponse(BaseModel):
     """
 
     id: uuid.UUID
+
     rule_id: uuid.UUID
+
     work_item_id: uuid.UUID
+
+    rule_name: str
+
+    document_name: str
+
+    action_type: str
+
     status: str
+
     log_message: str | None = None
+
     created_at: datetime
+
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -16,6 +16,7 @@ import {
   Trash2,
   Edit2,
   Check,
+  MoreVertical,
   X,
   Loader2,
   AlertCircle,
@@ -29,6 +30,8 @@ import { ChatPanel } from "@/components/assistant/ChatPanel";
 import { SkeletonSidebar } from "@/components/common/skeletons/SkeletonSidebar";
 
 import { ApiError } from "@/services/api/client";
+
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 import type { ConversationSummary } from "@/types/assistant";
 
@@ -189,12 +192,19 @@ export const Assistant: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [selectedConversationId, setSelectedConversationId] = useState<
-    string | undefined
-  >();
+    string | null
+  >(null);
 
   const [editingConversationId, setEditingConversationId] = useState<
     string | null
   >(null);
+
+  const [openConversationMenu, setOpenConversationMenu] = useState<
+    string | null
+  >(null);
+
+  const [conversationToDelete, setConversationToDelete] =
+    useState<ConversationSummary | null>(null);
 
   /* ==========================================================================
        Conversations Query
@@ -221,7 +231,7 @@ export const Assistant: React.FC = () => {
 
   useEffect(() => {
     if (conversations.length === 0) {
-      setSelectedConversationId(undefined);
+      setSelectedConversationId(null);
       return;
     }
 
@@ -308,33 +318,42 @@ export const Assistant: React.FC = () => {
     });
 
   /* ==========================================================================
-       Delete Conversation
-    ========================================================================== */
+   Delete Conversation
+========================================================================== */
 
-  const { mutate: deleteConversation } = useMutation({
-    mutationFn: assistantApi.deleteConversation,
+  const { mutate: deleteConversation, isPending: isDeletingConversation } =
+    useMutation({
+      mutationFn: assistantApi.deleteConversation,
 
-    onSuccess: async (_, deletedConversationId) => {
-      toast.success("Conversation deleted.");
+      onSuccess: async (_, deletedConversationId) => {
+        toast.success("Conversation deleted.");
 
-      await queryClient.invalidateQueries({
-        queryKey: CONVERSATIONS_QUERY_KEY,
-      });
+        queryClient.setQueryData<ConversationSummary[]>(
+          CONVERSATIONS_QUERY_KEY,
+          (old = []) =>
+            old.filter(
+              (conversation) => conversation.id !== deletedConversationId
+            )
+        );
 
-      if (selectedConversationId === deletedConversationId) {
-        setSelectedConversationId(undefined);
-      }
-    },
+        await queryClient.invalidateQueries({
+          queryKey: CONVERSATIONS_QUERY_KEY,
+        });
 
-    onError: (error: unknown) => {
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-        return;
-      }
+        if (selectedConversationId === deletedConversationId) {
+          setSelectedConversationId(null);
+        }
+      },
 
-      toast.error("Unable to delete conversation.");
-    },
-  });
+      onError: (error: unknown) => {
+        if (error instanceof ApiError) {
+          toast.error(error.message);
+          return;
+        }
+
+        toast.error("Unable to delete conversation.");
+      },
+    });
   /* ==========================================================================
        Event Handlers
     ========================================================================== */
@@ -359,15 +378,21 @@ export const Assistant: React.FC = () => {
 
   const handleDeleteConversation = useCallback(
     (conversationId: string): void => {
-      const confirmed = window.confirm("Delete this conversation permanently?");
+      setOpenConversationMenu(null);
 
-      if (!confirmed) {
-        return;
+      if (selectedConversationId === conversationId) {
+        const remainingConversation = conversations.find(
+          (conversation) => conversation.id !== conversationId
+        );
+
+        setSelectedConversationId(
+          remainingConversation ? remainingConversation.id : null
+        );
       }
 
       deleteConversation(conversationId);
     },
-    [deleteConversation]
+    [conversations, deleteConversation, selectedConversationId]
   );
 
   /* ==========================================================================
@@ -666,56 +691,97 @@ export const Assistant: React.FC = () => {
                           </span>
                         </div>
 
-                        <div
-                          className="
-                                flex
-                                items-center
-                                gap-1
-                                opacity-0
-                                transition-opacity
-                                group-hover:opacity-100
-                                group-focus-within:opacity-100
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+
+                              setOpenConversationMenu((previous) =>
+                                previous === conversation.id
+                                  ? null
+                                  : conversation.id
+                              );
+                            }}
+                            className="
+                              rounded
+                              p-1
+                              text-muted-foreground
+                              transition-colors
+                              hover:bg-muted
+                              hover:text-foreground
+                              opacity-0
+                              group-hover:opacity-100
+                            "
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+
+                          {openConversationMenu === conversation.id && (
+                            <div
+                              className="
+                                absolute
+                                right-0
+                                top-8
+                                z-50
+                                w-40
+                                rounded-lg
+                                border
+                                border-border
+                                bg-card
+                                shadow-lg
                               "
-                        >
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
+                            >
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
 
-                              setEditingConversationId(conversation.id);
-                            }}
-                            className="
-                                  rounded
-                                  p-1
-                                  text-muted-foreground
-                                  transition-colors
+                                  setEditingConversationId(conversation.id);
+
+                                  setOpenConversationMenu(null);
+                                }}
+                                className="
+                                  flex
+                                  w-full
+                                  items-center
+                                  gap-2
+                                  px-3
+                                  py-2
+                                  text-sm
                                   hover:bg-muted
-                                  hover:text-foreground
                                 "
-                            aria-label="Rename conversation"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                Rename
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
 
-                              handleDeleteConversation(conversation.id);
-                            }}
-                            className="
-                                  rounded
-                                  p-1
-                                  text-muted-foreground
-                                  transition-colors
+                                  setConversationToDelete(conversation);
+
+                                  setOpenConversationMenu(null);
+                                }}
+                                className="
+                                  flex
+                                  w-full
+                                  items-center
+                                  gap-2
+                                  px-3
+                                  py-2
+                                  text-sm
+                                  text-destructive
                                   hover:bg-destructive/10
-                                  hover:text-destructive
                                 "
-                            aria-label="Delete conversation"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -731,15 +797,44 @@ export const Assistant: React.FC = () => {
           ====================================================== */}
 
         <div className="flex lg:col-span-8">
-          <ChatPanel
-            mode="global"
-            {...(selectedConversationId
-              ? { conversationId: selectedConversationId }
-              : {})}
-            className="w-full shadow-sm"
-          />
+          <div className="relative w-full">
+            {isLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/70 backdrop-blur-sm">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            <ChatPanel
+              mode="global"
+              {...(selectedConversationId
+                ? { conversationId: selectedConversationId }
+                : {})}
+              className="w-full shadow-sm"
+            />
+          </div>
         </div>
       </section>
+
+      <ConfirmDialog
+        open={conversationToDelete !== null}
+        title="Delete Conversation"
+        message={
+          conversationToDelete
+            ? `Delete "${conversationToDelete.title}"? This action cannot be undone.`
+            : ""
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        loading={false}
+        onCancel={() => setConversationToDelete(null)}
+        onConfirm={() => {
+          if (!conversationToDelete) return;
+
+          handleDeleteConversation(conversationToDelete.id);
+
+          setConversationToDelete(null);
+        }}
+      />
     </div>
   );
 };

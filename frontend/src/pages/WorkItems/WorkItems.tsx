@@ -87,8 +87,9 @@ export const WorkItems: React.FC = () => {
   const queryClient = useQueryClient();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const [selectedWorkItemId, setSelectedWorkItemId] =
-    useState<string | null>(null);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
+    null
+  );
 
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
 
@@ -168,9 +169,7 @@ export const WorkItems: React.FC = () => {
       }
 
       const hasRunningJobs = currentList.items.some(
-        (item) =>
-          item.status === "QUEUED" ||
-          item.status === "PROCESSING"
+        (item) => item.status === "QUEUED" || item.status === "PROCESSING"
       );
 
       return hasRunningJobs ? 2000 : false;
@@ -198,6 +197,18 @@ export const WorkItems: React.FC = () => {
         queryClient.invalidateQueries({
           queryKey: ["dashboard-overview"],
         }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["automation-logs"],
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["automation-rules"],
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: ["notifications"],
+        }),
       ]);
     },
 
@@ -224,7 +235,7 @@ export const WorkItems: React.FC = () => {
     reprocessMutation.mutate(selectedReprocessWorkItemId);
   };
 
-/* ==========================================================================
+  /* ==========================================================================
    Delete Mutation
 ========================================================================== */
 
@@ -313,7 +324,6 @@ export const WorkItems: React.FC = () => {
     },
     []
   );
-
 
   /* ==========================================================================
        Sorting
@@ -651,7 +661,9 @@ export const WorkItems: React.FC = () => {
                           >
                             <RefreshCw
                               className={`h-4 w-4 ${
-                                reprocessMutation.isPending ? "animate-spin" : ""
+                                reprocessMutation.isPending
+                                  ? "animate-spin"
+                                  : ""
                               }`}
                             />
                           </button>

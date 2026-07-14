@@ -205,6 +205,75 @@ async def list_conversations(
 
 
 @router.get(
+    "/documents/{work_item_id}/conversation",
+    response_model=ConversationResponse,
+    response_model_exclude_none=True,
+    summary="Get Document Conversation",
+)
+async def get_document_conversation(
+    work_item_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(
+        deps.get_current_active_user,
+    ),
+) -> ConversationResponse:
+    """
+    Return the existing conversation for a document.
+
+    If none exists, create one automatically.
+    """
+
+    #
+    # Verify document ownership.
+    #
+    work_item = crud.get_work_item_by_id(
+        db,
+        work_item_id=work_item_id,
+        user_id=current_user.id,
+    )
+
+    if work_item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated document not found.",
+        )
+
+    conversation = crud.get_document_conversation(
+        db,
+        user_id=current_user.id,
+        work_item_id=work_item_id,
+    )
+
+    #
+    # First time opening this document.
+    #
+    if conversation is None:
+
+        conversation = crud.create_conversation(
+            db,
+            user_id=current_user.id,
+            title=work_item.original_filename,
+            work_item_id=work_item_id,
+        )
+
+        logger.info(
+            "Created document conversation %s for WorkItem %s.",
+            conversation.id,
+            work_item_id,
+        )
+
+    else:
+
+        logger.info(
+            "Reusing document conversation %s for WorkItem %s.",
+            conversation.id,
+            work_item_id,
+        )
+
+    return conversation
+
+
+@router.get(
     "/conversations/{conversation_id}",
     response_model=ConversationResponse,
     response_model_exclude_none=True,
@@ -402,6 +471,10 @@ async def post_chat_query(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
+    
+
+    except HTTPException:
+        raise
 
     except Exception:
 

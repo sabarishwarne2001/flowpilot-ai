@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 import { Link, useParams } from "react-router-dom";
 
@@ -17,9 +17,11 @@ import {
 } from "lucide-react";
 
 import { workItemApi } from "@/services/api/workItem";
+import { assistantApi } from "@/services/api/assistant";
 
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { ErrorState } from "@/components/common/ErrorState";
+import ChatPanel from "@/components/assistant/ChatPanel";
 
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 
@@ -96,6 +98,8 @@ export const WorkItemDetails: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<DetailTab>("summary");
 
+  const [conversationId, setConversationId] = useState<string>();
+
   const queryKey = WORK_ITEM_DETAILS_QUERY_KEY(id);
 
   const {
@@ -133,6 +137,8 @@ export const WorkItemDetails: React.FC = () => {
         : false;
     },
   });
+
+
   /* ==========================================================================
        Reprocess Mutation
     ========================================================================== */
@@ -170,6 +176,35 @@ export const WorkItemDetails: React.FC = () => {
 
     reprocessDocument(id);
   }, [id, reprocessDocument]);
+
+
+  /* ==========================================================================
+    Document Conversation
+  ========================================================================== */
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    const createConversation = async () => {
+      try {
+        const conversation =
+          await assistantApi.getDocumentConversation(id);
+
+        setConversationId(conversation.id);
+      } catch (error) {
+        console.error(error);
+
+        toast.error(
+          "Unable to initialize document assistant."
+        );
+      }
+    };
+
+    createConversation();
+  }, [id]);
+
 
   /* ==========================================================================
        Loading State
@@ -604,41 +639,19 @@ export const WorkItemDetails: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 p-10 text-center">
-                    <MessageSquare className="mx-auto mb-4 h-12 w-12 text-primary/70" />
-
-                    <h3 className="text-lg font-bold">
-                      AI Assistant Coming Soon
-                    </h3>
-
-                    <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-muted-foreground">
-                      This workspace will become the dedicated AI conversation
-                      panel for this document.
-                    </p>
-
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      You'll be able to:
-                    </p>
-
-                    <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-                      <li>• Ask questions about this document.</li>
-
-                      <li>• Generate AI summaries.</li>
-
-                      <li>• Explain extracted entities.</li>
-
-                      <li>• Compare multiple uploaded documents.</li>
-
-                      <li>• Receive AI-powered recommendations.</li>
-                    </ul>
-
-                    {/*
-                        Module 6D
-                        Replace this placeholder
-                        with the integrated
-                        ChatPanel component.
-                      */}
-                  </div>
+                  {conversationId ? (
+                    <ChatPanel
+                      mode="document"
+                      conversationId={conversationId}
+                      workItemId={workItem.id}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 p-10">
+                      <p className="text-sm text-muted-foreground">
+                        Initializing document assistant...
+                      </p>
+                    </div>
+                  )}
                 </section>
               )}
             </div>

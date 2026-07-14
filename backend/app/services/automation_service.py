@@ -16,7 +16,16 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.models.work_item import WorkItem
+from app.models.email_settings import EmailSettings
 from app.services.notification.dispatcher import notification_dispatcher
+
+from app.schemas.notification import NotificationCreate
+from app.models.notification import (
+    NotificationChannel,
+    NotificationPriority,
+    NotificationStatus,
+    NotificationType,
+)
 
 logger = logging.getLogger("app.services.automation_service")
 
@@ -144,9 +153,29 @@ class AutomationService:
             event=event,
         )
 
-        if not rules:
-            logger.info("No active automation rules found.")
+        email_settings = crud.get_email_settings(
+            db,
+            user_id=work_item.user_id,
+        )
+
+        if email_settings is None:
+
+            logger.warning(
+                "No Email Settings configured for user %s.",
+                work_item.user_id,
+            )
+
             return stats
+
+        if not email_settings.is_enabled:
+
+            logger.info(
+                "Email notifications are disabled for user %s.",
+                work_item.user_id,
+            )
+
+            return stats
+        
 
         for rule in rules:
 
@@ -187,6 +216,7 @@ class AutomationService:
 
                 success = await notification_dispatcher.send(
                     action_type=rule.action_type,
+                    settings=email_settings,
                     recipient=recipient,
                     title=title,
                     body=body,
@@ -199,10 +229,16 @@ class AutomationService:
 
                 crud.create_notification(
                     db,
-                    user_id=work_item.user_id,
-                    title=title,
-                    message=body,
-                    work_item_id=work_item.id,
+                    notification_in=NotificationCreate(
+                        user_id=work_item.user_id,
+                        work_item_id=work_item.id,
+                        title=title,
+                        message=body,
+                        notification_type=NotificationType.AUTOMATION,
+                        priority=NotificationPriority.INFO,
+                        delivery_channel=NotificationChannel.IN_APP,
+                        delivery_status=NotificationStatus.SENT,
+                    ),
                 )
 
                 crud.create_automation_log(

@@ -22,6 +22,10 @@ from typing import Any
 
 from app.core.config import settings
 
+from fastapi import HTTPException, status
+
+from groq import RateLimitError
+
 logger = logging.getLogger("app.services.llm_service")
 
 
@@ -365,8 +369,11 @@ class LLMService:
         retries: int = 2,
     ) -> str:
         """
-        Execute an LLM request with simple retry support for transient
-        provider failures.
+        Execute an LLM request with retry support.
+
+        Provider-specific failures are converted into
+        application-level exceptions so the API can
+        return appropriate HTTP status codes.
         """
 
         last_exception: Exception | None = None
@@ -380,6 +387,26 @@ class LLMService:
                     temperature=temperature,
                 )
 
+            #
+            # Provider rate limit
+            #
+            except RateLimitError as exc:
+
+                logger.warning(
+                    "LLM rate limit reached."
+                )
+
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        "The AI service is temporarily busy. "
+                        "Please try again in a few minutes."
+                    ),
+                )
+
+            #
+            # Any other provider failure
+            #
             except Exception as exc:
 
                 last_exception = exc
@@ -394,7 +421,13 @@ class LLMService:
             "LLM request failed after all retry attempts."
         )
 
-        raise last_exception  # type: ignore[misc]
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The AI service is temporarily unavailable. "
+                "Please try again later."
+            ),
+        )
 
     def _extract_json(
         self,
