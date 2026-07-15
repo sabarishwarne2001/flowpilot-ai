@@ -31,6 +31,8 @@ from app.services.llm_service import llm_service
 
 from app.services.notification_service import notification_service
 
+from app.services.bm25_service import bm25_service
+
 from app.models.notification import (
     NotificationChannel,
     NotificationPriority,
@@ -91,9 +93,14 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 1
         # -----------------------------
-        raw_text = extract_text_from_document(
+        pages = extract_text_from_document(
             safe_path,
             work_item.file_type,
+        )
+
+        full_text = "\n\n".join(
+            page.text
+            for page in pages
         )
 
         crud.update_job(
@@ -105,7 +112,7 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 2
         # -----------------------------
-        chunks = split_text(raw_text)
+        chunks = split_text(pages)
 
         crud.update_job(
             db,
@@ -117,13 +124,21 @@ async def process_document_pipeline(
         # Stage 3
         # -----------------------------
         if chunks:
-            embeddings = embedding_service.generate_embeddings(chunks)
+            embeddings = embedding_service.generate_embeddings(
+                [
+                    chunk.text
+                    for chunk in chunks
+                ]
+            )
             embedding_service.store_chunks(
                 work_item_id=work_item.id,
                 original_filename=work_item.original_filename,
                 chunks=chunks,
                 embeddings=embeddings,
             )
+            
+            bm25_service.rebuild_index()
+
         else:
             logger.warning(
                 "No chunks generated for WorkItem %s.",
@@ -139,11 +154,11 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 4
         # -----------------------------
-        classification = llm_service.classify_document(raw_text)
+        classification = llm_service.classify_document(full_text)
         document_class = classification.get("document_classification", "Other")
 
         entities = llm_service.extract_entities(
-            raw_text,
+            full_text,
             document_class,
         )
         entities["classification_details"] = classification
@@ -157,7 +172,7 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 5
         # -----------------------------
-        summary = llm_service.generate_summary(raw_text)
+        summary = llm_service.generate_summary(full_text)
 
         crud.update_work_item_state(
             db,

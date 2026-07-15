@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import uuid
 from typing import Any
+from collections import OrderedDict
 
 from sqlalchemy.orm import Session
 
@@ -39,8 +40,9 @@ from app.schemas.assistant import (
     ConversationRole,
     SourceCitation,
 )
-from app.services.embedding_service import embedding_service
+
 from app.services.llm_service import llm_service
+from app.services.retrieval_service import retrieval_service
 
 logger = logging.getLogger(
     "app.services.assistant_service"
@@ -226,6 +228,330 @@ class AssistantService:
     # Context Retrieval
     # ========================================================================
 
+
+    def _deduplicate_results(
+        self,
+        results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Remove duplicate semantic matches.
+
+        When multiple retrieved chunks represent the same
+        document page and chunk index, retain only the
+        highest-similarity match.
+        """
+
+        unique: OrderedDict[
+            tuple[str, int, int],
+            dict[str, Any],
+        ] = OrderedDict()
+
+        for result in sorted(
+            results,
+            key=lambda item: item.get(
+                "similarity_score",
+                0.0,
+            ),
+            reverse=True,
+        ):
+
+            metadata = result.get(
+                "metadata",
+                {},
+            )
+
+            key = (
+                metadata.get("work_item_id", ""),
+                metadata.get("page_number", -1),
+                metadata.get("chunk_index", -1),
+            )
+
+            if key not in unique:
+                unique[key] = result
+
+        logger.info(
+            "Deduplicated %d semantic matches to %d.",
+            len(results),
+            len(unique),
+        )
+
+        return list(unique.values())
+    
+
+    def _rank_documents(
+        self,
+        results: list[dict[str, Any]],
+    ) -> dict[str, float]:
+        """
+        Compute an overall score for every document.
+
+        The score rewards:
+
+        - higher similarity
+        - multiple supporting chunks
+
+        This helps surface the most relevant document instead of
+        simply selecting whichever individual chunk scored highest.
+        """
+
+        document_scores: dict[str, float] = {}
+
+        for result in results:
+
+            metadata = result.get("metadata", {})
+
+            work_item_id = metadata.get("work_item_id")
+
+            if not work_item_id:
+                continue
+
+            similarity = result.get(
+                "similarity_score",
+                0.0,
+            )
+
+            #
+            # Accumulate evidence from multiple chunks.
+            #
+            document_scores[work_item_id] = (
+                document_scores.get(work_item_id, 0.0)
+                + similarity
+            )
+
+        logger.info(
+            "Document ranking scores: %s",
+            document_scores,
+        )
+
+        return document_scores
+    
+
+    def _compute_chunk_score(
+        self,
+        *,
+        query: str,
+        chunk_text: str,
+        similarity_score: float,
+        lexical_score: float,
+        document_name: str,
+    ) -> float:
+        """
+        Compute a production-quality score for a retrieved chunk.
+
+        Multiple ranking signals are combined instead of relying only
+        on embedding similarity.
+        """
+
+        query_lower = query.lower()
+        chunk_lower = chunk_text.lower()
+
+        score = similarity_score * 0.30
+
+        #
+        # Keyword overlap
+        #
+        query_words = {
+            word
+            for word in query_lower.split()
+            if len(word) >= 3
+        }
+
+        chunk_words = set(chunk_lower.split())
+
+        overlap = len(
+            query_words.intersection(chunk_words)
+        )
+
+        if query_words:
+            score += (
+                overlap / len(query_words)
+            ) * 0.30
+
+        #
+        # Exact query phrase
+        #
+        if query_lower in chunk_lower:
+            score += 0.20
+
+        #
+        # Filename relevance
+        #
+        if any(
+            word in document_name.lower()
+            for word in query_words
+        ):
+            score += 0.10
+
+        #
+        # Hybrid lexical score.
+        #
+        score += (
+            lexical_score * 0.25
+        )
+
+        return score
+    
+
+    def _compress_context_results(
+        self,
+        results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Remove highly overlapping retrieved chunks.
+
+        This reduces prompt size while preserving
+        semantic coverage.
+        """
+
+        compressed: list[dict[str, Any]] = []
+
+        seen_prefixes: set[str] = set()
+
+        for result in results:
+
+            text = result["text"].strip()
+
+            #
+            # First 120 characters are usually enough
+            # to identify overlapping chunks.
+            #
+            prefix = text[:120].lower()
+
+            if prefix in seen_prefixes:
+                continue
+
+            seen_prefixes.add(prefix)
+
+            compressed.append(result)
+
+        logger.info(
+            "Compressed retrieved context from %d to %d chunk(s).",
+            len(results),
+            len(compressed),
+        )
+
+        return compressed
+    
+
+    def _determine_top_k(
+        self,
+        query: str,
+    ) -> int:
+        """
+        Dynamically determine the number of chunks
+        to retrieve based on the user's query.
+        """
+
+        query = query.lower().strip()
+
+        broad_keywords = (
+            "summarize",
+            "summary",
+            "overview",
+            "everything",
+            "all",
+            "entire",
+            "complete",
+            "explain",
+        )
+
+        factual_keywords = (
+            "email",
+            "phone",
+            "date",
+            "salary",
+            "amount",
+            "id",
+            "address",
+            "who",
+            "when",
+            "where",
+        )
+
+        #
+        # Broad queries require more context.
+        #
+        if any(
+            keyword in query
+            for keyword in broad_keywords
+        ):
+            return min(
+                settings.RAG_TOP_K + 3,
+                10,
+            )
+
+        #
+        # Simple factual lookups need fewer chunks.
+        #
+        if any(
+            keyword in query
+            for keyword in factual_keywords
+        ):
+            return max(
+                3,
+                settings.RAG_TOP_K - 2,
+            )
+
+        return settings.RAG_TOP_K
+    
+    
+    def _determine_similarity_threshold(
+        self,
+        query: str,
+    ) -> float:
+        """
+        Dynamically determine the minimum similarity
+        score required for retrieved chunks.
+        """
+
+        query = query.lower().strip()
+
+        broad_keywords = (
+            "summarize",
+            "summary",
+            "overview",
+            "all",
+            "everything",
+            "entire",
+            "complete",
+            "explain",
+        )
+
+        factual_keywords = (
+            "email",
+            "phone",
+            "address",
+            "salary",
+            "id",
+            "date",
+            "where",
+            "who",
+            "when",
+        )
+
+        #
+        # Broad questions:
+        # allow slightly lower similarity
+        #
+        if any(keyword in query for keyword in broad_keywords):
+            return max(
+                settings.RAG_SIMILARITY_THRESHOLD - 0.05,
+                0.15,
+            )
+
+        #
+        # Precise questions:
+        # require higher similarity
+        #
+        if any(keyword in query for keyword in factual_keywords):
+            return min(
+                settings.RAG_SIMILARITY_THRESHOLD + 0.10,
+                0.40,
+            )
+
+        return settings.RAG_SIMILARITY_THRESHOLD
+
+
     def _retrieve_context(
         self,
         *,
@@ -238,7 +564,7 @@ class AssistantService:
 
         Returns:
 
-        - concatenated context string
+        - formatted context string
         - structured source citations
         """
 
@@ -260,32 +586,175 @@ class AssistantService:
             for item in work_items
         ]
 
-        #
-        # Decide between Document Assistant
-        # and Global Assistant.
-        #
-        if len(work_item_ids) == 1:
+        top_k = self._determine_top_k(
+            query,
+        )
 
-            results = embedding_service.similarity_search(
-                query=query,
-                top_k=settings.RAG_TOP_K,
-                filter_work_item_id=work_item_ids[0],
-                similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
+        similarity_threshold = (
+            self._determine_similarity_threshold(
+                query
             )
+        )
 
-        else:
+        logger.info(
+            "Dynamic similarity threshold: %.2f",
+            similarity_threshold,
+        )
 
-            results = embedding_service.similarity_search(
-                query=query,
-                top_k=settings.RAG_TOP_K,
-                filter_work_item_ids=work_item_ids,
-                similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
-            )
+        logger.info(
+            "Dynamic top_k selected: %d",
+            top_k,
+        )
+
+        #
+        # Document Assistant
+        #
+        results = retrieval_service.hybrid_search(
+
+            query=query,
+            work_item_ids=[
+                str(work_item_id)
+                for work_item_id in work_item_ids
+            ],
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+        )
+
+        logger.info(
+            "Hybrid retrieval returned %d result(s).",
+            len(results),
+        )
 
         logger.info(
             "Retrieved %d semantic matches.",
             len(results),
         )
+
+        #
+        # Remove duplicate semantic matches.
+        #
+        results = self._deduplicate_results(
+            results,
+        )
+
+        results = self._compress_context_results(
+            results,
+        )
+
+        #
+        # Rank retrieved documents.
+        #
+        document_scores = self._rank_documents(
+            results,
+        )
+
+        #
+        # Production reranking
+        #
+        results.sort(
+            key=lambda item: (
+
+                #
+                # 1. Best overall document
+                #
+                -document_scores.get(
+                    item.get(
+                        "metadata",
+                        {},
+                    ).get(
+                        "work_item_id",
+                        "",
+                    ),
+                    0.0,
+                ),
+
+                #
+                # 2. Best chunk within that document
+                #
+                -self._compute_chunk_score(
+                    query=query,
+                    chunk_text=item["text"],
+                    similarity_score=item.get(
+                        "similarity_score",
+                        0.0,
+                    ),
+                    document_name=item.get(
+                        "metadata",
+                        {},
+                    ).get(
+                        "original_filename",
+                        "",
+                    ),
+                    lexical_score=item.get(
+                        "lexical_score",
+                        0.0,
+                    ),
+                ),
+
+                #
+                # 3. Preserve natural document flow.
+                #
+                item.get(
+                    "metadata",
+                    {},
+                ).get(
+                    "page_number",
+                    0,
+                ),
+
+                item.get(
+                    "metadata",
+                    {},
+                ).get(
+                    "chunk_index",
+                    0,
+                ),
+            ),
+        )
+
+        logger.info(
+            "Top reranked chunks:"
+        )
+
+        for index, result in enumerate(results[:5], start=1):
+
+            metadata = result.get(
+                "metadata",
+                {},
+            )
+
+            rerank_score = self._compute_chunk_score(
+                query=query,
+                chunk_text=result["text"],
+                similarity_score=result.get(
+                    "similarity_score",
+                    0.0,
+                ),
+                document_name=metadata.get(
+                    "original_filename",
+                    "",
+                ),
+                lexical_score=result.get(
+                    "lexical_score",
+                    0.0,
+                ),
+            )
+
+            logger.info(
+                "%d | %s | page=%s | similarity=%.3f | rerank=%.3f",
+                index,
+                metadata.get(
+                    "original_filename",
+                ),
+                metadata.get(
+                    "page_number",
+                ),
+                result.get(
+                    "similarity_score",
+                    0.0,
+                ),
+                rerank_score,
+            )
 
         context_chunks: list[str] = []
 
@@ -293,10 +762,31 @@ class AssistantService:
 
         context_length = 0
 
+        current_document: str | None = None
+
+        current_page: int | None = None
+
         for result in results:
 
-            text = result["text"]
+            metadata = result.get(
+                "metadata",
+                {},
+            )
 
+            document_name = metadata.get(
+                "original_filename",
+                "Unknown Document",
+            )
+
+            page_number = metadata.get(
+                "page_number",
+            )
+
+            text = result["text"].strip()
+
+            #
+            # Respect context budget.
+            #
             if (
                 context_length + len(text)
                 > settings.RAG_MAX_CONTEXT_LENGTH
@@ -312,14 +802,39 @@ class AssistantService:
 
                 text = text[:remaining]
 
+            #
+            # Document header.
+            #
+            if document_name != current_document:
+
+                current_document = document_name
+                current_page = None
+
+                context_chunks.append(
+                    "\n"
+                    + "=" * 70
+                    + "\n"
+                    + f"Document: {document_name}\n"
+                    + "=" * 70
+                )
+
+            #
+            # Page header.
+            #
+            if page_number != current_page:
+
+                current_page = page_number
+
+                if page_number is not None:
+
+                    context_chunks.append(
+                        f"\nPage {page_number}\n"
+                        + "-" * 25
+                    )
+
             context_chunks.append(text)
 
             context_length += len(text)
-
-            metadata = result.get(
-                "metadata",
-                {},
-            )
 
             work_item_id = uuid.UUID(
                 metadata["work_item_id"]
@@ -362,6 +877,7 @@ class AssistantService:
             context,
             citations,
         )
+    
 
     def _build_citation(
         self,
@@ -375,6 +891,7 @@ class AssistantService:
         """
         Construct a standardized source citation.
         """
+        
 
         return SourceCitation(
             work_item_id=work_item_id,
@@ -387,7 +904,11 @@ class AssistantService:
                 "page_number",
             ),
             similarity_score=similarity_score,
-            snippet=text[:200],
+            snippet=(
+                text.strip()
+                    .replace("\n", " ")
+                    .replace("  ", " ")[:220]
+            ),
         )
     
     # ========================================================================

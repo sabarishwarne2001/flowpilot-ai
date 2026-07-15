@@ -6,6 +6,8 @@ pypdf, while scanned PDFs automatically fall back to PaddleOCR.
 """
 
 from pathlib import Path
+from app.services.document_models import DocumentPage
+
 import logging
 
 from pypdf import PdfReader
@@ -21,7 +23,9 @@ IMAGE_MIME_TYPES = {
 }
 
 
-def _extract_from_pdf(pdf_path: Path) -> str:
+def _extract_from_pdf(
+    pdf_path: Path,
+) -> list[DocumentPage]:
     """
     Extract text from an electronic PDF.
 
@@ -32,18 +36,33 @@ def _extract_from_pdf(pdf_path: Path) -> str:
     try:
         reader = PdfReader(str(pdf_path))
 
-        extracted_pages: list[str] = []
+        extracted_pages: list[DocumentPage] = []
 
-        for page in reader.pages:
+        for page_number, page in enumerate(
+            reader.pages,
+            start=1,
+        ):
             page_text = page.extract_text()
 
-            if page_text:
-                page_text = page_text.strip()
+            if not page_text:
+                continue
 
-                if page_text:
-                    extracted_pages.append(page_text)
+            page_text = page_text.strip()
 
-        full_text = "\n".join(extracted_pages)
+            if not page_text:
+                continue
+
+            extracted_pages.append(
+                DocumentPage(
+                    page_number=page_number,
+                    text=page_text,
+                )
+            )
+
+        full_text = "\n".join(
+            page.text
+            for page in extracted_pages
+        )
 
         if not full_text.strip():
             logger.warning(
@@ -51,7 +70,16 @@ def _extract_from_pdf(pdf_path: Path) -> str:
                 pdf_path,
             )
 
-            return ocr_service.extract_text(pdf_path)
+            ocr_text = ocr_service.extract_text(
+                pdf_path,
+            )
+
+            return [
+                DocumentPage(
+                    page_number=1,
+                    text=ocr_text,
+                )
+            ]
 
         logger.info(
             "PDF extraction completed. Pages with text: %d | Characters: %d",
@@ -59,7 +87,7 @@ def _extract_from_pdf(pdf_path: Path) -> str:
             len(full_text),
         )
 
-        return full_text
+        return extracted_pages
 
     except Exception:
         logger.exception("Failed while processing PDF '%s'.", pdf_path)
@@ -69,7 +97,7 @@ def _extract_from_pdf(pdf_path: Path) -> str:
 def extract_text_from_document(
     file_path: str | Path,
     mime_type: str,
-) -> str:
+) -> list[DocumentPage]:
     """
     Route document extraction based on MIME type.
 
@@ -78,7 +106,7 @@ def extract_text_from_document(
         mime_type: MIME type of the uploaded document.
 
     Returns:
-        Extracted plain text.
+        List of extracted document pages.
     """
     file_path = Path(file_path)
 
@@ -102,7 +130,15 @@ def extract_text_from_document(
         return _extract_from_pdf(file_path)
 
     if mime_type in IMAGE_MIME_TYPES:
-        return ocr_service.extract_text(file_path)
+
+        text = ocr_service.extract_text(file_path)
+
+        return [
+            DocumentPage(
+                page_number=1,
+                text=text,
+            )
+        ]
 
     logger.error("Unsupported MIME type: %s", mime_type)
 

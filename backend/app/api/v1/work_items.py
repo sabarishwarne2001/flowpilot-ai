@@ -20,6 +20,7 @@ from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemListResponse, WorkItemStatus, WorkItemUpdate
 from app.services import process_document_pipeline, embedding_service
 from app.schemas.work_item import WorkItemStatus
+from app.services.bm25_service import bm25_service
 
 router = APIRouter(tags=["Work Items"])
 
@@ -302,6 +303,7 @@ async def delete_work_item(
     embedding_service.delete_chunks(
         work_item.id
     )
+    bm25_service.rebuild_index()
 
     crud.delete_work_item(
         db,

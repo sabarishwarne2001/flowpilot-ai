@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     MAX_SOURCE_CITATIONS: int = 5
     LLM_TEMPERATURE: float = 0.2
     LLM_MAX_OUTPUT_TOKENS: int = 2048
+    MAX_CONTEXT_CHUNKS_PER_DOCUMENT: int = 3
+    RERANK_MIN_RESULTS = 4
+    RERANK_MAX_CANDIDATES = 15
+    RERANK_FINAL_RESULTS = 8
 
     # --- Pydantic Field Validators ---
 

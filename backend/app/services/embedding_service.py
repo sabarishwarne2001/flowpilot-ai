@@ -21,6 +21,7 @@ import logging
 import uuid
 from pathlib import Path
 from typing import Any
+from app.services.document_models import DocumentChunk
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -147,7 +148,7 @@ class EmbeddingService:
         self,
         work_item_id: uuid.UUID,
         original_filename: str,
-        chunks: list[str],
+        chunks: list[DocumentChunk],
         embeddings: EmbeddingList,
     ) -> None:
         """
@@ -169,17 +170,18 @@ class EmbeddingService:
             )
 
         ids = [
-            f"{work_item_id}_chunk_{index}"
-            for index in range(len(chunks))
+            f"{work_item_id}_chunk_{chunk.chunk_index}"
+            for chunk in chunks
         ]
 
         metadatas = [
             {
                 "work_item_id": str(work_item_id),
                 "original_filename": original_filename,
-                "chunk_index": index,
+                "chunk_index": chunk.chunk_index,
+                "page_number": chunk.page_number,
             }
-            for index in range(len(chunks))
+            for chunk in chunks
         ]
 
         logger.info(
@@ -190,9 +192,25 @@ class EmbeddingService:
 
         try:
 
+            logger.info(
+                "Storing page-aware metadata for %d chunk(s).",
+                len(chunks),
+            )
+
+            logger.debug(
+                "Page numbers: %s",
+                [
+                    chunk.page_number
+                    for chunk in chunks
+                ],
+            )
+
             self.collection.add(
                 ids=ids,
-                documents=chunks,
+                documents=[
+                    chunk.text
+                    for chunk in chunks
+                ],
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
@@ -408,6 +426,11 @@ class EmbeddingService:
                 continue
 
             metadata = metadatas[index] or {}
+
+            logger.info(
+                "Retrieved metadata: %s",
+                metadata,
+            )
 
             formatted_results.append(
                 {
