@@ -93,7 +93,7 @@ def get_dashboard_overview(
     for work_item in recent_work_items:
 
         if work_item.status == "COMPLETED":
-            event = "UPLOAD_COMPLETED"
+            event = "PROCESS_COMPLETED"
 
         elif work_item.status == "FAILED":
             event = "PROCESS_FAILED"

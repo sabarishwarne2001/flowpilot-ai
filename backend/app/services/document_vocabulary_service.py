@@ -263,7 +263,7 @@ class DocumentVocabularyService(
         if removed is None:
 
             logger.warning(
-                "Vocabulary for document %s does not exist.",
+                "Document vocabulary cleanup completed for WorkItem %s.",
                 work_item_id,
             )
 
@@ -427,6 +427,34 @@ class DocumentVocabularyService(
         )
 
         return token.strip()
+    
+
+    def _normalize_tokens(
+        self,
+        tokens: list[str],
+    ) -> list[str]:
+        """
+        Normalize a collection of raw tokens.
+
+        Applies the same normalization pipeline as
+        `_normalize_token()` and filters invalid tokens.
+        """
+
+        normalized_tokens: list[str] = []
+
+        for token in tokens:
+            normalized = self._normalize_token(token)
+
+            if not normalized:
+                continue
+
+            # _normalize_token() may introduce spaces
+            # (e.g. punctuation removal), so split again.
+            for sub_token in normalized.split():
+                if self._is_valid_token(sub_token):
+                    normalized_tokens.append(sub_token)
+
+        return normalized_tokens
 
 
     def _extract_text_terms(self, full_text: str) -> set[str]:
@@ -516,8 +544,10 @@ class DocumentVocabularyService(
             )
         )
 
-        return self._normalize_tokens(
-            raw_tokens,
+        return set(
+            self._normalize_tokens(
+                raw_tokens,
+            )
         )
 
 
@@ -535,8 +565,10 @@ class DocumentVocabularyService(
 
         raw_tokens = title.split()
 
-        return self._normalize_tokens(
-            raw_tokens,
+        return set(
+            self._normalize_tokens(
+                raw_tokens,
+            )
         )
     
     def _compute_term_frequency(

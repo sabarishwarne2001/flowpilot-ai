@@ -350,7 +350,7 @@ async def delete_work_item(
         work_item.id,
     )
 
-    query_service.update_document_vocabulary(
+    query_service.document_strategy.update_document_vocabulary(
         document_vocabulary_service.get_expansion_map(),
     )
 

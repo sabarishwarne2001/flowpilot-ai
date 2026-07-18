@@ -132,7 +132,7 @@ async def process_document_pipeline(
             full_text=full_text,
         )
 
-        query_service.update_document_vocabulary(
+        query_service.document_strategy.update_document_vocabulary(
             document_vocabulary_service.get_expansion_map(),
         )
 
