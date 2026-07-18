@@ -12,6 +12,7 @@ from app.crud.user import (
 from app.crud.work_item import (
     get_work_item_by_id,
     get_work_items_for_user,
+    get_all_work_items,
     create_work_item,
     update_work_item_state,
     delete_work_item,
@@ -67,6 +68,7 @@ __all__ = [
     "create_user",
     "get_work_item_by_id",
     "get_work_items_for_user",
+    "get_all_work_items",
     "create_work_item",
     "update_work_item_state",
     "delete_work_item",

@@ -33,6 +33,14 @@ from app.services.notification_service import notification_service
 
 from app.services.bm25_service import bm25_service
 
+from app.services.document_vocabulary_service import (
+    DocumentVocabularyService,
+)
+
+from app.services.query_service import (
+    query_service,
+)
+
 from app.models.notification import (
     NotificationChannel,
     NotificationPriority,
@@ -40,6 +48,10 @@ from app.models.notification import (
 )
 
 logger = logging.getLogger("app.services.document_processor")
+
+document_vocabulary_service = (
+    DocumentVocabularyService()
+)
 
 
 async def process_document_pipeline(
@@ -109,6 +121,26 @@ async def process_document_pipeline(
             obj_in=JobUpdate(progress=30),
         )
 
+        #
+        # Build document vocabulary used by
+        # document-aware query expansion.
+        #
+        document_vocabulary_service.update_document(
+            work_item_id=work_item.id,
+            original_filename=work_item.original_filename,
+            title=work_item.original_filename,
+            full_text=full_text,
+        )
+
+        query_service.update_document_vocabulary(
+            document_vocabulary_service.get_expansion_map(),
+        )
+
+        logger.info(
+            "Document vocabulary indexed for WorkItem %s.",
+            work_item.id,
+        )
+
         # -----------------------------
         # Stage 2
         # -----------------------------
@@ -138,6 +170,10 @@ async def process_document_pipeline(
             )
             
             bm25_service.rebuild_index()
+
+            logger.info(
+                "BM25 index rebuilt after document ingestion."
+            )
 
         else:
             logger.warning(
@@ -275,3 +311,5 @@ async def process_document_pipeline(
     finally:
         db.close()
         logger.info("Background session closed.")
+
+    

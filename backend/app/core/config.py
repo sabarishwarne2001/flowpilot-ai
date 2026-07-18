@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
 
     # Sprint 3: Text Chunking & Embedding Model Configurations
-    CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 100
+    CHUNK_SIZE: int = 750
+    CHUNK_OVERLAP: int = 150
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32
 
@@ -89,9 +89,48 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.2
     LLM_MAX_OUTPUT_TOKENS: int = 2048
     MAX_CONTEXT_CHUNKS_PER_DOCUMENT: int = 3
-    RERANK_MIN_RESULTS = 4
-    RERANK_MAX_CANDIDATES = 15
-    RERANK_FINAL_RESULTS = 8
+    
+    RERANK_MIN_RESULTS: int = 4
+    RERANK_MAX_CANDIDATES: int = 15
+    RERANK_FINAL_RESULTS: int = 8
+    
+    DOCUMENT_FILTER_MARGIN: float = 0.25
+    DOCUMENT_SCORE_TOP_K: int = 3
+
+    #
+    # Citation ranking
+    #
+
+    MAX_RESPONSE_CITATIONS: int = 3
+
+    CITATION_RERANK_WEIGHT: float = 0.60
+
+    CITATION_RRF_WEIGHT: float = 0.25
+
+    CITATION_SEMANTIC_WEIGHT: float = 0.15
+
+    #
+    # Citation snippets
+    #
+
+    SNIPPET_MAX_SENTENCES: int = 2
+
+    MAX_SNIPPET_LENGTH: int = 240
+
+    #
+    # Retrieval regression thresholds
+    #
+    RETRIEVAL_MIN_RECALL: float = 0.95
+
+    RETRIEVAL_MIN_PRECISION: float = 0.90
+
+    RETRIEVAL_MIN_MRR: float = 0.85
+
+    RETRIEVAL_MAX_CONTAMINATION: float = 0.10
+
+    RETRIEVAL_MAX_LATENCY_MS: float = 300.0
+
+    RETRIEVAL_FAIL_FAST: bool = False
 
     # --- Pydantic Field Validators ---
 

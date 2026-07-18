@@ -42,7 +42,9 @@ class BM25Service:
         or deleted.
         """
 
-        results = embedding_service.collection.get()
+        collection = embedding_service.get_default_collection()
+
+        results = collection.get()
 
         ids = results.get(
             "ids",

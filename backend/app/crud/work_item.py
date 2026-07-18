@@ -100,6 +100,32 @@ def get_work_items_for_user(
         .all()
     )
 
+
+def get_all_work_items(
+    db: Session,
+) -> list[WorkItem]:
+    """
+    Returns every WorkItem.
+
+    Used by:
+
+    - Knowledge Base reset
+    - Future full re-index
+    - Future backup/export
+    """
+
+    statement = (
+        select(WorkItem)
+        .order_by(WorkItem.created_at.asc())
+    )
+
+    return list(
+        db.execute(statement)
+        .scalars()
+        .all()
+    )
+
+
 def count_work_items_for_user(
     db: Session,
     *,

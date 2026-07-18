@@ -22,6 +22,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 from app.services.document_models import DocumentChunk
+from app.services.query_service import (
+    query_service,
+)
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -88,11 +91,10 @@ class EmbeddingService:
                 ),
             )
 
-            self.collection = self.client.get_or_create_collection(
-                name=settings.CHROMA_COLLECTION_NAME,
-                metadata={
-                    "hnsw:space": "cosine",
-                },
+            self.collections: dict[str, Any] = {}
+
+            self.get_collection(
+                settings.CHROMA_COLLECTION_NAME,
             )
 
             self._initialized = True
@@ -106,6 +108,65 @@ class EmbeddingService:
                 "Embedding service initialization failed."
             )
             raise
+
+    
+    def get_collection(
+        self,
+        collection_name: str,
+    ):
+        """
+        Return an existing Chroma collection or create it on first use.
+
+        Collections are cached so only one Chroma handle exists for each
+        collection during the application's lifetime.
+        """
+
+        if collection_name not in self.collections:
+
+            logger.info(
+                "Opening Chroma collection '%s'.",
+                collection_name,
+            )
+
+            self.collections[
+                collection_name
+            ] = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={
+                    "hnsw:space": "cosine",
+                },
+            )
+
+        return self.collections[
+            collection_name
+        ]
+    
+    def get_default_collection(
+        self,
+    ):
+        """
+        Return the application's primary production collection.
+        """
+
+        return self.get_collection(
+            settings.CHROMA_COLLECTION_NAME,
+        )
+    
+
+    def get_evaluation_collection(
+        self,
+    ):
+        """
+        Return the dedicated evaluation collection.
+
+        This collection is used exclusively by the retrieval
+        evaluation framework and never by production user data.
+        """
+
+        return self.get_collection(
+            "flowpilot_evaluation",
+        )
+    
 
     def generate_embeddings(
         self,
@@ -150,6 +211,8 @@ class EmbeddingService:
         original_filename: str,
         chunks: list[DocumentChunk],
         embeddings: EmbeddingList,
+        *,
+        collection_name: str | None = None,
     ) -> None:
         """
         Persist document chunks together with their embeddings.
@@ -205,7 +268,12 @@ class EmbeddingService:
                 ],
             )
 
-            self.collection.add(
+            collection = self.get_collection(
+                collection_name
+                or settings.CHROMA_COLLECTION_NAME,
+            )
+
+            collection.add(
                 ids=ids,
                 documents=[
                     chunk.text
@@ -240,7 +308,9 @@ class EmbeddingService:
         )
 
         try:
-            self.collection.delete(
+            collection = self.get_default_collection()
+
+            collection.delete(
                 where={
                     "work_item_id": str(work_item_id),
                 }
@@ -327,6 +397,7 @@ class EmbeddingService:
         filter_work_item_id: uuid.UUID | None = None,
         filter_work_item_ids: list[uuid.UUID] | None = None,
         similarity_threshold: float | None = None,
+        collection_name: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Execute semantic similarity search.
@@ -340,11 +411,13 @@ class EmbeddingService:
         ChromaDB's native response format.
         """
 
-        query = query.strip()
+        query = query_service.preprocess(
+            query,
+        )
 
         if not query:
             return []
-
+        
         if top_k <= 0:
             raise ValueError(
                 "top_k must be greater than zero."
@@ -366,9 +439,14 @@ class EmbeddingService:
 
         try:
 
+            collection = self.get_collection(
+                collection_name
+                or settings.CHROMA_COLLECTION_NAME,
+            )
+
             logger.info(
                 "Chroma collection contains %d vectors.",
-                self.collection.count(),
+                collection.count(),
             )
 
             logger.info(
@@ -376,10 +454,15 @@ class EmbeddingService:
                 where,
             )
 
-            results = self.collection.query(
+            results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
                 where=where,
+                include=[
+                    "documents",
+                    "metadatas",
+                    "distances",
+                ],
             )
 
 
@@ -510,7 +593,9 @@ class EmbeddingService:
 
         try:
 
-            self.collection.delete(
+            collection = self.get_default_collection()
+
+            collection.delete(
                 where={
                     "work_item_id": str(work_item_id)
                 }
@@ -528,6 +613,94 @@ class EmbeddingService:
             )
             raise
 
+    def clear_collection(
+        self,
+        *,
+        collection_name: str | None = None,
+    ) -> int:
+        """
+        Remove every vector from the collection while
+        keeping the collection itself.
+
+        Used by:
+
+        - Admin dashboard
+        - Knowledge base reset
+        - Retrieval testing
+        """
+
+        logger.info(
+            "Clearing vector collection."
+        )
+
+        collection = self.get_collection(
+            collection_name
+            or settings.CHROMA_COLLECTION_NAME,
+        )
+
+        existing = collection.get()
+
+        ids = existing.get(
+            "ids",
+            [],
+        )
+
+        if not ids:
+
+            logger.info(
+                "Vector collection already empty."
+            )
+
+            return 0
+
+        collection.delete(
+            ids=ids,
+        )
+
+        logger.info(
+            "Deleted %d vector(s).",
+            len(ids),
+        )
+
+        return len(ids)
+
+
+    def get_searchable_work_item_ids(
+        self,
+        *,
+        collection_name: str | None = None,
+    ) -> list[str]:
+        """
+        Return all searchable work item ids currently
+        stored in the vector database.
+        """
+
+        collection = self.get_collection(
+            collection_name
+            or settings.CHROMA_COLLECTION_NAME,
+        )
+
+        results = collection.get(
+            include=["metadatas"],
+        )
+
+        if not results["metadatas"]:
+            return []
+
+        ids = set()
+
+        for metadata in results["metadatas"]:
+
+            work_item_id = metadata.get(
+                "work_item_id",
+            )
+
+            if work_item_id:
+                ids.add(work_item_id)
+
+        return sorted(ids)
+
+
     def health_check(self) -> bool:
         """
         Verify that the embedding infrastructure is operational.
@@ -539,7 +712,9 @@ class EmbeddingService:
 
         try:
 
-            _ = self.collection.count()
+            collection = self.get_default_collection()
+
+            _ = collection.count()
 
             return True
 

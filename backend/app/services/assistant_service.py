@@ -43,6 +43,12 @@ from app.schemas.assistant import (
 
 from app.services.llm_service import llm_service
 from app.services.retrieval_service import retrieval_service
+from app.services.citation_service import (
+    citation_service,
+)
+from app.services.snippet_service import (
+    snippet_service,
+)
 
 logger = logging.getLogger(
     "app.services.assistant_service"
@@ -101,11 +107,27 @@ class AssistantService:
             conversation=conversation,
         )
 
-        response = llm_service.synthesize_response(
-            query=query_text,
-            context=context,
-            history=history,
-        )
+        #
+        # Skip the LLM when there is no searchable knowledge.
+        #
+        if not context.strip():
+
+            logger.info(
+                "Knowledge base is empty. Returning canned response."
+            )
+
+            response = (
+                "Your knowledge base is currently empty.\n\n"
+                "Please upload one or more documents before asking questions."
+            )
+
+        else:
+
+            response = self._generate_response(
+                query=query_text,
+                context=context,
+                history=history,
+            )
 
         self._save_messages(
             db=db,
@@ -563,321 +585,155 @@ class AssistantService:
         Retrieve semantic context from the Embedding Service.
 
         Returns:
-
         - formatted context string
         - structured source citations
         """
-
         if not work_items:
-
-            logger.info(
-                "No searchable documents available."
-            )
-
+            logger.info("No searchable documents available.")
             return "", []
 
-        filename_lookup = {
-            item.id: item.original_filename
-            for item in work_items
-        }
+        filename_lookup = {item.id: item.original_filename for item in work_items}
+        work_item_ids = [item.id for item in work_items]
+        
+        top_k = self._determine_top_k(query)
+        similarity_threshold = self._determine_similarity_threshold(query)
 
-        work_item_ids = [
-            item.id
-            for item in work_items
-        ]
+        logger.info("Dynamic similarity threshold: %.2f", similarity_threshold)
+        logger.info("Dynamic top_k selected: %d", top_k)
 
-        top_k = self._determine_top_k(
-            query,
-        )
-
-        similarity_threshold = (
-            self._determine_similarity_threshold(
-                query
-            )
-        )
-
-        logger.info(
-            "Dynamic similarity threshold: %.2f",
-            similarity_threshold,
-        )
-
-        logger.info(
-            "Dynamic top_k selected: %d",
-            top_k,
-        )
-
-        #
+        # -----------------------------
         # Document Assistant
-        #
+        # -----------------------------
         results = retrieval_service.hybrid_search(
-
             query=query,
-            work_item_ids=[
-                str(work_item_id)
-                for work_item_id in work_item_ids
-            ],
+            work_item_ids=[str(work_item_id) for work_item_id in work_item_ids],
             top_k=top_k,
             similarity_threshold=similarity_threshold,
         )
+        logger.info("Hybrid retrieval returned %d result(s).", len(results))
+        logger.info("Retrieved %d semantic matches.", len(results))
 
-        logger.info(
-            "Hybrid retrieval returned %d result(s).",
-            len(results),
-        )
+        # -----------------------------
+        # Clean & Compress Matches
+        # -----------------------------
+        results = self._deduplicate_results(results)
+        results = self._compress_context_results(results)
 
-        logger.info(
-            "Retrieved %d semantic matches.",
-            len(results),
-        )
+        if not results:
+            logger.info("No retrieval results after filtering.")
+            return "", []
 
-        #
-        # Remove duplicate semantic matches.
-        #
-        results = self._deduplicate_results(
-            results,
-        )
+        # -----------------------------
+        # Rank Retrieved Documents
+        # -----------------------------
+        document_scores = self._rank_documents(results)
 
-        results = self._compress_context_results(
-            results,
-        )
-
-        #
-        # Rank retrieved documents.
-        #
-        document_scores = self._rank_documents(
-            results,
-        )
-
-        #
         # Production reranking
-        #
         results.sort(
             key=lambda item: (
-
-                #
                 # 1. Best overall document
-                #
-                -document_scores.get(
-                    item.get(
-                        "metadata",
-                        {},
-                    ).get(
-                        "work_item_id",
-                        "",
-                    ),
-                    0.0,
-                ),
-
-                #
+                -document_scores.get(item.get("metadata", {}).get("work_item_id", ""), 0.0),
                 # 2. Best chunk within that document
-                #
                 -self._compute_chunk_score(
                     query=query,
                     chunk_text=item["text"],
-                    similarity_score=item.get(
-                        "similarity_score",
-                        0.0,
-                    ),
-                    document_name=item.get(
-                        "metadata",
-                        {},
-                    ).get(
-                        "original_filename",
-                        "",
-                    ),
-                    lexical_score=item.get(
-                        "lexical_score",
-                        0.0,
-                    ),
+                    similarity_score=item.get("similarity_score", 0.0),
+                    document_name=item.get("metadata", {}).get("original_filename", ""),
+                    lexical_score=item.get("lexical_score", 0.0),
                 ),
-
-                #
                 # 3. Preserve natural document flow.
-                #
-                item.get(
-                    "metadata",
-                    {},
-                ).get(
-                    "page_number",
-                    0,
-                ),
-
-                item.get(
-                    "metadata",
-                    {},
-                ).get(
-                    "chunk_index",
-                    0,
-                ),
+                item.get("metadata", {}).get("page_number", 0),
+                item.get("metadata", {}).get("chunk_index", 0),
             ),
         )
 
-        logger.info(
-            "Top reranked chunks:"
-        )
-
+        logger.info("Top reranked chunks:")
         for index, result in enumerate(results[:5], start=1):
-
-            metadata = result.get(
-                "metadata",
-                {},
-            )
-
+            metadata = result.get("metadata", {})
             rerank_score = self._compute_chunk_score(
                 query=query,
                 chunk_text=result["text"],
-                similarity_score=result.get(
-                    "similarity_score",
-                    0.0,
-                ),
-                document_name=metadata.get(
-                    "original_filename",
-                    "",
-                ),
-                lexical_score=result.get(
-                    "lexical_score",
-                    0.0,
-                ),
+                similarity_score=result.get("similarity_score", 0.0),
+                document_name=metadata.get("original_filename", ""),
+                lexical_score=result.get("lexical_score", 0.0),
             )
-
             logger.info(
                 "%d | %s | page=%s | similarity=%.3f | rerank=%.3f",
                 index,
-                metadata.get(
-                    "original_filename",
-                ),
-                metadata.get(
-                    "page_number",
-                ),
-                result.get(
-                    "similarity_score",
-                    0.0,
-                ),
+                metadata.get("original_filename"),
+                metadata.get("page_number"),
+                result.get("similarity_score", 0.0),
                 rerank_score,
             )
 
         context_chunks: list[str] = []
-
-        citations: list[SourceCitation] = []
-
         context_length = 0
-
         current_document: str | None = None
-
         current_page: int | None = None
 
         for result in results:
-
-            metadata = result.get(
-                "metadata",
-                {},
-            )
-
-            document_name = metadata.get(
-                "original_filename",
-                "Unknown Document",
-            )
-
-            page_number = metadata.get(
-                "page_number",
-            )
-
+            metadata = result.get("metadata", {})
+            document_name = metadata.get("original_filename", "Unknown Document")
+            page_number = metadata.get("page_number")
             text = result["text"].strip()
 
-            #
             # Respect context budget.
-            #
-            if (
-                context_length + len(text)
-                > settings.RAG_MAX_CONTEXT_LENGTH
-            ):
-
-                remaining = (
-                    settings.RAG_MAX_CONTEXT_LENGTH
-                    - context_length
-                )
-
+            if context_length + len(text) > settings.RAG_MAX_CONTEXT_LENGTH:
+                remaining = settings.RAG_MAX_CONTEXT_LENGTH - context_length
                 if remaining <= 50:
                     break
-
                 text = text[:remaining]
 
-            #
             # Document header.
-            #
             if document_name != current_document:
-
                 current_document = document_name
                 current_page = None
-
                 context_chunks.append(
-                    "\n"
-                    + "=" * 70
-                    + "\n"
-                    + f"Document: {document_name}\n"
-                    + "=" * 70
+                    "\n" + "=" * 70 + "\n" + f"Document: {document_name}\n" + "=" * 70
                 )
 
-            #
             # Page header.
-            #
             if page_number != current_page:
-
                 current_page = page_number
-
                 if page_number is not None:
-
-                    context_chunks.append(
-                        f"\nPage {page_number}\n"
-                        + "-" * 25
-                    )
+                    context_chunks.append(f"\nPage {page_number}\n" + "-" * 25)
 
             context_chunks.append(text)
-
             context_length += len(text)
 
-            work_item_id = uuid.UUID(
-                metadata["work_item_id"]
+        # Build context.
+        context = "\n\n".join(context_chunks)
+
+        # Rank citations before converting them into SourceCitation objects.
+        ranked_results = citation_service.rank_citations(results)
+        citations: list[SourceCitation] = []
+
+        for result in ranked_results:
+            metadata = result.get("metadata", {})
+            work_item_id = uuid.UUID(metadata["work_item_id"])
+            citation = self._build_citation(
+                work_item_id=work_item_id,
+                filename=filename_lookup.get(work_item_id, "Unknown Source"),
+                metadata=metadata,
+                text=result["text"],
+                query=query,
+                similarity_score=result.get("similarity_score", 0.0),
+            )
+            citations.append(citation)
+
+        logger.info("Final context length: %d characters.", len(context))
+        logger.info("Returning %d ranked citation(s).", len(citations))
+        
+        for citation in citations:
+            logger.info(
+                "Citation -> %s | Page %s | Chunk %s",
+                citation.original_filename,
+                citation.page_number,
+                citation.chunk_index,
             )
 
-            citations.append(
+        return context, citations
 
-                self._build_citation(
-                    work_item_id=work_item_id,
-                    filename=filename_lookup.get(
-                        work_item_id,
-                        "Unknown Source",
-                    ),
-                    metadata=metadata,
-                    text=text,
-                    similarity_score=result.get(
-                        "similarity_score",
-                        0.0,
-                    ),
-                )
-
-            )
-
-            if (
-                len(citations)
-                >= settings.MAX_SOURCE_CITATIONS
-            ):
-                break
-
-        context = "\n\n".join(
-            context_chunks
-        )
-
-        logger.info(
-            "Final context length: %d characters.",
-            len(context),
-        )
-
-        return (
-            context,
-            citations,
-        )
-    
 
     def _build_citation(
         self,
@@ -886,12 +742,17 @@ class AssistantService:
         filename: str,
         metadata: dict[str, Any],
         text: str,
+        query: str,
         similarity_score: float,
     ) -> SourceCitation:
         """
         Construct a standardized source citation.
         """
-        
+
+        snippet = snippet_service.generate_snippet(
+            text=text,
+            query=query,
+        )
 
         return SourceCitation(
             work_item_id=work_item_id,
@@ -904,11 +765,7 @@ class AssistantService:
                 "page_number",
             ),
             similarity_score=similarity_score,
-            snippet=(
-                text.strip()
-                    .replace("\n", " ")
-                    .replace("  ", " ")[:220]
-            ),
+            snippet=snippet,
         )
     
     # ========================================================================

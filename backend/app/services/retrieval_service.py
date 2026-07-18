@@ -30,8 +30,14 @@ from app.core.config import settings
 from app.services.embedding_service import embedding_service
 from app.services.bm25_service import bm25_service
 from app.services.intent_service import intent_service
+from app.services.query_service import (
+    query_service,
+)
 from app.services.reranker_service import (
     reranker_service,
+)
+from app.services.document_filter_service import (
+    document_filter_service,
 )
 
 import logging
@@ -43,6 +49,107 @@ class RetrievalService:
     """
     Production retrieval abstraction.
     """
+
+    def _determine_similarity_threshold(
+        self,
+        *,
+        query: str,
+    ) -> float:
+        """
+        Production adaptive similarity threshold.
+
+        Short queries are inherently ambiguous and
+        require a lower threshold to avoid missing
+        relevant candidates.
+
+        Long queries are more specific and can use
+        a stricter threshold.
+        """
+
+        words = len(query.split())
+
+        if words <= 2:
+            return 0.12
+
+        if words <= 5:
+            return 0.18
+
+        if words <= 10:
+            return 0.22
+
+        return 0.28
+    
+
+    def _retry_similarity_search(
+        self,
+        *,
+        query: str,
+        top_k: int,
+        similarity_threshold: float,
+        filter_work_item_id: UUID | None = None,
+        filter_work_item_ids: list[UUID] | None = None,
+        collection_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Production retrieval retry.
+
+        Retry with progressively relaxed thresholds
+        when too few semantic candidates are found.
+        """
+
+        retry_thresholds = [
+
+            similarity_threshold,
+
+            max(
+                0.08,
+                similarity_threshold - 0.05,
+            ),
+
+            max(
+                0.05,
+                similarity_threshold - 0.10,
+            ),
+        ]
+
+        best_results: list[dict[str, Any]] = []
+
+        for threshold in retry_thresholds:
+
+            logger.info(
+                "Semantic retrieval attempt (threshold=%.3f)",
+                threshold,
+            )
+
+            results = embedding_service.similarity_search(
+                query=query,
+                top_k=top_k,
+                similarity_threshold=threshold,
+                filter_work_item_id=filter_work_item_id,
+                filter_work_item_ids=filter_work_item_ids,
+                collection_name=collection_name,
+            )
+
+            if len(results) > len(best_results):
+
+                best_results = results
+
+            if len(results) >= 8:
+
+                logger.info(
+                    "Retrieval retry satisfied with %d candidates.",
+                    len(results),
+                )
+
+                return results
+
+        logger.info(
+            "Returning best retry result (%d candidates).",
+            len(best_results),
+        )
+
+        return best_results
+
 
     def _lexical_score(
         self,
@@ -86,6 +193,156 @@ class RetrievalService:
                 score += 1.0
 
         return score
+    
+
+    def _determine_candidate_count(
+        self,
+        *,
+        query: str,
+    ) -> int:
+        """
+        Determine how many semantic candidates should
+        be retrieved before hybrid ranking.
+
+        Short and ambiguous queries require more
+        candidates than long, specific queries.
+        """
+
+        word_count = len(query.split())
+
+        if word_count <= 2:
+            return 25
+
+        if word_count <= 5:
+            return 18
+
+        if word_count <= 10:
+            return 14
+
+        return 10
+
+
+    def _semantic_multi_query_search(
+        self,
+        *,
+        query: str,
+        top_k: int,
+        similarity_threshold: float,
+        filter_work_item_id: UUID | None = None,
+        filter_work_item_ids: list[UUID] | None = None,
+        collection_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Execute semantic retrieval using multiple
+        query variants.
+
+        Candidate chunks are merged and deduplicated
+        before entering the hybrid retrieval pipeline.
+        """
+
+        search_queries = (
+            query_service.generate_search_queries(
+                query,
+            )
+        )
+
+        candidate_count = (
+            self._determine_candidate_count(
+                query=query,
+            )
+        )
+
+        adaptive_threshold = (
+            self._determine_similarity_threshold(
+                query=query,
+            )
+        )
+
+        similarity_threshold = min(
+            similarity_threshold,
+            adaptive_threshold,
+        )
+
+        logger.info(
+            "Adaptive similarity threshold: %.3f",
+            similarity_threshold,
+        )
+
+        logger.info(
+            "Adaptive candidate count: %d",
+            candidate_count,
+        )
+
+        merged: dict[str, dict[str, Any]] = {}
+
+        for search_query in search_queries:
+
+            logger.info(
+                "Semantic search using query: %s",
+                search_query,
+            )
+
+            results = self._retry_similarity_search(
+                query=search_query,
+                top_k=max(
+                    top_k,
+                    candidate_count,
+                ),
+                similarity_threshold=similarity_threshold,
+                filter_work_item_id=filter_work_item_id,
+                filter_work_item_ids=filter_work_item_ids,
+                collection_name=collection_name,
+            )
+
+            for result in results:
+
+                chunk_id = result["id"]
+
+                existing = merged.get(
+                    chunk_id,
+                )
+
+                if existing is None:
+
+                    merged[
+                        chunk_id
+                    ] = result
+
+                    continue
+
+                if (
+                    result.get(
+                        "similarity_score",
+                        0.0,
+                    )
+                    >
+                    existing.get(
+                        "similarity_score",
+                        0.0,
+                    )
+                ):
+
+                    merged[
+                        chunk_id
+                    ] = result
+
+        merged_results = sorted(
+            merged.values(),
+            key=lambda item: item.get(
+                "similarity_score",
+                0.0,
+            ),
+            reverse=True,
+        )
+
+        logger.info(
+            "Multi-query semantic retrieval produced %d unique chunk(s).",
+            len(
+                merged_results,
+            ),
+        )
+
+        return merged_results
 
 
     def retrieve(
@@ -96,6 +353,7 @@ class RetrievalService:
         similarity_threshold: float,
         filter_work_item_id: UUID | None = None,
         filter_work_item_ids: list[UUID] | None = None,
+        collection_name: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Retrieve candidate chunks.
@@ -113,6 +371,7 @@ class RetrievalService:
             similarity_threshold=similarity_threshold,
             filter_work_item_id=filter_work_item_id,
             filter_work_item_ids=filter_work_item_ids,
+            collection_name=collection_name,
         )
 
         #
@@ -153,6 +412,7 @@ class RetrievalService:
         work_item_ids: list[str],
         top_k: int,
         similarity_threshold: float,
+        collection_name: str | None = None,
     ):
         """
         Hybrid retrieval:
@@ -170,14 +430,18 @@ class RetrievalService:
             intent,
         )
 
-        semantic_results = embedding_service.similarity_search(
-            query=query,
-            top_k=top_k,
-            filter_work_item_ids=[
-                uuid.UUID(work_item_id)
-                for work_item_id in work_item_ids
-            ],
-            similarity_threshold=similarity_threshold,
+        semantic_results = (
+            self._semantic_multi_query_search(
+                query=query,
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+                filter_work_item_ids=[
+                    uuid.UUID(work_item_id)
+                    for work_item_id in work_item_ids
+                ], 
+                collection_name=collection_name,
+
+            )
         )
 
         lexical_results = bm25_service.search(
@@ -201,11 +465,51 @@ class RetrievalService:
             results=merged_results,
         )
 
+        #
+        # Estimate baseline retrieval confidence from retrieval signals.
+        #
+        merged_results = (
+            self._estimate_retrieval_confidence(
+                merged_results,
+            )
+        )
+
+        #
+        # Apply metadata prior on top of the baseline confidence.
+        #
+        merged_results = (
+            self._apply_metadata_prior(
+                query=query,
+                results=merged_results,
+            )
+        )
+
+        #
+        # Apply document-level confidence prior.
+        #
+        merged_results = (
+            self._apply_document_prior(
+                merged_results,
+            )
+        )
+
         reranker_service.log_top_results(
             merged_results,
             top_n=3,
         )
 
+        #
+        # Cross-document filtering.
+        #
+        merged_results = (
+            document_filter_service.filter_documents(
+                merged_results,
+            )
+        )
+
+        #
+        # Context balancing.
+        #
         document_count = len(
             {
                 result["metadata"]["work_item_id"]
@@ -213,7 +517,12 @@ class RetrievalService:
             }
         )
 
-        if document_count > 1:
+        if (
+            document_count > 1
+            and self._should_balance_context(
+                merged_results,
+            )
+        ):
 
             logger.info(
                 "Applying context balancing across %d documents.",
@@ -227,13 +536,13 @@ class RetrievalService:
         else:
 
             logger.info(
-                "Skipping context balancing (single document).",
+                "Skipping context balancing.",
             )
 
-            logger.info(
-                "Hybrid retrieval pipeline completed with %d final chunk(s).",
-                len(merged_results),
-            )
+        logger.info(
+            "Hybrid retrieval pipeline completed with %d final chunk(s).",
+            len(merged_results),
+        )
 
         return merged_results
     
@@ -333,6 +642,342 @@ class RetrievalService:
             )
 
         return merged
+    
+
+    def _estimate_retrieval_confidence(
+        self,
+        results: list[dict],
+    ) -> list[dict]:
+        """
+        Estimate retrieval confidence using multiple retrieval
+        signals.
+
+        This confidence is later consumed by document filtering,
+        citation ranking and assistant response generation.
+
+        Confidence is normalized into [0,1].
+        """
+
+        if not results:
+            return results
+
+        rerank_scores = [
+            float(
+                result.get(
+                    "rerank_score",
+                    0.0,
+                )
+            )
+            for result in results
+        ]
+
+        semantic_scores = [
+            float(
+                result.get(
+                    "similarity_score",
+                    0.0,
+                )
+            )
+            for result in results
+        ]
+
+        lexical_scores = [
+            float(
+                result.get(
+                    "lexical_score",
+                    0.0,
+                )
+            )
+            for result in results
+        ]
+
+        max_rerank = max(rerank_scores) if rerank_scores else 1.0
+        min_rerank = min(rerank_scores) if rerank_scores else 0.0
+
+        max_lexical = max(lexical_scores) if lexical_scores else 1.0
+
+        rerank_range = max(
+            max_rerank - min_rerank,
+            1e-6,
+        )
+
+        lexical_range = max(
+            max_lexical,
+            1e-6,
+        )
+
+        for result in results:
+
+            rerank = (
+                float(
+                    result.get(
+                        "rerank_score",
+                        0.0,
+                    )
+                )
+                - min_rerank
+            ) / rerank_range
+
+            semantic = float(
+                result.get(
+                    "similarity_score",
+                    0.0,
+                )
+            )
+
+            lexical = (
+                float(
+                    result.get(
+                        "lexical_score",
+                        0.0,
+                    )
+                )
+                / lexical_range
+            )
+
+            confidence = (
+                0.55 * rerank
+                +
+                0.30 * semantic
+                +
+                0.15 * lexical
+            )
+
+            confidence = max(
+                0.0,
+                min(
+                    confidence,
+                    1.0,
+                ),
+            )
+
+            result[
+                "retrieval_confidence"
+            ] = confidence
+
+        logger.info(
+            "Retrieval confidence estimated for %d chunks.",
+            len(results),
+        )
+
+        return results
+    
+
+    def _apply_metadata_prior(
+        self,
+        *,
+        query: str,
+        results: list[dict],
+    ) -> list[dict]:
+        """
+        Production metadata-aware document prior.
+
+        Boosts retrieval using metadata without overriding
+        semantic relevance.
+
+        Signals:
+        - filename
+        - document title
+        - document keywords
+        """
+
+        if not results:
+            return results
+
+        query_words = {
+            word.lower()
+            for word in query.split()
+            if len(word) >= 3
+        }
+
+        for result in results:
+
+            metadata = result.get(
+                "metadata",
+                {},
+            )
+
+            filename = metadata.get(
+                "original_filename",
+                "",
+            ).lower()
+
+            prior = 0.0
+
+            #
+            # Filename prior.
+            #
+            filename_tokens = {
+                token
+                for token in filename.replace(
+                    "_",
+                    " ",
+                ).replace(
+                    "-",
+                    " ",
+                ).split()
+            }
+
+            overlap = len(
+                query_words
+                &
+                filename_tokens
+            )
+
+            if overlap:
+
+                prior += min(
+                    overlap * 0.35,
+                    1.00,
+                )
+
+            #
+            # Combine with confidence.
+            #
+            result[
+                "retrieval_confidence"
+            ] = min(
+                1.0,
+                result.get(
+                    "retrieval_confidence",
+                    0.0,
+                )
+                + prior,
+            )
+
+            result[
+                "metadata_prior"
+            ] = prior
+
+        results.sort(
+            key=lambda item: (
+                item.get(
+                    "intent_match",
+                    False,
+                ),
+                item.get(
+                    "retrieval_confidence",
+                    0.0,
+                ),
+                item.get(
+                    "rerank_score",
+                    0.0,
+                ),
+            ),
+            reverse=True,
+        )
+
+        logger.info(
+            "Metadata prior applied."
+        )
+
+        return results
+    
+
+    def _apply_document_prior(
+        self,
+        results: list[dict],
+    ) -> list[dict]:
+        """
+        Production semantic document prior.
+
+        Multiple highly-ranked chunks from the same document
+        increase confidence that the document is the correct
+        source.
+
+        This score is intentionally small so it complements,
+        rather than overrides, semantic relevance.
+        """
+
+        if not results:
+            return results
+
+        document_counts: dict[str, int] = {}
+
+        for result in results:
+
+            work_item_id = (
+                result.get(
+                    "metadata",
+                    {},
+                ).get(
+                    "work_item_id",
+                )
+            )
+
+            if work_item_id is None:
+                continue
+
+            document_counts[
+                work_item_id
+            ] = (
+                document_counts.get(
+                    work_item_id,
+                    0,
+                )
+                + 1
+            )
+
+        max_count = max(
+            document_counts.values(),
+            default=1,
+        )
+
+        for result in results:
+
+            work_item_id = (
+                result.get(
+                    "metadata",
+                    {},
+                ).get(
+                    "work_item_id",
+                )
+            )
+
+            count = document_counts.get(
+                work_item_id,
+                1,
+            )
+
+            prior = (
+                count
+                / max_count
+            ) * 0.15
+
+            result[
+                "document_prior"
+            ] = prior
+
+            result[
+                "retrieval_confidence"
+            ] = min(
+                1.0,
+                result.get(
+                    "retrieval_confidence",
+                    0.0,
+                )
+                + prior,
+            )
+
+        results.sort(
+            key=lambda item: (
+                item.get(
+                    "retrieval_confidence",
+                    0.0,
+                ),
+                item.get(
+                    "rerank_score",
+                    0.0,
+                ),
+            ),
+            reverse=True,
+        )
+
+        logger.info(
+            "Semantic document prior applied."
+        )
+
+        return results
 
 
     def _boost_intent_documents(
@@ -366,10 +1011,13 @@ class RetrievalService:
                 0.0,
             )
 
-            if intent in filename:
+            intent_match = intent in filename
+
+            if intent_match:
                 score += 1.0
 
             result["rrf_score"] = score
+            result["intent_match"] = intent_match
 
             boosted.append(result)
 
@@ -382,6 +1030,38 @@ class RetrievalService:
         )
 
         return boosted
+    
+    def _should_balance_context(
+        self,
+        results: list[dict],
+    ) -> bool:
+        """
+        Decide whether cross-document context balancing
+        should be applied.
+        """
+
+        if len(results) <= 1:
+            return False
+
+        top_document = (
+            results[0]
+            .get("metadata", {})
+            .get("work_item_id")
+        )
+
+        if top_document is None:
+            return True
+
+        top_document_chunks = sum(
+            1
+            for result in results
+            if (
+                result.get("metadata", {}).get("work_item_id")
+                == top_document
+            )
+        )
+
+        return top_document_chunks < 3
     
 
     def _balance_documents(
@@ -421,7 +1101,7 @@ class RetrievalService:
             chunks.sort(
                 key=lambda item: item.get(
                     "rerank_score",
-                    0.0,
+                    float("-inf"),
                 ),
                 reverse=True,
             )

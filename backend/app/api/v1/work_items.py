@@ -21,6 +21,20 @@ from app.schemas.work_item import WorkItemCreate, WorkItemResponse, WorkItemList
 from app.services import process_document_pipeline, embedding_service
 from app.schemas.work_item import WorkItemStatus
 from app.services.bm25_service import bm25_service
+from app.services.knowledge_base_service import (
+    knowledge_base_service,
+)
+from app.services.document_processor import (
+    document_vocabulary_service,
+)
+
+from app.services.query_service import (
+    query_service,
+)
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Work Items"])
 
@@ -269,6 +283,33 @@ async def reprocess_work_item(
 
 
 @router.delete(
+    "/knowledge-base",
+    status_code=status.HTTP_200_OK,
+)
+async def clear_knowledge_base(
+    current_user: User = Depends(
+        deps.get_current_active_user,
+    ),
+):
+    """
+    Remove every searchable document from
+    the AI knowledge base.
+    """
+
+    stats = (
+        knowledge_base_service.clear_knowledge_base()
+    )
+
+    return {
+
+    "message": "Knowledge base cleared successfully.",
+
+    **stats,
+
+}
+
+
+@router.delete(
     "/{work_item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
@@ -305,7 +346,21 @@ async def delete_work_item(
     )
     bm25_service.rebuild_index()
 
+    document_vocabulary_service.remove_document(
+        work_item.id,
+    )
+
+    query_service.update_document_vocabulary(
+        document_vocabulary_service.get_expansion_map(),
+    )
+
+    logger.info(
+        "Vocabulary removed for WorkItem %s.",
+        work_item.id,
+    )
+
     crud.delete_work_item(
         db,
         db_obj=work_item,
     )
+

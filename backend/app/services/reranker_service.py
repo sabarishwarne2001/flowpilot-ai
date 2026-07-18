@@ -22,7 +22,7 @@ class RerankerService:
     Cross-encoder based reranking.
     """
 
-    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    MODEL_NAME = "BAAI/bge-reranker-base"
 
 
     def __init__(self) -> None:
@@ -81,15 +81,35 @@ class RerankerService:
         ]
 
         #
-        # Build query-document pairs.
+        # Build context-aware query-document pairs.
         #
-        pairs = [
-            (
-                query,
-                result["text"],
+        pairs = []
+
+        for result in results:
+
+            metadata = result.get(
+                "metadata",
+                {},
             )
-            for result in results
-        ]
+
+            filename = metadata.get(
+                "original_filename",
+                "Unknown Document",
+            )
+
+            enriched_text = (
+                f"Document: {filename}\n\n"
+                f"Content:\n"
+                f"{result['text']}"
+            )
+
+            pairs.append(
+                (
+                    query,
+                    enriched_text,
+                )
+            )
+            
 
         #
         # Predict relevance scores.
@@ -97,6 +117,7 @@ class RerankerService:
         scores = self.model.predict(
             pairs,
         )
+
 
         #
         # Attach scores.
@@ -114,9 +135,17 @@ class RerankerService:
         # Highest score first.
         #
         results.sort(
-            key=lambda item: item[
-                "rerank_score"
-            ],
+            key=lambda item: (
+                item.get(
+                    "rerank_score",
+                    float("-inf"),
+                )
+                +
+                item.get(
+                    "rrf_score",
+                    0.0,
+                )
+            ),
             reverse=True,
         )
 
