@@ -87,7 +87,18 @@ class Settings(BaseSettings):
     MAX_CONVERSATION_TITLE_LENGTH: int = 150
     MAX_SOURCE_CITATIONS: int = 5
     LLM_TEMPERATURE: float = 0.2
+    LLM_CLASSIFICATION_TEMPERATURE: float = 0.0
+    LLM_ENTITY_EXTRACTION_TEMPERATURE: float = 0.1
+    LLM_SUMMARIZATION_TEMPERATURE: float = 0.3
+    GROQ_RAG_TEMPERATURE: float = 0.3
+    GEMINI_RAG_TEMPERATURE: float = 0.2
     LLM_MAX_OUTPUT_TOKENS: int = 2048
+    
+    # Sprint 5: Token Tracking & Usage Analytics
+    ENABLE_TOKEN_TRACKING: bool = True
+
+    TOKEN_COST_PER_1K_INPUT: float = 0.0
+    TOKEN_COST_PER_1K_OUTPUT: float = 0.0
     MAX_CONTEXT_CHUNKS_PER_DOCUMENT: int = 3
     
     RERANK_MIN_RESULTS: int = 4

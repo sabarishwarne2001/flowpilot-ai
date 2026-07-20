@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Bot, User, FileText } from "lucide-react";
 
 import type { ConversationMessage, SourceCitation } from "@/types/assistant";
@@ -99,6 +99,7 @@ function renderMessageContent(
 export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
   ({ message, onCitationClick, className = "" }) => {
     const isUser = message.role === "user";
+    const [showTokenUsage, setShowTokenUsage] = useState(false);
     return (
       <article
         className={`
@@ -268,6 +269,52 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
               </div>
             </section>
           )}
+
+          {/* ======================================================
+              Token Usage
+          ====================================================== */}
+
+          {!isUser && message.token_usage && (
+            <section className="mt-4 border-t border-border/20 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowTokenUsage(!showTokenUsage)}
+                className="flex w-full items-center justify-between text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span>⚡ Token Usage</span>
+                <span>{showTokenUsage ? "▲" : "▼"}</span>
+              </button>
+
+              {showTokenUsage && (
+                <div className="mt-3 rounded-lg border border-border/30 bg-muted/20 p-3 text-xs">
+                  <div className="grid grid-cols-2 gap-y-2">
+                    <span className="text-muted-foreground">Provider</span>
+                    <span>{message.token_usage.provider}</span>
+
+                    <span className="text-muted-foreground">Model</span>
+                    <span>{message.token_usage.model}</span>
+
+                    <span className="text-muted-foreground">Prompt</span>
+                    <span>{message.token_usage.prompt_tokens}</span>
+
+                    <span className="text-muted-foreground">Completion</span>
+                    <span>{message.token_usage.completion_tokens}</span>
+
+                    <span className="text-muted-foreground">Total</span>
+                    <span>{message.token_usage.total_tokens}</span>
+
+                    <span className="text-muted-foreground">
+                      Estimated Cost
+                    </span>
+                    <span>
+                      ${message.token_usage.estimated_cost.toFixed(4)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* ======================================================
               Future Metadata Footer
           ====================================================== */}

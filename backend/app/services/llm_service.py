@@ -20,7 +20,15 @@ import json
 import logging
 from typing import Any
 
+from app.prompts.intents import PromptIntent
+
+from app.prompts.prompt_builder import PromptBuilder
+
+from app.prompts import RAG_PROMPT_VERSION
+
 from app.core.config import settings
+
+from app.schemas.assistant import TokenUsage
 
 from fastapi import HTTPException, status
 
@@ -131,18 +139,82 @@ Document:
 
 
 RAG_SYNTHESIS_PROMPT_TEMPLATE = """
-You are FlowPilot AI.
+You are FlowPilot AI, an enterprise document intelligence assistant.
 
-Answer the user's question using ONLY the supplied document context.
+Your responsibility is to answer the user's question using ONLY the supplied document context.
 
 Rules:
 
 - Never invent information.
 - Never guess.
-- If the answer is unavailable in the supplied documents,
-  clearly state that the information could not be found.
-- Prefer concise answers.
-- Maintain professional tone.
+- Never use outside knowledge.
+- If the answer cannot be found in the supplied documents,
+  clearly state that the information is unavailable.
+- Maintain a professional and objective tone.
+- Be concise unless the question requires detailed reasoning.
+
+When generating your response:
+
+1. For simple factual questions:
+   - Respond naturally in one concise answer.
+
+2. For analytical, comparison, summarization, or multi-part questions,
+   organize the response using the following sections when appropriate:
+
+   Direct Answer
+
+   Key Findings
+
+   Supporting Evidence
+
+   Confidence
+   (High / Medium / Low based on the supplied document context.)
+
+3. Never fabricate confidence.
+   Lower confidence whenever:
+   - retrieved evidence is weak,
+   - documents are incomplete,
+   - or the answer requires inference.
+
+4. If multiple retrieved documents disagree,
+   explain the conflict instead of choosing one.
+
+5. When referring to information,
+   use the supplied document context only.
+
+
+========================
+Task-Specific Instructions
+========================
+
+{intent_instructions}
+
+========================
+Evidence & Citation Guidance
+========================
+
+When referring to retrieved information:
+
+- Clearly distinguish between facts that are explicitly supported by the supplied document context and conclusions drawn from multiple pieces of evidence.
+- Avoid phrases such as "I think", "I assume", or "it is likely" unless uncertainty is genuinely caused by incomplete document evidence.
+- Do not invent document names, page numbers, or citation identifiers.
+- Refer naturally to "the supplied documents", "the retrieved document context", or "the available evidence" when appropriate.
+- Never claim evidence exists if it is not present in the supplied context.
+
+========================
+Context Usage Guidance
+========================
+
+The supplied document context may contain information from one or more documents.
+
+When answering:
+
+- Base every statement only on the supplied context.
+- Combine information across multiple documents when appropriate.
+- If multiple documents disagree, explicitly mention the disagreement.
+- Do not assume missing information exists.
+- If evidence is weak or incomplete, state that clearly.
+- Prefer the strongest supporting evidence available in the supplied context.
 
 ========================
 Document Context
@@ -164,6 +236,8 @@ User Question
 
 Assistant:
 """
+
+GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE = RAG_SYNTHESIS_PROMPT_TEMPLATE
 
 
 class LLMService:
@@ -263,6 +337,30 @@ class LLMService:
             )
 
         return provider
+    
+    def _get_rag_temperature(self) -> float:
+        """
+        Return the provider-specific temperature used for conversational RAG.
+        """
+
+        provider = self._validate_provider()
+
+        if provider == "groq":
+            return settings.GROQ_RAG_TEMPERATURE
+
+        return settings.GEMINI_RAG_TEMPERATURE
+    
+    def _get_rag_prompt_template(self) -> str:
+        """
+        Return the provider-specific conversational RAG prompt template.
+        """
+
+        provider = self._validate_provider()
+
+        if provider == "groq":
+            return RAG_SYNTHESIS_PROMPT_TEMPLATE
+
+        return GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE
 
     def _query_groq(
         self,
@@ -292,12 +390,27 @@ class LLMService:
             )
         )
 
-        return str(
-            completion
-            .choices[0]
-            .message
-            .content
-        ).strip()
+        return (
+            str(
+                completion
+                .choices[0]
+                .message
+                .content
+            ).strip(),
+            TokenUsage(
+                provider="groq",
+                model=settings.GROQ_MODEL_NAME,
+                prompt_tokens=completion.usage.prompt_tokens,
+                completion_tokens=completion.usage.completion_tokens,
+                total_tokens=completion.usage.total_tokens,
+                estimated_cost=(
+                    (completion.usage.prompt_tokens / 1000)
+                    * settings.TOKEN_COST_PER_1K_INPUT
+                    + (completion.usage.completion_tokens / 1000)
+                    * settings.TOKEN_COST_PER_1K_OUTPUT
+                ),
+            )
+        )
 
     def _query_gemini(
         self,
@@ -334,7 +447,7 @@ class LLMService:
         *,
         prompt: str,
         temperature: float,
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """
         Route a request to the configured provider.
         """
@@ -352,9 +465,21 @@ class LLMService:
                 temperature=temperature,
             )
 
-        return self._query_gemini(
+        response = self._query_gemini(
             prompt=prompt,
             temperature=temperature,
+        )
+
+        return (
+            response,
+            TokenUsage(
+                provider="gemini",
+                model=settings.GEMINI_MODEL_NAME,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                estimated_cost=0.0,
+            ),
         )
     
     # ========================================================================
@@ -367,7 +492,7 @@ class LLMService:
         prompt: str,
         temperature: float,
         retries: int = 2,
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """
         Execute an LLM request with retry support.
 
@@ -498,6 +623,59 @@ class LLMService:
     # Prompt Builders
     # ========================================================================
 
+
+    def _detect_prompt_intent(
+        self,
+        query: str,
+    ) -> PromptIntent:
+        """
+        Detect the user's intent so the prompt can adapt its instructions.
+        """
+
+        normalized = query.lower()
+
+        if any(word in normalized for word in (
+            "summarize",
+            "summary",
+            "overview",
+            "brief",
+        )):
+            return PromptIntent.SUMMARIZATION
+
+        if any(word in normalized for word in (
+            "compare",
+            "difference",
+            "different",
+            "versus",
+            "vs",
+        )):
+            return PromptIntent.COMPARISON
+
+        if any(word in normalized for word in (
+            "extract",
+            "list",
+            "show all",
+            "identify",
+        )):
+            return PromptIntent.EXTRACTION
+
+        if any(word in normalized for word in (
+            "explain",
+            "why",
+            "how",
+        )):
+            return PromptIntent.EXPLANATION
+
+        if any(word in normalized for word in (
+            "policy",
+            "compliance",
+            "regulation",
+            "legal",
+        )):
+            return PromptIntent.COMPLIANCE
+
+        return PromptIntent.QUESTION_ANSWERING
+
     def _build_classification_prompt(
         self,
         text: str,
@@ -539,23 +717,26 @@ class LLMService:
         Construct the conversational RAG prompt.
         """
 
-        history_lines = [
-            f"{message['role'].capitalize()}: {message['content']}"
-            for message in history
-        ]
+        history_text = PromptBuilder.build_history(history)
 
-        history_text = (
-            "\n".join(history_lines)
-            if history_lines
-            else "No previous conversation."
+        intent = self._detect_prompt_intent(query)
+
+        logger.debug(
+            "Building RAG prompt version %s for intent '%s'.",
+            RAG_PROMPT_VERSION,
+            intent.value,
         )
 
-        return RAG_SYNTHESIS_PROMPT_TEMPLATE.format(
-            context=context[
-                : settings.RAG_MAX_CONTEXT_LENGTH
-            ],
+        intent_instructions = PromptBuilder.get_intent_instructions(
+            intent
+        )
+
+        return PromptBuilder.build_rag_prompt(
+            template=self._get_rag_prompt_template(),
+            context=context[: settings.RAG_MAX_CONTEXT_LENGTH],
             history=history_text,
             query=query,
+            intent_instructions=intent_instructions,
         )
     
     # ========================================================================
@@ -585,9 +766,9 @@ class LLMService:
             text,
         )
 
-        response = self._retry_query(
+        response, _ = self._retry_query(
             prompt=prompt,
-            temperature=0.0,
+            temperature=settings.LLM_CLASSIFICATION_TEMPERATURE,
         )
 
         return self._extract_json(
@@ -616,9 +797,9 @@ class LLMService:
             document_classification=document_classification,
         )
 
-        response = self._retry_query(
+        response, _ = self._retry_query(
             prompt=prompt,
-            temperature=0.1,
+            temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
         )
 
         return self._extract_json(
@@ -641,9 +822,9 @@ class LLMService:
             text,
         )
 
-        response = self._retry_query(
+        response, _ = self._retry_query(
             prompt=prompt,
-            temperature=0.3,
+            temperature=settings.LLM_SUMMARIZATION_TEMPERATURE,
         )
 
         return response.strip()
@@ -654,7 +835,7 @@ class LLMService:
         query: str,
         context: str,
         history: list[dict[str, str]],
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """
         Generate a conversational RAG response.
 
@@ -671,12 +852,12 @@ class LLMService:
             history=history,
         )
 
-        response = self._retry_query(
+        response, token_usage = self._retry_query(
             prompt=prompt,
-            temperature=settings.LLM_TEMPERATURE,
+            temperature=self._get_rag_temperature(),
         )
 
-        return response.strip()
+        return response.strip(), token_usage
     
 
     # ========================================================================

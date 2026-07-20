@@ -151,6 +151,7 @@ def create_conversation_message(
     role: str,
     content: str,
     sources: list[dict[str, Any]] | None = None,
+    token_usage: dict[str, Any] | None = None,
 ) -> ConversationMessage:
     """
     Create and persist a conversation message.
@@ -161,6 +162,7 @@ def create_conversation_message(
         role=role,
         content=content,
         sources=sources,
+        token_usage=token_usage,
     )
 
     db.add(message)

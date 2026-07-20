@@ -39,6 +39,7 @@ from app.schemas.assistant import (
     ChatResponse,
     ConversationRole,
     SourceCitation,
+    TokenUsage
 )
 
 from app.services.llm_service import llm_service
@@ -121,9 +122,18 @@ class AssistantService:
                 "Please upload one or more documents before asking questions."
             )
 
+            token_usage = TokenUsage(
+                provider="none",
+                model="none",
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                estimated_cost=0.0,
+            )
+
         else:
 
-            response = self._generate_response(
+            response, token_usage = self._generate_response(
                 query=query_text,
                 context=context,
                 history=history,
@@ -135,6 +145,7 @@ class AssistantService:
             query=query_text,
             response=response,
             citations=citations,
+            token_usage=token_usage,
         )
 
         self._initialize_title(
@@ -147,6 +158,7 @@ class AssistantService:
         return self._build_chat_response(
             response=response,
             citations=citations,
+            token_usage=token_usage,
         )
     
     # ========================================================================
@@ -810,7 +822,7 @@ class AssistantService:
         query: str,
         context: str,
         history: list[dict[str, str]],
-    ) -> str:
+    ) -> tuple[str, TokenUsage]:
         """
         Generate an AI response.
 
@@ -822,7 +834,7 @@ class AssistantService:
             "Generating assistant response."
         )
 
-        response = llm_service.synthesize_response(
+        response, token_usage = llm_service.synthesize_response(
             query=query,
             context=context,
             history=history,
@@ -832,7 +844,7 @@ class AssistantService:
             "Assistant response generated successfully."
         )
 
-        return response
+        return response, token_usage
     
     # ========================================================================
     # Persistence
@@ -846,6 +858,7 @@ class AssistantService:
         query: str,
         response: str,
         citations: list[SourceCitation],
+        token_usage: TokenUsage,
     ) -> None:
         """
         Persist both the user's message and the assistant's response.
@@ -876,6 +889,7 @@ class AssistantService:
             role=ConversationRole.ASSISTANT.value,
             content=response,
             sources=serialized_sources,
+            token_usage=token_usage.model_dump(mode="json"),
         )
 
         logger.info(
@@ -937,6 +951,7 @@ class AssistantService:
         *,
         response: str,
         citations: list[SourceCitation],
+        token_usage: TokenUsage,
     ) -> ChatResponse:
         """
         Construct the standardized API response.
@@ -956,6 +971,7 @@ class AssistantService:
         return ChatResponse(
             response=response,
             sources=citations,
+            token_usage=token_usage,
         )
 
 

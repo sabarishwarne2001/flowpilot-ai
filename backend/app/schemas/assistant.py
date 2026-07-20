@@ -68,6 +68,21 @@ class SourceCitation(BaseModel):
     }
 
 
+class TokenUsage(BaseModel):
+    """
+    Standardized token usage metadata returned by every LLM provider.
+    """
+
+    provider: str
+    model: str
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+    estimated_cost: float
+
+
 class ConversationMessageBase(BaseModel):
     """
     Base schema shared across conversation message models.
@@ -87,6 +102,11 @@ class ConversationMessageBase(BaseModel):
     sources: list[SourceCitation] | None = Field(
         None,
         description="Structured RAG citations associated with this message.",
+    )
+
+    token_usage: TokenUsage | None = Field(
+        None,
+        description="Token usage metadata for assistant messages.",
     )
 
 
@@ -198,9 +218,6 @@ class ChatQuery(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """
-    AI Assistant response returned to clients.
-    """
 
     response: str = Field(
         ...,
@@ -210,6 +227,11 @@ class ChatResponse(BaseModel):
     sources: list[SourceCitation] = Field(
         default_factory=list,
         description="Document citations supporting the generated response.",
+    )
+
+    token_usage: TokenUsage = Field(
+        ...,
+        description="Token usage metadata for the generated response.",
     )
 
     model_config = {

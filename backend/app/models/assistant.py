@@ -94,6 +94,11 @@ class ConversationMessage(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
+    token_usage: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
     conversation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("conversations.id", ondelete="CASCADE"),

@@ -124,6 +124,8 @@ export interface ConversationMessage {
   readonly agent_type?: AgentType;
 
   readonly model?: AIModelIdentifier;
+
+  readonly token_usage?: TokenUsage;
 }
 
 /* ========================================================================== */
@@ -208,11 +210,17 @@ export interface ConversationHistoryQuery {
  * Token accounting returned by the LLM provider.
  */
 export interface TokenUsage {
+  readonly provider: string;
+
+  readonly model: string;
+
   readonly prompt_tokens: number;
 
   readonly completion_tokens: number;
 
   readonly total_tokens: number;
+
+  readonly estimated_cost: number;
 }
 
 /**
