@@ -61,6 +61,22 @@ from app.crud.assistant import (
     get_conversation_messages,
     delete_conversation_messages,
 )
+from app.crud.workspace import (
+    create_workspace,
+    get_workspace,
+    workspace_exists,
+    update_workspace,
+    delete_workspace,
+    upsert_workspace,
+)
+from app.crud.ai_settings import (
+    create_ai_settings,
+    get_ai_settings,
+    ai_settings_exists,
+    update_ai_settings,
+    upsert_ai_settings,
+)
+
 
 __all__ = [
     "get_user_by_id",
@@ -105,4 +121,15 @@ __all__ = [
     "create_conversation_message",
     "get_conversation_messages",
     "delete_conversation_messages",
+    "create_workspace",
+    "get_workspace",
+    "workspace_exists",
+    "update_workspace",
+    "delete_workspace",
+    "upsert_workspace",
+    "create_ai_settings",
+    "get_ai_settings",
+    "ai_settings_exists",
+    "update_ai_settings",
+    "upsert_ai_settings",
 ]

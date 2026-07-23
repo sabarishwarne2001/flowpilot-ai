@@ -15,6 +15,8 @@ from app.api.v1.notifications import router as notifications_router
 from app.api.v1.assistant import router as assistant_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.email_settings import router as email_settings_router
+from app.api.v1 import workspace
+from app.api.v1 import ai_settings
 
 api_router = APIRouter()
 
@@ -22,11 +24,7 @@ api_router.include_router(health_router, prefix="/health", tags=["Health"])
 
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 
-api_router.include_router(
-    dashboard_router,
-    prefix="/dashboard",
-    tags=["Dashboard"],
-)
+api_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 
 api_router.include_router(work_items_router, prefix="/work-items", tags=["Work Items"])
 
@@ -36,8 +34,8 @@ api_router.include_router(notifications_router, prefix="/notifications", tags=["
 
 api_router.include_router(assistant_router, prefix="/assistant", tags=["AI Assistant"])
 
-api_router.include_router(
-    email_settings_router,
-    prefix="/email-settings",
-    tags=["Email Settings"],
-)
+api_router.include_router(email_settings_router, prefix="/email-settings", tags=["Email Settings"])
+
+api_router.include_router(workspace.router, prefix="/workspace",)
+
+api_router.include_router(ai_settings.router, prefix="/ai-settings",)

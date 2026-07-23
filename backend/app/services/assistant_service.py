@@ -32,6 +32,7 @@ from collections import OrderedDict
 from sqlalchemy.orm import Session
 
 from app import crud
+from app.models.ai_settings import AISettings
 from app.core.config import settings
 from app.models.assistant import Conversation
 from app.models.work_item import WorkItem
@@ -133,10 +134,16 @@ class AssistantService:
 
         else:
 
+            ai_settings = self._get_ai_settings(
+                db=db,
+                user_id=user_id,
+            )
+
             response, token_usage = self._generate_response(
                 query=query_text,
                 context=context,
                 history=history,
+                ai_settings=ai_settings,
             )
 
         self._save_messages(
@@ -815,6 +822,30 @@ class AssistantService:
             }
             for message in messages
         ]
+    
+    def _get_ai_settings(
+        self,
+        *,
+        db: Session,
+        user_id: uuid.UUID,
+    ) -> AISettings:
+        """
+        Load the user's AI runtime configuration.
+
+        AI Settings are required for every LLM request.
+        """
+
+        ai_settings = crud.get_ai_settings(
+            db=db,
+            user_id=user_id,
+        )
+
+        if ai_settings is None:
+            raise ValueError(
+                "AI settings have not been configured."
+            )
+
+        return ai_settings
 
     def _generate_response(
         self,
@@ -822,6 +853,7 @@ class AssistantService:
         query: str,
         context: str,
         history: list[dict[str, str]],
+        ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
         """
         Generate an AI response.
@@ -838,6 +870,7 @@ class AssistantService:
             query=query,
             context=context,
             history=history,
+            ai_settings=ai_settings,
         )
 
         logger.info(

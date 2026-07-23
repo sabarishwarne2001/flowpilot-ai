@@ -15,7 +15,7 @@ import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
 import { NotFound } from "@/pages/NotFound";
 import { Notifications } from "@/pages/Notifications/Notifications";
-import { Settings } from "@/pages/Settings/Settings";
+import  Settings  from "@/pages/Settings/Settings";
 import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
 import { WorkItems } from "@/pages/WorkItems/WorkItems";
 

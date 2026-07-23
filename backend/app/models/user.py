@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from app.models.notification import Notification
     from app.models.assistant import Conversation
     from app.models.email_settings import EmailSettings
+    from app.models.workspace import Workspace
+    from app.models.ai_settings import AISettings
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -75,6 +77,24 @@ class User(Base, UUIDMixin, TimestampMixin):
     # Bidirectional SQLAlchemy relationship mapping user SMTP configuration
     email_settings: Mapped["EmailSettings | None"] = relationship(
         "EmailSettings",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping user Workspace
+    workspace: Mapped["Workspace | None"] = relationship(
+        "Workspace",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
+
+    # Bidirectional SQLAlchemy relationship mapping user ai_providers
+    ai_settings = relationship(
+        "AISettings",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

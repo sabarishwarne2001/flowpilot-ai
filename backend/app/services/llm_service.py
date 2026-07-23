@@ -17,6 +17,7 @@ Business logic remains in higher-level orchestration services.
 from __future__ import annotations
 
 import json
+import time
 import logging
 from typing import Any
 
@@ -29,6 +30,8 @@ from app.prompts import RAG_PROMPT_VERSION
 from app.core.config import settings
 
 from app.schemas.assistant import TokenUsage
+
+from app.models.ai_settings import AISettings
 
 from fastapi import HTTPException, status
 
@@ -283,43 +286,45 @@ class LLMService:
     @property
     def gemini_model(self) -> Any:
         """
-        Lazily initialize the Gemini model.
+        Gemini client module.
+
+        Model selection is performed per request using the
+        user's AI Settings, so this property is responsible
+        only for API initialization.
         """
 
-        if self._gemini_model is None:
-
-            if settings.GEMINI_API_KEY is None:
-                raise ValueError(
-                    "GEMINI_API_KEY is not configured."
-                )
-
-            import google.generativeai as genai
-
-            logger.info(
-                "Initializing Gemini client."
+        if settings.GEMINI_API_KEY is None:
+            raise ValueError(
+                "GEMINI_API_KEY is not configured."
             )
 
-            genai.configure(
-                api_key=settings.GEMINI_API_KEY.get_secret_value(),
-            )
+        import google.generativeai as genai
 
-            self._gemini_model = genai.GenerativeModel(
-                settings.GEMINI_MODEL_NAME,
-            )
+        logger.info(
+            "Initializing Gemini client."
+        )
 
-        return self._gemini_model
+        genai.configure(
+            api_key=settings.GEMINI_API_KEY.get_secret_value(),
+        )
+
+        return genai
 
     # ========================================================================
     # Provider Helpers
     # ========================================================================
 
-    def _validate_provider(self) -> str:
+    def _validate_provider(
+        self,
+        *,
+        ai_settings: AISettings,
+    ) -> str:
         """
         Validate and return the configured provider.
         """
 
         provider = (
-            settings.LLM_PROVIDER
+            ai_settings.provider.value
             .strip()
             .lower()
         )
@@ -350,12 +355,18 @@ class LLMService:
 
         return settings.GEMINI_RAG_TEMPERATURE
     
-    def _get_rag_prompt_template(self) -> str:
+    def _get_rag_prompt_template(
+        self,
+        *,
+        ai_settings: AISettings,
+    ) -> str:
         """
         Return the provider-specific conversational RAG prompt template.
         """
 
-        provider = self._validate_provider()
+        provider = self._validate_provider(
+            ai_settings=ai_settings,
+        )
 
         if provider == "groq":
             return RAG_SYNTHESIS_PROMPT_TEMPLATE
@@ -367,6 +378,7 @@ class LLMService:
         *,
         prompt: str,
         temperature: float,
+        ai_settings: AISettings,
     ) -> str:
         """
         Execute a Groq chat completion.
@@ -378,9 +390,12 @@ class LLMService:
 
         completion = (
             self.groq_client.chat.completions.create(
-                model=settings.GROQ_MODEL_NAME,
+                model=ai_settings.model,
                 temperature=temperature,
-                max_tokens=settings.LLM_MAX_OUTPUT_TOKENS,
+                top_p=ai_settings.top_p,
+                frequency_penalty=ai_settings.frequency_penalty,
+                presence_penalty=ai_settings.presence_penalty,
+                max_tokens=ai_settings.max_output_tokens,
                 messages=[
                     {
                         "role": "user",
@@ -399,15 +414,15 @@ class LLMService:
             ).strip(),
             TokenUsage(
                 provider="groq",
-                model=settings.GROQ_MODEL_NAME,
+                model=ai_settings.model,
                 prompt_tokens=completion.usage.prompt_tokens,
                 completion_tokens=completion.usage.completion_tokens,
                 total_tokens=completion.usage.total_tokens,
                 estimated_cost=(
                     (completion.usage.prompt_tokens / 1000)
-                    * settings.TOKEN_COST_PER_1K_INPUT
+                    * ai_settings.input_cost_per_1k_tokens
                     + (completion.usage.completion_tokens / 1000)
-                    * settings.TOKEN_COST_PER_1K_OUTPUT
+                    * ai_settings.output_cost_per_1k_tokens
                 ),
             )
         )
@@ -417,6 +432,7 @@ class LLMService:
         *,
         prompt: str,
         temperature: float,
+        ai_settings: AISettings,
     ) -> str:
         """
         Execute a Gemini generation request.
@@ -430,29 +446,39 @@ class LLMService:
             GenerationConfig,
         )
 
+        model = self.gemini_model.GenerativeModel(
+            ai_settings.model,
+        )
+
         response = (
-            self.gemini_model.generate_content(
+            model.generate_content(
                 prompt,
                 generation_config=GenerationConfig(
                     temperature=temperature,
-                    max_output_tokens=settings.LLM_MAX_OUTPUT_TOKENS,
+                    max_output_tokens=ai_settings.max_output_tokens,
                 ),
             )
         )
 
-        return str(response.text).strip()
+        return (
+            str(response.text).strip(),
+            response,
+        )
 
     def _query_provider(
         self,
         *,
         prompt: str,
         temperature: float,
+        ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
         """
         Route a request to the configured provider.
         """
 
-        provider = self._validate_provider()
+        provider = self._validate_provider(
+            ai_settings=ai_settings,
+        )
 
         logger.info(
             "Using '%s' provider.",
@@ -463,22 +489,35 @@ class LLMService:
             return self._query_groq(
                 prompt=prompt,
                 temperature=temperature,
+                ai_settings=ai_settings,
             )
 
-        response = self._query_gemini(
+        response_text, gemini_response = self._query_gemini(
             prompt=prompt,
             temperature=temperature,
+            ai_settings=ai_settings,
         )
 
+        logger.info("========== GEMINI RESPONSE ==========")
+        logger.info(gemini_response)
+        logger.info("=====================================")
+
+        usage = gemini_response.usage_metadata
+
         return (
-            response,
+            response_text,
             TokenUsage(
                 provider="gemini",
-                model=settings.GEMINI_MODEL_NAME,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                estimated_cost=0.0,
+                model=ai_settings.model,
+                prompt_tokens=usage.prompt_token_count,
+                completion_tokens=usage.candidates_token_count,
+                total_tokens=usage.total_token_count,
+                estimated_cost=(
+                    (usage.prompt_token_count / 1000)
+                    * ai_settings.input_cost_per_1k_tokens
+                    + (usage.candidates_token_count / 1000)
+                    * ai_settings.output_cost_per_1k_tokens
+                ),
             ),
         )
     
@@ -491,6 +530,7 @@ class LLMService:
         *,
         prompt: str,
         temperature: float,
+        ai_settings: AISettings,
         retries: int = 2,
     ) -> tuple[str, TokenUsage]:
         """
@@ -510,6 +550,7 @@ class LLMService:
                 return self._query_provider(
                     prompt=prompt,
                     temperature=temperature,
+                    ai_settings=ai_settings,
                 )
 
             #
@@ -532,15 +573,18 @@ class LLMService:
             #
             # Any other provider failure
             #
-            except Exception as exc:
-
-                last_exception = exc
-
-                logger.warning(
-                    "LLM request failed (attempt %d/%d).",
+            except Exception as e:
+                logger.exception(
+                    "LLM request failed (attempt %d/%d): %s",
                     attempt + 1,
                     retries + 1,
+                    str(e),
                 )
+
+                if attempt == retries:
+                    raise
+
+                time.sleep(1)
 
         logger.exception(
             "LLM request failed after all retry attempts."
@@ -617,7 +661,8 @@ class LLMService:
 
         return text[
             : settings.RAG_MAX_CONTEXT_LENGTH
-        ]
+        ] 
+    
 
     # ========================================================================
     # Prompt Builders
@@ -675,6 +720,7 @@ class LLMService:
             return PromptIntent.COMPLIANCE
 
         return PromptIntent.QUESTION_ANSWERING
+    
 
     def _build_classification_prompt(
         self,
@@ -712,6 +758,7 @@ class LLMService:
         query: str,
         context: str,
         history: list[dict[str, str]],
+        ai_settings: AISettings,
     ) -> str:
         """
         Construct the conversational RAG prompt.
@@ -732,7 +779,9 @@ class LLMService:
         )
 
         return PromptBuilder.build_rag_prompt(
-            template=self._get_rag_prompt_template(),
+            template=self._get_rag_prompt_template(
+                ai_settings=ai_settings,
+            ),
             context=context[: settings.RAG_MAX_CONTEXT_LENGTH],
             history=history_text,
             query=query,
@@ -835,6 +884,7 @@ class LLMService:
         query: str,
         context: str,
         history: list[dict[str, str]],
+        ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
         """
         Generate a conversational RAG response.
@@ -850,11 +900,13 @@ class LLMService:
             query=query,
             context=context,
             history=history,
+            ai_settings=ai_settings,
         )
 
         response, token_usage = self._retry_query(
             prompt=prompt,
-            temperature=self._get_rag_temperature(),
+            temperature=ai_settings.temperature,
+            ai_settings=ai_settings,
         )
 
         return response.strip(), token_usage
