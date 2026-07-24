@@ -20,25 +20,55 @@ export const workspaceSchema = z.object({
     .nullable()
     .or(z.literal("")),
 
-  timezone: z
-    .string()
-    .trim()
-    .min(1, "Timezone is required."),
+  timezone: z.enum([
+    "Asia/Kolkata",
+    "Asia/Dubai",
+    "Europe/London",
+    "Europe/Berlin",
+    "America/New_York",
+    "America/Chicago",
+    "America/Los_Angeles",
+    "Asia/Singapore",
+    "Australia/Sydney",
+    "UTC",
+  ]),
 
-  language: z
-    .string()
-    .trim()
-    .min(1, "Language is required."),
+  language: z.enum([
+    "en",
+    "hi",
+    "ta",
+    "ml",
+    "te",
+    "kn",
+    "ar",
+    "de",
+    "fr",
+    "es",
+    "ja",
+    "zh",
+  ]),
 
-  currency: z
-    .string()
-    .trim()
-    .min(1, "Currency is required."),
+  currency: z.enum([
+    "INR",
+    "USD",
+    "EUR",
+    "GBP",
+    "AED",
+    "SGD",
+    "AUD",
+    "CAD",
+    "JPY",
+    "CNY",
+  ]),
 
-  date_format: z
-    .string()
-    .trim()
-    .min(1, "Date format is required."),
+  date_format: z.enum([
+    "DD-MM-YYYY",
+    "MM-DD-YYYY",
+    "YYYY-MM-DD",
+    "DD/MM/YYYY",
+    "MM/DD/YYYY",
+    "YYYY/MM/DD",
+  ]),
 
   primary_color: z
     .string()

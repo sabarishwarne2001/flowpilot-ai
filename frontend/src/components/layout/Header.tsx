@@ -25,8 +25,12 @@ export const Header: React.FC<HeaderProps> = React.memo(
       useState<boolean>(false);
 
     // Extract reactive states directly from our centralized UI Zustand store
-    const { toggleSidebar, theme, toggleTheme, notificationBadgeCount } =
-      useUIStore();
+    const {
+        toggleMobileSidebar,
+        theme,
+        toggleTheme,
+        notificationBadgeCount,
+    } = useUIStore();
 
     // Memoized toggler handlers to prevent unnecessary component allocations
     const handleToggleNotifications = useCallback((): void => {
@@ -46,23 +50,21 @@ export const Header: React.FC<HeaderProps> = React.memo(
 
     return (
       <header
-        className={`h-16 border-b border-border/40 flex items-center justify-between px-6 bg-card select-none z-10 transition-colors duration-200 relative ${className}`}
+        className={`h-16 shrink-0 border-b border-border/40 flex items-center justify-between px-6 bg-card select-none z-10 transition-colors duration-200 relative ${className}`}
         aria-label="Dashboard Header"
       >
-        {/* --- Part 1: Sidebar Toggle Controls & Viewport Name --- */}
-        <div className="flex items-center space-x-4">
-          {/* Hamburger Drawer Trigger (Visible strictly on mobile/tablet viewports) */}
+        {/* Left */}
+        <div className="flex items-center gap-4">
           <button
             type="button"
-            onClick={toggleSidebar}
+            onClick={toggleMobileSidebar}
             className="lg:hidden p-2 rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all active:scale-[0.97]"
             aria-label="Toggle Navigation Drawer"
           >
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Dynamic workspace label title */}
-          <span className="text-sm font-extrabold tracking-tight text-foreground/90 font-sans">
+          <span className="text-sm font-bold text-muted-foreground md:hidden">
             Workspace Overview
           </span>
         </div>

@@ -1,6 +1,5 @@
 import { Outlet } from "react-router-dom";
-
-const APP_NAME = import.meta.env.VITE_APP_NAME ?? "FlowPilot AI";
+import { Brand } from "@/components/branding/Brand";
 
 export const AuthLayout = () => {
   return (
@@ -11,19 +10,10 @@ export const AuthLayout = () => {
 
       <section className="relative flex flex-col justify-center px-6 py-12 sm:px-12 xl:px-16 lg:col-span-5">
         <header
-          aria-label="Application Logo"
-          className="absolute left-6 top-8 flex items-center gap-2 select-none sm:left-12 xl:left-16"
+          aria-label="Application Brand"
+          className="absolute left-6 top-8 sm:left-12 xl:left-16"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary shadow-md">
-            <span className="font-mono text-xl font-black text-primary-foreground">
-              FP
-            </span>
-          </div>
-
-          <span className="text-xl font-black tracking-tight">
-            {APP_NAME.replace(" AI", "")}
-            <span className="text-primary">AI</span>
-          </span>
+          <Brand variant="login" />
         </header>
 
         <div className="mx-auto mt-8 w-full max-w-md">
@@ -54,7 +44,7 @@ export const AuthLayout = () => {
 
         <footer className="z-10 mt-8 flex items-center justify-between border-t border-border/40 pt-8 text-xs text-muted-foreground/60">
           <span>
-            © {new Date().getFullYear()} {APP_NAME}
+            © {new Date().getFullYear()} FlowPilot AI
           </span>
 
           <span>All rights reserved.</span>

@@ -1,6 +1,10 @@
 import React, { useEffect } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getWorkspace, saveWorkspace } from "@/services/api/workspace";
@@ -25,10 +29,10 @@ export const Workspace: React.FC = () => {
       company_name: "",
       company_logo_url: "",
 
-      timezone: "Asia/Kolkata",
+      timezone: "UTC",
       language: "en",
-      currency: "INR",
-      date_format: "DD-MM-YYYY",
+      currency: "USD",
+      date_format: "YYYY-MM-DD",
 
       primary_color: "#2563EB",
       secondary_color: "#0F172A",
@@ -39,9 +43,10 @@ export const Workspace: React.FC = () => {
 
   const { data: workspace, isLoading: isLoadingWorkspace } = useQuery({
     queryKey: ["workspace"],
-
     queryFn: getWorkspace,
   });
+
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!workspace) {
@@ -65,26 +70,40 @@ export const Workspace: React.FC = () => {
     });
   }, [workspace, reset]);
 
-  const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } =
-    useMutation({
-      mutationFn: saveWorkspace,
+  const {
+    mutateAsync: saveWorkspaceMutation,
+    isPending: isSaving,
+  } = useMutation({
+    mutationFn: saveWorkspace,
 
-      onSuccess: () => {
-        toast.success("Workspace settings saved successfully.");
-      },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["workspace"],
+      });
 
-      onError: (error: unknown) => {
-        if (error instanceof ApiError) {
-          toast.error(error.message);
-          return;
-        }
+      toast.success("Workspace settings saved successfully.");
+    },
 
-        toast.error("Failed to save workspace settings.");
-      },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.error("Failed to save workspace settings.");
+    },
+  });
+
+  const onSubmit = async (
+    data: WorkspaceFormData,
+  ): Promise<void> => {
+    await saveWorkspaceMutation({
+      ...data,
+      company_logo_url:
+        !data.company_logo_url?.trim()
+          ? null
+          : data.company_logo_url,
     });
-
-  const onSubmit = async (data: WorkspaceFormData): Promise<void> => {
-    await saveWorkspaceMutation(data);
   };
 
   if (isLoadingWorkspace) {
@@ -205,6 +224,7 @@ export const Workspace: React.FC = () => {
               </p>
             )}
           </div>
+
           {/* Regional Settings */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Timezone */}
@@ -216,13 +236,22 @@ export const Workspace: React.FC = () => {
                 Timezone
               </label>
 
-              <input
+              <select
                 id="timezone"
-                type="text"
-                placeholder="Asia/Kolkata"
                 {...register("timezone")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              />
+              >
+                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                <option value="Europe/London">Europe/London (GMT/BST)</option>
+                <option value="Europe/Berlin">Europe/Berlin (CET)</option>
+                <option value="America/New_York">America/New_York (EST)</option>
+                <option value="America/Chicago">America/Chicago (CST)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                <option value="UTC">UTC</option>
+              </select>
 
               {errors.timezone && (
                 <p className="text-xs text-destructive">
@@ -240,13 +269,24 @@ export const Workspace: React.FC = () => {
                 Language
               </label>
 
-              <input
+              <select
                 id="language"
-                type="text"
-                placeholder="en"
                 {...register("language")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              />
+              >
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="ta">Tamil</option>
+                <option value="ml">Malayalam</option>
+                <option value="te">Telugu</option>
+                <option value="kn">Kannada</option>
+                <option value="ar">Arabic</option>
+                <option value="de">German</option>
+                <option value="fr">French</option>
+                <option value="es">Spanish</option>
+                <option value="ja">Japanese</option>
+                <option value="zh">Chinese</option>
+              </select>
 
               {errors.language && (
                 <p className="text-xs text-destructive">
@@ -264,13 +304,22 @@ export const Workspace: React.FC = () => {
                 Currency
               </label>
 
-              <input
+              <select
                 id="currency"
-                type="text"
-                placeholder="INR"
                 {...register("currency")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              />
+              >
+                <option value="INR">Indian Rupee (INR)</option>
+                <option value="USD">US Dollar (USD)</option>
+                <option value="EUR">Euro (EUR)</option>
+                <option value="GBP">British Pound (GBP)</option>
+                <option value="AED">UAE Dirham (AED)</option>
+                <option value="SGD">Singapore Dollar (SGD)</option>
+                <option value="AUD">Australian Dollar (AUD)</option>
+                <option value="CAD">Canadian Dollar (CAD)</option>
+                <option value="JPY">Japanese Yen (JPY)</option>
+                <option value="CNY">Chinese Yuan (CNY)</option>
+              </select>
 
               {errors.currency && (
                 <p className="text-xs text-destructive">
@@ -288,13 +337,18 @@ export const Workspace: React.FC = () => {
                 Date Format
               </label>
 
-              <input
+              <select
                 id="date_format"
-                type="text"
-                placeholder="DD-MM-YYYY"
                 {...register("date_format")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              />
+              >
+                <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+                <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+              </select>
 
               {errors.date_format && (
                 <p className="text-xs text-destructive">
@@ -303,6 +357,7 @@ export const Workspace: React.FC = () => {
               )}
             </div>
           </div>
+
           {/* Branding */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Primary Color */}
@@ -351,6 +406,7 @@ export const Workspace: React.FC = () => {
               )}
             </div>
           </div>
+
           {/* Workspace Active */}
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
@@ -367,6 +423,7 @@ export const Workspace: React.FC = () => {
               className="h-5 w-5"
             />
           </div>
+
           <div className="flex justify-end">
             <button
               type="submit"

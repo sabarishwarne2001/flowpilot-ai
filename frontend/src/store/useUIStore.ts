@@ -26,11 +26,18 @@ const applyTheme = (theme: ThemeMode): void => {
 };
 
 interface UIState {
-  readonly isSidebarOpen: boolean;
+  readonly isSidebarCollapsed: boolean;
+  readonly isMobileSidebarOpen: boolean;
+
   readonly theme: ThemeMode;
   readonly notificationBadgeCount: number;
-  readonly toggleSidebar: () => void;
-  readonly setSidebarOpen: (open: boolean) => void;
+
+  readonly toggleSidebarCollapse: () => void;
+
+  readonly openMobileSidebar: () => void;
+  readonly closeMobileSidebar: () => void;
+  readonly toggleMobileSidebar: () => void;
+
   readonly setTheme: (theme: ThemeMode) => void;
   readonly toggleTheme: () => void;
   readonly setNotificationBadgeCount: (count: number) => void;
@@ -41,22 +48,37 @@ export const useUIStore = create<UIState>()(
   devtools(
     persist(
       (set, get) => ({
-        isSidebarOpen: true,
+        isSidebarCollapsed: false,
+        isMobileSidebarOpen: false,
         theme: "system",
         notificationBadgeCount: 0,
 
-        toggleSidebar: () =>
+        toggleSidebarCollapse: () =>
           set(
-            (state) => ({ isSidebarOpen: !state.isSidebarOpen }),
+            (state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed }),
             false,
-            "ui/toggleSidebar",
+            "ui/toggleSidebarCollapse",
           ),
 
-        setSidebarOpen: (open) =>
+        openMobileSidebar: () =>
           set(
-            { isSidebarOpen: open },
+            { isMobileSidebarOpen: true },
             false,
-            "ui/setSidebarOpen",
+            "ui/openMobileSidebar",
+          ),
+
+        closeMobileSidebar: () =>
+          set(
+            { isMobileSidebarOpen: false },
+            false,
+            "ui/closeMobileSidebar",
+          ),
+
+        toggleMobileSidebar: () =>
+          set(
+            (state) => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen }),
+            false,
+            "ui/toggleMobileSidebar",
           ),
 
         setTheme: (theme) => {
@@ -107,7 +129,7 @@ export const useUIStore = create<UIState>()(
         name: UI_STORE_KEY,
         storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
-          isSidebarOpen: state.isSidebarOpen,
+          isSidebarCollapsed: state.isSidebarCollapsed,
           theme: state.theme,
         }),
         onRehydrateStorage: () => (state) => {

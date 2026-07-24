@@ -17,6 +17,7 @@
     "prepare": "husky install"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.20",
     "@hookform/resolvers": "^5.1.1",
     "@tanstack/react-query": "^5.81.5",
     "axios": "^1.10.0",

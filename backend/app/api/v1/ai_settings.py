@@ -11,10 +11,20 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.models.user import User
+from app.services.ai_settings_service import (
+    ai_settings_service,
+)
 from app.schemas.ai_settings import (
     AISettingsResponse,
     AISettingsUpdate,
 )
+from app.schemas.available_providers import (
+    AvailableProvidersResponse,
+)
+from app.schemas.ai_connection_test import (
+    AIConnectionTestResponse,
+)
+from app.core.ai_models import AI_MODELS
 
 logger = logging.getLogger(
     "app.api.v1.ai_settings"
@@ -92,3 +102,49 @@ async def upsert_ai_settings(
     )
 
     return settings
+
+
+@router.get(
+    "/models",
+    summary="Get Supported AI Models",
+)
+async def get_supported_models():
+    """
+    Returns the supported models for every AI provider.
+    """
+
+    return {
+        provider.value: models
+        for provider, models in AI_MODELS.items()
+    }
+
+
+@router.get(
+    "/providers",
+    response_model=AvailableProvidersResponse,
+    summary="Get Available AI Providers",
+)
+async def get_available_providers():
+    """
+    Returns only providers that are configured.
+    """
+
+    return ai_settings_service.get_available_providers()
+
+
+@router.post(
+    "/test",
+    response_model=AIConnectionTestResponse,
+    summary="Test AI Configuration",
+)
+async def test_ai_configuration(
+    settings_in: AISettingsUpdate,
+):
+    """
+    Test the supplied AI configuration without
+    saving it to the database.
+    """
+
+    return ai_settings_service.test_connection(
+        ai_settings=settings_in,
+    )

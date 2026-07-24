@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
 import { ROUTES } from "@/constants/routes";
-import { Sidebar } from "@/components/layout/Sidebar";
+import Sidebar from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
 /**
@@ -17,8 +17,9 @@ export const DashboardLayout: React.FC = () => {
 
   // Extract state getters from Zustand stores
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
-  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const isSidebarCollapsed = useUIStore(
+    (state) => state.isSidebarCollapsed
+  );
 
   /**
    * Action handler to safely clear session stores and return to Login endpoint.
@@ -40,24 +41,20 @@ export const DashboardLayout: React.FC = () => {
   }, [clearAuth, navigate]);
 
   return (
-    <div className="min-h-dvh flex bg-background text-foreground transition-colors duration-200 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-200">
       {/* --- Part 1: Collapsible Sidebar Drawer Panel --- */}
-      <Sidebar onLogout={handleLogout} />
-
-      {/* Backdrop overlay visible strictly under active mobile drawer displays */}
-      {isSidebarOpen && (
-        <div
-          onClick={toggleSidebar}
-          onKeyDown={(e) => e.key === "Escape" && toggleSidebar()}
-          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden cursor-pointer"
-          aria-label="Close navigation sidebar"
-          role="button"
-          tabIndex={0}
-        />
-      )}
+      <div
+        className={`
+          h-screen
+          shrink-0
+          ${isSidebarCollapsed ? "lg:w-20" : "lg:w-64"}
+        `}
+      >
+        <Sidebar onLogout={handleLogout} />
+      </div>
 
       {/* --- Part 2: Main Workspace Canvas Area (Toolbar + Outlet Subview) --- */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         {/* Consolidated top layout header bar */}
         <Header />
 

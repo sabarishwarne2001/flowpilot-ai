@@ -3,30 +3,46 @@ import React, { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { getAISettings, updateAISettings } from "@/services/api/aiSettings";
+import {
+  getAISettings,
+  updateAISettings,
+  getSupportedModels,
+  getAvailableProviders,
+  testAIConnection,
+} from "@/services/api/aiSettings";
 
 import { ApiError } from "@/services/api/client";
 
-import { useForm } from "react-hook-form";
+import { useState } from "react";
+
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+import InfoTooltip from "@/components/common/InfoTooltip";
+import { AI_FIELD_HELP } from "@/constants/aiFieldHelp";
 
 import {
   aiSettingsSchema,
   type AISettingsFormData,
 } from "@/schemas/aiSettings";
 
+import type { AIConnectionTestResponse } from "@/types/aiConnectionTest";
+
 export const AISettings: React.FC = () => {
   const {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
+    getValues,
     formState: { errors, isDirty },
   } = useForm<AISettingsFormData>({
     resolver: zodResolver(aiSettingsSchema),
 
     defaultValues: {
       provider: "GROQ",
-      model: "llama3-8b-8192",
+      model: "llama3.3-70b-versatile",
       temperature: 0.7,
       max_output_tokens: 4096,
       top_p: 0.9,
@@ -41,10 +57,31 @@ export const AISettings: React.FC = () => {
     },
   });
 
+  const selectedProvider = useWatch({
+    control,
+    name: "provider",
+  });
+
   const { data: aiSettings, isLoading: isLoadingAISettings } = useQuery({
     queryKey: ["ai-settings"],
     queryFn: getAISettings,
   });
+
+  const { data: supportedModels, isLoading: isLoadingModels } = useQuery({
+    queryKey: ["supported-models"],
+    queryFn: getSupportedModels,
+  });
+
+  const {
+    data: availableProviders,
+    isLoading: isLoadingProviders,
+  } = useQuery({
+    queryKey: ["available-providers"],
+    queryFn: getAvailableProviders,
+  });
+
+  const [connectionResult, setConnectionResult] =
+    useState<AIConnectionTestResponse | null>(null);
 
   useEffect(() => {
     if (!aiSettings) {
@@ -68,6 +105,19 @@ export const AISettings: React.FC = () => {
     });
   }, [aiSettings, reset]);
 
+  // Automatically switch model to a valid one if provider changes
+  useEffect(() => {
+    if (!selectedProvider || !supportedModels) return;
+
+    const availableModels =
+      supportedModels[selectedProvider as keyof typeof supportedModels] ?? [];
+    const currentModel = getValues("model");
+
+    if (availableModels.length > 0 && !availableModels.includes(currentModel)) {
+      setValue("model", availableModels[0]!);
+    }
+  }, [selectedProvider, supportedModels, getValues, setValue]);
+
   const { mutateAsync: saveAISettings, isPending: isSaving } = useMutation({
     mutationFn: updateAISettings,
 
@@ -85,11 +135,55 @@ export const AISettings: React.FC = () => {
     },
   });
 
+  const { mutateAsync: testConnection, isPending: isTestingConnection } =
+    useMutation({
+      mutationFn: testAIConnection,
+    });
+
   const onSubmit = async (data: AISettingsFormData): Promise<void> => {
     await saveAISettings(data);
   };
 
-  if (isLoadingAISettings) {
+  const handleTestConnection = async () => {
+    try {
+      const result = await testConnection(getValues());
+
+      setConnectionResult(result);
+
+      toast.success("Connection successful.");
+    } catch (error) {
+      setConnectionResult(null);
+
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.error("Connection test failed.");
+    }
+  };
+
+  const renderLabel = (key: keyof typeof AI_FIELD_HELP, label: string) => {
+    const help = AI_FIELD_HELP[key]!;
+
+    return (
+      <div className="flex items-center">
+        <span>{label}</span>
+
+        <InfoTooltip
+          title={help.title}
+          description={help.description}
+          recommended={help.recommended}
+        />
+      </div>
+    );
+  };
+
+  if (
+    isLoadingAISettings ||
+    isLoadingModels ||
+    isLoadingProviders
+  ) {
     return (
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="space-y-6 animate-pulse">
@@ -164,6 +258,19 @@ export const AISettings: React.FC = () => {
           AI.
         </p>
 
+        {/* Advanced AI Parameters Information Card */}
+        <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">
+          <h3 className="text-sm font-semibold text-blue-300">
+            Advanced AI Parameters
+          </h3>
+
+          <p className="mt-2 text-sm text-slate-300">
+            These settings control how the AI model behaves. The default values
+            are optimized for most business workflows. Unless you have a
+            specific requirement, we recommend keeping the default values.
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
           {/* Provider */}
           <div className="space-y-2">
@@ -171,7 +278,7 @@ export const AISettings: React.FC = () => {
               htmlFor="provider"
               className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
             >
-              AI Provider
+              {renderLabel("provider", "Provider")}
             </label>
 
             <select
@@ -179,10 +286,18 @@ export const AISettings: React.FC = () => {
               {...register("provider")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
             >
-              <option value="GROQ">Groq</option>
-              <option value="GEMINI">Google Gemini</option>
-              <option value="OPENAI">OpenAI</option>
-              <option value="CLAUDE">Anthropic Claude</option>
+              {availableProviders?.providers.map((provider) => (
+                <option
+                  key={provider}
+                  value={provider}
+                >
+                  {provider === "GROQ"
+                    ? "Groq"
+                    : provider === "GEMINI"
+                    ? "Google Gemini"
+                    : provider}
+                </option>
+              ))}
             </select>
 
             {errors.provider && (
@@ -198,16 +313,24 @@ export const AISettings: React.FC = () => {
               htmlFor="model"
               className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
             >
-              Model
+              {renderLabel("model", "Model")}
             </label>
 
-            <input
+            <select
               id="model"
-              type="text"
-              placeholder="llama3-8b-8192"
               {...register("model")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            />
+            >
+              {(
+                supportedModels?.[
+                  selectedProvider as keyof typeof supportedModels
+                ] ?? []
+              ).map((model: string) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
 
             {errors.model && (
               <p className="text-xs text-destructive">{errors.model.message}</p>
@@ -222,7 +345,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="temperature"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Temperature
+                {renderLabel("temperature", "Temperature")}
               </label>
 
               <input
@@ -250,7 +373,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="top_p"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Top P
+                {renderLabel("top_p", "Top P")}
               </label>
 
               <input
@@ -278,7 +401,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="max_output_tokens"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Max Output Tokens
+                {renderLabel("max_output_tokens", "Max Output Tokens")}
               </label>
 
               <input
@@ -303,7 +426,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="frequency_penalty"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Frequency Penalty
+                {renderLabel("frequency_penalty", "Frequency Penalty")}
               </label>
 
               <input
@@ -331,7 +454,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="presence_penalty"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Presence Penalty
+                {renderLabel("presence_penalty", "Presence Penalty")}
               </label>
 
               <input
@@ -359,7 +482,10 @@ export const AISettings: React.FC = () => {
                 htmlFor="input_cost_per_1k_tokens"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Input Cost per 1K Tokens
+                {renderLabel(
+                  "input_cost_per_1k_tokens",
+                  "Input Cost per 1K Tokens"
+                )}
               </label>
 
               <input
@@ -386,7 +512,10 @@ export const AISettings: React.FC = () => {
                 htmlFor="output_cost_per_1k_tokens"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Output Cost per 1K Tokens
+                {renderLabel(
+                  "output_cost_per_1k_tokens",
+                  "Output Cost per 1K Tokens"
+                )}
               </label>
 
               <input
@@ -416,7 +545,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="system_prompt_version"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                System Prompt Version
+                {renderLabel("system_prompt_version", "System Prompt Version")}
               </label>
 
               <input
@@ -439,7 +568,7 @@ export const AISettings: React.FC = () => {
                 htmlFor="prompt_version"
                 className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
               >
-                Prompt Version
+                {renderLabel("prompt_version", "Prompt Version")}
               </label>
 
               <input
@@ -461,8 +590,13 @@ export const AISettings: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border p-4">
               <div>
-                <h3 className="font-medium">Enable Token Tracking</h3>
-                <p className="text-sm text-muted-foreground">
+                <h3 className="font-medium">
+                  {renderLabel(
+                    "enable_token_tracking",
+                    "Enable Token Tracking"
+                  )}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
                   Track token usage for requests.
                 </p>
               </div>
@@ -476,8 +610,10 @@ export const AISettings: React.FC = () => {
 
             <div className="flex items-center justify-between rounded-lg border border-border p-4">
               <div>
-                <h3 className="font-medium">Enable Streaming</h3>
-                <p className="text-sm text-muted-foreground">
+                <h3 className="font-medium">
+                  {renderLabel("enable_streaming", "Enable Streaming")}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
                   Stream model responses when supported.
                 </p>
               </div>
@@ -491,7 +627,16 @@ export const AISettings: React.FC = () => {
           </div>
 
           {/* Save Button */}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={isTestingConnection}
+              className="rounded-lg border border-border px-5 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            >
+              {isTestingConnection ? "Testing..." : "Test Connection"}
+            </button>
+
             <button
               type="submit"
               disabled={!isDirty || isSaving}
@@ -501,6 +646,43 @@ export const AISettings: React.FC = () => {
             </button>
           </div>
         </form>
+
+        {connectionResult && (
+          <div className="mt-6 rounded-lg border border-green-700/40 bg-green-950/20 p-4">
+            <h3 className="font-semibold text-green-400">
+              Connection Successful
+            </h3>
+
+            <div className="mt-3 space-y-2 text-sm">
+              <p>
+                <strong>Provider:</strong> {connectionResult.provider}
+              </p>
+
+              <p>
+                <strong>Model:</strong> {connectionResult.model}
+              </p>
+
+              <p>
+                <strong>Latency:</strong>{" "}
+                {connectionResult.latency_ms.toFixed(2)} ms
+              </p>
+
+              <p>
+                <strong>Response:</strong> {connectionResult.response}
+              </p>
+
+              <p>
+                <strong>Total Tokens:</strong>{" "}
+                {connectionResult.token_usage.total_tokens}
+              </p>
+
+              <p>
+                <strong>Estimated Cost:</strong> $
+                {connectionResult.token_usage.estimated_cost}
+              </p>
+            </div>
+          </div>
+        )}
 
         {Object.keys(errors).length > 0 && (
           <p className="mt-4 text-sm text-destructive">Validation is active.</p>

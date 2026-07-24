@@ -4,8 +4,6 @@ export const aiSettingsSchema = z.object({
     provider: z.enum([
         "GROQ",
         "GEMINI",
-        "OPENAI",
-        "CLAUDE",
     ]),
 
     model: z
