@@ -72,9 +72,13 @@ export const Brand: React.FC<BrandProps> = ({
   className = "",
 }) => {
   const { workspace, isLoading } = useWorkspace();
+
+  const isWorkspaceReady =
+    !isLoading && workspace !== null;
+
   const [logoError, setLogoError] = useState(false);
 
-  if (isLoading || variant === "loading") {
+  if (!isWorkspaceReady) {
     return <BrandSkeleton variant={variant} />;
   }
 
@@ -82,7 +86,15 @@ export const Brand: React.FC<BrandProps> = ({
 
   const companyName = workspace?.company_name ?? "AI Document Intelligence";
 
-  const logo = workspace?.company_logo_url;
+  const API_BASE_URL =
+    (import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1").replace(
+      "/api/v1",
+      "",
+    );
+
+  const logo = workspace?.company_logo_url
+    ? `${API_BASE_URL}${workspace.company_logo_url}`
+    : null;
 
   const initials = (workspaceName || companyName || "FP")
     .trim()

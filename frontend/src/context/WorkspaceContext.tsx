@@ -6,14 +6,20 @@ import {
 
 import { useQuery } from "@tanstack/react-query";
 
-import { getWorkspace } from "@/services/api/workspace";
+import {
+  getWorkspace,
+  getPublicWorkspace,
+} from "@/services/api/workspace";
+
+import { useAuthStore } from "@/store/useAuthStore";
+
 import type { Workspace } from "@/types/workspace";
 
 interface WorkspaceContextValue {
   workspace: Workspace | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
 const WorkspaceContext =
@@ -24,6 +30,8 @@ export function WorkspaceProvider({
 }: {
   children: ReactNode;
 }) {
+  const token = useAuthStore((state) => state.token);
+
   const {
     data,
     isLoading,
@@ -31,7 +39,11 @@ export function WorkspaceProvider({
     refetch,
   } = useQuery({
     queryKey: ["workspace"],
-    queryFn: getWorkspace,
+    queryFn: async () => {
+      return token
+        ? await getWorkspace()
+        : await getPublicWorkspace();
+    },
   });
 
   return (

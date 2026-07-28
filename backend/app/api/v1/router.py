@@ -17,6 +17,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.email_settings import router as email_settings_router
 from app.api.v1 import workspace
 from app.api.v1 import ai_settings
+from app.api.v1 import upload
 
 api_router = APIRouter()
 
@@ -37,5 +38,7 @@ api_router.include_router(assistant_router, prefix="/assistant", tags=["AI Assis
 api_router.include_router(email_settings_router, prefix="/email-settings", tags=["Email Settings"])
 
 api_router.include_router(workspace.router, prefix="/workspace",)
+
+api_router.include_router(upload.router)
 
 api_router.include_router(ai_settings.router, prefix="/ai-settings",)

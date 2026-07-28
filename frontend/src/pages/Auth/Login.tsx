@@ -82,7 +82,7 @@ export const Login: React.FC = () => {
     try {
       await toast.promise(loginPromise, {
         loading: "Signing in...",
-        success: "Welcome back to FlowPilot AI!",
+        success: "Welcome back!",
         error: (error) =>
           error instanceof ApiError ? error.message : "Unable to sign in.",
       });

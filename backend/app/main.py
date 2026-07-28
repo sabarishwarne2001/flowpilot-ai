@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
@@ -58,6 +59,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Mount the static uploads directory to serve uploaded company logos and files
+app.mount(
+    "/uploads",
+    StaticFiles(directory="uploads"),
+    name="uploads",
+)
+
 # Apply CORS middleware properties to protect network pathways
 if settings.cors_origins:
     app.add_middleware(
@@ -74,4 +82,3 @@ else:
 # Mount the consolidated versioned routing table
 app.include_router(api_router, prefix=settings.API_V1_STR)
 logger.info(f"API endpoints registered under baseline prefix: {settings.API_V1_STR}")
-

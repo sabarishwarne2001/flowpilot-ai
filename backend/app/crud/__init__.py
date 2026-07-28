@@ -64,6 +64,7 @@ from app.crud.assistant import (
 from app.crud.workspace import (
     create_workspace,
     get_workspace,
+    get_first_workspace,
     workspace_exists,
     update_workspace,
     delete_workspace,
@@ -123,6 +124,7 @@ __all__ = [
     "delete_conversation_messages",
     "create_workspace",
     "get_workspace",
+    "get_first_workspace",
     "workspace_exists",
     "update_workspace",
     "delete_workspace",

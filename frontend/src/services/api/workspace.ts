@@ -10,6 +10,11 @@ export const getWorkspace = async (): Promise<Workspace> => {
   return response.data;
 };
 
+export const getPublicWorkspace = async (): Promise<Workspace> => {
+  const response = await apiClient.get("/workspace/public");
+  return response.data;
+};
+
 export const saveWorkspace = async (
   payload: WorkspaceCreate,
 ): Promise<Workspace> => {

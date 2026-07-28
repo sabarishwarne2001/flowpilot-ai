@@ -8,7 +8,7 @@ export const AI_FIELD_HELP = {
   provider: {
     title: "AI Provider",
     description:
-      "Select the AI service FlowPilot AI will use to generate responses. Change this only if you want to use a different provider.",
+      "Select the AI service used to generate responses.",
     recommended: "Use the provider configured by your administrator.",
   },
 
@@ -73,7 +73,7 @@ export const AI_FIELD_HELP = {
   system_prompt_version: {
     title: "System Prompt Version",
     description:
-      "Identifies which system prompt configuration FlowPilot AI uses internally.",
+      "Identifies which system prompt configuration is used internally.",
     recommended: "Only change during controlled prompt releases.",
   },
 

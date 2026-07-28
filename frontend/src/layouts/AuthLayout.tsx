@@ -1,7 +1,9 @@
 import { Outlet } from "react-router-dom";
 import { Brand } from "@/components/branding/Brand";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export const AuthLayout = () => {
+  const { workspace } = useWorkspace();
   return (
     <main className="min-h-dvh grid grid-cols-1 lg:grid-cols-12 bg-background text-foreground transition-colors duration-200">
       {/* ===========================
@@ -44,7 +46,8 @@ export const AuthLayout = () => {
 
         <footer className="z-10 mt-8 flex items-center justify-between border-t border-border/40 pt-8 text-xs text-muted-foreground/60">
           <span>
-            © {new Date().getFullYear()} FlowPilot AI
+            © {new Date().getFullYear()}{" "}
+            {workspace?.workspace_name ?? "FlowPilot AI"}
           </span>
 
           <span>All rights reserved.</span>

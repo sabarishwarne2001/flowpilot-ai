@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 
@@ -22,20 +22,13 @@ import { WorkItems } from "@/pages/WorkItems/WorkItems";
 import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 
-import { useWorkspace } from "@/context/WorkspaceContext";
 import { ROUTES } from "@/constants/routes";
 import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
+import { useDocumentBranding } from "@/hooks/useDocumentBranding";
 
 export default function App() {
-  const { workspace, isLoading } = useWorkspace();
   useWorkspaceTheme();
-
-  React.useEffect(() => {
-    if (isLoading) return;
-
-    document.title =
-      workspace?.workspace_name || "FlowPilot AI";
-  }, [workspace, isLoading]);
+  useDocumentBranding();
 
   return (
     <ErrorBoundary>

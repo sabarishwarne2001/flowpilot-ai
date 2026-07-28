@@ -1,26 +1,31 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getWorkspace, saveWorkspace } from "@/services/api/workspace";
 
+import { uploadLogo, deleteLogo } from "@/services/api/upload";
+
 import { ApiError } from "@/services/api/client";
 
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
+).replace("/api/v1", "");
+
 export const Workspace: React.FC = () => {
   const {
     register,
+    control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
@@ -40,6 +45,15 @@ export const Workspace: React.FC = () => {
       is_active: true,
     },
   });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
+
+  const previewName = watch("workspace_name");
+  const previewPrimary = watch("primary_color");
+  const previewSecondary = watch("secondary_color");
+  const previewLogo = logoPreview ? `${API_BASE_URL}${logoPreview}` : null;
 
   const { data: workspace, isLoading: isLoadingWorkspace } = useQuery({
     queryKey: ["workspace"],
@@ -70,40 +84,175 @@ export const Workspace: React.FC = () => {
     });
   }, [workspace, reset]);
 
-  const {
-    mutateAsync: saveWorkspaceMutation,
-    isPending: isSaving,
-  } = useMutation({
-    mutationFn: saveWorkspace,
+  useEffect(() => {
+    if (!workspace) return;
 
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace"],
-      });
+    setLogoPreview(workspace.company_logo_url ?? null);
+    setUploadedLogo(null);
+  }, [workspace]);
 
-      toast.success("Workspace settings saved successfully.");
-    },
+  // Prevent accidental tab closure or browser refresh if form has unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
 
-    onError: (error: unknown) => {
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-        return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty]);
+
+  const handleReset = async () => {
+    if (!workspace) return;
+
+    if (uploadedLogo && uploadedLogo !== workspace.company_logo_url) {
+      try {
+        await deleteLogo(uploadedLogo);
+      } catch {}
+    }
+
+    setUploadedLogo(null);
+
+    reset({
+      workspace_name: workspace.workspace_name,
+      company_name: workspace.company_name,
+      company_logo_url: workspace.company_logo_url ?? "",
+      timezone: workspace.timezone,
+      language: workspace.language,
+      currency: workspace.currency,
+      date_format: workspace.date_format,
+      primary_color: workspace.primary_color,
+      secondary_color: workspace.secondary_color,
+      is_active: workspace.is_active,
+    });
+
+    setLogoPreview(workspace.company_logo_url ?? null);
+
+    toast.success("Changes discarded.");
+  };
+
+  const handleLogoSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only PNG, JPEG and WebP images are allowed.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be smaller than 2 MB.");
+      return;
+    }
+
+    try {
+      if (uploadedLogo) {
+        try {
+          await deleteLogo(uploadedLogo);
+        } catch {}
       }
 
-      toast.error("Failed to save workspace settings.");
-    },
-  });
+      const response = await uploadLogo(file);
 
-  const onSubmit = async (
-    data: WorkspaceFormData,
-  ): Promise<void> => {
+      setUploadedLogo(response.logo_url);
+
+      setLogoPreview(response.logo_url);
+
+      setValue("company_logo_url", response.logo_url, {
+        shouldDirty: true,
+      });
+
+      toast.success("Logo uploaded successfully.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Logo upload failed."
+      );
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } =
+    useMutation({
+      mutationFn: saveWorkspace,
+
+      onMutate: async (updatedWorkspace) => {
+        // Cancel any outgoing refetches so they do not overwrite our optimistic update
+        await queryClient.cancelQueries({
+          queryKey: ["workspace"],
+        });
+
+        // Snapshot the previous workspace state
+        const previousWorkspace = queryClient.getQueryData(["workspace"]);
+
+        // Optimistically update the query cache with new values
+        queryClient.setQueryData(["workspace"], (old: any) => ({
+          ...old,
+          ...updatedWorkspace,
+        }));
+
+        // Return context containing previous state for rollback on error
+        return { previousWorkspace };
+      },
+
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ["workspace"],
+          exact: false,
+        });
+        setUploadedLogo(null);
+
+        reset(
+          {
+            ...watch(),
+          },
+          {
+            keepDirty: false,
+          }
+        );
+
+        toast.success("Workspace settings saved successfully.");
+      },
+
+      onError: (error: unknown, _variables, context) => {
+        // Rollback to the cached snapshotted value if the mutation fails
+        if (context?.previousWorkspace) {
+          queryClient.setQueryData(["workspace"], context.previousWorkspace);
+        }
+
+        if (error instanceof ApiError) {
+          toast.error(error.message);
+          return;
+        }
+
+        toast.error("Failed to save workspace settings.");
+      },
+    });
+
+  const onSubmit = async (data: WorkspaceFormData): Promise<void> => {
     await saveWorkspaceMutation({
       ...data,
-      company_logo_url:
-        !data.company_logo_url?.trim()
-          ? null
-          : data.company_logo_url,
+      company_logo_url: data.company_logo_url || null,
     });
+  };
+
+  const getInitials = (name: string) => {
+    return (name || "FP")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((word) => word.charAt(0).toUpperCase())
+      .join("");
   };
 
   if (isLoadingWorkspace) {
@@ -166,12 +315,22 @@ export const Workspace: React.FC = () => {
               id="workspace_name"
               type="text"
               placeholder="My Workspace"
+              required
+              aria-required="true"
+              aria-invalid={!!errors.workspace_name}
+              aria-describedby={
+                errors.workspace_name ? "workspace-name-error" : undefined
+              }
               {...register("workspace_name")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
 
             {errors.workspace_name && (
-              <p className="text-xs text-destructive">
+              <p
+                id="workspace-name-error"
+                role="alert"
+                className="text-xs text-destructive"
+              >
                 {errors.workspace_name.message}
               </p>
             )}
@@ -189,40 +348,97 @@ export const Workspace: React.FC = () => {
             <input
               id="company_name"
               type="text"
-              placeholder="FlowPilot AI"
+              placeholder="Workspace Name"
+              required
+              aria-required="true"
+              aria-invalid={!!errors.company_name}
+              aria-describedby={
+                errors.company_name ? "company-name-error" : undefined
+              }
               {...register("company_name")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
 
             {errors.company_name && (
-              <p className="text-xs text-destructive">
+              <p
+                id="company-name-error"
+                role="alert"
+                className="text-xs text-destructive"
+              >
                 {errors.company_name.message}
               </p>
             )}
           </div>
 
-          {/* Company Logo URL */}
-          <div className="space-y-2">
-            <label
-              htmlFor="company_logo_url"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
-              Company Logo URL
+          {/* Company Logo Upload */}
+          <div className="space-y-4">
+            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              Company Logo
             </label>
 
-            <input
-              id="company_logo_url"
-              type="url"
-              placeholder="https://example.com/logo.png"
-              {...register("company_logo_url")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            />
+            <div className="flex items-center gap-4">
+              {logoPreview ? (
+                <img
+                  src={previewLogo ?? undefined}
+                  alt="Company logo preview"
+                  className="h-20 w-20 rounded-lg border border-border object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-border text-xs text-muted-foreground bg-muted/20">
+                  No Logo
+                </div>
+              )}
 
-            {errors.company_logo_url && (
-              <p className="text-xs text-destructive">
-                {errors.company_logo_url.message}
-              </p>
-            )}
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  aria-label="Upload company logo"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted/50 transition"
+                >
+                  Upload Logo
+                </button>
+
+                {logoPreview && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const logoToDelete = uploadedLogo ?? logoPreview;
+
+                      if (logoToDelete) {
+                        try {
+                          await deleteLogo(logoToDelete);
+                        } catch {}
+                      }
+
+                      setUploadedLogo(null);
+
+                      setLogoPreview(null);
+
+                      setValue("company_logo_url", "", {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
+                    className="rounded-lg border border-transparent text-destructive px-4 py-2 text-sm font-medium hover:bg-destructive/10 transition text-left"
+                  >
+                    Remove Logo
+                  </button>
+                )}
+              </div>
+
+              <input
+                id="company_logo"
+                ref={fileInputRef}
+                className="hidden"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleLogoSelect}
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <input type="hidden" {...register("company_logo_url")} />
+            </div>
           </div>
 
           {/* Regional Settings */}
@@ -238,6 +454,10 @@ export const Workspace: React.FC = () => {
 
               <select
                 id="timezone"
+                aria-invalid={!!errors.timezone}
+                aria-describedby={
+                  errors.timezone ? "timezone-error" : undefined
+                }
                 {...register("timezone")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
@@ -247,14 +467,22 @@ export const Workspace: React.FC = () => {
                 <option value="Europe/Berlin">Europe/Berlin (CET)</option>
                 <option value="America/New_York">America/New_York (EST)</option>
                 <option value="America/Chicago">America/Chicago (CST)</option>
-                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                <option value="America/Los_Angeles">
+                  America/Los_Angeles (PST)
+                </option>
                 <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                <option value="Australia/Sydney">
+                  Australia/Sydney (AEST)
+                </option>
                 <option value="UTC">UTC</option>
               </select>
 
               {errors.timezone && (
-                <p className="text-xs text-destructive">
+                <p
+                  id="timezone-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   {errors.timezone.message}
                 </p>
               )}
@@ -271,6 +499,10 @@ export const Workspace: React.FC = () => {
 
               <select
                 id="language"
+                aria-invalid={!!errors.language}
+                aria-describedby={
+                  errors.language ? "language-error" : undefined
+                }
                 {...register("language")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
@@ -289,7 +521,11 @@ export const Workspace: React.FC = () => {
               </select>
 
               {errors.language && (
-                <p className="text-xs text-destructive">
+                <p
+                  id="language-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   {errors.language.message}
                 </p>
               )}
@@ -306,6 +542,10 @@ export const Workspace: React.FC = () => {
 
               <select
                 id="currency"
+                aria-invalid={!!errors.currency}
+                aria-describedby={
+                  errors.currency ? "currency-error" : undefined
+                }
                 {...register("currency")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
@@ -322,7 +562,11 @@ export const Workspace: React.FC = () => {
               </select>
 
               {errors.currency && (
-                <p className="text-xs text-destructive">
+                <p
+                  id="currency-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   {errors.currency.message}
                 </p>
               )}
@@ -339,6 +583,10 @@ export const Workspace: React.FC = () => {
 
               <select
                 id="date_format"
+                aria-invalid={!!errors.date_format}
+                aria-describedby={
+                  errors.date_format ? "date-format-error" : undefined
+                }
                 {...register("date_format")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
@@ -351,7 +599,11 @@ export const Workspace: React.FC = () => {
               </select>
 
               {errors.date_format && (
-                <p className="text-xs text-destructive">
+                <p
+                  id="date-format-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   {errors.date_format.message}
                 </p>
               )}
@@ -369,11 +621,35 @@ export const Workspace: React.FC = () => {
                 Primary Color
               </label>
 
-              <input
-                id="primary_color"
-                type="color"
-                {...register("primary_color")}
-                className="h-12 w-full rounded-lg border border-border bg-background p-2"
+              <Controller
+                name="primary_color"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="primary_color"
+                      type="color"
+                      value={field.value}
+                      onChange={field.onChange}
+                      className="h-10 w-12 cursor-pointer rounded border border-border bg-background focus:ring-2 focus:ring-primary/20"
+                    />
+
+                    <input
+                      type="text"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="#2563EB"
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                )}
+              />
+
+              <div
+                className="mt-2 h-8 rounded-md border border-border"
+                style={{
+                  backgroundColor: previewPrimary,
+                }}
               />
 
               {errors.primary_color && (
@@ -392,11 +668,35 @@ export const Workspace: React.FC = () => {
                 Secondary Color
               </label>
 
-              <input
-                id="secondary_color"
-                type="color"
-                {...register("secondary_color")}
-                className="h-12 w-full rounded-lg border border-border bg-background p-2"
+              <Controller
+                name="secondary_color"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="secondary_color"
+                      type="color"
+                      value={field.value}
+                      onChange={field.onChange}
+                      className="h-10 w-12 cursor-pointer rounded border border-border bg-background focus:ring-2 focus:ring-primary/20"
+                    />
+
+                    <input
+                      type="text"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="#0F172A"
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                )}
+              />
+
+              <div
+                className="mt-2 h-8 rounded-md border border-border"
+                style={{
+                  backgroundColor: previewSecondary,
+                }}
               />
 
               {errors.secondary_color && (
@@ -404,6 +704,68 @@ export const Workspace: React.FC = () => {
                   {errors.secondary_color.message}
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* Brand Live Preview Card */}
+          <div className="rounded-lg border border-border p-5 bg-muted/10 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground">
+                Brand Preview
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Preview how your workspace branding will appear.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {previewLogo ? (
+                <img
+                  src={previewLogo ?? undefined}
+                  alt="Workspace logo preview"
+                  className="h-16 w-16 rounded-lg border border-border object-cover"
+                />
+              ) : (
+                <div
+                  className="flex h-16 w-16 items-center justify-center rounded-lg border border-border font-bold text-sm text-primary-foreground shadow-sm"
+                  style={{
+                    backgroundColor: previewPrimary,
+                  }}
+                >
+                  {getInitials(previewName)}
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-semibold text-sm">
+                  {previewName || "Workspace Name"}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Workspace Preview
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="rounded-md px-4 py-2 text-xs font-medium text-white transition hover:opacity-90"
+                style={{
+                  backgroundColor: previewPrimary,
+                }}
+              >
+                Primary Button
+              </button>
+
+              <button
+                type="button"
+                className="rounded-md px-4 py-2 text-xs font-medium border border-border text-white transition hover:opacity-90"
+                style={{
+                  backgroundColor: previewSecondary,
+                }}
+              >
+                Secondary Button
+              </button>
             </div>
           </div>
 
@@ -418,15 +780,30 @@ export const Workspace: React.FC = () => {
             </div>
 
             <input
+              id="is_active"
               type="checkbox"
+              aria-label="Workspace Active"
               {...register("is_active")}
               className="h-5 w-5"
             />
           </div>
 
-          <div className="flex justify-end">
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              aria-label="Reset workspace changes"
+              onClick={handleReset}
+              disabled={!isDirty}
+              className="rounded-lg border border-border bg-background px-5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reset
+            </button>
+
             <button
               type="submit"
+              aria-label="Save workspace settings"
+              aria-busy={isSaving}
               disabled={!isDirty || isSaving}
               className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >

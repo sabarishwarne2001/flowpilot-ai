@@ -23,7 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop */}
-      <div className="hidden lg:block">
+      <div className="hidden h-full lg:block">
         <DesktopSidebar
           onLogout={onLogout}
           className={className}

@@ -15,6 +15,7 @@ import { ApiError } from "@/services/api/client";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 import {
   emailSettingsSchema,
@@ -42,6 +43,8 @@ export const EmailSettings: React.FC = () => {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
 
   const [testRecipient, setTestRecipient] = useState("");
+
+  const { workspace } = useWorkspace();
 
   const { data: emailSettings, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["email-settings"],
@@ -157,7 +160,7 @@ export const EmailSettings: React.FC = () => {
         <h1 className="text-2xl font-bold">Email Settings</h1>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          Configure SMTP settings used by FlowPilot AI to send automation
+          Configure SMTP settings used to send automation emails.
           emails.
         </p>
 
@@ -174,7 +177,7 @@ export const EmailSettings: React.FC = () => {
             <input
               id="sender_name"
               type="text"
-              placeholder="FlowPilot AI"
+              placeholder={workspace?.workspace_name ?? ""}
               {...register("sender_name")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
             />

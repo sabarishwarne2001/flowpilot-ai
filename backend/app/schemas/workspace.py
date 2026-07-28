@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
-from pydantic import HttpUrl
+from pydantic import AnyUrl
 
 
 # ============================================================================
@@ -28,7 +28,7 @@ class WorkspaceBase(BaseModel):
         max_length=150,
     )
 
-    company_logo_url: HttpUrl | None = None
+    company_logo_url: str | None = None
 
     timezone: str = Field(
         default="UTC",
@@ -88,7 +88,7 @@ class WorkspaceUpdate(BaseModel):
 
     company_name: str | None = Field(default=None, min_length=1, max_length=150)
 
-    company_logo_url: HttpUrl | None = None
+    company_logo_url: str | None = None
 
     timezone: str | None = Field(default=None, max_length=100)
 

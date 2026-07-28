@@ -1,6 +1,9 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
+import { Brand } from "@/components/branding/Brand";
+import { useWorkspace } from "@/context/WorkspaceContext";
+
 /**
  * Full-viewport, stateless application loading screen for FlowPilot AI.
  *
@@ -8,6 +11,7 @@ import { Loader2 } from "lucide-react";
  * and complies with accessibility guidelines during startup or lazy-loads transitions.
  */
 export const LoadingScreen: React.FC = () => {
+  const { workspace } = useWorkspace();
   return (
     <div
       className="min-h-dvh w-full flex items-center justify-center p-6 bg-background text-foreground transition-colors duration-200 select-none"
@@ -24,20 +28,12 @@ export const LoadingScreen: React.FC = () => {
           />
         </div>
 
-        {/* Unified Typography Branding Logo */}
-        <div className="flex items-center space-x-2">
-          <div className="h-6 w-6 rounded bg-primary flex items-center justify-center shadow-sm">
-            <span className="font-mono text-xs font-black text-primary-foreground">FP</span>
-          </div>
-          <span className="text-lg font-black tracking-tight font-sans">
-            FlowPilot<span className="text-primary font-black">AI</span>
-          </span>
-        </div>
+        <Brand variant="loading" />
 
         {/* Loading Indicators Text Pane */}
         <div className="space-y-1.5">
           <h1 className="text-sm font-extrabold text-foreground">
-            Loading FlowPilot AI...
+            Loading {workspace?.workspace_name ?? "Workspace"}...
           </h1>
           <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
             Preparing your workspace.

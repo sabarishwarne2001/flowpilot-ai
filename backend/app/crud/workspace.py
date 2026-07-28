@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -56,6 +57,19 @@ def get_workspace(
     ).scalar_one_or_none()
 
 
+def get_first_workspace(
+    db: Session,
+) -> Workspace | None:
+    """
+    Returns the first workspace.
+    Used for public branding before login.
+    """
+
+    return db.execute(
+        select(Workspace)
+    ).scalar_one_or_none()
+
+
 # ============================================================================
 # Exists
 # ============================================================================
@@ -82,6 +96,25 @@ def workspace_exists(
 # Update
 # ============================================================================
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+
+def delete_logo_file(logo_url: str | None) -> None:
+    """
+    Deletes a logo from disk.
+    """
+
+    if not logo_url:
+        return
+
+    if not logo_url.startswith("/uploads/logos/"):
+        return
+
+    file_path = BASE_DIR / logo_url.lstrip("/")
+
+    if file_path.exists():
+        file_path.unlink()
+
 def update_workspace(
     db: Session,
     *,
@@ -95,6 +128,14 @@ def update_workspace(
     update_data = workspace_in.model_dump(
         exclude_unset=True,
     )
+
+    old_logo = workspace.company_logo_url
+
+    new_logo = update_data.get("company_logo_url")
+
+    if "company_logo_url" in update_data:
+        if old_logo and old_logo != new_logo:
+            delete_logo_file(old_logo)
 
     for field, value in update_data.items():
         setattr(

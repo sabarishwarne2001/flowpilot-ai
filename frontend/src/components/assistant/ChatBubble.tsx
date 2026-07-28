@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Bot, User, FileText } from "lucide-react";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 import type { ConversationMessage, SourceCitation } from "@/types/assistant";
 
@@ -100,6 +101,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
   ({ message, onCitationClick, className = "" }) => {
     const isUser = message.role === "user";
     const [showTokenUsage, setShowTokenUsage] = useState(false);
+    const { workspace } = useWorkspace();
     return (
       <article
         className={`
@@ -180,7 +182,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
               )}
 
               <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {isUser ? "You" : "FlowPilot AI"}
+                {isUser ? "You" : (workspace?.workspace_name ?? "Assistant")}
               </span>
             </div>
 

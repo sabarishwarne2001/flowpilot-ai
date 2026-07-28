@@ -16,7 +16,6 @@ export const workspaceSchema = z.object({
   company_logo_url: z
     .string()
     .trim()
-    .url("Please enter a valid URL.")
     .nullable()
     .or(z.literal("")),
 

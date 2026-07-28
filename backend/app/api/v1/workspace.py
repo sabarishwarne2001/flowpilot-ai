@@ -56,6 +56,30 @@ async def get_workspace(
     return workspace
 
 
+@router.get(
+    "/public",
+    response_model=WorkspaceResponse,
+    summary="Get Public Workspace",
+)
+async def get_public_workspace(
+    db: Session = Depends(deps.get_db),
+) -> WorkspaceResponse:
+    """
+    Returns public workspace branding.
+    Does not require authentication.
+    """
+
+    workspace = crud.get_first_workspace(db)
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not configured.",
+        )
+
+    return workspace
+
+
 # ============================================================================
 # Create / Update
 # ============================================================================
