@@ -5,11 +5,9 @@ import { toast } from "sonner";
 
 import { getWorkspace, saveWorkspace } from "@/services/api/workspace";
 
-import { uploadLogo, deleteLogo } from "@/services/api/upload";
+import { uploadLogo } from "@/services/api/upload";
 
-import { ApiError } from "@/services/api/client";
-
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
@@ -21,10 +19,8 @@ const API_BASE_URL = (
 export const Workspace: React.FC = () => {
   const {
     register,
-    control,
     handleSubmit,
     reset,
-    watch,
     setValue,
     formState: { errors, isDirty },
   } = useForm<WorkspaceFormData>({
@@ -39,21 +35,13 @@ export const Workspace: React.FC = () => {
       currency: "USD",
       date_format: "YYYY-MM-DD",
 
-      primary_color: "#2563EB",
-      secondary_color: "#0F172A",
-
       is_active: true,
     },
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
-
-  const previewName = watch("workspace_name");
-  const previewPrimary = watch("primary_color");
-  const previewSecondary = watch("secondary_color");
-  const previewLogo = logoPreview ? `${API_BASE_URL}${logoPreview}` : null;
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
 
   const { data: workspace, isLoading: isLoadingWorkspace } = useQuery({
     queryKey: ["workspace"],
@@ -77,9 +65,6 @@ export const Workspace: React.FC = () => {
       currency: workspace.currency,
       date_format: workspace.date_format,
 
-      primary_color: workspace.primary_color,
-      secondary_color: workspace.secondary_color,
-
       is_active: workspace.is_active,
     });
   }, [workspace, reset]);
@@ -88,7 +73,6 @@ export const Workspace: React.FC = () => {
     if (!workspace) return;
 
     setLogoPreview(workspace.company_logo_url ?? null);
-    setUploadedLogo(null);
   }, [workspace]);
 
   // Prevent accidental tab closure or browser refresh if form has unsaved changes
@@ -110,14 +94,6 @@ export const Workspace: React.FC = () => {
   const handleReset = async () => {
     if (!workspace) return;
 
-    if (uploadedLogo && uploadedLogo !== workspace.company_logo_url) {
-      try {
-        await deleteLogo(uploadedLogo);
-      } catch {}
-    }
-
-    setUploadedLogo(null);
-
     reset({
       workspace_name: workspace.workspace_name,
       company_name: workspace.company_name,
@@ -126,24 +102,28 @@ export const Workspace: React.FC = () => {
       language: workspace.language,
       currency: workspace.currency,
       date_format: workspace.date_format,
-      primary_color: workspace.primary_color,
-      secondary_color: workspace.secondary_color,
       is_active: workspace.is_active,
     });
+
+    setSelectedLogoFile(null);
 
     setLogoPreview(workspace.company_logo_url ?? null);
 
     toast.success("Changes discarded.");
   };
 
-  const handleLogoSelect = async (
+  const handleLogoSelect = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
 
     if (!file) return;
 
-    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
 
     if (!allowedTypes.includes(file.type)) {
       toast.error("Only PNG, JPEG and WebP images are allowed.");
@@ -155,82 +135,39 @@ export const Workspace: React.FC = () => {
       return;
     }
 
-    try {
-      if (uploadedLogo) {
-        try {
-          await deleteLogo(uploadedLogo);
-        } catch {}
-      }
+    setSelectedLogoFile(file);
 
-      const response = await uploadLogo(file);
+    const preview = URL.createObjectURL(file);
 
-      setUploadedLogo(response.logo_url);
+    setLogoPreview(preview);
 
-      setLogoPreview(response.logo_url);
+    setValue("company_logo_url", preview, {
+      shouldDirty: true,
+    });
 
-      setValue("company_logo_url", response.logo_url, {
-        shouldDirty: true,
-      });
-
-      toast.success("Logo uploaded successfully.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Logo upload failed."
-      );
-    } finally {
-      event.target.value = "";
-    }
+    event.target.value = "";
   };
 
   const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } =
     useMutation({
       mutationFn: saveWorkspace,
 
-      onMutate: async (updatedWorkspace) => {
-        // Cancel any outgoing refetches so they do not overwrite our optimistic update
-        await queryClient.cancelQueries({
-          queryKey: ["workspace"],
-        });
-
-        // Snapshot the previous workspace state
-        const previousWorkspace = queryClient.getQueryData(["workspace"]);
-
-        // Optimistically update the query cache with new values
-        queryClient.setQueryData(["workspace"], (old: any) => ({
-          ...old,
-          ...updatedWorkspace,
-        }));
-
-        // Return context containing previous state for rollback on error
-        return { previousWorkspace };
-      },
-
       onSuccess: async () => {
         await queryClient.invalidateQueries({
           queryKey: ["workspace"],
-          exact: false,
         });
-        setUploadedLogo(null);
 
-        reset(
-          {
-            ...watch(),
-          },
-          {
-            keepDirty: false,
-          }
-        );
+        setSelectedLogoFile(null);
+
+        reset(undefined, {
+          keepDirty: false,
+        });
 
         toast.success("Workspace settings saved successfully.");
       },
 
-      onError: (error: unknown, _variables, context) => {
-        // Rollback to the cached snapshotted value if the mutation fails
-        if (context?.previousWorkspace) {
-          queryClient.setQueryData(["workspace"], context.previousWorkspace);
-        }
-
-        if (error instanceof ApiError) {
+      onError: (error: unknown) => {
+        if (error instanceof Error) {
           toast.error(error.message);
           return;
         }
@@ -239,20 +176,30 @@ export const Workspace: React.FC = () => {
       },
     });
 
-  const onSubmit = async (data: WorkspaceFormData): Promise<void> => {
-    await saveWorkspaceMutation({
-      ...data,
-      company_logo_url: data.company_logo_url || null,
-    });
-  };
+  const onSubmit = async (
+    data: WorkspaceFormData
+  ): Promise<void> => {
+    try {
+      let logoUrl = data.company_logo_url;
 
-  const getInitials = (name: string) => {
-    return (name || "FP")
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((word) => word.charAt(0).toUpperCase())
-      .join("");
+      if (selectedLogoFile) {
+        const response = await uploadLogo(selectedLogoFile);
+        logoUrl = response.logo_url;
+      }
+
+      await saveWorkspaceMutation({
+        ...data,
+        company_logo_url: logoUrl || null,
+      });
+
+      setSelectedLogoFile(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to save workspace."
+      );
+    }
   };
 
   if (isLoadingWorkspace) {
@@ -379,7 +326,13 @@ export const Workspace: React.FC = () => {
             <div className="flex items-center gap-4">
               {logoPreview ? (
                 <img
-                  src={previewLogo ?? undefined}
+                  src={
+                    logoPreview?.startsWith("blob:")
+                      ? logoPreview
+                      : logoPreview
+                        ? `${API_BASE_URL}${logoPreview}`
+                        : undefined
+                  }
                   alt="Company logo preview"
                   className="h-20 w-20 rounded-lg border border-border object-cover"
                 />
@@ -403,15 +356,7 @@ export const Workspace: React.FC = () => {
                   <button
                     type="button"
                     onClick={async () => {
-                      const logoToDelete = uploadedLogo ?? logoPreview;
-
-                      if (logoToDelete) {
-                        try {
-                          await deleteLogo(logoToDelete);
-                        } catch {}
-                      }
-
-                      setUploadedLogo(null);
+                      setSelectedLogoFile(null);
 
                       setLogoPreview(null);
 
@@ -610,165 +555,6 @@ export const Workspace: React.FC = () => {
             </div>
           </div>
 
-          {/* Branding */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Primary Color */}
-            <div className="space-y-2">
-              <label
-                htmlFor="primary_color"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
-                Primary Color
-              </label>
-
-              <Controller
-                name="primary_color"
-                control={control}
-                render={({ field }) => (
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="primary_color"
-                      type="color"
-                      value={field.value}
-                      onChange={field.onChange}
-                      className="h-10 w-12 cursor-pointer rounded border border-border bg-background focus:ring-2 focus:ring-primary/20"
-                    />
-
-                    <input
-                      type="text"
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="#2563EB"
-                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                )}
-              />
-
-              <div
-                className="mt-2 h-8 rounded-md border border-border"
-                style={{
-                  backgroundColor: previewPrimary,
-                }}
-              />
-
-              {errors.primary_color && (
-                <p className="text-xs text-destructive">
-                  {errors.primary_color.message}
-                </p>
-              )}
-            </div>
-
-            {/* Secondary Color */}
-            <div className="space-y-2">
-              <label
-                htmlFor="secondary_color"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
-                Secondary Color
-              </label>
-
-              <Controller
-                name="secondary_color"
-                control={control}
-                render={({ field }) => (
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="secondary_color"
-                      type="color"
-                      value={field.value}
-                      onChange={field.onChange}
-                      className="h-10 w-12 cursor-pointer rounded border border-border bg-background focus:ring-2 focus:ring-primary/20"
-                    />
-
-                    <input
-                      type="text"
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="#0F172A"
-                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                )}
-              />
-
-              <div
-                className="mt-2 h-8 rounded-md border border-border"
-                style={{
-                  backgroundColor: previewSecondary,
-                }}
-              />
-
-              {errors.secondary_color && (
-                <p className="text-xs text-destructive">
-                  {errors.secondary_color.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Brand Live Preview Card */}
-          <div className="rounded-lg border border-border p-5 bg-muted/10 space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-foreground">
-                Brand Preview
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Preview how your workspace branding will appear.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {previewLogo ? (
-                <img
-                  src={previewLogo ?? undefined}
-                  alt="Workspace logo preview"
-                  className="h-16 w-16 rounded-lg border border-border object-cover"
-                />
-              ) : (
-                <div
-                  className="flex h-16 w-16 items-center justify-center rounded-lg border border-border font-bold text-sm text-primary-foreground shadow-sm"
-                  style={{
-                    backgroundColor: previewPrimary,
-                  }}
-                >
-                  {getInitials(previewName)}
-                </div>
-              )}
-
-              <div>
-                <h3 className="font-semibold text-sm">
-                  {previewName || "Workspace Name"}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Workspace Preview
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="rounded-md px-4 py-2 text-xs font-medium text-white transition hover:opacity-90"
-                style={{
-                  backgroundColor: previewPrimary,
-                }}
-              >
-                Primary Button
-              </button>
-
-              <button
-                type="button"
-                className="rounded-md px-4 py-2 text-xs font-medium border border-border text-white transition hover:opacity-90"
-                style={{
-                  backgroundColor: previewSecondary,
-                }}
-              >
-                Secondary Button
-              </button>
-            </div>
-          </div>
-
           {/* Workspace Active */}
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
@@ -802,8 +588,6 @@ export const Workspace: React.FC = () => {
 
             <button
               type="submit"
-              aria-label="Save workspace settings"
-              aria-busy={isSaving}
               disabled={!isDirty || isSaving}
               className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >

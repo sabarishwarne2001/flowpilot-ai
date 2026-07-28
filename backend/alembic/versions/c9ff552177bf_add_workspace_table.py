@@ -29,8 +29,6 @@ def upgrade() -> None:
     sa.Column('language', sa.String(length=20), nullable=False),
     sa.Column('currency', sa.String(length=10), nullable=False),
     sa.Column('date_format', sa.String(length=30), nullable=False),
-    sa.Column('primary_color', sa.String(length=20), nullable=False),
-    sa.Column('secondary_color', sa.String(length=20), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

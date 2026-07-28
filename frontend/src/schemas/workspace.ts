@@ -69,16 +69,6 @@ export const workspaceSchema = z.object({
     "YYYY/MM/DD",
   ]),
 
-  primary_color: z
-    .string()
-    .trim()
-    .min(1),
-
-  secondary_color: z
-    .string()
-    .trim()
-    .min(1),
-
   is_active: z.boolean(),
 });
 

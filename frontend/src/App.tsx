@@ -23,12 +23,8 @@ import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 
 import { ROUTES } from "@/constants/routes";
-import { useWorkspaceTheme } from "@/hooks/useWorkspaceTheme";
-import { useDocumentBranding } from "@/hooks/useDocumentBranding";
 
 export default function App() {
-  useWorkspaceTheme();
-  useDocumentBranding();
 
   return (
     <ErrorBoundary>

@@ -74,22 +74,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
     )
 
     # ------------------------------------------------------------------
-    # Branding
-    # ------------------------------------------------------------------
-
-    primary_color: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default="#2563EB",
-    )
-
-    secondary_color: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default="#0F172A",
-    )
-
-    # ------------------------------------------------------------------
     # Status
     # ------------------------------------------------------------------
 

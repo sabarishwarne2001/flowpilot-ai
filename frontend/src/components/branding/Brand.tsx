@@ -131,10 +131,8 @@ export const Brand: React.FC<BrandProps> = ({
           justify-center
           overflow-hidden
           rounded-lg
+          bg-primary
         `}
-        style={{
-          backgroundColor: "var(--workspace-primary)",
-        }}
       >
         {logo && !logoError ? (
           <img

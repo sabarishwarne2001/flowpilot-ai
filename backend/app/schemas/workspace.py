@@ -50,16 +50,6 @@ class WorkspaceBase(BaseModel):
         max_length=30,
     )
 
-    primary_color: str = Field(
-        default="#2563EB",
-        max_length=20,
-    )
-
-    secondary_color: str = Field(
-        default="#0F172A",
-        max_length=20,
-    )
-
     is_active: bool = True
 
 
@@ -97,10 +87,6 @@ class WorkspaceUpdate(BaseModel):
     currency: str | None = Field(default=None, max_length=10)
 
     date_format: str | None = Field(default=None, max_length=30)
-
-    primary_color: str | None = Field(default=None, max_length=20)
-
-    secondary_color: str | None = Field(default=None, max_length=20)
 
     is_active: bool | None = None
 

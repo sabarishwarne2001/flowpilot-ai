@@ -52,9 +52,6 @@ export interface Workspace {
     | "MM/DD/YYYY"
     | "YYYY/MM/DD";
 
-  primary_color: string;
-  secondary_color: string;
-
   is_active: boolean;
 
   created_at: string;

@@ -10,8 +10,6 @@ import "@/styles/index.css";
 
 import { ApiError } from "@/services/api/client";
 
-import { bootstrapWorkspaceTheme } from "@/theme/themeBootstrap";
-
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -44,8 +42,6 @@ export const queryClient = new QueryClient({
     },
   },
 });
-
-bootstrapWorkspaceTheme();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
