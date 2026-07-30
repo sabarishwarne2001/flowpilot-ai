@@ -8,7 +8,7 @@ mappings, and execution audit histories.
 import uuid
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, JSON, String, Text
+from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, Integer, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -31,25 +31,29 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    priority: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=100,
+        index=True,
+    )
+
     event: Mapped[str] = mapped_column(
         String(50),
         index=True,
         nullable=False,
     )
 
-    field: Mapped[str] = mapped_column(
-        String(100),
+    conditions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
         nullable=False,
+        default=list,
     )
 
-    operator: Mapped[str] = mapped_column(
-        String(50),
+    logic_operator: Mapped[str] = mapped_column(
+        Enum("AND", "OR", name="logic_operator_enum"),
         nullable=False,
-    )
-
-    value: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
+        default="AND",
     )
 
     action_type: Mapped[str] = mapped_column(

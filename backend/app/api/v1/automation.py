@@ -9,15 +9,20 @@ import logging
 import uuid
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.models.user import User
+from app.models.work_item import WorkItem
+from app.services.automation_service import automation_service
 from app.schemas.automation import (
     AutomationRuleCreate,
     AutomationRuleUpdate,
     AutomationRuleResponse,
     AutomationLogResponse,
+    AutomationRuleTestRequest,
+    AutomationRuleTestResponse,
 )
 
 
@@ -206,3 +211,51 @@ async def delete_rule(
     crud.delete_automation_rule(db, db_obj=rule)
     logger.info(f"User {current_user.id} deleted Automation Rule [ID: {rule_id}]")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{rule_id}/test",
+    response_model=AutomationRuleTestResponse,
+    summary="Test an Automation Rule against a Work Item",
+    response_description="Detailed results of the test match evaluation."
+)
+async def test_rule(
+    rule_id: uuid.UUID,
+    payload: AutomationRuleTestRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+) -> Any:
+    """
+    Triggers a manual evaluation of a single rule against a target Work Item.
+    Enforces ownership of both the target Automation Rule and the chosen Work Item.
+    """
+    rule = crud.get_rule_by_id(db, rule_id=rule_id, user_id=current_user.id)
+    if rule is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Automation rule not found."
+        )
+
+    work_item = db.execute(
+        select(WorkItem).where(
+            WorkItem.id == payload.work_item_id,
+            WorkItem.user_id == current_user.id
+        )
+    ).scalar_one_or_none()
+    
+    if work_item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Work item not found."
+        )
+
+    result = await automation_service.test_rule_for_work_item(
+        db, rule=rule, work_item=work_item
+    )
+    logger.info(
+        "Manual automation test executed for rule %s by user %s",
+        rule.id,
+        current_user.id,
+    )
+
+    return result

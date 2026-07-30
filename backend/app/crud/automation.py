@@ -7,6 +7,7 @@ user ownership and keeping business logic outside the repository layer.
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,10 +29,10 @@ def create_automation_rule(
     """
     db_obj = AutomationRule(
         name=obj_in.name,
+        priority=obj_in.priority,
         event=obj_in.event,
-        field=obj_in.field,
-        operator=obj_in.operator,
-        value=obj_in.value,
+        conditions=[cond.model_dump() for cond in obj_in.conditions],
+        logic_operator=obj_in.logic_operator,
         action_type=obj_in.action_type,
         action_config=obj_in.action_config,
         is_active=obj_in.is_active,
@@ -70,12 +71,12 @@ def get_rules_by_user(
     limit: int = 100,
 ) -> list[AutomationRule]:
     """
-    Retrieve paginated automation rules for a user.
+    Retrieve paginated automation rules for a user sorted by execution priority.
     """
     statement = (
         select(AutomationRule)
         .where(AutomationRule.user_id == user_id)
-        .order_by(AutomationRule.created_at.desc())
+        .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -90,7 +91,7 @@ def get_active_rules_by_user_and_event(
     event: str,
 ) -> list[AutomationRule]:
     """
-    Retrieve active automation rules for a specific event.
+    Retrieve active automation rules sorted by execution priority.
     """
     statement = (
         select(AutomationRule)
@@ -99,7 +100,7 @@ def get_active_rules_by_user_and_event(
             AutomationRule.event == event,
             AutomationRule.is_active.is_(True),
         )
-        .order_by(AutomationRule.created_at.desc())
+        .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
     )
 
     return list(db.execute(statement).scalars().all())
@@ -117,6 +118,11 @@ def update_automation_rule(
     update_data = obj_in.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
+        if field == "conditions" and value is not None:
+            value = [
+                cond.model_dump() if hasattr(cond, "model_dump") else cond
+                for cond in value
+            ]
         setattr(db_obj, field, value)
 
     db.add(db_obj)
@@ -192,6 +198,7 @@ def get_logs_by_rule(
         .offset(skip)
         .limit(limit)
     )
+    return list(db.execute(statement).scalars().all())
 
 
 def get_logs_by_user(

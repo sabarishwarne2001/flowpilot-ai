@@ -32,9 +32,6 @@ export type AutomationOperator =
 
 /**
  * Supported automation actions.
- *
- * Additional providers can be added later without changing
- * the surrounding DTO structure.
  */
 export type AutomationActionType =
   | "SEND_EMAIL";
@@ -45,6 +42,35 @@ export type AutomationActionType =
 export type AutomationExecutionStatus =
   | "SUCCESS"
   | "FAILED";
+
+/**
+ * Test Rule of an automation log.
+ */
+export interface AutomationRuleTestResponse {
+  readonly success: boolean;
+  readonly matched: boolean;
+  readonly notification_sent: boolean;
+  readonly message: string;
+  readonly execution_time_ms: number;
+}
+
+/**
+ * Logical operators supporting multiple conditions.
+ */
+export type AutomationLogicOperator = "AND" | "OR";
+
+/* ============================================================================
+ * Sub-Structures
+ * ========================================================================== */
+
+/**
+ * Single logical evaluate criteria constraint configured for rule matching.
+ */
+export interface AutomationCondition {
+  readonly field: string;
+  readonly operator: AutomationOperator;
+  readonly value: string;
+}
 
 /* ============================================================================
  * Rule DTOs
@@ -58,14 +84,12 @@ export interface AutomationRule {
   readonly user_id: string;
 
   readonly name: string;
+  readonly priority: number;
 
   readonly event: AutomationEvent;
 
-  readonly field: string;
-
-  readonly operator: AutomationOperator;
-
-  readonly value: string;
+  readonly conditions: readonly AutomationCondition[];
+  readonly logic_operator: AutomationLogicOperator;
 
   readonly action_type: AutomationActionType;
 
@@ -91,14 +115,12 @@ export interface AutomationRule {
  */
 export interface AutomationRuleCreateRequest {
   readonly name: string;
+  readonly priority: number;
 
   readonly event: AutomationEvent;
 
-  readonly field: string;
-
-  readonly operator: AutomationOperator;
-
-  readonly value: string;
+  readonly conditions: readonly AutomationCondition[];
+  readonly logic_operator: AutomationLogicOperator;
 
   readonly action_type: AutomationActionType;
 
@@ -112,14 +134,12 @@ export interface AutomationRuleCreateRequest {
  */
 export interface AutomationRuleUpdateRequest {
   readonly name?: string;
+  readonly priority?: number;
 
   readonly event?: AutomationEvent;
 
-  readonly field?: string;
-
-  readonly operator?: AutomationOperator;
-
-  readonly value?: string;
+  readonly conditions?: readonly AutomationCondition[];
+  readonly logic_operator?: AutomationLogicOperator;
 
   readonly action_type?: AutomationActionType;
 

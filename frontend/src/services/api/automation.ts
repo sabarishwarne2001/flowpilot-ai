@@ -4,15 +4,17 @@ import type {
   AutomationLog,
   AutomationRuleCreateRequest,
   AutomationRuleUpdateRequest,
+  AutomationRuleTestResponse,
 } from "@/types/automation";
 
 /**
  * Automation Route Path Endpoints Configurations.
  */
 const AUTOMATION_ENDPOINTS = {
-  BASE: "/automation",
-  RULE: (id: string) => `/automation/${id}`,
-  LOGS: "/automation/logs",
+    BASE: "/automation",
+    RULE: (id: string) => `/automation/${id}`,
+    TEST: (id: string) => `/automation/${id}/test`,
+    LOGS: "/automation/logs",
 } as const;
 
 /**
@@ -126,6 +128,28 @@ export const getAutomationLogs = async (): Promise<readonly AutomationLog[]> => 
   return response.data;
 };
 
+/**
+ * Manually executes a target automation rule against a target Work Item.
+ *
+ * @param ruleId - Primary key UUID identifying the target rule.
+ * @param workItemId - Primary key UUID identifying the target work item.
+ */
+export const testAutomationRule = async (
+  ruleId: string,
+  workItemId: string,
+): Promise<AutomationRuleTestResponse> => {
+  const response = await apiClient.post<AutomationRuleTestResponse>(
+    `${AUTOMATION_ENDPOINTS.RULE(ruleId)}/test`,
+    { work_item_id: workItemId },
+    {
+      headers: {
+        "Accept": "application/json",
+      },
+    },
+  );
+  return response.data;
+};
+
 // Export unified API namespace wrapper
 export const automationApi = {
   createAutomationRule,
@@ -134,6 +158,7 @@ export const automationApi = {
   updateAutomationRule,
   deleteAutomationRule,
   getAutomationLogs,
+  testAutomationRule,
 };
 
 export default automationApi;

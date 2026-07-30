@@ -8,6 +8,7 @@ dispatches notifications, creates audit logs, and records execution statistics.
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.models.work_item import WorkItem
 from app.models.email_settings import EmailSettings
+from app.models.automation import AutomationRule
 from app.services.notification.dispatcher import notification_dispatcher
 
 from app.schemas.notification import NotificationCreate
@@ -36,7 +38,7 @@ def _evaluate_condition(
     target_value: str,
 ) -> bool:
     """
-    Evaluate a rule condition against an actual document value.
+    Evaluate a single condition operator constraint against an actual document value.
     """
 
     operator = operator.upper().strip()
@@ -58,7 +60,7 @@ def _evaluate_condition(
 
     try:
         actual_num = float(actual)
-        target_num = float(target_str)
+        sa_target = float(target_str)
     except (TypeError, ValueError):
         logger.warning(
             "Numeric comparison failed. Actual='%s' Target='%s'",
@@ -68,16 +70,16 @@ def _evaluate_condition(
         return False
 
     if operator == "GREATER_THAN":
-        return actual_num > target_num
+        return actual_num > sa_target
 
     if operator == "LESS_THAN":
-        return actual_num < target_num
+        return actual_num < sa_target
 
     if operator == "GREATER_THAN_OR_EQUAL":
-        return actual_num >= target_num
+        return actual_num >= sa_target
 
     if operator == "LESS_THAN_OR_EQUAL":
-        return actual_num <= target_num
+        return actual_num <= sa_target
 
     logger.warning("Unsupported automation operator '%s'.", operator)
     return False
@@ -109,6 +111,71 @@ def _get_nested_value(
             return None
 
     return current
+
+
+def _get_condition_attribute(condition: Any, attr: str) -> Any:
+    """
+    Safely retrieves a configuration attribute from either a dictionary
+    or a validation object property instance.
+    """
+    if hasattr(condition, attr):
+        return getattr(condition, attr)
+    if isinstance(condition, dict):
+        return condition.get(attr)
+    return None
+
+
+def _evaluate_rule_conditions(
+    rule: Any,
+    work_item: WorkItem,
+) -> bool:
+    """
+    Evaluates multiple conditions of a rule against a WorkItem based on
+    the specified logic operator. Supports early-exit short-circuit logic.
+    """
+    conditions = getattr(rule, "conditions", []) or []
+    if not conditions:
+        return False
+
+    logic_operator = getattr(rule, "logic_operator", "AND")
+    if isinstance(logic_operator, str):
+        logic_operator = logic_operator.upper().strip()
+
+    if logic_operator not in ("AND", "OR"):
+        logger.warning("Unknown logic operator '%s'. Falling back to AND.", logic_operator)
+        logic_operator = "AND"
+
+    matched_results = []
+    for cond in conditions:
+        field_path = _get_condition_attribute(cond, "field")
+        operator = _get_condition_attribute(cond, "operator")
+        target_value = _get_condition_attribute(cond, "value")
+
+        if not field_path or not operator or target_value is None:
+            matched_results.append(False)
+            continue
+
+        if hasattr(work_item, field_path):
+            actual_value = getattr(work_item, field_path)
+        else:
+            actual_value = _get_nested_value(
+                work_item.extracted_entities or {},
+                field_path,
+            )
+
+        is_matched = _evaluate_condition(actual_value, operator, target_value)
+
+        # Early-exit evaluation optimizations
+        if logic_operator == "AND" and not is_matched:
+            return False
+        if logic_operator == "OR" and is_matched:
+            return True
+
+        matched_results.append(is_matched)
+
+    if logic_operator == "OR":
+        return any(matched_results)
+    return all(matched_results)
 
 
 class AutomationService:
@@ -147,10 +214,20 @@ class AutomationService:
             logger.error("WorkItem %s not found.", work_item_id)
             return stats
 
-        rules = crud.get_active_rules_by_user_and_event(
+        raw_rules = crud.get_active_rules_by_user_and_event(
             db,
             user_id=work_item.user_id,
             event=event,
+        )
+
+        # Explicitly sort rules in-memory strictly by execution priority ASC,
+        # then fallback to created_at timestamp to guarantee predictable run orders
+        rules = sorted(
+            raw_rules,
+            key=lambda r: (
+                r.priority,
+                r.created_at.timestamp() if getattr(r, "created_at", None) else 0
+            )
         )
 
         email_settings = crud.get_email_settings(
@@ -183,20 +260,7 @@ class AutomationService:
 
             try:
 
-                if hasattr(work_item, rule.field):
-                    actual_value = getattr(work_item, rule.field)
-
-                else:
-                    actual_value = _get_nested_value(
-                        work_item.extracted_entities or {},
-                        rule.field,
-                    )
-
-                if not _evaluate_condition(
-                    actual_value,
-                    rule.operator,
-                    rule.value,
-                ):
+                if not _evaluate_rule_conditions(rule, work_item):
                     continue
 
                 stats["matched"] += 1
@@ -285,6 +349,108 @@ class AutomationService:
         )
 
         return stats
+
+    async def test_rule_for_work_item(
+        self,
+        db: Session,
+        *,
+        rule: AutomationRule,
+        work_item: WorkItem,
+    ) -> dict[str, Any]:
+        """
+        Manually executes and evaluates a single target rule against a specific Work Item,
+        producing standard execution logs and notification traces without modifying trigger queues.
+        """
+        start_time = time.perf_counter()
+        success = True
+        matched = False
+        notification_sent = False
+        message = "Rule conditions were not satisfied."
+
+        try:
+            if _evaluate_rule_conditions(rule, work_item):
+                matched = True
+                log_msg = "[MANUAL TEST RUN] Rule conditions matched."
+                email_settings = crud.get_email_settings(db, user_id=work_item.user_id)
+
+                if email_settings and email_settings.is_enabled:
+                    recipient = rule.action_config.get("recipient", "").strip()
+                    title = f"[TEST MATCHED] Automation Rule: {rule.name}"
+                    body = (
+                        f"[MANUAL AUTOMATION TEST RUN]\n"
+                        f"Document: {work_item.original_filename}\n"
+                        f"Rule: {rule.name}\n"
+                        f"Status: Matched\n\n"
+                        f"{work_item.summary or 'No summary available.'}"
+                    )
+
+                    ok = await notification_dispatcher.send(
+                        action_type=rule.action_type,
+                        settings=email_settings,
+                        recipient=recipient,
+                        title=title,
+                        body=body,
+                    )
+
+                    if ok:
+                        notification_sent = True
+                        message = f"Rule conditions met. Manual test email dispatched to {recipient}."
+                        crud.create_automation_log(
+                            db,
+                            rule_id=rule.id,
+                            work_item_id=work_item.id,
+                            status="SUCCESS",
+                            log_message=f"{log_msg} Email dispatched to {recipient}.",
+                        )
+                    else:
+                        message = "Rule conditions met, but email dispatcher failed."
+                        crud.create_automation_log(
+                            db,
+                            rule_id=rule.id,
+                            work_item_id=work_item.id,
+                            status="FAILED",
+                            log_message=f"[MANUAL TEST FAILED] Dispatch failed for {recipient}.",
+                        )
+                else:
+                    if not email_settings:
+                        message = "Rule conditions met. Email not sent because Email settings are missing."
+                    else:
+                        message = "Rule conditions met. Email not sent because SMTP is disabled in settings."
+                    
+                    crud.create_automation_log(
+                        db,
+                        rule_id=rule.id,
+                        work_item_id=work_item.id,
+                        status="SUCCESS",
+                        log_message=f"{log_msg} {message}",
+                    )
+
+                db.commit()
+
+        except Exception as exc:
+            success = False
+            message = f"Error evaluating manual rule conditions: {str(exc)}"
+            try:
+                crud.create_automation_log(
+                    db,
+                    rule_id=rule.id,
+                    work_item_id=work_item.id,
+                    status="FAILED",
+                    log_message=f"[MANUAL TEST FAILED] {str(exc)[:5000]}",
+                )
+                db.commit()
+            except Exception:
+                logger.exception("Unable to write manual automation test error log.")
+
+        execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+
+        return {
+            "success": success,
+            "matched": matched,
+            "notification_sent": notification_sent,
+            "message": message,
+            "execution_time_ms": round(execution_time_ms, 2),
+        }
 
 
 automation_service = AutomationService()

@@ -8,13 +8,15 @@ import {
   Edit2,
   AlertCircle,
   RefreshCw,
-  ToggleLeft,
-  ToggleRight,
   Clock,
   ArrowRight,
+  Loader2,
+  Copy,
+  Play,
 } from "lucide-react";
 import { automationApi } from "@/services/api/automation";
 import { RuleForm } from "@/pages/Automation/RuleForm";
+import { RuleTestDialog } from "@/pages/Automation/RuleTestDialog";
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
@@ -49,7 +51,10 @@ export const Automation: React.FC = () => {
   // Dialog overlay controller states
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [ruleToEdit, setRuleToEdit] = useState<AutomationRule | null>(null);
+  const [ruleToDuplicate, setRuleToDuplicate] = useState<AutomationRule | null>(null);
+  const [ruleToTest, setRuleToTest] = useState<AutomationRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<AutomationRule | null>(null);
+  const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
 
   // 1. Query user-configured Rules lists
   const {
@@ -96,13 +101,14 @@ export const Automation: React.FC = () => {
     },
   });
 
-  // 4. Register toggles mutation to modify active states dynamically
+  // 4. Register toggles mutation to modify active states dynamically with Optimistic UI updates
   const { mutate: triggerToggleActive, isPending: isUpdatingRule } =
     useMutation({
       mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
         automationApi.updateAutomationRule(id, { is_active }),
 
       onMutate: async (updatedRule) => {
+        setTogglingRuleId(updatedRule.id);
         await queryClient.cancelQueries({
           queryKey: RULES_QUERY_KEY,
         });
@@ -126,7 +132,8 @@ export const Automation: React.FC = () => {
         return { previousRules };
       },
 
-      onError: (err, _, context) => {
+      onError: (err, variables, context) => {
+        setTogglingRuleId(null);
         if (context?.previousRules) {
           queryClient.setQueryData(RULES_QUERY_KEY, context.previousRules);
         }
@@ -134,15 +141,16 @@ export const Automation: React.FC = () => {
         if (err instanceof ApiError) {
           toast.error(err.message);
         } else {
-          toast.error("Failed to update rule.");
+          toast.error(`Failed to ${variables.is_active ? "enable" : "disable"} automation rule.`);
         }
       },
 
-      onSuccess: () => {
-        toast.success("Rule status updated.");
+      onSuccess: (_data, variables) => {
+        toast.success(variables.is_active ? "Rule enabled successfully." : "Rule disabled successfully.");
       },
 
       onSettled: () => {
+        setTogglingRuleId(null);
         queryClient.invalidateQueries({
           queryKey: RULES_QUERY_KEY,
         });
@@ -153,17 +161,34 @@ export const Automation: React.FC = () => {
 
   const handleOpenCreateForm = useCallback((): void => {
     setRuleToEdit(null);
+    setRuleToDuplicate(null);
     setIsFormOpen(true);
   }, []);
 
   const handleOpenEditForm = useCallback((rule: AutomationRule): void => {
+    setRuleToDuplicate(null);
     setRuleToEdit(rule);
+    setIsFormOpen(true);
+  }, []);
+
+  const handleOpenDuplicateForm = useCallback((rule: AutomationRule): void => {
+    setRuleToEdit(null);
+    setRuleToDuplicate(rule);
     setIsFormOpen(true);
   }, []);
 
   const handleFormClose = useCallback((): void => {
     setIsFormOpen(false);
     setRuleToEdit(null);
+    setRuleToDuplicate(null);
+  }, []);
+
+  const handleOpenTestDialog = useCallback((rule: AutomationRule): void => {
+    setRuleToTest(rule);
+  }, []);
+
+  const handleCloseTestDialog = useCallback((): void => {
+    setRuleToTest(null);
   }, []);
 
   const handleSaveSuccessCallback = useCallback((): void => {
@@ -260,101 +285,195 @@ export const Automation: React.FC = () => {
           </h3>
 
           {rules.length === 0 ? (
-            <div className="text-center py-12 px-6 bg-card border border-border/40 rounded-xl select-none">
-              <Sliders className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-35" />
-              <p className="text-sm font-bold tracking-tight">
-                No automation rules configured
-              </p>
-              <p className="text-xs text-muted-foreground font-semibold mt-1">
-                Configure your first rule to send emails oncompleted files.
-              </p>
+            <div className="text-center py-14 px-6 bg-card border border-dashed border-border/60 rounded-2xl select-none flex flex-col items-center justify-center space-y-3">
+              <div className="h-14 w-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1">
+                <Sliders className="h-7 w-7" />
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <h4 className="text-base font-extrabold tracking-tight">
+                  No automation rules configured
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Create your first workflow automation rule to automatically evaluate processed documents and dispatch alerts.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateForm}
+                disabled={isDeletingRule || isUpdatingRule}
+                className="mt-2 inline-flex items-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98]"
+              >
+                <Plus className="h-4 w-4 mr-1.5 flex-shrink-0" />
+                Create First Rule
+              </button>
             </div>
           ) : (
-            <div className="space-y-3.5">
+            <div className="space-y-4">
               {rules.map((rule) => (
                 <article
                   key={rule.id}
-                  className={`p-5 bg-card border rounded-xl shadow-sm transition-all duration-200 flex flex-col justify-between space-y-4
+                  className={`p-5 bg-card border rounded-xl shadow-sm transition-all duration-200 hover:shadow-md flex flex-col justify-between space-y-4
                     ${
                       rule.is_active
-                        ? "border-border/80"
-                        : "border-border/40 bg-muted/10 opacity-70"
+                        ? "border-border/80 shadow-md ring-1 ring-emerald-500/10"
+                        : "border-muted/40 bg-muted/10 opacity-70 filter grayscale-[15%]"
                     }`}
                 >
+                  {/* Modern Header Row */}
                   <div className="flex justify-between items-start space-x-4">
-                    <div className="min-w-0">
-                      <h4 className="font-extrabold text-sm truncate leading-snug">
+                    <div className="min-w-0 space-y-2">
+                      <h4 className="font-extrabold text-base leading-snug truncate text-foreground">
                         {rule.name}
                       </h4>
-                      <span className="text-[10px] text-muted-foreground font-semibold leading-none mt-1.5 block select-none">
-                        Event: {rule.event.replace("WORK_ITEM_", "")}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold select-none whitespace-nowrap">
+                          Priority #{rule.priority}
+                        </span>
+                        <span className="text-[10px] bg-secondary text-secondary-foreground border border-border/40 px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
+                          Event: {rule.event.replace("WORK_ITEM_", "")}
+                        </span>
+                        {rule.is_active ? (
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2.5 py-0.5 rounded-full font-bold select-none whitespace-nowrap">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full font-bold select-none whitespace-nowrap">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Active toggle button control */}
+                    {/* Active toggle switch control */}
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={rule.is_active}
                       onClick={() =>
                         triggerToggleActive({
                           id: rule.id,
                           is_active: !rule.is_active,
                         })
                       }
-                      className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={
-                        rule.is_active ? "Deactivate rule" : "Activate rule"
-                      }
-                      disabled={isDeletingRule || isUpdatingRule}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
+                        ${rule.is_active ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
+                      disabled={togglingRuleId === rule.id || isDeletingRule || isUpdatingRule}
+                      title={rule.is_active ? "Deactivate rule" : "Activate rule"}
+                      aria-label={`Toggle rule ${rule.name}`}
                     >
-                      {rule.is_active ? (
-                        <ToggleRight className="h-7 w-7 text-emerald-500 fill-emerald-500" />
-                      ) : (
-                        <ToggleLeft className="h-7 w-7 text-muted-foreground/60" />
-                      )}
+                      <span className="sr-only">Toggle rule status</span>
+                      <span
+                        className={`pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center
+                          ${rule.is_active ? "translate-x-5" : "translate-x-0"}`}
+                      >
+                        {togglingRuleId === rule.id && (
+                          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                        )}
+                      </span>
                     </button>
                   </div>
 
-                  {/* Summary Condition metrics display */}
-                  <div className="p-3 bg-muted/40 dark:bg-muted/10 border border-border/20 rounded-lg text-xs font-semibold leading-relaxed flex items-center select-none text-muted-foreground">
-                    <div className="truncate">
-                      <span className="font-mono text-foreground font-extrabold text-[11px]">
-                        {getFriendlyFieldName(rule.field)}
+                  {/* Structured IF / THEN Panel supporting multiple conditions */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-muted/30 dark:bg-muted/10 border border-border/40 rounded-xl p-3.5 select-none">
+                    {/* IF Section */}
+                    <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-primary">
+                        IF Conditions ({rule.logic_operator})
                       </span>
-                      <span className="mx-1.5 text-primary text-[10px] uppercase font-bold">
-                        {OPERATOR_DISPLAY_MAP[rule.operator] ?? rule.operator.replace("_", " ")}
-                      </span>
-                      <span className="font-bold text-foreground bg-background px-1.5 py-0.5 rounded border border-border/50">
-                        {rule.value}
-                      </span>
+                      <div className="flex flex-col gap-2">
+                        {rule.conditions.map((cond, idx) => (
+                          <React.Fragment key={idx}>
+                            {idx > 0 && (
+                              <div className="flex items-center space-x-2 select-none">
+                                <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black uppercase">
+                                  {rule.logic_operator}
+                                </span>
+                                <div className="h-px bg-border/40 flex-1" />
+                              </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <span className="px-2 py-1 rounded-md bg-background border border-border/60 font-mono font-bold text-foreground truncate max-w-[150px]">
+                                {getFriendlyFieldName(cond.field)}
+                              </span>
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground px-1">
+                                {OPERATOR_DISPLAY_MAP[cond.operator] ?? cond.operator.replace("_", " ")}
+                              </span>
+                              <span className="px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold truncate max-w-[150px]">
+                                {cond.value}
+                              </span>
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
                     </div>
-                    <ArrowRight className="h-3 w-3 mx-2 text-muted-foreground/60 flex-shrink-0" />
-                    <span className="text-primary font-bold">
-                      {rule.action_type}
-                    </span>
+
+                    {/* THEN Section */}
+                    <div className="sm:col-span-5 flex flex-col justify-center border-t sm:border-t-0 sm:border-l border-border/40 pt-2.5 sm:pt-0 sm:pl-3.5 space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                        THEN Action
+                      </span>
+                      <div className="flex items-center space-x-1.5 text-xs font-bold text-foreground">
+                        <span className="px-2 py-1 rounded-md bg-background border border-border/60 text-emerald-600 dark:text-emerald-400">
+                          {rule.action_type.replace("_", " ")}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Edit / Delete control buttons */}
-                  <div className="flex items-center justify-end space-x-2 pt-2 border-t border-border/10">
-                    <button
-                      type="button"
-                      disabled={isDeletingRule || isUpdatingRule}
-                      onClick={() => handleOpenEditForm(rule)}
-                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Edit rule configurations"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRuleToDelete(rule);
-                      }}
-                      disabled={isDeletingRule || isUpdatingRule}
-                      className="p-1.5 rounded bg-muted/60 dark:bg-muted/5 border border-border/40 hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Delete automation rule"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                  {/* Metadata Row & Action Toolbar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/10">
+                    <div className="text-[10px] text-muted-foreground font-medium flex flex-wrap items-center gap-x-3 gap-y-1 select-none">
+                      <span>Created: {formatDateTime(rule.created_at)}</span>
+                      {rule.updated_at && (
+                        <span>Updated: {formatDateTime(rule.updated_at)}</span>
+                      )}
+                    </div>
+
+                    {/* Action Buttons Toolbar */}
+                    <div className="flex items-center space-x-1 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        disabled={isDeletingRule || isUpdatingRule}
+                        onClick={() => handleOpenTestDialog(rule)}
+                        className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Test automation rule"
+                        aria-label={`Test rule ${rule.name}`}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDeletingRule || isUpdatingRule}
+                        onClick={() => handleOpenDuplicateForm(rule)}
+                        className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Duplicate automation rule"
+                        aria-label={`Duplicate rule ${rule.name}`}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDeletingRule || isUpdatingRule}
+                        onClick={() => handleOpenEditForm(rule)}
+                        className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Edit rule configurations"
+                        aria-label={`Edit rule ${rule.name}`}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRuleToDelete(rule);
+                        }}
+                        disabled={isDeletingRule || isUpdatingRule}
+                        className="p-2 rounded-lg bg-background border border-border/40 hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive text-muted-foreground transition-all focus:outline-none focus:ring-2 focus:ring-destructive/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete automation rule"
+                        aria-label={`Delete rule ${rule.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -468,6 +587,12 @@ export const Automation: React.FC = () => {
         onClose={handleFormClose}
         onSaveSuccess={handleSaveSuccessCallback}
         ruleToEdit={ruleToEdit}
+        ruleToDuplicate={ruleToDuplicate}
+      />
+      <RuleTestDialog
+        isOpen={ruleToTest !== null}
+        onClose={handleCloseTestDialog}
+        rule={ruleToTest}
       />
       <ConfirmDialog
         open={ruleToDelete !== null}
