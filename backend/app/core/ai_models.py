@@ -7,16 +7,16 @@ AI_MODELS = {
         "deepseek-r1-distill-llama-70b",
     ],
     AIProvider.GEMINI: [
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
         "gemini-3.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
     ],
-    AIProvider.OPENAI: [
-        "gpt-5",
-        "gpt-5-mini",
-    ],
-    AIProvider.CLAUDE: [
-        "claude-sonnet-4",
-        "claude-opus-4",
-    ],
+    # AIProvider.OPENAI: [
+    #     "gpt-5",
+    #     "gpt-5-mini",
+    # ],
+    # AIProvider.CLAUDE: [
+    #     "claude-sonnet-4",
+    #     "claude-opus-4",
+    # ],
 }

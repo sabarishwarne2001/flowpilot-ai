@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 class AIProvider(str, enum.Enum):
     GROQ = "GROQ"
     GEMINI = "GEMINI"
-    OPENAI = "OPENAI"
-    CLAUDE = "CLAUDE"
+    # OPENAI = "OPENAI"
+    # CLAUDE = "CLAUDE"
 
 
 # ============================================================================

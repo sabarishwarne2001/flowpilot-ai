@@ -82,6 +82,26 @@ async def process_document_pipeline(
             logger.error("Pipeline aborted. WorkItem or Job not found.")
             return
 
+        ai_settings = crud.get_ai_settings(
+            db,
+            user_id=work_item.user_id,
+        )
+
+        if ai_settings is None:
+            raise ValueError(
+                f"No AI settings found for user {work_item.user_id}"
+            )
+
+        document_settings = crud.get_document_settings(
+            db,
+            user_id=work_item.user_id,
+        )
+
+        if document_settings is None:
+            raise ValueError(
+                f"No Document Settings found for user {work_item.user_id}"
+            )
+
         crud.update_work_item_state(
             db,
             db_obj=work_item,
@@ -144,7 +164,11 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 2
         # -----------------------------
-        chunks = split_text(pages)
+        chunks = split_text(
+            pages,
+            chunk_size=document_settings.chunk_size,
+            chunk_overlap=document_settings.chunk_overlap,
+        )
 
         crud.update_job(
             db,
@@ -190,13 +214,30 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 4
         # -----------------------------
-        classification = llm_service.classify_document(full_text)
-        document_class = classification.get("document_classification", "Other")
+        if document_settings.automatic_classification:
+            classification = llm_service.classify_document(
+                full_text,
+                ai_settings=ai_settings,
+            )
+        else:
+            classification = {
+                "document_classification": "Other",
+            }
 
-        entities = llm_service.extract_entities(
-            full_text,
-            document_class,
+        document_class = classification.get(
+            "document_classification",
+            "Other",
         )
+
+        if document_settings.automatic_entity_extraction:
+            entities = llm_service.extract_entities(
+                full_text,
+                document_class,
+                ai_settings=ai_settings,
+            )
+        else:
+            entities = {}
+
         entities["classification_details"] = classification
 
         crud.update_job(
@@ -208,7 +249,13 @@ async def process_document_pipeline(
         # -----------------------------
         # Stage 5
         # -----------------------------
-        summary = llm_service.generate_summary(full_text)
+        if document_settings.automatic_summarization:
+            summary = llm_service.generate_summary(
+                full_text,
+                ai_settings=ai_settings,
+            )
+        else:
+            summary = None
 
         crud.update_work_item_state(
             db,

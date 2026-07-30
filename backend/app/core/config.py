@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: SecretStr | None = None
     LLM_PROVIDER: str = "groq"  # Supported drivers: "groq", "gemini"
     GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
-    GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
+    GEMINI_MODEL_NAME: str = "gemini-3.5-flash"
 
     # Sprint 3: Text Chunking & Embedding Model Configurations
     CHUNK_SIZE: int = 750

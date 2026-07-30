@@ -48,6 +48,12 @@ from app.schemas.assistant import (
     ChatResponse,
     SourceCitation,
 )
+from app.schemas.document_settings import (
+    DocumentSettingsCreate,
+    DocumentSettingsUpdate,
+    DocumentSettingsResponse,
+)
+
 
 __all__ = [
     "UserRegister",
@@ -82,4 +88,7 @@ __all__ = [
     "ChatQuery",
     "ChatResponse",
     "SourceCitation",
+    "DocumentSettingsCreate",
+    "DocumentSettingsUpdate",
+    "DocumentSettingsResponse",
 ]

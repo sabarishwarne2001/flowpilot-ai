@@ -7,10 +7,19 @@ import { toast } from "sonner";
 import { X, Loader2, Play } from "lucide-react";
 import { automationApi } from "@/services/api/automation";
 import { ApiError } from "@/services/api/client";
-import type { AutomationRule, AutomationRuleCreateRequest, AutomationRuleUpdateRequest } from "@/types/automation";
+import {
+  AUTOMATION_FIELDS_MAP,
+  getCategorizedFields,
+  getAllowedOperators,
+} from "@/constants/automationFields";
+import type {
+  AutomationRule,
+  AutomationRuleCreateRequest,
+  AutomationRuleUpdateRequest,
+} from "@/types/automation";
 
 // Centralized query key constant mapping to core rules lists
-const RULES_QUERY_KEY = ["automation-rules"] as const; // Matches the registered list cache keys
+const RULES_QUERY_KEY = ["automation-rules"] as const;
 
 // Declarative Zod validation schema to govern rule configurations
 const ruleFormValidationSchema = z.object({
@@ -23,7 +32,7 @@ const ruleFormValidationSchema = z.object({
     "WORK_ITEM_CREATED",
     "WORK_ITEM_COMPLETED",
     "WORK_ITEM_FAILED",
-    "WORK_ITEM_REPROCESSED"
+    "WORK_ITEM_REPROCESSED",
   ]),
   field: z
     .string()
@@ -37,7 +46,7 @@ const ruleFormValidationSchema = z.object({
     "GREATER_THAN",
     "LESS_THAN",
     "GREATER_THAN_OR_EQUAL",
-    "LESS_THAN_OR_EQUAL"
+    "LESS_THAN_OR_EQUAL",
   ]),
   value: z
     .string()
@@ -67,6 +76,17 @@ interface RuleFormProps {
   readonly ruleToEdit?: AutomationRule | null;
 }
 
+// Logic Operator Display mapping
+const OPERATOR_LABELS: Record<string, string> = {
+  EQUALS: "Equals (==)",
+  NOT_EQUALS: "Not Equals (!=)",
+  CONTAINS: "Contains",
+  GREATER_THAN: "Greater Than (>)",
+  LESS_THAN: "Less Than (<)",
+  GREATER_THAN_OR_EQUAL: "Greater Than or Equal (>=)",
+  LESS_THAN_OR_EQUAL: "Less Than or Equal (<=)",
+};
+
 /**
  * Validated Modal Dialog Form for composing or editing trigger-action Automation Rules.
  *
@@ -81,12 +101,15 @@ export const RuleForm: React.FC<RuleFormProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const isEditMode = ruleToEdit !== null;
+  const categorizedFields = getCategorizedFields();
 
   // Initialize input validator controllers with focus boundaries
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<RuleFormInput>({
     resolver: zodResolver(ruleFormValidationSchema),
@@ -101,6 +124,29 @@ export const RuleForm: React.FC<RuleFormProps> = ({
       recipient: "",
     },
   });
+
+  // Watch field configurations to drive dynamic metadata adjustments
+  const selectedFieldPath = watch("field");
+  const selectedOperator = watch("operator");
+
+  // Lookup dynamic field properties
+  const selectedFieldMeta = AUTOMATION_FIELDS_MAP[selectedFieldPath];
+  const fieldDescription = selectedFieldMeta?.description ?? "";
+  const fieldPlaceholder = selectedFieldMeta
+    ? `e.g. ${selectedFieldMeta.example}`
+    : "e.g. Match value";
+
+  // Derive dynamic evaluation operators allowed for the selected path
+  const allowedOperators = getAllowedOperators(selectedFieldPath);
+
+  // Automatically enforce valid default operators when the active field pivots
+  useEffect(() => {
+    if (selectedFieldPath && allowedOperators.length > 0) {
+      if (!allowedOperators.includes(selectedOperator)) {
+        setValue("operator", allowedOperators[0]!);
+      }
+    }
+  }, [selectedFieldPath, allowedOperators, selectedOperator, setValue]);
 
   // Hydrate form defaults dynamically whenever edit contexts change
   useEffect(() => {
@@ -158,8 +204,13 @@ export const RuleForm: React.FC<RuleFormProps> = ({
 
   // 2. Transaction mutation mapping Rule updates
   const { mutateAsync: runUpdateMutation, isPending: isUpdating } = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: AutomationRuleUpdateRequest }) =>
-      automationApi.updateAutomationRule(id, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: AutomationRuleUpdateRequest;
+    }) => automationApi.updateAutomationRule(id, payload),
     onSuccess: async () => {
       toast.success("Automation rule updated.");
       await queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
@@ -177,7 +228,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
 
   const onFormSubmit = async (data: RuleFormInput): Promise<void> => {
     // Compile dynamic parameters into the standard provider-agnostic JSON format
-    const compiledPayload: AutomationRuleCreateRequest  = {
+    const compiledPayload: AutomationRuleCreateRequest = {
       name: data.name.trim(),
       event: data.event,
       field: data.field.trim(),
@@ -268,18 +319,32 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Target JSON Path Field */}
+              {/* Categorized Fields Dropdown */}
               <div className="space-y-1.5">
                 <label htmlFor="field" className="text-[10px] font-black uppercase tracking-wider text-muted-foreground select-none">Evaluated Field</label>
-                <input
+                <select
                   {...register("field")}
                   id="field"
-                  type="text"
                   disabled={isProcessing}
-                  placeholder="e.g. total_amount"
-                  className={`w-full px-3.5 py-2 bg-background border rounded-lg text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
+                  className={`w-full px-3 py-2 bg-background border rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer
                     ${errors.field ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"}`}
-                />
+                >
+                  <option value="" disabled>Select a field...</option>
+                  {Object.entries(categorizedFields).map(([category, fields]) => (
+                    <optgroup key={category} label={category}>
+                      {fields.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {fieldDescription && (
+                  <p className="text-[10px] text-muted-foreground mt-1 select-none leading-relaxed">
+                    {fieldDescription}
+                  </p>
+                )}
                 {errors.field && <p className="text-xs text-destructive font-semibold pt-0.5" role="alert">{errors.field.message}</p>}
               </div>
 
@@ -289,16 +354,17 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 <select
                   {...register("operator")}
                   id="operator"
-                  disabled={isProcessing}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
+                  disabled={isProcessing || allowedOperators.length === 0}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="EQUALS">Equals (==)</option>
-                  <option value="NOT_EQUALS">Not Equals (!=)</option>
-                  <option value="CONTAINS">Contains</option>
-                  <option value="GREATER_THAN">Greater Than (&gt;)</option>
-                  <option value="LESS_THAN">Less Than (&lt;)</option>
-                  <option value="GREATER_THAN_OR_EQUAL">Greater Than or Equal (&gt;=)</option>
-                  <option value="LESS_THAN_OR_EQUAL">Less Than or Equal (&lt;=)</option>
+                  {allowedOperators.map((op) => (
+                    <option key={op} value={op}>
+                      {OPERATOR_LABELS[op] ?? op}
+                    </option>
+                  ))}
+                  {allowedOperators.length === 0 && (
+                    <option value="">Select a field first</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -316,7 +382,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 id="value"
                 type="text"
                 disabled={isProcessing}
-                placeholder="e.g. Invoice"
+                placeholder={fieldPlaceholder}
                 className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
                   ${errors.value ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"}`}
               />

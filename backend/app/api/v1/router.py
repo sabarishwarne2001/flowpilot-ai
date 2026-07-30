@@ -18,6 +18,7 @@ from app.api.v1.email_settings import router as email_settings_router
 from app.api.v1 import workspace
 from app.api.v1 import ai_settings
 from app.api.v1 import upload
+from app.api.v1 import document_settings
 
 api_router = APIRouter()
 
@@ -42,3 +43,5 @@ api_router.include_router(workspace.router, prefix="/workspace",)
 api_router.include_router(upload.router)
 
 api_router.include_router(ai_settings.router, prefix="/ai-settings",)
+
+api_router.include_router(document_settings.router, prefix="/document-settings",)

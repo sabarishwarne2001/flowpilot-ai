@@ -77,7 +77,14 @@ from app.crud.ai_settings import (
     update_ai_settings,
     upsert_ai_settings,
 )
-
+from app.crud.document_settings import (
+    create_document_settings,
+    get_document_settings,
+    document_settings_exists,
+    update_document_settings,
+    delete_document_settings,
+    upsert_document_settings,
+)
 
 __all__ = [
     "get_user_by_id",
@@ -134,4 +141,10 @@ __all__ = [
     "ai_settings_exists",
     "update_ai_settings",
     "upsert_ai_settings",
+    "create_document_settings",
+    "get_document_settings",
+    "document_settings_exists",
+    "update_document_settings",
+    "delete_document_settings",
+    "upsert_document_settings",
 ]

@@ -17,6 +17,7 @@ from app.models.email_settings import EmailSettings
 from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace
 from app.models.ai_settings import AISettings
+from app.models.document_settings import DocumentSettings
 
 # All database schemas are imported here so that Base.metadata can 
 # detect them when compiling Alembic migration revisions.
@@ -35,4 +36,5 @@ __all__ = [
     "EmailEncryption",
     "Workspace",
     "AISettings",
+    "DocumentSettings",
 ]

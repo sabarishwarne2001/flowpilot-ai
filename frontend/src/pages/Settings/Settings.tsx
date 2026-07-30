@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import Workspace from "./Workspace";
 import EmailSettings from "./EmailSettings";
 import AISettings from "./AISettings";
+import DocumentSettings from "./DocumentSettings";
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState<
-    "workspace" | "email" | "ai"
+    "workspace" | "email" | "ai" | "document"
   >("workspace");
 
   return (
@@ -58,6 +59,17 @@ const Settings: React.FC = () => {
             >
               AI Settings
             </button>
+
+            <button
+              onClick={() => setActiveSection("document")}
+              className={`w-full rounded-lg px-4 py-2 text-left transition-colors ${
+                activeSection === "document"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted"
+              }`}
+            >
+              Document Settings
+            </button>
           </nav>
         </aside>
 
@@ -66,6 +78,7 @@ const Settings: React.FC = () => {
           {activeSection === "workspace" && <Workspace />}
           {activeSection === "email" && <EmailSettings />}
           {activeSection === "ai" && <AISettings />}
+          {activeSection === "document" && <DocumentSettings />}
         </section>
       </div>
     </div>

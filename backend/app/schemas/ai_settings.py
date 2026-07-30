@@ -16,8 +16,8 @@ from pydantic import ConfigDict
 class AIProvider(str, Enum):
     GROQ = "GROQ"
     GEMINI = "GEMINI"
-    OPENAI = "OPENAI"
-    CLAUDE = "CLAUDE"
+    # OPENAI = "OPENAI"
+    # CLAUDE = "CLAUDE"
 
 
 # ============================================================================

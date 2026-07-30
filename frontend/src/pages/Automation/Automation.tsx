@@ -6,8 +6,6 @@ import {
   Plus,
   Trash2,
   Edit2,
-  CheckCircle2,
-  XCircle,
   AlertCircle,
   RefreshCw,
   ToggleLeft,
@@ -20,12 +18,24 @@ import { RuleForm } from "@/pages/Automation/RuleForm";
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
+import { getFriendlyFieldName } from "@/constants/automationFields";
 import type { AutomationRule } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 // Centralized Query Cache Keys matching our approved system configurations
 const RULES_QUERY_KEY = ["automation-rules"] as const;
 const LOGS_QUERY_KEY = ["automation-logs"] as const;
+
+// Human-readable labels for logic operators displayed in lists
+const OPERATOR_DISPLAY_MAP: Record<string, string> = {
+  EQUALS: "Equals",
+  NOT_EQUALS: "Not Equals",
+  CONTAINS: "Contains",
+  GREATER_THAN: "Greater Than",
+  LESS_THAN: "Less Than",
+  GREATER_THAN_OR_EQUAL: "Greater Than or Equal",
+  LESS_THAN_OR_EQUAL: "Less Than or Equal",
+};
 
 /**
  * Split-pane business Automation Rules and Audit Logs control panel for FlowPilot AI.
@@ -61,15 +71,10 @@ export const Automation: React.FC = () => {
   } = useQuery({
     queryKey: LOGS_QUERY_KEY,
     queryFn: automationApi.getAutomationLogs,
-
     staleTime: 5000,
-
     refetchInterval: 5000,
-
     refetchOnWindowFocus: true,
-
     refetchOnReconnect: true,
-
     placeholderData: (previousData) => previousData,
   });
 
@@ -313,10 +318,10 @@ export const Automation: React.FC = () => {
                   <div className="p-3 bg-muted/40 dark:bg-muted/10 border border-border/20 rounded-lg text-xs font-semibold leading-relaxed flex items-center select-none text-muted-foreground">
                     <div className="truncate">
                       <span className="font-mono text-foreground font-extrabold text-[11px]">
-                        {rule.field}
+                        {getFriendlyFieldName(rule.field)}
                       </span>
                       <span className="mx-1.5 text-primary text-[10px] uppercase font-bold">
-                        {rule.operator.replace("_", " ")}
+                        {OPERATOR_DISPLAY_MAP[rule.operator] ?? rule.operator.replace("_", " ")}
                       </span>
                       <span className="font-bold text-foreground bg-background px-1.5 py-0.5 rounded border border-border/50">
                         {rule.value}

@@ -101,6 +101,14 @@ class User(Base, UUIDMixin, TimestampMixin):
         uselist=False,
     )
 
+    # Bidirectional SQLAlchemy relationship mapping user document_settings
+    document_settings = relationship(
+        "DocumentSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     # Bidirectional SQLAlchemy relationship mapping child Conversation sessions
     conversations: Mapped[list["Conversation"]] = relationship(
         "Conversation",

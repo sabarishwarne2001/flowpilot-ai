@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import DateTime, UUID
 
+
 class Base(DeclarativeBase):
     """
     Common base class for all relational database models.

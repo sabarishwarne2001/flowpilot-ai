@@ -795,6 +795,8 @@ class LLMService:
     def classify_document(
         self,
         text: str,
+        *,
+        ai_settings: AISettings,
     ) -> dict[str, Any]:
         """
         Classify a document into one of the supported business document
@@ -818,6 +820,7 @@ class LLMService:
         response, _ = self._retry_query(
             prompt=prompt,
             temperature=settings.LLM_CLASSIFICATION_TEMPERATURE,
+            ai_settings=ai_settings,
         )
 
         return self._extract_json(
@@ -828,6 +831,8 @@ class LLMService:
         self,
         text: str,
         document_classification: str,
+        *,
+        ai_settings: AISettings,
     ) -> dict[str, Any]:
         """
         Extract structured entities from a document.
@@ -849,6 +854,7 @@ class LLMService:
         response, _ = self._retry_query(
             prompt=prompt,
             temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
+            ai_settings=ai_settings,
         )
 
         return self._extract_json(
@@ -858,6 +864,8 @@ class LLMService:
     def generate_summary(
         self,
         text: str,
+        *,
+        ai_settings: AISettings,
     ) -> str:
         """
         Generate an executive summary for a document.
@@ -874,6 +882,7 @@ class LLMService:
         response, _ = self._retry_query(
             prompt=prompt,
             temperature=settings.LLM_SUMMARIZATION_TEMPERATURE,
+            ai_settings=ai_settings,
         )
 
         return response.strip()

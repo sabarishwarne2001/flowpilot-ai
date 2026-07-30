@@ -1,8 +1,8 @@
 export type AIProvider =
     | "GROQ"
     | "GEMINI"
-    | "OPENAI"
-    | "CLAUDE";
+    // | "OPENAI"
+    // | "CLAUDE";
 
 export interface AISettings {
     id: string;
