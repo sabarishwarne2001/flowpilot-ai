@@ -19,16 +19,25 @@ export type AutomationEvent =
   | "WORK_ITEM_REPROCESSED";
 
 /**
- * Supported comparison operators.
+ * Supported evaluation logic operators.
  */
 export type AutomationOperator =
   | "EQUALS"
   | "NOT_EQUALS"
   | "CONTAINS"
+  | "NOT_CONTAINS"
+  | "STARTS_WITH"
+  | "ENDS_WITH"
   | "GREATER_THAN"
   | "LESS_THAN"
   | "GREATER_THAN_OR_EQUAL"
-  | "LESS_THAN_OR_EQUAL";
+  | "LESS_THAN_OR_EQUAL"
+  | "BETWEEN"
+  | "IN"
+  | "NOT_IN"
+  | "EXISTS"
+  | "IS_EMPTY"
+  | "IS_NOT_EMPTY";
 
 /**
  * Supported automation actions.
@@ -130,18 +139,6 @@ export interface AutomationRuleUpdateRequest {
   readonly is_active?: boolean;
 }
 
-/**
- * Result of running a "test" evaluation of a rule against a sample work item,
- * without persisting an execution log.
- */
-export interface AutomationRuleTestResponse {
-  readonly success: boolean;
-  readonly matched: boolean;
-  readonly notification_sent: boolean;
-  readonly message: string;
-  readonly execution_time_ms: number;
-}
-
 /* ============================================================================
  * Automation Logs
  * ========================================================================== */
@@ -169,4 +166,15 @@ export interface AutomationLog {
   readonly created_at: string;
 
   readonly updated_at: string;
+}
+
+/**
+ * Response returned after manually testing an automation rule.
+ */
+export interface AutomationRuleTestResponse {
+  readonly success: boolean;
+  readonly matched: boolean;
+  readonly notification_sent: boolean;
+  readonly message: string;
+  readonly execution_time_ms: number;
 }

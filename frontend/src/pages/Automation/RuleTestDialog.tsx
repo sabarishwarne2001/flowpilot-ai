@@ -141,7 +141,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             </span>
             <h3 className="text-sm font-extrabold leading-snug">{rule.name}</h3>
             <p className="text-xs text-muted-foreground leading-normal">
-              Evaluate events logic for {rule.conditions.length} configured
+              Evaluate events logic for {rule.conditions.length} configured{" "}
               condition{rule.conditions.length > 1 ? "s" : ""}.
             </p>
           </div>

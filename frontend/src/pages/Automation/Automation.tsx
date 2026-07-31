@@ -29,6 +29,13 @@ import { ApiError } from "@/services/api/client";
 import { getFriendlyFieldName } from "@/constants/automationFields";
 import type { AutomationRule } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/Select";
 
 // Centralized Query Cache Keys matching our approved system configurations
 const RULES_QUERY_KEY = ["automation-rules"] as const;
@@ -554,7 +561,7 @@ export const Automation: React.FC = () => {
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
-              Success Rate
+              sa_Success Rate
             </span>
             <Activity className="h-4 w-4 text-emerald-500" />
           </div>
@@ -572,7 +579,7 @@ export const Automation: React.FC = () => {
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
-              Failure Rate
+              sa_Failure Rate
             </span>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </div>
@@ -604,56 +611,81 @@ export const Automation: React.FC = () => {
         {/* Filter selectors row */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Status filter */}
-          <div className="flex items-center space-x-2 bg-background border border-border/60 rounded-lg px-3 py-1.5 shadow-sm text-xs font-bold text-foreground">
-            <span className="text-[10px] text-muted-foreground uppercase">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Status:
             </span>
-            <select
+
+            <Select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-transparent border-none focus:outline-none cursor-pointer"
+              onValueChange={(value) =>
+                setStatusFilter(value as "ALL" | "ENABLED" | "DISABLED")
+              }
             >
-              <option value="ALL">All States</option>
-              <option value="ENABLED">Active Only</option>
-              <option value="DISABLED">Disabled Only</option>
-            </select>
+              <SelectTrigger className="w-[170px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="ALL">All States</SelectItem>
+                <SelectItem value="ENABLED">Active Only</SelectItem>
+                <SelectItem value="DISABLED">Disabled Only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Trigger Event filter */}
-          <div className="flex items-center space-x-2 bg-background border border-border/60 rounded-lg px-3 py-1.5 shadow-sm text-xs font-bold text-foreground">
-            <span className="text-[10px] text-muted-foreground uppercase">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Trigger:
             </span>
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              className="bg-transparent border-none focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Events</option>
-              <option value="WORK_ITEM_CREATED">Created</option>
-              <option value="WORK_ITEM_COMPLETED">Completed</option>
-              <option value="WORK_ITEM_FAILED">Failed</option>
-              <option value="WORK_ITEM_REPROCESSED">Reprocessed</option>
-            </select>
+
+            <Select value={eventFilter} onValueChange={setEventFilter}>
+              <SelectTrigger className="w-[190px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="ALL">All Events</SelectItem>
+                <SelectItem value="WORK_ITEM_CREATED">Created</SelectItem>
+                <SelectItem value="WORK_ITEM_COMPLETED">Completed</SelectItem>
+                <SelectItem value="WORK_ITEM_FAILED">Failed</SelectItem>
+                <SelectItem value="WORK_ITEM_REPROCESSED">
+                  Reprocessed
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Sort By selectors */}
-          <div className="flex items-center space-x-2 bg-background border border-border/60 rounded-lg px-3 py-1.5 shadow-sm text-xs font-bold text-foreground">
-            <span className="text-[10px] text-muted-foreground uppercase">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Sort:
             </span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent border-none focus:outline-none cursor-pointer"
-            >
-              <option value="PRIORITY_ASC">Priority Low → High</option>
-              <option value="PRIORITY_DESC">Priority High → Low</option>
-              <option value="NAME_ASC">Name (A → Z)</option>
-              <option value="NAME_DESC">Name (Z → A)</option>
-              <option value="CREATED_DESC">Recently Created</option>
-              <option value="UPDATED_DESC">Last Updated</option>
-            </select>
+
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[220px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="PRIORITY_ASC">
+                  Priority Low → High
+                </SelectItem>
+
+                <SelectItem value="PRIORITY_DESC">
+                  Priority High → Low
+                </SelectItem>
+
+                <SelectItem value="NAME_ASC">Name (A → Z)</SelectItem>
+
+                <SelectItem value="NAME_DESC">Name (Z → A)</SelectItem>
+
+                <SelectItem value="CREATED_DESC">Recently Created</SelectItem>
+
+                <SelectItem value="UPDATED_DESC">Last Updated</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -975,39 +1007,58 @@ export const Automation: React.FC = () => {
 
               {/* Advanced multi-filter selectors */}
               <div className="grid grid-cols-3 gap-2 text-xs font-bold">
-                <select
+                <Select
                   value={logStatusFilter}
-                  onChange={(e) => setLogStatusFilter(e.target.value as any)}
-                  className="px-2.5 py-1.5 bg-background border border-border rounded-lg focus:outline-none cursor-pointer text-ellipsis overflow-hidden"
+                  onValueChange={(value) =>
+                    setLogStatusFilter(value as "ALL" | "SUCCESS" | "FAILED")
+                  }
                 >
-                  <option value="ALL">All Statuses</option>
-                  <option value="SUCCESS">Succeeded Runs</option>
-                  <option value="FAILED">Failed Runs</option>
-                </select>
+                  <SelectTrigger className="h-9 text-xs w-full">
+                    <SelectValue />
+                  </SelectTrigger>
 
-                <select
-                  value={logRuleFilter}
-                  onChange={(e) => setLogRuleFilter(e.target.value)}
-                  className="px-2.5 py-1.5 bg-background border border-border rounded-lg focus:outline-none cursor-pointer text-ellipsis overflow-hidden"
-                >
-                  <option value="ALL">All Rules</option>
-                  {rules.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Statuses</SelectItem>
+                    <SelectItem value="SUCCESS">Succeeded Runs</SelectItem>
+                    <SelectItem value="FAILED">Failed Runs</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                <select
+                <Select value={logRuleFilter} onValueChange={setLogRuleFilter}>
+                  <SelectTrigger className="h-9 text-xs w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="ALL">All Rules</SelectItem>
+
+                    {rules.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
                   value={logDateRangeFilter}
-                  onChange={(e) => setLogDateRangeFilter(e.target.value as any)}
-                  className="px-2.5 py-1.5 bg-background border border-border rounded-lg focus:outline-none cursor-pointer text-ellipsis overflow-hidden"
+                  onValueChange={(value) =>
+                    setLogDateRangeFilter(
+                      value as "ALL" | "TODAY" | "7_DAYS" | "30_DAYS"
+                    )
+                  }
                 >
-                  <option value="ALL">All Dates</option>
-                  <option value="TODAY">Executed Today</option>
-                  <option value="7_DAYS">Last 7 Days</option>
-                  <option value="30_DAYS">Last 30 Days</option>
-                </select>
+                  <SelectTrigger className="h-9 text-xs w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="ALL">All Dates</SelectItem>
+                    <SelectItem value="TODAY">Executed Today</SelectItem>
+                    <SelectItem value="7_DAYS">Last 7 Days</SelectItem>
+                    <SelectItem value="30_DAYS">Last 30 Days</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

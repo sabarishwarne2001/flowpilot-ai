@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class AutomationCondition(BaseModel):
     """
     Validation schema representing a single trigger evaluation criteria.
+    Enforces operator-dependent value validation rules for advanced condition matching.
     """
 
     field: str = Field(
@@ -37,12 +38,69 @@ class AutomationCondition(BaseModel):
         description="Comparison target match value.",
     )
 
-    @field_validator("field", "operator", "value", mode="before")
+    @field_validator("field", "value", mode="before")
     @classmethod
     def strip_strings(cls, value: Any) -> Any:
         if isinstance(value, str):
             return value.strip()
         return value
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def normalize_operator(cls, value: Any) -> Any:
+        """
+        Normalizes and strips logic operators into standard uppercase representation.
+        """
+        if isinstance(value, str):
+            return value.upper().strip()
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_missing_value_fallback(cls, data: Any) -> Any:
+        """
+        Lenient fallback injecting an empty string when value is omitted from the raw payload,
+        allowing the model validation to cleanly enforce constraints downstream.
+        """
+        if isinstance(data, dict) and "value" not in data:
+            data["value"] = ""
+        return data
+
+    @model_validator(mode="after")
+    def validate_operator_value_dependency(self) -> "AutomationCondition":
+        """
+        Enforces value constraints based on selected operator compatibility rules.
+        """
+        op = self.operator.upper().strip()
+        val = self.value.strip() if self.value else ""
+
+        value_required_operators = {
+            "EQUALS",
+            "NOT_EQUALS",
+            "CONTAINS",
+            "NOT_CONTAINS",
+            "STARTS_WITH",
+            "ENDS_WITH",
+            "GREATER_THAN",
+            "LESS_THAN",
+            "GREATER_THAN_OR_EQUAL",
+            "LESS_THAN_OR_EQUAL",
+            "BETWEEN",
+            "IN",
+            "NOT_IN",
+        }
+        value_not_required_operators = {"EXISTS", "IS_EMPTY", "IS_NOT_EMPTY"}
+
+        if op in value_required_operators:
+            if not val:
+                raise ValueError(f"A target match value is required for operator '{op}'.")
+        elif op in value_not_required_operators:
+            # Clear target values for existence checking operators
+            self.value = ""
+        else:
+            raise ValueError(f"Unsupported automation logic operator '{op}'.")
+
+        return self
 
 
 class AutomationAction(BaseModel):
@@ -234,8 +292,8 @@ class AutomationRuleTestResponse(BaseModel):
     """
     success: bool
     matched: bool
-    notification_sent: bool
-    message: str
-    sa_execution_time_ms: float = Field(default=0.0, alias="execution_time_ms")
+    notification_sent: bool = Field(default=False)
+    message: str = Field(default="")
+    execution_time_ms: float = Field(default=0.0)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

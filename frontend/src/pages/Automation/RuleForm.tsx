@@ -4,7 +4,7 @@ import type { SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, Loader2, Play, Plus, AlertCircle } from "lucide-react";
+import { X, Loader2, Play, Plus } from "lucide-react";
 import { automationApi } from "@/services/api/automation";
 import { ApiError } from "@/services/api/client";
 import {
@@ -48,10 +48,19 @@ const OPERATOR_LABELS: Record<string, string> = {
   EQUALS: "Equals (==)",
   NOT_EQUALS: "Not Equals (!=)",
   CONTAINS: "Contains",
+  NOT_CONTAINS: "Not Contains",
+  STARTS_WITH: "Starts With",
+  ENDS_WITH: "Ends With",
   GREATER_THAN: "Greater Than (>)",
   LESS_THAN: "Less Than (<)",
   GREATER_THAN_OR_EQUAL: "Greater Than or Equal (>=)",
   LESS_THAN_OR_EQUAL: "Less Than or Equal (<=)",
+  BETWEEN: "Between (Range)",
+  IN: "In (Collection)",
+  NOT_IN: "Not In (Collection)",
+  EXISTS: "Exists",
+  IS_EMPTY: "Is Empty",
+  IS_NOT_EMPTY: "Is Not Empty",
 };
 
 /**
@@ -365,8 +374,8 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
                   ${
                     errors.priority
-                      ? "border-destructive focus:ring-destructive/20 focus:border-destructive"
-                      : "border-border focus:ring-primary/20 focus:border-primary"
+                      ? "border-destructive focus:ring-destructive/20 focus:border-destructive font-semibold"
+                      : "border-border focus:border-primary font-semibold"
                   }`}
               />
               {errors.priority && (
@@ -447,7 +456,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
 
             {errors.conditions?.message && (
               <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-xs font-bold text-destructive select-none flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+                <X className="h-4 w-4 shrink-0" />
                 <span>{errors.conditions.message}</span>
               </div>
             )}
@@ -456,8 +465,16 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             <div className="space-y-4">
               {conditionFields.map((fieldItem, idx) => {
                 const currentFieldPath = watchedConditions[idx]?.field ?? "";
+                const currentOperator = watchedConditions[idx]?.operator ?? "";
                 const currentMeta = AUTOMATION_FIELDS_MAP[currentFieldPath];
                 const allowedOps = getAllowedOperators(currentFieldPath);
+
+                // Existence checking operators do not require target value inputs
+                const isValueHidden = [
+                  "EXISTS",
+                  "IS_EMPTY",
+                  "IS_NOT_EMPTY",
+                ].includes(currentOperator);
 
                 return (
                   <div
@@ -499,20 +516,16 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                           {...register(`conditions.${idx}.field`)}
                           onChange={(e) => {
                             const val = e.target.value;
-
                             setValue(`conditions.${idx}.field`, val);
-
+                            const currentOp =
+                              watchedConditions[idx]?.operator ?? "";
                             const ops = getAllowedOperators(val);
 
-                            const currentOperator =
-                              watchedConditions[idx]?.operator;
-
-                            if (
-                              ops.length > 0 &&
-                              (!currentOperator ||
-                                !ops.includes(currentOperator))
-                            ) {
-                              setValue(`conditions.${idx}.operator`, ops[0]!);
+                            if (ops.length > 0) {
+                              // Only change selection if the previous operator is no longer allowed
+                              if (!ops.includes(currentOp as any)) {
+                                setValue(`conditions.${idx}.operator`, ops[0]!);
+                              }
                             }
                           }}
                         >
@@ -543,7 +556,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                         )}
                       </div>
 
-                      {/* Logic Operator dropdown */}
+                      {/* Logic Operator dropdown with field-specific operator restrictions */}
                       <div className="space-y-1.5">
                         <label
                           htmlFor={`operator-${idx}`}
@@ -574,40 +587,42 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                       </div>
                     </div>
 
-                    {/* Match Value constraints */}
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor={`value-${idx}`}
-                        className="text-[10px] font-black uppercase tracking-wider text-muted-foreground select-none"
-                      >
-                        Target Match Value
-                      </label>
-                      <input
-                        id={`value-${idx}`}
-                        type="text"
-                        disabled={isProcessing}
-                        placeholder={
-                          currentMeta
-                            ? `e.g. ${currentMeta.example}`
-                            : "e.g. Match value"
-                        }
-                        className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
-                          ${
-                            errors.conditions?.[idx]?.value
-                              ? "border-destructive focus:border-destructive font-semibold"
-                              : "border-border focus:border-primary font-semibold"
-                          }`}
-                        {...register(`conditions.${idx}.value`)}
-                      />
-                      {errors.conditions?.[idx]?.value && (
-                        <p
-                          className="text-xs text-destructive font-semibold"
-                          role="alert"
+                    {/* Match Value constraints - Hidden dynamically for existence operators */}
+                    {!isValueHidden && (
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor={`value-${idx}`}
+                          className="text-[10px] font-black uppercase tracking-wider text-muted-foreground select-none"
                         >
-                          {errors.conditions[idx]?.value?.message}
-                        </p>
-                      )}
-                    </div>
+                          Target Match Value
+                        </label>
+                        <input
+                          id={`value-${idx}`}
+                          type="text"
+                          disabled={isProcessing}
+                          placeholder={
+                            currentMeta
+                              ? `e.g. ${currentMeta.example}`
+                              : "e.g. Match value"
+                          }
+                          className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
+                            ${
+                              errors.conditions?.[idx]?.value
+                                ? "border-destructive focus:ring-destructive/20 focus:border-destructive font-semibold"
+                                : "border-border focus:ring-primary/20 focus:border-primary font-semibold"
+                            }`}
+                          {...register(`conditions.${idx}.value`)}
+                        />
+                        {errors.conditions?.[idx]?.value && (
+                          <p
+                            className="text-xs text-destructive font-semibold"
+                            role="alert"
+                          >
+                            {errors.conditions[idx]?.value?.message}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -641,7 +656,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
 
             {errors.actions?.message && (
               <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-xs font-bold text-destructive select-none flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+                <X className="h-4 w-4 shrink-0" />
                 <span>{errors.actions.message}</span>
               </div>
             )}

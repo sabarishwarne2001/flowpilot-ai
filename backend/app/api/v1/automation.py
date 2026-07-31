@@ -151,7 +151,7 @@ async def get_rule(
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found."
+            detail="Automation rule not found or you do not have permission to access it."
         )
     return rule
 
@@ -177,7 +177,7 @@ async def update_rule(
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found."
+            detail="Automation rule not found or you do not have permission to access it."
         )
     
     updated_rule = crud.update_automation_rule(db, db_obj=rule, obj_in=rule_in)
@@ -205,7 +205,7 @@ async def delete_rule(
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found."
+            detail="Automation rule not found or you do not have permission to access it."
         )
     
     crud.delete_automation_rule(db, db_obj=rule)
@@ -233,7 +233,7 @@ async def test_rule(
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found."
+            detail="Automation rule not found or you do not have permission to access it."
         )
 
     work_item = db.execute(
@@ -246,15 +246,10 @@ async def test_rule(
     if work_item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Work item not found."
+            detail="Work item not found or you do not have permission to access it."
         )
 
     result = await automation_service.test_rule_for_work_item(
         db, rule=rule, work_item=work_item
-    )
-    logger.info(
-        "Manual automation test executed for rule %s by user %s",
-        rule.id,
-        current_user.id,
     )
     return result

@@ -39,47 +39,107 @@ def _evaluate_condition(
 ) -> bool:
     """
     Evaluate a single condition operator constraint against an actual document value.
+    Supports advanced String, Collection, Range, and Existence matching rules.
     """
-
     operator = operator.upper().strip()
+    target_value = target_value.strip() if target_value else ""
 
+    # EXISTS: Checks if a field is present and non-null in the evaluation context.
+    if operator == "EXISTS":
+        return actual is not None
+
+    # Empty checks (Short-circuit to handle None actual values)
+    actual_is_empty = (
+        actual is None
+        or str(actual).strip() == ""
+        or (isinstance(actual, (list, dict, set)) and len(actual) == 0)
+    )
+    if operator == "IS_EMPTY":
+        return actual_is_empty
+    if operator == "IS_NOT_EMPTY":
+        return not actual_is_empty
+
+    # Handle None actual values safely for other operators
     if actual is None:
-        return operator == "NOT_EQUALS"
+        if operator in ("NOT_EQUALS", "NOT_CONTAINS", "NOT_IN"):
+            return True
+        return False
 
     actual_str = str(actual).strip()
-    target_str = target_value.strip()
+    actual_lower = actual_str.lower()
+    target_lower = target_value.lower()
+
+    # String Operators with list/tuple/set collection item evaluations for Entity-Based rules
+    if operator in ("CONTAINS", "NOT_CONTAINS"):
+        if isinstance(actual, (list, tuple, set)):
+            actual_list = [str(x).strip().lower() for x in actual]
+            is_contained = target_lower in actual_list
+            return is_contained if operator == "CONTAINS" else not is_contained
+        else:
+            is_contained = target_lower in actual_lower
+            return is_contained if operator == "CONTAINS" else not is_contained
 
     if operator == "EQUALS":
-        return actual_str.lower() == target_str.lower()
-
+        return actual_lower == target_lower
     if operator == "NOT_EQUALS":
-        return actual_str.lower() != target_str.lower()
+        return actual_lower != target_lower
+    if operator == "STARTS_WITH":
+        return actual_lower.startswith(target_lower)
+    if operator == "ENDS_WITH":
+        return actual_lower.endswith(target_lower)
 
-    if operator == "CONTAINS":
-        return target_str.lower() in actual_str.lower()
+    # Collection Operators with list/tuple/set support
+    if operator in ("IN", "NOT_IN"):
+        targets = [v.strip().lower() for v in target_value.split(",") if v.strip()]
+        if isinstance(actual, (list, tuple, set)):
+            actual_list = [str(x).strip().lower() for x in actual]
+            has_intersection = any(x in targets for x in actual_list)
+            return has_intersection if operator == "IN" else not has_intersection
+        else:
+            is_in = actual_lower in targets
+            return is_in if operator == "IN" else not is_in
 
+    # Range Operators
+    if operator == "BETWEEN":
+        normalized_range = target_value.replace("..", ",").replace(" - ", ",")
+        if "," not in normalized_range and "-" in normalized_range:
+            split_idx = normalized_range.find("-", 1)
+            if split_idx != -1:
+                normalized_range = normalized_range[:split_idx] + "," + normalized_range[split_idx+1:]
+                
+        parts = [p.strip() for p in normalized_range.split(",") if p.strip()]
+        if len(parts) != 2:
+            logger.warning("Malformed BETWEEN range values: '%s'. Expected 'min,max', 'min-max', or 'min..max'.", target_value)
+            return False
+        try:
+            low = float(parts[0])
+            high = float(parts[1])
+            val = float(actual)
+            return low <= val <= high
+        except (TypeError, ValueError):
+            logger.warning("BETWEEN comparison failed. Value='%s' Range='%s'", actual, target_value)
+            return False
+
+    # Numeric/Comparison Operators
     try:
         actual_num = float(actual)
-        sa_target = float(target_str)
+        target_num = float(target_value)
     except (TypeError, ValueError):
         logger.warning(
             "Numeric comparison failed. Actual='%s' Target='%s'",
             actual,
-            target_str,
+            target_value,
         )
         return False
 
     if operator == "GREATER_THAN":
-        return actual_num > sa_target
-
+        return actual_num > target_num
     if operator == "LESS_THAN":
-        return actual_num < sa_target
-
+        return actual_num < target_num
     if operator == "GREATER_THAN_OR_EQUAL":
-        return actual_num >= sa_target
-
+        return actual_num >= target_num
     if operator == "LESS_THAN_OR_EQUAL":
-        return actual_num <= sa_target
+        return actual_num <= target_num
 
     logger.warning("Unsupported automation operator '%s'.", operator)
     return False

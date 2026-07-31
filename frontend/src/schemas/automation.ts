@@ -44,19 +44,56 @@ export const createRuleFormSchema = (
     ]),
     conditions: z
       .array(
-        z.object({
-          field: z.string().trim().min(1, "Field path is required."),
-          operator: z.enum([
-            "EQUALS",
-            "NOT_EQUALS",
-            "CONTAINS",
-            "GREATER_THAN",
-            "LESS_THAN",
-            "GREATER_THAN_OR_EQUAL",
-            "LESS_THAN_OR_EQUAL",
-          ]),
-          value: z.string().trim().min(1, "Match value is required."),
-        })
+        z
+          .object({
+            field: z.string().trim().min(1, "Field path is required."),
+            operator: z.enum([
+              "EQUALS",
+              "NOT_EQUALS",
+              "CONTAINS",
+              "NOT_CONTAINS",
+              "STARTS_WITH",
+              "ENDS_WITH",
+              "GREATER_THAN",
+              "LESS_THAN",
+              "GREATER_THAN_OR_EQUAL",
+              "LESS_THAN_OR_EQUAL",
+              "BETWEEN",
+              "IN",
+              "NOT_IN",
+              "EXISTS",
+              "IS_EMPTY",
+              "IS_NOT_EMPTY",
+            ]),
+            value: z.string().trim(),
+          })
+          .superRefine((data, ctx) => {
+            const valueRequiredOperators = [
+              "EQUALS",
+              "NOT_EQUALS",
+              "CONTAINS",
+              "NOT_CONTAINS",
+              "STARTS_WITH",
+              "ENDS_WITH",
+              "GREATER_THAN",
+              "LESS_THAN",
+              "GREATER_THAN_OR_EQUAL",
+              "LESS_THAN_OR_EQUAL",
+              "BETWEEN",
+              "IN",
+              "NOT_IN",
+            ];
+            // Enforce required match value verification only for non-existence operators
+            if (valueRequiredOperators.includes(data.operator)) {
+              if (!data.value || data.value.length === 0) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: "Match value is required for this operator.",
+                  path: ["value"],
+                });
+              }
+            }
+          })
       )
       .min(1, "At least one evaluation condition is required.")
       .refine(
