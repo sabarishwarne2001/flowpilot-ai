@@ -11,16 +11,15 @@ import type {
  * Automation Route Path Endpoints Configurations.
  */
 const AUTOMATION_ENDPOINTS = {
-    BASE: "/automation",
-    RULE: (id: string) => `/automation/${id}`,
-    TEST: (id: string) => `/automation/${id}/test`,
-    LOGS: "/automation/logs",
+  BASE: "/automation",
+  RULE: (id: string) => `/automation/${id}`,
+  LOGS: "/automation/logs",
 } as const;
 
 /**
- * Dispatches a request to compile and persist a new user-defined Automation Rule.
+ * Dispatches a request to compile and persist a new user-defined Automation Rule with multiple actions.
  *
- * @param data - Input schema validating event triggers and JSON action configs.
+ * @param data - Input schema validating event triggers and multi-action arrays.
  * @returns Serialized Rule metadata returned by the PostgreSQL transaction engine.
  */
 export const createAutomationRule = async (
@@ -76,7 +75,7 @@ export const getAutomationRuleDetails = async (
 };
 
 /**
- * Executes a partial patch update on an existing Automation Rule (e.g. toggling active states).
+ * Executes a partial patch update on an existing Automation Rule (supporting multi-action edits).
  *
  * @param ruleId - Primary key UUID identifying the target rule.
  * @param data - Updated schema fields to merge with the existing DB rule entry.

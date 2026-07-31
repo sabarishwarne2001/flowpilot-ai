@@ -321,7 +321,7 @@ export const Assistant: React.FC = () => {
    Delete Conversation
 ========================================================================== */
 
-  const { mutate: deleteConversation, isPending: isDeletingConversation } =
+  const { mutate: deleteConversation } =
     useMutation({
       mutationFn: assistantApi.deleteConversation,
 

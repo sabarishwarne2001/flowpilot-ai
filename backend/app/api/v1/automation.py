@@ -257,5 +257,4 @@ async def test_rule(
         rule.id,
         current_user.id,
     )
-
     return result

@@ -25,7 +25,7 @@ def create_automation_rule(
     user_id: uuid.UUID,
 ) -> AutomationRule:
     """
-    Create and persist a new automation rule.
+    Create and persist a new automation rule with multiple conditions and actions.
     """
     db_obj = AutomationRule(
         name=obj_in.name,
@@ -33,8 +33,7 @@ def create_automation_rule(
         event=obj_in.event,
         conditions=[cond.model_dump() for cond in obj_in.conditions],
         logic_operator=obj_in.logic_operator,
-        action_type=obj_in.action_type,
-        action_config=obj_in.action_config,
+        actions=[act.model_dump() for act in obj_in.actions],
         is_active=obj_in.is_active,
         user_id=user_id,
     )
@@ -122,6 +121,11 @@ def update_automation_rule(
             value = [
                 cond.model_dump() if hasattr(cond, "model_dump") else cond
                 for cond in value
+            ]
+        elif field == "actions" and value is not None:
+            value = [
+                act.model_dump() if hasattr(act, "model_dump") else act
+                for act in value
             ]
         setattr(db_obj, field, value)
 
@@ -245,6 +249,10 @@ def get_logs_by_user(
     for log in logs:
         log.rule_name = log.rule.name
         log.document_name = log.work_item.original_filename
-        log.action_type = log.rule.action_type
+        log.action_type = (
+            log.rule.actions[0].get("action_type", "UNKNOWN")
+            if log.rule.actions
+            else "UNKNOWN"
+        )
 
     return logs

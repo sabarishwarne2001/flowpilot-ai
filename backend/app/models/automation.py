@@ -56,15 +56,10 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         default="AND",
     )
 
-    action_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-    )
-
-    action_config: Mapped[dict[str, Any]] = mapped_column(
+    actions: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON,
         nullable=False,
-        default=dict,
+        default=list,
     )
 
     is_active: Mapped[bool] = mapped_column(

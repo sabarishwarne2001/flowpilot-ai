@@ -265,39 +265,50 @@ class AutomationService:
 
                 stats["matched"] += 1
 
-                recipient = (
-                    rule.action_config.get("recipient", "").strip()
-                )
+                actions = getattr(rule, "actions", []) or []
+                actions_succeeded = True
+                action_logs = []
 
-                title = f"Automation Rule Triggered: {rule.name}"
-
-                body = (
-                    f"Document: {work_item.original_filename}\n"
-                    f"Rule: {rule.name}\n"
-                    f"Status: Matched\n\n"
-                    f"{work_item.summary or 'No summary available.'}"
-                )
-
-                success = await notification_dispatcher.send(
-                    action_type=rule.action_type,
-                    settings=email_settings,
-                    recipient=recipient,
-                    title=title,
-                    body=body,
-                )
-
-                if not success:
-                    raise RuntimeError(
-                        "Notification provider reported failure."
+                for idx, action in enumerate(actions):
+                    act_type = _get_condition_attribute(action, "action_type")
+                    act_config = _get_condition_attribute(action, "config") or {}
+                    
+                    recipient = act_config.get("recipient", "").strip()
+                    title = f"Automation Rule Triggered: {rule.name}"
+                    body = (
+                        f"Document: {work_item.original_filename}\n"
+                        f"Rule: {rule.name}\n"
+                        f"Status: Matched\n\n"
+                        f"{work_item.summary or 'No summary available.'}"
                     )
+
+                    success = await notification_dispatcher.send(
+                        action_type=act_type,
+                        settings=email_settings,
+                        recipient=recipient,
+                        title=title,
+                        body=body,
+                    )
+
+                    if not success:
+                        actions_succeeded = False
+                        logger.error(
+                            "Action #%d (%s) of rule '%s' failed to execute.",
+                            idx + 1, act_type, rule.name
+                        )
+                    else:
+                        action_logs.append(f"{act_type} -> {recipient}")
+
+                if not actions_succeeded:
+                    raise RuntimeError("One or more configured actions failed to execute successfully.")
 
                 crud.create_notification(
                     db,
                     notification_in=NotificationCreate(
                         user_id=work_item.user_id,
                         work_item_id=work_item.id,
-                        title=title,
-                        message=body,
+                        title=f"Automation Rule Triggered: {rule.name}",
+                        message="Conditions matched. Actions executed successfully.",
                         notification_type=NotificationType.AUTOMATION,
                         priority=NotificationPriority.INFO,
                         delivery_channel=NotificationChannel.IN_APP,
@@ -310,9 +321,7 @@ class AutomationService:
                     rule_id=rule.id,
                     work_item_id=work_item.id,
                     status="SUCCESS",
-                    log_message=(
-                        f"{rule.action_type} -> {recipient}"
-                    ),
+                    log_message=" | ".join(action_logs) or "All actions executed.",
                 )
 
                 stats["succeeded"] += 1
@@ -374,43 +383,57 @@ class AutomationService:
                 email_settings = crud.get_email_settings(db, user_id=work_item.user_id)
 
                 if email_settings and email_settings.is_enabled:
-                    recipient = rule.action_config.get("recipient", "").strip()
-                    title = f"[TEST MATCHED] Automation Rule: {rule.name}"
-                    body = (
-                        f"[MANUAL AUTOMATION TEST RUN]\n"
-                        f"Document: {work_item.original_filename}\n"
-                        f"Rule: {rule.name}\n"
-                        f"Status: Matched\n\n"
-                        f"{work_item.summary or 'No summary available.'}"
-                    )
+                    actions = getattr(rule, "actions", []) or []
+                    actions_succeeded = True
+                    action_logs = []
 
-                    ok = await notification_dispatcher.send(
-                        action_type=rule.action_type,
-                        settings=email_settings,
-                        recipient=recipient,
-                        title=title,
-                        body=body,
-                    )
+                    for idx, action in enumerate(actions):
+                        act_type = _get_condition_attribute(action, "action_type")
+                        act_config = _get_condition_attribute(action, "config") or {}
+                        recipient = act_config.get("recipient", "").strip()
+                        title = f"[TEST MATCHED] Automation Rule: {rule.name}"
+                        body = (
+                            f"[MANUAL AUTOMATION TEST RUN]\n"
+                            f"Document: {work_item.original_filename}\n"
+                            f"Rule: {rule.name}\n"
+                            f"Status: Matched\n\n"
+                            f"{work_item.summary or 'No summary available.'}"
+                        )
 
-                    if ok:
+                        ok = await notification_dispatcher.send(
+                            action_type=act_type,
+                            settings=email_settings,
+                            recipient=recipient,
+                            title=title,
+                            body=body,
+                        )
+
+                        if ok:
+                            action_logs.append(f"{act_type} -> {recipient}")
+                        else:
+                            actions_succeeded = False
+                            logger.error("Manual test action #%d failed.", idx + 1)
+                            crud.create_automation_log(
+                                db,
+                                rule_id=rule.id,
+                                work_item_id=work_item.id,
+                                status="FAILED",
+                                log_message=f"[MANUAL TEST FAILED] Action #{idx + 1} ({act_type}) failed for {recipient}.",
+                            )
+
+                    if actions_succeeded:
                         notification_sent = True
-                        message = f"Rule conditions met. Manual test email dispatched to {recipient}."
+                        message = f"Rule conditions met. Manual test actions executed: {', '.join(action_logs)}"
                         crud.create_automation_log(
                             db,
                             rule_id=rule.id,
                             work_item_id=work_item.id,
                             status="SUCCESS",
-                            log_message=f"{log_msg} Email dispatched to {recipient}.",
+                            log_message=f"{log_msg} Actions executed: {', '.join(action_logs)}",
                         )
                     else:
-                        message = "Rule conditions met, but email dispatcher failed."
-                        crud.create_automation_log(
-                            db,
-                            rule_id=rule.id,
-                            work_item_id=work_item.id,
-                            status="FAILED",
-                            log_message=f"[MANUAL TEST FAILED] Dispatch failed for {recipient}.",
-                        )
+                        success = False
+                        message = "Rule conditions met, but one or more actions failed to execute."
                 else:
                     if not email_settings:
                         message = "Rule conditions met. Email not sent because Email settings are missing."

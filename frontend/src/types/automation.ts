@@ -44,17 +44,6 @@ export type AutomationExecutionStatus =
   | "FAILED";
 
 /**
- * Test Rule of an automation log.
- */
-export interface AutomationRuleTestResponse {
-  readonly success: boolean;
-  readonly matched: boolean;
-  readonly notification_sent: boolean;
-  readonly message: string;
-  readonly execution_time_ms: number;
-}
-
-/**
  * Logical operators supporting multiple conditions.
  */
 export type AutomationLogicOperator = "AND" | "OR";
@@ -70,6 +59,14 @@ export interface AutomationCondition {
   readonly field: string;
   readonly operator: AutomationOperator;
   readonly value: string;
+}
+
+/**
+ * Single trigger action workflow configured for rule matching executions.
+ */
+export interface AutomationAction {
+  readonly action_type: string;
+  readonly config: Record<string, unknown>;
 }
 
 /* ============================================================================
@@ -91,18 +88,7 @@ export interface AutomationRule {
   readonly conditions: readonly AutomationCondition[];
   readonly logic_operator: AutomationLogicOperator;
 
-  readonly action_type: AutomationActionType;
-
-  /**
-   * Provider-specific configuration.
-   *
-   * Example:
-   * {
-   *   recipient: "...",
-   *   subject: "...",
-   * }
-   */
-  readonly action_config: Record<string, unknown>;
+  readonly actions: readonly AutomationAction[];
 
   readonly is_active: boolean;
 
@@ -122,9 +108,7 @@ export interface AutomationRuleCreateRequest {
   readonly conditions: readonly AutomationCondition[];
   readonly logic_operator: AutomationLogicOperator;
 
-  readonly action_type: AutomationActionType;
-
-  readonly action_config: Record<string, unknown>;
+  readonly actions: readonly AutomationAction[];
 
   readonly is_active?: boolean;
 }
@@ -141,11 +125,21 @@ export interface AutomationRuleUpdateRequest {
   readonly conditions?: readonly AutomationCondition[];
   readonly logic_operator?: AutomationLogicOperator;
 
-  readonly action_type?: AutomationActionType;
-
-  readonly action_config?: Record<string, unknown>;
+  readonly actions?: readonly AutomationAction[];
 
   readonly is_active?: boolean;
+}
+
+/**
+ * Result of running a "test" evaluation of a rule against a sample work item,
+ * without persisting an execution log.
+ */
+export interface AutomationRuleTestResponse {
+  readonly success: boolean;
+  readonly matched: boolean;
+  readonly notification_sent: boolean;
+  readonly message: string;
+  readonly execution_time_ms: number;
 }
 
 /* ============================================================================

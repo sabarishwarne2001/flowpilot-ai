@@ -9,7 +9,6 @@ import {
   AlertCircle,
   RefreshCw,
   Clock,
-  ArrowRight,
   Loader2,
   Copy,
   Play,
@@ -51,7 +50,9 @@ export const Automation: React.FC = () => {
   // Dialog overlay controller states
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [ruleToEdit, setRuleToEdit] = useState<AutomationRule | null>(null);
-  const [ruleToDuplicate, setRuleToDuplicate] = useState<AutomationRule | null>(null);
+  const [ruleToDuplicate, setRuleToDuplicate] = useState<AutomationRule | null>(
+    null
+  );
   const [ruleToTest, setRuleToTest] = useState<AutomationRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<AutomationRule | null>(null);
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
@@ -141,12 +142,20 @@ export const Automation: React.FC = () => {
         if (err instanceof ApiError) {
           toast.error(err.message);
         } else {
-          toast.error(`Failed to ${variables.is_active ? "enable" : "disable"} automation rule.`);
+          toast.error(
+            `Failed to ${
+              variables.is_active ? "enable" : "disable"
+            } automation rule.`
+          );
         }
       },
 
       onSuccess: (_data, variables) => {
-        toast.success(variables.is_active ? "Rule enabled successfully." : "Rule disabled successfully.");
+        toast.success(
+          variables.is_active
+            ? "Rule enabled successfully."
+            : "Rule disabled successfully."
+        );
       },
 
       onSettled: () => {
@@ -294,7 +303,8 @@ export const Automation: React.FC = () => {
                   No automation rules configured
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Create your first workflow automation rule to automatically evaluate processed documents and dispatch alerts.
+                  Create your first workflow automation rule to automatically
+                  evaluate processed documents and dispatch alerts.
                 </p>
               </div>
               <button
@@ -356,15 +366,27 @@ export const Automation: React.FC = () => {
                         })
                       }
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
-                        ${rule.is_active ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
-                      disabled={togglingRuleId === rule.id || isDeletingRule || isUpdatingRule}
-                      title={rule.is_active ? "Deactivate rule" : "Activate rule"}
+                        ${
+                          rule.is_active
+                            ? "bg-emerald-500"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      disabled={
+                        togglingRuleId === rule.id ||
+                        isDeletingRule ||
+                        isUpdatingRule
+                      }
+                      title={
+                        rule.is_active ? "Deactivate rule" : "Activate rule"
+                      }
                       aria-label={`Toggle rule ${rule.name}`}
                     >
                       <span className="sr-only">Toggle rule status</span>
                       <span
                         className={`pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center
-                          ${rule.is_active ? "translate-x-5" : "translate-x-0"}`}
+                          ${
+                            rule.is_active ? "translate-x-5" : "translate-x-0"
+                          }`}
                       >
                         {togglingRuleId === rule.id && (
                           <Loader2 className="h-3 w-3 animate-spin text-primary" />
@@ -373,10 +395,10 @@ export const Automation: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Structured IF / THEN Panel supporting multiple conditions */}
+                  {/* Structured IF / THEN Panel supporting multiple conditions and multiple actions */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-muted/30 dark:bg-muted/10 border border-border/40 rounded-xl p-3.5 select-none">
                     {/* IF Section */}
-                    <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5">
+                    <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5 border-b sm:border-b-0 pb-2.5 sm:pb-0">
                       <span className="text-[10px] font-black uppercase tracking-wider text-primary">
                         IF Conditions ({rule.logic_operator})
                       </span>
@@ -396,7 +418,8 @@ export const Automation: React.FC = () => {
                                 {getFriendlyFieldName(cond.field)}
                               </span>
                               <span className="text-[10px] uppercase font-bold text-muted-foreground px-1">
-                                {OPERATOR_DISPLAY_MAP[cond.operator] ?? cond.operator.replace("_", " ")}
+                                {OPERATOR_DISPLAY_MAP[cond.operator] ??
+                                  cond.operator.replace("_", " ")}
                               </span>
                               <span className="px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold truncate max-w-[150px]">
                                 {cond.value}
@@ -407,15 +430,33 @@ export const Automation: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* THEN Section */}
-                    <div className="sm:col-span-5 flex flex-col justify-center border-t sm:border-t-0 sm:border-l border-border/40 pt-2.5 sm:pt-0 sm:pl-3.5 space-y-1.5">
+                    {/* THEN Section supporting multiple actions */}
+                    <div className="sm:col-span-5 flex flex-col justify-center sm:border-l border-border/40 pt-1.5 sm:pt-0 sm:pl-3.5 space-y-2.5">
                       <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                        THEN Action
+                        THEN Actions ({rule.actions.length})
                       </span>
-                      <div className="flex items-center space-x-1.5 text-xs font-bold text-foreground">
-                        <span className="px-2 py-1 rounded-md bg-background border border-border/60 text-emerald-600 dark:text-emerald-400">
-                          {rule.action_type.replace("_", " ")}
-                        </span>
+                      <div className="flex flex-col gap-2 select-none">
+                        {rule.actions.map((act, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center space-x-2 text-xs font-bold text-foreground"
+                          >
+                            <span className="text-[9px] text-muted-foreground bg-muted border border-border/40 px-1.5 py-0.5 rounded font-mono">
+                              #{idx + 1}
+                            </span>
+                            <span
+                              className="px-2 py-1 rounded-md bg-background border border-border/60 text-emerald-600 dark:text-emerald-400 truncate max-w-[150px]"
+                              title={act.config?.recipient as string}
+                            >
+                              {act.action_type.replace("_", " ")}
+
+                              {"recipient" in act.config &&
+                                typeof act.config.recipient === "string" && (
+                                  <> ({act.config.recipient})</>
+                                )}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -588,6 +629,7 @@ export const Automation: React.FC = () => {
         onSaveSuccess={handleSaveSuccessCallback}
         ruleToEdit={ruleToEdit}
         ruleToDuplicate={ruleToDuplicate}
+        existingRules={rules}
       />
       <RuleTestDialog
         isOpen={ruleToTest !== null}

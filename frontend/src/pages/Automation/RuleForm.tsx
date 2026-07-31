@@ -2,10 +2,9 @@ import React, { useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import type { SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, Loader2, Play, Plus } from "lucide-react";
+import { X, Loader2, Play, Plus, AlertCircle } from "lucide-react";
 import { automationApi } from "@/services/api/automation";
 import { ApiError } from "@/services/api/client";
 import {
@@ -13,6 +12,7 @@ import {
   getCategorizedFields,
   getAllowedOperators,
 } from "@/constants/automationFields";
+import { createRuleFormSchema, type RuleFormInput } from "@/schemas/automation";
 import type {
   AutomationRule,
   AutomationRuleCreateRequest,
@@ -21,48 +21,6 @@ import type {
 
 // Centralized query key constant mapping to core rules lists
 const RULES_QUERY_KEY = ["automation-rules"] as const;
-
-// Declarative Zod validation schema to govern rule configurations
-const ruleFormValidationSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Rule name is required.")
-    .max(100, "Rule name cannot exceed 100 characters."),
-  priority: z.number().int().min(1, "Priority must be at least 1."),
-  event: z.enum([
-    "WORK_ITEM_CREATED",
-    "WORK_ITEM_COMPLETED",
-    "WORK_ITEM_FAILED",
-    "WORK_ITEM_REPROCESSED",
-  ]),
-  conditions: z
-    .array(
-      z.object({
-        field: z.string().trim().min(1, "Field path is required."),
-        operator: z.enum([
-          "EQUALS",
-          "NOT_EQUALS",
-          "CONTAINS",
-          "GREATER_THAN",
-          "LESS_THAN",
-          "GREATER_THAN_OR_EQUAL",
-          "LESS_THAN_OR_EQUAL",
-        ]),
-        value: z.string().trim().min(1, "Match value is required."),
-      })
-    )
-    .min(1, "At least one evaluation condition is required."),
-  logic_operator: z.enum(["AND", "OR"]),
-  action_type: z.literal("SEND_EMAIL"),
-  recipient: z
-    .string()
-    .trim()
-    .min(1, "Recipient email address is required.")
-    .email("Please enter a valid recipient email address."),
-});
-
-type RuleFormInput = z.infer<typeof ruleFormValidationSchema>;
 
 interface RuleFormProps {
   readonly isOpen: boolean;
@@ -79,6 +37,10 @@ interface RuleFormProps {
    * Optional Rule entity. If supplied, the form operates in duplication/create mode.
    */
   readonly ruleToDuplicate?: AutomationRule | null;
+  /**
+   * Active workspace rules list to check for duplicates on the client side.
+   */
+  readonly existingRules?: readonly AutomationRule[];
 }
 
 // Logic Operator Display mapping
@@ -104,10 +66,16 @@ export const RuleForm: React.FC<RuleFormProps> = ({
   onSaveSuccess,
   ruleToEdit = null,
   ruleToDuplicate = null,
+  existingRules = [],
 }) => {
   const queryClient = useQueryClient();
   const isEditMode = ruleToEdit !== null;
   const categorizedFields = getCategorizedFields();
+
+  // Instantiate strict validation schema dynamically based on context
+  const validationSchema = React.useMemo(() => {
+    return createRuleFormSchema(ruleToEdit?.id, existingRules);
+  }, [ruleToEdit, existingRules]);
 
   // Initialize input validator controllers with focus boundaries
   const {
@@ -119,8 +87,9 @@ export const RuleForm: React.FC<RuleFormProps> = ({
     setValue,
     formState: { errors },
   } = useForm<RuleFormInput>({
-    resolver: zodResolver(ruleFormValidationSchema),
+    resolver: zodResolver(validationSchema),
     shouldFocusError: true,
+    mode: "onChange",
     defaultValues: {
       name: "",
       priority: 100,
@@ -133,15 +102,33 @@ export const RuleForm: React.FC<RuleFormProps> = ({
         },
       ],
       logic_operator: "AND",
-      action_type: "SEND_EMAIL",
-      recipient: "",
+      actions: [
+        {
+          action_type: "SEND_EMAIL",
+          config: { recipient: "" },
+        },
+      ],
     },
   });
 
-  // Dynamic conditions list tracking helper
-  const { fields, append, remove } = useFieldArray({
+  // Dynamic conditions list tracking helpers
+  const {
+    fields: conditionFields,
+    append: appendCondition,
+    remove: removeCondition,
+  } = useFieldArray({
     control,
     name: "conditions",
+  });
+
+  // Dynamic actions list tracking helpers
+  const {
+    fields: actionFields,
+    append: appendAction,
+    remove: removeAction,
+  } = useFieldArray({
+    control,
+    name: "actions",
   });
 
   // Watch currently configured field pathways to load placeholders and metadata
@@ -160,8 +147,10 @@ export const RuleForm: React.FC<RuleFormProps> = ({
           value: c.value,
         })),
         logic_operator: ruleToEdit.logic_operator ?? "AND",
-        action_type: ruleToEdit.action_type,
-        recipient: (ruleToEdit.action_config?.recipient as string) ?? "",
+        actions: ruleToEdit.actions.map((a) => ({
+          action_type: a.action_type as "SEND_EMAIL",
+          config: { recipient: (a.config?.recipient as string) ?? "" },
+        })),
       });
     } else if (ruleToDuplicate) {
       reset({
@@ -174,8 +163,10 @@ export const RuleForm: React.FC<RuleFormProps> = ({
           value: c.value,
         })),
         logic_operator: ruleToDuplicate.logic_operator ?? "AND",
-        action_type: ruleToDuplicate.action_type,
-        recipient: (ruleToDuplicate.action_config?.recipient as string) ?? "",
+        actions: ruleToDuplicate.actions.map((a) => ({
+          action_type: a.action_type as "SEND_EMAIL",
+          config: { recipient: (a.config?.recipient as string) ?? "" },
+        })),
       });
     } else {
       reset({
@@ -190,8 +181,12 @@ export const RuleForm: React.FC<RuleFormProps> = ({
           },
         ],
         logic_operator: "AND",
-        action_type: "SEND_EMAIL",
-        recipient: "",
+        actions: [
+          {
+            action_type: "SEND_EMAIL",
+            config: { recipient: "" },
+          },
+        ],
       });
     }
   }, [ruleToEdit, ruleToDuplicate, reset]);
@@ -265,10 +260,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
       event: data.event,
       conditions: data.conditions,
       logic_operator: data.logic_operator,
-      action_type: data.action_type,
-      action_config: {
-        recipient: data.recipient.trim(),
-      },
+      actions: data.actions,
     };
 
     if (isEditMode && ruleToEdit) {
@@ -283,6 +275,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
   }
 
   const isProcessing = isCreating || isUpdating;
+  const isFormInvalid = Object.keys(errors).length > 0;
 
   return (
     <div
@@ -337,11 +330,11 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 type="text"
                 disabled={isProcessing}
                 placeholder="e.g. Email Accounting Dept"
-                className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
+                className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
                   ${
                     errors.name
-                      ? "border-destructive focus:border-destructive"
-                      : "border-border focus:border-primary"
+                      ? "border-destructive focus:ring-destructive/20 focus:border-destructive"
+                      : "border-border focus:ring-primary/20 focus:border-primary"
                   }`}
               />
               {errors.name && (
@@ -366,13 +359,14 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 id="priority"
                 type="number"
                 min="1"
+                max="9999"
                 disabled={isProcessing}
                 placeholder="100"
-                className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
+                className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
                   ${
                     errors.priority
-                      ? "border-destructive focus:border-destructive"
-                      : "border-border focus:border-primary"
+                      ? "border-destructive focus:ring-destructive/20 focus:border-destructive"
+                      : "border-border focus:ring-primary/20 focus:border-primary"
                   }`}
               />
               {errors.priority && (
@@ -449,19 +443,18 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                   <span>ANY (OR)</span>
                 </label>
               </div>
-              {errors.logic_operator && (
-                <p
-                  className="text-xs text-destructive font-semibold"
-                  role="alert"
-                >
-                  {errors.logic_operator.message}
-                </p>
-              )}
             </div>
+
+            {errors.conditions?.message && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-xs font-bold text-destructive select-none flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{errors.conditions.message}</span>
+              </div>
+            )}
 
             {/* Dynamic Conditions List Timeline stack */}
             <div className="space-y-4">
-              {fields.map((fieldItem: typeof fields[number], idx: number) => {
+              {conditionFields.map((fieldItem, idx) => {
                 const currentFieldPath = watchedConditions[idx]?.field ?? "";
                 const currentMeta = AUTOMATION_FIELDS_MAP[currentFieldPath];
                 const allowedOps = getAllowedOperators(currentFieldPath);
@@ -477,11 +470,11 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                         Condition #{idx + 1}
                       </span>
 
-                      {fields.length > 1 && (
+                      {conditionFields.length > 1 && (
                         <button
                           type="button"
                           disabled={isProcessing}
-                          onClick={() => remove(idx)}
+                          onClick={() => removeCondition(idx)}
                           className="p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
                           title="Remove condition"
                         >
@@ -598,11 +591,11 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                             ? `e.g. ${currentMeta.example}`
                             : "e.g. Match value"
                         }
-                        className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
+                        className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2
                           ${
                             errors.conditions?.[idx]?.value
-                              ? "border-destructive focus:border-destructive"
-                              : "border-border focus:border-primary"
+                              ? "border-destructive focus:border-destructive font-semibold"
+                              : "border-border focus:border-primary font-semibold"
                           }`}
                         {...register(`conditions.${idx}.value`)}
                       />
@@ -625,7 +618,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
               type="button"
               disabled={isProcessing}
               onClick={() =>
-                append({
+                appendCondition({
                   field: "classification_details.document_classification",
                   operator: "EQUALS",
                   value: "",
@@ -638,62 +631,115 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </button>
           </div>
 
-          {/* Action Dispatch Configurations Panel (THEN actions) */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground select-none">
-              Action Configurations
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Locked Dispatcher Channels Type */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="action_type"
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground select-none"
-                >
-                  Action Type
-                </label>
-                <select
-                  {...register("action_type")}
-                  id="action_type"
-                  disabled
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-sm font-semibold cursor-not-allowed opacity-80"
-                >
-                  <option value="SEND_EMAIL">Send SMTP Email</option>
-                </select>
-              </div>
-
-              {/* Dynamic Recipient email Field */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="recipient"
-                  className="text-xs font-bold uppercase tracking-wider text-muted-foreground select-none"
-                >
-                  Recipient Email
-                </label>
-                <input
-                  {...register("recipient")}
-                  id="recipient"
-                  type="email"
-                  disabled={isProcessing}
-                  placeholder="billing@company.com"
-                  className={`w-full px-3.5 py-2 bg-background border rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20
-                    ${
-                      errors.recipient
-                        ? "border-destructive focus:border-destructive"
-                        : "border-border focus:border-primary"
-                    }`}
-                />
-                {errors.recipient && (
-                  <p
-                    className="text-xs text-destructive font-semibold pt-0.5"
-                    role="alert"
-                  >
-                    {errors.recipient.message}
-                  </p>
-                )}
-              </div>
+          {/* Action Dispatch Configurations Panel (THEN actions supporting multiple actions) */}
+          <div className="border border-border/60 rounded-xl p-4 bg-muted/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-border/40 pb-2 select-none">
+              <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                Action Configurations
+              </span>
             </div>
+
+            {errors.actions?.message && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-xs font-bold text-destructive select-none flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{errors.actions.message}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {actionFields.map((actField, idx) => (
+                <div
+                  key={actField.id}
+                  className="p-4 bg-background border border-border/60 rounded-xl space-y-3 relative group transition-all duration-200 hover:border-border hover:shadow-sm"
+                >
+                  {/* Header detail */}
+                  <div className="flex justify-between items-center select-none border-b border-border/10 pb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                      Action #{idx + 1}
+                    </span>
+
+                    {actionFields.length > 1 && (
+                      <button
+                        type="button"
+                        disabled={isProcessing}
+                        onClick={() => removeAction(idx)}
+                        className="p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                        title="Remove action"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Action Type */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={`act-type-${idx}`}
+                        className="text-[10px] font-black uppercase tracking-wider text-muted-foreground select-none"
+                      >
+                        Action Type
+                      </label>
+                      <select
+                        id={`act-type-${idx}`}
+                        disabled
+                        className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-xs font-semibold cursor-not-allowed opacity-80"
+                        {...register(`actions.${idx}.action_type`)}
+                      >
+                        <option value="SEND_EMAIL">Send SMTP Email</option>
+                      </select>
+                    </div>
+
+                    {/* Config fields: Recipient Email */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={`act-recipient-${idx}`}
+                        className="text-[10px] font-black uppercase tracking-wider text-muted-foreground select-none"
+                      >
+                        Recipient Email
+                      </label>
+                      <input
+                        id={`act-recipient-${idx}`}
+                        type="email"
+                        disabled={isProcessing}
+                        placeholder="billing@company.com"
+                        className={`w-full px-3.5 py-2 bg-background border rounded-lg text-xs font-semibold focus:outline-none focus:ring-2
+                          ${
+                            errors.actions?.[idx]?.config?.recipient
+                              ? "border-destructive focus:ring-destructive/20 focus:border-destructive"
+                              : "border-border focus:ring-primary/20 focus:border-primary"
+                          }`}
+                        {...register(`actions.${idx}.config.recipient`)}
+                      />
+                      {errors.actions?.[idx]?.config?.recipient && (
+                        <p
+                          className="text-[10px] text-destructive font-semibold"
+                          role="alert"
+                        >
+                          {errors.actions[idx]?.config?.recipient?.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Append actions activator */}
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={() =>
+                appendAction({
+                  action_type: "SEND_EMAIL",
+                  config: { recipient: "" },
+                })
+              }
+              className="w-full py-2.5 bg-background border border-dashed border-border/80 hover:border-primary/50 text-muted-foreground hover:text-primary transition-all rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 focus:outline-none focus:ring-2 focus:ring-primary/10 select-none disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Action</span>
+            </button>
           </div>
 
           {/* Footer Interactive Trigger Panels */}
@@ -708,7 +754,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || isFormInvalid}
               className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center min-w-[100px]"
             >
               {isProcessing ? (

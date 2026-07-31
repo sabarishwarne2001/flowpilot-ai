@@ -45,9 +45,34 @@ class AutomationCondition(BaseModel):
         return value
 
 
+class AutomationAction(BaseModel):
+    """
+    Validation schema representing a single trigger action workflow to execute.
+    """
+
+    action_type: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Action type identifier executed when rule conditions match.",
+    )
+
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Provider-specific action configuration payload.",
+    )
+
+    @field_validator("action_type", mode="before")
+    @classmethod
+    def strip_action_type(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class AutomationRuleBase(BaseModel):
     """
-    Shared fields for automation rule schemas, utilizing multiple conditions.
+    Shared fields for automation rule schemas, utilizing multiple conditions and actions.
     """
 
     name: str = Field(
@@ -70,18 +95,6 @@ class AutomationRuleBase(BaseModel):
         description="Workflow event that triggers this rule.",
     )
 
-    action_type: str = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="Action executed when the rule matches.",
-    )
-
-    action_config: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Provider-specific configuration payload.",
-    )
-
     is_active: bool = Field(
         default=True,
         description="Whether the rule is currently enabled.",
@@ -97,7 +110,13 @@ class AutomationRuleBase(BaseModel):
         description="Logical operator connecting multi-condition checks.",
     )
 
-    @field_validator("name", "event", "action_type", mode="before")
+    actions: list[AutomationAction] = Field(
+        ...,
+        min_length=1,
+        description="List of sequential actions executed when conditions match.",
+    )
+
+    @field_validator("name", "event", mode="before")
     @classmethod
     def strip_base_strings(cls, value: Any) -> Any:
         if isinstance(value, str):
@@ -139,13 +158,12 @@ class AutomationRuleUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     priority: int | None = Field(None, ge=1)
     event: str | None = Field(None, min_length=1, max_length=50)
-    action_type: str | None = Field(None, min_length=1, max_length=50)
-    action_config: dict[str, Any] | None = None
     is_active: bool | None = None
     conditions: list[AutomationCondition] | None = None
     logic_operator: Literal["AND", "OR"] | None = None
+    actions: list[AutomationAction] | None = Field(None, min_length=1)
 
-    @field_validator("name", "event", "action_type", mode="before")
+    @field_validator("name", "event", mode="before")
     @classmethod
     def strip_optional_strings(cls, value: Any) -> Any:
         if isinstance(value, str):
@@ -218,4 +236,6 @@ class AutomationRuleTestResponse(BaseModel):
     matched: bool
     notification_sent: bool
     message: str
-    execution_time_ms: float
+    sa_execution_time_ms: float = Field(default=0.0, alias="execution_time_ms")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
