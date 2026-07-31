@@ -88,6 +88,8 @@ class AutomationCondition(BaseModel):
             "BETWEEN",
             "IN",
             "NOT_IN",
+            "ARRAY_CONTAINS_ANY",
+            "ARRAY_CONTAINS_ALL",
         }
         value_not_required_operators = {"EXISTS", "IS_EMPTY", "IS_NOT_EMPTY"}
 
@@ -296,4 +298,4 @@ class AutomationRuleTestResponse(BaseModel):
     message: str = Field(default="")
     execution_time_ms: float = Field(default=0.0)
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)

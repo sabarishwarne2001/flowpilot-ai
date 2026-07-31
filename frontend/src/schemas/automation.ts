@@ -64,6 +64,8 @@ export const createRuleFormSchema = (
               "EXISTS",
               "IS_EMPTY",
               "IS_NOT_EMPTY",
+              "ARRAY_CONTAINS_ANY",
+              "ARRAY_CONTAINS_ALL",
             ]),
             value: z.string().trim(),
           })
@@ -82,6 +84,8 @@ export const createRuleFormSchema = (
               "BETWEEN",
               "IN",
               "NOT_IN",
+              "ARRAY_CONTAINS_ANY",
+              "ARRAY_CONTAINS_ALL",
             ];
             // Enforce required match value verification only for non-existence operators
             if (valueRequiredOperators.includes(data.operator)) {

@@ -90,14 +90,28 @@ def _evaluate_condition(
 
     # Collection Operators with list/tuple/set support
     if operator in ("IN", "NOT_IN"):
-        targets = [v.strip().lower() for v in target_value.split(",") if v.strip()]
+        targets_list = [v.strip().lower() for v in target_value.split(",") if v.strip()]
         if isinstance(actual, (list, tuple, set)):
             actual_list = [str(x).strip().lower() for x in actual]
-            has_intersection = any(x in targets for x in actual_list)
+            has_intersection = any(x in targets_list for x in actual_list)
             return has_intersection if operator == "IN" else not has_intersection
         else:
-            is_in = actual_lower in targets
+            is_in = actual_lower in targets_list
             return is_in if operator == "IN" else not is_in
+
+    # These are generic collection operators that work with any entity path resolved by the automation engine.
+    if operator in ("ARRAY_CONTAINS_ANY", "ARRAY_CONTAINS_ALL"):
+        targets = {v.strip().lower() for v in target_value.split(",") if v.strip()}
+        if not targets:
+            return False
+        if not isinstance(actual, (list, tuple, set)):
+            return False
+
+        actual_set = {str(x).strip().lower() for x in actual}
+        if operator == "ARRAY_CONTAINS_ANY":
+            return bool(actual_set & targets)
+        else:  # ARRAY_CONTAINS_ALL
+            return targets.issubset(actual_set)
 
     # Range Operators
     if operator == "BETWEEN":

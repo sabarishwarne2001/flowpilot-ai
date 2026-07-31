@@ -50,6 +50,17 @@ const OPERATOR_DISPLAY_MAP: Record<string, string> = {
   LESS_THAN: "Less Than",
   GREATER_THAN_OR_EQUAL: "Greater Than or Equal",
   LESS_THAN_OR_EQUAL: "Less Than or Equal",
+  NOT_CONTAINS: "Not Contains",
+  STARTS_WITH: "Starts With",
+  ENDS_WITH: "Ends With",
+  BETWEEN: "Between",
+  IN: "In",
+  NOT_IN: "Not In",
+  EXISTS: "Exists",
+  IS_EMPTY: "Is Empty",
+  IS_NOT_EMPTY: "Is Not Empty",
+  ARRAY_CONTAINS_ANY: "Contains Any",
+  ARRAY_CONTAINS_ALL: "Contains All",
 };
 
 /**
@@ -561,7 +572,7 @@ export const Automation: React.FC = () => {
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
-              sa_Success Rate
+              Success Rate
             </span>
             <Activity className="h-4 w-4 text-emerald-500" />
           </div>
@@ -579,7 +590,7 @@ export const Automation: React.FC = () => {
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
-              sa_Failure Rate
+              Failure Rate
             </span>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </div>

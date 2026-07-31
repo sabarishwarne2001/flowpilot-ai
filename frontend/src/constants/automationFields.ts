@@ -29,6 +29,21 @@ export interface AutomationField {
 }
 
 /**
+ * Reusable operators array supporting array/collection data type evaluation checks.
+ */
+const ARRAY_OPERATORS: readonly AutomationOperator[] = [
+  "CONTAINS",
+  "NOT_CONTAINS",
+  "IN",
+  "NOT_IN",
+  "ARRAY_CONTAINS_ANY",
+  "ARRAY_CONTAINS_ALL",
+  "EXISTS",
+  "IS_EMPTY",
+  "IS_NOT_EMPTY",
+] as const;
+
+/**
  * Centralized list of supported target fields mapped to user-friendly contexts.
  * Fields are sorted alphabetically within each semantic category block.
  */
@@ -152,15 +167,7 @@ export const AUTOMATION_FIELDS: readonly AutomationField[] = [
     dataType: "array",
     description: "Extracted list of professional and technical skills.",
     example: "React",
-    allowedOperators: [
-      "CONTAINS",
-      "NOT_CONTAINS",
-      "IN",
-      "NOT_IN",
-      "EXISTS",
-      "IS_EMPTY",
-      "IS_NOT_EMPTY",
-    ],
+    allowedOperators: ARRAY_OPERATORS,
   },
 
   // --- Contact ---

@@ -37,7 +37,9 @@ export type AutomationOperator =
   | "NOT_IN"
   | "EXISTS"
   | "IS_EMPTY"
-  | "IS_NOT_EMPTY";
+  | "IS_NOT_EMPTY"
+  | "ARRAY_CONTAINS_ANY"
+  | "ARRAY_CONTAINS_ALL";
 
 /**
  * Supported automation actions.

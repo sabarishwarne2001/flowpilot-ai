@@ -61,6 +61,8 @@ const OPERATOR_LABELS: Record<string, string> = {
   EXISTS: "Exists",
   IS_EMPTY: "Is Empty",
   IS_NOT_EMPTY: "Is Not Empty",
+  ARRAY_CONTAINS_ANY: "Contains Any",
+  ARRAY_CONTAINS_ALL: "Contains All",
 };
 
 /**
