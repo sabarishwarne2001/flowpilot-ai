@@ -90,3 +90,4 @@ async def get_current_active_user(
             detail="Inactive user account"
         )
     return current_user
+

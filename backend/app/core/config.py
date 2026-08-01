@@ -1,7 +1,9 @@
 import json
-from pydantic import field_validator, SecretStr
+# Add model_validator to the existing pydantic imports
+from pydantic import field_validator, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.constants import APP_VERSION
+
 
 class Settings(BaseSettings):
     """

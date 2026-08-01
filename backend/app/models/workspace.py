@@ -1,22 +1,70 @@
 from __future__ import annotations
 
+import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean
-from sqlalchemy import ForeignKey
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
-from app.db.base import Base
-from app.db.base import TimestampMixin
-from app.db.base import UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
+
+
+class WorkspaceRole(str, enum.Enum):
+    """
+    Available workspace membership roles within FlowPilot AI.
+    """
+    OWNER = "OWNER"
+    MANAGER = "MANAGER"
+    CONTRIBUTOR = "CONTRIBUTOR"
+    VIEWER = "VIEWER"
+
+
+class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
+    """
+    Represents the many-to-many relationship mapping users to workspaces.
+    """
+    __tablename__ = "workspace_members"
+    __table_args__ = (
+        UniqueConstraint("user_id", "workspace_id", name="uq_user_workspace_membership"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[WorkspaceRole] = mapped_column(
+        Enum(WorkspaceRole),
+        default=WorkspaceRole.VIEWER,
+        nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="memberships",
+    )
+    workspace: Mapped["Workspace"] = relationship(
+        "Workspace",
+        back_populates="members",
+    )
 
 
 class Workspace(Base, UUIDMixin, TimestampMixin):
@@ -106,5 +154,12 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
     user: Mapped["User"] = relationship(
         "User",
         back_populates="workspace",
+        passive_deletes=True,
+    )
+
+    members: Mapped[list[WorkspaceMember]] = relationship(
+        "WorkspaceMember",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )

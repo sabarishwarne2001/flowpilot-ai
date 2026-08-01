@@ -92,6 +92,14 @@ class User(Base, UUIDMixin, TimestampMixin):
         uselist=False,
     )
 
+    # Bidirectional SQLAlchemy relationship mapping user memberships
+    memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     # Bidirectional SQLAlchemy relationship mapping user ai_providers
     ai_settings = relationship(
         "AISettings",
