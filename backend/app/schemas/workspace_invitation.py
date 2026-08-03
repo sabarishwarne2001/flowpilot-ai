@@ -3,15 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
-
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.workspace import WorkspaceRole
 from app.models.workspace_invitation import InvitationStatus
 
 
 # ============================================================================
-# Create Request Schema
+# Request Schemas
 # ============================================================================
 
 class WorkspaceInvitationCreate(BaseModel):
@@ -31,6 +30,17 @@ class WorkspaceInvitationCreate(BaseModel):
     )
 
 
+class WorkspaceInvitationTokenRequest(BaseModel):
+    """
+    Schema for processing an invitation via its secure token.
+    """
+    token: str = Field(
+        ...,
+        min_length=1,
+        description="The secure URL-safe invitation token.",
+    )
+
+
 # ============================================================================
 # Response Serialization Schema
 # ============================================================================
@@ -42,7 +52,7 @@ class WorkspaceInvitationResponse(BaseModel):
     id: UUID
     workspace_id: UUID
     inviter_id: UUID
-    email: EmailStr
+    email: str
     role: WorkspaceRole
     status: InvitationStatus
     expires_at: datetime
