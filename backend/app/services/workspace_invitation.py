@@ -134,43 +134,17 @@ def create_workspace_invitation(
 
         commit_and_refresh(db, invitation)
 
-        # 6. Trigger outbound email delivery via provider-agnostic NotificationDispatcher
+        # 6. Trigger outbound email delivery using the central Notification Service
         try:
             workspace = db.get(Workspace, workspace_id)
             workspace_name = workspace.workspace_name if workspace else "Workspace"
 
-            # Resolve SMTP configuration cleanly through core SMTP parameters
-            from app.core.smtp import resolve_smtp_config
-            smtp_config = resolve_smtp_config(db, user_id=invitation.inviter_id)
-
-            # Build secure accept link
-            from app.core.config import settings as app_settings
-            frontend_host = getattr(app_settings, "FRONTEND_HOST", "http://localhost:3000")
-            accept_link = f"{frontend_host}/invitations/accept?token={invitation.token}"
-            
-            role_display = invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role)
-            expiry_str = invitation.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-            # Render HTML templates cleanly via dedicated templates package
-            from app.templates.emails.workspace_invitation import render_workspace_invitation
-            subject, html_body, text_body = render_workspace_invitation(
-                workspace_name=workspace_name,
-                role_display=role_display,
-                accept_link=accept_link,
-                expiry_str=expiry_str,
-                brand_name=app_settings.PROJECT_NAME,
-            )
-
-            # Dispatch email through the Notification Dispatcher
-            from app.services.notification.dispatcher import notification_dispatcher
+            from app.services.notification_service import notification_service
             success = _run_async(
-                notification_dispatcher.send(
-                    action_type="email",
-                    settings=smtp_config,
-                    recipient=invitation.email,
-                    title=subject,
-                    body=text_body,
-                    html_body=html_body,
+                notification_service.send_workspace_invitation(
+                    db=db,
+                    invitation=invitation,
+                    workspace_name=workspace_name,
                 )
             )
 

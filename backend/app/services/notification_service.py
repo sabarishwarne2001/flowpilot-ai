@@ -9,6 +9,8 @@ providers through the dispatcher.
 from __future__ import annotations
 
 import logging
+import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,10 @@ from app.models.work_item import WorkItem
 from app.schemas.notification import NotificationCreate
 from app.services.notification.dispatcher import notification_dispatcher
 
+if TYPE_CHECKING:
+    from app.models.email_settings import EmailSettings
+    from app.models.workspace_invitation import WorkspaceInvitation
+    from app.core.smtp import SMTPConfig
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +61,8 @@ class NotificationService:
         priority: NotificationPriority = NotificationPriority.INFO,
         delivery_channel: NotificationChannel = NotificationChannel.IN_APP,
         work_item: WorkItem | None = None,
+        settings: EmailSettings | SMTPConfig | None = None,
+        html_body: str | None = None,
     ) -> Notification:
         """
         Create and optionally deliver a notification.
@@ -128,12 +136,18 @@ class NotificationService:
         ):
 
             try:
+                # Fallback: resolve active SMTPConfig dynamically if not supplied
+                if settings is None:
+                    from app.core.smtp import resolve_smtp_config
+                    settings = resolve_smtp_config(db, user_id=user.id)
 
                 success = await self.dispatcher.send(
                     action_type="email",
+                    settings=settings,
                     recipient=user.email,
                     title=title,
                     body=message,
+                    html_body=html_body,
                 )
 
                 if success:
@@ -192,5 +206,76 @@ class NotificationService:
         # Future delivery channels (Slack, Teams, SMS, Webhooks...)
         #
         return notification
-    
+
+    # ======================================================================
+    # Workspace Invitation Orchestrator (Extended)
+    # ======================================================================
+
+    async def send_workspace_invitation(
+        self,
+        db: Session,
+        *,
+        invitation: WorkspaceInvitation,
+        workspace_name: str,
+    ) -> bool:
+        """
+        Orchestrates delivering a workspace invitation.
+
+        Renders HTML/Text layouts, determines if the recipient possesses an 
+        active User account, persists a database Notification record (for registered users), 
+        and dispatches the email.
+        """
+        from app.core.smtp import resolve_smtp_config
+        from app.templates.emails.workspace_invitation import render_workspace_invitation
+        from app.core.config import settings as app_settings
+
+        # 1. Resolve outbound SMTP credentials using the sender user profile
+        smtp_config = resolve_smtp_config(db, user_id=invitation.inviter_id)
+
+        # 2. Build accept links
+        frontend_host = getattr(app_settings, "FRONTEND_HOST", "http://localhost:3000")
+        accept_link = f"{frontend_host}/invitations/accept?token={invitation.token}"
+        
+        role_display = invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role)
+        expiry_str = invitation.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        # 3. Render HTML templates from dedicated templates package
+        subject, html_body, text_body = render_workspace_invitation(
+            workspace_name=workspace_name,
+            role_display=role_display,
+            accept_link=accept_link,
+            expiry_str=expiry_str,
+            brand_name=app_settings.PROJECT_NAME,
+        )
+
+        # 4. Check if the recipient already owns a registered account
+        from app.crud import user as user_crud
+        recipient_user = user_crud.get_user_by_email(db, email=invitation.email)
+
+        if recipient_user:
+            # If the user exists, persist a formal database Notification and dispatch
+            await self.send_notification(
+                db=db,
+                user=recipient_user,
+                title=subject,
+                message=text_body,
+                notification_type=NotificationType.EMAIL,
+                priority=NotificationPriority.INFO,
+                delivery_channel=NotificationChannel.EMAIL,
+                settings=smtp_config,
+                html_body=html_body,
+            )
+            return True
+        else:
+            # If the user is external, dispatch directly via dispatcher without database row
+            return await self.dispatcher.send(
+                action_type="email",
+                settings=smtp_config,
+                recipient=invitation.email,
+                title=subject,
+                body=text_body,
+                html_body=html_body,
+            )
+
+
 notification_service = NotificationService()
