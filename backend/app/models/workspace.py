@@ -46,7 +46,11 @@ class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
     role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole),
+        Enum(
+            WorkspaceRole,
+            name="workspace_role",
+            create_type=False,
+        ),
         default=WorkspaceRole.VIEWER,
         nullable=False,
     )

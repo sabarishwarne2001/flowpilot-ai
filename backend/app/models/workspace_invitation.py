@@ -66,12 +66,20 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
     role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole),
+        Enum(
+            WorkspaceRole,
+            name="workspace_role",
+            create_type=False,
+        ),
         default=WorkspaceRole.VIEWER,
         nullable=False,
     )
     status: Mapped[InvitationStatus] = mapped_column(
-        Enum(InvitationStatus),
+        Enum(
+            InvitationStatus,
+            name="invitation_status",
+            create_type=False,
+        ),
         default=InvitationStatus.PENDING,
         nullable=False,
         index=True,

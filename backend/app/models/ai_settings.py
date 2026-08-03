@@ -54,7 +54,11 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
     # ------------------------------------------------------------------
 
     provider: Mapped[AIProvider] = mapped_column(
-        SQLEnum(AIProvider),
+        SQLEnum(
+            AIProvider,
+            name="ai_provider",
+            create_type=False,
+        ),
         nullable=False,
         default=AIProvider.GROQ,
     )

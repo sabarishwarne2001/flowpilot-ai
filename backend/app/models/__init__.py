@@ -16,6 +16,7 @@ from app.models.assistant import Conversation, ConversationMessage
 from app.models.email_settings import EmailSettings
 from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
+from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
 
@@ -36,6 +37,7 @@ __all__ = [
     "EmailEncryption",
     "Workspace",
     "WorkspaceMember",
+    "WorkspaceInvitation",
     "AISettings",
     "DocumentSettings",
 ]

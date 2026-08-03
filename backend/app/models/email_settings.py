@@ -100,7 +100,11 @@ class EmailSettings(Base, UUIDMixin, TimestampMixin):
     # ------------------------------------------------------------------
 
     encryption: Mapped[EmailEncryption] = mapped_column(
-        SQLEnum(EmailEncryption),
+        SQLEnum(
+            EmailEncryption,
+            name="email_encryption",
+            create_type=False,
+        ),
         nullable=False,
         default=EmailEncryption.TLS,
     )

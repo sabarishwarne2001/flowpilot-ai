@@ -51,7 +51,12 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     )
 
     logic_operator: Mapped[str] = mapped_column(
-        Enum("AND", "OR", name="logic_operator_enum"),
+        Enum(
+            "AND",
+            "OR",
+            name="logic_operator",
+            create_type=False,
+        ),
         nullable=False,
         default="AND",
     )

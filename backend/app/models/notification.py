@@ -132,14 +132,22 @@ class Notification(Base, UUIDMixin, TimestampMixin):
     # ------------------------------------------------------------------
 
     notification_type: Mapped[NotificationType] = mapped_column(
-        SQLEnum(NotificationType),
+        SQLEnum(
+            NotificationType,
+            name="notification_type",
+            create_type=False,
+        ),
         nullable=False,
         default=NotificationType.SYSTEM,
         index=True,
     )
 
     priority: Mapped[NotificationPriority] = mapped_column(
-        SQLEnum(NotificationPriority),
+        SQLEnum(
+            NotificationPriority,
+            name="notification_priority",
+            create_type=False,
+        ),
         nullable=False,
         default=NotificationPriority.INFO,
         index=True,
@@ -150,14 +158,22 @@ class Notification(Base, UUIDMixin, TimestampMixin):
     # ------------------------------------------------------------------
 
     delivery_channel: Mapped[NotificationChannel] = mapped_column(
-        SQLEnum(NotificationChannel),
+        SQLEnum(
+            NotificationChannel,
+            name="notification_channel",
+            create_type=False,
+        ),
         nullable=False,
         default=NotificationChannel.IN_APP,
         index=True,
     )
 
     delivery_status: Mapped[NotificationStatus] = mapped_column(
-        SQLEnum(NotificationStatus),
+        SQLEnum(
+            NotificationStatus,
+            name="notification_status",
+            create_type=False,
+        ),
         nullable=False,
         default=NotificationStatus.PENDING,
         index=True,
