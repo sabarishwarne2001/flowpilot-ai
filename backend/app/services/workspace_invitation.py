@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
-from concurrent.futures import Future
 from datetime import datetime, timezone, timedelta
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -32,40 +29,6 @@ from app.models.workspace import Workspace, WorkspaceRole
 from app.models.workspace_invitation import WorkspaceInvitation, InvitationStatus
 
 logger = logging.getLogger("app.services.workspace_invitation")
-
-
-# ============================================================================
-# Private Synchronous-to-Asyncio Bridge
-# ============================================================================
-
-def _run_async(coro: Any) -> Any:
-    """
-    Safely executes an async coroutine from a synchronous thread.
-    
-    Reuses the running event loop when called from FastAPI's threadpool executor, 
-    or launches a new event loop as appropriate.
-    """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    if loop.is_running():
-        future = Future()
-
-        def callback():
-            async def wrapper():
-                try:
-                    result = await coro
-                    future.set_result(result)
-                except Exception as exc:
-                    future.set_exception(exc)
-            asyncio.create_task(wrapper())
-
-        loop.call_soon_threadsafe(callback)
-        return future.result()
-    else:
-        return asyncio.run(coro)
 
 
 # ============================================================================
@@ -133,44 +96,6 @@ def create_workspace_invitation(
         )
 
         commit_and_refresh(db, invitation)
-
-        # 6. Trigger outbound email delivery using the central Notification Service
-        try:
-            workspace = db.get(Workspace, workspace_id)
-            workspace_name = workspace.workspace_name if workspace else "Workspace"
-
-            from app.services.notification_service import notification_service
-            success = _run_async(
-                notification_service.send_workspace_invitation(
-                    db=db,
-                    invitation=invitation,
-                    workspace_name=workspace_name,
-                )
-            )
-
-            if not success:
-                logger.error(
-                    "SMTP_DELIVERY_FAILURE | Recipient: %s | WorkspaceID: %s | InvitationID: %s",
-                    normalized_email,
-                    workspace_id,
-                    invitation.id,
-                )
-            else:
-                logger.info(
-                    "SMTP_DELIVERY_SUCCESS | Recipient: %s | WorkspaceID: %s | InvitationID: %s",
-                    normalized_email,
-                    workspace_id,
-                    invitation.id,
-                )
-        except Exception as email_err:
-            # Catch defensively: failures in SMTP routing are completely non-blocking
-            logger.error(
-                "SMTP_DELIVERY_CRITICAL_EXCEPTION | Recipient: %s | WorkspaceID: %s | InvitationID: %s | Error: %s",
-                normalized_email,
-                workspace_id,
-                invitation.id,
-                str(email_err),
-            )
 
         logger.info(
             "Successfully created workspace invitation. ID: %s, Workspace: %s, Recipient: %s",

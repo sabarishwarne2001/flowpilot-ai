@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -21,6 +21,7 @@ from app.schemas.workspace_invitation import (
     WorkspaceInvitationTokenRequest,
 )
 from app.services import workspace_invitation as workspace_invitation_service
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger("app.api.v1.workspace")
 
@@ -169,19 +170,29 @@ async def get_my_membership(
 )
 async def invite_user(
     invitation_in: WorkspaceInvitationCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> WorkspaceInvitationResponse:
     workspace = _get_user_workspace(db, current_user.id)
 
-    # Delegate entirely to the service layer orchestration
-    return workspace_invitation_service.create_workspace_invitation(
+    invitation = workspace_invitation_service.create_workspace_invitation(
         db,
         workspace_id=workspace.id,
         inviter_id=current_user.id,
         email=invitation_in.email,
         role=invitation_in.role,
     )
+
+    # Dispatch outbound email notification safely as a non-blocking background task
+    background_tasks.add_task(
+        notification_service.send_workspace_invitation,
+        db=db,
+        invitation=invitation,
+        workspace_name=workspace.workspace_name,
+    )
+
+    return invitation
 
 
 @router.get(
@@ -250,14 +261,27 @@ async def revoke_invitation(
 )
 async def resend_invitation(
     invitation_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> WorkspaceInvitationResponse:
-    return workspace_invitation_service.resend_workspace_invitation(
+    invitation = workspace_invitation_service.resend_workspace_invitation(
         db,
         invitation_id=invitation_id,
         actor_id=current_user.id,
     )
+
+    workspace = _get_user_workspace(db, current_user.id)
+
+    # Dispatch outbound email notification safely as a non-blocking background task
+    background_tasks.add_task(
+        notification_service.send_workspace_invitation,
+        db=db,
+        invitation=invitation,
+        workspace_name=workspace.workspace_name,
+    )
+
+    return invitation
 
 
 @router.post(
