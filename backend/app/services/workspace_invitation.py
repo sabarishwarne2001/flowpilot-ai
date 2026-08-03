@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import secrets
+from app.core.tokens import generate_secure_token
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -25,29 +25,12 @@ from app.core.exceptions import (
     InvitationPermissionDeniedError,
     InvalidInvitationTokenError,
 )
+from app.core.transactions import (
+    commit_and_refresh,
+    rollback_and_log_error,
+)
 
 logger = logging.getLogger("app.services.workspace_invitation")
-
-
-# ============================================================================
-# Transaction & Logging Private Helpers
-# ============================================================================
-
-def _commit_and_refresh(db: Session, obj: Any) -> None:
-    """
-    Commits the transaction and refreshes the ORM object state.
-    """
-    db.commit()
-    db.refresh(obj)
-
-
-def _rollback_and_log_error(db: Session, message_fmt: str, *args: Any, exc: Exception) -> None:
-    """
-    Rollbacks the active database session transaction and logs the exception details.
-    """
-    db.rollback()
-    logger.error(message_fmt, *args)
-    raise exc
 
 
 # ============================================================================
@@ -100,7 +83,7 @@ def create_workspace_invitation(
             workspace_invitation_crud.mark_invitation_revoked(db, invitation=existing_invite)
 
         # 4. Generate cryptographically secure invitation token and calculate expiration
-        token = secrets.token_urlsafe(32)
+        token = generate_secure_token()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
         # 5. Persist invitation record
@@ -114,7 +97,7 @@ def create_workspace_invitation(
             expires_at=expires_at,
         )
 
-        _commit_and_refresh(db, invitation)
+        commit_and_refresh(db, invitation)
 
         # Placeholder/Hook for future asynchronous email delivery integration
         logger.info(
@@ -126,8 +109,9 @@ def create_workspace_invitation(
         return invitation
 
     except Exception as e:
-        _rollback_and_log_error(
+        rollback_and_log_error(
             db,
+            logger,
             "Failed to create workspace invitation for %s in workspace %s: %s",
             normalized_email,
             workspace_id,
@@ -168,14 +152,15 @@ def revoke_workspace_invitation(
     try:
         # 3. Transition invitation status to REVOKED
         workspace_invitation_crud.mark_invitation_revoked(db, invitation=invitation)
-        _commit_and_refresh(db, invitation)
+        commit_and_refresh(db, invitation)
 
         logger.info("Successfully revoked workspace invitation ID: %s", invitation_id)
         return invitation
 
     except Exception as e:
-        _rollback_and_log_error(
+        rollback_and_log_error(
             db,
+            logger,
             "Failed to revoke workspace invitation ID %s: %s",
             invitation_id,
             str(e),
@@ -257,7 +242,7 @@ def accept_workspace_invitation(
         # 4. Transition invitation status to ACCEPTED
         workspace_invitation_crud.mark_invitation_accepted(db, invitation=invitation)
 
-        _commit_and_refresh(db, invitation)
+        commit_and_refresh(db, invitation)
 
         logger.info(
             "Successfully accepted workspace invitation ID: %s. User %s joined workspace %s",
@@ -268,8 +253,9 @@ def accept_workspace_invitation(
         return invitation
 
     except Exception as e:
-        _rollback_and_log_error(
+        rollback_and_log_error(
             db,
+            logger,
             "Failed to accept workspace invitation: %s",
             str(e),
             exc=e,
@@ -290,14 +276,15 @@ def reject_workspace_invitation(
 
         # 2. Transition status to REJECTED
         workspace_invitation_crud.mark_invitation_rejected(db, invitation=invitation)
-        _commit_and_refresh(db, invitation)
+        commit_and_refresh(db, invitation)
 
         logger.info("Successfully rejected workspace invitation ID: %s", invitation.id)
         return invitation
 
     except Exception as e:
-        _rollback_and_log_error(
+        rollback_and_log_error(
             db,
+            logger,
             "Failed to reject workspace invitation: %s",
             str(e),
             exc=e,
@@ -332,8 +319,9 @@ def expire_workspace_stale_invitations(
         return expired_count
 
     except Exception as e:
-        _rollback_and_log_error(
+        rollback_and_log_error(
             db,
+            logger,
             "Failed to expire stale invitations in workspace %s: %s",
             workspace_id,
             str(e),
