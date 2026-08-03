@@ -13,17 +13,15 @@ Supports:
 
 from __future__ import annotations
 
+import logging
 import smtplib
 from email.message import EmailMessage
 
-from app.models.email_settings import EmailEncryption
-from app.models.email_settings import EmailSettings
-
-import logging
+from app.core.config import settings as app_settings
+from app.core.smtp import SMTPConfig
+from app.models.email_settings import EmailEncryption, EmailSettings
 
 from cryptography.fernet import Fernet
-
-from app.core.config import settings as app_settings
 
 
 class EmailService:
@@ -53,49 +51,77 @@ class EmailService:
 
 
     # ======================================================================
-    # Build SMTP Client
+    # Private Helpers & Adaptation
     # ======================================================================
+
+    def _resolve_config(self, settings: EmailSettings | SMTPConfig) -> SMTPConfig:
+        """
+        Adapts legacy database model EmailSettings or SMTPConfig to a unified SMTPConfig.
+        """
+        if isinstance(settings, EmailSettings):
+            return SMTPConfig(
+                smtp_host=settings.smtp_host,
+                smtp_port=settings.smtp_port,
+                smtp_username=settings.smtp_username,
+                smtp_password=self.decrypt_password(settings.encrypted_password),
+                sender_name=settings.sender_name,
+                encryption=settings.encryption,
+            )
+        return settings
 
     def _create_client(
         self,
-        settings: EmailSettings,
+        config: SMTPConfig,
     ) -> smtplib.SMTP:
         """
-        Creates an authenticated SMTP client.
+        Creates an authenticated SMTP client from an SMTPConfig.
         """
-
-        if settings.encryption == EmailEncryption.SSL:
-
+        if config.encryption == EmailEncryption.SSL:
             client = smtplib.SMTP_SSL(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
+                host=config.smtp_host,
+                port=config.smtp_port,
                 timeout=20,
             )
-
         else:
-
             client = smtplib.SMTP(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
+                host=config.smtp_host,
+                port=config.smtp_port,
                 timeout=20,
             )
-
             client.ehlo()
 
-            if settings.encryption == EmailEncryption.TLS:
+            if config.encryption == EmailEncryption.TLS:
                 client.starttls()
                 client.ehlo()
 
-        password = self.decrypt_password(
-            settings.encrypted_password,
-        )
-
         client.login(
-            settings.smtp_username,
-            password,
+            config.smtp_username,
+            config.smtp_password,
         )
 
         return client
+
+    def _send_message(
+        self,
+        config: SMTPConfig,
+        message: EmailMessage,
+    ) -> tuple[bool, str]:
+        """
+        Executes client connection, authentication, message delivery, and cleanup.
+        """
+        client = None
+        try:
+            client = self._create_client(config)
+            client.send_message(message)
+            client.quit()
+            return True, "Email sent successfully."
+        except Exception as exc:
+            if client:
+                try:
+                    client.quit()
+                except Exception:
+                    pass
+            return False, str(exc)
 
     # ======================================================================
     # Test Connection
@@ -106,31 +132,21 @@ class EmailService:
         settings: EmailSettings,
     ) -> tuple[bool, str]:
         """
-        Verifies SMTP credentials.
+        Verifies SMTP credentials. Maintains complete backwards compatibility.
         """
-
+        client = None
         try:
-
-            client = self._create_client(settings)
-
+            config = self._resolve_config(settings)
+            client = self._create_client(config)
             client.quit()
-
-            return (
-                True,
-                "SMTP connection successful.",
-            )
-
+            return True, "SMTP connection successful."
         except Exception as exc:
-
-            try:
-                client.quit()
-            except Exception:
-                pass
-
-            return (
-                False,
-                str(exc),
-            )
+            if client:
+                try:
+                    client.quit()
+                except Exception:
+                    pass
+            return False, str(exc)
 
     # ======================================================================
     # Send Email
@@ -145,46 +161,39 @@ class EmailService:
         body: str,
     ) -> tuple[bool, str]:
         """
-        Sends a plain-text email.
+        Sends a plain-text email. Maintains complete backwards compatibility.
         """
+        config = self._resolve_config(settings)
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = f"{config.sender_name} <{config.smtp_username}>"
+        message["To"] = recipient
+        message.set_content(body)
 
-        try:
+        return self._send_message(config, message)
 
-            message = EmailMessage()
+    def send_html_email(
+        self,
+        *,
+        settings: EmailSettings | SMTPConfig,
+        recipient: str,
+        subject: str,
+        html_body: str,
+        text_body: str,
+    ) -> tuple[bool, str]:
+        """
+        Sends a multipart HTML/text alternative email.
+        """
+        config = self._resolve_config(settings)
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = f"{config.sender_name} <{config.smtp_username}>"
+        message["To"] = recipient
 
-            message["Subject"] = subject
+        message.set_content(text_body)
+        message.add_alternative(html_body, subtype="html")
 
-            message["From"] = (
-                f"{settings.sender_name} "
-                f"<{settings.smtp_username}>"
-            )
-
-            message["To"] = recipient
-
-            message.set_content(body)
-
-            client = self._create_client(settings)
-
-            client.send_message(message)
-
-            client.quit()
-
-            return (
-                True,
-                "Email sent successfully.",
-            )
-
-        except Exception as exc:
-
-            try:
-                client.quit()
-            except Exception:
-                pass
-
-            return (
-                False,
-                str(exc),
-            )
+        return self._send_message(config, message)
 
 
 email_service = EmailService()

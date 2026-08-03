@@ -1,20 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from app.core.tokens import generate_secure_token
 import uuid
+from concurrent.futures import Future
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core import workspace_permissions
-from app.crud import user as user_crud
-from app.crud import workspace_members as workspace_members_crud
-from app.crud import workspace_invitation as workspace_invitation_crud
-from app.models.workspace import WorkspaceRole
-from app.models.workspace_invitation import WorkspaceInvitation, InvitationStatus
-
 from app.core.exceptions import (
     InvitationAlreadyExistsError,
     InvitationAlreadyMemberError,
@@ -25,12 +20,52 @@ from app.core.exceptions import (
     InvitationPermissionDeniedError,
     InvalidInvitationTokenError,
 )
+from app.core.tokens import generate_secure_token
 from app.core.transactions import (
     commit_and_refresh,
     rollback_and_log_error,
 )
+from app.crud import user as user_crud
+from app.crud import workspace_invitation as workspace_invitation_crud
+from app.crud import workspace_members as workspace_members_crud
+from app.models.workspace import Workspace, WorkspaceRole
+from app.models.workspace_invitation import WorkspaceInvitation, InvitationStatus
 
 logger = logging.getLogger("app.services.workspace_invitation")
+
+
+# ============================================================================
+# Private Synchronous-to-Asyncio Bridge
+# ============================================================================
+
+def _run_async(coro: Any) -> Any:
+    """
+    Safely executes an async coroutine from a synchronous thread.
+    
+    Reuses the running event loop when called from FastAPI's threadpool executor, 
+    or launches a new event loop as appropriate.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    if loop.is_running():
+        future = Future()
+
+        def callback():
+            async def wrapper():
+                try:
+                    result = await coro
+                    future.set_result(result)
+                except Exception as exc:
+                    future.set_exception(exc)
+            asyncio.create_task(wrapper())
+
+        loop.call_soon_threadsafe(callback)
+        return future.result()
+    else:
+        return asyncio.run(coro)
 
 
 # ============================================================================
@@ -99,7 +134,70 @@ def create_workspace_invitation(
 
         commit_and_refresh(db, invitation)
 
-        # Placeholder/Hook for future asynchronous email delivery integration
+        # 6. Trigger outbound email delivery via provider-agnostic NotificationDispatcher
+        try:
+            workspace = db.get(Workspace, workspace_id)
+            workspace_name = workspace.workspace_name if workspace else "Workspace"
+
+            # Resolve SMTP configuration cleanly through core SMTP parameters
+            from app.core.smtp import resolve_smtp_config
+            smtp_config = resolve_smtp_config(db, user_id=invitation.inviter_id)
+
+            # Build secure accept link
+            from app.core.config import settings as app_settings
+            frontend_host = getattr(app_settings, "FRONTEND_HOST", "http://localhost:3000")
+            accept_link = f"{frontend_host}/invitations/accept?token={invitation.token}"
+            
+            role_display = invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role)
+            expiry_str = invitation.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+            # Render HTML templates cleanly via dedicated templates package
+            from app.templates.emails.workspace_invitation import render_workspace_invitation
+            subject, html_body, text_body = render_workspace_invitation(
+                workspace_name=workspace_name,
+                role_display=role_display,
+                accept_link=accept_link,
+                expiry_str=expiry_str,
+                brand_name=app_settings.PROJECT_NAME,
+            )
+
+            # Dispatch email through the Notification Dispatcher
+            from app.services.notification.dispatcher import notification_dispatcher
+            success = _run_async(
+                notification_dispatcher.send(
+                    action_type="email",
+                    settings=smtp_config,
+                    recipient=invitation.email,
+                    title=subject,
+                    body=text_body,
+                    html_body=html_body,
+                )
+            )
+
+            if not success:
+                logger.error(
+                    "SMTP_DELIVERY_FAILURE | Recipient: %s | WorkspaceID: %s | InvitationID: %s",
+                    normalized_email,
+                    workspace_id,
+                    invitation.id,
+                )
+            else:
+                logger.info(
+                    "SMTP_DELIVERY_SUCCESS | Recipient: %s | WorkspaceID: %s | InvitationID: %s",
+                    normalized_email,
+                    workspace_id,
+                    invitation.id,
+                )
+        except Exception as email_err:
+            # Catch defensively: failures in SMTP routing are completely non-blocking
+            logger.error(
+                "SMTP_DELIVERY_CRITICAL_EXCEPTION | Recipient: %s | WorkspaceID: %s | InvitationID: %s | Error: %s",
+                normalized_email,
+                workspace_id,
+                invitation.id,
+                str(email_err),
+            )
+
         logger.info(
             "Successfully created workspace invitation. ID: %s, Workspace: %s, Recipient: %s",
             invitation.id,

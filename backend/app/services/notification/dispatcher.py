@@ -8,10 +8,14 @@ Webhooks, SMS, etc.) through a provider-agnostic registry.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.services.notification.base import NotificationProvider
 from app.services.notification.email import email_notification_provider
 from app.models.email_settings import EmailSettings
+
+if TYPE_CHECKING:
+    from app.core.smtp import SMTPConfig
 
 logger = logging.getLogger("app.services.notification.dispatcher")
 
@@ -63,10 +67,11 @@ class NotificationDispatcher:
         self,
         *,
         action_type: str,
-        settings: EmailSettings,
+        settings: EmailSettings | SMTPConfig,
         recipient: str,
         title: str,
         body: str,
+        html_body: str | None = None,
     ) -> bool:
         """
         Dispatch a notification using the requested provider.
@@ -96,6 +101,7 @@ class NotificationDispatcher:
                 recipient=recipient,
                 title=title,
                 body=body,
+                html_body=html_body,
             )
 
             if success:
