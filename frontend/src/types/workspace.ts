@@ -62,3 +62,57 @@ export type WorkspaceCreate = Omit<
   Workspace,
   "id" | "user_id" | "created_at" | "updated_at"
 >;
+
+
+// ============================================================================
+// Memberships & Invitations (Sprint 2 Extensions)
+// ============================================================================
+
+export type WorkspaceRole = "OWNER" | "MANAGER" | "CONTRIBUTOR" | "VIEWER";
+
+export type InvitationStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "REVOKED";
+
+export interface WorkspaceUser {
+  id: string;
+  email: string;
+  is_active: boolean;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  role: WorkspaceRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user?: WorkspaceUser;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  inviter_id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: InvitationStatus;
+  expires_at: string;
+  accepted_at: string | null;
+  rejected_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceInvitationCreate {
+  email: string;
+  role: WorkspaceRole;
+}
+
+export interface WorkspaceInvitationTokenRequest {
+  token: string;
+}
+
+export interface WorkspaceInvitationList {
+  invitations: WorkspaceInvitation[];
+}
