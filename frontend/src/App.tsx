@@ -11,6 +11,7 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { Assistant } from "@/pages/Assistant/Assistant";
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
+import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
 import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
 import { NotFound } from "@/pages/NotFound";
@@ -25,17 +26,30 @@ import { PublicRoute } from "@/routes/PublicRoute";
 import { ROUTES } from "@/constants/routes";
 
 export default function App() {
-
   return (
     <ErrorBoundary>
-      <Toaster position="top-right" richColors closeButton duration={4000} />
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        duration={4000}
+      />
 
       <BrowserRouter>
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
-            {/* ===========================
+
+            {/* ======================================
+                Invitation Acceptance (PUBLIC)
+            ======================================= */}
+            <Route
+              path={ROUTES.INVITATION_ACCEPT}
+              element={<InvitationAcceptPage />}
+            />
+
+            {/* ======================================
                 Public Routes
-            =========================== */}
+            ======================================= */}
             <Route
               element={
                 <PublicRoute>
@@ -43,13 +57,20 @@ export default function App() {
                 </PublicRoute>
               }
             >
-              <Route path={ROUTES.LOGIN} element={<Login />} />
-              <Route path={ROUTES.REGISTER} element={<Register />} />
+              <Route
+                path={ROUTES.LOGIN}
+                element={<Login />}
+              />
+
+              <Route
+                path={ROUTES.REGISTER}
+                element={<Register />}
+              />
             </Route>
 
-            {/* ===========================
+            {/* ======================================
                 Protected Routes
-            =========================== */}
+            ======================================= */}
             <Route
               element={
                 <PrivateRoute>
@@ -57,22 +78,50 @@ export default function App() {
                 </PrivateRoute>
               }
             >
-              <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
-              <Route path={ROUTES.WORK_ITEMS} element={<WorkItems />} />
+              <Route
+                path={ROUTES.DASHBOARD}
+                element={<Dashboard />}
+              />
+
+              <Route
+                path={ROUTES.WORK_ITEMS}
+                element={<WorkItems />}
+              />
+
               <Route
                 path={ROUTES.WORK_ITEM_DETAILS}
                 element={<WorkItemDetails />}
               />
-              <Route path={ROUTES.ASSISTANT} element={<Assistant />} />
-              <Route path={ROUTES.AUTOMATION} element={<Automation />} />
-              <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
-              <Route path={ROUTES.SETTINGS} element={<Settings />} />
+
+              <Route
+                path={ROUTES.ASSISTANT}
+                element={<Assistant />}
+              />
+
+              <Route
+                path={ROUTES.AUTOMATION}
+                element={<Automation />}
+              />
+
+              <Route
+                path={ROUTES.NOTIFICATIONS}
+                element={<Notifications />}
+              />
+
+              <Route
+                path={ROUTES.SETTINGS}
+                element={<Settings />}
+              />
             </Route>
 
-            {/* ===========================
+            {/* ======================================
                 404
-            =========================== */}
-            <Route path={ROUTES.NOT_FOUND} element={<NotFound />} />
+            ======================================= */}
+            <Route
+              path={ROUTES.NOT_FOUND}
+              element={<NotFound />}
+            />
+
           </Routes>
         </Suspense>
       </BrowserRouter>
