@@ -46,14 +46,9 @@ def create_workspace_invitation(
 ) -> WorkspaceInvitation:
     """
     Orchestrates the creation of a workspace invitation.
-    
-    Performs email normalization, business validations (inviter active status, 
-    invite authority, recipient current membership, duplicate pending invitations), 
-    secure token generation, and transaction execution.
     """
     normalized_email = email.strip().lower()
 
-    # 1. Validate inviter identity and authorization permissions
     inviter_membership = workspace_members_crud.get_membership(
         db, user_id=inviter_id, workspace_id=workspace_id
     )
@@ -63,7 +58,6 @@ def create_workspace_invitation(
     if not workspace_permissions.can_invite_members(inviter_membership.role):
         raise InvitationPermissionDeniedError("Inviter does not possess permissions to invite members.")
 
-    # 2. Prevent inviting a user who is already an active member of the workspace
     user = user_crud.get_user_by_email(db, email=normalized_email)
     if user:
         is_member = workspace_members_crud.membership_exists(
@@ -73,18 +67,15 @@ def create_workspace_invitation(
             raise InvitationAlreadyMemberError("The recipient is already a member of this workspace.")
 
     try:
-        # 3. Handle duplicates: revoke any existing active pending invitation for this recipient
         existing_invite = workspace_invitation_crud.get_pending_invitation(
             db, workspace_id=workspace_id, email=normalized_email
         )
         if existing_invite:
             workspace_invitation_crud.mark_invitation_revoked(db, invitation=existing_invite)
 
-        # 4. Generate cryptographically secure invitation token and calculate expiration
         token = generate_secure_token()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
-        # 5. Persist invitation record
         invitation = workspace_invitation_crud.create_invitation(
             db,
             workspace_id=workspace_id,
@@ -98,11 +89,10 @@ def create_workspace_invitation(
         commit_and_refresh(db, invitation)
 
         logger.info(
-            "Successfully created workspace invitation. ID: %s, Workspace: %s, Recipient: %s",
-            invitation.id,
-            workspace_id,
-            normalized_email,
+            "AUDIT | INVITATION_CREATED | ID: %s | Workspace: %s | Email: %s | Role: %s | Inviter: %s",
+            invitation.id, workspace_id, normalized_email, role, inviter_id
         )
+
         return invitation
 
     except Exception as e:
@@ -125,10 +115,7 @@ def revoke_workspace_invitation(
 ) -> WorkspaceInvitation:
     """
     Orchestrates revoking an active pending invitation.
-    
-    Verifies that the actor possesses appropriate member management permissions.
     """
-    # 1. Fetch invitation record
     invitation = workspace_invitation_crud.get_invitation_by_id(db, invitation_id=invitation_id)
     if not invitation:
         raise InvitationNotFoundError("Invitation not found.")
@@ -136,7 +123,6 @@ def revoke_workspace_invitation(
     if invitation.status != InvitationStatus.PENDING:
         raise InvitationAlreadyProcessedError("Only pending invitations can be revoked.")
 
-    # 2. Validate actor permissions
     actor_membership = workspace_members_crud.get_membership(
         db, user_id=actor_id, workspace_id=invitation.workspace_id
     )
@@ -147,11 +133,14 @@ def revoke_workspace_invitation(
         raise InvitationPermissionDeniedError("Actor does not possess permissions to revoke invitations.")
 
     try:
-        # 3. Transition invitation status to REVOKED
         workspace_invitation_crud.mark_invitation_revoked(db, invitation=invitation)
         commit_and_refresh(db, invitation)
 
-        logger.info("Successfully revoked workspace invitation ID: %s", invitation_id)
+        logger.info(
+            "AUDIT | INVITATION_REVOKED | ID: %s | Actor: %s",
+            invitation_id, actor_id
+        )
+
         return invitation
 
     except Exception as e:
@@ -174,16 +163,11 @@ def resend_workspace_invitation(
 ) -> WorkspaceInvitation:
     """
     Resends an invitation by ID.
-    
-    Handles duplicates idempotently by revoking the old record (even if pending) 
-    and generating a fresh pending invitation with a new secure token.
     """
-    # 1. Fetch original invitation
     invitation = workspace_invitation_crud.get_invitation_by_id(db, invitation_id=invitation_id)
     if not invitation:
         raise InvitationNotFoundError("Original invitation not found.")
 
-    # 2. Validate actor membership and permissions
     actor_membership = workspace_members_crud.get_membership(
         db, user_id=actor_id, workspace_id=invitation.workspace_id
     )
@@ -193,7 +177,6 @@ def resend_workspace_invitation(
     if not workspace_permissions.can_invite_members(actor_membership.role):
         raise InvitationPermissionDeniedError("Actor does not possess permissions to invite members.")
 
-    # 3. Re-delegate to create_workspace_invitation which safely revokes the old one and handles transaction
     return create_workspace_invitation(
         db,
         workspace_id=invitation.workspace_id,
@@ -211,23 +194,16 @@ def accept_workspace_invitation(
 ) -> WorkspaceInvitation:
     """
     Accepts an invitation using a secure token.
-    
-    Verifies that the invitation is valid and not expired, maps the recipient 
-    email to an existing active User account, registers the user in the workspace_members 
-    table, and transitions the invitation status to ACCEPTED.
     """
     try:
-        # 1. Validate the secure token and check for expiration
         invitation = validate_invitation_token(db, token=token)
 
-        # 2. Retrieve corresponding user account
         user = user_crud.get_user_by_email(db, email=invitation.email)
         if not user or not user.is_active:
             raise InvitationPermissionDeniedError(
                 "An active user account matching the invitation email is required to accept."
             )
 
-        # 3. Register user as a member of the workspace (or idempotently ignore if already active)
         workspace_members_crud.create_membership(
             db,
             user_id=user.id,
@@ -236,17 +212,14 @@ def accept_workspace_invitation(
             is_active=True,
         )
 
-        # 4. Transition invitation status to ACCEPTED
         workspace_invitation_crud.mark_invitation_accepted(db, invitation=invitation)
-
         commit_and_refresh(db, invitation)
 
         logger.info(
-            "Successfully accepted workspace invitation ID: %s. User %s joined workspace %s",
-            invitation.id,
-            user.id,
-            invitation.workspace_id,
+            "AUDIT | INVITATION_ACCEPTED | ID: %s | Workspace: %s | User: %s | Email: %s",
+            invitation.id, invitation.workspace_id, user.id, invitation.email
         )
+
         return invitation
 
     except Exception as e:
@@ -268,14 +241,15 @@ def reject_workspace_invitation(
     Validates the secure token and transitions the invitation status to REJECTED.
     """
     try:
-        # 1. Validate token state and expiration
         invitation = validate_invitation_token(db, token=token)
-
-        # 2. Transition status to REJECTED
         workspace_invitation_crud.mark_invitation_rejected(db, invitation=invitation)
         commit_and_refresh(db, invitation)
 
-        logger.info("Successfully rejected workspace invitation ID: %s", invitation.id)
+        logger.info(
+            "AUDIT | INVITATION_REJECTED | ID: %s | Workspace: %s | Email: %s",
+            invitation.id, invitation.workspace_id, invitation.email
+        )
+
         return invitation
 
     except Exception as e:
@@ -288,6 +262,36 @@ def reject_workspace_invitation(
         )
 
 
+def preview_workspace_invitation(
+    db: Session,
+    *,
+    token: str,
+) -> dict:
+    """
+    Safely resolves and previews invitation parameters without mutating states.
+    """
+    invitation = workspace_invitation_crud.get_invitation_by_token(db, token=token)
+    if not invitation:
+        raise InvitationNotFoundError("The invitation link is invalid or has expired.")
+
+    if invitation.status != InvitationStatus.PENDING:
+        raise InvitationAlreadyProcessedError("This invitation has already been processed.")
+
+    if invitation.expires_at <= datetime.now(timezone.utc):
+        raise InvitationExpiredError("This invitation has expired.")
+
+    workspace = db.get(Workspace, invitation.workspace_id)
+    inviter_user = db.get(User, invitation.inviter_id)
+
+    return {
+        "workspace_name": workspace.workspace_name if workspace else "Workspace",
+        "inviter_email": inviter_user.email if inviter_user else "Team Member",
+        "invited_email": invitation.email,
+        "role": invitation.role,
+        "expires_at": invitation.expires_at,
+    }
+
+
 def expire_workspace_stale_invitations(
     db: Session,
     *,
@@ -295,8 +299,6 @@ def expire_workspace_stale_invitations(
 ) -> int:
     """
     Scans and transitions expired pending invitations inside a workspace to EXPIRED.
-    
-    Returns the count of updated invitations.
     """
     expired_count = 0
     try:
@@ -338,8 +340,6 @@ def get_workspace_invitations(
 ) -> list[WorkspaceInvitation]:
     """
     Retrieves all invitations associated with a given workspace.
-    
-    Enforces active membership check on the requesting actor.
     """
     actor_membership = workspace_members_crud.get_membership(
         db, user_id=actor_id, workspace_id=workspace_id
@@ -358,8 +358,6 @@ def get_pending_workspace_invitations(
 ) -> list[WorkspaceInvitation]:
     """
     Retrieves all pending invitations associated with a given workspace.
-    
-    Enforces active membership check on the requesting actor.
     """
     actor_membership = workspace_members_crud.get_membership(
         db, user_id=actor_id, workspace_id=workspace_id
@@ -377,8 +375,6 @@ def validate_invitation_token(
 ) -> WorkspaceInvitation:
     """
     Validates the active state and expiration of an invitation secure token.
-    
-    If the token has expired, transition status to EXPIRED and commit transaction.
     """
     invitation = workspace_invitation_crud.get_invitation_by_token(db, token=token)
     if not invitation or invitation.status != InvitationStatus.PENDING:

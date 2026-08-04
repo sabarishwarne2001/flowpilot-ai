@@ -3,16 +3,16 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app import crud
 from app.api import deps
-from app.core import workspace_permissions
-from app.crud import workspace_members
 from app.models.user import User
-from app.models.workspace import Workspace
-from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
+from app.models.workspace import Workspace, WorkspaceRole, WorkspaceMember
+from app.models.workspace_invitation import WorkspaceInvitation, InvitationStatus
+from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate
 from app.schemas.workspace_member import WorkspaceMemberResponse
 from app.schemas.workspace_invitation import (
     WorkspaceInvitationCreate,
@@ -21,7 +21,9 @@ from app.schemas.workspace_invitation import (
     WorkspaceInvitationTokenRequest,
 )
 from app.services import workspace_invitation as workspace_invitation_service
+from app.services import workspace_service
 from app.services.notification_service import notification_service
+from app.core.exceptions import WorkspaceMemberError
 
 logger = logging.getLogger("app.api.v1.workspace")
 
@@ -30,143 +32,199 @@ router = APIRouter(
 )
 
 
-def _get_user_workspace(db: Session, user_id: uuid.UUID) -> Workspace:
+def _get_user_workspace_member(db: Session, user_id: uuid.UUID) -> WorkspaceMember:
     """
-    Private router helper to resolve the active workspace using legacy ownership.
-    Reduces duplicated 404 boilerplate across endpoints until Sprint 3.
+    Resolves active workspace membership directly from user context.
     """
-    workspace = crud.get_workspace(db, user_id=user_id)
-    if workspace is None:
+    stmt = select(WorkspaceMember).where(
+        WorkspaceMember.user_id == user_id,
+        WorkspaceMember.is_active == True,
+    )
+    membership = db.execute(stmt).scalar_one_or_none()
+    if membership is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not configured.",
+            detail="Workspace not configured. Please complete onboarding.",
         )
-    return workspace
+    return membership
 
 
 # ============================================================================
-# Get Workspace
+# Get Workspace / Onboarding Endpoint
 # ============================================================================
 
 @router.get(
     "",
     response_model=WorkspaceResponse,
     summary="Get Active Workspace",
-    description="Retrieves active workspace details matching the authenticated user profile using legacy ownership lookup constraints."
+    description="Retrieves the active workspace. Returns 204 No Content if no workspace is initialized, enabling non-blocking onboarding."
 )
 async def get_workspace(
+    response: Response,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-) -> WorkspaceResponse:
-    return _get_user_workspace(db, current_user.id)
+) -> Any:
+    workspace = crud.get_workspace(db, user_id=current_user.id)
+    if workspace is None:
+        # Standardize 204 No Content return schema bypassing pydantic serialization
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return workspace
 
 
 @router.get(
     "/public",
     response_model=WorkspaceResponse,
     summary="Get Public Workspace Branding",
-    description="Returns public landing-page branding and logo URLs. This route intentionally does not require authentication."
 )
 async def get_public_workspace(
     db: Session = Depends(deps.get_db),
 ) -> WorkspaceResponse:
     workspace = crud.get_first_workspace(db)
-
     if workspace is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workspace not configured.",
         )
-
     return workspace
 
 
 # ============================================================================
-# Create / Update
+# Create / Update (Transactional Services & RBAC Guards)
 # ============================================================================
 
 @router.put(
     "",
     response_model=WorkspaceResponse,
-    summary="Create or Update Workspace",
-    description="Idempotently creates or updates the active workspace. Automatically synchronizes database many-to-many OWNER memberships."
+    summary="Create or Update Workspace Settings",
+    description="Transactional onboarding and updating endpoint. Enforces that only OWNER/MANAGER may modify settings."
 )
 async def upsert_workspace(
     workspace_in: WorkspaceCreate,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> WorkspaceResponse:
-    workspace = crud.upsert_workspace(
+    workspace = crud.get_workspace(db, user_id=current_user.id)
+
+    if workspace is None:
+        # Onboard atomically
+        return workspace_service.create_new_workspace(
+            db,
+            user_id=current_user.id,
+            workspace_in=workspace_in,
+        )
+
+    # Secure modifications strictly to Owner & Manager
+    membership = _get_user_workspace_member(db, current_user.id)
+    if membership.role not in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied. Workspace administration is restricted.",
+        )
+
+    update = WorkspaceUpdate(**workspace_in.model_dump())
+    return workspace_service.update_existing_workspace(
         db,
-        user_id=current_user.id,
-        workspace_in=workspace_in,
+        workspace_id=workspace.id,
+        workspace_in=update,
     )
-    logger.info("Updated workspace for user %s.", current_user.id)
-    return workspace
 
 
 # ============================================================================
-# Memberships (Read-Only API)
+# Memberships (RBAC Protections)
 # ============================================================================
 
 @router.get(
     "/members",
     response_model=list[WorkspaceMemberResponse],
     summary="List Workspace Members",
-    description="Retrieves a complete list of workspace member accounts. The requesting actor must possess at least active Viewer authorization."
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR, WorkspaceRole.VIEWER]))]
 )
 async def list_workspace_members(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> list[WorkspaceMemberResponse]:
-    workspace = _get_user_workspace(db, current_user.id)
+    membership = _get_user_workspace_member(db, current_user.id)
+    return crud.get_workspace_members(db, workspace_id=membership.workspace_id)
 
-    membership = workspace_members.get_membership(
-        db, user_id=current_user.id, workspace_id=workspace.id
-    )
-    if not membership or not membership.is_active or not workspace_permissions.is_workspace_viewer(membership.role):
+
+@router.delete(
+    "/members/{member_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove Workspace Member",
+    description="Deletes workspace member. Enforces Owner/Manager privilege controls and prevents deleting the last active Owner."
+)
+async def remove_member(
+    member_user_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> None:
+    membership = _get_user_workspace_member(db, current_user.id)
+    
+    # If a user is deleting another user's membership, enforce Owner/Manager privileges
+    if member_user_id != current_user.id:
+        if membership.role not in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Insufficient role permissions."
+            )
+
+    try:
+        workspace_service.remove_workspace_member(
+            db,
+            workspace_id=membership.workspace_id,
+            member_user_id=member_user_id,
+        )
+    except WorkspaceMemberError as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Active membership required.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
 
-    return workspace_members.get_workspace_members(db, workspace_id=workspace.id)
+
+# ============================================================================
+# Workspace Invitations (RBAC Protections)
+# ============================================================================
+
+@router.get(
+    "/invitations/preview",
+    summary="Preview Invitation Details",
+    description="Resolves and returns invitation context securely based on its token. This endpoint is public."
+)
+async def preview_invitation(
+    token: str,
+    db: Session = Depends(deps.get_db),
+) -> dict:
+    return workspace_invitation_service.preview_workspace_invitation(db, token=token)
 
 
 @router.get(
-    "/members/me",
-    response_model=WorkspaceMemberResponse,
-    summary="Get My Workspace Membership",
-    description="Retrieves current membership details and role assignments of the active user profile inside the workspace."
+    "/invitations/me",
+    response_model=list[WorkspaceInvitationResponse],
+    summary="List My Received Pending Invitations",
 )
-async def get_my_membership(
+async def list_my_invitations(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-) -> WorkspaceMemberResponse:
-    workspace = _get_user_workspace(db, current_user.id)
-
-    membership = workspace_members.get_membership(
-        db, user_id=current_user.id, workspace_id=workspace.id
+) -> list[WorkspaceInvitation]:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    return list(
+        db.scalars(
+            select(WorkspaceInvitation).where(
+                WorkspaceInvitation.email == current_user.email,
+                WorkspaceInvitation.status == InvitationStatus.PENDING,
+                WorkspaceInvitation.expires_at > now,
+            )
+        ).all()
     )
-    if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Membership record not found.",
-        )
 
-    return membership
-
-
-# ============================================================================
-# Workspace Invitations
-# ============================================================================
 
 @router.post(
     "/invite",
     response_model=WorkspaceInvitationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Invite New Member",
-    description="Sends a secure email invitation to join the active workspace under a designated role. Restricted to Owners and Managers."
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def invite_user(
     invitation_in: WorkspaceInvitationCreate,
@@ -174,7 +232,8 @@ async def invite_user(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> WorkspaceInvitationResponse:
-    workspace = _get_user_workspace(db, current_user.id)
+    membership = _get_user_workspace_member(db, current_user.id)
+    workspace = membership.workspace
 
     invitation = workspace_invitation_service.create_workspace_invitation(
         db,
@@ -184,62 +243,20 @@ async def invite_user(
         role=invitation_in.role,
     )
 
-    # Dispatch outbound email notification safely as a non-blocking background task
     background_tasks.add_task(
         notification_service.send_workspace_invitation,
         db=db,
         invitation=invitation,
         workspace_name=workspace.workspace_name,
     )
-
     return invitation
-
-
-@router.get(
-    "/invitations",
-    response_model=WorkspaceInvitationListResponse,
-    summary="List Workspace Invitations",
-    description="Retrieves a complete list of invitations (all statuses) associated with the current active workspace."
-)
-async def list_invitations(
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-) -> WorkspaceInvitationListResponse:
-    workspace = _get_user_workspace(db, current_user.id)
-
-    invitations = workspace_invitation_service.get_workspace_invitations(
-        db,
-        workspace_id=workspace.id,
-        actor_id=current_user.id,
-    )
-    return WorkspaceInvitationListResponse(invitations=invitations)
-
-
-@router.get(
-    "/invitations/pending",
-    response_model=WorkspaceInvitationListResponse,
-    summary="List Pending Workspace Invitations",
-    description="Retrieves all active PENDING invitations associated with the current active workspace."
-)
-async def list_pending_invitations(
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-) -> WorkspaceInvitationListResponse:
-    workspace = _get_user_workspace(db, current_user.id)
-
-    invitations = workspace_invitation_service.get_pending_workspace_invitations(
-        db,
-        workspace_id=workspace.id,
-        actor_id=current_user.id,
-    )
-    return WorkspaceInvitationListResponse(invitations=invitations)
 
 
 @router.post(
     "/invitations/{invitation_id}/revoke",
     response_model=WorkspaceInvitationResponse,
     summary="Revoke Workspace Invitation",
-    description="Cancels and revokes an active pending invitation. The recipient will no longer be able to use the associated secure token."
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def revoke_invitation(
     invitation_id: uuid.UUID,
@@ -257,7 +274,7 @@ async def revoke_invitation(
     "/invitations/{invitation_id}/resend",
     response_model=WorkspaceInvitationResponse,
     summary="Resend Workspace Invitation",
-    description="Resends a pending or expired invitation by revoking the old record and issuing a fresh token with updated expiry constraints."
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def resend_invitation(
     invitation_id: uuid.UUID,
@@ -271,16 +288,13 @@ async def resend_invitation(
         actor_id=current_user.id,
     )
 
-    workspace = _get_user_workspace(db, current_user.id)
-
-    # Dispatch outbound email notification safely as a non-blocking background task
+    membership = _get_user_workspace_member(db, current_user.id)
     background_tasks.add_task(
         notification_service.send_workspace_invitation,
         db=db,
         invitation=invitation,
-        workspace_name=workspace.workspace_name,
+        workspace_name=membership.workspace.workspace_name,
     )
-
     return invitation
 
 
@@ -288,7 +302,6 @@ async def resend_invitation(
     "/invitations/accept",
     response_model=WorkspaceInvitationResponse,
     summary="Accept Workspace Invitation",
-    description="Validates a secure URL-safe token, associates the recipient email profile, and registers a new active workspace member."
 )
 async def accept_invitation(
     request: WorkspaceInvitationTokenRequest,
@@ -304,7 +317,6 @@ async def accept_invitation(
     "/invitations/reject",
     response_model=WorkspaceInvitationResponse,
     summary="Reject Workspace Invitation",
-    description="Rejects a workspace membership invitation using its secure token, transitioning status to REJECTED."
 )
 async def reject_invitation(
     request: WorkspaceInvitationTokenRequest,

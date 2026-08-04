@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -12,8 +12,6 @@ import {
 } from "@/services/api/aiSettings";
 
 import { ApiError } from "@/services/api/client";
-
-import { useState } from "react";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,8 +25,10 @@ import {
 } from "@/schemas/aiSettings";
 
 import type { AIConnectionTestResponse } from "@/types/aiConnectionTest";
+import { getMyMembership } from "@/services/api/workspace";
 
 export const AISettings: React.FC = () => {
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -80,6 +80,15 @@ export const AISettings: React.FC = () => {
     queryFn: getAvailableProviders,
   });
 
+  // Query workspace membership role to secure controls
+  const { data: myMembership } = useQuery({
+    queryKey: ["workspace_membership_me"],
+    queryFn: getMyMembership,
+    retry: false,
+  });
+
+  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+
   const [connectionResult, setConnectionResult] =
     useState<AIConnectionTestResponse | null>(null);
 
@@ -121,8 +130,9 @@ export const AISettings: React.FC = () => {
   const { mutateAsync: saveAISettings, isPending: isSaving } = useMutation({
     mutationFn: updateAISettings,
 
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("AI settings saved successfully.");
+      await queryClient.invalidateQueries({ queryKey: ["ai-settings"] });
     },
 
     onError: (error: unknown) => {
@@ -283,8 +293,9 @@ export const AISettings: React.FC = () => {
 
             <select
               id="provider"
+              disabled={!canManageSettings}
               {...register("provider")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             >
               {availableProviders?.providers.map((provider) => (
                 <option
@@ -318,8 +329,9 @@ export const AISettings: React.FC = () => {
 
             <select
               id="model"
+              disabled={!canManageSettings}
               {...register("model")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             >
               {(
                 supportedModels?.[
@@ -354,10 +366,11 @@ export const AISettings: React.FC = () => {
                 step="0.1"
                 min="0"
                 max="2"
+                disabled={!canManageSettings}
                 {...register("temperature", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.temperature && (
@@ -382,10 +395,11 @@ export const AISettings: React.FC = () => {
                 step="0.1"
                 min="0"
                 max="1"
+                disabled={!canManageSettings}
                 {...register("top_p", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.top_p && (
@@ -407,10 +421,11 @@ export const AISettings: React.FC = () => {
               <input
                 id="max_output_tokens"
                 type="number"
+                disabled={!canManageSettings}
                 {...register("max_output_tokens", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.max_output_tokens && (
@@ -435,10 +450,11 @@ export const AISettings: React.FC = () => {
                 step="0.1"
                 min="0"
                 max="2"
+                disabled={!canManageSettings}
                 {...register("frequency_penalty", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.frequency_penalty && (
@@ -463,10 +479,11 @@ export const AISettings: React.FC = () => {
                 step="0.1"
                 min="0"
                 max="2"
+                disabled={!canManageSettings}
                 {...register("presence_penalty", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.presence_penalty && (
@@ -493,10 +510,11 @@ export const AISettings: React.FC = () => {
                 type="number"
                 step="0.000001"
                 min="0"
+                disabled={!canManageSettings}
                 {...register("input_cost_per_1k_tokens", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.input_cost_per_1k_tokens && (
@@ -523,10 +541,11 @@ export const AISettings: React.FC = () => {
                 type="number"
                 step="0.000001"
                 min="0"
+                disabled={!canManageSettings}
                 {...register("output_cost_per_1k_tokens", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.output_cost_per_1k_tokens && (
@@ -551,8 +570,9 @@ export const AISettings: React.FC = () => {
               <input
                 id="system_prompt_version"
                 type="text"
+                disabled={!canManageSettings}
                 {...register("system_prompt_version")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.system_prompt_version && (
@@ -574,8 +594,9 @@ export const AISettings: React.FC = () => {
               <input
                 id="prompt_version"
                 type="text"
+                disabled={!canManageSettings}
                 {...register("prompt_version")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.prompt_version && (
@@ -603,8 +624,9 @@ export const AISettings: React.FC = () => {
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("enable_token_tracking")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
 
@@ -620,26 +642,29 @@ export const AISettings: React.FC = () => {
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("enable_streaming")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
           </div>
 
           {/* Save Button */}
           <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={isTestingConnection}
-              className="rounded-lg border border-border px-5 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-            >
-              {isTestingConnection ? "Testing..." : "Test Connection"}
-            </button>
+            {canManageSettings && (
+              <button
+                type="button"
+                onClick={handleTestConnection}
+                disabled={isTestingConnection}
+                className="rounded-lg border border-border px-5 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+              >
+                {isTestingConnection ? "Testing..." : "Test Connection"}
+              </button>
+            )}
 
             <button
               type="submit"
-              disabled={!isDirty || isSaving}
+              disabled={!isDirty || isSaving || !canManageSettings}
               className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save AI Settings"}

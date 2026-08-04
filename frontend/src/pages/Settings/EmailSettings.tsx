@@ -21,6 +21,7 @@ import {
   emailSettingsSchema,
   type EmailSettingsFormData,
 } from "@/schemas/emailSettings";
+import { getMyMembership } from "@/services/api/workspace";
 
 export const EmailSettings: React.FC = () => {
   const {
@@ -41,16 +42,23 @@ export const EmailSettings: React.FC = () => {
   });
 
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
-
   const [testRecipient, setTestRecipient] = useState("");
 
   const { workspace } = useWorkspace();
 
   const { data: emailSettings, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["email-settings"],
-
     queryFn: getEmailSettings,
   });
+
+  // Query workspace membership role to secure controls
+  const { data: myMembership } = useQuery({
+    queryKey: ["workspace_membership_me"],
+    queryFn: getMyMembership,
+    retry: false,
+  });
+
+  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
 
   useEffect(() => {
     if (!emailSettings) {
@@ -73,8 +81,9 @@ export const EmailSettings: React.FC = () => {
   const { mutateAsync: saveSettings, isPending: isSaving } = useMutation({
     mutationFn: saveEmailSettings,
 
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Email settings saved successfully.");
+      await queryClient.invalidateQueries({ queryKey: ["email-settings"] });
     },
 
     onError: (error: unknown) => {
@@ -114,7 +123,6 @@ export const EmailSettings: React.FC = () => {
     });
 
     setIsTestDialogOpen(false);
-
     setTestRecipient("");
   };
 
@@ -161,7 +169,6 @@ export const EmailSettings: React.FC = () => {
 
         <p className="mt-2 text-sm text-muted-foreground">
           Configure SMTP settings used to send automation emails.
-          emails.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
@@ -177,9 +184,10 @@ export const EmailSettings: React.FC = () => {
             <input
               id="sender_name"
               type="text"
+              disabled={!canManageSettings}
               placeholder={workspace?.workspace_name ?? ""}
               {...register("sender_name")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
 
             {errors.sender_name && (
@@ -201,9 +209,10 @@ export const EmailSettings: React.FC = () => {
             <input
               id="smtp_host"
               type="text"
+              disabled={!canManageSettings}
               placeholder="smtp.gmail.com"
               {...register("smtp_host")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
 
             {errors.smtp_host && (
@@ -226,8 +235,9 @@ export const EmailSettings: React.FC = () => {
               <input
                 id="smtp_port"
                 type="number"
+                disabled={!canManageSettings}
                 {...register("smtp_port", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.smtp_port && (
@@ -248,8 +258,9 @@ export const EmailSettings: React.FC = () => {
 
               <select
                 id="encryption"
+                disabled={!canManageSettings}
                 {...register("encryption")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
                 <option value="TLS">TLS</option>
                 <option value="SSL">SSL</option>
@@ -276,9 +287,10 @@ export const EmailSettings: React.FC = () => {
             <input
               id="smtp_username"
               type="email"
+              disabled={!canManageSettings}
               placeholder="your-email@gmail.com"
               {...register("smtp_username")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
 
             {errors.smtp_username && (
@@ -300,9 +312,10 @@ export const EmailSettings: React.FC = () => {
             <input
               id="smtp_password"
               type="password"
+              disabled={!canManageSettings}
               placeholder="Google App Password"
               {...register("smtp_password")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
 
             {errors.smtp_password && (
@@ -315,20 +328,22 @@ export const EmailSettings: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="submit"
-              disabled={isSaving || !isDirty}
+              disabled={isSaving || !isDirty || !canManageSettings}
               className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? "Saving..." : "Save Settings"}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsTestDialogOpen(true)}
-              disabled={isSendingTest}
-              className="rounded-lg border border-border bg-card px-5 py-2 text-sm font-semibold transition-colors hover:bg-muted"
-            >
-              {isSendingTest ? "Sending..." : "Send Test Email"}
-            </button>
+            {canManageSettings && (
+              <button
+                type="button"
+                onClick={() => setIsTestDialogOpen(true)}
+                disabled={isSendingTest}
+                className="rounded-lg border border-border bg-card px-5 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+              >
+                {isSendingTest ? "Sending..." : "Send Test Email"}
+              </button>
+            )}
           </div>
         </form>
 

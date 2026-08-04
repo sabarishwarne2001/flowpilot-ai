@@ -9,6 +9,7 @@ from app.crud import (
     upsert_document_settings,
 )
 from app.models.user import User
+from app.models.workspace import WorkspaceRole
 from app.schemas.document_settings import (
     DocumentSettingsCreate,
     DocumentSettingsResponse,
@@ -20,6 +21,7 @@ router = APIRouter(tags=["Document Settings"])
 @router.get(
     "/",
     response_model=DocumentSettingsResponse,
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_document_processing_settings(
     db: Session = Depends(deps.get_db),
@@ -44,6 +46,7 @@ async def get_document_processing_settings(
 @router.put(
     "/",
     response_model=DocumentSettingsResponse,
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def update_document_processing_settings(
     settings_in: DocumentSettingsCreate,

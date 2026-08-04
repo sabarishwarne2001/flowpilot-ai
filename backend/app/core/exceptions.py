@@ -1,6 +1,21 @@
 from __future__ import annotations
 
 
+class WorkspaceError(Exception):
+    """Base exception for all workspace-related failures."""
+    pass
+
+
+class WorkspaceNotFoundError(WorkspaceError):
+    """Raised when a workspace record is missing or inactive."""
+    pass
+
+
+class WorkspaceMemberError(WorkspaceError):
+    """Raised when a membership constraint is violated (e.g. removing the last owner)."""
+    pass
+
+
 class InvitationError(Exception):
     """Base exception for all workspace invitation operations."""
     pass

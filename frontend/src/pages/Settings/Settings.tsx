@@ -1,13 +1,47 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ShieldAlert } from "lucide-react";
+
 import Workspace from "./Workspace";
 import EmailSettings from "./EmailSettings";
 import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
+import { getMyMembership } from "@/services/api/workspace";
+import LoadingScreen from "@/components/common/LoadingScreen";
+
+export const PermissionDenied: React.FC = () => {
+  return (
+    <div className="flex h-[60vh] flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+      <div className="p-4 bg-destructive/10 text-destructive rounded-full mb-4">
+        <ShieldAlert className="h-10 w-10" />
+      </div>
+      <h2 className="text-lg font-extrabold tracking-tight">Permission Denied</h2>
+      <p className="text-xs text-muted-foreground font-semibold leading-relaxed mt-2 max-w-sm">
+        You do not possess sufficient privilege levels to inspect or modify workspace settings in this role.
+      </p>
+    </div>
+  );
+};
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState<
     "workspace" | "email" | "ai" | "document"
   >("workspace");
+
+  const { data: myMembership, isLoading } = useQuery({
+    queryKey: ["workspace_membership_me"],
+    queryFn: getMyMembership,
+    retry: false,
+  });
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  // Intercept and prevent VIEWER role manual URL accesses
+  if (myMembership?.role === "VIEWER") {
+    return <PermissionDenied />;
+  }
 
   return (
     <div className="space-y-6">

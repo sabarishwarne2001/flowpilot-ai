@@ -63,7 +63,6 @@ export type WorkspaceCreate = Omit<
   "id" | "user_id" | "created_at" | "updated_at"
 >;
 
-
 // ============================================================================
 // Memberships & Invitations (Sprint 2 Extensions)
 // ============================================================================
@@ -115,4 +114,12 @@ export interface WorkspaceInvitationTokenRequest {
 
 export interface WorkspaceInvitationList {
   invitations: WorkspaceInvitation[];
+}
+
+export interface WorkspaceInvitationPreview {
+  workspace_name: string;
+  inviter_email: string;
+  invited_email: string;
+  role: WorkspaceRole;
+  expires_at: string;
 }

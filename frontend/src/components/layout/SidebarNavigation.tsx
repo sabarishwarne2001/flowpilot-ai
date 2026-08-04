@@ -1,8 +1,10 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 import { ROUTES } from "@/constants/routes";
 import { NAVIGATION_ITEMS } from "./navigation";
+import { getMyMembership } from "@/services/api/workspace";
 
 interface SidebarNavigationProps {
   readonly collapsed: boolean;
@@ -13,6 +15,23 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   collapsed,
   onNavigate,
 }) => {
+  // Query active membership role to filter visibility of settings dynamically
+  const { data: myMembership } = useQuery({
+    queryKey: ["workspace_membership_me"],
+    queryFn: getMyMembership,
+    retry: false,
+  });
+
+  const role = myMembership?.role;
+
+  // Viewers cannot inspect settings tabs
+  const filteredNavigationItems = NAVIGATION_ITEMS.filter((item) => {
+    if (item.path === ROUTES.SETTINGS && role === "VIEWER") {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <nav
       className={`
@@ -29,7 +48,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
       aria-label="Primary Navigation"
     >
       <div className="space-y-2">
-        {NAVIGATION_ITEMS.map((item) => (
+        {filteredNavigationItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

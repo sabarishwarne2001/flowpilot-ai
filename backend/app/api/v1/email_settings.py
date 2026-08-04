@@ -1,10 +1,3 @@
-"""
-Email Settings API for FlowPilot AI.
-
-Allows each authenticated user to manage their SMTP configuration
-used by Automation Rules and Notification Services.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -18,6 +11,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.models.user import User
+from app.models.workspace import WorkspaceRole
 from app.schemas.email_settings import (
     EmailSettingsCreate,
     EmailSettingsResponse,
@@ -44,6 +38,7 @@ router = APIRouter(
     "",
     response_model=EmailSettingsResponse,
     summary="Get Email Settings",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_email_settings(
     db: Session = Depends(deps.get_db),
@@ -78,6 +73,7 @@ async def get_email_settings(
     "",
     response_model=EmailSettingsResponse,
     summary="Create or Update Email Settings",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def upsert_email_settings(
     settings_in: EmailSettingsCreate,
@@ -113,6 +109,7 @@ async def upsert_email_settings(
     "/test",
     response_model=TestEmailResponse,
     summary="Send Test Email",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def test_email_settings(
     request: TestEmailRequest,

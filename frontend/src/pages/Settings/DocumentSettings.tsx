@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -20,8 +20,10 @@ import {
   documentSettingsSchema,
   type DocumentSettingsFormData,
 } from "@/schemas/documentSettings";
+import { getMyMembership } from "@/services/api/workspace";
 
 export const DocumentSettings: React.FC = () => {
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -50,6 +52,15 @@ export const DocumentSettings: React.FC = () => {
       queryFn: getDocumentSettings,
     });
 
+  // Query workspace membership role to secure controls
+  const { data: myMembership } = useQuery({
+    queryKey: ["workspace_membership_me"],
+    queryFn: getMyMembership,
+    retry: false,
+  });
+
+  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+
   useEffect(() => {
     if (!documentSettings) {
       return;
@@ -73,8 +84,9 @@ export const DocumentSettings: React.FC = () => {
     useMutation({
       mutationFn: updateDocumentSettings,
 
-      onSuccess: () => {
+      onSuccess: async () => {
         toast.success("Document settings saved successfully.");
+        await queryClient.invalidateQueries({ queryKey: ["document-settings"] });
       },
 
       onError: (error: unknown) => {
@@ -210,10 +222,11 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="chunk_size"
                 type="number"
+                disabled={!canManageSettings}
                 {...register("chunk_size", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.chunk_size && (
@@ -235,10 +248,11 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="chunk_overlap"
                 type="number"
+                disabled={!canManageSettings}
                 {...register("chunk_overlap", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.chunk_overlap && (
@@ -260,9 +274,10 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="embedding_model"
                 type="text"
+                disabled={!canManageSettings}
                 placeholder="sentence-transformers/all-MiniLM-L6-v2"
                 {...register("embedding_model")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.embedding_model && (
@@ -284,9 +299,10 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="ocr_language"
                 type="text"
+                disabled={!canManageSettings}
                 placeholder="eng"
                 {...register("ocr_language")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.ocr_language && (
@@ -308,10 +324,11 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="max_upload_size"
                 type="number"
+                disabled={!canManageSettings}
                 {...register("max_upload_size", {
                   valueAsNumber: true,
                 })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.max_upload_size && (
@@ -333,9 +350,10 @@ export const DocumentSettings: React.FC = () => {
               <input
                 id="allowed_file_types"
                 type="text"
+                disabled={!canManageSettings}
                 placeholder="pdf,png,jpg,jpeg"
                 {...register("allowed_file_types")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
 
               {errors.allowed_file_types && (
@@ -361,8 +379,9 @@ export const DocumentSettings: React.FC = () => {
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("duplicate_detection")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
 
@@ -379,8 +398,9 @@ export const DocumentSettings: React.FC = () => {
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("automatic_classification")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
 
@@ -391,14 +411,15 @@ export const DocumentSettings: React.FC = () => {
                   {renderLabel("automatic_summarization", "Automatic Summarization")}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Generate summaries automatically upon document ingestion.
+                  Generate AI summaries immediately after document processing.
                 </p>
               </div>
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("automatic_summarization")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
 
@@ -415,8 +436,9 @@ export const DocumentSettings: React.FC = () => {
 
               <input
                 type="checkbox"
+                disabled={!canManageSettings}
                 {...register("automatic_entity_extraction")}
-                className="h-5 w-5"
+                className="h-5 w-5 disabled:opacity-50"
               />
             </div>
           </div>
@@ -425,7 +447,7 @@ export const DocumentSettings: React.FC = () => {
           <div className="flex justify-end gap-3">
             <button
               type="submit"
-              disabled={!isDirty || isSaving}
+              disabled={!isDirty || isSaving || !canManageSettings}
               className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save Document Settings"}

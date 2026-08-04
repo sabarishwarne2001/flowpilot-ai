@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -11,19 +11,44 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 
-/**
- * Registration page for FlowPilot AI.
- *
- * Validates user input with React Hook Form + Zod,
- * registers a new account, then redirects users
- * to the login screen.
- */
 export const Register: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [showPassword, setShowPassword] = useState(false);
-
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Securely whitelist redirect destinations to mitigate Open Redirect vulnerabilities
+  const isValidRedirect = (path: string): boolean => {
+    if (!path) {
+      return false;
+    }
+    if (!path.startsWith("/") || path.startsWith("//")) {
+      return false;
+    }
+    const cleanPath = path.split("?")[0]?.split("#")[0] || "";
+    const allowedPrefixes = [
+      "/",
+      "/work-items",
+      "/assistant",
+      "/automation",
+      "/notifications",
+      "/profile",
+      "/settings",
+      "/account",
+      "/invitations/accept"
+    ];
+    return allowedPrefixes.some(prefix => {
+      if (prefix === "/") {
+        return cleanPath === "/";
+      }
+      return cleanPath.startsWith(prefix);
+    });
+  };
+
+  const searchParams = new URLSearchParams(location.search);
+  const redirectParam = searchParams.get("redirect");
+  const validatedRedirectParam = redirectParam && isValidRedirect(redirectParam) ? redirectParam : null;
 
   const {
     register,
@@ -40,8 +65,8 @@ export const Register: React.FC = () => {
   });
 
   const togglePassword = () => setShowPassword((value) => !value);
-
   const toggleConfirmPassword = () => setShowConfirmPassword((value) => !value);
+
   const onSubmit = async (data: RegisterInput): Promise<void> => {
     const payload = {
       email: data.email.trim(),
@@ -55,7 +80,11 @@ export const Register: React.FC = () => {
         loading: "Creating your FlowPilot account...",
 
         success: () => {
-          navigate(ROUTES.LOGIN, {
+          const loginTarget = validatedRedirectParam
+            ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}`
+            : ROUTES.LOGIN;
+
+          navigate(loginTarget, {
             replace: true,
           });
 
@@ -77,22 +106,12 @@ export const Register: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* ===========================
-          Header
-      =========================== */}
-
       <div className="select-none space-y-2">
-        <h1 className="text-2xl font-extrabold tracking-tight">
-          Create an Account
-        </h1>
-
+        <h1 className="text-2xl font-extrabold tracking-tight">Create an Account</h1>
         <p className="text-sm font-semibold leading-relaxed text-muted-foreground">
           Sign up to begin automating your business documents.
         </p>
       </div>
-      {/* ===========================
-          Registration Form
-      =========================== */}
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
@@ -102,12 +121,10 @@ export const Register: React.FC = () => {
           >
             Email Address
           </label>
-
           <input
             {...register("email")}
             id="email"
             type="email"
-            autoFocus
             autoComplete="email"
             placeholder="name@company.com"
             disabled={isSubmitting}
@@ -119,19 +136,13 @@ export const Register: React.FC = () => {
                 : "border-border hover:border-muted-foreground/30 focus:border-primary"
             }`}
           />
-
           {errors.email && (
-            <p
-              id="email-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="email-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
               {errors.email.message}
             </p>
           )}
         </div>
 
-        {/* Password */}
         <div className="space-y-1.5">
           <label
             htmlFor="password"
@@ -139,7 +150,6 @@ export const Register: React.FC = () => {
           >
             Password
           </label>
-
           <div className="relative">
             <input
               {...register("password")}
@@ -164,26 +174,16 @@ export const Register: React.FC = () => {
               aria-label={showPassword ? "Hide Password" : "Show Password"}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
             >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-
           {errors.password && (
-            <p
-              id="password-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="password-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
               {errors.password.message}
             </p>
           )}
         </div>
 
-        {/* Confirm Password */}
         <div className="space-y-1.5">
           <label
             htmlFor="confirmPassword"
@@ -191,7 +191,6 @@ export const Register: React.FC = () => {
           >
             Confirm Password
           </label>
-
           <div className="relative">
             <input
               {...register("confirmPassword")}
@@ -201,9 +200,7 @@ export const Register: React.FC = () => {
               autoComplete="new-password"
               disabled={isSubmitting}
               aria-invalid={!!errors.confirmPassword}
-              aria-describedby={
-                errors.confirmPassword ? "confirmPassword-error" : undefined
-              }
+              aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
               className={`w-full rounded-lg border bg-background py-2.5 pl-3.5 pr-11 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
                 errors.confirmPassword
                   ? "border-destructive focus:border-destructive"
@@ -215,27 +212,14 @@ export const Register: React.FC = () => {
               onClick={toggleConfirmPassword}
               disabled={isSubmitting}
               tabIndex={-1}
-              aria-label={
-                showConfirmPassword
-                  ? "Hide Confirm Password"
-                  : "Show Confirm Password"
-              }
+              aria-label={showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
             >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-
           {errors.confirmPassword && (
-            <p
-              id="confirmPassword-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="confirmPassword-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
               {errors.confirmPassword.message}
             </p>
           )}
@@ -256,15 +240,12 @@ export const Register: React.FC = () => {
           )}
         </button>
       </form>
-      {/* ===========================
-          Footer
-      =========================== */}
 
       <footer className="pt-2 text-center select-none">
         <p className="text-sm font-medium leading-none text-muted-foreground">
           Already have an account?{" "}
           <Link
-            to={ROUTES.LOGIN}
+            to={validatedRedirectParam ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}` : ROUTES.LOGIN}
             className="font-bold text-primary hover:underline"
           >
             Sign in instead

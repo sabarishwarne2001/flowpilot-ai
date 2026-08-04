@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.models.user import User
+from app.models.workspace import WorkspaceRole
 from app.services.ai_settings_service import (
     ai_settings_service,
 )
@@ -44,6 +45,7 @@ router = APIRouter(
     "",
     response_model=AISettingsResponse,
     summary="Get AI Settings",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_ai_settings(
     db: Session = Depends(deps.get_db),
@@ -78,6 +80,7 @@ async def get_ai_settings(
     "",
     response_model=AISettingsResponse,
     summary="Create or Update AI Settings",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def upsert_ai_settings(
     settings_in: AISettingsUpdate,
@@ -107,6 +110,7 @@ async def upsert_ai_settings(
 @router.get(
     "/models",
     summary="Get Supported AI Models",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_supported_models():
     """
@@ -123,6 +127,7 @@ async def get_supported_models():
     "/providers",
     response_model=AvailableProvidersResponse,
     summary="Get Available AI Providers",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_available_providers():
     """
@@ -136,6 +141,7 @@ async def get_available_providers():
     "/test",
     response_model=AIConnectionTestResponse,
     summary="Test AI Configuration",
+    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def test_ai_configuration(
     settings_in: AISettingsUpdate,
