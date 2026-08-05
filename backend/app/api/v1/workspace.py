@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response
 from sqlalchemy.orm import Session
@@ -66,7 +67,6 @@ async def get_workspace(
 ) -> Any:
     workspace = crud.get_workspace(db, user_id=current_user.id)
     if workspace is None:
-        # Standardize 204 No Content return schema bypassing pydantic serialization
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return workspace
 
@@ -106,7 +106,6 @@ async def upsert_workspace(
     workspace = crud.get_workspace(db, user_id=current_user.id)
 
     if workspace is None:
-        # Onboard atomically
         return workspace_service.create_new_workspace(
             db,
             user_id=current_user.id,
@@ -151,7 +150,7 @@ async def list_workspace_members(
     "/members/{member_user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove Workspace Member",
-    description="Deletes workspace member. Enforces Owner/Manager privilege controls and prevents deleting the last active Owner."
+    description="Deletes a workspace member. Enforces Owner/Manager privilege controls, role hierarchy, and prevents deleting the last active Owner."
 )
 async def remove_member(
     member_user_id: uuid.UUID,
@@ -160,12 +159,42 @@ async def remove_member(
 ) -> None:
     membership = _get_user_workspace_member(db, current_user.id)
     
-    # If a user is deleting another user's membership, enforce Owner/Manager privileges
-    if member_user_id != current_user.id:
+    # 1. Self-removal (Leaving the workspace)
+    if member_user_id == current_user.id:
+        target_membership = membership
+    else:
+        # 2. Administrative removal: Only Owners or Managers can remove other members
         if membership.role not in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Insufficient role permissions."
+            )
+        target_membership = crud.workspace_members_crud.get_membership(
+            db, user_id=member_user_id, workspace_id=membership.workspace_id
+        )
+        if not target_membership:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target member not found in this workspace."
+            )
+        
+        # Enforce role hierarchy: Managers cannot remove Owners or other Managers
+        if membership.role == WorkspaceRole.MANAGER and target_membership.role in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Managers cannot remove Owners or other Managers."
+            )
+
+    # If the target being removed is an OWNER, verify they are not the last active Owner
+    if target_membership.role == WorkspaceRole.OWNER:
+        active_owners = [
+            m for m in crud.workspace_members_crud.get_workspace_members(db, workspace_id=membership.workspace_id)
+            if m.role == WorkspaceRole.OWNER and m.is_active
+        ]
+        if len(active_owners) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove the last active Owner. You must promote another member to Owner first."
             )
 
     try:
@@ -195,28 +224,6 @@ async def preview_invitation(
     db: Session = Depends(deps.get_db),
 ) -> dict:
     return workspace_invitation_service.preview_workspace_invitation(db, token=token)
-
-
-@router.get(
-    "/invitations/me",
-    response_model=list[WorkspaceInvitationResponse],
-    summary="List My Received Pending Invitations",
-)
-async def list_my_invitations(
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-) -> list[WorkspaceInvitation]:
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    return list(
-        db.scalars(
-            select(WorkspaceInvitation).where(
-                WorkspaceInvitation.email == current_user.email,
-                WorkspaceInvitation.status == InvitationStatus.PENDING,
-                WorkspaceInvitation.expires_at > now,
-            )
-        ).all()
-    )
 
 
 @router.post(

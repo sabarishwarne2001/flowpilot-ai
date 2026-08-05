@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -10,7 +9,6 @@ import {
 } from "@/services/api/emailSettings";
 
 import TestEmailDialog from "@/components/settings/TestEmailDialog";
-
 import { ApiError } from "@/services/api/client";
 
 import { useForm } from "react-hook-form";
@@ -24,6 +22,7 @@ import {
 import { getMyMembership } from "@/services/api/workspace";
 
 export const EmailSettings: React.FC = () => {
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -70,45 +69,36 @@ export const EmailSettings: React.FC = () => {
       smtp_host: emailSettings.smtp_host,
       smtp_port: emailSettings.smtp_port,
       smtp_username: emailSettings.smtp_username,
-
-      // Password is intentionally left blank.
       smtp_password: "",
-
       encryption: emailSettings.encryption,
     });
   }, [emailSettings, reset]);
 
   const { mutateAsync: saveSettings, isPending: isSaving } = useMutation({
     mutationFn: saveEmailSettings,
-
     onSuccess: async () => {
       toast.success("Email settings saved successfully.");
       await queryClient.invalidateQueries({ queryKey: ["email-settings"] });
     },
-
     onError: (error: unknown) => {
       if (error instanceof ApiError) {
         toast.error(error.message);
         return;
       }
-
       toast.error("Failed to save email settings.");
     },
   });
 
   const { mutateAsync: sendTestEmail, isPending: isSendingTest } = useMutation({
     mutationFn: testEmailSettings,
-
     onSuccess: () => {
       toast.success("Test email sent successfully.");
     },
-
     onError: (error: unknown) => {
       if (error instanceof ApiError) {
         toast.error(error.message);
         return;
       }
-
       toast.error("Failed to send test email.");
     },
   });
@@ -131,30 +121,15 @@ export const EmailSettings: React.FC = () => {
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="space-y-6 animate-pulse">
           <div className="h-8 w-56 rounded bg-muted" />
-
           <div className="h-4 w-80 rounded bg-muted" />
-
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
               <div className="h-3 w-24 rounded bg-muted" />
               <div className="h-10 rounded bg-muted" />
             </div>
-
             <div className="space-y-2">
               <div className="h-3 w-24 rounded bg-muted" />
               <div className="h-10 rounded bg-muted" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="h-3 w-24 rounded bg-muted" />
-                <div className="h-10 rounded bg-muted" />
-              </div>
-
-              <div className="space-y-2">
-                <div className="h-3 w-24 rounded bg-muted" />
-                <div className="h-10 rounded bg-muted" />
-              </div>
             </div>
           </div>
         </div>
@@ -166,21 +141,15 @@ export const EmailSettings: React.FC = () => {
     <div className="space-y-6">
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold">Email Settings</h1>
-
         <p className="mt-2 text-sm text-muted-foreground">
           Configure SMTP settings used to send automation emails.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
-          {/* Sender Name */}
           <div className="space-y-2">
-            <label
-              htmlFor="sender_name"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="sender_name" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Sender Name
             </label>
-
             <input
               id="sender_name"
               type="text"
@@ -189,23 +158,15 @@ export const EmailSettings: React.FC = () => {
               {...register("sender_name")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
-
             {errors.sender_name && (
-              <p className="text-xs text-destructive">
-                {errors.sender_name.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.sender_name.message}</p>
             )}
           </div>
 
-          {/* SMTP Host */}
           <div className="space-y-2">
-            <label
-              htmlFor="smtp_host"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="smtp_host" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               SMTP Host
             </label>
-
             <input
               id="smtp_host"
               type="text"
@@ -214,24 +175,16 @@ export const EmailSettings: React.FC = () => {
               {...register("smtp_host")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
-
             {errors.smtp_host && (
-              <p className="text-xs text-destructive">
-                {errors.smtp_host.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.smtp_host.message}</p>
             )}
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* SMTP Port */}
             <div className="space-y-2">
-              <label
-                htmlFor="smtp_port"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="smtp_port" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 SMTP Port
               </label>
-
               <input
                 id="smtp_port"
                 type="number"
@@ -239,23 +192,15 @@ export const EmailSettings: React.FC = () => {
                 {...register("smtp_port", { valueAsNumber: true })}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
-
               {errors.smtp_port && (
-                <p className="text-xs text-destructive">
-                  {errors.smtp_port.message}
-                </p>
+                <p className="text-xs text-destructive">{errors.smtp_port.message}</p>
               )}
             </div>
 
-            {/* Encryption */}
             <div className="space-y-2">
-              <label
-                htmlFor="encryption"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="encryption" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Encryption
               </label>
-
               <select
                 id="encryption"
                 disabled={!canManageSettings}
@@ -266,24 +211,16 @@ export const EmailSettings: React.FC = () => {
                 <option value="SSL">SSL</option>
                 <option value="NONE">None</option>
               </select>
-
               {errors.encryption && (
-                <p className="text-xs text-destructive">
-                  {errors.encryption.message}
-                </p>
+                <p className="text-xs text-destructive">{errors.encryption.message}</p>
               )}
             </div>
           </div>
 
-          {/* SMTP Username */}
           <div className="space-y-2">
-            <label
-              htmlFor="smtp_username"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="smtp_username" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               SMTP Username
             </label>
-
             <input
               id="smtp_username"
               type="email"
@@ -292,23 +229,15 @@ export const EmailSettings: React.FC = () => {
               {...register("smtp_username")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
-
             {errors.smtp_username && (
-              <p className="text-xs text-destructive">
-                {errors.smtp_username.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.smtp_username.message}</p>
             )}
           </div>
 
-          {/* SMTP Password */}
           <div className="space-y-2">
-            <label
-              htmlFor="smtp_password"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="smtp_password" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               SMTP Password
             </label>
-
             <input
               id="smtp_password"
               type="password"
@@ -317,11 +246,8 @@ export const EmailSettings: React.FC = () => {
               {...register("smtp_password")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             />
-
             {errors.smtp_password && (
-              <p className="text-xs text-destructive">
-                {errors.smtp_password.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.smtp_password.message}</p>
             )}
           </div>
 

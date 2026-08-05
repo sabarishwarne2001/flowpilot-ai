@@ -31,7 +31,7 @@ export const InvitationAcceptPage: React.FC = () => {
     onSuccess: async () => {
       setStatus("accepted");
       toast.success("Invitation accepted! Welcome aboard.");
-      // Standardize S2 state cleanups
+      // Standardize S2 cache invalidations
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["workspace"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace_members"] }),

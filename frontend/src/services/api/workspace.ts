@@ -61,11 +61,6 @@ export const previewInvitation = async (token: string): Promise<WorkspaceInvitat
   return response.data;
 };
 
-export const listMyInvitations = async (): Promise<WorkspaceInvitation[]> => {
-  const response = await apiClient.get<WorkspaceInvitation[]>("/workspace/invitations/me");
-  return response.data;
-};
-
 export const inviteUser = async (
   invitation: WorkspaceInvitationCreate
 ): Promise<WorkspaceInvitation> => {

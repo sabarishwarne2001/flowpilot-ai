@@ -23,7 +23,7 @@ export const Register: React.FC = () => {
     if (!path) {
       return false;
     }
-    if (!path.startsWith("/") || path.startsWith("//")) {
+    if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("\\")) {
       return false;
     }
     const cleanPath = path.split("?")[0]?.split("#")[0] || "";
@@ -241,6 +241,7 @@ export const Register: React.FC = () => {
         </button>
       </form>
 
+      {/* Footer */}
       <footer className="pt-2 text-center select-none">
         <p className="text-sm font-medium leading-none text-muted-foreground">
           Already have an account?{" "}

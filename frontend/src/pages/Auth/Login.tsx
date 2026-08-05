@@ -27,7 +27,7 @@ export const Login: React.FC = () => {
       return false;
     }
     // Enforce relative paths that prevent protocol switches (e.g. bypassing "https:")
-    if (!path.startsWith("/") || path.startsWith("//")) {
+    if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("\\")) {
       return false;
     }
     const cleanPath = path.split("?")[0]?.split("#")[0] || "";

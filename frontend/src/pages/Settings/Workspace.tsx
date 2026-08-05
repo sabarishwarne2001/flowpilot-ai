@@ -12,6 +12,7 @@ import {
   resendInvitation,
   revokeInvitation,
   getMyMembership,
+  removeWorkspaceMember,
 } from "@/services/api/workspace";
 
 import { uploadLogo } from "@/services/api/upload";
@@ -22,12 +23,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
 import type { WorkspaceRole } from "@/types/workspace";
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
 ).replace("/api/v1", "");
 
 export const Workspace: React.FC = () => {
+  const navigate = useNavigate();
   const {
     register,
     handleSubmit,
@@ -693,30 +696,62 @@ export const Workspace: React.FC = () => {
                 <th className="py-2.5 px-4 font-bold">Email Address</th>
                 <th className="py-2.5 px-4 font-bold">Access Role</th>
                 <th className="py-2.5 px-4 font-bold">Status</th>
+                <th className="py-2.5 px-4 font-bold text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {members?.map((mem) => (
-                <tr key={mem.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition">
-                  <td className="py-3.5 px-4 font-medium text-foreground">
-                    {mem.user?.email || "Unknown User"}
-                  </td>
-                  <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">
-                    {mem.role}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 text-xs font-bold rounded-full ${
-                        mem.is_active
-                          ? "bg-emerald-100 text-green-800 dark:bg-emerald-900/30 dark:text-green-300"
-                          : "bg-destructive/10 text-destructive"
-                      }`}
-                    >
-                      {mem.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {members?.map((mem) => {
+                const isSelf = mem.user_id === myMembership?.user_id;
+                return (
+                  <tr key={mem.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition">
+                    <td className="py-3.5 px-4 font-medium text-foreground">
+                      {mem.user?.email || "Unknown User"} {isSelf && "(You)"}
+                    </td>
+                    <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">
+                      {mem.role}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                          mem.is_active
+                            ? "bg-emerald-100 text-green-800 dark:bg-emerald-900/30 dark:text-green-300"
+                            : "bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        {mem.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      {(canManageTeam || isSelf) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm(isSelf ? "Are you sure you want to leave this workspace?" : `Are you sure you want to remove ${mem.user?.email}?`)) {
+                              try {
+                                await removeWorkspaceMember(mem.user_id);
+                                toast.success(isSelf ? "You left the workspace." : "Member removed successfully.");
+                                await Promise.all([
+                                  queryClient.invalidateQueries({ queryKey: ["workspace_members"] }),
+                                  queryClient.invalidateQueries({ queryKey: ["workspace_membership_me"] }),
+                                  queryClient.invalidateQueries({ queryKey: ["workspace"] })
+                                ]);
+                                if (isSelf) {
+                                  navigate("/");
+                                }
+                              } catch (err: any) {
+                                toast.error(err.response?.data?.detail || "Failed to remove member.");
+                              }
+                            }
+                          }}
+                          className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
+                        >
+                          {isSelf ? "Leave Workspace" : "Remove Member"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
