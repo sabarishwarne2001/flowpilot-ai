@@ -123,9 +123,29 @@ async def list_workspace_members(
     return crud.get_workspace_members(db, workspace_id=membership.workspace_id)
 
 
+@router.get(
+    "/members/me",
+    response_model=WorkspaceMemberResponse,
+    summary="Get Current User Membership",
+)
+async def get_my_membership(
+    membership: WorkspaceMember = Depends(
+        deps.RequireRole(
+            [
+                WorkspaceRole.OWNER,
+                WorkspaceRole.MANAGER,
+                WorkspaceRole.CONTRIBUTOR,
+                WorkspaceRole.VIEWER,
+            ]
+        )
+    ),
+) -> WorkspaceMemberResponse:
+    return membership
+
+
 @router.delete(
     "/members/{member_user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_200_OK,
     summary="Remove Workspace Member",
     description="Removes a member from the workspace or allows a member to leave if they are not the last active OWNER."
 )
@@ -156,8 +176,10 @@ async def remove_member(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. Insufficient role permissions."
             )
-        target_membership = crud.workspace_members_crud.get_membership(
-            db, user_id=member_user_id, workspace_id=membership.workspace_id
+        target_membership = crud.get_membership(
+            db,
+            user_id=member_user_id,
+            workspace_id=membership.workspace_id,
         )
         if not target_membership:
             raise HTTPException(
@@ -175,7 +197,11 @@ async def remove_member(
     # If the target being removed is an OWNER, verify they are not the last active Owner
     if target_membership.role == WorkspaceRole.OWNER:
         active_owners = [
-            m for m in crud.workspace_members_crud.get_workspace_members(db, workspace_id=membership.workspace_id)
+            m
+            for m in crud.get_workspace_members(
+                db,
+                workspace_id=membership.workspace_id,
+            )
             if m.role == WorkspaceRole.OWNER and m.is_active
         ]
         if len(active_owners) <= 1:
@@ -195,6 +221,10 @@ async def remove_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+    return {
+        "message": "Workspace member removed successfully."
+    }
 
 
 # ============================================================================
@@ -243,6 +273,28 @@ async def invite_user(
         workspace_name=workspace.workspace_name,
     )
     return invitation
+
+
+@router.get(
+    "/invitations/pending",
+    response_model=list[WorkspaceInvitationResponse],
+    summary="List Pending Workspace Invitations",
+)
+async def list_pending_invitations(
+    db: Session = Depends(deps.get_db),
+    membership: WorkspaceMember = Depends(
+        deps.RequireRole(
+            [
+                WorkspaceRole.OWNER,
+                WorkspaceRole.MANAGER,
+            ]
+        )
+    ),
+) -> list[WorkspaceInvitationResponse]:
+    return crud.list_pending_workspace_invitations(
+        db,
+        workspace_id=membership.workspace_id,
+    )
 
 
 @router.post(

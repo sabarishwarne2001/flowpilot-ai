@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -255,6 +255,7 @@ export const Workspace: React.FC = () => {
   }
 
   const canManageTeam = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+  const invitations = pendingInvitations ?? [];
 
   return (
     <div className="space-y-6">
@@ -590,7 +591,7 @@ export const Workspace: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
 
-          {!pendingInvitations || pendingInvitations.invitations.length === 0 ? (
+          {!pendingInvitations || invitations.length === 0 ? (
             <p className="text-sm text-muted-foreground bg-muted/10 p-4 rounded-lg border border-border/50 text-center">
               No active pending invitations found.
             </p>
@@ -606,7 +607,7 @@ export const Workspace: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingInvitations.invitations.map((inv) => (
+                  {invitations.map((inv) => (
                     <tr key={inv.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition">
                       <td className="py-3.5 px-4 font-medium text-foreground">{inv.email}</td>
                       <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">{inv.role}</td>

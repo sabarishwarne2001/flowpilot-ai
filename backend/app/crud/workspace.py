@@ -75,15 +75,16 @@ def get_workspace(
     return None
 
 
-def get_first_workspace(
-    db: Session,
-) -> Workspace | None:
+def get_first_workspace(db):
     """
-    Returns the first workspace in the database.
+    Returns the oldest workspace.
     """
+
     return db.execute(
         select(Workspace)
-    ).scalar_one_or_none()
+        .order_by(Workspace.created_at.asc())
+        .limit(1)
+    ).scalar()
 
 
 def workspace_exists(
