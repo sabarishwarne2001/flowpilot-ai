@@ -6,7 +6,6 @@ import type {
   WorkspaceMember,
   WorkspaceInvitation,
   WorkspaceInvitationCreate,
-  WorkspaceInvitationList,
   WorkspaceInvitationPreview,
 } from "@/types/workspace";
 
@@ -68,8 +67,8 @@ export const inviteUser = async (
   return response.data;
 };
 
-export const listPendingInvitations = async (): Promise<WorkspaceInvitationList> => {
-  const response = await apiClient.get<WorkspaceInvitationList>("/workspace/invitations/pending");
+export const listPendingInvitations = async (): Promise<WorkspaceInvitation[]> => {
+  const response = await apiClient.get<WorkspaceInvitation[]>("/workspace/invitations/pending");
   return response.data;
 };
 

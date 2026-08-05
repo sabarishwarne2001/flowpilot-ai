@@ -18,14 +18,15 @@ from app.schemas.workspace_member import WorkspaceMemberResponse
 from app.schemas.workspace_invitation import (
     WorkspaceInvitationCreate,
     WorkspaceInvitationResponse,
-    WorkspaceInvitationListResponse,
     WorkspaceInvitationTokenRequest,
     WorkspaceInvitationPreviewResponse,
 )
+from app.schemas.common import MessageResponse
 from app.services import workspace_invitation as workspace_invitation_service
 from app.services import workspace_service
 from app.services.notification_service import notification_service
 from app.core.exceptions import WorkspaceMemberError
+
 
 logger = logging.getLogger("app.api.v1.workspace")
 
@@ -145,6 +146,7 @@ async def get_my_membership(
 
 @router.delete(
     "/members/{member_user_id}",
+    response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
     summary="Remove Workspace Member",
     description="Removes a member from the workspace or allows a member to leave if they are not the last active OWNER."
@@ -153,7 +155,7 @@ async def remove_member(
     member_user_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-) -> None:
+) -> MessageResponse:
     # 1. Resolve actor's membership
     stmt = select(WorkspaceMember).where(
         WorkspaceMember.user_id == current_user.id,
@@ -222,9 +224,9 @@ async def remove_member(
             detail=str(e)
         )
 
-    return {
-        "message": "Workspace member removed successfully."
-    }
+    return MessageResponse(
+        message="Workspace member removed successfully."
+    )
 
 
 # ============================================================================

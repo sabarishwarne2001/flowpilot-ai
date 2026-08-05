@@ -18,8 +18,9 @@ import {
 } from "@/services/api/workspace";
 
 import { uploadLogo } from "@/services/api/upload";
+import { ApiError } from "@/services/api/client";
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
-import type { WorkspaceRole, WorkspaceMember } from "@/types/workspace";
+import type { WorkspaceRole, WorkspaceMember, WorkspaceInvitation } from "@/types/workspace";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const API_BASE_URL = (
@@ -127,8 +128,12 @@ export const Workspace: React.FC = () => {
       setInviteRole("VIEWER");
       toast.success("Invitation dispatched successfully.");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Failed to send invitation.");
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        toast.error(error.message || "Failed to send invitation.");
+        return;
+      }
+      toast.error("Failed to send invitation.");
     },
   });
 
@@ -138,8 +143,12 @@ export const Workspace: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ["workspace_invitations_pending"] });
       toast.success("Invitation revoked successfully.");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Failed to revoke invitation.");
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        toast.error(error.message || "Failed to revoke invitation.");
+        return;
+      }
+      toast.error("Failed to revoke invitation.");
     },
   });
 
@@ -149,8 +158,12 @@ export const Workspace: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ["workspace_invitations_pending"] });
       toast.success("Invitation resent successfully.");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Failed to resend invitation.");
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        toast.error(error.message || "Failed to resend invitation.");
+        return;
+      }
+      toast.error("Failed to resend invitation.");
     },
   });
 
@@ -255,7 +268,8 @@ export const Workspace: React.FC = () => {
   }
 
   const canManageTeam = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
-  const invitations = pendingInvitations ?? [];
+  const invitations: WorkspaceInvitation[] =
+    pendingInvitations ?? [];
 
   return (
     <div className="space-y-6">

@@ -27,6 +27,7 @@ from app.crud import workspace_invitation as workspace_invitation_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.models.workspace import Workspace, WorkspaceRole
 from app.models.workspace_invitation import WorkspaceInvitation, InvitationStatus
+from app.models.user import User
 
 logger = logging.getLogger("app.services.workspace_invitation")
 

@@ -53,7 +53,7 @@ from app.schemas.document_settings import (
     DocumentSettingsUpdate,
     DocumentSettingsResponse,
 )
-
+from app.schemas.common import MessageResponse
 
 __all__ = [
     "UserRegister",
@@ -91,4 +91,5 @@ __all__ = [
     "DocumentSettingsCreate",
     "DocumentSettingsUpdate",
     "DocumentSettingsResponse",
+    "MessageResponse"
 ]

@@ -112,10 +112,6 @@ export interface WorkspaceInvitationTokenRequest {
   token: string;
 }
 
-export interface WorkspaceInvitationList {
-  invitations: WorkspaceInvitation[];
-}
-
 export interface WorkspaceInvitationPreview {
   workspace_name: string;
   inviter_email: string;

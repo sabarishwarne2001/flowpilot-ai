@@ -75,17 +75,3 @@ class WorkspaceInvitationPreviewResponse(BaseModel):
     role: WorkspaceRole
     expires_at: datetime
 
-
-# ============================================================================
-# Collection List Wrapper
-# ============================================================================
-
-class WorkspaceInvitationListResponse(BaseModel):
-    """
-    Strongly typed collection wrapper for workspace invitation responses.
-    """
-    invitations: list[WorkspaceInvitationResponse]
-
-    model_config = ConfigDict(
-        from_attributes=True,
-    )
