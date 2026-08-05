@@ -19,13 +19,14 @@ export const OnboardingPage: React.FC = () => {
   } = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
     defaultValues: {
-      workspace_name: "",
-      company_name: "",
-      timezone: "UTC",
-      language: "en",
-      currency: "USD",
-      date_format: "YYYY-MM-DD",
-      is_active: true,
+        workspace_name: "",
+        company_name: "",
+        company_logo_url: null,
+        timezone: "UTC",
+        language: "en",
+        currency: "USD",
+        date_format: "YYYY-MM-DD",
+        is_active: true,
     },
   });
 
