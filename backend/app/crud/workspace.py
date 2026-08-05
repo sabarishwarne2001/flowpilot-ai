@@ -43,8 +43,6 @@ def create_workspace(
         date_format=date_format,
         company_logo_url=company_logo_url,
         is_active=True,
-        # Maintain legacy user_id column fallback with a placeholder (UUIDv4)
-        user_id=uuid.uuid4(),
     )
     db.add(workspace)
     db.flush()

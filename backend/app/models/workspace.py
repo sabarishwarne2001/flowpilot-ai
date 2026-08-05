@@ -73,7 +73,10 @@ class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
 
 class Workspace(Base, UUIDMixin, TimestampMixin):
     """
-    Persistent workspace configuration owned by a single user.
+    Persistent workspace configuration.
+
+    Ownership is NOT stored on this model. A workspace is owned by every
+    WorkspaceMember row referencing it with role = WorkspaceRole.OWNER.
     """
 
     __tablename__ = "workspaces"
@@ -137,29 +140,20 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
     )
 
     # ------------------------------------------------------------------
-    # Ownership
+    # Ownership (DEPRECATED - Phase 1 Contract, revision c4e81a9f2b73)
     # ------------------------------------------------------------------
+    # Inert, nullable rollback artifact retained for one release. Never
+    # written and never read by application code. Ownership resolves through
+    # workspace_members.role == OWNER. Scheduled for removal.
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        unique=True,
-        index=True,
+        nullable=True,
     )
 
     # ------------------------------------------------------------------
     # Relationships
     # ------------------------------------------------------------------
-
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="workspace",
-        passive_deletes=True,
-    )
 
     members: Mapped[list[WorkspaceMember]] = relationship(
         "WorkspaceMember",

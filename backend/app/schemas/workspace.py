@@ -106,7 +106,8 @@ class WorkspaceResponse(WorkspaceBase):
 
     id: UUID
 
-    user_id: UUID
+    # DEPRECATED. Null for workspaces created after revision c4e81a9f2b73.
+    user_id: UUID | None = None
 
     created_at: datetime
 

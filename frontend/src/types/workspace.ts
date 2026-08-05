@@ -1,6 +1,7 @@
 export interface Workspace {
   id: string;
-  user_id: string;
+  /** @deprecated Null for workspaces created after the ownership migration. */
+  user_id: string | null;
 
   workspace_name: string;
   company_name: string;
