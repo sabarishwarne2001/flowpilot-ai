@@ -1,19 +1,13 @@
 from datetime import datetime
 from uuid import UUID
+from typing import Any
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
-from pydantic import AnyUrl
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-# ============================================================================
-# Base
-# ============================================================================
 
 class WorkspaceBase(BaseModel):
     """
-    Shared workspace configuration fields.
+    Shared workspace configuration fields with whitespace-check validators.
     """
 
     workspace_name: str = Field(
@@ -51,6 +45,16 @@ class WorkspaceBase(BaseModel):
     )
 
     is_active: bool = True
+
+    @field_validator("workspace_name", "company_name", mode="before")
+    @classmethod
+    def check_empty_and_whitespace(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_stripped = v.strip()
+            if not v_stripped:
+                raise ValueError("Field cannot be empty or contain only whitespace.")
+            return v_stripped
+        return v
 
 
 # ============================================================================

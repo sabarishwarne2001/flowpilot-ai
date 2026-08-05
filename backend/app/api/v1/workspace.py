@@ -20,6 +20,7 @@ from app.schemas.workspace_invitation import (
     WorkspaceInvitationResponse,
     WorkspaceInvitationListResponse,
     WorkspaceInvitationTokenRequest,
+    WorkspaceInvitationPreviewResponse,
 )
 from app.services import workspace_invitation as workspace_invitation_service
 from app.services import workspace_service
@@ -31,23 +32,6 @@ logger = logging.getLogger("app.api.v1.workspace")
 router = APIRouter(
     tags=["Workspace"],
 )
-
-
-def _get_user_workspace_member(db: Session, user_id: uuid.UUID) -> WorkspaceMember:
-    """
-    Resolves active workspace membership directly from user context.
-    """
-    stmt = select(WorkspaceMember).where(
-        WorkspaceMember.user_id == user_id,
-        WorkspaceMember.is_active == True,
-    )
-    membership = db.execute(stmt).scalar_one_or_none()
-    if membership is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not configured. Please complete onboarding.",
-        )
-    return membership
 
 
 # ============================================================================
@@ -112,13 +96,8 @@ async def upsert_workspace(
             workspace_in=workspace_in,
         )
 
-    # Secure modifications strictly to Owner & Manager
-    membership = _get_user_workspace_member(db, current_user.id)
-    if membership.role not in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access Denied. Workspace administration is restricted.",
-        )
+    # Secure modifications: Inject validated OWNER/MANAGER role dependency directly
+    _ = deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER])(db, current_user)
 
     update = WorkspaceUpdate(**workspace_in.model_dump())
     return workspace_service.update_existing_workspace(
@@ -136,13 +115,11 @@ async def upsert_workspace(
     "/members",
     response_model=list[WorkspaceMemberResponse],
     summary="List Workspace Members",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR, WorkspaceRole.VIEWER]))]
 )
 async def list_workspace_members(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR, WorkspaceRole.VIEWER]))
 ) -> list[WorkspaceMemberResponse]:
-    membership = _get_user_workspace_member(db, current_user.id)
     return crud.get_workspace_members(db, workspace_id=membership.workspace_id)
 
 
@@ -150,20 +127,30 @@ async def list_workspace_members(
     "/members/{member_user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove Workspace Member",
-    description="Deletes a workspace member. Enforces Owner/Manager privilege controls, role hierarchy, and prevents deleting the last active Owner."
+    description="Removes a member from the workspace or allows a member to leave if they are not the last active OWNER."
 )
 async def remove_member(
     member_user_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> None:
-    membership = _get_user_workspace_member(db, current_user.id)
-    
-    # 1. Self-removal (Leaving the workspace)
+    # 1. Resolve actor's membership
+    stmt = select(WorkspaceMember).where(
+        WorkspaceMember.user_id == current_user.id,
+        WorkspaceMember.is_active == True,
+    )
+    membership = db.execute(stmt).scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not configured. Please complete onboarding.",
+        )
+
+    # 2. Self-removal (Leaving the workspace)
     if member_user_id == current_user.id:
         target_membership = membership
     else:
-        # 2. Administrative removal: Only Owners or Managers can remove other members
+        # 3. Administrative removal: Only Owners or Managers can remove other members
         if membership.role not in [WorkspaceRole.OWNER, WorkspaceRole.MANAGER]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -216,13 +203,14 @@ async def remove_member(
 
 @router.get(
     "/invitations/preview",
+    response_model=WorkspaceInvitationPreviewResponse,
     summary="Preview Invitation Details",
     description="Resolves and returns invitation context securely based on its token. This endpoint is public."
 )
 async def preview_invitation(
     token: str,
     db: Session = Depends(deps.get_db),
-) -> dict:
+) -> Any:
     return workspace_invitation_service.preview_workspace_invitation(db, token=token)
 
 
@@ -231,21 +219,19 @@ async def preview_invitation(
     response_model=WorkspaceInvitationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Invite New Member",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def invite_user(
     invitation_in: WorkspaceInvitationCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER])),
 ) -> WorkspaceInvitationResponse:
-    membership = _get_user_workspace_member(db, current_user.id)
     workspace = membership.workspace
 
     invitation = workspace_invitation_service.create_workspace_invitation(
         db,
         workspace_id=workspace.id,
-        inviter_id=current_user.id,
+        inviter_id=membership.user_id,
         email=invitation_in.email,
         role=invitation_in.role,
     )
@@ -263,17 +249,16 @@ async def invite_user(
     "/invitations/{invitation_id}/revoke",
     response_model=WorkspaceInvitationResponse,
     summary="Revoke Workspace Invitation",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def revoke_invitation(
     invitation_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER])),
 ) -> WorkspaceInvitationResponse:
     return workspace_invitation_service.revoke_workspace_invitation(
         db,
         invitation_id=invitation_id,
-        actor_id=current_user.id,
+        actor_id=membership.user_id,
     )
 
 
@@ -281,21 +266,19 @@ async def revoke_invitation(
     "/invitations/{invitation_id}/resend",
     response_model=WorkspaceInvitationResponse,
     summary="Resend Workspace Invitation",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def resend_invitation(
     invitation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER])),
 ) -> WorkspaceInvitationResponse:
     invitation = workspace_invitation_service.resend_workspace_invitation(
         db,
         invitation_id=invitation_id,
-        actor_id=current_user.id,
+        actor_id=membership.user_id,
     )
 
-    membership = _get_user_workspace_member(db, current_user.id)
     background_tasks.add_task(
         notification_service.send_workspace_invitation,
         db=db,

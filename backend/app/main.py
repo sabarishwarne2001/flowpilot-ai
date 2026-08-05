@@ -15,8 +15,8 @@ from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
 from app.utils import initialize_storage
 from app.services.bm25_service import bm25_service
-from app.core.exceptions import InvitationError
-from app.core.exception_handlers import invitation_error_handler
+from app.core.exceptions import InvitationError, WorkspaceError
+from app.core.exception_handlers import domain_exception_handler
 
 # Initialize early logging configuration before booting the ASGI application instance
 setup_logging()
@@ -82,7 +82,8 @@ else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
 # Register global custom invitation exception handler
-app.add_exception_handler(InvitationError, invitation_error_handler)
+app.add_exception_handler(InvitationError, domain_exception_handler)
+app.add_exception_handler(WorkspaceError, domain_exception_handler)
 
 # Mount the consolidated versioned routing table
 app.include_router(api_router, prefix=settings.API_V1_STR)

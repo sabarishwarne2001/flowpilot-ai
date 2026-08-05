@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
-
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 import {
   getWorkspace,
@@ -16,14 +18,9 @@ import {
 } from "@/services/api/workspace";
 
 import { uploadLogo } from "@/services/api/upload";
-
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
-
-import type { WorkspaceRole } from "@/types/workspace";
-import { useNavigate } from "react-router-dom";
+import type { WorkspaceRole, WorkspaceMember } from "@/types/workspace";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
@@ -31,6 +28,15 @@ const API_BASE_URL = (
 
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [memberToRemove, setMemberToRemove] = useState<WorkspaceMember | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<WorkspaceRole>("VIEWER");
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const {
     register,
     handleSubmit,
@@ -43,25 +49,13 @@ export const Workspace: React.FC = () => {
       workspace_name: "",
       company_name: "",
       company_logo_url: "",
-
       timezone: "UTC",
       language: "en",
       currency: "USD",
       date_format: "YYYY-MM-DD",
-
       is_active: true,
     },
   });
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
-
-  // Form States for Invitations
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<WorkspaceRole>("VIEWER");
-
-  const queryClient = useQueryClient();
 
   // Queries
   const { data: workspace, isLoading: isLoadingWorkspace } = useQuery({
@@ -85,119 +79,104 @@ export const Workspace: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!workspace) {
-      return;
+    if (workspace) {
+      reset({
+        workspace_name: workspace.workspace_name,
+        company_name: workspace.company_name,
+        company_logo_url: workspace.company_logo_url ?? "",
+        timezone: workspace.timezone,
+        language: workspace.language,
+        currency: workspace.currency,
+        date_format: workspace.date_format,
+        is_active: workspace.is_active,
+      });
+      setLogoPreview(workspace.company_logo_url ?? null);
     }
-
-    reset({
-      workspace_name: workspace.workspace_name,
-      company_name: workspace.company_name,
-      company_logo_url: workspace.company_logo_url ?? "",
-
-      timezone: workspace.timezone,
-      language: workspace.language,
-      currency: workspace.currency,
-      date_format: workspace.date_format,
-
-      is_active: workspace.is_active,
-    });
   }, [workspace, reset]);
 
   useEffect(() => {
-    if (!workspace) return;
-
-    setLogoPreview(workspace.company_logo_url ?? null);
-  }, [workspace]);
-
-  // Prevent accidental tab closure if form is dirty
-  useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!isDirty) return;
-
-      event.preventDefault();
-      event.returnValue = "";
+      if (isDirty) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     };
-
     window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
   // Mutations
-  const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } =
-    useMutation({
-      mutationFn: saveWorkspace,
-
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({
-          queryKey: ["workspace"],
-        });
-
-        setSelectedLogoFile(null);
-
-        reset(undefined, {
-          keepDirty: false,
-        });
-
-        toast.success("Workspace settings saved successfully.");
-      },
-
-      onError: (error: unknown) => {
-        if (error instanceof Error) {
-          toast.error(error.message);
-          return;
-        }
-
-        toast.error("Failed to save workspace settings.");
-      },
-    });
+  const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } = useMutation({
+    mutationFn: saveWorkspace,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workspace"] });
+      setSelectedLogoFile(null);
+      reset(undefined, { keepDirty: false });
+      toast.success("Workspace settings saved successfully.");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to save workspace settings.");
+    },
+  });
 
   const { mutateAsync: sendInviteMutation, isPending: isInviting } = useMutation({
     mutationFn: inviteUser,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace_invitations_pending"],
-      });
+      await queryClient.invalidateQueries({ queryKey: ["workspace_invitations_pending"] });
       setInviteEmail("");
       setInviteRole("VIEWER");
       toast.success("Invitation dispatched successfully.");
     },
-    onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Failed to send invitation.");
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Failed to send invitation.");
     },
   });
 
   const { mutateAsync: revokeInviteMutation } = useMutation({
     mutationFn: revokeInvitation,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace_invitations_pending"],
-      });
+      await queryClient.invalidateQueries({ queryKey: ["workspace_invitations_pending"] });
       toast.success("Invitation revoked successfully.");
     },
-    onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Failed to revoke invitation.");
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Failed to revoke invitation.");
     },
   });
 
   const { mutateAsync: resendInviteMutation } = useMutation({
     mutationFn: resendInvitation,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace_invitations_pending"],
-      });
+      await queryClient.invalidateQueries({ queryKey: ["workspace_invitations_pending"] });
       toast.success("Invitation resent successfully.");
     },
-    onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Failed to resend invitation.");
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Failed to resend invitation.");
     },
   });
 
-  const handleReset = async () => {
-    if (!workspace) return;
+  const { mutateAsync: removeMemberMutation, isPending: isRemoving } = useMutation({
+    mutationFn: removeWorkspaceMember,
+    onSuccess: async (_, variables) => {
+      const isSelf = variables === myMembership?.user_id;
+      toast.success(isSelf ? "You left the workspace." : "Member removed successfully.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace_members"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace_membership_me"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace"] })
+      ]);
+      setMemberToRemove(null);
+      if (isSelf) {
+        navigate("/");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Failed to remove member.");
+      setMemberToRemove(null);
+    }
+  });
 
+  const handleReset = () => {
+    if (!workspace) return;
     reset({
       workspace_name: workspace.workspace_name,
       company_name: workspace.company_name,
@@ -208,74 +187,42 @@ export const Workspace: React.FC = () => {
       date_format: workspace.date_format,
       is_active: workspace.is_active,
     });
-
     setSelectedLogoFile(null);
-
     setLogoPreview(workspace.company_logo_url ?? null);
-
     toast.success("Changes discarded.");
   };
 
-  const handleLogoSelect = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleLogoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
 
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/webp",
-    ];
-
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       toast.error("Only PNG, JPEG and WebP images are allowed.");
       return;
     }
-
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Logo must be smaller than 2 MB.");
       return;
     }
 
     setSelectedLogoFile(file);
-
     const preview = URL.createObjectURL(file);
-
     setLogoPreview(preview);
-
-    setValue("company_logo_url", preview, {
-      shouldDirty: true,
-    });
-
+    setValue("company_logo_url", preview, { shouldDirty: true });
     event.target.value = "";
   };
 
-  const onSubmit = async (
-    data: WorkspaceFormData
-  ): Promise<void> => {
-    try {
-      let logoUrl = data.company_logo_url;
-
-      if (selectedLogoFile) {
-        const response = await uploadLogo(selectedLogoFile);
-        logoUrl = response.logo_url;
-      }
-
-      await saveWorkspaceMutation({
-        ...data,
-        company_logo_url: logoUrl || null,
-      });
-
-      setSelectedLogoFile(null);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to save workspace."
-      );
+  const onSubmit = async (data: WorkspaceFormData): Promise<void> => {
+    let logoUrl = data.company_logo_url;
+    if (selectedLogoFile) {
+      const response = await uploadLogo(selectedLogoFile);
+      logoUrl = response.logo_url;
     }
+    await saveWorkspaceMutation({
+      ...data,
+      company_logo_url: logoUrl || null,
+    });
   };
 
   const handleSendInvite = async (e: React.FormEvent) => {
@@ -307,7 +254,6 @@ export const Workspace: React.FC = () => {
     );
   }
 
-  // Multi-tenant RBAC checks: only Owner and Manager accounts possess administrative write authority
   const canManageTeam = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
 
   return (
@@ -315,99 +261,55 @@ export const Workspace: React.FC = () => {
       {/* 1. Branding Settings Card */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold">Workspace Settings</h1>
-
         <p className="mt-2 text-sm text-muted-foreground">
-          Configure your organization's workspace profile and regional
-          preferences.
+          Configure your organization's workspace profile and regional preferences.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
-          {/* Workspace Name */}
           <div className="space-y-2">
-            <label
-              htmlFor="workspace_name"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="workspace_name" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Workspace Name
             </label>
-
             <input
               id="workspace_name"
               type="text"
               disabled={!canManageTeam}
               placeholder="My Workspace"
               required
-              aria-required="true"
-              aria-invalid={!!errors.workspace_name}
-              aria-describedby={
-                errors.workspace_name ? "workspace-name-error" : undefined
-              }
               {...register("workspace_name")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
             />
-
             {errors.workspace_name && (
-              <p
-                id="workspace-name-error"
-                role="alert"
-                className="text-xs text-destructive"
-              >
-                {errors.workspace_name.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.workspace_name.message}</p>
             )}
           </div>
 
-          {/* Company Name */}
           <div className="space-y-2">
-            <label
-              htmlFor="company_name"
-              className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-            >
+            <label htmlFor="company_name" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Company Name
             </label>
-
             <input
               id="company_name"
               type="text"
               disabled={!canManageTeam}
-              placeholder="Workspace Name"
+              placeholder="Company Name"
               required
-              aria-required="true"
-              aria-invalid={!!errors.company_name}
-              aria-describedby={
-                errors.company_name ? "company-name-error" : undefined
-              }
               {...register("company_name")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
             />
-
             {errors.company_name && (
-              <p
-                id="company-name-error"
-                role="alert"
-                className="text-xs text-destructive"
-              >
-                {errors.company_name.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.company_name.message}</p>
             )}
           </div>
 
-          {/* Company Logo Upload */}
           <div className="space-y-4">
             <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Company Logo
             </label>
-
             <div className="flex items-center gap-4">
               {logoPreview ? (
                 <img
-                  src={
-                    logoPreview?.startsWith("blob:")
-                      ? logoPreview
-                      : logoPreview
-                        ? `${API_BASE_URL}${logoPreview}`
-                        : undefined
-                  }
+                  src={logoPreview.startsWith("blob:") ? logoPreview : `${API_BASE_URL}${logoPreview}`}
                   alt="Company logo preview"
                   className="h-20 w-20 rounded-lg border border-border object-cover"
                 />
@@ -421,25 +323,18 @@ export const Workspace: React.FC = () => {
                 <button
                   type="button"
                   disabled={!canManageTeam}
-                  aria-label="Upload company logo"
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted/50 transition disabled:opacity-50"
                 >
                   Upload Logo
                 </button>
-
                 {logoPreview && canManageTeam && (
                   <button
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
                       setSelectedLogoFile(null);
-
                       setLogoPreview(null);
-
-                      setValue("company_logo_url", "", {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
+                      setValue("company_logo_url", "", { shouldDirty: true });
                     }}
                     className="rounded-lg border border-transparent text-destructive px-4 py-2 text-sm font-medium hover:bg-destructive/10 transition text-left"
                   >
@@ -449,37 +344,23 @@ export const Workspace: React.FC = () => {
               </div>
 
               <input
-                id="company_logo"
                 ref={fileInputRef}
                 className="hidden"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={handleLogoSelect}
-                aria-hidden="true"
-                tabIndex={-1}
               />
-              <input type="hidden" {...register("company_logo_url")} />
             </div>
           </div>
 
-          {/* Regional Settings */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Timezone */}
             <div className="space-y-2">
-              <label
-                htmlFor="timezone"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="timezone" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Timezone
               </label>
-
               <select
                 id="timezone"
                 disabled={!canManageTeam}
-                aria-invalid={!!errors.timezone}
-                aria-describedby={
-                  errors.timezone ? "timezone-error" : undefined
-                }
                 {...register("timezone")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
@@ -489,43 +370,20 @@ export const Workspace: React.FC = () => {
                 <option value="Europe/Berlin">Europe/Berlin (CET)</option>
                 <option value="America/New_York">America/New_York (EST)</option>
                 <option value="America/Chicago">America/Chicago (CST)</option>
-                <option value="America/Los_Angeles">
-                  America/Los_Angeles (PST)
-                </option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
                 <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                <option value="Australia/Sydney">
-                  Australia/Sydney (AEST)
-                </option>
+                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
                 <option value="UTC">UTC</option>
               </select>
-
-              {errors.timezone && (
-                <p
-                  id="timezone-error"
-                  role="alert"
-                  className="text-xs text-destructive"
-                >
-                  {errors.timezone.message}
-                </p>
-              )}
             </div>
 
-            {/* Language */}
             <div className="space-y-2">
-              <label
-                htmlFor="language"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="language" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Language
               </label>
-
               <select
                 id="language"
                 disabled={!canManageTeam}
-                aria-invalid={!!errors.language}
-                aria-describedby={
-                  errors.language ? "language-error" : undefined
-                }
                 {...register("language")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
@@ -542,34 +400,15 @@ export const Workspace: React.FC = () => {
                 <option value="ja">Japanese</option>
                 <option value="zh">Chinese</option>
               </select>
-
-              {errors.language && (
-                <p
-                  id="language-error"
-                  role="alert"
-                  className="text-xs text-destructive"
-                >
-                  {errors.language.message}
-                </p>
-              )}
             </div>
 
-            {/* Currency */}
             <div className="space-y-2">
-              <label
-                htmlFor="currency"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="currency" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Currency
               </label>
-
               <select
                 id="currency"
                 disabled={!canManageTeam}
-                aria-invalid={!!errors.currency}
-                aria-describedby={
-                  errors.currency ? "currency-error" : undefined
-                }
                 {...register("currency")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
@@ -584,34 +423,15 @@ export const Workspace: React.FC = () => {
                 <option value="JPY">Japanese Yen (JPY)</option>
                 <option value="CNY">Chinese Yuan (CNY)</option>
               </select>
-
-              {errors.currency && (
-                <p
-                  id="currency-error"
-                  role="alert"
-                  className="text-xs text-destructive"
-                >
-                  {errors.currency.message}
-                </p>
-              )}
             </div>
 
-            {/* Date Format */}
             <div className="space-y-2">
-              <label
-                htmlFor="date_format"
-                className="text-xs font-bold uppercase tracking-wide text-muted-foreground"
-              >
+              <label htmlFor="date_format" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Date Format
               </label>
-
               <select
                 id="date_format"
                 disabled={!canManageTeam}
-                aria-invalid={!!errors.date_format}
-                aria-describedby={
-                  errors.date_format ? "date-format-error" : undefined
-                }
                 {...register("date_format")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
@@ -622,64 +442,41 @@ export const Workspace: React.FC = () => {
                 <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                 <option value="YYYY/MM/DD">YYYY/MM/DD</option>
               </select>
-
-              {errors.date_format && (
-                <p
-                  id="date-format-error"
-                  role="alert"
-                  className="text-xs text-destructive"
-                >
-                  {errors.date_format.message}
-                </p>
-              )}
             </div>
           </div>
 
-          {/* Workspace Active */}
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
               <h3 className="font-medium">Workspace Active</h3>
-
-              <p className="text-sm text-muted-foreground">
-                Enable or disable this workspace.
-              </p>
+              <p className="text-sm text-muted-foreground">Enable or disable this workspace.</p>
             </div>
-
             <input
               id="is_active"
               type="checkbox"
               disabled={!canManageTeam}
-              aria-label="Workspace Active"
               {...register("is_active")}
               className="h-5 w-5 disabled:opacity-50"
             />
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              aria-label="Reset workspace changes"
               onClick={handleReset}
               disabled={!isDirty || !canManageTeam}
-              className="rounded-lg border border-border bg-background px-5 py-2 text-sm font-medium text-foreground transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
             >
               Reset
             </button>
-
             <button
               type="submit"
               disabled={!isDirty || isSaving || !canManageTeam}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save Workspace"}
             </button>
           </div>
         </form>
-
-        {Object.keys(errors).length > 0 && (
-          <p className="mt-4 text-sm text-destructive">Validation is active.</p>
-        )}
       </div>
 
       {/* 2. Team Directory Table Card */}
@@ -725,24 +522,7 @@ export const Workspace: React.FC = () => {
                       {(canManageTeam || isSelf) && (
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (window.confirm(isSelf ? "Are you sure you want to leave this workspace?" : `Are you sure you want to remove ${mem.user?.email}?`)) {
-                              try {
-                                await removeWorkspaceMember(mem.user_id);
-                                toast.success(isSelf ? "You left the workspace." : "Member removed successfully.");
-                                await Promise.all([
-                                  queryClient.invalidateQueries({ queryKey: ["workspace_members"] }),
-                                  queryClient.invalidateQueries({ queryKey: ["workspace_membership_me"] }),
-                                  queryClient.invalidateQueries({ queryKey: ["workspace"] })
-                                ]);
-                                if (isSelf) {
-                                  navigate("/");
-                                }
-                              } catch (err: any) {
-                                toast.error(err.response?.data?.detail || "Failed to remove member.");
-                              }
-                            }
-                          }}
+                          onClick={() => setMemberToRemove(mem)}
                           className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
                         >
                           {isSelf ? "Leave Workspace" : "Remove Member"}
@@ -798,7 +578,7 @@ export const Workspace: React.FC = () => {
               <button
                 type="submit"
                 disabled={isInviting || !inviteEmail.trim()}
-                className="w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               >
                 {isInviting ? "Sending..." : "Send Invite"}
               </button>
@@ -859,6 +639,25 @@ export const Workspace: React.FC = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={memberToRemove !== null}
+        title={memberToRemove?.user_id === myMembership?.user_id ? "Leave Workspace" : "Remove Workspace Member"}
+        message={
+          memberToRemove?.user_id === myMembership?.user_id
+            ? "Are you sure you want to leave this workspace? You will no longer have access to its resources."
+            : `Are you sure you want to remove ${memberToRemove?.user?.email ?? "this member"} from the workspace?`
+        }
+        confirmText={memberToRemove?.user_id === myMembership?.user_id ? "Leave" : "Remove"}
+        cancelText="Cancel"
+        loading={isRemoving}
+        onCancel={() => setMemberToRemove(null)}
+        onConfirm={() => {
+          if (memberToRemove) {
+            removeMemberMutation(memberToRemove.user_id);
+          }
+        }}
+      />
     </div>
   );
 };

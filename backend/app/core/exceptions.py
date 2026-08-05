@@ -11,8 +11,13 @@ class WorkspaceNotFoundError(WorkspaceError):
     pass
 
 
+class WorkspaceAlreadyExistsError(WorkspaceError):
+    """Raised when trying to register a duplicate workspace."""
+    pass
+
+
 class WorkspaceMemberError(WorkspaceError):
-    """Raised when a membership constraint is violated (e.g. removing the last owner)."""
+    """Raised when a membership constraint is violated."""
     pass
 
 
@@ -32,7 +37,7 @@ class InvitationExpiredError(InvitationError):
 
 
 class InvitationPermissionDeniedError(InvitationError):
-    """Raised when the actor lacks sufficient privileges to perform the action."""
+    """Raised when the actor lacks sufficient privileges."""
     pass
 
 

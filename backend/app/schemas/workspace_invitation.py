@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
 from app.models.workspace import WorkspaceRole
 from app.models.workspace_invitation import InvitationStatus
@@ -18,11 +18,9 @@ class WorkspaceInvitationCreate(BaseModel):
     Schema representing the input parameters required to invite a user 
     to a workspace.
     """
-    email: str = Field(
+    email: EmailStr = Field(
         ...,
-        min_length=3,
-        max_length=255,
-        description="The email address of the user to be invited."
+        description="The validated email address of the user to be invited."
     )
     role: WorkspaceRole = Field(
         default=WorkspaceRole.VIEWER,
@@ -65,6 +63,17 @@ class WorkspaceInvitationResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class WorkspaceInvitationPreviewResponse(BaseModel):
+    """
+    Public schema for previewing invitation parameters without leaking private database keys.
+    """
+    workspace_name: str
+    inviter_email: str
+    invited_email: str
+    role: WorkspaceRole
+    expires_at: datetime
 
 
 # ============================================================================

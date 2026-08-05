@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.models.user import User
-from app.models.workspace import WorkspaceRole
+from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.services.ai_settings_service import (
     ai_settings_service,
 )
@@ -45,13 +44,10 @@ router = APIRouter(
     "",
     response_model=AISettingsResponse,
     summary="Get AI Settings",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
 async def get_ai_settings(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(
-        deps.get_current_active_user,
-    ),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
 ) -> AISettingsResponse:
     """
     Returns the authenticated user's AI settings.
@@ -59,7 +55,7 @@ async def get_ai_settings(
 
     settings = crud.get_ai_settings(
         db,
-        user_id=current_user.id,
+        user_id=membership.user_id,
     )
 
     if settings is None:
@@ -80,14 +76,11 @@ async def get_ai_settings(
     "",
     response_model=AISettingsResponse,
     summary="Create or Update AI Settings",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def upsert_ai_settings(
     settings_in: AISettingsUpdate,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(
-        deps.get_current_active_user,
-    ),
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
 ) -> AISettingsResponse:
     """
     Creates or updates the authenticated user's AI settings.
@@ -95,13 +88,13 @@ async def upsert_ai_settings(
 
     settings = crud.upsert_ai_settings(
         db,
-        user_id=current_user.id,
+        user_id=membership.user_id,
         settings_in=settings_in,
     )
 
     logger.info(
         "Updated AI settings for user %s.",
-        current_user.id,
+        membership.user_id,
     )
 
     return settings
@@ -110,9 +103,10 @@ async def upsert_ai_settings(
 @router.get(
     "/models",
     summary="Get Supported AI Models",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
-async def get_supported_models():
+async def get_supported_models(
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+):
     """
     Returns the supported models for every AI provider.
     """
@@ -127,9 +121,10 @@ async def get_supported_models():
     "/providers",
     response_model=AvailableProvidersResponse,
     summary="Get Available AI Providers",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))]
 )
-async def get_available_providers():
+async def get_available_providers(
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+):
     """
     Returns only providers that are configured.
     """
@@ -141,10 +136,10 @@ async def get_available_providers():
     "/test",
     response_model=AIConnectionTestResponse,
     summary="Test AI Configuration",
-    dependencies=[Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))]
 )
 async def test_ai_configuration(
     settings_in: AISettingsUpdate,
+    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
 ):
     """
     Test the supplied AI configuration without
