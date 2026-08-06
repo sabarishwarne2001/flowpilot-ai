@@ -8,7 +8,7 @@ Alerts, and Conversation memories.
 
 import uuid
 from typing import Any, TYPE_CHECKING, Union
-from sqlalchemy import String, Integer, ForeignKey, JSON
+from sqlalchemy import String, Text, Integer, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 from app.db.base import Base, UUIDMixin, TimestampMixin
@@ -35,8 +35,18 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=False
     )
     stored_filename: Mapped[str] = mapped_column(
-        String(255), 
-        nullable=False
+        String(255),
+        unique=True,
+        index=True,
+        nullable=False,
+        doc=(
+            "Filesystem storage key. The unique index is a data-integrity "
+            "guarantee, not an optimisation: without it two uploads can "
+            "collide on the same key and silently overwrite one another on "
+            "disk. unique=True and index=True together produce the unique "
+            "INDEX ix_work_items_stored_filename; unique=True alone would "
+            "produce a differently named UniqueConstraint instead."
+        ),
     )
     file_type: Mapped[str] = mapped_column(
         String(100), 
@@ -53,8 +63,12 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=False
     )
     summary: Mapped[Union[str, None]] = mapped_column(
-        String, 
-        nullable=True
+        Text,
+        nullable=True,
+        doc=(
+            "Unbounded AI-generated prose. Declared Text rather than String "
+            "so the model states the absence of a length bound explicitly."
+        ),
     )
     extracted_entities: Mapped[Union[dict[str, Any], None]] = mapped_column(
         JSON, 

@@ -84,7 +84,6 @@ class User(Base, UUIDMixin, TimestampMixin):
         uselist=False,
     )
 
-    # EDIT 2: Explicitly specified foreign_keys to resolve ambiguity and added organization_memberships
     # Bidirectional SQLAlchemy relationship mapping user memberships
     memberships: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember",
@@ -99,6 +98,7 @@ class User(Base, UUIDMixin, TimestampMixin):
         back_populates="user",
         foreign_keys="OrganizationMember.user_id",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     # Bidirectional SQLAlchemy relationship mapping user ai_providers

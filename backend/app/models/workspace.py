@@ -13,6 +13,13 @@ permission level but no owner role, ownership residing with the organization.
 Retaining a workspace-level owner would create two competing ownership
 concepts, and every future billing or deletion question would have to
 disambiguate them.
+
+Locale and branding live here rather than on the Organization because a US and
+an India workspace on a single contract legitimately need different currency,
+timezone, and date formatting. Their column lengths are the project's original
+values, retained deliberately: BCP-47 language tags such as
+"sr-Latn-RS-u-ca-gregory" exceed ten characters, so the wider bound is the
+correct one.
 """
 
 from __future__ import annotations
@@ -162,10 +169,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
     every WorkspaceMember row referencing it with role = WorkspaceRole.ADMIN,
     plus every OrganizationMember of its parent organization holding
     OrganizationRole.OWNER or OrganizationRole.ADMIN.
-
-    Locale and branding live here rather than on the Organization because a US
-    and an India workspace on a single contract legitimately need different
-    currency, timezone, and date formatting.
     """
     __tablename__ = "workspaces"
     __table_args__ = (
@@ -189,7 +192,8 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         doc=(
             "URL-safe identifier, unique within the parent organization. "
             "Combined with the organization slug this yields the public "
-            "address /{organization}/{workspace}/..."
+            "address /{organization}/{workspace}/... Bounded at 63 to match "
+            "the DNS label limit, keeping subdomain addressing available."
         ),
     )
     workspace_name: Mapped[str] = mapped_column(
@@ -209,12 +213,12 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
 
     # --- Localization and branding -----------------------------------------
     timezone: Mapped[str] = mapped_column(
-        String(64),
+        String(100),
         default="UTC",
         nullable=False,
     )
     language: Mapped[str] = mapped_column(
-        String(10),
+        String(20),
         default="en",
         nullable=False,
     )
@@ -224,12 +228,12 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     date_format: Mapped[str] = mapped_column(
-        String(20),
+        String(30),
         default="YYYY-MM-DD",
         nullable=False,
     )
     company_logo_url: Mapped[str | None] = mapped_column(
-        String(512),
+        String(500),
         nullable=True,
     )
 
