@@ -4,6 +4,7 @@ import {
   devtools,
   persist,
 } from "zustand/middleware";
+import { useTenantStore } from "@/store/useTenantStore";
 
 /**
  * Storage key for persisted authentication state.
@@ -98,14 +99,26 @@ export const useAuthStore = create<AuthState>()(
           }),
 
         /**
-         * Clears all authentication state.
+         * Clears all authentication state and the tenant selection.
+         *
+         * The tenant reset belongs here rather than at each call site because
+         * clearAuth is reached from three places — explicit sign-out, the 401
+         * interceptor, and a failed login — and a path that forgot it would
+         * leave the next user on this machine starting from a stranger's
+         * tenant identifiers.
+         *
+         * One-way dependency: the tenant store imports nothing from here, so
+         * there is no cycle.
          */
-        clearAuth: () =>
+        clearAuth: () => {
+          useTenantStore.getState().resetTenantSelection();
+
           set({
             user: null,
             token: null,
             isAuthenticated: false,
-          }),
+          });
+        },
 
         /**
          * Authorization helper.

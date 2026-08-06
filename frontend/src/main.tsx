@@ -12,6 +12,8 @@ import { ApiError } from "@/services/api/client";
 
 import { assertPermissionParity } from "@/permissions";
 
+import { assertTenantResolutionIntegrity } from "@/hooks/tenantResolution";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -55,6 +57,7 @@ export const queryClient = new QueryClient({
 // anyone to notice.
 if (import.meta.env.DEV) {
   assertPermissionParity();
+  assertTenantResolutionIntegrity();
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
