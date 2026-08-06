@@ -61,13 +61,19 @@ from app.crud.assistant import (
     get_conversation_messages,
     delete_conversation_messages,
 )
+# EDIT 2: Replaced the legacy workspace import block entirely
 from app.crud.workspace import (
     create_workspace,
-    get_workspace,
-    get_first_workspace,
-    workspace_exists,
+    get_workspace_by_id,
+    get_workspace_with_organization,
+    get_workspace_by_slug,
+    is_workspace_slug_available,
+    list_workspaces_for_organization,
+    list_granted_workspaces_for_user,
+    count_workspaces_for_organization,
     update_workspace,
-    delete_workspace,
+    clear_workspace_logo,
+    set_workspace_status,
 )
 from app.crud.workspace_invitation import (
     get_invitation_by_id,
@@ -84,14 +90,19 @@ from app.crud.workspace_invitation import (
     is_invitation_expired,
     delete_invitation,
 )
+# EDIT 3: Replaced the legacy workspace_members import block entirely
 from app.crud.workspace_members import (
-    get_membership,
-    get_workspace_members,
-    get_user_memberships,
-    membership_exists,
-    create_membership,
-    ensure_owner_membership,
-    remove_membership,
+    create_workspace_member,
+    get_workspace_member,
+    get_workspace_member_by_id,
+    list_workspace_members,
+    count_workspace_members,
+    count_workspace_admins,
+    update_workspace_member_role,
+    set_workspace_member_status,
+    deactivate_workspace_member,
+    reactivate_workspace_member,
+    deactivate_all_workspace_grants_for_user,
 )
 from app.crud.ai_settings import (
     create_ai_settings,
@@ -108,7 +119,36 @@ from app.crud.document_settings import (
     delete_document_settings,
     upsert_document_settings,
 )
+# EDIT 1: Added new imports for organizations and membership filters
+from app.crud.membership_filters import (
+    ACTIVE_ONLY,
+    DIRECTORY_STATUSES,
+    SEAT_CONSUMING_STATUSES,
+)
+from app.crud.organization import (
+    create_organization,
+    get_organization_by_id,
+    get_organization_by_slug,
+    is_organization_slug_available,
+    list_organizations_for_user,
+    count_organizations_owned_by_user,
+    update_organization,
+    set_organization_status,
+)
+from app.crud.organization_members import (
+    create_organization_member,
+    get_organization_member,
+    get_organization_member_by_id,
+    list_organization_members,
+    count_active_owners,
+    count_consumed_seats,
+    update_organization_member_role,
+    set_organization_member_status,
+    deactivate_organization_member,
+    reactivate_organization_member,
+)
 
+# EDIT 4: Updated __all__ to align with the new and retired functions
 __all__ = [
     "get_user_by_id",
     "get_user_by_email",
@@ -152,12 +192,19 @@ __all__ = [
     "create_conversation_message",
     "get_conversation_messages",
     "delete_conversation_messages",
+    # replaced workspace block:
     "create_workspace",
-    "get_workspace",
-    "get_first_workspace",
-    "workspace_exists",
+    "get_workspace_by_id",
+    "get_workspace_with_organization",
+    "get_workspace_by_slug",
+    "is_workspace_slug_available",
+    "list_workspaces_for_organization",
+    "list_granted_workspaces_for_user",
+    "count_workspaces_for_organization",
     "update_workspace",
-    "delete_workspace",
+    "clear_workspace_logo",
+    "set_workspace_status",
+    # workspace invitations (untouched):
     "get_invitation_by_id",
     "get_invitation_by_token",
     "get_pending_invitation",
@@ -171,13 +218,19 @@ __all__ = [
     "mark_invitation_expired",
     "is_invitation_expired",
     "delete_invitation",
-    "get_membership",
-    "get_workspace_members",
-    "get_user_memberships",
-    "membership_exists",
-    "create_membership",
-    "ensure_owner_membership",
-    "remove_membership",
+    # replaced workspace_members block:
+    "create_workspace_member",
+    "get_workspace_member",
+    "get_workspace_member_by_id",
+    "list_workspace_members",
+    "count_workspace_members",
+    "count_workspace_admins",
+    "update_workspace_member_role",
+    "set_workspace_member_status",
+    "deactivate_workspace_member",
+    "reactivate_workspace_member",
+    "deactivate_all_workspace_grants_for_user",
+    # AI and document settings (untouched):
     "create_ai_settings",
     "get_ai_settings",
     "ai_settings_exists",
@@ -189,4 +242,28 @@ __all__ = [
     "update_document_settings",
     "delete_document_settings",
     "upsert_document_settings",
+    # added membership filters block:
+    "ACTIVE_ONLY",
+    "DIRECTORY_STATUSES",
+    "SEAT_CONSUMING_STATUSES",
+    # added organization block:
+    "create_organization",
+    "get_organization_by_id",
+    "get_organization_by_slug",
+    "is_organization_slug_available",
+    "list_organizations_for_user",
+    "count_organizations_owned_by_user",
+    "update_organization",
+    "set_organization_status",
+    # added organization_members block:
+    "create_organization_member",
+    "get_organization_member",
+    "get_organization_member_by_id",
+    "list_organization_members",
+    "count_active_owners",
+    "count_consumed_seats",
+    "update_organization_member_role",
+    "set_organization_member_status",
+    "deactivate_organization_member",
+    "reactivate_organization_member",
 ]
