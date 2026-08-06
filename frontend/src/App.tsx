@@ -1,6 +1,5 @@
 import { Suspense } from "react";
-import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
@@ -12,55 +11,55 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { Assistant } from "@/pages/Assistant/Assistant";
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
-import { OnboardingPage } from "@/pages/Auth/OnboardingPage";
 import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
 import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
 import { NotFound } from "@/pages/NotFound";
 import { Notifications } from "@/pages/Notifications/Notifications";
 import Settings from "@/pages/Settings/Settings";
+import CreateOrganizationPage from "@/pages/Tenant/CreateOrganizationPage";
+import NoAccess from "@/pages/Tenant/NoAccess";
+import WorkspacePicker from "@/pages/Tenant/WorkspacePicker";
 import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
 import { WorkItems } from "@/pages/WorkItems/WorkItems";
 
+import LegacyRouteRedirect from "@/routes/LegacyRouteRedirect";
 import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
+import TenantGuard from "@/routes/TenantGuard";
 
-import { getWorkspace } from "@/services/api/workspace";
-import { useAuthStore } from "@/store/useAuthStore";
+import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
 import { ROUTES } from "@/constants/routes";
 
-// ============================================================================
-// Onboarding Redirect Guard (Sprint 2)
-// ============================================================================
-
-const OnboardingGuard: React.FC = () => {
-  const token = useAuthStore((state) => state.token);
-
-  const { data: workspace, isLoading } = useQuery({
-    queryKey: ["workspace", token],
-    queryFn: getWorkspace,
-    retry: false,
-    enabled: !!token,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-foreground">
-        <span className="text-sm font-semibold animate-pulse text-muted-foreground">
-          Resolving workspace routing...
-        </span>
-      </div>
-    );
-  }
-
-  // If authenticated user does not belong to any workspace, force redirect to onboarding
-  if (!workspace) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  return <Outlet />;
-};
-
+/**
+ * Application route tree for FlowPilot AI.
+ *
+ * ARCH-01 replaced the inline OnboardingGuard that previously lived here. It
+ * called getWorkspace() and treated any falsy result as "no workspace", so an
+ * expired token and a genuinely membership-less user produced the same signal
+ * — session expiry sent people to the workspace creation screen instead of the
+ * login page, and removed members founded phantom organizations.
+ *
+ * Responsibility is now split across three guards, each with one job:
+ *
+ *   PrivateRoute   validates the session against /me/context before rendering
+ *                  anything. It no longer trusts the rehydrated localStorage
+ *                  flag, which said only "this browser once held a session".
+ *
+ *   TenantGuard    resolves organization and workspace, reconciles them
+ *                  against the URL, and publishes the result to descendants.
+ *                  Handles all six tenant states explicitly.
+ *
+ *   LegacyRouteRedirect  forwards pre-ARCH-01 flat paths to their
+ *                  tenant-scoped equivalents.
+ *
+ * ROUTE ORDERING
+ *
+ * Static segments outrank dynamic ones in React Router v6, so /work-items
+ * matches before /:orgSlug/:workspaceSlug. That ranking is a convenience; the
+ * real guarantee is the backend's reserved-slug list, which makes it
+ * impossible to name an organization "work-items" in the first place.
+ */
 export default function App() {
   return (
     <ErrorBoundary>
@@ -77,6 +76,10 @@ export default function App() {
 
             {/* ======================================
                 Invitation Acceptance (PUBLIC)
+
+                Preview is public so a recipient can see who invited them
+                before creating an account. Accepting requires a session — the
+                page handles that transition itself.
             ======================================= */}
             <Route
               path={ROUTES.INVITATION_ACCEPT}
@@ -105,47 +108,93 @@ export default function App() {
             </Route>
 
             {/* ======================================
-                Protected Routes
+                Authenticated, tenant-independent
+
+                These require a session but no tenant, so they mount under
+                PrivateRoute alone. Placing them under TenantGuard would be a
+                redirect loop: the guard sends a membership-less actor to
+                /onboarding, which would then need a tenant to render.
             ======================================= */}
             <Route element={<PrivateRoute />}>
-              {/* Workspace Onboarding Page */}
-              <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route
+                path={ROUTES.ONBOARDING}
+                element={<CreateOrganizationPage />}
+              />
 
-              {/* Secure Workspace Context Routes */}
-              <Route element={<OnboardingGuard />}>
+              <Route
+                path={ROUTES.WORKSPACES}
+                element={<WorkspacePicker />}
+              />
+
+              <Route
+                path={ROUTES.NO_ACCESS}
+                element={<NoAccess />}
+              />
+
+              {/* ======================================
+                  Legacy flat paths
+
+                  Forwarded to their tenant-scoped equivalents. Sidebar,
+                  navigation.ts, and DashboardLayout still link here until
+                  Step 8; these redirects keep every link working and remain
+                  useful afterwards for bookmarks saved before ARCH-01.
+              ======================================= */}
+              <Route path="/" element={<LegacyRouteRedirect />} />
+              <Route path="/work-items/*" element={<LegacyRouteRedirect />} />
+              <Route path="/assistant/*" element={<LegacyRouteRedirect />} />
+              <Route path="/automation/*" element={<LegacyRouteRedirect />} />
+              <Route
+                path="/notifications/*"
+                element={<LegacyRouteRedirect />}
+              />
+              <Route path="/settings/*" element={<LegacyRouteRedirect />} />
+              <Route path="/profile/*" element={<LegacyRouteRedirect />} />
+              <Route path="/account/*" element={<LegacyRouteRedirect />} />
+
+              {/* ======================================
+                  Workspace-scoped routes
+
+                  /:orgSlug/:workspaceSlug/... — the tenant is in the URL, so
+                  deep links survive, two tabs can hold two workspaces, and a
+                  refresh is idempotent.
+              ======================================= */}
+              <Route
+                path={ROUTE_PATTERNS.workspaceShell}
+                element={<TenantGuard />}
+              >
                 <Route element={<DashboardLayout />}>
                   <Route
-                    path={ROUTES.DASHBOARD}
+                    index
                     element={<Dashboard />}
                   />
 
                   <Route
-                    path={ROUTES.WORK_ITEMS}
+                    path={ROUTE_PATTERNS.workspaceWorkItems}
                     element={<WorkItems />}
                   />
 
                   <Route
-                    path={ROUTES.WORK_ITEM_DETAILS}
+                    path={ROUTE_PATTERNS.workspaceWorkItemDetails}
                     element={<WorkItemDetails />}
                   />
 
                   <Route
-                    path={ROUTES.ASSISTANT}
+                    path={ROUTE_PATTERNS.workspaceAssistant}
                     element={<Assistant />}
                   />
 
                   <Route
-                    path={ROUTES.AUTOMATION}
+                    path={ROUTE_PATTERNS.workspaceAutomation}
                     element={<Automation />}
                   />
 
                   <Route
-                    path={ROUTES.NOTIFICATIONS}
+                    path={ROUTE_PATTERNS.workspaceNotifications}
                     element={<Notifications />}
                   />
 
                   <Route
-                    path={ROUTES.SETTINGS}
+                    path={ROUTE_PATTERNS.workspaceSettings}
                     element={<Settings />}
                   />
                 </Route>
