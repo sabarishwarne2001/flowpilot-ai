@@ -117,6 +117,7 @@ RESERVED_SLUGS: frozenset[str] = frozenset(
         "logout",
         "me",
         "new",
+        "no-access",
         "notifications",
         "oauth",
         "onboarding",
