@@ -190,5 +190,5 @@ export const SETTINGS_ENDPOINTS = {
     `/workspaces/${seg(workspaceId)}/email-settings/test`,
 
   documentSettings: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/document-settings`,
+    `/workspaces/${seg(workspaceId)}/document-settings/`,
 } as const;

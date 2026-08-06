@@ -64,6 +64,13 @@ export const useMeContext = (): UseMeContextResult => {
     // would be waste.
     staleTime: 1000 * 60 * 5,
 
+    // Overrides the global refetchOnMount: "always", which defeats staleTime.
+    // Several guards mount this hook on a single navigation, so "always" turns
+    // one page load into three or four identical bootstrap requests. Tenancy
+    // changes are explicit — a switch, an accepted invitation, a role change —
+    // and each invalidates the key directly.
+    refetchOnMount: false,
+
     // A 401 is final. Retrying only delays the redirect to login.
     retry: (failureCount, error) => {
       if (error instanceof ApiError && error.status === 401) {
