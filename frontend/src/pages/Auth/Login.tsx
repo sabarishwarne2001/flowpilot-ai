@@ -12,6 +12,7 @@ import { ApiError } from "@/services/api/client";
 
 import { useAuthStore } from "@/store/useAuthStore";
 import { ROUTES } from "@/constants/routes";
+import { isSafeRedirectPath } from "@/routes/tenantPaths";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -21,34 +22,19 @@ export const Login: React.FC = () => {
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // Securely whitelist redirect destinations to mitigate Open Redirect vulnerabilities
-  const isValidRedirect = (path: string): boolean => {
-    if (!path) {
-      return false;
-    }
-    // Enforce relative paths that prevent protocol switches (e.g. bypassing "https:")
-    if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("\\")) {
-      return false;
-    }
-    const cleanPath = path.split("?")[0]?.split("#")[0] || "";
-    const allowedPrefixes = [
-      "/",
-      "/work-items",
-      "/assistant",
-      "/automation",
-      "/notifications",
-      "/profile",
-      "/settings",
-      "/account",
-      "/invitations/accept"
-    ];
-    return allowedPrefixes.some(prefix => {
-      if (prefix === "/") {
-        return cleanPath === "/";
-      }
-      return cleanPath.startsWith(prefix);
-    });
-  };
+  // Redirect validation moved to @/routes/tenantPaths.
+  //
+  // The previous implementation matched against a fixed list of path prefixes.
+  // That worked while every route was a known string, but a tenant path such
+  // as /acme/engineering/work-items matches no prefix — so once ARCH-01 route
+  // shapes land, every deep-link redirect would silently fall back to the
+  // dashboard and the user's destination would vanish without a trace.
+  //
+  // isSafeRedirectPath validates structurally instead: same-origin relative
+  // path, no scheme, no protocol-relative or backslash prefix, no control
+  // characters. That is the property open-redirect safety actually depends on,
+  // and it holds for paths containing user-chosen slugs.
+  const isValidRedirect = isSafeRedirectPath;
 
   const searchParams = new URLSearchParams(location.search);
   const redirectParam = searchParams.get("redirect");

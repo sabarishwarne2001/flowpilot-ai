@@ -14,6 +14,8 @@ import { assertPermissionParity } from "@/permissions";
 
 import { assertTenantResolutionIntegrity } from "@/hooks/tenantResolution";
 
+import { assertTenantPathIntegrity } from "@/routes/tenantPaths";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -58,6 +60,7 @@ export const queryClient = new QueryClient({
 if (import.meta.env.DEV) {
   assertPermissionParity();
   assertTenantResolutionIntegrity();
+  assertTenantPathIntegrity();
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
