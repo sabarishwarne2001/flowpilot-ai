@@ -1,22 +1,75 @@
 """
 Dependencies Module for FlowPilot AI.
 
-Hosts database session factories and security guards enforcing JWT token 
-verifications and session injection controllers.
+Hosts database session factories, authentication guards, and the tenant context
+resolution chain:
+
+    get_current_user            identity from the access token
+            |
+    get_current_active_user     account status check
+            |
+    get_organization_context    resolves and authorizes organization membership
+            |
+    get_workspace_context       resolves the workspace, requires organization
+            |                   membership, then applies the explicit grant or
+            |                   the derived organization elevation
+            |
+    RequireOrgRole / RequireWorkspaceRole    assert the role
+
+Two functions were removed in ARCH-01. Both resolved "the user's workspace"
+with no workspace filter:
+
+    get_current_workspace()
+    RequireRole.__call__()
+
+Each executed scalar_one_or_none() against a query that could legitimately
+match many rows, so a second active membership raised MultipleResultsFound and
+the account returned HTTP 500 on every request thereafter. They also emitted a
+404 reading "Workspace not configured. Please complete onboarding.", which sent
+removed members to organization creation.
+
+The tenant identifier now arrives as a path parameter and is authorized
+server-side. Master Plan section 4.6 forbade this, intending to prevent tenant
+leakage; the mechanism was inverted. Safety comes from validating the named
+tenant against the actor's membership, not from the client being unable to name
+one. Withholding the identifier only removed the server's ability to know which
+tenant the caller meant. GitHub, Slack, Linear, and Stripe all accept a tenant
+identifier and authorize it. There is now exactly one function resolving
+workspace authorization, against four independent call sites before.
 """
 
+from __future__ import annotations
+
 import uuid
-from typing import Generator, Union, List
-from fastapi import Depends, HTTPException, status
+from dataclasses import dataclass
+from typing import Annotated, Generator, Sequence, Union
+
+from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app import crud
 from app.core import security
 from app.core.config import settings
+from app.core.exceptions import (
+    OrganizationAccessDeniedError,
+    OrganizationPermissionDeniedError,
+    WorkspaceAccessDeniedError,
+    WorkspacePermissionDeniedError,
+)
+from app.core.workspace_permissions import is_at_least
+from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import SessionLocal
+from app.models.organization import (
+    Organization,
+    OrganizationMember,
+    OrganizationRole,
+)
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.services import organization_service
+from app.services import workspace_member_service
+from app.services import workspace_service
 
 # Instantiate standard OAuth2 authorization extractor targeting the unified login route
 oauth2_scheme = OAuth2PasswordBearer(
@@ -24,10 +77,14 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
+# ===========================================================================
+# Session
+# ===========================================================================
+
 def get_db() -> Generator[Session, None, None]:
     """
     Supplies an active transactional database session for a single HTTP request context.
-    
+
     Guarantees session release back to the connection pool upon request termination.
     """
     db = SessionLocal()
@@ -37,44 +94,52 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+# ===========================================================================
+# Authentication
+# ===========================================================================
+
 async def get_current_user(
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
 ) -> User:
     """
     Validates, parses, and resolves incoming JWT access tokens.
-    
-    Inspects claims signatures, extracts UUID subjects, and returns the 
+
+    Inspects claims signatures, extracts UUID subjects, and returns the
     corresponding authenticated User database record.
+
+    Raises HTTPException rather than a domain exception because a 401 must
+    carry the WWW-Authenticate header, and because authentication failure is a
+    protocol-level outcome rather than a business one.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     payload = security.decode_access_token(token)
     if payload is None:
         raise credentials_exception
-        
+
     token_sub: Union[str, None] = payload.get("sub")
     if token_sub is None:
         raise credentials_exception
-        
+
     try:
         user_uuid = uuid.UUID(token_sub)
     except ValueError:
         raise credentials_exception
-        
+
     user = crud.get_user_by_id(db, user_id=user_uuid)
     if user is None:
         raise credentials_exception
-        
+
     return user
 
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> User:
     """
     Secures API endpoints by enforcing that users must possess active accounts.
@@ -82,65 +147,326 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user account"
+            detail="Inactive user account",
         )
     return current_user
 
 
-async def get_current_workspace(
+#: Reusable annotated dependencies. Keep route signatures readable and ensure
+#: every handler resolves the session and actor the same way.
+DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
+
+
+# ===========================================================================
+# Context objects
+# ===========================================================================
+
+@dataclass(frozen=True)
+class OrganizationContext:
+    """
+    An authenticated actor's authorized standing in one organization.
+
+    Supplied to commercial and administrative routes. Reaching a handler at all
+    guarantees the organization exists and the actor holds an ACTIVE membership
+    in it.
+    """
+    user: User
+    organization: Organization
+    membership: OrganizationMember
+
+    @property
+    def user_id(self) -> uuid.UUID:
+        return self.user.id
+
+    @property
+    def organization_id(self) -> uuid.UUID:
+        return self.organization.id
+
+    @property
+    def role(self) -> OrganizationRole:
+        return self.membership.role
+
+
+@dataclass(frozen=True)
+class TenantContext:
+    """
+    An authenticated actor's fully resolved standing in one workspace.
+
+    The single object every tenant-scoped service accepts. Carries both tiers
+    because several decisions legitimately span them: granting workspace ADMIN,
+    for instance, requires organization-level standing.
+
+    workspace_membership may be None while effective_workspace_role is ADMIN.
+    That is the derived-elevation case, not an inconsistency: organization
+    OWNER and ADMIN hold ADMIN on every workspace without a stored grant, so
+    that an organization role change takes effect on the next request instead
+    of leaving stale rows behind.
+    """
+    user: User
+    organization: Organization
+    organization_membership: OrganizationMember
+    workspace: Workspace
+    workspace_membership: WorkspaceMember | None
+    effective_workspace_role: WorkspaceRole
+
+    @property
+    def user_id(self) -> uuid.UUID:
+        return self.user.id
+
+    @property
+    def organization_id(self) -> uuid.UUID:
+        return self.organization.id
+
+    @property
+    def workspace_id(self) -> uuid.UUID:
+        return self.workspace.id
+
+    @property
+    def organization_role(self) -> OrganizationRole:
+        return self.organization_membership.role
+
+    @property
+    def role(self) -> WorkspaceRole:
+        """Alias for effective_workspace_role, for concise route code."""
+        return self.effective_workspace_role
+
+
+# ===========================================================================
+# Context resolution
+# ===========================================================================
+
+async def get_organization_context(
+    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-) -> Workspace:
+) -> OrganizationContext:
     """
-    FastAPI dependency injection guard that resolves the active workspace 
-    directly from the authenticated user's active membership context.
-    
-    Prevents introducing path-level workspace_id parameter dependencies.
+    Resolves and authorizes the actor's membership in the addressed organization.
+
+    Mount on routes shaped /organizations/{organization_id}/... The path
+    parameter name must match exactly.
+
+    A non-member receives 404 rather than 403. A 403 would confirm the
+    organization exists, which is an enumeration oracle; GitHub applies the
+    same rule to private repositories.
     """
-    stmt = select(WorkspaceMember).where(
-        WorkspaceMember.user_id == current_user.id,
-        WorkspaceMember.is_active == True,
+    organization = organization_service.get_organization_or_raise(
+        db, organization_id=organization_id
     )
-    membership = db.execute(stmt).scalar_one_or_none()
-    if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not configured. Please complete onboarding.",
-        )
 
-    workspace = db.get(Workspace, membership.workspace_id)
-    if not workspace or not workspace.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Active workspace not found.",
-        )
+    membership = crud.get_organization_member(
+        db,
+        organization_id=organization.id,
+        user_id=current_user.id,
+        statuses=ACTIVE_ONLY,
+    )
+    if membership is None:
+        raise OrganizationAccessDeniedError("Organization not found.")
 
-    return workspace
+    organization_service.assert_organization_operational(organization)
+
+    return OrganizationContext(
+        user=current_user,
+        organization=organization,
+        membership=membership,
+    )
 
 
-class RequireRole:
+async def get_billing_organization_context(
+    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> OrganizationContext:
     """
-    Centralized, parameterized RBAC dependency injector.
-    
-    Resolves active workspace membership directly from current_user session context,
-    enforcing the commercial permission matrix at the API route level.
+    Resolves organization context WITHOUT requiring the tenant to be operational.
+
+    A suspended organization is blocked everywhere else, but its owner must
+    still reach billing to settle the balance that lifts the suspension.
+    Locking them out of the recovery path would be a self-inflicted support
+    incident. Mount only on billing and subscription routes; ARCH-05 consumes
+    this.
+
+    Membership is still required, so this weakens the tenant-status check
+    alone, never the access check.
     """
-    def __init__(self, allowed_roles: List[WorkspaceRole]) -> None:
-        self.allowed_roles = allowed_roles
+    organization = organization_service.get_organization_or_raise(
+        db, organization_id=organization_id
+    )
+
+    membership = crud.get_organization_member(
+        db,
+        organization_id=organization.id,
+        user_id=current_user.id,
+        statuses=ACTIVE_ONLY,
+    )
+    if membership is None:
+        raise OrganizationAccessDeniedError("Organization not found.")
+
+    return OrganizationContext(
+        user=current_user,
+        organization=organization,
+        membership=membership,
+    )
+
+
+async def get_workspace_context(
+    workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> TenantContext:
+    """
+    Resolves and authorizes the actor's standing in the addressed workspace.
+
+    Mount on routes shaped /workspaces/{workspace_id}/... The path parameter
+    name must match exactly.
+
+    The workspace identifier is taken directly rather than nested under the
+    organization, because a workspace identifier already determines its
+    organization. Requiring both would create two sources of truth and an
+    inconsistency check on every request. GitHub nests (/repos/{owner}/{repo})
+    because its identifier is a name needing a namespace; a UUID is not.
+
+    Resolution order, and why:
+      1. Load the workspace with its organization eagerly (one round trip).
+      2. Resolve access, which requires ACTIVE organization membership before
+         any workspace grant is considered. Organization membership is a
+         precondition for workspace access, not an alternative to it.
+      3. No access -> 404, never 403.
+      4. Assert both tenants are operational, so a suspended organization
+         blocks its workspaces without needing a separate check per workspace.
+
+    Costs three indexed lookups, with the third skipped for organization
+    administrators. ARCH-11 introduces caching with invalidation on role change.
+    """
+    workspace = workspace_service.get_workspace_or_raise(
+        db, workspace_id=workspace_id
+    )
+
+    access = workspace_member_service.resolve_workspace_access(
+        db, workspace=workspace, user_id=current_user.id
+    )
+
+    if not access.has_access:
+        raise WorkspaceAccessDeniedError("Workspace not found.")
+
+    organization_service.assert_organization_operational(workspace.organization)
+    workspace_service.assert_workspace_operational(workspace)
+
+    # Narrowed by has_access. Asserted so the dataclass fields stay
+    # non-optional for every downstream consumer.
+    assert access.organization_membership is not None
+    assert access.effective_role is not None
+
+    return TenantContext(
+        user=current_user,
+        organization=workspace.organization,
+        organization_membership=access.organization_membership,
+        workspace=workspace,
+        workspace_membership=access.workspace_membership,
+        effective_workspace_role=access.effective_role,
+    )
+
+
+OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
+WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
+
+
+# ===========================================================================
+# Role guards
+# ===========================================================================
+
+class RequireOrgRole:
+    """
+    Parameterized organization-level RBAC dependency.
+
+    Takes an EXPLICIT SET of permitted roles rather than a minimum, because
+    organization roles are not a ladder. BILLING grants billing visibility
+    while granting less content access than MEMBER, so it sits on no coherent
+    rung and a minimum-based guard would include or exclude it wrongly. The
+    argument type is the signal: a sequence means an explicit set.
+
+    Usage:
+        @router.get("/organizations/{organization_id}/members")
+        async def list_members(
+            context: OrganizationContext = Depends(
+                deps.RequireOrgRole([OrganizationRole.OWNER,
+                                     OrganizationRole.ADMIN])
+            ),
+        ): ...
+
+    Composes get_organization_context, so membership, existence, and tenant
+    status are already validated by the time __call__ runs. A rejection here is
+    always 403: the actor is a member, so acknowledging the organization
+    discloses nothing.
+    """
+
+    def __init__(self, allowed_roles: Sequence[OrganizationRole]) -> None:
+        self.allowed_roles = frozenset(allowed_roles)
 
     def __call__(
         self,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_active_user),
-    ) -> WorkspaceMember:
-        stmt = select(WorkspaceMember).where(
-            WorkspaceMember.user_id == current_user.id,
-            WorkspaceMember.is_active == True,
-        )
-        membership = db.execute(stmt).scalar_one_or_none()
-        if not membership or membership.role not in self.allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied. Insufficient workspace privilege levels.",
+        context: OrganizationContext = Depends(get_organization_context),
+    ) -> OrganizationContext:
+        if context.role not in self.allowed_roles:
+            raise OrganizationPermissionDeniedError(
+                "You do not have permission to perform this action in this "
+                "organization."
             )
-        return membership
+        return context
+
+
+class RequireWorkspaceRole:
+    """
+    Parameterized workspace-level RBAC dependency.
+
+    Takes a MINIMUM role rather than a set, because workspace roles do form a
+    true ladder: ADMIN holds every capability of CONTRIBUTOR, which holds every
+    capability of VIEWER. Enumerating a set at each route would invite the
+    omissions that a ladder makes impossible.
+
+    Usage:
+        @router.post("/workspaces/{workspace_id}/work-items")
+        async def create_item(
+            context: TenantContext = Depends(
+                deps.RequireWorkspaceRole(WorkspaceRole.CONTRIBUTOR)
+            ),
+        ): ...
+
+    The role checked is the EFFECTIVE role, so an organization OWNER or ADMIN
+    satisfies any workspace requirement through their derived grant without
+    holding a stored row.
+
+    A rejection here is always 403: reaching this guard means the actor already
+    has some access to the workspace, so its existence is not a secret from
+    them.
+    """
+
+    def __init__(self, minimum_role: WorkspaceRole) -> None:
+        self.minimum_role = minimum_role
+
+    def __call__(
+        self,
+        context: TenantContext = Depends(get_workspace_context),
+    ) -> TenantContext:
+        if not is_at_least(context.effective_workspace_role, self.minimum_role):
+            raise WorkspacePermissionDeniedError(
+                "You do not have permission to perform this action in this "
+                "workspace."
+            )
+        return context
+
+
+#: Convenience guards for the three common workspace requirements.
+RequireWorkspaceViewer = RequireWorkspaceRole(WorkspaceRole.VIEWER)
+RequireWorkspaceContributor = RequireWorkspaceRole(WorkspaceRole.CONTRIBUTOR)
+RequireWorkspaceAdmin = RequireWorkspaceRole(WorkspaceRole.ADMIN)
+
+#: Convenience guard for organization administration.
+RequireOrgAdmin = RequireOrgRole(
+    [OrganizationRole.OWNER, OrganizationRole.ADMIN]
+)
+
+#: Convenience guard for owner-only operations: billing changes, organization
+#: deletion, ownership transfer, SSO, and security policy.
+RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
