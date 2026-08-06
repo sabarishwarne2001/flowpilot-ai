@@ -1,13 +1,12 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 
 import Workspace from "./Workspace";
 import EmailSettings from "./EmailSettings";
 import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
-import { getMyMembership } from "@/services/api/workspace";
-import LoadingScreen from "@/components/common/LoadingScreen";
+import { isAtLeast } from "@/permissions/workspacePermissions";
+import { useResolvedTenant } from "@/routes/TenantContext";
 
 export const PermissionDenied: React.FC = () => {
   return (
@@ -23,23 +22,32 @@ export const PermissionDenied: React.FC = () => {
   );
 };
 
+/**
+ * Workspace settings shell.
+ *
+ * ARCH-01 removed the membership query that previously gated this page. It
+ * called GET /workspace/members/me — deleted in the backend transformation —
+ * and every settings tab waited behind a LoadingScreen for a request that
+ * always 404s.
+ *
+ * The role now comes from TenantContext, already resolved by TenantGuard
+ * before this component mounts. There is no request and therefore no loading
+ * state.
+ *
+ * The role read here is the EFFECTIVE role, so an organization admin holding
+ * no stored workspace grant reaches settings. The previous check compared
+ * against a stored membership, which is null for those users — the most
+ * privileged accounts were the ones it locked out.
+ */
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState<
     "workspace" | "email" | "ai" | "document"
   >("workspace");
 
-  const { data: myMembership, isLoading } = useQuery({
-    queryKey: ["workspace_membership_me"],
-    queryFn: getMyMembership,
-    retry: false,
-  });
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
+  const { workspaceRole } = useResolvedTenant();
 
   // Intercept and prevent VIEWER role manual URL accesses
-  if (myMembership?.role === "VIEWER") {
+  if (!isAtLeast(workspaceRole, "CONTRIBUTOR")) {
     return <PermissionDenied />;
   }
 

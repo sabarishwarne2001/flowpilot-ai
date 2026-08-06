@@ -13,13 +13,13 @@ import { ApiError } from "@/services/api/client";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWorkspace } from "@/context/WorkspaceContext";
+import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
+import { useResolvedTenant } from "@/routes/TenantContext";
 
 import {
   emailSettingsSchema,
   type EmailSettingsFormData,
 } from "@/schemas/emailSettings";
-import { getMyMembership } from "@/services/api/workspace";
 
 export const EmailSettings: React.FC = () => {
   const queryClient = useQueryClient();
@@ -43,21 +43,19 @@ export const EmailSettings: React.FC = () => {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testRecipient, setTestRecipient] = useState("");
 
-  const { workspace } = useWorkspace();
+  // Tenant context replaces the workspace provider removed in Step 8a. The
+  // sender-name placeholder below reads workspace.workspace_name from here.
+  const { workspace, workspaceRole } = useResolvedTenant();
 
   const { data: emailSettings, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["email-settings"],
     queryFn: getEmailSettings,
   });
 
-  // Query workspace membership role to secure controls
-  const { data: myMembership } = useQuery({
-    queryKey: ["workspace_membership_me"],
-    queryFn: getMyMembership,
-    retry: false,
-  });
-
-  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+  // Effective role from TenantContext. See the note in AISettings.tsx: the
+  // previous check queried a deleted endpoint and compared against deleted
+  // role names, so it was permanently false.
+  const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
   useEffect(() => {
     if (!emailSettings) {

@@ -23,7 +23,8 @@ import {
 } from "@/schemas/aiSettings";
 
 import type { AIConnectionTestResponse } from "@/types/aiConnectionTest";
-import { getMyMembership } from "@/services/api/workspace";
+import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
+import { useResolvedTenant } from "@/routes/TenantContext";
 
 export const AISettings: React.FC = () => {
   const queryClient = useQueryClient();
@@ -77,14 +78,17 @@ export const AISettings: React.FC = () => {
     queryFn: getAvailableProviders,
   });
 
-  // Query workspace membership role to secure controls
-  const { data: myMembership } = useQuery({
-    queryKey: ["workspace_membership_me"],
-    queryFn: getMyMembership,
-    retry: false,
-  });
+  // Effective workspace role, already resolved by TenantGuard. The previous
+  // implementation queried GET /workspace/members/me — deleted in ARCH-01 —
+  // and compared against OWNER/MANAGER, two role names that no longer exist.
+  // The comparison was therefore permanently false, so this form was read-only
+  // for everyone including owners.
+  //
+  // workspaceRole includes derived elevation: an organization OWNER or ADMIN
+  // reads ADMIN here whether or not a stored workspace grant exists.
+  const { workspaceRole } = useResolvedTenant();
 
-  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+  const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
   const [connectionResult, setConnectionResult] =
     useState<AIConnectionTestResponse | null>(null);

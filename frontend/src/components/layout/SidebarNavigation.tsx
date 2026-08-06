@@ -1,32 +1,58 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 
-import { ROUTES } from "@/constants/routes";
-import { NAVIGATION_ITEMS } from "./navigation";
-import { getMyMembership } from "@/services/api/workspace";
+import { buildNavigationItems } from "./navigation";
+import { isAtLeast } from "@/permissions/workspacePermissions";
+import { useResolvedTenant } from "@/routes/TenantContext";
+import { workspaceDashboardPath, workspaceSettingsPath } from "@/routes/tenantPaths";
 
 interface SidebarNavigationProps {
   readonly collapsed: boolean;
   readonly onNavigate?: () => void;
 }
 
+/**
+ * Primary navigation for the workspace shell.
+ *
+ * ARCH-01 removed two things from this component.
+ *
+ * The membership query. It called GET /workspace/members/me on every render of
+ * the shell — an endpoint deleted in the backend transformation, so it 404s —
+ * and compared the result against role names that no longer exist. The role is
+ * now read from TenantContext, which TenantGuard has already resolved, so the
+ * sidebar costs no request at all.
+ *
+ * The flat route constants. Every item linked to /work-items and its siblings,
+ * which still resolve through LegacyRouteRedirect but cost a redirect hop per
+ * click and briefly show a non-canonical URL. Paths are now built for the
+ * active tenant.
+ *
+ * Role filtering is unchanged in effect: viewers do not see Settings.
+ * isAtLeast(role, CONTRIBUTOR) is the same predicate over the new role set,
+ * and it reads the EFFECTIVE role — so an organization admin holding no stored
+ * workspace grant sees the full menu, where the previous check hid it from
+ * them.
+ */
 const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   collapsed,
   onNavigate,
 }) => {
-  // Query active membership role to filter visibility of settings dynamically
-  const { data: myMembership } = useQuery({
-    queryKey: ["workspace_membership_me"],
-    queryFn: getMyMembership,
-    retry: false,
-  });
+  const { organization, workspace, workspaceRole } = useResolvedTenant();
 
-  const role = myMembership?.role;
+  const orgSlug = organization.organization_slug;
+  const workspaceSlug = workspace.slug;
 
-  // Viewers cannot inspect settings tabs
-  const filteredNavigationItems = NAVIGATION_ITEMS.filter((item) => {
-    if (item.path === ROUTES.SETTINGS && role === "VIEWER") {
+  const dashboardPath = workspaceDashboardPath(orgSlug, workspaceSlug);
+  const settingsPath = workspaceSettingsPath(orgSlug, workspaceSlug);
+
+  const navigationItems = useMemo(
+    () => buildNavigationItems(orgSlug, workspaceSlug),
+    [orgSlug, workspaceSlug],
+  );
+
+  // Viewers cannot inspect settings tabs.
+  const filteredNavigationItems = navigationItems.filter((item) => {
+    if (item.path === settingsPath && !isAtLeast(workspaceRole, "CONTRIBUTOR")) {
       return false;
     }
     return true;
@@ -53,7 +79,10 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
             key={item.path}
             to={item.path}
             onClick={onNavigate}
-            end={item.path === ROUTES.DASHBOARD}
+            // The dashboard IS the workspace root, so every other item's path
+            // is a prefix match against it. Without `end` it would render as
+            // active on every page.
+            end={item.path === dashboardPath}
             title={collapsed ? item.name : undefined}
             className={({ isActive }) =>
               `
@@ -100,13 +129,10 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
                   bg-card
                   px-2.5 py-1.5
                   text-xs font-semibold
-                  text-foreground
-                  shadow-md
                   opacity-0
+                  shadow-lg
                   transition-opacity
-                  duration-150
                   group-hover:opacity-100
-                  group-focus-visible:opacity-100
                 "
               >
                 {item.name}

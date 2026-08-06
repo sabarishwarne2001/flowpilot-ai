@@ -1,9 +1,22 @@
 import { Outlet } from "react-router-dom";
 import { Brand } from "@/components/branding/Brand";
-import { useWorkspace } from "@/context/WorkspaceContext";
 
+/**
+ * Layout for unauthenticated screens.
+ *
+ * ARCH-01 removed the workspace lookup from this component. It called
+ * useWorkspace() on the login page, where no tenant exists — which is why the
+ * old provider fell back to GET /workspace/public, an endpoint that returned
+ * the oldest workspace row in the database to any anonymous visitor. That
+ * disclosed one tenant's name, logo, and locale to everyone who reached the
+ * sign-in screen, and the endpoint was deleted in the backend transformation.
+ *
+ * The footer now shows the product name. Per-tenant branding on an
+ * unauthenticated screen requires the visitor to have identified which tenant
+ * they belong to, which only an invitation token does — that arrives with the
+ * ARCH-04 invitation flow, on the invitation page rather than here.
+ */
 export const AuthLayout = () => {
-  const { workspace } = useWorkspace();
   return (
     <main className="min-h-dvh grid grid-cols-1 lg:grid-cols-12 bg-background text-foreground transition-colors duration-200">
       {/* ===========================
@@ -45,10 +58,7 @@ export const AuthLayout = () => {
         </div>
 
         <footer className="z-10 mt-8 flex items-center justify-between border-t border-border/40 pt-8 text-xs text-muted-foreground/60">
-          <span>
-            © {new Date().getFullYear()}{" "}
-            {workspace?.workspace_name ?? "FlowPilot AI"}
-          </span>
+          <span>© {new Date().getFullYear()} FlowPilot AI</span>
 
           <span>All rights reserved.</span>
         </footer>

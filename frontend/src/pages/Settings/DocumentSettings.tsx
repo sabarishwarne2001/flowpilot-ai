@@ -18,7 +18,8 @@ import {
   documentSettingsSchema,
   type DocumentSettingsFormData,
 } from "@/schemas/documentSettings";
-import { getMyMembership } from "@/services/api/workspace";
+import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
+import { useResolvedTenant } from "@/routes/TenantContext";
 
 export const DocumentSettings: React.FC = () => {
   const queryClient = useQueryClient();
@@ -49,14 +50,10 @@ export const DocumentSettings: React.FC = () => {
       queryFn: getDocumentSettings,
     });
 
-  // Query workspace membership role to secure controls
-  const { data: myMembership } = useQuery({
-    queryKey: ["workspace_membership_me"],
-    queryFn: getMyMembership,
-    retry: false,
-  });
+  // Effective role from TenantContext. See the note in AISettings.tsx.
+  const { workspaceRole } = useResolvedTenant();
 
-  const canManageSettings = myMembership?.role === "OWNER" || myMembership?.role === "MANAGER";
+  const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
   useEffect(() => {
     if (!documentSettings) {
