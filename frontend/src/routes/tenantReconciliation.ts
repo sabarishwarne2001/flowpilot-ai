@@ -115,6 +115,7 @@ const ws = (slug: string, orgId: string): WorkspaceSummary => ({
   workspace_name: slug,
   status: "ACTIVE",
   effective_role: "ADMIN",
+  company_logo_url: null,
 });
 
 const org = (

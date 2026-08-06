@@ -1,5 +1,21 @@
 import React, { useState } from "react";
-import { useWorkspace } from "@/context/WorkspaceContext";
+
+import { useOptionalTenant } from "@/routes/TenantContext";
+
+/**
+ * Brand mark for FlowPilot AI.
+ *
+ * ARCH-01 removed the workspace context this component read. workspace.company_name
+ * no longer exists — it was the tenant's identity rather than the workspace's,
+ * and moved to Organization.name, which is what the subtitle now shows.
+ *
+ * useOptionalTenant rather than useResolvedTenant: this renders in AuthLayout
+ * on the login screen, outside any tenant provider, where useResolvedTenant
+ * throws by design. Outside tenant scope the component falls back to the
+ * product name — which is also the correct security posture, since the
+ * previous per-tenant login branding came from an endpoint that disclosed the
+ * oldest tenant's identity to every anonymous visitor.
+ */
 
 export type BrandVariant =
   | "sidebar"
@@ -45,6 +61,16 @@ const BRAND_VARIANTS = {
   },
 } as const;
 
+/**
+ * Origin of the API server, for resolving relative logo paths.
+ *
+ * company_logo_url is stored as a server-relative path such as
+ * /uploads/logos/x.png, so it needs the API origin rather than the app origin.
+ */
+const API_ORIGIN = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
+).replace("/api/v1", "");
+
 function BrandSkeleton({ variant }: { variant: BrandVariant }) {
   const config = BRAND_VARIANTS[variant];
   const showText = variant !== "sidebar-compact";
@@ -71,30 +97,22 @@ export const Brand: React.FC<BrandProps> = ({
   variant = "sidebar",
   className = "",
 }) => {
-  const { workspace, isLoading } = useWorkspace();
-
-  const isWorkspaceReady =
-    !isLoading && workspace !== null;
+  const tenant = useOptionalTenant();
 
   const [logoError, setLogoError] = useState(false);
 
-  if (!isWorkspaceReady) {
-    return <BrandSkeleton variant={variant} />;
-  }
+  // No skeleton outside tenant scope. TenantGuard resolves the tenant before
+  // anything beneath it mounts, so there is no in-between state here — and on
+  // the login screen a permanent skeleton would be worse than the product
+  // name.
+  const workspaceName = tenant?.workspace.workspace_name ?? "FlowPilot AI";
 
-  const workspaceName = workspace?.workspace_name ?? "FlowPilot AI";
+  const companyName =
+    tenant?.organization.organization_name ?? "AI Document Intelligence";
 
-  const companyName = workspace?.company_name ?? "AI Document Intelligence";
+  const logoPath = tenant?.workspace.company_logo_url ?? null;
 
-  const API_BASE_URL =
-    (import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1").replace(
-      "/api/v1",
-      "",
-    );
-
-  const logo = workspace?.company_logo_url
-    ? `${API_BASE_URL}${workspace.company_logo_url}`
-    : null;
+  const logo = logoPath ? `${API_ORIGIN}${logoPath}` : null;
 
   const initials = (workspaceName || companyName || "FP")
     .trim()
@@ -171,5 +189,7 @@ export const Brand: React.FC<BrandProps> = ({
     </div>
   );
 };
+
+export { BrandSkeleton };
 
 export default Brand;

@@ -147,3 +147,48 @@ export const INVITATION_ENDPOINTS = {
   accept: "/invitations/accept",
   reject: "/invitations/reject",
 } as const;
+
+/* ==========================================================================
+ * Workspace-scoped settings
+ * ==========================================================================
+ *
+ * These three routers moved under the tenant prefix in backend ARCH-01 Step
+ * 9c-2:
+ *
+ *   /ai-settings        ->  /workspaces/{workspace_id}/ai-settings
+ *   /email-settings     ->  /workspaces/{workspace_id}/email-settings
+ *   /document-settings  ->  /workspaces/{workspace_id}/document-settings
+ *
+ * The move was made in the router registration rather than in each route
+ * decorator, so no backend handler changed — which is also why the frontend
+ * services were overlooked. Centralising the paths here means the next such
+ * move is one edit, not three.
+ *
+ * The underlying rows are still keyed on user_id, not workspace_id. The route
+ * is tenant-addressed and tenant-authorized; the data is not yet
+ * tenant-scoped. ARCH-02 closes that gap, and having the correct route shape
+ * already in place means ARCH-02 touches only the query layer.
+ */
+
+export const SETTINGS_ENDPOINTS = {
+  aiSettings: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/ai-settings`,
+
+  aiSettingsModels: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/ai-settings/models`,
+
+  aiSettingsProviders: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/ai-settings/providers`,
+
+  aiSettingsTest: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/ai-settings/test`,
+
+  emailSettings: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/email-settings`,
+
+  emailSettingsTest: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/email-settings/test`,
+
+  documentSettings: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/document-settings`,
+} as const;

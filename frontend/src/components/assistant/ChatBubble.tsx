@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Bot, User, FileText } from "lucide-react";
-import { useWorkspace } from "@/context/WorkspaceContext";
+import { useOptionalTenant } from "@/routes/TenantContext";
 
 import type { ConversationMessage, SourceCitation } from "@/types/assistant";
 
@@ -101,7 +101,10 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
   ({ message, onCitationClick, className = "" }) => {
     const isUser = message.role === "user";
     const [showTokenUsage, setShowTokenUsage] = useState(false);
-    const { workspace } = useWorkspace();
+    // Optional rather than resolved: ChatBubble is exported and may render in
+    // previews or tests outside a tenant provider, where useResolvedTenant
+    // throws. The assistant label falls back cleanly.
+    const tenant = useOptionalTenant();
     return (
       <article
         className={`
@@ -182,7 +185,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
               )}
 
               <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {isUser ? "You" : (workspace?.workspace_name ?? "Assistant")}
+                {isUser ? "You" : (tenant?.workspace.workspace_name ?? "Assistant")}
               </span>
             </div>
 

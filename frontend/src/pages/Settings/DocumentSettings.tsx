@@ -23,6 +23,10 @@ import { useResolvedTenant } from "@/routes/TenantContext";
 
 export const DocumentSettings: React.FC = () => {
   const queryClient = useQueryClient();
+
+  // Effective role from TenantContext.
+  const { workspace, workspaceRole } = useResolvedTenant();
+
   const {
     register,
     handleSubmit,
@@ -46,12 +50,9 @@ export const DocumentSettings: React.FC = () => {
 
   const { data: documentSettings, isLoading: isLoadingDocumentSettings } =
     useQuery({
-      queryKey: ["document-settings"],
-      queryFn: getDocumentSettings,
+      queryKey: ["document-settings", workspace.id],
+      queryFn: () => getDocumentSettings(workspace.id),
     });
-
-  // Effective role from TenantContext. See the note in AISettings.tsx.
-  const { workspaceRole } = useResolvedTenant();
 
   const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
@@ -76,7 +77,7 @@ export const DocumentSettings: React.FC = () => {
 
   const { mutateAsync: saveDocumentSettings, isPending: isSaving } =
     useMutation({
-      mutationFn: updateDocumentSettings,
+      mutationFn: (data: DocumentSettingsFormData) => updateDocumentSettings(workspace.id, data),
       onSuccess: async () => {
         toast.success("Document settings saved successfully.");
         await queryClient.invalidateQueries({ queryKey: ["document-settings"] });

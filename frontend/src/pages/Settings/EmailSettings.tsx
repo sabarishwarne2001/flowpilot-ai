@@ -23,6 +23,10 @@ import {
 
 export const EmailSettings: React.FC = () => {
   const queryClient = useQueryClient();
+
+  // Tenant context replaces the workspace provider.
+  const { workspace, workspaceRole } = useResolvedTenant();
+
   const {
     register,
     handleSubmit,
@@ -43,18 +47,11 @@ export const EmailSettings: React.FC = () => {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testRecipient, setTestRecipient] = useState("");
 
-  // Tenant context replaces the workspace provider removed in Step 8a. The
-  // sender-name placeholder below reads workspace.workspace_name from here.
-  const { workspace, workspaceRole } = useResolvedTenant();
-
   const { data: emailSettings, isLoading: isLoadingSettings } = useQuery({
-    queryKey: ["email-settings"],
-    queryFn: getEmailSettings,
+    queryKey: ["email-settings", workspace.id],
+    queryFn: () => getEmailSettings(workspace.id),
   });
 
-  // Effective role from TenantContext. See the note in AISettings.tsx: the
-  // previous check queried a deleted endpoint and compared against deleted
-  // role names, so it was permanently false.
   const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
   useEffect(() => {
@@ -73,7 +70,7 @@ export const EmailSettings: React.FC = () => {
   }, [emailSettings, reset]);
 
   const { mutateAsync: saveSettings, isPending: isSaving } = useMutation({
-    mutationFn: saveEmailSettings,
+    mutationFn: (data: EmailSettingsFormData) => saveEmailSettings(workspace.id, data),
     onSuccess: async () => {
       toast.success("Email settings saved successfully.");
       await queryClient.invalidateQueries({ queryKey: ["email-settings"] });
@@ -88,7 +85,7 @@ export const EmailSettings: React.FC = () => {
   });
 
   const { mutateAsync: sendTestEmail, isPending: isSendingTest } = useMutation({
-    mutationFn: testEmailSettings,
+    mutationFn: (payload: { recipient: string }) => testEmailSettings(workspace.id, payload),
     onSuccess: () => {
       toast.success("Test email sent successfully.");
     },

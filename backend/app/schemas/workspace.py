@@ -128,6 +128,7 @@ class WorkspaceSummary(BaseModel):
     slug: str
     workspace_name: str
     status: WorkspaceStatus
+    company_logo_url: str | None = None
     effective_role: WorkspaceRole
 
     model_config = ConfigDict(from_attributes=True)

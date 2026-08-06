@@ -175,6 +175,7 @@ export interface WorkspaceSummary {
   slug: string;
   workspace_name: string;
   status: WorkspaceStatus;
+  company_logo_url: string | null;
   effective_role: WorkspaceRole;
 }
 

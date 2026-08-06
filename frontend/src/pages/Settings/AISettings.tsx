@@ -28,6 +28,10 @@ import { useResolvedTenant } from "@/routes/TenantContext";
 
 export const AISettings: React.FC = () => {
   const queryClient = useQueryClient();
+
+  // Effective workspace role, already resolved by TenantGuard.
+  const { workspace, workspaceRole } = useResolvedTenant();
+
   const {
     register,
     handleSubmit,
@@ -61,32 +65,22 @@ export const AISettings: React.FC = () => {
   });
 
   const { data: aiSettings, isLoading: isLoadingAISettings } = useQuery({
-    queryKey: ["ai-settings"],
-    queryFn: getAISettings,
+    queryKey: ["ai-settings", workspace.id],
+    queryFn: () => getAISettings(workspace.id),
   });
 
   const { data: supportedModels, isLoading: isLoadingModels } = useQuery({
-    queryKey: ["supported-models"],
-    queryFn: getSupportedModels,
+    queryKey: ["supported-models", workspace.id],
+    queryFn: () => getSupportedModels(workspace.id),
   });
 
   const {
     data: availableProviders,
     isLoading: isLoadingProviders,
   } = useQuery({
-    queryKey: ["available-providers"],
-    queryFn: getAvailableProviders,
+    queryKey: ["available-providers", workspace.id],
+    queryFn: () => getAvailableProviders(workspace.id),
   });
-
-  // Effective workspace role, already resolved by TenantGuard. The previous
-  // implementation queried GET /workspace/members/me — deleted in ARCH-01 —
-  // and compared against OWNER/MANAGER, two role names that no longer exist.
-  // The comparison was therefore permanently false, so this form was read-only
-  // for everyone including owners.
-  //
-  // workspaceRole includes derived elevation: an organization OWNER or ADMIN
-  // reads ADMIN here whether or not a stored workspace grant exists.
-  const { workspaceRole } = useResolvedTenant();
 
   const canManageSettings = canManageWorkspaceSettings(workspaceRole);
 
@@ -129,7 +123,7 @@ export const AISettings: React.FC = () => {
   }, [selectedProvider, supportedModels, getValues, setValue]);
 
   const { mutateAsync: saveAISettings, isPending: isSaving } = useMutation({
-    mutationFn: updateAISettings,
+    mutationFn: (data: AISettingsFormData) => updateAISettings(workspace.id, data),
     onSuccess: async () => {
       toast.success("AI settings saved successfully.");
       await queryClient.invalidateQueries({ queryKey: ["ai-settings"] });
@@ -145,7 +139,7 @@ export const AISettings: React.FC = () => {
 
   const { mutateAsync: testConnection, isPending: isTestingConnection } =
     useMutation({
-      mutationFn: testAIConnection,
+      mutationFn: (data: AISettingsFormData) => testAIConnection(workspace.id, data),
     });
 
   const onSubmit = async (data: AISettingsFormData): Promise<void> => {
@@ -233,7 +227,7 @@ export const AISettings: React.FC = () => {
               {...register("provider")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
             >
-              {availableProviders?.providers.map((provider) => (
+              {availableProviders?.providers.map((provider: string) => (
                 <option key={provider} value={provider}>
                   {provider === "GROQ" ? "Groq" : provider === "GEMINI" ? "Google Gemini" : provider}
                 </option>

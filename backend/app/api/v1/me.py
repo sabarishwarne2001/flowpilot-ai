@@ -126,6 +126,7 @@ async def get_my_context(
                     slug=workspace.slug,
                     workspace_name=workspace.workspace_name,
                     status=workspace.status,
+                    company_logo_url=workspace.company_logo_url,
                     effective_role=effective_role,
                 )
             )
@@ -193,6 +194,7 @@ async def list_my_workspaces(
                 slug=workspace.slug,
                 workspace_name=workspace.workspace_name,
                 status=workspace.status,
+                company_logo_url=workspace.company_logo_url,
                 effective_role=grant.role,
             )
         )

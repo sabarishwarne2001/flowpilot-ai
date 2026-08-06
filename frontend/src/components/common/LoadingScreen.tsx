@@ -2,16 +2,23 @@ import React from "react";
 import { Loader2 } from "lucide-react";
 
 import { Brand } from "@/components/branding/Brand";
-import { useWorkspace } from "@/context/WorkspaceContext";
+import { useOptionalTenant } from "@/routes/TenantContext";
 
 /**
  * Full-viewport, stateless application loading screen for FlowPilot AI.
  *
  * Provides automated transitions, aligns with system design languages,
  * and complies with accessibility guidelines during startup or lazy-loads transitions.
+ *
+ * ARCH-01 replaced the workspace context with optional tenant context. This is
+ * the Suspense fallback in App.tsx, mounted ABOVE every guard, so it renders
+ * during the initial load of every session — before any tenant is resolved and
+ * outside the provider entirely. useResolvedTenant would throw there by
+ * design, which is why this one reads the optional variant.
  */
 export const LoadingScreen: React.FC = () => {
-  const { workspace } = useWorkspace();
+  const tenant = useOptionalTenant();
+
   return (
     <div
       className="min-h-dvh w-full flex items-center justify-center p-6 bg-background text-foreground transition-colors duration-200 select-none"
@@ -33,7 +40,7 @@ export const LoadingScreen: React.FC = () => {
         {/* Loading Indicators Text Pane */}
         <div className="space-y-1.5">
           <h1 className="text-sm font-extrabold text-foreground">
-            Loading {workspace?.workspace_name ?? "Workspace"}...
+            Loading {tenant?.workspace.workspace_name ?? "Workspace"}...
           </h1>
           <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
             Preparing your workspace.

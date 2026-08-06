@@ -290,6 +290,7 @@ const stubWorkspace = (
   workspace_name: id,
   status: "ACTIVE",
   effective_role: role,
+  company_logo_url: null,
 });
 
 const stubOrganization = (
