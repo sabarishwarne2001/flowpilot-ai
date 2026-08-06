@@ -248,3 +248,11 @@ def delete_invitation(
     Participates in the caller's transaction context.
     """
     db.delete(invitation)
+
+
+# ============================================================================
+# Aliases
+# ============================================================================
+
+# Alias to satisfy the runtime contract verification script
+list_pending_invitations = list_pending_workspace_invitations

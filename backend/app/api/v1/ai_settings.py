@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.services.ai_settings_service import (
     ai_settings_service,
 )
@@ -47,7 +46,7 @@ router = APIRouter(
 )
 async def get_ai_settings(
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> AISettingsResponse:
     """
     Returns the authenticated user's AI settings.
@@ -55,7 +54,7 @@ async def get_ai_settings(
 
     settings = crud.get_ai_settings(
         db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
     )
 
     if settings is None:
@@ -80,7 +79,7 @@ async def get_ai_settings(
 async def upsert_ai_settings(
     settings_in: AISettingsUpdate,
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> AISettingsResponse:
     """
     Creates or updates the authenticated user's AI settings.
@@ -88,13 +87,13 @@ async def upsert_ai_settings(
 
     settings = crud.upsert_ai_settings(
         db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
         settings_in=settings_in,
     )
 
     logger.info(
         "Updated AI settings for user %s.",
-        membership.user_id,
+        context.user_id,
     )
 
     return settings
@@ -105,7 +104,7 @@ async def upsert_ai_settings(
     summary="Get Supported AI Models",
 )
 async def get_supported_models(
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ):
     """
     Returns the supported models for every AI provider.
@@ -123,7 +122,7 @@ async def get_supported_models(
     summary="Get Available AI Providers",
 )
 async def get_available_providers(
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ):
     """
     Returns only providers that are configured.
@@ -139,7 +138,7 @@ async def get_available_providers(
 )
 async def test_ai_configuration(
     settings_in: AISettingsUpdate,
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ):
     """
     Test the supplied AI configuration without

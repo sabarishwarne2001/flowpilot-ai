@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.schemas.email_settings import (
     EmailSettingsCreate,
     EmailSettingsResponse,
@@ -40,7 +39,7 @@ router = APIRouter(
 )
 async def get_email_settings(
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> EmailSettingsResponse:
     """
     Returns the authenticated user's SMTP settings.
@@ -48,7 +47,7 @@ async def get_email_settings(
 
     settings = crud.get_email_settings(
         db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
     )
 
     if settings is None:
@@ -73,7 +72,7 @@ async def get_email_settings(
 async def upsert_email_settings(
     settings_in: EmailSettingsCreate,
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> EmailSettingsResponse:
     """
     Creates or updates SMTP settings.
@@ -81,13 +80,13 @@ async def upsert_email_settings(
 
     settings = crud.upsert_email_settings(
         db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
         settings_in=settings_in,
     )
 
     logger.info(
         "Updated email settings for user %s.",
-        membership.user_id,
+        context.user_id,
     )
 
     return settings
@@ -106,7 +105,7 @@ async def upsert_email_settings(
 async def test_email_settings(
     request: TestEmailRequest,
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> TestEmailResponse:
     """
     Sends a test email using the user's SMTP configuration.
@@ -114,7 +113,7 @@ async def test_email_settings(
 
     settings = crud.get_email_settings(
         db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
     )
 
     if settings is None:

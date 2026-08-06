@@ -47,6 +47,7 @@ from app.core.exceptions import (
     WorkspaceMemberError,
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
+    InvitationEmailMismatchError,
 )
 
 logger = logging.getLogger("app.core.exception_handlers")
@@ -103,6 +104,7 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     # --- Invitations -------------------------------------------------------
     InvitationNotFoundError: (404, "RESOURCE_NOT_FOUND"),
     InvitationPermissionDeniedError: (403, "PERMISSION_DENIED"),
+    InvitationEmailMismatchError: (403, "INVITATION_EMAIL_MISMATCH"),
     InvitationExpiredError: (400, "INVITATION_EXPIRED"),
     InvitationAlreadyProcessedError: (409, "INVITATION_ALREADY_PROCESSED"),
     InvitationAlreadyMemberError: (409, "INVITATION_ALREADY_MEMBER"),

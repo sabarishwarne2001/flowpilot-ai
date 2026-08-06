@@ -8,7 +8,6 @@ from app.crud import (
     get_document_settings,
     upsert_document_settings,
 )
-from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.schemas.document_settings import (
     DocumentSettingsCreate,
     DocumentSettingsResponse,
@@ -23,18 +22,18 @@ router = APIRouter(tags=["Document Settings"])
 )
 async def get_document_processing_settings(
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER, WorkspaceRole.CONTRIBUTOR]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> Any:
 
     settings = get_document_settings(
         db=db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
     )
 
     if settings is None:
         settings = upsert_document_settings(
             db=db,
-            user_id=membership.user_id,
+            user_id=context.user_id,
             settings_in=DocumentSettingsCreate(),
         )
 
@@ -48,11 +47,11 @@ async def get_document_processing_settings(
 async def update_document_processing_settings(
     settings_in: DocumentSettingsCreate,
     db: Session = Depends(deps.get_db),
-    membership: WorkspaceMember = Depends(deps.RequireRole([WorkspaceRole.OWNER, WorkspaceRole.MANAGER]))
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> Any:
 
     return upsert_document_settings(
         db=db,
-        user_id=membership.user_id,
+        user_id=context.user_id,
         settings_in=settings_in,
     )

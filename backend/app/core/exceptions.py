@@ -181,6 +181,17 @@ class InvitationPermissionDeniedError(InvitationError):
     """Raised when the actor lacks sufficient privileges."""
     pass
 
+class InvitationEmailMismatchError(InvitationError):
+    """
+    Raised when the authenticated actor's email does not match the invited
+    address.
+
+    Distinct from InvitationPermissionDeniedError so the client can offer to
+    sign out and switch accounts rather than showing a dead end. This check is
+    what closes the pre-ARCH-01 hole in which any holder of an invitation token
+    could accept it on the invitee's behalf.
+    """
+    pass
 
 class InvitationAlreadyExistsError(InvitationError):
     """Raised when a pending invitation already exists."""
