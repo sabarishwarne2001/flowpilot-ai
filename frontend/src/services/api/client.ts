@@ -1,56 +1,34 @@
+/**
+ * Shared Axios instance and interceptors for the FlowPilot AI frontend.
+ *
+ * The response interceptor now resolves every backend error envelope through
+ * parseErrorEnvelope. Previously it read only `detail`, which the ARCH-01
+ * domain handler does not emit — so every tenancy error message was silently
+ * replaced by axios's own "Request failed with status code N", and the
+ * carefully authored backend prose never reached the user.
+ *
+ * ApiError is re-exported here for backwards compatibility: it moved to
+ * ./errors so the parser could stay free of axios and store imports, and every
+ * existing `import { ApiError } from "@/services/api/client"` keeps working.
+ */
+
 import axios from "axios";
 
-import type {
-  AxiosError,
-  InternalAxiosRequestConfig,
-} from "axios";
+import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 import { useAuthStore } from "@/store/useAuthStore";
+import { API_ERROR_CODES } from "@/constants/errorCodes";
+import { ApiError, parseErrorEnvelope } from "@/services/api/errors";
 
-/**
- * Standardized API error used across the FlowPilot AI frontend.
- * Wraps transport and backend errors into a consistent application error model.
- */
-export class ApiError extends Error {
-  public readonly status?: number;
-
-  public readonly code?: string;
-
-  public readonly detail?: string;
-
-  constructor(
-    message: string,
-    status?: number,
-    code?: string,
-    detail?: string,
-  ) {
-    super(message);
-
-    this.name = "ApiError";
-
-    if (status !== undefined) {
-      this.status = status;
-    }
-
-    if (code !== undefined) {
-      this.code = code;
-    }
-
-    if (detail !== undefined) {
-      this.detail = detail;
-    }
-
-    Object.setPrototypeOf(this, ApiError.prototype);
-  }
-}
+export { ApiError } from "@/services/api/errors";
+export type { ParsedApiError } from "@/services/api/errors";
 
 /**
  * Base backend API URL.
  * Falls back to localhost during local development.
  */
 const API_URL =
-  import.meta.env.VITE_API_URL ??
-  "http://localhost:8000/api/v1";
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 /**
  * Shared Axios instance used throughout the application.
@@ -68,11 +46,8 @@ export const apiClient = axios.create({
  * Automatically inject JWT bearer token into every authenticated request.
  */
 apiClient.interceptors.request.use(
-  (
-    config: InternalAxiosRequestConfig,
-  ): InternalAxiosRequestConfig => {
-    const token =
-      useAuthStore.getState().token;
+  (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+    const token = useAuthStore.getState().token;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -84,8 +59,9 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => {
     return Promise.reject(
       new ApiError(
-        error.message ||
-          "Failed to prepare request.",
+        error.message || "Failed to prepare request.",
+        undefined,
+        API_ERROR_CODES.NETWORK_ERROR,
       ),
     );
   },
@@ -93,6 +69,10 @@ apiClient.interceptors.request.use(
 
 /**
  * Centralized API response error handling.
+ *
+ * Every rejection is an ApiError carrying a stable `code`. Callers branch on
+ * the code and display the message; they must never parse the message, which
+ * the backend may reword at any time.
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -103,48 +83,46 @@ apiClient.interceptors.response.use(
         new ApiError(
           "Unable to reach the server.",
           undefined,
-          "NETWORK_ERROR",
+          API_ERROR_CODES.NETWORK_ERROR,
         ),
       );
     }
 
     const status = error.response.status;
 
-    const data =
-      error.response.data as
-        | {
-            detail?: string;
-            code?: string;
-          }
-        | undefined;
+    const parsed = parseErrorEnvelope(
+      error.response.data,
+      status,
+      error.message || "An unexpected server error occurred.",
+    );
 
-    const detail =
-      typeof data?.detail === "string"
-        ? data.detail
-        : error.message;
-
+    // A 401 means the session is gone, not merely insufficient. Clearing here
+    // guarantees no component can act on a token the server has rejected.
+    //
+    // This is the first half of the fix for the expired-token defect: the
+    // second half is the guard in Step 6, which routes UNAUTHORIZED to /login
+    // rather than treating a failed request as "this user has no workspace".
     if (status === 401) {
-      useAuthStore
-        .getState()
-        .clearAuth();
+      useAuthStore.getState().clearAuth();
 
       return Promise.reject(
         new ApiError(
           "Session expired. Please sign in again.",
           401,
-          "UNAUTHORIZED",
-          detail,
+          API_ERROR_CODES.UNAUTHORIZED,
+          parsed.message,
+          parsed.details,
         ),
       );
     }
 
     return Promise.reject(
       new ApiError(
-        detail ||
-          "An unexpected server error occurred.",
+        parsed.message,
         status,
-        data?.code ?? "SERVER_ERROR",
-        detail,
+        parsed.code,
+        parsed.message,
+        parsed.details,
       ),
     );
   },
