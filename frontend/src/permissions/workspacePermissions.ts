@@ -18,6 +18,11 @@
  * organization owns it.
  *
  * SCOPE: affordance only. RequireWorkspaceRole is the real boundary.
+ *
+ * FORMATTING NOTE: every generic type argument in this file is kept on a
+ * single line. A line break inside angle brackets is valid TypeScript but is
+ * fragile in transit, and a dropped "<" turns the whole file into a cascade of
+ * unrelated parse errors.
  */
 
 import type { OrganizationRole, WorkspaceRole } from "@/types/tenancy";
@@ -35,9 +40,7 @@ import { IMPLICIT_WORKSPACE_ADMIN_ROLES } from "@/permissions/organizationPermis
  * deliberately absent from the organization module, where BILLING breaks the
  * property.
  */
-export const WORKSPACE_ROLE_PRECEDENCE: Readonly
-  Record<WorkspaceRole, number>
-> = {
+export const WORKSPACE_ROLE_PRECEDENCE: Readonly<Record<WorkspaceRole, number>> = {
   ADMIN: 3,
   CONTRIBUTOR: 2,
   VIEWER: 1,
@@ -47,8 +50,7 @@ export const WORKSPACE_ROLE_PRECEDENCE: Readonly
  * Roles a workspace ADMIN may grant directly. Granting or revoking workspace
  * ADMIN is reserved to organization administrators; see canAssignWorkspaceRole.
  */
-export const WORKSPACE_ADMIN_ASSIGNABLE_ROLES: ReadonlySet<WorkspaceRole> =
-  new Set<WorkspaceRole>(["CONTRIBUTOR", "VIEWER"]);
+export const WORKSPACE_ADMIN_ASSIGNABLE_ROLES: ReadonlySet<WorkspaceRole> = new Set<WorkspaceRole>(["CONTRIBUTOR", "VIEWER"]);
 
 export const precedence = (role: WorkspaceRole): number =>
   WORKSPACE_ROLE_PRECEDENCE[role];

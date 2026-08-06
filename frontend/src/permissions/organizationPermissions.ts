@@ -28,6 +28,11 @@
  * position on a single ordinal ladder. It sits at the SAME precedence as
  * MEMBER — neither can administer anyone — and receives its billing capability
  * explicitly.
+ *
+ * FORMATTING NOTE: every generic type argument in this file is kept on a
+ * single line. A line break inside angle brackets is valid TypeScript but is
+ * fragile in transit, and a dropped "<" turns the whole file into a cascade of
+ * unrelated parse errors.
  */
 
 import type { OrganizationRole } from "@/types/tenancy";
@@ -44,9 +49,7 @@ import type { OrganizationRole } from "@/types/tenancy";
  * and neither can administer anyone else, so no ordering between them exists
  * or is needed. Do not read a capability implication into these numbers.
  */
-export const ORGANIZATION_ROLE_PRECEDENCE: Readonly
-  Record<OrganizationRole, number>
-> = {
+export const ORGANIZATION_ROLE_PRECEDENCE: Readonly<Record<OrganizationRole, number>> = {
   OWNER: 3,
   ADMIN: 2,
   BILLING: 1,
@@ -54,25 +57,20 @@ export const ORGANIZATION_ROLE_PRECEDENCE: Readonly
 };
 
 /** Roles permitted to administer an organization's members and workspaces. */
-export const ADMINISTRATIVE_ROLES: ReadonlySet<OrganizationRole> = new Set
-  OrganizationRole
->(["OWNER", "ADMIN"]);
+export const ADMINISTRATIVE_ROLES: ReadonlySet<OrganizationRole> = new Set<OrganizationRole>(["OWNER", "ADMIN"]);
 
 /**
  * Roles that receive an implicit ADMIN grant on every workspace in the
  * organization. Consumed by resolveEffectiveWorkspaceRole.
  */
-export const IMPLICIT_WORKSPACE_ADMIN_ROLES: ReadonlySet<OrganizationRole> =
-  ADMINISTRATIVE_ROLES;
+export const IMPLICIT_WORKSPACE_ADMIN_ROLES: ReadonlySet<OrganizationRole> = ADMINISTRATIVE_ROLES;
 
 /**
  * Roles a non-OWNER administrator may assign. Promotion to ADMIN or OWNER is
  * reserved to OWNER, so an administrator cannot manufacture a peer and thereby
  * escape the strict precedence check in canModifyMember.
  */
-export const ADMIN_ASSIGNABLE_ROLES: ReadonlySet<OrganizationRole> = new Set
-  OrganizationRole
->(["MEMBER", "BILLING"]);
+export const ADMIN_ASSIGNABLE_ROLES: ReadonlySet<OrganizationRole> = new Set<OrganizationRole>(["MEMBER", "BILLING"]);
 
 export const precedence = (role: OrganizationRole): number =>
   ORGANIZATION_ROLE_PRECEDENCE[role];
