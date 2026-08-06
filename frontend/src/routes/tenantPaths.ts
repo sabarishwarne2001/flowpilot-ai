@@ -293,6 +293,39 @@ export const rebaseTenantPath = (
   return `${root}/${parsed.rest}`;
 };
 
+/**
+ * Forwards a pre-ARCH-01 flat path to its tenant-scoped equivalent.
+ *
+ *   /                    ->  /acme/engineering
+ *   /work-items          ->  /acme/engineering/work-items
+ *   /work-items/abc-123  ->  /acme/engineering/work-items/abc-123
+ *
+ * DISTINCT FROM rebaseTenantPath, and the distinction is the whole point.
+ *
+ * rebaseTenantPath moves a path from one tenant to another, so it reads the
+ * remainder AFTER an existing tenant prefix and falls back to the workspace
+ * root when there is no prefix to strip. That fallback is correct for the
+ * switcher and wrong here: a legacy path never carries a tenant prefix, so
+ * every legacy forward would hit the fallback and discard the sub-page — which
+ * is exactly what made sidebar links appear to do nothing.
+ *
+ * This function treats the ENTIRE pathname as the remainder. It is safe only
+ * for paths known not to carry a tenant, which is why it is called solely from
+ * LegacyRouteRedirect, mounted on an explicit list of legacy routes.
+ */
+export const toTenantPath = (
+  pathname: string,
+  orgSlug: string,
+  workspaceSlug: string,
+): string => {
+  const root = workspacePath(orgSlug, workspaceSlug);
+
+  const parsed = parseTenantPath(pathname);
+  const rest = parsed ? parsed.rest : pathname.replace(/^\/+/, "");
+
+  return rest ? `${root}/${rest}` : root;
+};
+
 /* ==========================================================================
  * Redirect safety
  * ========================================================================== */
@@ -446,6 +479,27 @@ export const runTenantPathSelfCheck = (): string[] => {
   expect(
     "rebasing a non-tenant path falls back to the workspace root",
     rebaseTenantPath("/login", "beta", "main") === "/beta/main",
+  );
+
+  /* --- Legacy forwarding: the Step 7 runtime failure --------------------- */
+  expect(
+    "A LEGACY FLAT PATH KEEPS ITS SUB-PAGE WHEN FORWARDED",
+    toTenantPath("/work-items", "acme", "engineering") ===
+      "/acme/engineering/work-items",
+  );
+  expect(
+    "a legacy path with an id keeps the whole remainder",
+    toTenantPath("/work-items/abc-123", "acme", "engineering") ===
+      "/acme/engineering/work-items/abc-123",
+  );
+  expect(
+    "the root path forwards to the workspace root",
+    toTenantPath("/", "acme", "engineering") === "/acme/engineering",
+  );
+  expect(
+    "toTenantPath and rebaseTenantPath differ on legacy input",
+    toTenantPath("/work-items", "acme", "engineering") !==
+      rebaseTenantPath("/work-items", "acme", "engineering"),
   );
 
   /* --- Redirect safety: the regression this step prevents ---------------- */

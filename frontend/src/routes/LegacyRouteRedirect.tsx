@@ -32,7 +32,7 @@ import { Loader2 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { loginPathWithRedirect, rebaseTenantPath } from "@/routes/tenantPaths";
+import { loginPathWithRedirect, toTenantPath } from "@/routes/tenantPaths";
 
 /**
  * Forwards the current flat path to its tenant-scoped equivalent.
@@ -73,7 +73,10 @@ export const LegacyRouteRedirect: React.FC = () => {
       return <Navigate to={ROUTES.WORKSPACES} replace />;
 
     case "ready": {
-      const target = rebaseTenantPath(
+      // toTenantPath, not rebaseTenantPath: a legacy path carries no tenant
+      // prefix to strip, so rebaseTenantPath's fallback discards the sub-page
+      // and every sidebar link lands on the workspace root.
+      const target = toTenantPath(
         location.pathname,
         state.organization.organization_slug,
         state.workspace.slug,
