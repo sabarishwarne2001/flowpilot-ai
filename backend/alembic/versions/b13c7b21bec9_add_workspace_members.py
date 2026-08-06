@@ -10,6 +10,7 @@ import uuid
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from alembic import context
 
 # revision identifiers, used by Alembic.
 revision: str = 'b13c7b21bec9'
@@ -42,46 +43,71 @@ def upgrade() -> None:
     op.create_index(op.f('ix_workspace_members_user_id'), 'workspace_members', ['user_id'], unique=False)
     op.create_index(op.f('ix_workspace_members_workspace_id'), 'workspace_members', ['workspace_id'], unique=False)
 
-    # 3. Perform Data Backfill using complete table metadata
-    bind = op.get_bind()
-    metadata = sa.MetaData()
+    if not context.is_offline_mode():
+        bind = op.get_bind()
+        metadata = sa.MetaData()
 
-    workspaces_table = sa.Table(
-        'workspaces',
-        metadata,
-        sa.Column('id', sa.UUID(), primary_key=True),
-        sa.Column('user_id', sa.UUID(), nullable=False)
-    )
+        workspaces_table = sa.Table(
+            "workspaces",
+            metadata,
+            sa.Column("id", sa.UUID(), primary_key=True),
+            sa.Column("user_id", sa.UUID(), nullable=False),
+        )
 
-    workspace_members_table = sa.Table(
-        'workspace_members',
-        metadata,
-        sa.Column('id', sa.UUID(), primary_key=True),
-        sa.Column('user_id', sa.UUID(), nullable=False),
-        sa.Column('workspace_id', sa.UUID(), nullable=False),
-        sa.Column('role', role_enum, nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False)
-    )
+        workspace_members_table = sa.Table(
+            "workspace_members",
+            metadata,
+            sa.Column("id", sa.UUID(), primary_key=True),
+            sa.Column("user_id", sa.UUID(), nullable=False),
+            sa.Column("workspace_id", sa.UUID(), nullable=False),
+            sa.Column("role", role_enum, nullable=False),
+            sa.Column("is_active", sa.Boolean(), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+        )
 
-    workspaces = bind.execute(sa.select(workspaces_table.c.id, workspaces_table.c.user_id)).fetchall()
-    existing_memberships = bind.execute(sa.select(workspace_members_table.c.user_id, workspace_members_table.c.workspace_id)).fetchall()
-    existing_set = {(row[0], row[1]) for row in existing_memberships}
+        workspaces = bind.execute(
+            sa.select(workspaces_table.c.id, workspaces_table.c.user_id)
+        ).fetchall()
 
-    memberships_to_insert = []
-    for ws_id, u_id in workspaces:
-        if ws_id and u_id and (u_id, ws_id) not in existing_set:
-            memberships_to_insert.append({
-                'id': uuid.uuid4(),
-                'user_id': u_id,
-                'workspace_id': ws_id,
-                'role': 'OWNER',
-                'is_active': True
-            })
+        existing_memberships = bind.execute(
+            sa.select(
+                workspace_members_table.c.user_id,
+                workspace_members_table.c.workspace_id,
+            )
+        ).fetchall()
 
-    if memberships_to_insert:
-        bind.execute(workspace_members_table.insert(), memberships_to_insert)
+        existing_set = {(r[0], r[1]) for r in existing_memberships}
+
+        memberships_to_insert = []
+
+        for ws_id, u_id in workspaces:
+            if ws_id and u_id and (u_id, ws_id) not in existing_set:
+                memberships_to_insert.append(
+                    {
+                        "id": uuid.uuid4(),
+                        "user_id": u_id,
+                        "workspace_id": ws_id,
+                        "role": "OWNER",
+                        "is_active": True,
+                    }
+                )
+
+        if memberships_to_insert:
+            bind.execute(
+                workspace_members_table.insert(),
+                memberships_to_insert,
+            )
 
 
 def downgrade() -> None:

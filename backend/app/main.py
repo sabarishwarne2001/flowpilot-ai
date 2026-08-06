@@ -15,7 +15,7 @@ from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
 from app.utils import initialize_storage
 from app.services.bm25_service import bm25_service
-from app.core.exceptions import InvitationError, WorkspaceError
+from app.core.exceptions import FlowPilotError
 from app.core.exception_handlers import domain_exception_handler
 
 # Initialize early logging configuration before booting the ASGI application instance
@@ -81,9 +81,10 @@ if settings.cors_origins:
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
-# Register global custom invitation exception handler
-app.add_exception_handler(InvitationError, domain_exception_handler)
-app.add_exception_handler(WorkspaceError, domain_exception_handler)
+# Register the global domain exception handler.
+# One registration covers the entire taxonomy: Starlette resolves handlers by
+# walking type(exc).__mro__, and every domain exception inherits FlowPilotError.
+app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
 # Mount the consolidated versioned routing table
 app.include_router(api_router, prefix=settings.API_V1_STR)

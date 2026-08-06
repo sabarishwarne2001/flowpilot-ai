@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from app.models.assistant import Conversation
     from app.models.email_settings import EmailSettings
     from app.models.ai_settings import AISettings
+    from app.models.workspace import WorkspaceMember
+    from app.models.organization import OrganizationMember
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -82,12 +84,21 @@ class User(Base, UUIDMixin, TimestampMixin):
         uselist=False,
     )
 
+    # EDIT 2: Explicitly specified foreign_keys to resolve ambiguity and added organization_memberships
     # Bidirectional SQLAlchemy relationship mapping user memberships
     memberships: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember",
         back_populates="user",
+        foreign_keys="WorkspaceMember.user_id",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+
+    organization_memberships: Mapped[list["OrganizationMember"]] = relationship(
+        "OrganizationMember",
+        back_populates="user",
+        foreign_keys="OrganizationMember.user_id",
+        cascade="all, delete-orphan",
     )
 
     # Bidirectional SQLAlchemy relationship mapping user ai_providers

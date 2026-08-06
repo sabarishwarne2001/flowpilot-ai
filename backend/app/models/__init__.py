@@ -20,6 +20,14 @@ from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
 
+from app.models.organization import (
+    Organization,
+    OrganizationMember,
+    OrganizationRole,
+    OrganizationStatus,
+    MembershipStatus,
+)
+
 # All database schemas are imported here so that Base.metadata can 
 # detect them when compiling Alembic migration revisions.
 
@@ -40,4 +48,9 @@ __all__ = [
     "WorkspaceInvitation",
     "AISettings",
     "DocumentSettings",
+    "Organization",
+    "OrganizationMember",
+    "OrganizationRole",
+    "OrganizationStatus",
+    "MembershipStatus",
 ]

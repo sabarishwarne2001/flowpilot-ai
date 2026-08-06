@@ -15,6 +15,8 @@ from app.models.workspace import WorkspaceRole
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.workspace import Workspace
+    # EDIT 2 (Part A): Import Organization in TYPE_CHECKING block
+    from app.models.organization import Organization
 
 
 class InvitationStatus(str, enum.Enum):
@@ -53,6 +55,20 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    # EDIT 1: Added organization_id column immediately after workspace_id
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        doc=(
+            "Parent organization of the invited workspace. Nullable during "
+            "ARCH-01 and populated by the MIGRATE revision. ARCH-04 makes "
+            "this non-nullable when invitations become organization-scoped "
+            "with workspace grants attached, matching how GitHub invites to "
+            "an organization and then to teams."
+        ),
     )
     inviter_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -122,6 +138,11 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
     workspace: Mapped["Workspace"] = relationship(
         "Workspace",
         foreign_keys=[workspace_id],
+    )
+    # EDIT 2 (Part B): Added organization relationship immediately after workspace
+    organization: Mapped["Organization | None"] = relationship(
+        "Organization",
+        foreign_keys=[organization_id],
     )
     inviter: Mapped["User"] = relationship(
         "User",
