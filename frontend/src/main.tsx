@@ -10,6 +10,8 @@ import "@/styles/index.css";
 
 import { ApiError } from "@/services/api/client";
 
+import { assertPermissionParity } from "@/permissions";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -42,6 +44,18 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Verifies the client permission mirror still agrees with the backend
+// contract. DEV-gated: Vite statically evaluates import.meta.env.DEV and
+// tree-shakes both the call and the entire selfCheck module out of production
+// bundles.
+//
+// The alternative to this check is silent drift — a helper that disagrees with
+// the server produces buttons that 403, and nothing fails loudly enough for
+// anyone to notice.
+if (import.meta.env.DEV) {
+  assertPermissionParity();
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
