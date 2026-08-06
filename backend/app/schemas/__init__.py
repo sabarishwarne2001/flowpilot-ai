@@ -55,6 +55,42 @@ from app.schemas.document_settings import (
 )
 from app.schemas.common import MessageResponse
 
+# EDIT 1: Added Organization and Me schema imports
+from app.schemas.organization import (
+    UserSummary,
+    OrganizationCreate,
+    OrganizationUpdate,
+    OrganizationMemberRoleUpdate,
+    OwnershipTransferRequest,
+    OrganizationResponse,
+    OrganizationMemberResponse,
+    OrganizationMemberListResponse,
+    SlugAvailabilityResponse,
+)
+from app.schemas.me import (
+    MeUser,
+    OrganizationMembershipSummary,
+    MeContextResponse,
+)
+
+# EDIT 2: Added Workspace schema imports
+from app.schemas.workspace import (
+    WorkspaceCreate,
+    WorkspaceUpdate,
+    WorkspaceResponse,
+    WorkspaceSummary,
+    WorkspaceSlugAvailabilityResponse,
+)
+
+# EDIT 3: Added Workspace Member schema imports
+from app.schemas.workspace_member import (
+    WorkspaceMemberGrant,
+    WorkspaceMemberRoleUpdate,
+    WorkspaceMemberResponse,
+    WorkspaceMemberListResponse,
+)
+
+# EDIT 4: Updated __all__ with the new schema names
 __all__ = [
     "UserRegister",
     "UserLogin",
@@ -91,5 +127,30 @@ __all__ = [
     "DocumentSettingsCreate",
     "DocumentSettingsUpdate",
     "DocumentSettingsResponse",
-    "MessageResponse"
+    "MessageResponse",
+    # Organization
+    "UserSummary",
+    "OrganizationCreate",
+    "OrganizationUpdate",
+    "OrganizationMemberRoleUpdate",
+    "OwnershipTransferRequest",
+    "OrganizationResponse",
+    "OrganizationMemberResponse",
+    "OrganizationMemberListResponse",
+    "SlugAvailabilityResponse",
+    # Me
+    "MeUser",
+    "OrganizationMembershipSummary",
+    "MeContextResponse",
+    # Workspace
+    "WorkspaceCreate",
+    "WorkspaceUpdate",
+    "WorkspaceResponse",
+    "WorkspaceSummary",
+    "WorkspaceSlugAvailabilityResponse",
+    # Workspace Member
+    "WorkspaceMemberGrant",
+    "WorkspaceMemberRoleUpdate",
+    "WorkspaceMemberResponse",
+    "WorkspaceMemberListResponse",
 ]
