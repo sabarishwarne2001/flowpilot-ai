@@ -76,7 +76,15 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(),
                type_=sa.Text(),
                existing_nullable=True)
-    op.drop_constraint('work_items_stored_filename_key', 'work_items', type_='unique')
+    # Check if the constraint exists before attempting to drop it.
+    # This prevents migrations from crashing on clean database builds.
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    unique_constraints = inspector.get_unique_constraints('work_items')
+    constraint_names = [c['name'] for c in unique_constraints if c['name']]
+    
+    if 'work_items_stored_filename_key' in constraint_names:
+        op.drop_constraint('work_items_stored_filename_key', 'work_items', type_='unique')
     op.create_index(op.f('ix_work_items_file_type'), 'work_items', ['file_type'], unique=False)
     op.create_index(op.f('ix_work_items_stored_filename'), 'work_items', ['stored_filename'], unique=True)
     # ### end Alembic commands ###
