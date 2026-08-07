@@ -1,66 +1,60 @@
 """
 Semantic embedding generation and vector storage service for FlowPilot AI.
-
-Provides SentenceTransformer embeddings together with persistent ChromaDB
-storage, semantic similarity search, and vector lifecycle management.
-
-This service is an infrastructure component. It owns:
-
-- Embedding generation
-- Vector persistence
-- Semantic search
-- Similarity score normalization
-- ChromaDB interaction
-
-Business logic belongs in higher service layers.
+Partitioned strictly into collections per workspace.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
+import re
 from pathlib import Path
-from typing import Any
-from app.services.document_models import DocumentChunk
-from app.services.query_service import (
-    query_service,
-)
+from typing import Any, List
+from collections import OrderedDict
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
+from app.services.document_models import DocumentChunk
+from app.services.query_service import query_service
 
 logger = logging.getLogger("app.services.embedding_service")
+
+_COLLECTION_NAME_RE = re.compile(r"^ws_[0-9a-f-]{36}$")
+_MAX_CACHED_COLLECTIONS = 64
 
 Embedding = list[float]
 EmbeddingList = list[Embedding]
 
 
+def workspace_collection_name(workspace_id: uuid.UUID) -> str:
+    """
+    The only way a collection name is produced.
+    """
+    return f"ws_{workspace_id}"
+
+
 class EmbeddingService:
     """
     Singleton service responsible for embedding generation and
-    ChromaDB vector management.
+    ChromaDB vector management, strictly partitioned by workspace.
     """
 
     _instance: "EmbeddingService | None" = None
 
     def __new__(cls) -> "EmbeddingService":
-
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
-
         return cls._instance
 
     def __init__(self) -> None:
-
         if self._initialized:
             return
 
         try:
-
             logger.info(
                 "Loading embedding model '%s'.",
                 settings.EMBEDDING_MODEL_NAME,
@@ -73,7 +67,6 @@ class EmbeddingService:
             chroma_path = Path(
                 settings.CHROMA_PERSIST_DIRECTORY
             )
-
             chroma_path.mkdir(
                 parents=True,
                 exist_ok=True,
@@ -91,14 +84,10 @@ class EmbeddingService:
                 ),
             )
 
-            self.collections: dict[str, Any] = {}
-
-            self.get_collection(
-                settings.CHROMA_COLLECTION_NAME,
-            )
+            # Bounded LRU Cache for workspace collections
+            self.collections: OrderedDict[str, Any] = OrderedDict()
 
             self._initialized = True
-
             logger.info(
                 "Embedding service initialized successfully."
             )
@@ -109,73 +98,35 @@ class EmbeddingService:
             )
             raise
 
-    
-    def get_collection(
-        self,
-        collection_name: str,
-    ):
+    def _get_collection(self, name: str) -> Any:
         """
-        Return an existing Chroma collection or create it on first use.
-
-        Collections are cached so only one Chroma handle exists for each
-        collection during the application's lifetime.
+        Private. The public surface takes workspace_id.
         """
+        if name in self.collections:
+            self.collections.move_to_end(name)
+            return self.collections[name]
 
-        if collection_name not in self.collections:
-
-            logger.info(
-                "Opening Chroma collection '%s'.",
-                collection_name,
-            )
-
-            self.collections[
-                collection_name
-            ] = self.client.get_or_create_collection(
-                name=collection_name,
-                metadata={
-                    "hnsw:space": "cosine",
-                },
-            )
-
-        return self.collections[
-            collection_name
-        ]
-    
-    def get_default_collection(
-        self,
-    ):
-        """
-        Return the application's primary production collection.
-        """
-
-        return self.get_collection(
-            settings.CHROMA_COLLECTION_NAME,
+        collection = self.client.get_or_create_collection(
+            name=name,
+            metadata={
+                "hnsw:space": "cosine",
+            },
         )
-    
+        self.collections[name] = collection
+        while len(self.collections) > _MAX_CACHED_COLLECTIONS:
+            self.collections.popitem(last=False)
+        return collection
 
-    def get_evaluation_collection(
-        self,
-    ):
-        """
-        Return the dedicated evaluation collection.
+    def get_workspace_collection(self, workspace_id: uuid.UUID) -> Any:
+        return self._get_collection(workspace_collection_name(workspace_id))
 
-        This collection is used exclusively by the retrieval
-        evaluation framework and never by production user data.
-        """
-
-        return self.get_collection(
-            "flowpilot_evaluation",
-        )
-    
+    def get_evaluation_collection(self) -> Any:
+        return self._get_collection(settings.CHROMA_EVALUATION_COLLECTION)
 
     def generate_embeddings(
         self,
         texts: list[str],
     ) -> EmbeddingList:
-        """
-        Generate embeddings for one or more text strings.
-        """
-
         if not texts:
             return []
 
@@ -185,7 +136,6 @@ class EmbeddingService:
         )
 
         try:
-
             embeddings = self.model.encode(
                 texts,
                 batch_size=settings.EMBEDDING_BATCH_SIZE,
@@ -193,12 +143,10 @@ class EmbeddingService:
                 normalize_embeddings=True,
                 show_progress_bar=False,
             )
-
             return [
                 embedding.tolist()
                 for embedding in embeddings
             ]
-
         except Exception:
             logger.exception(
                 "Embedding generation failed."
@@ -207,20 +155,13 @@ class EmbeddingService:
 
     def store_chunks(
         self,
+        *,
+        workspace_id: uuid.UUID,
         work_item_id: uuid.UUID,
         original_filename: str,
         chunks: list[DocumentChunk],
         embeddings: EmbeddingList,
-        *,
-        collection_name: str | None = None,
     ) -> None:
-        """
-        Persist document chunks together with their embeddings.
-
-        Every chunk receives a deterministic identifier and metadata
-        allowing future retrieval by WorkItem.
-        """
-
         if not chunks:
             logger.warning(
                 "No chunks supplied for storage."
@@ -239,6 +180,7 @@ class EmbeddingService:
 
         metadatas = [
             {
+                "workspace_id": str(workspace_id),
                 "work_item_id": str(work_item_id),
                 "original_filename": original_filename,
                 "chunk_index": chunk.chunk_index,
@@ -248,31 +190,14 @@ class EmbeddingService:
         ]
 
         logger.info(
-            "Persisting %d vectors for WorkItem %s.",
+            "Persisting %d vectors for WorkItem %s inside workspace %s.",
             len(chunks),
             work_item_id,
+            workspace_id,
         )
 
         try:
-
-            logger.info(
-                "Storing page-aware metadata for %d chunk(s).",
-                len(chunks),
-            )
-
-            logger.debug(
-                "Page numbers: %s",
-                [
-                    chunk.page_number
-                    for chunk in chunks
-                ],
-            )
-
-            collection = self.get_collection(
-                collection_name
-                or settings.CHROMA_COLLECTION_NAME,
-            )
-
+            collection = self.get_workspace_collection(workspace_id)
             collection.add(
                 ids=ids,
                 documents=[
@@ -282,47 +207,14 @@ class EmbeddingService:
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
-
             logger.info(
-                "Successfully stored %d vectors.",
+                "Successfully stored %d vectors in workspace %s.",
                 len(chunks),
+                workspace_id,
             )
-
         except Exception:
             logger.exception(
                 "Failed to store vectors."
-            )
-            raise
-
-    def delete_chunks(
-        self,
-        work_item_id: uuid.UUID,
-    ) -> None:
-        """
-        Delete every vector belonging to a WorkItem.
-        """
-
-        logger.info(
-            "Deleting vectors for WorkItem %s.",
-            work_item_id,
-        )
-
-        try:
-            collection = self.get_default_collection()
-
-            collection.delete(
-                where={
-                    "work_item_id": str(work_item_id),
-                }
-            )
-
-            logger.info(
-                "Vectors deleted successfully."
-            )
-
-        except Exception:
-            logger.exception(
-                "Failed to delete vectors."
             )
             raise
 
@@ -330,27 +222,8 @@ class EmbeddingService:
         self,
         distance: float,
     ) -> float:
-        """
-        Convert the Chroma distance value into a normalized
-        similarity score.
-
-        Current implementation assumes cosine distance.
-
-        Returns:
-            float between 0.0 and 1.0
-        """
-
         similarity = 1.0 - distance
-
-        similarity = max(
-            0.0,
-            min(
-                1.0,
-                similarity,
-            ),
-        )
-
-        return similarity
+        return max(0.0, min(1.0, similarity))
 
     def _build_search_filter(
         self,
@@ -358,17 +231,7 @@ class EmbeddingService:
         filter_work_item_id: uuid.UUID | None = None,
         filter_work_item_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any] | None:
-        """
-        Construct the ChromaDB metadata filter.
-
-        Supports both:
-
-        - Document Assistant
-        - Global Assistant
-        """
-
         if filter_work_item_id is not None:
-
             return {
                 "work_item_id": str(
                     filter_work_item_id
@@ -376,7 +239,6 @@ class EmbeddingService:
             }
 
         if filter_work_item_ids:
-
             return {
                 "work_item_id": {
                     "$in": [
@@ -385,32 +247,18 @@ class EmbeddingService:
                     ]
                 }
             }
-
         return None
-    
 
     def similarity_search(
         self,
         *,
+        workspace_id: uuid.UUID,
         query: str,
         top_k: int = 5,
         filter_work_item_id: uuid.UUID | None = None,
         filter_work_item_ids: list[uuid.UUID] | None = None,
         similarity_threshold: float | None = None,
-        collection_name: str | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Execute semantic similarity search.
-
-        Supports both:
-
-        - Document Assistant (single WorkItem)
-        - Global Assistant (multiple WorkItems)
-
-        Returns a normalized result structure independent of
-        ChromaDB's native response format.
-        """
-
         query = query_service.preprocess(
             query,
         )
@@ -424,7 +272,8 @@ class EmbeddingService:
             )
 
         logger.info(
-            "Executing semantic search (top_k=%d).",
+            "Executing semantic search inside workspace %s (top_k=%d).",
+            workspace_id,
             top_k,
         )
 
@@ -438,17 +287,11 @@ class EmbeddingService:
         )
 
         try:
-
-            collection = self.get_collection(
-                collection_name
-                or settings.CHROMA_COLLECTION_NAME,
-            )
-
+            collection = self.get_workspace_collection(workspace_id)
             logger.info(
-                "Chroma collection contains %d vectors.",
+                "Workspace collection contains %d vectors.",
                 collection.count(),
             )
-
             logger.info(
                 "Search filter: %s",
                 where,
@@ -464,7 +307,6 @@ class EmbeddingService:
                     "distances",
                 ],
             )
-
 
         except Exception:
             logger.exception(
@@ -486,9 +328,7 @@ class EmbeddingService:
         distances = results["distances"][0]
 
         for index in range(len(documents)):
-
             distance = float(distances[index])
-
             similarity_score = (
                 self._normalize_similarity_score(
                     distance
@@ -509,7 +349,6 @@ class EmbeddingService:
                 continue
 
             metadata = metadatas[index] or {}
-
             logger.info(
                 "Retrieved metadata: %s",
                 metadata,
@@ -517,45 +356,23 @@ class EmbeddingService:
 
             formatted_results.append(
                 {
-                    # ----------------------------------------------------------
-                    # Retrieval
-                    # ----------------------------------------------------------
                     "id": ids[index],
                     "text": documents[index],
-
-                    # ----------------------------------------------------------
-                    # Citation Information
-                    # ----------------------------------------------------------
                     "document_name": metadata.get(
                         "original_filename",
                         "Unknown Document",
                     ),
-
                     "work_item_id": metadata.get(
                         "work_item_id",
                     ),
-
                     "chunk_index": metadata.get(
                         "chunk_index",
                     ),
-
-                    #
-                    # Reserved for Production Hardening.
-                    #
                     "page_number": metadata.get(
                         "page_number",
                     ),
-
-                    # ----------------------------------------------------------
-                    # Metadata
-                    # ----------------------------------------------------------
                     "metadata": metadata,
-
-                    # ----------------------------------------------------------
-                    # Retrieval Metrics
-                    # ----------------------------------------------------------
                     "distance": distance,
-
                     "similarity_score": similarity_score,
                 }
             )
@@ -568,118 +385,97 @@ class EmbeddingService:
             )
 
         logger.info(
-            "Semantic search returned %d result(s).",
+            "Semantic search returned %d result(s) inside workspace %s.",
             len(formatted_results),
-        )
+            workspace_id,
+                )
 
         return formatted_results
-    
+            
     def delete_vectors_by_work_item_id(
         self,
+        *,
+        workspace_id: uuid.UUID,
         work_item_id: uuid.UUID,
     ) -> None:
-        """
-        Delete every vector associated with a WorkItem.
-
-        This operation is typically invoked when a document is
-        removed from the platform to keep the vector store
-        synchronized with PostgreSQL.
-        """
-
         logger.info(
-            "Deleting vectors for WorkItem %s.",
+            "Deleting vectors for WorkItem %s inside workspace %s.",
             work_item_id,
+            workspace_id,
         )
 
         try:
-
-            collection = self.get_default_collection()
-
+            collection = self.get_workspace_collection(workspace_id)
             collection.delete(
                 where={
                     "work_item_id": str(work_item_id)
                 }
             )
-
             logger.info(
-                "Successfully deleted vectors for WorkItem %s.",
+                "Successfully deleted vectors for WorkItem %s inside workspace %s.",
                 work_item_id,
+                workspace_id,
             )
-
         except Exception:
             logger.exception(
-                "Failed to delete vectors for WorkItem %s.",
+                "Failed to delete vectors for WorkItem %s inside workspace %s.",
                 work_item_id,
+                workspace_id,
             )
             raise
 
-    def clear_collection(
+    def clear_workspace_collection(
         self,
         *,
-        collection_name: str | None = None,
+        workspace_id: uuid.UUID,
     ) -> int:
-        """
-        Remove every vector from the collection while
-        keeping the collection itself.
-
-        Used by:
-
-        - Admin dashboard
-        - Knowledge base reset
-        - Retrieval testing
-        """
-
         logger.info(
-            "Clearing vector collection."
+            "Clearing workspace vector collection: %s",
+            workspace_id,
         )
 
-        collection = self.get_collection(
-            collection_name
-            or settings.CHROMA_COLLECTION_NAME,
-        )
-
+        collection = self.get_workspace_collection(workspace_id)
         existing = collection.get()
-
         ids = existing.get(
             "ids",
             [],
         )
 
         if not ids:
-
             logger.info(
-                "Vector collection already empty."
+                "Workspace vector collection already empty."
             )
-
             return 0
 
         collection.delete(
             ids=ids,
         )
-
         logger.info(
-            "Deleted %d vector(s).",
+            "Deleted %d vector(s) inside workspace %s.",
             len(ids),
+            workspace_id,
         )
-
         return len(ids)
 
+    def delete_workspace_collection(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+    ) -> None:
+        name = workspace_collection_name(workspace_id)
+        self.collections.pop(name, None)
+        try:
+            self.client.delete_collection(name)
+        except Exception:
+            logger.exception("Failed to delete collection %s.", name)
+            raise
 
     def get_searchable_work_item_ids(
         self,
         *,
-        collection_name: str | None = None,
+        workspace_id: uuid.UUID,
     ) -> list[str]:
-        """
-        Return all searchable work item ids currently
-        stored in the vector database.
-        """
-
-        collection = self.get_collection(
-            collection_name
-            or settings.CHROMA_COLLECTION_NAME,
-        )
-
+        collection = self.get_workspace_collection(workspace_id)
         results = collection.get(
             include=["metadatas"],
         )
@@ -688,42 +484,23 @@ class EmbeddingService:
             return []
 
         ids = set()
-
         for metadata in results["metadatas"]:
-
             work_item_id = metadata.get(
                 "work_item_id",
             )
-
             if work_item_id:
                 ids.add(work_item_id)
 
         return sorted(ids)
 
-
     def health_check(self) -> bool:
-        """
-        Verify that the embedding infrastructure is operational.
-
-        Returns:
-            True if the embedding model and ChromaDB collection
-            are available.
-        """
-
         try:
-
-            collection = self.get_default_collection()
-
-            _ = collection.count()
-
+            self.client.heartbeat()
             return True
-
         except Exception:
-
             logger.exception(
                 "Embedding service health check failed."
             )
-
             return False
 
 
