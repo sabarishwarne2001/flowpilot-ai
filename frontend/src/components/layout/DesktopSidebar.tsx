@@ -6,6 +6,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Brand } from "@/components/branding/Brand";
 import SidebarNavigation from "./SidebarNavigation";
+import OrgWorkspaceSwitcher from "./OrgWorkspaceSwitcher";
+
 
 interface DesktopSidebarProps {
   /**
@@ -89,6 +91,13 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
             </button>
           </div>
         )}
+
+        {/* Tenant switcher. Renders nothing when the actor has a single
+            workspace — a dropdown offering one option is noise in the most
+            valuable space in the sidebar. */}
+        <div className="border-b border-border/40">
+          <OrgWorkspaceSwitcher collapsed={isDesktopCollapsed} />
+        </div>
 
         {/* Navigation */}
         <div className="flex-1 min-h-0">

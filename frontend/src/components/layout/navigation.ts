@@ -7,7 +7,6 @@ import {
   Sliders,
 } from "lucide-react";
 
-import { ROUTES } from "@/constants/routes";
 import {
   assistantPath,
   automationPath,
@@ -67,44 +66,3 @@ export const buildNavigationItems = (
     icon: Settings,
   },
 ];
-
-/**
- * Flat navigation, retained until Step 8b.
- *
- * SidebarNavigation, DesktopSidebar, and MobileSidebarContent still consume
- * this. Removing it now would break them with no replacement wired in.
- *
- * These paths still resolve — LegacyRouteRedirect forwards each to its
- * tenant-scoped equivalent — but every click costs a redirect hop and briefly
- * shows a non-canonical URL in the address bar. Step 8b switches the sidebar
- * to buildNavigationItems and deletes this export.
- *
- * @deprecated Use buildNavigationItems.
- */
-export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
-  {
-    name: "Overview",
-    path: ROUTES.DASHBOARD,
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Documents",
-    path: ROUTES.WORK_ITEMS,
-    icon: FileText,
-  },
-  {
-    name: "AI Assistant",
-    path: ROUTES.ASSISTANT,
-    icon: MessageSquare,
-  },
-  {
-    name: "Workflows",
-    path: ROUTES.AUTOMATION,
-    icon: Sliders,
-  },
-  {
-    name: "Settings",
-    path: ROUTES.SETTINGS,
-    icon: Settings,
-  },
-] as const;
