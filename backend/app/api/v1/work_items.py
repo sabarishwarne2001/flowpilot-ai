@@ -136,7 +136,17 @@ async def list_work_items(
         workspace_id=context.workspace_id,
         created_by_user_id=context.user_id if mine_only else None,
     )
-    return WorkItemListResponse(items=items, total=total, skip=skip, limit=limit)
+    # Map skip and limit parameters directly to Pydantic pagination schema fields
+    page = (skip // limit) + 1
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
+
+    return WorkItemListResponse(
+        items=items,
+        page=page,
+        pageSize=limit,
+        totalItems=total,
+        totalPages=total_pages,
+    )
 
 
 @router.get("/{work_item_id}", response_model=WorkItemResponse)

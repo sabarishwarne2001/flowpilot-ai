@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from typing import Union
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -97,11 +98,9 @@ class DocumentSettingsUpdate(BaseModel):
 
 class DocumentSettingsResponse(DocumentSettingsBase):
     id: UUID
-
-    user_id: UUID
-
+    workspace_id: UUID
+    updated_by_user_id: Union[UUID, None] = None
     created_at: datetime
-
     updated_at: datetime
 
     model_config = ConfigDict(

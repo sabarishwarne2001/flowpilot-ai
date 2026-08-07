@@ -7,7 +7,7 @@ Defines request and response models for rule management and execution history.
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -246,7 +246,8 @@ class AutomationRuleResponse(AutomationRuleBase):
     """
 
     id: uuid.UUID
-    user_id: uuid.UUID
+    workspace_id: uuid.UUID
+    created_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
 

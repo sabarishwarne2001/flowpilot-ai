@@ -43,12 +43,9 @@ class BM25Service:
         *,
         workspace_id: uuid.UUID,
     ) -> None:
-        """
-        Rebuild the BM25 index from every chunk currently stored inside ChromaDB
-        for the target workspace.
-        """
         collection = embedding_service.get_workspace_collection(workspace_id)
-        results = collection.get()
+        # Force Chroma to return documents and metadatas explicitly
+        results = collection.get(include=["documents", "metadatas"])
 
         ids = results.get("ids", [])
         documents = results.get("documents", [])

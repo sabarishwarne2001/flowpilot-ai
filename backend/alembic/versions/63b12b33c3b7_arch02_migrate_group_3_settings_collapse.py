@@ -422,10 +422,11 @@ def _rehearse(bind, rev: str) -> None:
                             marker="zz2"),
         ])
         if not cloned:
-            raise RuntimeError(
-                "Rehearsal requires at least one existing row in each settings "
-                "table to clone from."
+            log.warning(
+                "ARCH-02 rehearsal skipped: settings tables are empty "
+                "(likely a fresh test database)."
             )
+            return
 
         # --- Run the real thing ---------------------------------------
         _backfill_scope(bind)

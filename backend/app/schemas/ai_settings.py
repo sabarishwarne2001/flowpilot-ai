@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 from enum import Enum
+from typing import Union
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -16,8 +15,6 @@ from pydantic import ConfigDict
 class AIProvider(str, Enum):
     GROQ = "GROQ"
     GEMINI = "GEMINI"
-    # OPENAI = "OPENAI"
-    # CLAUDE = "CLAUDE"
 
 
 # ============================================================================
@@ -57,7 +54,8 @@ class AISettingsUpdate(AISettingsBase):
 
 class AISettingsResponse(AISettingsBase):
     id: uuid.UUID
-    user_id: uuid.UUID
+    workspace_id: uuid.UUID
+    updated_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
 

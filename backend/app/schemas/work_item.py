@@ -82,7 +82,8 @@ class WorkItemResponse(WorkItemBase):
     status: WorkItemStatus
     summary: Union[str, None] = None
     extracted_entities: Union[dict[str, Any], None] = None
-    user_id: uuid.UUID
+    workspace_id: uuid.UUID
+    created_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
 
