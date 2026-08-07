@@ -19,6 +19,7 @@ from app.models.workspace import Workspace, WorkspaceMember
 from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
+from app.models.settings_migration_archive import SettingsMigrationArchive
 
 from app.models.organization import (
     Organization,
@@ -53,4 +54,5 @@ __all__ = [
     "OrganizationRole",
     "OrganizationStatus",
     "MembershipStatus",
+    "SettingsMigrationArchive",
 ]

@@ -1,49 +1,22 @@
-"""
-Database representation of the Notification entity for FlowPilot AI.
-
-Stores both in-app and external notification records while tracking
-delivery status, retry attempts, priority, and associated resources.
-
-This schema is intentionally extensible to support future notification
-providers such as Email, Slack, Microsoft Teams, Webhooks, SMS,
-WhatsApp, and Push Notifications without requiring structural redesign.
-"""
-
 from __future__ import annotations
 
 import enum
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, Enum as SQLEnum, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
-from app.db.base import Base
-from app.db.base import TimestampMixin
-from app.db.base import UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.work_item import WorkItem
+    from app.models.workspace import Workspace
 
-
-# ============================================================================
-# Notification Type
-# ============================================================================
 
 class NotificationType(str, enum.Enum):
-    """
-    High-level category describing why the notification exists.
-    """
-
     DOCUMENT = "DOCUMENT"
     AUTOMATION = "AUTOMATION"
     EMAIL = "EMAIL"
@@ -51,15 +24,7 @@ class NotificationType(str, enum.Enum):
     SECURITY = "SECURITY"
 
 
-# ============================================================================
-# Delivery Channel
-# ============================================================================
-
 class NotificationChannel(str, enum.Enum):
-    """
-    Destination through which the notification is delivered.
-    """
-
     IN_APP = "IN_APP"
     EMAIL = "EMAIL"
     SLACK = "SLACK"
@@ -67,55 +32,34 @@ class NotificationChannel(str, enum.Enum):
     WEBHOOK = "WEBHOOK"
 
 
-# ============================================================================
-# Delivery Status
-# ============================================================================
-
 class NotificationStatus(str, enum.Enum):
-    """
-    Current delivery state.
-    """
-
     PENDING = "PENDING"
     SENT = "SENT"
     FAILED = "FAILED"
 
 
-# ============================================================================
-# Notification Priority
-# ============================================================================
-
 class NotificationPriority(str, enum.Enum):
-    """
-    Indicates how important a notification is to the recipient.
-    """
-
     INFO = "INFO"
     SUCCESS = "SUCCESS"
     WARNING = "WARNING"
     ERROR = "ERROR"
 
 
-# ============================================================================
-# Notification Model
-# ============================================================================
-
 class Notification(Base, UUIDMixin, TimestampMixin):
     """
     Persistent notification record.
-
-    A notification belongs to exactly one user and may optionally
-    reference a WorkItem.
-
-    Notifications support multiple delivery channels while tracking
-    delivery state, retries, and failures.
     """
-
     __tablename__ = "notifications"
 
-    # ------------------------------------------------------------------
-    # Content
-    # ------------------------------------------------------------------
+    __table_args__ = (
+        Index(
+            "ix_notifications_workspace_user_read_created",
+            "workspace_id",
+            "user_id",
+            "is_read",
+            "created_at",
+        ),
+    )
 
     title: Mapped[str] = mapped_column(
         String(150),
@@ -126,10 +70,6 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         Text,
         nullable=False,
     )
-
-    # ------------------------------------------------------------------
-    # Classification
-    # ------------------------------------------------------------------
 
     notification_type: Mapped[NotificationType] = mapped_column(
         SQLEnum(
@@ -152,10 +92,6 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         default=NotificationPriority.INFO,
         index=True,
     )
-
-    # ------------------------------------------------------------------
-    # Delivery
-    # ------------------------------------------------------------------
 
     delivery_channel: Mapped[NotificationChannel] = mapped_column(
         SQLEnum(
@@ -190,20 +126,17 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    # ------------------------------------------------------------------
-    # Read State
-    # ------------------------------------------------------------------
-
     is_read: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
-        index=True,
     )
 
-    # ------------------------------------------------------------------
-    # Ownership
-    # ------------------------------------------------------------------
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -225,13 +158,10 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    # ------------------------------------------------------------------
-    # Relationships
-    # ------------------------------------------------------------------
+    workspace: Mapped["Workspace"] = relationship("Workspace")
 
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="notifications",
     )
 
     work_item: Mapped["WorkItem"] = relationship(

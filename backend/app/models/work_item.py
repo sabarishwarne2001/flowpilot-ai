@@ -1,14 +1,10 @@
 """
 Database representation of the Work Item entity for FlowPilot AI.
-
-Manages original and storage filename mapping, active processing pipeline states, 
-AI-generated extraction schemas, and bidirectional relationships to Users, Jobs, Logs, 
-Alerts, and Conversation memories.
 """
 
 import uuid
 from typing import Any, TYPE_CHECKING, Union
-from sqlalchemy import String, Text, Integer, ForeignKey, JSON
+from sqlalchemy import String, Text, Integer, ForeignKey, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 from app.db.base import Base, UUIDMixin, TimestampMixin
@@ -20,15 +16,19 @@ if TYPE_CHECKING:
     from app.models.automation import AutomationLog
     from app.models.notification import Notification
     from app.models.assistant import Conversation
+    from app.models.workspace import Workspace
 
 
 class WorkItem(Base, UUIDMixin, TimestampMixin):
     """
     Persistent representation of a business document (Work Item) within FlowPilot AI.
-    
-    Acts as the central business document entity powering AI processing, semantic retrieval, automation workflows, and assistant conversations.
     """
     __tablename__ = "work_items"
+
+    __table_args__ = (
+        Index("ix_work_items_workspace_created", "workspace_id", "created_at"),
+        Index("ix_work_items_workspace_status", "workspace_id", "status"),
+    )
 
     original_filename: Mapped[str] = mapped_column(
         String(255), 
@@ -41,11 +41,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         doc=(
             "Filesystem storage key. The unique index is a data-integrity "
-            "guarantee, not an optimisation: without it two uploads can "
-            "collide on the same key and silently overwrite one another on "
-            "disk. unique=True and index=True together produce the unique "
-            "INDEX ix_work_items_stored_filename; unique=True alone would "
-            "produce a differently named UniqueConstraint instead."
+            "guarantee, not an optimisation."
         ),
     )
     file_type: Mapped[str] = mapped_column(
@@ -59,7 +55,6 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(
         String(50),
         default=WorkItemStatus.QUEUED.value,
-        index=True,
         nullable=False
     )
     summary: Mapped[Union[str, None]] = mapped_column(
@@ -75,21 +70,33 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=True
     )
     
-    # Ownership foreign key relation referencing the parent User account
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    # --- Scope: the workspace owns this document -------------------------
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # --- Attribution: who uploaded it. Nullable by necessity -------------
+    created_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
-        nullable=False
+        doc=(
+            "Author, not scope. Nullable because ON DELETE SET NULL cannot "
+            "fire against a NOT NULL column — deleting a user would raise "
+            "instead of orphaning the attribution. A NULL here reads as "
+            "'uploaded by a former member', which is the correct semantics."
+        ),
     )
 
-    # Bidirectional SQLAlchemy relationship referencing the parent User object
-    user: Mapped["User"] = relationship(
-        "User", 
-        back_populates="work_items"
-    )
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace")
 
-    # Bidirectional SQLAlchemy relationship referencing child Processing Jobs
+    created_by: Mapped[Union["User", None]] = relationship("User")
+
+    # Bidirectional SQLAlchemy relationships referencing child objects
     jobs: Mapped[list["ProcessingJob"]] = relationship(
         "ProcessingJob",
         back_populates="work_item",
@@ -97,7 +104,6 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         passive_deletes=True  
     )
 
-    # Bidirectional SQLAlchemy relationship mapping child Automation Logs
     automation_logs: Mapped[list["AutomationLog"]] = relationship(
         "AutomationLog",
         back_populates="work_item",
@@ -105,7 +111,6 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         passive_deletes=True
     )
 
-    # Bidirectional SQLAlchemy relationship mapping child in-app Notifications
     notifications: Mapped[list["Notification"]] = relationship(
         "Notification",
         back_populates="work_item",
@@ -113,7 +118,6 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         passive_deletes=True
     )
 
-    # Bidirectional SQLAlchemy relationship mapping child Conversation sessions
     conversations: Mapped[list["Conversation"]] = relationship(
         "Conversation",
         back_populates="work_item",

@@ -1,14 +1,11 @@
 """
 Database representation of Conversation Memory and Messages for FlowPilot AI.
-
-Manages persistent chat session titles, chronological participant messages,
-and extensible JSON-formatted citation sources used for RAG operations.
 """
 
 import uuid
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, JSON, String
+from sqlalchemy import ForeignKey, JSON, String, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -18,22 +15,32 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.work_item import WorkItem
+    from app.models.workspace import Workspace
 
 
 class Conversation(Base, UUIDMixin, TimestampMixin):
     """
     Persistent representation of an interactive AI Assistant conversation.
-
-    A Conversation may represent:
-
-    - Global Assistant (work_item_id is NULL)
-    - Document Assistant (work_item_id references a WorkItem)
     """
-
     __tablename__ = "conversations"
+
+    __table_args__ = (
+        Index(
+            "ix_conversations_workspace_user_updated",
+            "workspace_id",
+            "user_id",
+            "updated_at",
+        ),
+    )
 
     title: Mapped[str] = mapped_column(
         String(settings.MAX_CONVERSATION_TITLE_LENGTH),
+        nullable=False,
+    )
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -51,9 +58,10 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
+    workspace: Mapped["Workspace"] = relationship("Workspace")
+
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="conversations",
     )
 
     work_item: Mapped["WorkItem"] = relationship(
@@ -72,11 +80,7 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
 class ConversationMessage(Base, UUIDMixin, TimestampMixin):
     """
     Represents a single message inside a Conversation.
-
-    Stores both user and assistant messages together with structured
-    RAG source citation metadata.
     """
-
     __tablename__ = "conversation_messages"
 
     role: Mapped[str] = mapped_column(

@@ -2,56 +2,29 @@ from __future__ import annotations
 
 import enum
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Enum as SQLEnum, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
-from app.db.base import Base
-from app.db.base import TimestampMixin
-from app.db.base import UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
-
-
-# ============================================================================
-# AI Provider
-# ============================================================================
+    from app.models.workspace import Workspace
 
 
 class AIProvider(str, enum.Enum):
     GROQ = "GROQ"
     GEMINI = "GEMINI"
-    # OPENAI = "OPENAI"
-    # CLAUDE = "CLAUDE"
-
-
-# ============================================================================
-# AI Settings
-# ============================================================================
 
 
 class AISettings(Base, UUIDMixin, TimestampMixin):
     """
-    Persistent AI configuration owned by a single user.
-
-    Exactly one AISettings record may exist per user.
+    Persistent AI configuration owned by a single workspace.
     """
-
     __tablename__ = "ai_settings"
-
-    # ------------------------------------------------------------------
-    # Provider
-    # ------------------------------------------------------------------
 
     provider: Mapped[AIProvider] = mapped_column(
         SQLEnum(
@@ -67,10 +40,6 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
         String(100),
         nullable=False,
     )
-
-    # ------------------------------------------------------------------
-    # Generation Parameters
-    # ------------------------------------------------------------------
 
     temperature: Mapped[float] = mapped_column(
         Float,
@@ -114,10 +83,6 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
         default=0.0,
     )
 
-    # ------------------------------------------------------------------
-    # Prompt Configuration
-    # ------------------------------------------------------------------
-
     system_prompt_version: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
@@ -129,10 +94,6 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default="v1",
     )
-
-    # ------------------------------------------------------------------
-    # Features
-    # ------------------------------------------------------------------
 
     enable_token_tracking: Mapped[bool] = mapped_column(
         Boolean,
@@ -146,27 +107,20 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
         default=True,
     )
 
-    # ------------------------------------------------------------------
-    # Ownership
-    # ------------------------------------------------------------------
-
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
 
-    # ------------------------------------------------------------------
-    # Relationships
-    # ------------------------------------------------------------------
-
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="ai_settings",
-        passive_deletes=True,
+    updated_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
+
+    workspace: Mapped["Workspace"] = relationship("Workspace")
+
+    updated_by: Mapped[Union["User", None]] = relationship("User")

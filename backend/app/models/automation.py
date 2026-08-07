@@ -1,14 +1,11 @@
 """
 Database representation of Automation Rules and Audit History Logs for FlowPilot AI.
-
-Manages user-facing trigger-action rule definitions, extensible JSON configuration
-mappings, and execution audit histories.
 """
 
 import uuid
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, Integer, Enum
+from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, Integer, Enum, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -17,14 +14,18 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.work_item import WorkItem
+    from app.models.workspace import Workspace
 
 
 class AutomationRule(Base, UUIDMixin, TimestampMixin):
     """
     Persistent representation of a user-defined automation rule.
     """
-
     __tablename__ = "automation_rules"
+
+    __table_args__ = (
+        Index("ix_automation_rules_workspace_active", "workspace_id", "is_active"),
+    )
 
     name: Mapped[str] = mapped_column(
         String(100),
@@ -71,20 +72,24 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         Boolean,
         nullable=False,
         default=True,
-        index=True,
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
+    )
+
+    created_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="automation_rules",
-    )
+    workspace: Mapped["Workspace"] = relationship("Workspace")
+
+    created_by: Mapped[Union["User", None]] = relationship("User")
 
     logs: Mapped[list["AutomationLog"]] = relationship(
         "AutomationLog",
@@ -98,8 +103,11 @@ class AutomationLog(Base, UUIDMixin, TimestampMixin):
     """
     Stores the execution history of automation rule runs.
     """
-
     __tablename__ = "automation_logs"
+
+    __table_args__ = (
+        Index("ix_automation_logs_workspace_created", "workspace_id", "created_at"),
+    )
 
     status: Mapped[str] = mapped_column(
         String(50),
@@ -125,6 +133,14 @@ class AutomationLog(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    workspace: Mapped["Workspace"] = relationship("Workspace")
 
     rule: Mapped["AutomationRule"] = relationship(
         "AutomationRule",

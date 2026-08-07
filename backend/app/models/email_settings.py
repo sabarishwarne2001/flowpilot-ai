@@ -1,70 +1,31 @@
-"""
-Database representation of user-specific SMTP Email Settings
-for FlowPilot AI.
-
-Stores one SMTP configuration per user and is used by the
-Email Service for test emails, automation emails, and future
-notification providers.
-"""
-
 from __future__ import annotations
 
 import enum
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Enum as SQLEnum, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
-from app.db.base import Base
-from app.db.base import TimestampMixin
-from app.db.base import UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
-    
-
-# ============================================================================
-# Email Encryption
-# ============================================================================
+    from app.models.workspace import Workspace
 
 
 class EmailEncryption(str, enum.Enum):
-    """
-    Supported SMTP transport encryption.
-    """
-
     NONE = "NONE"
-
     TLS = "TLS"
-
     SSL = "SSL"
-
-
-# ============================================================================
-# Email Settings
-# ============================================================================
 
 
 class EmailSettings(Base, UUIDMixin, TimestampMixin):
     """
-    Persistent SMTP configuration owned by a single user.
-
-    Exactly one EmailSettings record may exist per user.
+    Persistent SMTP configuration owned by a single workspace.
     """
-
     __tablename__ = "email_settings"
-
-    # ------------------------------------------------------------------
-    # SMTP Server
-    # ------------------------------------------------------------------
 
     smtp_host: Mapped[str] = mapped_column(
         String(255),
@@ -75,10 +36,6 @@ class EmailSettings(Base, UUIDMixin, TimestampMixin):
         Integer,
         nullable=False,
     )
-
-    # ------------------------------------------------------------------
-    # Authentication
-    # ------------------------------------------------------------------
 
     smtp_username: Mapped[str] = mapped_column(
         String(255),
@@ -94,10 +51,6 @@ class EmailSettings(Base, UUIDMixin, TimestampMixin):
         String(100),
         nullable=False,
     )
-
-    # ------------------------------------------------------------------
-    # Transport
-    # ------------------------------------------------------------------
 
     encryption: Mapped[EmailEncryption] = mapped_column(
         SQLEnum(
@@ -116,27 +69,20 @@ class EmailSettings(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    # ------------------------------------------------------------------
-    # Ownership
-    # ------------------------------------------------------------------
-
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
 
-    # ------------------------------------------------------------------
-    # Relationships
-    # ------------------------------------------------------------------
-
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="email_settings",
-        passive_deletes=True,
+    updated_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
+
+    workspace: Mapped["Workspace"] = relationship("Workspace")
+
+    updated_by: Mapped[Union["User", None]] = relationship("User")

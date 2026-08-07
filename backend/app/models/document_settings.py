@@ -1,16 +1,22 @@
 from __future__ import annotations
 import uuid
+from typing import TYPE_CHECKING, Union
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
-from app.db.base import Base
-from app.db.base import TimestampMixin
-from app.db.base import UUIDMixin
+from app.db.base import Base, TimestampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.workspace import Workspace
 
 
 class DocumentSettings(Base, UUIDMixin, TimestampMixin):
+    """
+    Persistent document settings owned by a single workspace.
+    """
     __tablename__ = "document_settings"
 
     chunk_size: Mapped[int] = mapped_column(
@@ -73,12 +79,20 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         default=False,
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
 
-    user = relationship("User", back_populates="document_settings")
+    updated_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    workspace: Mapped["Workspace"] = relationship("Workspace")
+
+    updated_by: Mapped[Union["User", None]] = relationship("User")
