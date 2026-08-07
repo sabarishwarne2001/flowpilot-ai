@@ -27,7 +27,8 @@ import { Building2, Loader2, Plus } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { loginPathWithRedirect, workspacePath } from "@/routes/tenantPaths";
+import { loginPathWithRedirect, workspacePath, createWorkspacePath } from "@/routes/tenantPaths";
+import { canCreateWorkspace } from "@/permissions/organizationPermissions";
 import type { OrganizationMembershipSummary } from "@/types/tenancy";
 
 interface UnreachableState {
@@ -63,8 +64,9 @@ const OrganizationCard: React.FC<{
 
     {organization.workspaces.length === 0 ? (
       <p className="rounded-lg bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-        You do not have access to any workspace in this organization yet. An
-        organization admin can grant you access.
+        {canCreateWorkspace(organization.role)
+          ? "No workspaces yet. Create one to get started."
+          : "You do not have access to any workspace in this organization yet. An organization admin can grant you access."}
       </p>
     ) : (
       <ul className="space-y-1.5">
@@ -84,6 +86,16 @@ const OrganizationCard: React.FC<{
           </li>
         ))}
       </ul>
+    )}
+
+    {canCreateWorkspace(organization.role) && (
+      <Link
+        to={createWorkspacePath(organization.organization_slug)}
+        className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        New workspace
+      </Link>
     )}
   </section>
 );

@@ -4,7 +4,8 @@ import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useResolvedTenant } from "@/routes/TenantContext";
-import { rebaseTenantPath } from "@/routes/tenantPaths";
+import { createWorkspacePath, rebaseTenantPath } from "@/routes/tenantPaths";
+import { canCreateWorkspace } from "@/permissions/organizationPermissions";
 
 /**
  * Organization and workspace switcher for FlowPilot AI.
@@ -44,7 +45,8 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { organization, workspace, organizations } = useResolvedTenant();
+  const { organization, workspace, organizations, organizationRole } =
+    useResolvedTenant();
 
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,12 +88,20 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
 
   const totalWorkspaces = useMemo(
     () => organizations.reduce((sum, org) => sum + org.workspaces.length, 0),
-    [organizations],
+    [organizations]
   );
 
-  // A single workspace has nothing to switch to. Rendering a dropdown that
-  // offers one option is noise in the most valuable space in the sidebar.
-  if (totalWorkspaces <= 1 && organizations.length <= 1) {
+  // Rendered when there is somewhere to switch to, OR when the actor can
+  // create a workspace.
+  //
+  // The second condition matters: without it the switcher needs two workspaces
+  // to appear, and the only place that creates a second one is inside the
+  // switcher — so a single-workspace tenant could never grow. Hiding the sole
+  // path to a feature behind that feature already existing is a dead end, and
+  // it is the reason multi-workspace was unreachable through the UI.
+  const canCreate = canCreateWorkspace(organizationRole);
+
+  if (totalWorkspaces <= 1 && organizations.length <= 1 && !canCreate) {
     return null;
   }
 
@@ -197,7 +207,23 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
             </div>
           ))}
 
-          <div className="mt-1 border-t border-border/60 pt-1">
+          <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  navigate(createWorkspacePath(organization.organization_slug));
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              >
+                <Plus className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-medium">
+                  New workspace in {organization.organization_name}
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -206,7 +232,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
               }}
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >
-              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <Building2 className="h-3.5 w-3.5 shrink-0" />
               <span className="font-medium">Create organization</span>
             </button>
           </div>

@@ -16,12 +16,13 @@ import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
 import { NotFound } from "@/pages/NotFound";
 import { Notifications } from "@/pages/Notifications/Notifications";
+import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
+import { WorkItems } from "@/pages/WorkItems/WorkItems";
 import Settings from "@/pages/Settings/Settings";
 import CreateOrganizationPage from "@/pages/Tenant/CreateOrganizationPage";
 import NoAccess from "@/pages/Tenant/NoAccess";
 import WorkspacePicker from "@/pages/Tenant/WorkspacePicker";
-import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
-import { WorkItems } from "@/pages/WorkItems/WorkItems";
+import CreateWorkspacePage from "@/pages/Tenant/CreateWorkspacePage";
 
 import LegacyRouteRedirect from "@/routes/LegacyRouteRedirect";
 import { PrivateRoute } from "@/routes/PrivateRoute";
@@ -129,6 +130,14 @@ export default function App() {
               <Route
                 path={ROUTES.NO_ACCESS}
                 element={<NoAccess />}
+              />
+
+              {/* Workspace creation. Organization-scoped, so it mounts under
+                  PrivateRoute rather than TenantGuard — the actor may have no
+                  workspace yet, which is exactly when they need this. */}
+              <Route
+                path={ROUTE_PATTERNS.organizationNewWorkspace}
+                element={<CreateWorkspacePage />}
               />
 
               {/* ======================================

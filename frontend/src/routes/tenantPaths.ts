@@ -120,6 +120,7 @@ export const ROUTE_PATTERNS = {
   organizationSettings: "settings",
   organizationMembers: "members",
   organizationBilling: "billing",
+  organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   workspaceShell: `/${P_ORG}/${P_WS}`,
   workspaceDashboard: "",
@@ -156,6 +157,16 @@ export const organizationMembersPath = (orgSlug: string): string =>
 
 export const organizationBillingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/billing`;
+
+/**
+ * Workspace creation, scoped to an organization.
+ *
+ * Namespaced under the reserved "organizations" segment rather than under a
+ * tenant path: creating a workspace is governed by organization role, and the
+ * page must be reachable by an actor who has no workspace to be inside.
+ */
+export const createWorkspacePath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/workspaces/new`;
 
 /**
  * Root of a workspace. Also the dashboard.
