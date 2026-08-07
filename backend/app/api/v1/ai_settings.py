@@ -25,18 +25,11 @@ from app.schemas.ai_connection_test import (
 )
 from app.core.ai_models import AI_MODELS
 
-logger = logging.getLogger(
-    "app.api.v1.ai_settings"
-)
+logger = logging.getLogger("app.api.v1.ai_settings")
 
 router = APIRouter(
     tags=["AI Settings"],
 )
-
-
-# ============================================================================
-# Get
-# ============================================================================
 
 
 @router.get(
@@ -48,13 +41,9 @@ async def get_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> AISettingsResponse:
-    """
-    Returns the authenticated user's AI settings.
-    """
-
     settings = crud.get_ai_settings(
         db,
-        user_id=context.user_id,
+        workspace_id=context.workspace_id,
     )
 
     if settings is None:
@@ -64,11 +53,6 @@ async def get_ai_settings(
         )
 
     return settings
-
-
-# ============================================================================
-# Update
-# ============================================================================
 
 
 @router.put(
@@ -81,18 +65,16 @@ async def upsert_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> AISettingsResponse:
-    """
-    Creates or updates the authenticated user's AI settings.
-    """
-
     settings = crud.upsert_ai_settings(
         db,
-        user_id=context.user_id,
+        workspace_id=context.workspace_id,
+        updated_by_user_id=context.user_id,
         settings_in=settings_in,
     )
 
     logger.info(
-        "Updated AI settings for user %s.",
+        "Updated AI settings inside workspace %s by user %s.",
+        context.workspace_id,
         context.user_id,
     )
 
@@ -106,10 +88,6 @@ async def upsert_ai_settings(
 async def get_supported_models(
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ):
-    """
-    Returns the supported models for every AI provider.
-    """
-
     return {
         provider.value: models
         for provider, models in AI_MODELS.items()
@@ -124,10 +102,6 @@ async def get_supported_models(
 async def get_available_providers(
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ):
-    """
-    Returns only providers that are configured.
-    """
-
     return ai_settings_service.get_available_providers()
 
 
@@ -140,11 +114,6 @@ async def test_ai_configuration(
     settings_in: AISettingsUpdate,
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ):
-    """
-    Test the supplied AI configuration without
-    saving it to the database.
-    """
-
     return ai_settings_service.test_connection(
         ai_settings=settings_in,
     )

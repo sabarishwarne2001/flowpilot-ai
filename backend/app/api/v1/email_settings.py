@@ -18,18 +18,11 @@ from app.schemas.email_settings import (
 )
 from app.services.email_service import email_service
 
-logger = logging.getLogger(
-    "app.api.v1.email_settings"
-)
+logger = logging.getLogger("app.api.v1.email_settings")
 
 router = APIRouter(
     tags=["Email Settings"],
 )
-
-
-# ============================================================================
-# Get
-# ============================================================================
 
 
 @router.get(
@@ -41,13 +34,9 @@ async def get_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> EmailSettingsResponse:
-    """
-    Returns the authenticated user's SMTP settings.
-    """
-
     settings = crud.get_email_settings(
         db,
-        user_id=context.user_id,
+        workspace_id=context.workspace_id,
     )
 
     if settings is None:
@@ -57,11 +46,6 @@ async def get_email_settings(
         )
 
     return settings
-
-
-# ============================================================================
-# Create / Update
-# ============================================================================
 
 
 @router.put(
@@ -74,27 +58,20 @@ async def upsert_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> EmailSettingsResponse:
-    """
-    Creates or updates SMTP settings.
-    """
-
     settings = crud.upsert_email_settings(
         db,
-        user_id=context.user_id,
+        workspace_id=context.workspace_id,
+        updated_by_user_id=context.user_id,
         settings_in=settings_in,
     )
 
     logger.info(
-        "Updated email settings for user %s.",
+        "Updated email settings inside workspace %s by user %s.",
+        context.workspace_id,
         context.user_id,
     )
 
     return settings
-
-
-# ============================================================================
-# Test SMTP
-# ============================================================================
 
 
 @router.post(
@@ -107,13 +84,9 @@ async def test_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> TestEmailResponse:
-    """
-    Sends a test email using the user's SMTP configuration.
-    """
-
     settings = crud.get_email_settings(
         db,
-        user_id=context.user_id,
+        workspace_id=context.workspace_id,
     )
 
     if settings is None:

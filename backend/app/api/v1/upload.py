@@ -1,12 +1,12 @@
 from pathlib import Path
 import os
-from fastapi import HTTPException
-
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
-
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, Depends
 from pydantic import BaseModel
+
+from app.api import deps
+from app.models.user import User
 
 class DeleteLogoRequest(BaseModel):
     logo_url: str
@@ -27,7 +27,8 @@ MAX_FILE_SIZE = 2 * 1024 * 1024
 
 @router.post("/logo")
 async def upload_logo(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: User = Depends(deps.get_current_active_user),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
@@ -44,11 +45,8 @@ async def upload_logo(
         )
 
     extension = ALLOWED_TYPES[file.content_type]
-
     filename = f"{uuid4()}{extension}"
-
     destination = UPLOAD_DIR / filename
-
     destination.write_bytes(content)
 
     return {
@@ -59,6 +57,7 @@ async def upload_logo(
 @router.delete("/logo")
 async def delete_logo(
     request: DeleteLogoRequest,
+    current_user: User = Depends(deps.get_current_active_user),
 ):
     if not request.logo_url:
         raise HTTPException(
@@ -73,7 +72,6 @@ async def delete_logo(
         )
 
     filename = Path(request.logo_url).name
-
     file_path = UPLOAD_DIR / filename
 
     if file_path.exists():
