@@ -10,9 +10,14 @@ from app.crud.user import (
     create_user,
 )
 from app.crud.work_item import (
-    get_work_item_by_id,
-    get_work_items_for_user,
-    get_all_work_items,
+    get_work_item,
+    list_work_items,
+    count_work_items,
+    get_recent_work_items,
+    get_processing_status,
+    get_completion_statistics,
+    count_completed_today,
+    get_document_type_distribution,
     create_work_item,
     update_work_item_state,
     delete_work_item,
@@ -26,18 +31,18 @@ from app.crud.job import (
 from app.crud.automation import (
     create_automation_rule,
     get_rule_by_id,
-    get_rules_by_user,
-    get_active_rules_by_user_and_event,
+    list_automation_rules,
+    list_active_rules_for_event,
     update_automation_rule,
     delete_automation_rule,
     create_automation_log,
     get_logs_by_rule,
-    get_logs_by_user,
+    list_automation_logs,
 )
 from app.crud.notification import (
     create_notification,
     get_notification_by_id,
-    get_notifications_for_user,
+    list_notifications,
     update_notification_read_status,
     update_notification_delivery_status,
     mark_all_notifications_as_read,
@@ -53,15 +58,14 @@ from app.crud.email_settings import (
 from app.crud.assistant import (
     create_conversation,
     get_document_conversation,
-    get_conversation_by_id,
-    get_user_conversations,
+    get_conversation,
+    list_conversations,
     update_conversation_title,
     delete_conversation,
     create_conversation_message,
     get_conversation_messages,
     delete_conversation_messages,
 )
-# EDIT 2: Replaced the legacy workspace import block entirely
 from app.crud.workspace import (
     create_workspace,
     get_workspace_by_id,
@@ -90,7 +94,6 @@ from app.crud.workspace_invitation import (
     is_invitation_expired,
     delete_invitation,
 )
-# EDIT 3: Replaced the legacy workspace_members import block entirely
 from app.crud.workspace_members import (
     create_workspace_member,
     get_workspace_member,
@@ -119,7 +122,6 @@ from app.crud.document_settings import (
     delete_document_settings,
     upsert_document_settings,
 )
-# EDIT 1: Added new imports for organizations and membership filters
 from app.crud.membership_filters import (
     ACTIVE_ONLY,
     DIRECTORY_STATUSES,
@@ -148,51 +150,70 @@ from app.crud.organization_members import (
     reactivate_organization_member,
 )
 
-# EDIT 4: Updated __all__ to align with the new and retired functions
 __all__ = [
+    # user
     "get_user_by_id",
     "get_user_by_email",
     "create_user",
-    "get_work_item_by_id",
-    "get_work_items_for_user",
-    "get_all_work_items",
+    
+    # work_item
+    "get_work_item",
+    "list_work_items",
+    "count_work_items",
+    "get_recent_work_items",
+    "get_processing_status",
+    "get_completion_statistics",
+    "count_completed_today",
+    "get_document_type_distribution",
     "create_work_item",
     "update_work_item_state",
     "delete_work_item",
+    
+    # job
     "get_job_by_id",
     "get_jobs_for_work_item",
     "create_job",
     "update_job",
+    
+    # automation
     "create_automation_rule",
     "get_rule_by_id",
-    "get_rules_by_user",
-    "get_active_rules_by_user_and_event",
+    "list_automation_rules",
+    "list_active_rules_for_event",
     "update_automation_rule",
     "delete_automation_rule",
     "create_automation_log",
     "get_logs_by_rule",
-    "get_logs_by_user",
+    "list_automation_logs",
+    
+    # notification
     "create_notification",
     "get_notification_by_id",
-    "get_notifications_for_user",
+    "list_notifications",
     "update_notification_read_status",
+    "update_notification_delivery_status",
     "mark_all_notifications_as_read",
     "delete_notification",
+    
+    # email_settings
     "create_email_settings",
     "get_email_settings",
     "update_email_settings",
     "delete_email_settings",
     "upsert_email_settings",
+    
+    # assistant / conversations
     "create_conversation",
-    "get_conversation_by_id",
+    "get_conversation",
     "get_document_conversation",
-    "get_user_conversations",
+    "list_conversations",
     "update_conversation_title",
     "delete_conversation",
     "create_conversation_message",
     "get_conversation_messages",
     "delete_conversation_messages",
-    # replaced workspace block:
+    
+    # workspace
     "create_workspace",
     "get_workspace_by_id",
     "get_workspace_with_organization",
@@ -204,7 +225,8 @@ __all__ = [
     "update_workspace",
     "clear_workspace_logo",
     "set_workspace_status",
-    # workspace invitations (untouched):
+    
+    # workspace_invitation
     "get_invitation_by_id",
     "get_invitation_by_token",
     "get_pending_invitation",
@@ -218,7 +240,8 @@ __all__ = [
     "mark_invitation_expired",
     "is_invitation_expired",
     "delete_invitation",
-    # replaced workspace_members block:
+    
+    # workspace_members
     "create_workspace_member",
     "get_workspace_member",
     "get_workspace_member_by_id",
@@ -230,23 +253,28 @@ __all__ = [
     "deactivate_workspace_member",
     "reactivate_workspace_member",
     "deactivate_all_workspace_grants_for_user",
-    # AI and document settings (untouched):
+    
+    # ai_settings
     "create_ai_settings",
     "get_ai_settings",
     "ai_settings_exists",
     "update_ai_settings",
     "upsert_ai_settings",
+    
+    # document_settings
     "create_document_settings",
     "get_document_settings",
     "document_settings_exists",
     "update_document_settings",
     "delete_document_settings",
     "upsert_document_settings",
-    # added membership filters block:
+    
+    # membership filters
     "ACTIVE_ONLY",
     "DIRECTORY_STATUSES",
     "SEAT_CONSUMING_STATUSES",
-    # added organization block:
+    
+    # organization
     "create_organization",
     "get_organization_by_id",
     "get_organization_by_slug",
@@ -255,7 +283,8 @@ __all__ = [
     "count_organizations_owned_by_user",
     "update_organization",
     "set_organization_status",
-    # added organization_members block:
+    
+    # organization_members
     "create_organization_member",
     "get_organization_member",
     "get_organization_member_by_id",

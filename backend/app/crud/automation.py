@@ -1,32 +1,18 @@
-"""
-Database CRUD (Create, Read, Update, Delete) repository layer for Automation
-Rules and Automation Logs.
-
-Provides database access for automation rule management while enforcing
-user ownership and keeping business logic outside the repository layer.
-"""
-
 import uuid
 from typing import Any
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from app.models.automation import AutomationLog, AutomationRule
+from app.models.automation import AutomationRule, AutomationLog
 from app.models.work_item import WorkItem
-
 from app.schemas.automation import AutomationRuleCreate, AutomationRuleUpdate
-
 
 def create_automation_rule(
     db: Session,
     *,
+    workspace_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
     obj_in: AutomationRuleCreate,
-    user_id: uuid.UUID,
 ) -> AutomationRule:
-    """
-    Create and persist a new automation rule with multiple conditions and actions.
-    """
     db_obj = AutomationRule(
         name=obj_in.name,
         priority=obj_in.priority,
@@ -35,75 +21,58 @@ def create_automation_rule(
         logic_operator=obj_in.logic_operator,
         actions=[act.model_dump() for act in obj_in.actions],
         is_active=obj_in.is_active,
-        user_id=user_id,
+        workspace_id=workspace_id,
+        created_by_user_id=created_by_user_id,
     )
-
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
-
     return db_obj
-
 
 def get_rule_by_id(
     db: Session,
     *,
+    workspace_id: uuid.UUID,
     rule_id: uuid.UUID,
-    user_id: uuid.UUID,
 ) -> AutomationRule | None:
-    """
-    Retrieve a single automation rule owned by a user.
-    """
     statement = select(AutomationRule).where(
         AutomationRule.id == rule_id,
-        AutomationRule.user_id == user_id,
+        AutomationRule.workspace_id == workspace_id,
     )
-
     return db.execute(statement).scalar_one_or_none()
 
-
-def get_rules_by_user(
+def list_automation_rules(
     db: Session,
     *,
-    user_id: uuid.UUID,
+    workspace_id: uuid.UUID,
     skip: int = 0,
     limit: int = 100,
 ) -> list[AutomationRule]:
-    """
-    Retrieve paginated automation rules for a user sorted by execution priority.
-    """
     statement = (
         select(AutomationRule)
-        .where(AutomationRule.user_id == user_id)
+        .where(AutomationRule.workspace_id == workspace_id)
         .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
-
     return list(db.execute(statement).scalars().all())
 
-
-def get_active_rules_by_user_and_event(
+def list_active_rules_for_event(
     db: Session,
     *,
-    user_id: uuid.UUID,
+    workspace_id: uuid.UUID,
     event: str,
 ) -> list[AutomationRule]:
-    """
-    Retrieve active automation rules sorted by execution priority.
-    """
     statement = (
         select(AutomationRule)
         .where(
-            AutomationRule.user_id == user_id,
+            AutomationRule.workspace_id == workspace_id,
             AutomationRule.event == event,
             AutomationRule.is_active.is_(True),
         )
         .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
     )
-
     return list(db.execute(statement).scalars().all())
-
 
 def update_automation_rule(
     db: Session,
@@ -111,11 +80,7 @@ def update_automation_rule(
     db_obj: AutomationRule,
     obj_in: AutomationRuleUpdate,
 ) -> AutomationRule:
-    """
-    Apply a partial update to an automation rule.
-    """
     update_data = obj_in.model_dump(exclude_unset=True)
-
     for field, value in update_data.items():
         if field == "conditions" and value is not None:
             value = [
@@ -128,75 +93,54 @@ def update_automation_rule(
                 for act in value
             ]
         setattr(db_obj, field, value)
-
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
-
     return db_obj
-
 
 def delete_automation_rule(
     db: Session,
     *,
     db_obj: AutomationRule,
 ) -> bool:
-    """
-    Delete an automation rule.
-
-    Child execution logs are removed automatically by the database
-    through ON DELETE CASCADE.
-    """
     db.delete(db_obj)
     db.commit()
-
     return True
-
 
 def create_automation_log(
     db: Session,
     *,
+    workspace_id: uuid.UUID,
     rule_id: uuid.UUID,
     work_item_id: uuid.UUID,
     status: str,
     log_message: str | None = None,
 ) -> AutomationLog:
-    """
-    Create an automation execution log.
-    """
     db_obj = AutomationLog(
+        workspace_id=workspace_id,
         rule_id=rule_id,
         work_item_id=work_item_id,
         status=status,
         log_message=log_message,
     )
-
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
-
     return db_obj
-
 
 def get_logs_by_rule(
     db: Session,
     *,
+    workspace_id: uuid.UUID,
     rule_id: uuid.UUID,
-    user_id: uuid.UUID,
     skip: int = 0,
     limit: int = 100,
 ) -> list[AutomationLog]:
-    """
-    Retrieve paginated execution logs for an automation rule.
-
-    User ownership is enforced through the parent AutomationRule.
-    """
     statement = (
         select(AutomationLog)
-        .join(AutomationRule, AutomationLog.rule_id == AutomationRule.id)
         .where(
+            AutomationLog.workspace_id == workspace_id,
             AutomationLog.rule_id == rule_id,
-            AutomationRule.user_id == user_id,
         )
         .order_by(AutomationLog.created_at.desc())
         .offset(skip)
@@ -204,48 +148,23 @@ def get_logs_by_rule(
     )
     return list(db.execute(statement).scalars().all())
 
-
-def get_logs_by_user(
+def list_automation_logs(
     db: Session,
     *,
-    user_id: uuid.UUID,
+    workspace_id: uuid.UUID,
     skip: int = 0,
     limit: int = 100,
 ) -> list[AutomationLog]:
-    """
-    Retrieve all automation execution logs belonging to a user.
-
-    Enrich each log with rule metadata and document metadata
-    required by the frontend audit timeline.
-    """
-
     statement = (
         select(AutomationLog)
-        .join(
-            AutomationRule,
-            AutomationLog.rule_id == AutomationRule.id,
-        )
-        .join(
-            WorkItem,
-            AutomationLog.work_item_id == WorkItem.id,
-        )
-        .where(
-            AutomationRule.user_id == user_id,
-        )
-        .order_by(
-            AutomationLog.created_at.desc(),
-        )
+        .join(AutomationRule, AutomationLog.rule_id == AutomationRule.id)
+        .join(WorkItem, AutomationLog.work_item_id == WorkItem.id)
+        .where(AutomationLog.workspace_id == workspace_id)
+        .order_by(AutomationLog.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
-
-    logs = list(
-        db.execute(statement).scalars().all()
-    )
-
-    #
-    # Attach additional frontend fields.
-    #
+    logs = list(db.execute(statement).scalars().all())
     for log in logs:
         log.rule_name = log.rule.name
         log.document_name = log.work_item.original_filename
@@ -254,5 +173,4 @@ def get_logs_by_user(
             if log.rule.actions
             else "UNKNOWN"
         )
-
     return logs
