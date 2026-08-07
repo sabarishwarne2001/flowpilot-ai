@@ -1,9 +1,5 @@
 """
 Document processing orchestration service for FlowPilot AI.
-
-Coordinates the sequential AI pipeline (text extraction, chunking,
-embeddings, vector storage, document classification, entity extraction,
-summarization, and business automation execution).
 """
 
 from __future__ import annotations
@@ -28,18 +24,10 @@ from app.services.chunking_service import split_text
 from app.services.embedding_service import embedding_service
 from app.services.extraction_service import extract_text_from_document
 from app.services.llm_service import llm_service
-
 from app.services.notification_service import notification_service
-
 from app.services.bm25_service import bm25_service
-
-from app.services.document_vocabulary_service import (
-    DocumentVocabularyService,
-)
-
-from app.services.query_service import (
-    query_service,
-)
+from app.services.document_vocabulary_service import DocumentVocabularyService
+from app.services.query_service import query_service
 
 from app.models.notification import (
     NotificationChannel,
@@ -48,19 +36,13 @@ from app.models.notification import (
 )
 
 logger = logging.getLogger("app.services.document_processor")
-
-document_vocabulary_service = (
-    DocumentVocabularyService()
-)
+document_vocabulary_service = DocumentVocabularyService()
 
 
 async def process_document_pipeline(
     work_item_id: uuid.UUID,
     job_id: uuid.UUID,
 ) -> None:
-    """
-    Execute the complete AI processing pipeline for a WorkItem.
-    """
     logger.info(
         "Starting document pipeline. WorkItem=%s Job=%s",
         work_item_id,
@@ -82,25 +64,15 @@ async def process_document_pipeline(
             logger.error("Pipeline aborted. WorkItem or Job not found.")
             return
 
-        ai_settings = crud.get_ai_settings(
-            db,
-            user_id=work_item.user_id,
-        )
+        workspace_id = work_item.workspace_id
 
+        ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)
         if ai_settings is None:
-            raise ValueError(
-                f"No AI settings found for user {work_item.user_id}"
-            )
+            raise ValueError(f"No AI settings found for workspace {workspace_id}")
 
-        document_settings = crud.get_document_settings(
-            db,
-            user_id=work_item.user_id,
-        )
-
+        document_settings = crud.get_document_settings(db, workspace_id=workspace_id)
         if document_settings is None:
-            raise ValueError(
-                f"No Document Settings found for user {work_item.user_id}"
-            )
+            raise ValueError(f"No Document Settings found for workspace {workspace_id}")
 
         crud.update_work_item_state(
             db,
@@ -118,33 +90,17 @@ async def process_document_pipeline(
         )
 
         safe_path = Path(utils.get_safe_path(work_item.stored_filename))
-
         if not safe_path.exists():
             raise FileNotFoundError(f"Missing document: {safe_path}")
 
         # -----------------------------
-        # Stage 1
+        # Stage 1: Text Extraction
         # -----------------------------
-        pages = extract_text_from_document(
-            safe_path,
-            work_item.file_type,
-        )
+        pages = extract_text_from_document(safe_path, work_item.file_type)
+        full_text = "\n\n".join(page.text for page in pages)
 
-        full_text = "\n\n".join(
-            page.text
-            for page in pages
-        )
+        crud.update_job(db, db_obj=job, obj_in=JobUpdate(progress=30))
 
-        crud.update_job(
-            db,
-            db_obj=job,
-            obj_in=JobUpdate(progress=30),
-        )
-
-        #
-        # Build document vocabulary used by
-        # document-aware query expansion.
-        #
         document_vocabulary_service.update_document(
             work_item_id=work_item.id,
             original_filename=work_item.original_filename,
@@ -156,13 +112,10 @@ async def process_document_pipeline(
             document_vocabulary_service.get_expansion_map(),
         )
 
-        logger.info(
-            "Document vocabulary indexed for WorkItem %s.",
-            work_item.id,
-        )
+        logger.info("Document vocabulary indexed for WorkItem %s.", work_item.id)
 
         # -----------------------------
-        # Stage 2
+        # Stage 2: Chunking
         # -----------------------------
         chunks = split_text(
             pages,
@@ -170,64 +123,35 @@ async def process_document_pipeline(
             chunk_overlap=document_settings.chunk_overlap,
         )
 
-        crud.update_job(
-            db,
-            db_obj=job,
-            obj_in=JobUpdate(progress=50),
-        )
+        crud.update_job(db, db_obj=job, obj_in=JobUpdate(progress=50))
 
         # -----------------------------
-        # Stage 3
+        # Stage 3: Embedding Storage
         # -----------------------------
         if chunks:
-            embeddings = embedding_service.generate_embeddings(
-                [
-                    chunk.text
-                    for chunk in chunks
-                ]
-            )
+            embeddings = embedding_service.generate_embeddings([chunk.text for chunk in chunks])
             embedding_service.store_chunks(
                 work_item_id=work_item.id,
                 original_filename=work_item.original_filename,
                 chunks=chunks,
                 embeddings=embeddings,
             )
-            
             bm25_service.rebuild_index()
-
-            logger.info(
-                "BM25 index rebuilt after document ingestion."
-            )
-
+            logger.info("BM25 index rebuilt after document ingestion.")
         else:
-            logger.warning(
-                "No chunks generated for WorkItem %s.",
-                work_item.id,
-            )
+            logger.warning("No chunks generated for WorkItem %s.", work_item.id)
 
-        crud.update_job(
-            db,
-            db_obj=job,
-            obj_in=JobUpdate(progress=70),
-        )
+        crud.update_job(db, db_obj=job, obj_in=JobUpdate(progress=70))
 
         # -----------------------------
-        # Stage 4
+        # Stage 4: Document Intelligence
         # -----------------------------
         if document_settings.automatic_classification:
-            classification = llm_service.classify_document(
-                full_text,
-                ai_settings=ai_settings,
-            )
+            classification = llm_service.classify_document(full_text, ai_settings=ai_settings)
         else:
-            classification = {
-                "document_classification": "Other",
-            }
+            classification = {"document_classification": "Other"}
 
-        document_class = classification.get(
-            "document_classification",
-            "Other",
-        )
+        document_class = classification.get("document_classification", "Other")
 
         if document_settings.automatic_entity_extraction:
             entities = llm_service.extract_entities(
@@ -239,21 +163,13 @@ async def process_document_pipeline(
             entities = {}
 
         entities["classification_details"] = classification
-
-        crud.update_job(
-            db,
-            db_obj=job,
-            obj_in=JobUpdate(progress=90),
-        )
+        crud.update_job(db, db_obj=job, obj_in=JobUpdate(progress=90))
 
         # -----------------------------
-        # Stage 5
+        # Stage 5: Summarization
         # -----------------------------
         if document_settings.automatic_summarization:
-            summary = llm_service.generate_summary(
-                full_text,
-                ai_settings=ai_settings,
-            )
+            summary = llm_service.generate_summary(full_text, ai_settings=ai_settings)
         else:
             summary = None
 
@@ -281,54 +197,45 @@ async def process_document_pipeline(
         # Automation Engine
         # -----------------------------
         try:
-            automation_stats = (
-                await automation_service.execute_rules_for_work_item(
-                    db,
-                    work_item_id=work_item.id,
-                    event="WORK_ITEM_COMPLETED",
-                )
+            automation_stats = await automation_service.execute_rules_for_work_item(
+                db,
+                work_item_id=work_item.id,
+                event="WORK_ITEM_COMPLETED",
             )
-
-            logger.info(
-                "Automation completed. %s",
-                automation_stats,
-            )
+            logger.info("Automation completed. %s", automation_stats)
         except Exception:
-            logger.exception(
-                "Automation engine failed after successful pipeline."
-            )
+            logger.exception("Automation engine failed after successful pipeline.")
 
         # -----------------------------
-        # In-App Notification
+        # In-App Notification (Safe to user-deletion)
         # -----------------------------
-        try:
-            await notification_service.send_notification(
-                db=db,
-                user=work_item.user,
-                title="Document processed successfully",
-                message=(
-                    f"{work_item.original_filename} "
-                    "has finished processing."
-                ),
-                notification_type=NotificationType.DOCUMENT,
-                priority=NotificationPriority.SUCCESS,
-                delivery_channel=NotificationChannel.IN_APP,
-                work_item=work_item,
-            )
-
+        recipient = work_item.created_by
+        if recipient is None:
             logger.info(
-                "Completion notification created for WorkItem %s.",
+                "Work item %s completed; uploader no longer exists, skipping completion notification.",
                 work_item.id,
             )
-        except Exception:
-            logger.exception("Failed to create completion notification.")
+        else:
+            try:
+                await notification_service.send_notification(
+                    db=db,
+                    workspace_id=workspace_id,
+                    user=recipient,
+                    title="Document processed successfully",
+                    message=f"{work_item.original_filename} has finished processing.",
+                    notification_type=NotificationType.DOCUMENT,
+                    priority=NotificationPriority.SUCCESS,
+                    delivery_channel=NotificationChannel.IN_APP,
+                    work_item=work_item,
+                )
+                logger.info("Completion notification created for WorkItem %s.", work_item.id)
+            except Exception:
+                logger.exception("Failed to create completion notification.")
 
     except Exception as exc:
         logger.exception("Pipeline failed.")
-
         try:
             db.rollback()
-
             work_item = db.execute(
                 select(WorkItem).where(WorkItem.id == work_item_id)
             ).scalar_one_or_none()
@@ -343,7 +250,6 @@ async def process_document_pipeline(
                     db_obj=work_item,
                     obj_in=WorkItemUpdate(status=WorkItemStatus.FAILED),
                 )
-
                 crud.update_job(
                     db,
                     db_obj=job,
@@ -354,9 +260,6 @@ async def process_document_pipeline(
                 )
         except Exception:
             logger.exception("Unable to persist failure state.")
-
     finally:
         db.close()
         logger.info("Background session closed.")
-
-    

@@ -1,8 +1,5 @@
 """
 Automation Rules Evaluation and Matching Service for FlowPilot AI.
-
-Evaluates user-defined automation rules after document processing completes,
-dispatches notifications, creates audit logs, and records execution statistics.
 """
 
 from __future__ import annotations
@@ -37,18 +34,12 @@ def _evaluate_condition(
     operator: str,
     target_value: str,
 ) -> bool:
-    """
-    Evaluate a single condition operator constraint against an actual document value.
-    Supports advanced String, Collection, Range, and Existence matching rules.
-    """
     operator = operator.upper().strip()
     target_value = target_value.strip() if target_value else ""
 
-    # EXISTS: Checks if a field is present and non-null in the evaluation context.
     if operator == "EXISTS":
         return actual is not None
 
-    # Empty checks (Short-circuit to handle None actual values)
     actual_is_empty = (
         actual is None
         or str(actual).strip() == ""
@@ -59,7 +50,6 @@ def _evaluate_condition(
     if operator == "IS_NOT_EMPTY":
         return not actual_is_empty
 
-    # Handle None actual values safely for other operators
     if actual is None:
         if operator in ("NOT_EQUALS", "NOT_CONTAINS", "NOT_IN"):
             return True
@@ -69,7 +59,6 @@ def _evaluate_condition(
     actual_lower = actual_str.lower()
     target_lower = target_value.lower()
 
-    # String Operators with list/tuple/set collection item evaluations for Entity-Based rules
     if operator in ("CONTAINS", "NOT_CONTAINS"):
         if isinstance(actual, (list, tuple, set)):
             actual_list = [str(x).strip().lower() for x in actual]
@@ -88,7 +77,6 @@ def _evaluate_condition(
     if operator == "ENDS_WITH":
         return actual_lower.endswith(target_lower)
 
-    # Collection Operators with list/tuple/set support
     if operator in ("IN", "NOT_IN"):
         targets_list = [v.strip().lower() for v in target_value.split(",") if v.strip()]
         if isinstance(actual, (list, tuple, set)):
@@ -99,7 +87,6 @@ def _evaluate_condition(
             is_in = actual_lower in targets_list
             return is_in if operator == "IN" else not is_in
 
-    # These are generic collection operators that work with any entity path resolved by the automation engine.
     if operator in ("ARRAY_CONTAINS_ANY", "ARRAY_CONTAINS_ALL"):
         targets = {v.strip().lower() for v in target_value.split(",") if v.strip()}
         if not targets:
@@ -110,10 +97,9 @@ def _evaluate_condition(
         actual_set = {str(x).strip().lower() for x in actual}
         if operator == "ARRAY_CONTAINS_ANY":
             return bool(actual_set & targets)
-        else:  # ARRAY_CONTAINS_ALL
+        else:
             return targets.issubset(actual_set)
 
-    # Range Operators
     if operator == "BETWEEN":
         normalized_range = target_value.replace("..", ",").replace(" - ", ",")
         if "," not in normalized_range and "-" in normalized_range:
@@ -123,7 +109,7 @@ def _evaluate_condition(
                 
         parts = [p.strip() for p in normalized_range.split(",") if p.strip()]
         if len(parts) != 2:
-            logger.warning("Malformed BETWEEN range values: '%s'. Expected 'min,max', 'min-max', or 'min..max'.", target_value)
+            logger.warning("Malformed BETWEEN range values: '%s'.", target_value)
             return False
         try:
             low = float(parts[0])
@@ -134,7 +120,6 @@ def _evaluate_condition(
             logger.warning("BETWEEN comparison failed. Value='%s' Range='%s'", actual, target_value)
             return False
 
-    # Numeric/Comparison Operators
     try:
         actual_num = float(actual)
         target_num = float(target_value)
@@ -163,35 +148,17 @@ def _get_nested_value(
     data: dict[str, Any],
     field_path: str,
 ) -> Any:
-    """
-    Resolve nested dictionary values using dot notation.
-
-    Examples:
-        name
-        classification_details.document_classification
-        invoice.vendor.address.city
-    """
-
     current: Any = data
-
     for key in field_path.split("."):
-
         if not isinstance(current, dict):
             return None
-
         current = current.get(key)
-
         if current is None:
             return None
-
     return current
 
 
 def _get_condition_attribute(condition: Any, attr: str) -> Any:
-    """
-    Safely retrieves a configuration attribute from either a dictionary
-    or a validation object property instance.
-    """
     if hasattr(condition, attr):
         return getattr(condition, attr)
     if isinstance(condition, dict):
@@ -203,10 +170,6 @@ def _evaluate_rule_conditions(
     rule: Any,
     work_item: WorkItem,
 ) -> bool:
-    """
-    Evaluates multiple conditions of a rule against a WorkItem based on
-    the specified logic operator. Supports early-exit short-circuit logic.
-    """
     conditions = getattr(rule, "conditions", []) or []
     if not conditions:
         return False
@@ -216,7 +179,7 @@ def _evaluate_rule_conditions(
         logic_operator = logic_operator.upper().strip()
 
     if logic_operator not in ("AND", "OR"):
-        logger.warning("Unknown logic operator '%s'. Falling back to AND.", logic_operator)
+        logger.warning("Unknown logic operator '%s'.", logic_operator)
         logic_operator = "AND"
 
     matched_results = []
@@ -239,7 +202,6 @@ def _evaluate_rule_conditions(
 
         is_matched = _evaluate_condition(actual_value, operator, target_value)
 
-        # Early-exit evaluation optimizations
         if logic_operator == "AND" and not is_matched:
             return False
         if logic_operator == "OR" and is_matched:
@@ -254,7 +216,7 @@ def _evaluate_rule_conditions(
 
 class AutomationService:
     """
-    Executes user automation rules for completed work items.
+    Executes user automation rules for completed work items scoped to a workspace.
     """
 
     async def execute_rules_for_work_item(
@@ -264,7 +226,6 @@ class AutomationService:
         work_item_id: uuid.UUID,
         event: str,
     ) -> dict[str, int]:
-
         stats = {
             "evaluated": 0,
             "matched": 0,
@@ -279,23 +240,21 @@ class AutomationService:
         )
 
         work_item = db.execute(
-            select(WorkItem).where(
-                WorkItem.id == work_item_id
-            )
+            select(WorkItem).where(WorkItem.id == work_item_id)
         ).scalar_one_or_none()
 
         if work_item is None:
             logger.error("WorkItem %s not found.", work_item_id)
             return stats
 
-        raw_rules = crud.get_active_rules_by_user_and_event(
+        workspace_id = work_item.workspace_id
+
+        raw_rules = crud.list_active_rules_for_event(
             db,
-            user_id=work_item.user_id,
+            workspace_id=workspace_id,
             event=event,
         )
 
-        # Explicitly sort rules in-memory strictly by execution priority ASC,
-        # then fallback to created_at timestamp to guarantee predictable run orders
         rules = sorted(
             raw_rules,
             key=lambda r: (
@@ -306,34 +265,20 @@ class AutomationService:
 
         email_settings = crud.get_email_settings(
             db,
-            user_id=work_item.user_id,
+            workspace_id=workspace_id,
         )
 
         if email_settings is None:
-
-            logger.warning(
-                "No Email Settings configured for user %s.",
-                work_item.user_id,
-            )
-
+            logger.warning("No Email Settings configured for workspace %s.", workspace_id)
             return stats
 
         if not email_settings.is_enabled:
-
-            logger.info(
-                "Email notifications are disabled for user %s.",
-                work_item.user_id,
-            )
-
+            logger.info("Email notifications are disabled for workspace %s.", workspace_id)
             return stats
-        
 
         for rule in rules:
-
             stats["evaluated"] += 1
-
             try:
-
                 if not _evaluate_rule_conditions(rule, work_item):
                     continue
 
@@ -376,22 +321,26 @@ class AutomationService:
                 if not actions_succeeded:
                     raise RuntimeError("One or more configured actions failed to execute successfully.")
 
-                crud.create_notification(
-                    db,
-                    notification_in=NotificationCreate(
-                        user_id=work_item.user_id,
-                        work_item_id=work_item.id,
-                        title=f"Automation Rule Triggered: {rule.name}",
-                        message="Conditions matched. Actions executed successfully.",
-                        notification_type=NotificationType.AUTOMATION,
-                        priority=NotificationPriority.INFO,
-                        delivery_channel=NotificationChannel.IN_APP,
-                        delivery_status=NotificationStatus.SENT,
-                    ),
-                )
+                recipient_user = work_item.created_by
+                if recipient_user is not None:
+                    crud.create_notification(
+                        db,
+                        workspace_id=workspace_id,
+                        notification_in=NotificationCreate(
+                            user_id=recipient_user.id,
+                            work_item_id=work_item.id,
+                            title=f"Automation Rule Triggered: {rule.name}",
+                            message="Conditions matched. Actions executed successfully.",
+                            notification_type=NotificationType.AUTOMATION,
+                            priority=NotificationPriority.INFO,
+                            delivery_channel=NotificationChannel.IN_APP,
+                            delivery_status=NotificationStatus.SENT,
+                        ),
+                    )
 
                 crud.create_automation_log(
                     db,
+                    workspace_id=workspace_id,
                     rule_id=rule.id,
                     work_item_id=work_item.id,
                     status="SUCCESS",
@@ -401,36 +350,23 @@ class AutomationService:
                 stats["succeeded"] += 1
 
             except Exception as exc:
-
-                logger.exception(
-                    "Automation rule '%s' failed.",
-                    rule.name,
-                )
-
+                logger.exception("Automation rule '%s' failed.", rule.name)
                 stats["failed"] += 1
-
                 db.rollback()
 
                 try:
-
                     crud.create_automation_log(
                         db,
+                        workspace_id=workspace_id,
                         rule_id=rule.id,
                         work_item_id=work_item.id,
                         status="FAILED",
                         log_message=str(exc)[:5000],
                     )
-
                 except Exception:
-                    logger.exception(
-                        "Unable to create automation audit log."
-                    )
+                    logger.exception("Unable to create automation audit log.")
 
-        logger.info(
-            "Automation execution complete. %s",
-            stats,
-        )
-
+        logger.info("Automation execution complete. %s", stats)
         return stats
 
     async def test_rule_for_work_item(
@@ -440,21 +376,18 @@ class AutomationService:
         rule: AutomationRule,
         work_item: WorkItem,
     ) -> dict[str, Any]:
-        """
-        Manually executes and evaluates a single target rule against a specific Work Item,
-        producing standard execution logs and notification traces without modifying trigger queues.
-        """
         start_time = time.perf_counter()
         success = True
         matched = False
         notification_sent = False
         message = "Rule conditions were not satisfied."
+        workspace_id = work_item.workspace_id
 
         try:
             if _evaluate_rule_conditions(rule, work_item):
                 matched = True
                 log_msg = "[MANUAL TEST RUN] Rule conditions matched."
-                email_settings = crud.get_email_settings(db, user_id=work_item.user_id)
+                email_settings = crud.get_email_settings(db, workspace_id=workspace_id)
 
                 if email_settings and email_settings.is_enabled:
                     actions = getattr(rule, "actions", []) or []
@@ -489,6 +422,7 @@ class AutomationService:
                             logger.error("Manual test action #%d failed.", idx + 1)
                             crud.create_automation_log(
                                 db,
+                                workspace_id=workspace_id,
                                 rule_id=rule.id,
                                 work_item_id=work_item.id,
                                 status="FAILED",
@@ -500,6 +434,7 @@ class AutomationService:
                         message = f"Rule conditions met. Manual test actions executed: {', '.join(action_logs)}"
                         crud.create_automation_log(
                             db,
+                            workspace_id=workspace_id,
                             rule_id=rule.id,
                             work_item_id=work_item.id,
                             status="SUCCESS",
@@ -516,6 +451,7 @@ class AutomationService:
                     
                     crud.create_automation_log(
                         db,
+                        workspace_id=workspace_id,
                         rule_id=rule.id,
                         work_item_id=work_item.id,
                         status="SUCCESS",
@@ -530,6 +466,7 @@ class AutomationService:
             try:
                 crud.create_automation_log(
                     db,
+                    workspace_id=workspace_id,
                     rule_id=rule.id,
                     work_item_id=work_item.id,
                     status="FAILED",

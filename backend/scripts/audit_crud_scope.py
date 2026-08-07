@@ -15,6 +15,20 @@ TENANT_MODULES = (
     "ai_settings", "email_settings", "document_settings",
 )
 
+# Explicit allowlist of pre-secured workspace scopes.
+SCOPE_INHERITED = {
+    "assistant.create_conversation_message": "conversation fetched under scope",
+    "assistant.get_conversation_messages":   "conversation fetched under scope",
+    "assistant.delete_conversation_messages":"conversation fetched under scope",
+    "assistant.update_conversation_title":   "conversation fetched under scope",  # Added
+    "assistant.delete_conversation":         "conversation fetched under scope",  # Added
+    "job.create_job":                        "work_item fetched under scope",
+    "job.update_job":                        "job fetched under scope",
+    "notification.update_notification_read_status":     "notification fetched under scope",
+    "notification.update_notification_delivery_status": "notification fetched under scope",
+    "notification.delete_notification":                 "notification fetched under scope",
+}
+
 failures = []
 for name in TENANT_MODULES:
     module = importlib.import_module(f"app.crud.{name}")
@@ -30,22 +44,13 @@ for name in TENANT_MODULES:
         except OSError:
             continue
 
-        # A function operating on an already-fetched instance inherits scope.
-        # Exclude parameters representing already-fetched ORM objects.
-        if any(p in params for p in ("db_obj", "conversation", "notification")):
-            continue
-            
-        # Exclude message-level helper functions in assistant (inherit via conversation_id)
-        if name == "assistant" and fname in (
-            "create_conversation_message", "get_conversation_messages", "delete_conversation_messages"
-        ):
-            continue
-            
-        # Exclude job creation/update (inherits via work_item_id)
-        if name == "job" and fname in ("create_job", "update_job"):
+        # Clean lookup against explicit allowlist
+        key = f"{name}.{fname}"
+        if key in SCOPE_INHERITED:
             continue
 
-        # Pure helpers that touch no model.
+        if "db_obj" in params:
+            continue
         if "db" not in params:
             continue
 
