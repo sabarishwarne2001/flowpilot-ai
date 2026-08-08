@@ -154,8 +154,18 @@ class NotificationService:
         smtp_config = resolve_smtp_config(db, workspace_id=invitation.workspace_id)
 
         # 2. Build accept links
-        frontend_host = getattr(app_settings, "FRONTEND_HOST", "http://localhost:3000")
-        accept_link = f"{frontend_host}/invitations/accept?token={invitation.token}"
+        # FRONTEND_URL is a declared setting as of ARCH-03 Step 1. The previous
+        # getattr against a nonexistent FRONTEND_HOST always took the default,
+        # so every invitation ever sent pointed at localhost:3000.
+        #
+        # The token still travels as a query parameter here. That violates
+        # §B.9 and is fixed in Step 8, when the frontend accept route is moved
+        # to fragment delivery; changing the link shape before the route can
+        # read a fragment would break the one live pending invitation.
+        accept_link = (
+            f"{app_settings.FRONTEND_URL}/invitations/accept"
+            f"?token={invitation.token}"
+        )
         
         role_display = invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role)
         expiry_str = invitation.expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")

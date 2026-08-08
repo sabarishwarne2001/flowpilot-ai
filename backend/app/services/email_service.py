@@ -166,7 +166,7 @@ class EmailService:
         config = self._resolve_config(settings)
         message = EmailMessage()
         message["Subject"] = subject
-        message["From"] = f"{config.sender_name} <{config.smtp_username}>"
+        message["From"] = f"{config.sender_name} <{config.sender_address}>"
         message["To"] = recipient
         message.set_content(body)
 
@@ -187,7 +187,7 @@ class EmailService:
         config = self._resolve_config(settings)
         message = EmailMessage()
         message["Subject"] = subject
-        message["From"] = f"{config.sender_name} <{config.smtp_username}>"
+        message["From"] = f"{config.sender_name} <{config.sender_address}>"
         message["To"] = recipient
 
         message.set_content(text_body)

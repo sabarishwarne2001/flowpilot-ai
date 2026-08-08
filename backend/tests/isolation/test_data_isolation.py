@@ -8,7 +8,7 @@ from tests.isolation.helpers import assert_workspace_scoped
 
 SCOPED_COLLECTIONS = [
     ("work-items", "original_filename", "alpha_doc", "beta_doc"),
-    ("automation", "name", "alpha_rule", "beta_rule"),
+    ("automation/rules", "name", "alpha_rule", "beta_rule"),
     ("notifications", "title", "alpha_note", "beta_note"),
     ("assistant/conversations", "title", "alpha_convo", "beta_convo"),
 ]

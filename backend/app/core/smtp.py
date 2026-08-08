@@ -28,6 +28,18 @@ class SMTPConfig(BaseModel):
     sender_name: str
     encryption: EmailEncryption
 
+    # Optional visible sender. Hosted relays authenticate as an identity that
+    # is not an address at all — SendGrid as "apikey", Mailgun as
+    # "postmaster@mg.example.com" — so deriving the From header from the login
+    # username yields an unroutable address and a hard bounce. Workspace SMTP
+    # rows leave this None and keep the previous behaviour exactly.
+    from_email: str | None = None
+
+    @property
+    def sender_address(self) -> str:
+        """The address that appears in the From header."""
+        return self.from_email or self.smtp_username
+
 
 def resolve_smtp_config(
     db: Session,
@@ -49,22 +61,12 @@ def resolve_smtp_config(
                 encryption=workspace_settings.encryption,
             )
 
-    smtp_password = (
-        app_settings.SMTP_PASSWORD.get_secret_value()
-        if app_settings.SMTP_PASSWORD
-        else ""
-    )
-    encryption = (
-        EmailEncryption.TLS
-        if app_settings.SMTP_USE_TLS
-        else EmailEncryption.NONE
-    )
+    # No workspace, or a workspace with no enabled SMTP row: this is FlowPilot
+    # speaking for itself. Delegated so the platform credentials have exactly
+    # one definition and the two paths cannot drift. ARCH-03 §B.1.
+    #
+    # Imported at call time: platform_email imports SMTPConfig from this
+    # module, so a module-level import here would be circular.
+    from app.core.platform_email import platform_smtp_config
 
-    return SMTPConfig(
-        smtp_host=app_settings.SMTP_HOST,
-        smtp_port=app_settings.SMTP_PORT,
-        smtp_username=app_settings.SMTP_USERNAME or app_settings.SMTP_FROM_EMAIL,
-        smtp_password=smtp_password,
-        sender_name=app_settings.PROJECT_NAME,
-        encryption=encryption,
-    )
+    return platform_smtp_config()

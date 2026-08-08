@@ -1,8 +1,18 @@
 import json
-# Add model_validator to the existing pydantic imports
 from pydantic import field_validator, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.constants import APP_VERSION
+
+# Signing keys that have been published and must never be accepted again,
+# regardless of environment. This one was committed to app/core/config.py and
+# .env.example in a public repository; every token it ever signed is forgeable
+# by anyone who has read the history. Listing it here makes reuse a startup
+# failure rather than a silent one. ARCH-03 Step 1.
+LEAKED_JWT_SECRET_KEYS: frozenset[str] = frozenset(
+    {
+        "e839e248b9409893d5f84893708e983cf4b1b88e17409c914e963df9bc0297da",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -32,7 +42,9 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
 
     # Cryptography and Token Configurations (enforce obfuscated SecretStr)
-    JWT_SECRET_KEY: SecretStr = SecretStr("e839e248b9409893d5f84893708e983cf4b1b88e17409c914e963df9bc0297da")
+    # No default. A signing key with a fallback value is a signing key that
+    # ships to production unset. Validated in validate_identity_configuration.
+    JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -69,14 +81,29 @@ class Settings(BaseSettings):
     # Sprint 3: OCR Configurations
     OCR_LANGUAGE: str = "en"  # Standard default OCR language identifier
 
-    # Sprint 4: SMTP Email Configurations
-    SMTP_HOST: str = "localhost"
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str = ""
-    SMTP_PASSWORD: SecretStr | None = None
-    SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
-    SMTP_USE_TLS: bool = True
-    SMTP_TIMEOUT: int = 10
+    # ------------------------------------------------------------------
+    # Identity email — platform SMTP relay (ARCH-03 §B.1)
+    # ------------------------------------------------------------------
+    # Replaces the former SMTP_* block, which existed only as the fallback
+    # branch of resolve_smtp_config and was never a deliberate platform
+    # identity. Workspace SMTP lives in the email_settings table and sends on
+    # behalf of a tenant; these credentials send on behalf of FlowPilot, to
+    # people who may have no workspace at all.
+    PLATFORM_SMTP_HOST: str = ""
+    PLATFORM_SMTP_PORT: int = 587
+    PLATFORM_SMTP_USERNAME: str = ""
+    PLATFORM_SMTP_PASSWORD: SecretStr | None = None
+    PLATFORM_SMTP_ENCRYPTION: str = "TLS"  # NONE | TLS | SSL
+
+    # The visible sender, which on a hosted relay is not the login username.
+    PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
+    PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
+
+    # Origin of the user-facing application. Identity links are built against
+    # this, so a wrong value produces mail whose links point nowhere. Formerly
+    # read via getattr(settings, "FRONTEND_HOST", "http://localhost:3000") in
+    # notification_service, which silently sent every invitation to localhost.
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # SMTP Password Encryption
     EMAIL_ENCRYPTION_KEY: SecretStr
@@ -178,6 +205,74 @@ class Settings(BaseSettings):
         if v < 1:
             raise ValueError("MAX_CONVERSATION_MESSAGES must be greater than or equal to 1.")
         return v
+
+    @field_validator("PLATFORM_SMTP_ENCRYPTION")
+    @classmethod
+    def validate_platform_smtp_encryption(cls, v: str) -> str:
+        """Constrains the platform relay transport to a supported mode."""
+        normalized = v.strip().upper()
+        if normalized not in {"NONE", "TLS", "SSL"}:
+            raise ValueError(
+                "PLATFORM_SMTP_ENCRYPTION must be one of NONE, TLS, or SSL."
+            )
+        return normalized
+
+    @field_validator("FRONTEND_URL")
+    @classmethod
+    def validate_frontend_url(cls, v: str) -> str:
+        """
+        Normalizes the application origin and rejects unusable values early.
+
+        The trailing slash is stripped here rather than at every call site, so
+        link builders can concatenate a path without producing a double slash.
+        """
+        cleaned = v.strip().rstrip("/")
+        if not cleaned.startswith(("http://", "https://")):
+            raise ValueError(
+                "FRONTEND_URL must include a scheme, e.g. https://app.flowpilot.ai"
+            )
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_identity_configuration(self) -> "Settings":
+        """
+        Enforces the invariants ARCH-03 depends on, at import time.
+
+        These are checked here rather than at first use because the failure
+        modes are all silent: a compromised signing key produces tokens that
+        verify perfectly, an unset relay produces registrations that appear to
+        succeed, and a plaintext origin produces refresh cookies that are never
+        sent back. None of them raise on their own.
+        """
+        secret = self.JWT_SECRET_KEY.get_secret_value()
+
+        if secret in LEAKED_JWT_SECRET_KEYS:
+            raise ValueError(
+                "JWT_SECRET_KEY is a published value and cannot be used. "
+                "Generate a new key with: openssl rand -hex 32"
+            )
+
+        if len(secret) < 32:
+            raise ValueError(
+                "JWT_SECRET_KEY must be at least 32 characters. "
+                "Generate one with: openssl rand -hex 32"
+            )
+
+        if self.ENVIRONMENT != "development":
+            if not self.PLATFORM_SMTP_HOST.strip():
+                raise ValueError(
+                    "PLATFORM_SMTP_HOST is required outside development. "
+                    "Without it no user can verify an address or reset a "
+                    "password."
+                )
+            if not self.FRONTEND_URL.startswith("https://"):
+                raise ValueError(
+                    "FRONTEND_URL must use HTTPS outside development. The "
+                    "refresh cookie is issued Secure and will not be sent "
+                    "back over plaintext HTTP."
+                )
+
+        return self
 
     # --- Custom Model Properties ---
 
