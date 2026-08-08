@@ -1,7 +1,6 @@
-import type { AxiosProgressEvent } from "axios";
-
+import type { AxiosProgressEvent, AxiosResponse } from "axios";
 import apiClient from "@/services/api/client";
-
+import { WORK_ITEM_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   UploadDocumentResponse,
   WorkItemQueryFilters,
@@ -9,147 +8,95 @@ import type {
   WorkItemResponse,
 } from "@/types/workItem";
 
-/* --------------------------------------------------------------------------
- * API Endpoints
- * -------------------------------------------------------------------------- */
-
-const WORK_ITEM_ENDPOINTS = {
-  upload: "/work-items/upload",
-  list: "/work-items",
-  details: (id: string) => `/work-items/${id}`,
-  reprocess: (id: string) => `/work-items/${id}/reprocess`,
-  remove: (id: string) => `/work-items/${id}`,
-} as const;
-
-/* --------------------------------------------------------------------------
- * Helpers
- * -------------------------------------------------------------------------- */
+const JSON_HEADERS = { Accept: "application/json" } as const;
 
 const buildQueryParams = (filters: WorkItemQueryFilters): URLSearchParams => {
   const params = new URLSearchParams({
     page: String(filters.page),
     pageSize: String(filters.pageSize),
   });
-
-  if (filters.search?.trim()) {
-    params.set("search", filters.search.trim());
-  }
-
-  if (filters.status) {
-    params.set("status", filters.status);
-  }
-
-  if (filters.sortBy) {
-    params.set("sortBy", filters.sortBy);
-  }
-
-  if (filters.sortOrder) {
-    params.set("sortOrder", filters.sortOrder);
-  }
-
+  if (filters.search?.trim()) params.set("search", filters.search.trim());
+  if (filters.status) params.set("status", filters.status);
+  if (filters.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters.sortOrder) params.set("sortOrder", filters.sortOrder);
   return params;
 };
-/**
- * Uploads a document for processing.
- */
+
 export const uploadDocument = async (
+  workspaceId: string,
   file: File,
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
 ): Promise<UploadDocumentResponse> => {
   const formData = new FormData();
-
   formData.append("file", file);
-
-  const requestConfig = {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      Accept: "application/json",
-    },
-
-    ...(onUploadProgress
-      ? {
-          onUploadProgress,
-        }
-      : {}),
-  };
 
   const response = await apiClient.post<
     UploadDocumentResponse,
-    import("axios").AxiosResponse<UploadDocumentResponse>
-  >(WORK_ITEM_ENDPOINTS.upload, formData, requestConfig);
-
+    AxiosResponse<UploadDocumentResponse>
+  >(WORK_ITEM_ENDPOINTS.upload(workspaceId), formData, {
+    headers: { "Content-Type": "multipart/form-data", ...JSON_HEADERS },
+    ...(onUploadProgress ? { onUploadProgress } : {}),
+  });
   return response.data;
 };
 
-/**
- * Returns a paginated work item list.
- */
 export const getWorkItems = async (
-  filters: WorkItemQueryFilters
+  workspaceId: string,
+  filters: WorkItemQueryFilters,
 ): Promise<WorkItemsListResponse> => {
   const response = await apiClient.get<WorkItemsListResponse>(
-    WORK_ITEM_ENDPOINTS.list,
-    {
-      params: buildQueryParams(filters),
-      headers: {
-        Accept: "application/json",
-      },
-    }
+    WORK_ITEM_ENDPOINTS.list(workspaceId),
+    { params: buildQueryParams(filters), headers: JSON_HEADERS },
   );
-
   return response.data;
 };
-/**
- * Returns the details for a single work item.
- */
+
 export const getWorkItemDetails = async (
-  workItemId: string
+  workspaceId: string,
+  workItemId: string,
 ): Promise<WorkItemResponse> => {
   const response = await apiClient.get<WorkItemResponse>(
-    WORK_ITEM_ENDPOINTS.details(workItemId),
-    {
-      headers: {
-        Accept: "application/json",
-      },
-    }
+    WORK_ITEM_ENDPOINTS.details(workspaceId, workItemId),
+    { headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * Requeues a failed work item for processing.
- */
-export const reprocessWorkItem = async (workItemId: string): Promise<void> => {
-  await apiClient.post(WORK_ITEM_ENDPOINTS.reprocess(workItemId), null, {
-    headers: {
-      Accept: "application/json",
-    },
+export const reprocessWorkItem = async (
+  workspaceId: string,
+  workItemId: string,
+): Promise<void> => {
+  await apiClient.post(
+    WORK_ITEM_ENDPOINTS.reprocess(workspaceId, workItemId),
+    null,
+    { headers: JSON_HEADERS },
+  );
+};
+
+export const deleteWorkItem = async (
+  workspaceId: string,
+  workItemId: string,
+): Promise<void> => {
+  await apiClient.delete(WORK_ITEM_ENDPOINTS.remove(workspaceId, workItemId), {
+    headers: JSON_HEADERS,
   });
 };
 
-/**
- * Placeholder for future document deletion.
- */
-export const deleteWorkItem = async (workItemId: string): Promise<void> => {
-  await apiClient.delete(WORK_ITEM_ENDPOINTS.remove(workItemId), {
-    headers: {
-      Accept: "application/json",
-    },
+export const resetKnowledgeBase = async (
+  workspaceId: string,
+): Promise<void> => {
+  await apiClient.delete(WORK_ITEM_ENDPOINTS.knowledgeBase(workspaceId), {
+    headers: JSON_HEADERS,
   });
 };
-/**
- * Unified Work Item API namespace.
- *
- * Groups all work item operations behind a single export,
- * simplifying imports and future dependency injection.
- */
+
 export const workItemApi = {
   uploadDocument,
   getWorkItems,
   getWorkItemDetails,
   reprocessWorkItem,
   deleteWorkItem,
+  resetKnowledgeBase,
 };
 
 export default workItemApi;

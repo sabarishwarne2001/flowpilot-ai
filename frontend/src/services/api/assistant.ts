@@ -1,4 +1,5 @@
 import apiClient from "@/services/api/client";
+import { ASSISTANT_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   ConversationSummary,
   ConversationHistoryResponse,
@@ -9,229 +10,101 @@ import type {
   ConversationHistoryQuery,
 } from "@/types/assistant";
 
-/**
- * ============================================================================
- * Assistant API Constants
- * ============================================================================
- */
-
-const ASSISTANT_ENDPOINTS = {
-  CONVERSATIONS: "/assistant/conversations",
-  CONVERSATION: (conversationId: string) =>
-    `/assistant/conversations/${conversationId}`,
-  MESSAGES: (conversationId: string) =>
-    `/assistant/conversations/${conversationId}/messages`,
-} as const;
-
-const JSON_HEADERS = {
-  Accept: "application/json",
-} as const;
-
+const JSON_HEADERS = { Accept: "application/json" } as const;
 const DEFAULT_HISTORY_PAGE_SIZE = 50;
 
-/**
- * ============================================================================
- * Conversation APIs
- * ============================================================================
- */
-
-/**
- * Creates a new conversation.
- *
- * The backend automatically generates the conversation
- * title after receiving the first user message.
- */
 export const createConversation = async (
-  workItemId?: string | null
+  workspaceId: string,
+  workItemId?: string | null,
 ): Promise<ConversationSummary> => {
-  const payload: ConversationCreateRequest = {
-    work_item_id: workItemId ?? null,
-  };
-
+  const payload: ConversationCreateRequest = { work_item_id: workItemId ?? null };
   const response = await apiClient.post<ConversationSummary>(
-    ASSISTANT_ENDPOINTS.CONVERSATIONS,
+    ASSISTANT_ENDPOINTS.conversations(workspaceId),
     payload,
-    {
-      headers: JSON_HEADERS,
-    }
+    { headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * Returns the existing conversation for a document.
- *
- * If no conversation exists, the backend automatically
- * creates one and returns it.
- */
 export const getDocumentConversation = async (
-  workItemId: string
+  workspaceId: string,
+  workItemId: string,
 ): Promise<ConversationSummary> => {
   const response = await apiClient.get<ConversationSummary>(
-    `/assistant/documents/${workItemId}/conversation`,
-    {
-      headers: JSON_HEADERS,
-    }
+    ASSISTANT_ENDPOINTS.documentConversation(workspaceId, workItemId),
+    { headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * Retrieves every active conversation owned by
- * the authenticated user.
- */
-export const getConversations = async (): Promise<
-  readonly ConversationSummary[]
-> => {
+export const getConversations = async (
+  workspaceId: string,
+): Promise<readonly ConversationSummary[]> => {
   const response = await apiClient.get<readonly ConversationSummary[]>(
-    ASSISTANT_ENDPOINTS.CONVERSATIONS,
-    {
-      headers: JSON_HEADERS,
-    }
+    ASSISTANT_ENDPOINTS.conversations(workspaceId),
+    { headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * ============================================================================
- * Conversation History
- * ============================================================================
- */
-
-/**
- * Retrieves paginated conversation history.
- *
- * Designed to support future infinite scrolling.
- */
 export const getConversationHistory = async (
+  workspaceId: string,
   conversationId: string,
-  query: ConversationHistoryQuery = {}
+  query: ConversationHistoryQuery = {},
 ): Promise<ConversationHistoryResponse> => {
   const { limit = DEFAULT_HISTORY_PAGE_SIZE, cursor } = query;
-
   const queryParams = new URLSearchParams();
-
   queryParams.append("limit", limit.toString());
-
-  if (cursor) {
-    queryParams.append("cursor", cursor);
-  }
+  if (cursor) queryParams.append("cursor", cursor);
 
   const response = await apiClient.get<ConversationHistoryResponse>(
-    ASSISTANT_ENDPOINTS.CONVERSATION(conversationId),
-    {
-      params: queryParams,
-      headers: JSON_HEADERS,
-    }
+    ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
+    { params: queryParams, headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * ============================================================================
- * Messaging APIs
- * ============================================================================
- */
-
-/**
- * Sends a user message to the assistant.
- *
- * NOTE:
- * The current implementation uses a traditional
- * request/response workflow.
- *
- * TODO (Future):
- * Upgrade to Server Sent Events (SSE) or
- * streaming responses without changing the
- * public API contract.
- */
 export const sendChatMessage = async (
+  workspaceId: string,
   conversationId: string,
   content: string,
-  options?: {
-    stream?: boolean;
-    signal?: AbortSignal;
-  }
+  options?: { stream?: boolean; signal?: AbortSignal },
 ): Promise<ChatResponse> => {
   const trimmedContent = content.trim();
+  if (!trimmedContent) throw new Error("Message content cannot be empty.");
 
-  if (!trimmedContent) {
-    throw new Error("Message content cannot be empty.");
-  }
-
-  const payload: ChatQueryRequest = {
-    content: trimmedContent,
-  };
-
-  const requestConfig = {
-    headers: JSON_HEADERS,
-    ...(options?.signal
-      ? {
-          signal: options.signal,
-        }
-      : {}),
-  };
-
+  const payload: ChatQueryRequest = { content: trimmedContent };
   const response = await apiClient.post<ChatResponse>(
-    ASSISTANT_ENDPOINTS.MESSAGES(conversationId),
+    ASSISTANT_ENDPOINTS.messages(workspaceId, conversationId),
     payload,
-    requestConfig
+    { headers: JSON_HEADERS, ...(options?.signal ? { signal: options.signal } : {}) },
   );
-
   return response.data;
 };
 
-/**
- * ============================================================================
- * Conversation Management
- * ============================================================================
- */
-
-/**
- * Renames an existing conversation.
- */
 export const renameConversation = async (
+  workspaceId: string,
   conversationId: string,
-  title: string
+  title: string,
 ): Promise<ConversationSummary> => {
-  const trimmedTitle = title.trim();
-
-  const payload: ConversationUpdateRequest = {
-    title: trimmedTitle,
-  };
-
+  const payload: ConversationUpdateRequest = { title: title.trim() };
   const response = await apiClient.patch<ConversationSummary>(
-    ASSISTANT_ENDPOINTS.CONVERSATION(conversationId),
+    ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
     payload,
-    {
-      headers: JSON_HEADERS,
-    }
+    { headers: JSON_HEADERS },
   );
-
   return response.data;
 };
 
-/**
- * Deletes a conversation together with all
- * associated messages.
- */
 export const deleteConversation = async (
-  conversationId: string
+  workspaceId: string,
+  conversationId: string,
 ): Promise<void> => {
-  await apiClient.delete(ASSISTANT_ENDPOINTS.CONVERSATION(conversationId), {
-    headers: JSON_HEADERS,
-  });
+  await apiClient.delete(
+    ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
+    { headers: JSON_HEADERS },
+  );
 };
-
-/**
- * ============================================================================
- * Unified Assistant API
- * ============================================================================
- */
 
 export const assistantApi = {
   createConversation,

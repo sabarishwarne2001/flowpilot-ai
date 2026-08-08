@@ -1,194 +1,121 @@
 /**
  * Centralized API path construction for FlowPilot AI.
- *
- * Every tenant-scoped URL in the application is built here. This exists
- * because ARCH-01 embeds a tenant identifier in nearly every path, and the
- * previous pattern — each service defining its own endpoint constants — would
- * scatter that requirement across a dozen modules. One forgotten identifier is
- * a 404 discovered by a user rather than by the compiler.
- *
- * Path shape follows the ARCH-01 contract:
- *
- *   /organizations/{organization_id}/...   organization-scoped
- *   /workspaces/{workspace_id}/...         workspace-scoped
- *   /me/...                                actor-scoped, no tenant
- *   /invitations/...                       token-addressed, no tenant
- *
- * Workspace routes are NOT nested under their organization. A workspace
- * identifier already determines its organization, so requiring both would
- * create two sources of truth and an inconsistency check on every request.
- *
- * IDENTIFIERS, NOT SLUGS. These paths take UUIDs. Slugs are the human-facing
- * address in the browser URL (/acme/engineering/...) and are resolved to
- * identifiers once, at the tenant context boundary. Passing a slug to any
- * function here is a bug the type system cannot catch — the parameter names
- * say organizationId and workspaceId for that reason.
  */
 
-/**
- * Encodes a path segment.
- *
- * Every identifier passed here is a UUID today and needs no encoding, but the
- * cost is one function call and the alternative is a path-injection bug the
- * first time a non-UUID segment appears.
- */
 const seg = (value: string): string => encodeURIComponent(value);
 
+const ws = (workspaceId: string): string => {
+  if (!workspaceId) {
+    throw new Error(
+      "A workspaceId is required to build this URL. The caller rendered " +
+        "before the tenant context resolved — gate the query with " +
+        "`enabled: Boolean(workspaceId)`.",
+    );
+  }
+  return encodeURIComponent(workspaceId);
+};
+
+const scoped = (workspaceId: string): string => `/workspaces/${ws(workspaceId)}`;
+
 /* ==========================================================================
- * Actor-scoped
- * ========================================================================== */
+   Unscoped — identity and tenancy
+   ========================================================================== */
 
 export const ME_ENDPOINTS = {
-  /** Bootstrap: identity, tenants, and default destination in one call. */
   context: "/me/context",
   organizations: "/me/organizations",
   workspaces: "/me/workspaces",
 } as const;
 
-/* ==========================================================================
- * Organizations
- * ========================================================================== */
-
 export const ORGANIZATION_ENDPOINTS = {
-  /** Provision a tenant. Account-level; governed by no role. */
   create: "/organizations",
-
   slugAvailable: "/organizations/slug-available",
-
-  detail: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}`,
-
-  archive: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}/archive`,
-
-  leave: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}/leave`,
-
-  transferOwnership: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}/transfer-ownership`,
-
-  workspaces: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}/workspaces`,
-
-  members: (organizationId: string): string =>
-    `/organizations/${seg(organizationId)}/members`,
-
-  member: (organizationId: string, membershipId: string): string =>
-    `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
-
-  /**
-   * Deactivate rather than delete. The membership row is retained with the
-   * actor and timestamp recorded, so attribution for past work survives.
-   */
-  deactivateMember: (organizationId: string, membershipId: string): string =>
-    `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
+  detail: (organizationId: string): string => `/organizations/${seg(organizationId)}`,
+  archive: (organizationId: string): string => `/organizations/${seg(organizationId)}/archive`,
+  leave: (organizationId: string): string => `/organizations/${seg(organizationId)}/leave`,
+  transferOwnership: (organizationId: string): string => `/organizations/${seg(organizationId)}/transfer-ownership`,
+  workspaces: (organizationId: string): string => `/organizations/${seg(organizationId)}/workspaces`,
+  members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
+  member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
+  deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
 } as const;
-
-/* ==========================================================================
- * Workspaces
- * ========================================================================== */
 
 export const WORKSPACE_ENDPOINTS = {
-  detail: (workspaceId: string): string => `/workspaces/${seg(workspaceId)}`,
-
-  logo: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/logo`,
-
-  slugAvailable: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/slug-available`,
-
-  archive: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/archive`,
-
-  restore: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/restore`,
-
-  leave: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/leave`,
-
-  members: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/members`,
-
-  member: (workspaceId: string, membershipId: string): string =>
-    `/workspaces/${seg(workspaceId)}/members/${seg(membershipId)}`,
-
-  revokeMember: (workspaceId: string, membershipId: string): string =>
-    `/workspaces/${seg(workspaceId)}/members/${seg(membershipId)}/revoke`,
+  detail: (workspaceId: string): string => scoped(workspaceId),
+  logo: (workspaceId: string): string => `${scoped(workspaceId)}/logo`,
+  slugAvailable: (workspaceId: string): string => `${scoped(workspaceId)}/slug-available`,
+  archive: (workspaceId: string): string => `${scoped(workspaceId)}/archive`,
+  restore: (workspaceId: string): string => `${scoped(workspaceId)}/restore`,
+  leave: (workspaceId: string): string => `${scoped(workspaceId)}/leave`,
+  members: (workspaceId: string): string => `${scoped(workspaceId)}/members`,
+  member: (workspaceId: string, membershipId: string): string => `${scoped(workspaceId)}/members/${seg(membershipId)}`,
+  revokeMember: (workspaceId: string, membershipId: string): string => `${scoped(workspaceId)}/members/${seg(membershipId)}/revoke`,
 } as const;
 
-/* ==========================================================================
- * Invitations
- * ========================================================================== */
-
 export const INVITATION_ENDPOINTS = {
-  /** Management, workspace-scoped. */
-  list: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/invitations`,
-
-  create: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/invitations`,
-
-  revoke: (workspaceId: string, invitationId: string): string =>
-    `/workspaces/${seg(workspaceId)}/invitations/${seg(invitationId)}/revoke`,
-
-  resend: (workspaceId: string, invitationId: string): string =>
-    `/workspaces/${seg(workspaceId)}/invitations/${seg(invitationId)}/resend`,
-
-  /**
-   * Token-addressed. Flat rather than workspace-scoped because a recipient has
-   * no tenant context yet — establishing it is what the token is for.
-   *
-   * preview is public. accept and reject require authentication: the token
-   * identifies the invitation, the session identifies the actor. Before
-   * ARCH-01 both took only a token, so any holder of a forwarded link could
-   * act on the invitee's behalf.
-   */
+  list: (workspaceId: string): string => `${scoped(workspaceId)}/invitations`,
+  create: (workspaceId: string): string => `${scoped(workspaceId)}/invitations`,
+  revoke: (workspaceId: string, invitationId: string): string => `${scoped(workspaceId)}/invitations/${seg(invitationId)}/revoke`,
+  resend: (workspaceId: string, invitationId: string): string => `${scoped(workspaceId)}/invitations/${seg(invitationId)}/resend`,
   preview: "/invitations/preview",
   accept: "/invitations/accept",
   reject: "/invitations/reject",
 } as const;
 
-/* ==========================================================================
- * Workspace-scoped settings
- * ==========================================================================
- *
- * These three routers moved under the tenant prefix in backend ARCH-01 Step
- * 9c-2:
- *
- *   /ai-settings        ->  /workspaces/{workspace_id}/ai-settings
- *   /email-settings     ->  /workspaces/{workspace_id}/email-settings
- *   /document-settings  ->  /workspaces/{workspace_id}/document-settings
- *
- * The move was made in the router registration rather than in each route
- * decorator, so no backend handler changed — which is also why the frontend
- * services were overlooked. Centralising the paths here means the next such
- * move is one edit, not three.
- *
- * The underlying rows are still keyed on user_id, not workspace_id. The route
- * is tenant-addressed and tenant-authorized; the data is not yet
- * tenant-scoped. ARCH-02 closes that gap, and having the correct route shape
- * already in place means ARCH-02 touches only the query layer.
- */
-
 export const SETTINGS_ENDPOINTS = {
-  aiSettings: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/ai-settings`,
+  aiSettings: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings`,
+  aiSettingsModels: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/models`,
+  aiSettingsProviders: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/providers`,
+  aiSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/test`,
+  emailSettings: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings`,
+  emailSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings/test`,
+  documentSettings: (workspaceId: string): string => `${scoped(workspaceId)}/document-settings/`,
+} as const;
 
-  aiSettingsModels: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/ai-settings/models`,
+/* ==========================================================================
+   Re-scoped in ARCH-02
+   ========================================================================== */
 
-  aiSettingsProviders: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/ai-settings/providers`,
+export const WORK_ITEM_ENDPOINTS = {
+  list: (workspaceId: string): string => `${scoped(workspaceId)}/work-items`,
+  upload: (workspaceId: string): string => `${scoped(workspaceId)}/work-items`,
+  details: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}`,
+  reprocess: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/reprocess`,
+  remove: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}`,
+  knowledgeBase: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/work-items/knowledge-base`,
+} as const;
 
-  aiSettingsTest: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/ai-settings/test`,
+export const ASSISTANT_ENDPOINTS = {
+  conversations: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/assistant/conversations`,
+  conversation: (workspaceId: string, conversationId: string): string =>
+    `${scoped(workspaceId)}/assistant/conversations/${seg(conversationId)}`,
+  messages: (workspaceId: string, conversationId: string): string =>
+    `${scoped(workspaceId)}/assistant/conversations/${seg(conversationId)}/messages`,
+  documentConversation: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/assistant/documents/${seg(workItemId)}/conversation`,
+} as const;
 
-  emailSettings: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/email-settings`,
+export const DASHBOARD_ENDPOINTS = {
+  overview: (workspaceId: string): string => `${scoped(workspaceId)}/dashboard/overview`,
+  health: (workspaceId: string): string => `${scoped(workspaceId)}/dashboard/health`,
+} as const;
 
-  emailSettingsTest: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/email-settings/test`,
+export const AUTOMATION_ENDPOINTS = {
+  rules: (workspaceId: string): string => `${scoped(workspaceId)}/automation/rules`,
+  rule: (workspaceId: string, ruleId: string): string =>
+    `${scoped(workspaceId)}/automation/rules/${seg(ruleId)}`,
+  logs: (workspaceId: string): string => `${scoped(workspaceId)}/automation/logs`,
+} as const;
 
-  documentSettings: (workspaceId: string): string =>
-    `/workspaces/${seg(workspaceId)}/document-settings/`,
+export const NOTIFICATION_ENDPOINTS = {
+  list: (workspaceId: string): string => `${scoped(workspaceId)}/notifications`,
+  detail: (workspaceId: string, notificationId: string): string =>
+    `${scoped(workspaceId)}/notifications/${seg(notificationId)}`,
+  markAllRead: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/notifications/read-all`,
 } as const;

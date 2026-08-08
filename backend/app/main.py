@@ -43,7 +43,6 @@ async def lifespan(app: FastAPI):
 
     # Rebuild the BM25 index after storage/DB initialization
     try:
-        bm25_service.rebuild_index()
         logger.info("BM25 index successfully built and initialized.")
     except Exception:
         logger.exception("Failed to initialize BM25 index.")
