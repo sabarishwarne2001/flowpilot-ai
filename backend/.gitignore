@@ -65,4 +65,7 @@ Thumbs.db
 # ==========================
 .docker-volumes/
 
-
+# ==========================
+# ChromaDB persistent vector database
+# ==========================
+chromadb/
