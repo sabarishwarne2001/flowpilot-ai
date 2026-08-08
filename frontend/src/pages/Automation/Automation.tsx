@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -27,8 +27,10 @@ import { RuleTestDialog } from "@/pages/Automation/RuleTestDialog";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import { getFriendlyFieldName } from "@/constants/automationFields";
-import type { AutomationRule } from "@/types/automation";
+import type { AutomationRule, AutomationLog } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { automationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import {
   Select,
   SelectTrigger,
@@ -36,10 +38,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/Select";
-
-// Centralized Query Cache Keys matching our approved system configurations
-const RULES_QUERY_KEY = ["automation-rules"] as const;
-const LOGS_QUERY_KEY = ["automation-logs"] as const;
 
 // Human-readable labels for logic operators displayed in lists
 const OPERATOR_DISPLAY_MAP: Record<string, string> = {
@@ -65,41 +63,42 @@ const OPERATOR_DISPLAY_MAP: Record<string, string> = {
 
 /**
  * Split-pane business Automation Rules and Audit Logs control panel for FlowPilot AI.
- *
- * Supports rule creations and inline modifications, manages real-time toggles
- * of active/inactive states, and lists execution status logs cleanly with trace details.
  */
 export const Automation: React.FC = () => {
   const queryClient = useQueryClient();
+  const workspaceId = useActiveWorkspaceId();
 
   // Dialog overlay controller states
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [ruleToEdit, setRuleToEdit] = useState<AutomationRule | null>(null);
-  const [ruleToDuplicate, setRuleToDuplicate] = useState<AutomationRule | null>(
-    null
-  );
+  const [ruleToDuplicate, setRuleToDuplicate] = useState<AutomationRule | null>(null);
   const [ruleToTest, setRuleToTest] = useState<AutomationRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<AutomationRule | null>(null);
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
 
   // Search & Filters Panel states (Rule list)
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<
-    "ALL" | "ENABLED" | "DISABLED"
-  >("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ENABLED" | "DISABLED">("ALL");
   const [eventFilter, setEventFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<string>("PRIORITY_ASC");
 
   // Advanced Audit Log Filter states (Log list)
   const [logSearchQuery, setLogSearchQuery] = useState<string>("");
-  const [logStatusFilter, setLogStatusFilter] = useState<
-    "ALL" | "SUCCESS" | "FAILED"
-  >("ALL");
+  const [logStatusFilter, setLogStatusFilter] = useState<"ALL" | "SUCCESS" | "FAILED">("ALL");
   const [logRuleFilter, setLogRuleFilter] = useState<string>("ALL");
-  const [logDateRangeFilter, setLogDateRangeFilter] = useState<
-    "ALL" | "TODAY" | "7_DAYS" | "30_DAYS"
-  >("ALL");
+  const [logDateRangeFilter, setLogDateRangeFilter] = useState<"ALL" | "TODAY" | "7_DAYS" | "30_DAYS">("ALL");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  // Reset internal selection states upon switching workspaces
+  useEffect(() => {
+    setIsFormOpen(false);
+    setRuleToEdit(null);
+    setRuleToDuplicate(null);
+    setRuleToTest(null);
+    setRuleToDelete(null);
+    setTogglingRuleId(null);
+    setExpandedLogId(null);
+  }, [workspaceId]);
 
   // 1. Query user-configured Rules lists
   const {
@@ -108,11 +107,12 @@ export const Automation: React.FC = () => {
     error: rulesError,
     refetch: refetchRules,
     isRefetching: isRulesRefetching,
-  } = useQuery({
-    queryKey: RULES_QUERY_KEY,
-    queryFn: automationApi.getAutomationRules,
+  } = useQuery<readonly AutomationRule[], Error>({
+    queryKey: automationKeys.rules(workspaceId!),
+    queryFn: () => automationApi.getAutomationRules(workspaceId!),
+    enabled: Boolean(workspaceId),
     staleTime: 1000 * 30,
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousWithinWorkspace<readonly AutomationRule[]>(workspaceId!),
   });
 
   // 2. Query separate execution logs histories
@@ -122,14 +122,15 @@ export const Automation: React.FC = () => {
     error: logsError,
     refetch: refetchLogs,
     isRefetching: isLogsRefetching,
-  } = useQuery({
-    queryKey: LOGS_QUERY_KEY,
-    queryFn: automationApi.getAutomationLogs,
+  } = useQuery<readonly AutomationLog[], Error>({
+    queryKey: automationKeys.logs(workspaceId!),
+    queryFn: () => automationApi.getAutomationLogs(workspaceId!),
+    enabled: Boolean(workspaceId),
     staleTime: 5000,
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousWithinWorkspace<readonly AutomationLog[]>(workspaceId!),
   });
 
   // Sync refresh utility
@@ -140,12 +141,13 @@ export const Automation: React.FC = () => {
 
   // 3. Register rule deletion mutation
   const { mutate: triggerDelete, isPending: isDeletingRule } = useMutation({
-    mutationFn: automationApi.deleteAutomationRule,
+    mutationFn: (ruleId: string) => automationApi.deleteAutomationRule(workspaceId!, ruleId),
     onSuccess: async () => {
       toast.success("Automation rule removed from PostgreSQL.");
-      // Deletions cascade inside database; re-fetch both lists
-      await queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
-      await queryClient.invalidateQueries({ queryKey: LOGS_QUERY_KEY });
+      if (workspaceId) {
+        await queryClient.invalidateQueries({ queryKey: automationKeys.rules(workspaceId) });
+        await queryClient.invalidateQueries({ queryKey: automationKeys.logs(workspaceId) });
+      }
     },
     onError: (err: unknown) => {
       if (err instanceof ApiError) {
@@ -160,37 +162,40 @@ export const Automation: React.FC = () => {
   const { mutate: triggerToggleActive, isPending: isUpdatingRule } =
     useMutation({
       mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-        automationApi.updateAutomationRule(id, { is_active }),
+        automationApi.updateAutomationRule(workspaceId!, id, { is_active }),
 
       onMutate: async (updatedRule) => {
         setTogglingRuleId(updatedRule.id);
-        await queryClient.cancelQueries({
-          queryKey: RULES_QUERY_KEY,
-        });
+        if (workspaceId) {
+          await queryClient.cancelQueries({
+            queryKey: automationKeys.rules(workspaceId),
+          });
 
-        const previousRules =
-          queryClient.getQueryData<AutomationRule[]>(RULES_QUERY_KEY);
+          const previousRules =
+            queryClient.getQueryData<readonly AutomationRule[]>(automationKeys.rules(workspaceId));
 
-        queryClient.setQueryData<AutomationRule[]>(
-          RULES_QUERY_KEY,
-          (old = []) =>
-            old.map((rule) =>
-              rule.id === updatedRule.id
-                ? {
-                    ...rule,
-                    is_active: updatedRule.is_active,
-                  }
-                : rule
-            )
-        );
+          queryClient.setQueryData<readonly AutomationRule[]>(
+            automationKeys.rules(workspaceId),
+            (old = []) =>
+              old.map((rule) =>
+                rule.id === updatedRule.id
+                  ? {
+                      ...rule,
+                      is_active: updatedRule.is_active,
+                    }
+                  : rule
+              )
+          );
 
-        return { previousRules };
+          return { previousRules };
+        }
+        return { previousRules: [] };
       },
 
       onError: (err, variables, context) => {
         setTogglingRuleId(null);
-        if (context?.previousRules) {
-          queryClient.setQueryData(RULES_QUERY_KEY, context.previousRules);
+        if (workspaceId && context?.previousRules) {
+          queryClient.setQueryData(automationKeys.rules(workspaceId), context.previousRules);
         }
 
         if (err instanceof ApiError) {
@@ -214,32 +219,33 @@ export const Automation: React.FC = () => {
 
       onSettled: () => {
         setTogglingRuleId(null);
-        queryClient.invalidateQueries({
-          queryKey: RULES_QUERY_KEY,
-        });
+        if (workspaceId) {
+          queryClient.invalidateQueries({
+            queryKey: automationKeys.rules(workspaceId),
+          });
+        }
       },
     });
 
   // --- KPI Statistics & Insights Calculations ---
   const stats = useMemo(() => {
     const total = rules.length;
-    const active = rules.filter((r) => r.is_active).length;
+    const active = rules.filter((r: AutomationRule) => r.is_active).length;
     const disabled = total - active;
     const activePct = total > 0 ? Math.round((active / total) * 100) : 0;
     const disabledPct = total > 0 ? 100 - activePct : 0;
     const avgPriority =
       total > 0
-        ? Math.round(rules.reduce((acc, r) => acc + r.priority, 0) / total)
+        ? Math.round(rules.reduce((acc: number, r: AutomationRule) => acc + r.priority, 0) / total)
         : 0;
 
-    const sortedByPriority = [...rules].sort((a, b) => a.priority - b.priority);
+    const sortedByPriority = [...rules].sort((a: AutomationRule, b: AutomationRule) => a.priority - b.priority);
     const highestPriority = sortedByPriority[0] || null;
 
-    const successLogsCount = logs.filter((l) => l.status === "SUCCESS").length;
-    const failedLogsCount = logs.filter((l) => l.status === "FAILED").length;
+    const successLogsCount = logs.filter((l: AutomationLog) => l.status === "SUCCESS").length;
+    const failedLogsCount = logs.filter((l: AutomationLog) => l.status === "FAILED").length;
     const totalLogs = successLogsCount + failedLogsCount;
 
-    // Explicitly fallback Success/Failure rates to 0% when no execution logs exist
     const successRate =
       totalLogs > 0 ? Math.round((successLogsCount / totalLogs) * 100) : 0;
     const failureRate = totalLogs > 0 ? 100 - successRate : 0;
@@ -259,7 +265,7 @@ export const Automation: React.FC = () => {
 
   // --- Search, Filtering & Sorting logic (Rule list) ---
   const filteredRules = useMemo(() => {
-    return rules.filter((rule) => {
+    return rules.filter((rule: AutomationRule) => {
       const matchesSearch = rule.name
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
@@ -301,21 +307,17 @@ export const Automation: React.FC = () => {
 
   // --- Search, Filtering & Statistics logic (Advanced Audit Logs) ---
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      // Search matches rule name or document name
+    return logs.filter((log: AutomationLog) => {
       const matchesSearch =
         log.rule_name.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
         log.document_name.toLowerCase().includes(logSearchQuery.toLowerCase());
 
-      // Status filters
       const matchesStatus =
         logStatusFilter === "ALL" ? true : log.status === logStatusFilter;
 
-      // Associated Rule filter
       const matchesRule =
         logRuleFilter === "ALL" ? true : log.rule_id === logRuleFilter;
 
-      // Date Range filters
       let matchesDate = true;
       if (logDateRangeFilter !== "ALL") {
         const logTime = new Date(log.created_at).getTime();
@@ -343,7 +345,7 @@ export const Automation: React.FC = () => {
   const auditStats = useMemo(() => {
     const total = filteredLogs.length;
     const successful = filteredLogs.filter(
-      (l) => l.status === "SUCCESS"
+      (l: AutomationLog) => l.status === "SUCCESS"
     ).length;
     const failed = total - successful;
     const successPct = total > 0 ? Math.round((successful / total) * 100) : 0;
@@ -358,7 +360,6 @@ export const Automation: React.FC = () => {
     };
   }, [filteredLogs]);
 
-  // --- Click Handler Callbacks (Memoized) ---
   const handleOpenCreateForm = useCallback((): void => {
     setRuleToEdit(null);
     setRuleToDuplicate(null);
@@ -392,10 +393,11 @@ export const Automation: React.FC = () => {
   }, []);
 
   const handleSaveSuccessCallback = useCallback((): void => {
-    queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
-  }, [queryClient]);
+    if (workspaceId) {
+      queryClient.invalidateQueries({ queryKey: automationKeys.rules(workspaceId) });
+    }
+  }, [queryClient, workspaceId]);
 
-  // Render Skeleton Cards while querying initially
   const isInitializing = isRulesLoading || isLogsLoading;
   if (isInitializing && rules.length === 0 && logs.length === 0) {
     return (
@@ -428,7 +430,6 @@ export const Automation: React.FC = () => {
     );
   }
 
-  // Gracefully present connection retries on errors
   if (rulesError || logsError) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center text-center p-6 bg-card border border-border/40 rounded-xl max-w-xl mx-auto shadow-sm select-none">
@@ -457,7 +458,6 @@ export const Automation: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* --- Section 1: Top Dashboard Title Header --- */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0 select-none">
         <div className="space-y-1">
           <h2 className="text-2xl font-extrabold tracking-tight">
@@ -494,7 +494,6 @@ export const Automation: React.FC = () => {
         </div>
       </header>
 
-      {/* --- Section 2: Summary metrics (KPI Cards Grid) --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 select-none">
         {/* Total Rules */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
@@ -550,7 +549,7 @@ export const Automation: React.FC = () => {
           </div>
         </div>
 
-        {/* Executions Today placeholder */}
+        {/* Executions Today */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
@@ -605,9 +604,7 @@ export const Automation: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Section 3: Filter, Search & Sorting Panel bar --- */}
       <div className="p-4 bg-muted/20 border border-border/50 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
-        {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
           <input
@@ -619,9 +616,7 @@ export const Automation: React.FC = () => {
           />
         </div>
 
-        {/* Filter selectors row */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Status filter */}
           <div className="flex items-center space-x-2">
             <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Status:
@@ -645,7 +640,6 @@ export const Automation: React.FC = () => {
             </Select>
           </div>
 
-          {/* Trigger Event filter */}
           <div className="flex items-center space-x-2">
             <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Trigger:
@@ -668,7 +662,6 @@ export const Automation: React.FC = () => {
             </Select>
           </div>
 
-          {/* Sort By selectors */}
           <div className="flex items-center space-x-2">
             <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Sort:
@@ -681,19 +674,14 @@ export const Automation: React.FC = () => {
 
               <SelectContent>
                 <SelectItem value="PRIORITY_ASC">
-                  Priority Low → High
+                  Priority Low â†’ High
                 </SelectItem>
-
                 <SelectItem value="PRIORITY_DESC">
-                  Priority High → Low
+                  Priority High â†’ Low
                 </SelectItem>
-
-                <SelectItem value="NAME_ASC">Name (A → Z)</SelectItem>
-
-                <SelectItem value="NAME_DESC">Name (Z → A)</SelectItem>
-
+                <SelectItem value="NAME_ASC">Name (A â†’ Z)</SelectItem>
+                <SelectItem value="NAME_DESC">Name (Z â†’ A)</SelectItem>
                 <SelectItem value="CREATED_DESC">Recently Created</SelectItem>
-
                 <SelectItem value="UPDATED_DESC">Last Updated</SelectItem>
               </SelectContent>
             </Select>
@@ -701,9 +689,7 @@ export const Automation: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Section 4: Split Columns Operational Grid --- */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Panel 4A: Rules Management Grid list (Left Column) */}
         <div className="lg:col-span-5 space-y-4">
           <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground pl-1 select-none">
             Configured Rules ({sortedRules.length})
@@ -723,7 +709,6 @@ export const Automation: React.FC = () => {
                   parameters.
                 </p>
               </div>
-              {/* Clear Filters CTA */}
               <button
                 type="button"
                 onClick={() => {
@@ -739,7 +724,7 @@ export const Automation: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {sortedRules.map((rule) => (
+              {sortedRules.map((rule: AutomationRule) => (
                 <article
                   key={rule.id}
                   className={`p-5 bg-card border rounded-xl shadow-sm transition-all duration-200 hover:shadow-md flex flex-col justify-between space-y-4
@@ -749,7 +734,6 @@ export const Automation: React.FC = () => {
                         : "border-muted/40 bg-muted/10 opacity-70 filter grayscale-[15%]"
                     }`}
                 >
-                  {/* Modern Header Row */}
                   <div className="flex justify-between items-start space-x-4">
                     <div className="min-w-0 space-y-2">
                       <h4 className="font-extrabold text-base leading-snug truncate text-foreground">
@@ -774,7 +758,6 @@ export const Automation: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Active toggle switch control */}
                     <button
                       type="button"
                       role="switch"
@@ -815,15 +798,13 @@ export const Automation: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Structured IF / THEN Panel */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-muted/30 dark:bg-muted/10 border border-border/40 rounded-xl p-3.5 select-none">
-                    {/* IF Section */}
                     <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5 border-b sm:border-b-0 pb-2.5 sm:pb-0">
                       <span className="text-[10px] font-black uppercase tracking-wider text-primary">
                         IF Conditions ({rule.logic_operator})
                       </span>
                       <div className="flex flex-col gap-2">
-                        {rule.conditions.map((cond, idx) => (
+                        {rule.conditions.map((cond: any, idx: number) => (
                           <React.Fragment key={idx}>
                             {idx > 0 && (
                               <div className="flex items-center space-x-2 select-none">
@@ -850,13 +831,12 @@ export const Automation: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* THEN Section */}
                     <div className="sm:col-span-5 flex flex-col justify-center sm:border-l border-border/40 pt-1.5 sm:pt-0 sm:pl-3.5 space-y-2.5">
                       <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                         THEN Actions ({rule.actions.length})
                       </span>
                       <div className="flex flex-col gap-2 select-none">
-                        {rule.actions.map((act, idx) => (
+                        {rule.actions.map((act: any, idx: number) => (
                           <div
                             key={idx}
                             className="flex items-center space-x-2 text-xs font-bold text-foreground"
@@ -881,7 +861,6 @@ export const Automation: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Metadata Row & Action Toolbar */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/10">
                     <div className="text-[10px] text-muted-foreground font-medium flex flex-wrap items-center gap-x-3 gap-y-1 select-none">
                       <span>Created: {formatDateTime(rule.created_at)}</span>
@@ -890,7 +869,6 @@ export const Automation: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Action Buttons Toolbar */}
                     <div className="flex items-center space-x-1 self-end sm:self-auto">
                       <button
                         type="button"
@@ -942,9 +920,7 @@ export const Automation: React.FC = () => {
           )}
         </div>
 
-        {/* Panel 4B: Audit Logs & Quick Insights (Right Column) */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Quick Insights panel */}
           <div className="bg-card border border-border/60 rounded-xl p-5 shadow-sm select-none space-y-4">
             <header className="flex items-center space-x-2 border-b border-border/30 pb-2">
               <PieChart className="h-4 w-4 text-primary" />
@@ -988,7 +964,6 @@ export const Automation: React.FC = () => {
             )}
           </div>
 
-          {/* Advanced Monitoring & Filter Section */}
           <div className="bg-card border border-border/60 rounded-xl p-5 shadow-sm select-none space-y-4">
             <header className="flex items-center justify-between border-b border-border/30 pb-2">
               <div className="flex items-center space-x-2">
@@ -1002,9 +977,7 @@ export const Automation: React.FC = () => {
               </span>
             </header>
 
-            {/* Logs search & filters */}
             <div className="space-y-3">
-              {/* Logs search input */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
@@ -1016,7 +989,6 @@ export const Automation: React.FC = () => {
                 />
               </div>
 
-              {/* Advanced multi-filter selectors */}
               <div className="grid grid-cols-3 gap-2 text-xs font-bold">
                 <Select
                   value={logStatusFilter}
@@ -1043,7 +1015,7 @@ export const Automation: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="ALL">All Rules</SelectItem>
 
-                    {rules.map((r) => (
+                    {rules.map((r: AutomationRule) => (
                       <SelectItem key={r.id} value={r.id}>
                         {r.name}
                       </SelectItem>
@@ -1073,7 +1045,6 @@ export const Automation: React.FC = () => {
               </div>
             </div>
 
-            {/* Filtered Logs KPI summary */}
             <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-black uppercase text-muted-foreground border border-border/40 p-2.5 rounded-lg bg-muted/10">
               <div>
                 <span className="block text-foreground text-sm font-black">
@@ -1108,7 +1079,6 @@ export const Automation: React.FC = () => {
             </div>
           </div>
 
-          {/* Symmetrical timeline list of log executions */}
           <div className="bg-card border border-border/60 rounded-xl overflow-hidden shadow-sm flex flex-col h-[400px]">
             <header className="p-5 border-b border-border/40 bg-muted/5 select-none">
               <h3 className="text-sm font-extrabold tracking-tight">
@@ -1120,11 +1090,10 @@ export const Automation: React.FC = () => {
               </p>
             </header>
 
-            {/* List timelines scroller */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar bg-muted/5">
               {filteredLogs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 select-none text-muted-foreground space-y-2">
-                  <Clock className="h-8 w-8 mb-1 opacity-35 animate-pulse" />
+                  <Clock className="h-8 w-8 mb-1 opacity-35" />
                   <p className="text-xs font-semibold">
                     No matching audit trace logs recorded.
                   </p>
@@ -1147,7 +1116,7 @@ export const Automation: React.FC = () => {
                   )}
                 </div>
               ) : (
-                filteredLogs.map((log) => {
+                filteredLogs.map((log: AutomationLog) => {
                   const isExpanded = expandedLogId === log.id;
                   const isFailed = log.status === "FAILED";
 
@@ -1156,7 +1125,6 @@ export const Automation: React.FC = () => {
                       key={log.id}
                       className="rounded-xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-border/80 space-y-3"
                     >
-                      {/* Header */}
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <h4 className="truncate text-sm font-bold text-foreground">
@@ -1173,7 +1141,6 @@ export const Automation: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Action, Status and Trace summary details */}
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/10 pt-2 text-[10px]">
                         <div className="flex items-center space-x-2">
                           <span className="rounded-md bg-primary/10 px-2 py-0.5 font-bold text-primary">
@@ -1187,7 +1154,7 @@ export const Automation: React.FC = () => {
                                 : "bg-emerald-500/10 text-emerald-500"
                             }`}
                           >
-                            {isFailed ? "FAILED" : "✓ Successfully Executed"}
+                            {isFailed ? "FAILED" : " Successfully Executed"}
                           </span>
                         </div>
 
@@ -1196,7 +1163,6 @@ export const Automation: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Expanded detailed message */}
                       {log.log_message && (
                         <div className="space-y-2">
                           <button
@@ -1233,7 +1199,6 @@ export const Automation: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Copy Error & Retry Button */}
                       {isFailed && (
                         <div className="flex justify-end space-x-2 border-t border-border/10 pt-2 select-none">
                           <button
@@ -1267,14 +1232,13 @@ export const Automation: React.FC = () => {
         </div>
       </section>
 
-      {/* --- Section 5: Controlled Rules Creation modal --- */}
       <RuleForm
         isOpen={isFormOpen}
         onClose={handleFormClose}
         onSaveSuccess={handleSaveSuccessCallback}
         ruleToEdit={ruleToEdit}
         ruleToDuplicate={ruleToDuplicate}
-        existingRules={rules}
+        existingRules={rules as AutomationRule[]}
       />
       <RuleTestDialog
         isOpen={ruleToTest !== null}

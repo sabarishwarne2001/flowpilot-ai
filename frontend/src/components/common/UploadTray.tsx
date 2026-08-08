@@ -5,14 +5,13 @@ import React, {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
-
 import { FileText, Loader2, UploadCloud, X } from "lucide-react";
-
 import { toast } from "sonner";
 
 import { workItemApi } from "@/services/api/workItem";
 import { ApiError } from "@/services/api/client";
 import { formatBytes } from "@/utils/formatters";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -33,12 +32,12 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
   className = "",
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceId = useActiveWorkspaceId();
 
   const [isDragActive, setIsDragActive] = useState(false);
-
   const [isUploading, setIsUploading] = useState(false);
-
   const [selectedFiles, setSelectedFiles] = useState<readonly File[]>([]);
+
   const validateFile = (file: File): string | null => {
     if (
       !ALLOWED_MIME_TYPES.includes(
@@ -87,14 +86,13 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
       setSelectedFiles((previous) => [...previous, ...validFiles]);
     }
 
-    // Allow selecting the same file again after removal.
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
+
   const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
-
     if (!isUploading) {
       setIsDragActive(true);
     }
@@ -107,7 +105,6 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
 
   const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
-
     setIsDragActive(false);
 
     if (isUploading) {
@@ -123,7 +120,6 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
     if (!event.target.files) {
       return;
     }
-
     processFiles(event.target.files);
   };
 
@@ -145,30 +141,25 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
       previous.filter((_, index) => index !== indexToRemove)
     );
   };
+
   const handleUploadSubmit = async (): Promise<void> => {
-    if (isUploading || selectedFiles.length === 0) {
+    if (isUploading || selectedFiles.length === 0 || !workspaceId) {
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Sequential uploads for now.
-      // The architecture is intentionally kept
-      // ready for future parallel uploads.
       for (const file of selectedFiles) {
-        const uploadPromise = workItemApi.uploadDocument(file);
+        const uploadPromise = workItemApi.uploadDocument(workspaceId, file);
 
         toast.promise(uploadPromise, {
           loading: `Uploading "${file.name}"...`,
-
           success: `Successfully uploaded "${file.name}".`,
-
           error: (error: unknown) => {
             if (error instanceof ApiError) {
               return error.message ?? `Failed to upload "${file.name}".`;
             }
-
             return `Unexpected upload error for "${file.name}".`;
           },
         });
@@ -182,6 +173,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
       setIsUploading(false);
     }
   };
+
   return (
     <div className={`space-y-4 ${className}`}>
       <div
@@ -220,7 +212,6 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
           <p className="text-sm font-bold tracking-tight">
             Click to upload or drag & drop files
           </p>
-
           <p className="text-xs font-semibold text-muted-foreground">
             PDF, PNG, JPG, JPEG • Maximum 100 MB per file
           </p>
@@ -241,10 +232,8 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
               >
                 <div className="flex min-w-0 items-center space-x-3">
                   <FileText className="h-5 w-5 flex-shrink-0 text-primary/80" />
-
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{file.name}</p>
-
                     <p className="mt-1 text-[10px] font-semibold text-muted-foreground">
                       {formatBytes(file.size)}
                     </p>

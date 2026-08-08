@@ -283,14 +283,14 @@ export const Assistant: React.FC = () => {
         <p className="mb-6 text-sm text-muted-foreground">We couldn't retrieve your assistant sessions.</p>
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
             if (workspaceId) {
               queryClient.invalidateQueries({
                 queryKey: assistantKeys.conversations(workspaceId),
-              })
+              });
             }
-          }
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/95"
         >
           <RefreshCw className="h-4 w-4" />
           Retry

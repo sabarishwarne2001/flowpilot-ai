@@ -18,29 +18,16 @@ import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { notificationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import type { Notification } from "@/types/notification";
 
-// Centralized query key constant matching our verified workspace standards
-const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const;
-
 interface NotificationTrayProps {
-  /**
-   * Tracks whether the floating popover tray is visually open in the workspace header.
-   */
   readonly isOpen: boolean;
-  /**
-   * Toggle callback to handle closures during background backdrop clicks.
-   */
   readonly onClose: () => void;
   readonly className?: string;
 }
 
-/**
- * Absolute, floating Notification Center alert cards tray popover for FlowPilot AI.
- *
- * Intercepts unread indices, triggers synchronized Zustand top-bell badge updates,
- * implements bulk "Mark all read" states, and links clicks to document details sheets.
- */
 export const NotificationTray: React.FC<NotificationTrayProps> = ({
   isOpen,
   onClose,
@@ -48,51 +35,42 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [notificationToDelete, setNotificationToDelete] =
-    useState<Notification | null>(null);
-  const setNotificationBadgeCount = useUIStore(
-    (state) => state.setNotificationBadgeCount
-  );
+  const workspaceId = useActiveWorkspaceId();
+  const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
+  const setNotificationBadgeCount = useUIStore((state) => state.setNotificationBadgeCount);
 
-  // 1. Query raw alerts data from database
+  // Clear selections strictly on workspace switch
+  useEffect(() => {
+    setNotificationToDelete(null);
+  }, [workspaceId]);
+
   const {
     data: notifications = [],
     isLoading,
     error,
-  } = useQuery({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
-    queryFn: () => notificationApi.getNotifications(),
-
-    // Always keep notifications synchronized.
+  } = useQuery<readonly Notification[], Error>({
+    queryKey: notificationKeys.list(workspaceId!),
+    queryFn: () => notificationApi.getNotifications(workspaceId!),
+    enabled: Boolean(workspaceId),
     staleTime: 5_000,
-
-    // Poll every 5 seconds.
     refetchInterval: 5_000,
-
-    // Refresh when user returns to the tab.
     refetchOnWindowFocus: true,
-
-    // Refresh after reconnecting.
     refetchOnReconnect: true,
-
-    // Keep previous notifications while fetching.
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousWithinWorkspace<readonly Notification[]>(workspaceId!),
   });
 
-  // 2. Synchronize visual top alert badge count inside useUIStore in real-time
   const unreadCount = notifications.filter((alert) => !alert.is_read).length;
 
   useEffect(() => {
     setNotificationBadgeCount(unreadCount);
   }, [unreadCount, setNotificationBadgeCount]);
 
-  // 3. Register individual read state modifier mutation
   const { mutate: triggerMarkSingleRead } = useMutation({
     mutationFn: ({ id, isRead }: { id: string; isRead: boolean }) =>
-      notificationApi.updateNotificationRead(id, isRead),
+      notificationApi.updateNotificationRead(workspaceId!, id, isRead),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_QUERY_KEY,
+        queryKey: notificationKeys.all(workspaceId!),
       });
     },
     onError: (err: unknown) => {
@@ -102,13 +80,12 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
     },
   });
 
-  // 4. Register bulk one-click "Mark all as read" execution mutation
   const { mutate: triggerMarkAllRead, isPending: isMarkingAll } = useMutation({
-    mutationFn: notificationApi.markAllNotificationsRead,
+    mutationFn: () => notificationApi.markAllNotificationsRead(workspaceId!),
     onSuccess: async (response) => {
       toast.success(`Marked ${response.updated_count} alerts as read.`);
       await queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_QUERY_KEY,
+        queryKey: notificationKeys.all(workspaceId!),
       });
     },
     onError: (err: unknown) => {
@@ -118,16 +95,14 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
     },
   });
 
-  // 5. Register single alert card deletion mutation
   const { mutate: triggerDeleteSingle } = useMutation({
-    mutationFn: notificationApi.deleteNotification,
+    mutationFn: (id: string) => notificationApi.deleteNotification(workspaceId!, id),
     onSuccess: async () => {
       toast.success("Notification removed.");
       await queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_QUERY_KEY,
+        queryKey: notificationKeys.all(workspaceId!),
       });
       const remaining = notifications.length - 1;
-
       if (remaining <= 0) {
         onClose();
       }
@@ -139,7 +114,6 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
     },
   });
 
-  // Escape key handler to close the popover safely
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent): void => {
       if (e.key === "Escape" && isOpen) {
@@ -152,15 +126,10 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
 
   const handleCardClick = useCallback(
     (id: string, isRead: boolean, workItemId: string | null): void => {
-      // If unread, mark as read immediately out-of-band
       if (!isRead) {
         triggerMarkSingleRead({ id, isRead: true });
       }
-
-      // Close popover dialog
       onClose();
-
-      // If associated with a WorkItem, redirect the client to its details sheets
       if (workItemId) {
         navigate(ROUTES.WORK_ITEM_DETAILS.replace(":id", workItemId));
       }
@@ -177,7 +146,6 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
       <div
         className={`absolute right-0 mt-3 w-80 sm:w-96 bg-card border border-border/80 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[480px] z-50 animate-scale-in ${className}`}
       >
-        {/* Top Header Controls Panel */}
         <header className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/5 select-none">
           <div className="flex items-center space-x-2">
             <Bell className="h-4 w-4 text-primary" />
@@ -247,8 +215,9 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
                   handleCardClick(alert.id, alert.is_read, alert.work_item_id)
                 }
                 className={`p-4 flex items-start space-x-3.5 transition-all duration-150 cursor-pointer hover:bg-muted/30 group relative ${
-                  !alert.is_read &&
-                  "bg-primary/5 dark:bg-primary/10/20 border-l-2 border-primary"
+                  !alert.is_read
+                    ? "bg-primary/5 dark:bg-primary/10/20 border-l-2 border-primary"
+                    : ""
                 }`}
               >
                 <div className="mt-0.5 select-none">
@@ -312,7 +281,6 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
         onCancel={() => setNotificationToDelete(null)}
         onConfirm={() => {
           if (!notificationToDelete) return;
-
           triggerDeleteSingle(notificationToDelete.id);
           setNotificationToDelete(null);
         }}

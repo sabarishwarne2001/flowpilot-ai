@@ -1,30 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
 import { useForm } from "react-hook-form";
-
 import { zodResolver } from "@hookform/resolvers/zod";
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { z } from "zod";
-
 import { Send, Loader2, MessageSquare, ShieldAlert } from "lucide-react";
-
 import { toast } from "sonner";
 
 import { assistantApi } from "@/services/api/assistant";
-
 import { ChatBubble } from "@/components/assistant/ChatBubble";
 import { CitationDrawer } from "@/components/assistant/CitationDrawer";
 import { SkeletonChat } from "@/components/common/skeletons/SkeletonChat";
-
 import { ApiError } from "@/services/api/client";
-
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { assistantKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import type { ConversationMessage, SourceCitation } from "@/types/assistant";
-
-/* ============================================================================
-   Validation
-============================================================================ */
 
 const messageFormSchema = z.object({
   message: z.string().trim().min(1, "Message content cannot be empty."),
@@ -32,34 +21,12 @@ const messageFormSchema = z.object({
 
 type MessageFormInput = z.infer<typeof messageFormSchema>;
 
-/* ============================================================================
-   Props
-============================================================================ */
-
 interface ChatPanelProps {
-  /**
-   * Global assistant
-   * or document assistant.
-   */
   readonly mode: "global" | "document";
-
-  /**
-   * Active conversation.
-   */
   readonly conversationId?: string;
-
-  /**
-   * Optional Work Item
-   * restriction.
-   */
   readonly workItemId?: string;
-
   readonly className?: string;
 }
-
-/* ============================================================================
-   Component
-============================================================================ */
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   mode,
@@ -68,37 +35,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   className = "",
 }) => {
   const queryClient = useQueryClient();
-
+  const workspaceId = useActiveWorkspaceId();
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
-  /* ==========================================================================
-     Citation Drawer State
-  ========================================================================== */
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(
-    null
-  );
-
-  /* ==========================================================================
-     Local Messages
-  ========================================================================== */
-
+  const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([]);
-  /* ==========================================================================
-     Conversation History
-  ========================================================================== */
 
   const {
     data: historyData,
     isLoading: isHistoryLoading,
     error: historyError,
   } = useQuery({
-    queryKey: ["conversation-history", conversationId],
-
+    queryKey: assistantKeys.history(workspaceId!, conversationId!),
     queryFn: () => {
-      if (!conversationId) {
+      if (!conversationId || !workspaceId) {
         return Promise.resolve({
           messages: [],
           total_messages: 0,
@@ -106,34 +57,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           next_cursor: null,
         });
       }
-
-      return assistantApi.getConversationHistory(conversationId, {
+      return assistantApi.getConversationHistory(workspaceId, conversationId, {
         limit: 100,
       });
     },
-
-    enabled: Boolean(conversationId),
-
+    enabled: Boolean(workspaceId && conversationId),
     staleTime: 1000 * 30,
-
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousWithinWorkspace(workspaceId!),
   });
-
-  /* ==========================================================================
-     Synchronize Local Messages
-  ========================================================================== */
 
   useEffect(() => {
     if (!historyData) {
       return;
     }
-
     setLocalMessages([...historyData.messages]);
   }, [historyData]);
-
-  /* ==========================================================================
-     Auto Scroll
-  ========================================================================== */
 
   const scrollToBottom = useCallback((smooth = true): void => {
     scrollAnchorRef.current?.scrollIntoView({
@@ -145,10 +83,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     scrollToBottom();
   }, [localMessages, scrollToBottom]);
 
-  /* ==========================================================================
-     React Hook Form
-  ========================================================================== */
-
   const {
     register,
     handleSubmit,
@@ -156,21 +90,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     formState: { errors, isSubmitting },
   } = useForm<MessageFormInput>({
     resolver: zodResolver(messageFormSchema),
-
     shouldFocusError: true,
-
     defaultValues: {
       message: "",
     },
   });
 
-  /* ==========================================================================
-     Drawer Actions
-  ========================================================================== */
-
   const handleCitationClick = useCallback((citation: SourceCitation): void => {
     setActiveCitation(citation);
-
     setIsDrawerOpen(true);
   }, []);
 
@@ -179,30 +106,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setIsDrawerOpen(false);
   }, []);
 
-  /* ==========================================================================
-     Message Submission
-  ========================================================================== */
-
   const handleQuerySubmit = async (data: MessageFormInput): Promise<void> => {
-    if (!conversationId) {
+    if (!conversationId || !workspaceId) {
       toast.error("Please select or create a conversation first.");
       return;
     }
 
     const queryContent = data.message.trim();
-
     if (!queryContent) {
       return;
     }
 
-    // Clear input immediately for responsive UX
     reset();
-
     const timestamp = new Date().toISOString();
-
-    /* ------------------------------------------------------------------------
-       Optimistic User Message
-    ------------------------------------------------------------------------ */
 
     const optimisticUserMessage: ConversationMessage = {
       id: `optimistic-user-${Date.now()}`,
@@ -214,10 +130,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       created_at: timestamp,
       updated_at: timestamp,
     };
-
-    /* ------------------------------------------------------------------------
-       Assistant Placeholder
-    ------------------------------------------------------------------------ */
 
     const optimisticAssistantMessage: ConversationMessage = {
       id: `optimistic-assistant-${Date.now()}`,
@@ -239,133 +151,69 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     scrollToBottom(false);
 
     try {
-      await assistantApi.sendChatMessage(conversationId, queryContent);
+      await assistantApi.sendChatMessage(workspaceId, conversationId, queryContent);
 
       await queryClient.invalidateQueries({
-        queryKey: ["conversation-history", conversationId],
+        queryKey: assistantKeys.history(workspaceId, conversationId),
       });
 
       await queryClient.invalidateQueries({
-        queryKey: ["conversations"],
+        queryKey: assistantKeys.conversations(workspaceId),
       });
-    } catch (error) {
+    } catch (err) {
       setLocalMessages((previous) =>
         previous.filter((message) => !message.id.startsWith("optimistic-"))
       );
 
-     if (error instanceof ApiError) {
-      switch (error.status) {
-        case 429:
-          toast.error(
-            error.detail ?? "The AI service is temporarily busy."
-          );
-          break;
-
-        case 503:
-          toast.error(
-            "The AI service is temporarily unavailable. Please try again later."
-          );
-          break;
-
-        case 500:
-          toast.error(
-            "An unexpected server error occurred."
-          );
-          break;
-
-        default:
-          toast.error(
-            error.message ?? "Failed to send message."
-          );
+      if (err instanceof ApiError) {
+        switch (err.status) {
+          case 429:
+            toast.error(err.detail ?? "The AI service is temporarily busy.");
+            break;
+          case 503:
+            toast.error("The AI service is temporarily unavailable. Please try again later.");
+            break;
+          case 500:
+            toast.error("An unexpected server error occurred.");
+            break;
+          default:
+            toast.error(err.message ?? "Failed to send message.");
+        }
+      } else {
+        toast.error("Unable to reach the server.");
       }
-    } else {
-      toast.error(
-        "Unable to reach the server."
-      );
-    }
     }
   };
-
-  /* ==========================================================================
-     Derived State
-  ========================================================================== */
 
   const isAssistantResponding = localMessages.some(
     (message) =>
       message.id.startsWith("optimistic-assistant-") && message.content === ""
   );
-  /* ==========================================================================
-     Loading State
-  ========================================================================== */
 
   if (isHistoryLoading && !historyData) {
     return <SkeletonChat messagesCount={5} />;
   }
 
-  /* ==========================================================================
-     Error State
-  ========================================================================== */
-
   if (historyError) {
     return (
-      <div
-        className="
-          mx-auto
-          flex
-          h-[400px]
-          max-w-md
-          flex-col
-          items-center
-          justify-center
-          rounded-xl
-          border
-          border-border/40
-          bg-card
-          p-6
-          text-center
-          shadow-sm
-        "
-      >
-        <div
-          className="
-            mb-4
-            flex
-            h-10
-            w-10
-            items-center
-            justify-center
-            rounded-full
-            bg-destructive/10
-            text-destructive
-          "
-        >
+      <div className="mx-auto flex h-[400px] max-w-md flex-col items-center justify-center rounded-xl border border-border/40 bg-card p-6 text-center shadow-sm">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
           <ShieldAlert className="h-5 w-5" />
         </div>
-
         <h3 className="mb-2 text-sm font-bold">Unable to load conversation</h3>
-
         <p className="mb-5 text-xs font-medium leading-relaxed text-muted-foreground">
           Conversation history could not be synchronized with the server.
         </p>
-
         <button
           type="button"
-          onClick={() =>
-            queryClient.invalidateQueries({
-              queryKey: ["conversation-history", conversationId],
-            })
-          }
-          className="
-            rounded-lg
-            bg-primary
-            px-4
-            py-2
-            text-xs
-            font-bold
-            text-primary-foreground
-            transition-colors
-            hover:bg-primary/90
-          "
+          onClick={() => {
+            if (workspaceId) {
+              queryClient.invalidateQueries({
+                queryKey: assistantKeys.history(workspaceId, conversationId!),
+              });
+            }
+          }}
+          className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Retry
         </button>
@@ -373,41 +221,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     );
   }
 
-  /* ==========================================================================
-     Empty Conversation State
-  ========================================================================== */
-
   if (!conversationId) {
     return (
-      <div
-        className="
-          flex
-          min-h-[500px]
-          flex-col
-          items-center
-          justify-center
-          p-8
-          text-center
-        "
-      >
-        <div
-          className="
-            mb-5
-            flex
-            h-14
-            w-14
-            items-center
-            justify-center
-            rounded-full
-            bg-primary/10
-            text-primary
-          "
-        >
+      <div className="flex min-h-[500px] flex-col items-center justify-center p-8 text-center">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
           <MessageSquare className="h-7 w-7" />
         </div>
-
         <h2 className="mb-2 text-lg font-bold">AI Assistant</h2>
-
         <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
           {mode === "global"
             ? "Create or select a conversation to start chatting with your knowledge base."
@@ -417,53 +237,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     );
   }
 
-  /* ==========================================================================
-     Main Render
-  ========================================================================== */
-
   return (
-    <div
-      className={`
-        relative
-        flex
-        h-[600px]
-        w-full
-        flex-col
-        overflow-hidden
-        rounded-xl
-        border
-        border-border/40
-        bg-card
-        ${className}
-      `}
-    >
-      {/* ======================================================
-          Conversation Viewport
-      ====================================================== */}
-
-      <div
-        className="
-          flex-1
-          space-y-4
-          overflow-y-auto
-          bg-muted/10
-          p-4
-        "
-      >
+    <div className={`relative flex h-[600px] w-full flex-col overflow-hidden rounded-xl border border-border/40 bg-card ${className}`}>
+      <div className="flex-1 space-y-4 overflow-y-auto bg-muted/10 p-4">
         {localMessages.length === 0 ? (
-          <div
-            className="
-              flex
-              h-full
-              flex-col
-              items-center
-              justify-center
-              text-center
-              text-muted-foreground
-            "
-          >
+          <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
             <MessageSquare className="mb-3 h-8 w-8 opacity-40" />
-
             <p className="text-sm font-medium">
               Start the conversation by asking a question about your documents.
             </p>
@@ -477,71 +256,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             if (isTypingPlaceholder) {
               return (
                 <div key={message.id} className="flex items-start gap-3">
-                  {/* Assistant Avatar */}
-
-                  <div
-                    className="
-                      flex
-                      h-10
-                      w-10
-                      flex-shrink-0
-                      items-center
-                      justify-center
-                      rounded-full
-                      border
-                      border-primary/20
-                      bg-primary/10
-                      text-primary
-                    "
-                  >
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
                     <MessageSquare className="h-5 w-5" />
                   </div>
-
-                  {/* Typing Bubble */}
-
-                  <div
-                    className="
-                      rounded-2xl
-                      rounded-tl-none
-                      border
-                      border-border/40
-                      bg-card
-                      p-4
-                      shadow-sm
-                    "
-                  >
+                  <div className="rounded-2xl rounded-tl-none border border-border/40 bg-card p-4 shadow-sm">
                     <div className="flex gap-2">
-                      <span
-                        className="
-                          h-2
-                          w-2
-                          animate-bounce
-                          rounded-full
-                          bg-muted-foreground/60
-                        "
-                      />
-
-                      <span
-                        className="
-                          h-2
-                          w-2
-                          animate-bounce
-                          rounded-full
-                          bg-muted-foreground/60
-                          [animation-delay:150ms]
-                        "
-                      />
-
-                      <span
-                        className="
-                          h-2
-                          w-2
-                          animate-bounce
-                          rounded-full
-                          bg-muted-foreground/60
-                          [animation-delay:300ms]
-                        "
-                      />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:150ms]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:300ms]" />
                     </div>
                   </div>
                 </div>
@@ -557,23 +279,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             );
           })
         )}
-
         <div ref={scrollAnchorRef} />
       </div>
-      {/* ======================================================
-          Message Input
-      ====================================================== */}
 
-      <form
-        onSubmit={handleSubmit(handleQuerySubmit)}
-        noValidate
-        className="
-          border-t
-          border-border/40
-          bg-card
-          p-4
-        "
-      >
+      <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-4">
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <input
@@ -587,36 +296,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               }
               disabled={isSubmitting || isAssistantResponding}
               aria-invalid={errors.message ? "true" : "false"}
-              className="
-                w-full
-                rounded-lg
-                border
-                border-border
-                bg-background
-                px-4
-                py-3
-                text-sm
-                transition-colors
-                placeholder:text-muted-foreground
-                focus:border-primary
-                focus:outline-none
-                focus:ring-2
-                focus:ring-primary/20
-                disabled:cursor-not-allowed
-                disabled:opacity-50
-              "
+              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
             />
-
             {errors.message && (
-              <p
-                role="alert"
-                className="
-                  mt-2
-                  text-xs
-                  font-medium
-                  text-destructive
-                "
-              >
+              <p role="alert" className="mt-2 text-xs font-medium text-destructive">
                 {errors.message.message}
               </p>
             )}
@@ -625,21 +308,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <button
             type="submit"
             disabled={isSubmitting || isAssistantResponding}
-            className="
-              flex
-              h-12
-              w-12
-              items-center
-              justify-center
-              rounded-lg
-              bg-primary
-              text-primary-foreground
-              shadow-sm
-              transition-colors
-              hover:bg-primary/90
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
+            className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Send message"
           >
             {isSubmitting ? (
@@ -650,9 +319,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </button>
         </div>
       </form>
-      {/* ======================================================
-          Citation Drawer
-      ====================================================== */}
 
       <CitationDrawer
         isOpen={isDrawerOpen}

@@ -8,28 +8,29 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 import { formatDateTime } from "@/utils/formatters";
 import { ROUTES } from "@/constants/routes";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { notificationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
+import type { Notification } from "@/types/notification"; // Explicitly imported custom type
 
-// Centralized Query Cache Keys matching our standard specifications
-const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const;
 
 /**
  * High-fidelity, user-isolated Notifications list panel for FlowPilot AI.
- *
- * Leverages the pre-existing notificationApi and structures in-app alerts
- * chronologically, offering inline routing redirects to source documents.
  */
 export const Notifications: React.FC = () => {
-  // 1. Query raw alerts data from PostgreSQL using the centralized Query context
+  const workspaceId = useActiveWorkspaceId();
+
+  // Query raw alerts data from PostgreSQL using the centralized Query context
   const {
     data: notifications = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
-    queryFn: () => notificationApi.getNotifications(),
-    staleTime: 10_000, // 10-second cache stale boundaries
-    placeholderData: (previousData) => previousData, // Prevents cumulative visual shifts
+  } = useQuery<readonly Notification[], Error>({
+    queryKey: notificationKeys.list(workspaceId!),
+    queryFn: () => notificationApi.getNotifications(workspaceId!),
+    enabled: Boolean(workspaceId),
+    staleTime: 10_000,
+    placeholderData: keepPreviousWithinWorkspace<readonly Notification[]>(workspaceId!),
   });
 
   // Render Full-Page loading skeletons on initial startup
@@ -90,7 +91,7 @@ export const Notifications: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {notifications.map((alert) => (
+            {notifications.map((alert: Notification) => (
               <article
                 key={alert.id}
                 className={`p-5 bg-card border rounded-xl shadow-sm transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4

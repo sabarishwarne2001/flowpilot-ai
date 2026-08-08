@@ -9,8 +9,10 @@ import {
   AlertCircle,
   HelpCircle,
 } from "lucide-react";
-import apiClient from "@/services/api/client";
+import { workItemApi } from "@/services/api/workItem";
 import { automationApi } from "@/services/api/automation";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { workItemKeys } from "@/services/api/queryKeys";
 import type { AutomationRule } from "@/types/automation";
 
 interface RuleTestDialogProps {
@@ -29,16 +31,15 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
   onClose,
   rule,
 }) => {
+  const workspaceId = useActiveWorkspaceId();
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string>("");
 
-  // Clear selections when dialog is closed or toggled
   useEffect(() => {
     if (!isOpen) {
       setSelectedWorkItemId("");
     }
   }, [isOpen]);
 
-  // Escape key event boundaries
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent): void => {
       if (e.key === "Escape" && isOpen) {
@@ -49,25 +50,27 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen, onClose]);
 
-  // Load standard Work Items belonging to the authenticated account
+  // Load standard Work Items belonging to the active workspace to prevent 404s
   const {
     data: workItems = [],
     isLoading: isWorkItemsLoading,
     error: workItemsError,
-  } = useQuery({
-    queryKey: ["work-items"] as const,
-    queryFn: async (): Promise<readonly SimplifiedWorkItem[]> => {
-      const response = await apiClient.get<{
-        items: SimplifiedWorkItem[];
-      }>("/work-items");
-
-      return response.data.items;
+  } = useQuery<readonly SimplifiedWorkItem[], Error>({
+    queryKey: workItemKeys.list(workspaceId!, { page: 1, pageSize: 100 }),
+    queryFn: async () => {
+      const response = await workItemApi.getWorkItems(workspaceId!, {
+        page: 1,
+        pageSize: 100,
+      });
+      return response.items.map((item) => ({
+        id: item.id,
+        original_filename: item.original_filename,
+      }));
     },
-    enabled: isOpen,
+    enabled: isOpen && Boolean(workspaceId),
     staleTime: 1000 * 30,
   });
 
-  // Manual rule testing endpoint mutation trigger
   const {
     mutate: executeRuleTest,
     data: testResult = null,
@@ -76,7 +79,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
   } = useMutation({
     mutationFn: async () => {
       if (!rule) throw new Error("No automation rule selected.");
-      return automationApi.testAutomationRule(rule.id, selectedWorkItemId);
+      return automationApi.testAutomationRule(workspaceId!, rule.id, selectedWorkItemId);
     },
     onError: (err: unknown) => {
       if (
@@ -92,7 +95,6 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
     },
   });
 
-  // Reset internal states on exit
   const handleClose = () => {
     setSelectedWorkItemId("");
     resetMutation();
@@ -111,7 +113,6 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
       aria-labelledby="rule-test-title"
     >
       <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-in">
-        {/* Header block */}
         <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 bg-muted/5 select-none">
           <div className="flex items-center space-x-2">
             <Play className="h-4 w-4 text-primary fill-primary" />
@@ -133,7 +134,6 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           </button>
         </header>
 
-        {/* Content body */}
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar">
           <div className="space-y-2 select-none">
             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
@@ -142,11 +142,10 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             <h3 className="text-sm font-extrabold leading-snug">{rule.name}</h3>
             <p className="text-xs text-muted-foreground leading-normal">
               Evaluate events logic for {rule.conditions.length} configured{" "}
-              condition{rule.conditions.length > 1 ? "s" : ""}.
+              condition{rule.conditions.length > 1 ? "s" : ""}
             </p>
           </div>
 
-          {/* Configured Actions List displaying order sequentially */}
           <div className="space-y-1 bg-muted/20 border border-border/40 p-3 rounded-lg text-xs select-none">
             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block mb-1.5">
               Configured Actions ({rule.actions.length})
@@ -230,7 +229,6 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             </div>
           )}
 
-          {/* Inline Execution Trace Results rendering */}
           {testResult && (
             <div className="border border-border/60 rounded-xl overflow-hidden shadow-sm bg-muted/5 animate-fade-in select-none">
               <header className="px-4 py-3 border-b border-border/40 bg-muted/10 flex justify-between items-center">
@@ -300,7 +298,6 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           )}
         </div>
 
-        {/* Footer controls */}
         <footer className="h-16 border-t border-border/40 flex items-center justify-end px-6 bg-muted/5 space-x-3 select-none">
           <button
             type="button"

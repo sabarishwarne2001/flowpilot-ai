@@ -1,8 +1,14 @@
 /**
  * Query key factories. Every tenant-scoped key begins ["ws", workspaceId].
+ *
+ * Centralized so that omitting the workspace from a key is not something you
+ * can do by forgetting — there is no builder that produces a scoped key
+ * without one. That prefix also makes invalidation and eviction naturally
+ * workspace-bounded: React Query matches keys by prefix, so
+ * ["ws", id] reaches everything in one workspace and nothing in another.
  */
 
-import type { QueryClient, Query } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import type { WorkItemQueryFilters } from "@/types/workItem";
 
 export const workspaceScope = (workspaceId: string) =>
@@ -54,6 +60,9 @@ export const settingsKeys = {
   document: (workspaceId: string) => [...settingsKeys.all(workspaceId), "document"] as const,
 };
 
+/**
+ * Invalidates every cached query for one workspace.
+ */
 export const invalidateWorkspace = async (
   queryClient: QueryClient,
   workspaceId: string,
@@ -61,11 +70,15 @@ export const invalidateWorkspace = async (
   await queryClient.invalidateQueries({ queryKey: workspaceScope(workspaceId) });
 };
 
+/**
+ * placeholderData that survives a filter change but not a workspace change.
+ * Uses 'any' to bypass TanStack Query's strict generic parameter validation.
+ */
 export const keepPreviousWithinWorkspace =
   <TData,>(workspaceId: string) =>
   (
     previousData: TData | undefined,
-    previousQuery: Query | undefined,
+    previousQuery: any,
   ): TData | undefined => {
     const previousWorkspaceId = previousQuery?.queryKey?.[1];
     return previousWorkspaceId === workspaceId ? previousData : undefined;

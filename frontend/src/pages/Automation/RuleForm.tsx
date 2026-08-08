@@ -13,14 +13,13 @@ import {
   getAllowedOperators,
 } from "@/constants/automationFields";
 import { createRuleFormSchema, type RuleFormInput } from "@/schemas/automation";
+import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { automationKeys } from "@/services/api/queryKeys";
 import type {
   AutomationRule,
   AutomationRuleCreateRequest,
   AutomationRuleUpdateRequest,
 } from "@/types/automation";
-
-// Centralized query key constant mapping to core rules lists
-const RULES_QUERY_KEY = ["automation-rules"] as const;
 
 interface RuleFormProps {
   readonly isOpen: boolean;
@@ -80,6 +79,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
   existingRules = [],
 }) => {
   const queryClient = useQueryClient();
+  const workspaceId = useActiveWorkspaceId();
   const isEditMode = ruleToEdit !== null;
   const categorizedFields = getCategorizedFields();
 
@@ -216,14 +216,17 @@ export const RuleForm: React.FC<RuleFormProps> = ({
   // 1. Transaction mutation mapping Rule creations
   const { mutateAsync: runCreateMutation, isPending: isCreating } = useMutation(
     {
-      mutationFn: automationApi.createAutomationRule,
+      mutationFn: (payload: AutomationRuleCreateRequest) =>
+        automationApi.createAutomationRule(workspaceId!, payload),
       onSuccess: async () => {
         toast.success(
           ruleToDuplicate
             ? "Rule duplicated successfully."
             : "Automation rule compiled successfully."
         );
-        await queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
+        if (workspaceId) {
+          await queryClient.invalidateQueries({ queryKey: automationKeys.rules(workspaceId) });
+        }
         onSaveSuccess();
         onClose();
       },
@@ -246,10 +249,12 @@ export const RuleForm: React.FC<RuleFormProps> = ({
       }: {
         id: string;
         payload: AutomationRuleUpdateRequest;
-      }) => automationApi.updateAutomationRule(id, payload),
+      }) => automationApi.updateAutomationRule(workspaceId!, id, payload),
       onSuccess: async () => {
         toast.success("Automation rule updated.");
-        await queryClient.invalidateQueries({ queryKey: RULES_QUERY_KEY });
+        if (workspaceId) {
+          await queryClient.invalidateQueries({ queryKey: automationKeys.rules(workspaceId) });
+        }
         onSaveSuccess();
         onClose();
       },
@@ -420,9 +425,8 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </select>
           </div>
 
-          {/* Symmetrical Evaluation Rule Constraints (IF criteria supporting multiple conditions) */}
+          {/* IF criteria */}
           <div className="border border-border/60 rounded-xl p-4 bg-muted/10 space-y-4">
-            {/* Logic Group Match Options header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/40 pb-2 gap-2 select-none">
               <span className="text-xs font-black uppercase tracking-wider text-primary flex items-center">
                 <Play className="h-3.5 w-3.5 mr-1.5 fill-primary text-primary flex-shrink-0 animate-pulse" />
@@ -463,7 +467,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
               </div>
             )}
 
-            {/* Dynamic Conditions List Timeline stack */}
             <div className="space-y-4">
               {conditionFields.map((fieldItem, idx) => {
                 const currentFieldPath = watchedConditions[idx]?.field ?? "";
@@ -471,7 +474,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                 const currentMeta = AUTOMATION_FIELDS_MAP[currentFieldPath];
                 const allowedOps = getAllowedOperators(currentFieldPath);
 
-                // Existence checking operators do not require target value inputs
                 const isValueHidden = [
                   "EXISTS",
                   "IS_EMPTY",
@@ -483,7 +485,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                     key={fieldItem.id}
                     className="p-4 bg-background border border-border/60 rounded-xl space-y-3 relative group transition-all duration-200 hover:border-border hover:shadow-sm"
                   >
-                    {/* Item row details */}
                     <div className="flex justify-between items-center select-none border-b border-border/10 pb-1.5">
                       <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                         Condition #{idx + 1}
@@ -503,7 +504,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Field Path Selector */}
                       <div className="space-y-1.5">
                         <label
                           htmlFor={`field-${idx}`}
@@ -524,7 +524,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                             const ops = getAllowedOperators(val);
 
                             if (ops.length > 0) {
-                              // Only change selection if the previous operator is no longer allowed
                               if (!ops.includes(currentOp as any)) {
                                 setValue(`conditions.${idx}.operator`, ops[0]!);
                               }
@@ -558,7 +557,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                         )}
                       </div>
 
-                      {/* Logic Operator dropdown with field-specific operator restrictions */}
                       <div className="space-y-1.5">
                         <label
                           htmlFor={`operator-${idx}`}
@@ -589,7 +587,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                       </div>
                     </div>
 
-                    {/* Match Value constraints - Hidden dynamically for existence operators */}
                     {!isValueHidden && (
                       <div className="space-y-1.5">
                         <label
@@ -630,7 +627,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
               })}
             </div>
 
-            {/* Append conditions activator */}
             <button
               type="button"
               disabled={isProcessing}
@@ -648,7 +644,7 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </button>
           </div>
 
-          {/* Action Dispatch Configurations Panel (THEN actions supporting multiple actions) */}
+          {/* Action Dispatch Configurations Panel */}
           <div className="border border-border/60 rounded-xl p-4 bg-muted/10 space-y-4">
             <div className="flex items-center justify-between border-b border-border/40 pb-2 select-none">
               <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">
@@ -669,7 +665,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                   key={actField.id}
                   className="p-4 bg-background border border-border/60 rounded-xl space-y-3 relative group transition-all duration-200 hover:border-border hover:shadow-sm"
                 >
-                  {/* Header detail */}
                   <div className="flex justify-between items-center select-none border-b border-border/10 pb-1.5">
                     <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                       Action #{idx + 1}
@@ -689,7 +684,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Action Type */}
                     <div className="space-y-1.5">
                       <label
                         htmlFor={`act-type-${idx}`}
@@ -707,7 +701,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
                       </select>
                     </div>
 
-                    {/* Config fields: Recipient Email */}
                     <div className="space-y-1.5">
                       <label
                         htmlFor={`act-recipient-${idx}`}
@@ -742,7 +735,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
               ))}
             </div>
 
-            {/* Append actions activator */}
             <button
               type="button"
               disabled={isProcessing}
@@ -759,7 +751,6 @@ export const RuleForm: React.FC<RuleFormProps> = ({
             </button>
           </div>
 
-          {/* Footer Interactive Trigger Panels */}
           <footer className="flex items-center justify-end space-x-3 pt-4 border-t border-border/40 select-none">
             <button
               type="button"
