@@ -22,7 +22,7 @@ from app import utils
 from app.api import deps
 from app.core.config import settings
 from app.models.workspace import WorkspaceRole
-from app.schemas.job import JobCreate, JobResponse
+from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.schemas.work_item import (
     WorkItemCreate,
     WorkItemUpdate,  # Imported correctly here
@@ -204,7 +204,7 @@ async def reprocess_work_item(
 
     if next_retry_count > 0:
         new_job = crud.update_job(
-            db, db_obj=new_job, obj_in=crud.JobUpdate(retry_count=next_retry_count)
+            db, db_obj=new_job, obj_in=JobUpdate(retry_count=next_retry_count)
         )
 
     background_tasks.add_task(
