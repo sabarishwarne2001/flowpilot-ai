@@ -102,11 +102,29 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
     )
     # Production-safe string length of 512 is utilized to handle future invitation token strategies,
     # including high-entropy secure hashes or standard signed JWT payloads.
+    # Retained through EXPAND and MIGRATE, dropped by the ARCH-03 CONTRACT
+    # revision. Until then the invitation service must write BOTH columns on
+    # every create, or an invitation issued between MIGRATE and CONTRACT
+    # arrives at CONTRACT with a NULL token_hash and fails the NOT NULL.
     token: Mapped[str] = mapped_column(
         String(512),
         unique=True,
         nullable=False,
         index=True,
+    )
+    token_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=True,
+        index=True,
+        doc=(
+            "SHA-256 of the invitation secret, hex encoded. Nullable only "
+            "for the duration of the ARCH-03 EXPAND/MIGRATE window; CONTRACT "
+            "makes it NOT NULL and drops the plaintext column above. Stored "
+            "hashed for the same reason as every other token in the system: "
+            "a read of this table currently yields every live invitation "
+            "secret, each of which grants workspace membership (§A.2.2)."
+        ),
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

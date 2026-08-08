@@ -20,6 +20,8 @@ from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
 from app.models.settings_migration_archive import SettingsMigrationArchive
+from app.models.auth_token import AuthToken, AuthTokenPurpose
+from app.models.user_session import UserSession, SessionRevokedReason
 
 from app.models.organization import (
     Organization,
@@ -55,4 +57,8 @@ __all__ = [
     "OrganizationStatus",
     "MembershipStatus",
     "SettingsMigrationArchive",
+    "AuthToken",
+    "AuthTokenPurpose",
+    "UserSession",
+    "SessionRevokedReason",
 ]
