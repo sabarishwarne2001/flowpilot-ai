@@ -22,9 +22,10 @@ from app import utils
 from app.api import deps
 from app.core.config import settings
 from app.models.workspace import WorkspaceRole
-from app.schemas.job import JobResponse
+from app.schemas.job import JobCreate, JobResponse
 from app.schemas.work_item import (
     WorkItemCreate,
+    WorkItemUpdate,  # Imported correctly here
     WorkItemResponse,
     WorkItemListResponse,
     WorkItemStatus,
@@ -96,7 +97,7 @@ async def upload_document(
         obj_in=obj_in,
     )
     
-    job_in = crud.JobCreate(work_item_id=work_item.id)
+    job_in = JobCreate(work_item_id=work_item.id)
     job = crud.create_job(db, obj_in=job_in)
 
     background_tasks.add_task(
@@ -195,10 +196,10 @@ async def reprocess_work_item(
     next_retry_count = previous_jobs[0].retry_count + 1 if previous_jobs else 0
 
     crud.update_work_item_state(
-        db, db_obj=work_item, obj_in=crud.WorkItemUpdate(status=WorkItemStatus.QUEUED)
+        db, db_obj=work_item, obj_in=WorkItemUpdate(status=WorkItemStatus.QUEUED)
     )
 
-    job_in = crud.JobCreate(work_item_id=work_item_id)
+    job_in = JobCreate(work_item_id=work_item_id)
     new_job = crud.create_job(db, obj_in=job_in)
 
     if next_retry_count > 0:

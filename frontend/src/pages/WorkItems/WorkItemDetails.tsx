@@ -15,6 +15,7 @@ import {
 import { workItemApi } from "@/services/api/workItem";
 import { assistantApi } from "@/services/api/assistant";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { useTenant } from "@/hooks/useTenant"; // Imported to resolve slug links
 import { workItemKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
@@ -22,7 +23,6 @@ import { ErrorState } from "@/components/common/ErrorState";
 import ChatPanel from "@/components/assistant/ChatPanel";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
-import { ROUTES } from "@/constants/routes";
 import type { WorkItemStatus } from "@/types/workItem";
 
 type DetailTab = "summary" | "entities" | "ocr" | "chat";
@@ -46,6 +46,7 @@ export const WorkItemDetails: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
+  const { state: tenantState } = useTenant(); // Retrieve active tenant state for slugs
 
   const [activeTab, setActiveTab] = useState<DetailTab>("summary");
   const [conversationId, setConversationId] = useState<string>();
@@ -76,7 +77,9 @@ export const WorkItemDetails: React.FC = () => {
     retry: (failureCount, err) => {
       if (err instanceof ApiError && err.status === 404) {
         toast.error("Document not found in this workspace.");
-        navigate(ROUTES.WORK_ITEMS);
+        if (tenantState.status === "ready") {
+          navigate(`/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items`);
+        }
         return false;
       }
       return failureCount < 3;
@@ -124,6 +127,12 @@ export const WorkItemDetails: React.FC = () => {
     createConversation();
   }, [id, workspaceId]);
 
+  // Construct back navigation path dynamically
+  const getBackPath = () => {
+    if (tenantState.status !== "ready") return "#";
+    return `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items`;
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -163,7 +172,7 @@ export const WorkItemDetails: React.FC = () => {
     <div className="space-y-6">
       <header className="flex items-center justify-between">
         <Link
-          to={ROUTES.WORK_ITEMS}
+          to={getBackPath()}
           className="inline-flex items-center rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />

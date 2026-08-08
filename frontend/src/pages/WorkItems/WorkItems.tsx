@@ -17,6 +17,7 @@ import {
 
 import { workItemApi } from "@/services/api/workItem";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { useTenant } from "@/hooks/useTenant"; // Imported to resolve slug links
 import { workItemKeys, invalidateWorkspace, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
@@ -24,7 +25,6 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { formatBytes } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
-import { ROUTES } from "@/constants/routes";
 import type { WorkItemStatus, WorkItemSortField } from "@/types/workItem";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
@@ -53,6 +53,7 @@ const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
 export const WorkItems: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
+  const { state: tenantState } = useTenant(); // Retrieve active tenant state for slugs
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -208,6 +209,12 @@ export const WorkItems: React.FC = () => {
   const handleNextPage = useCallback((): void => {
     setCurrentPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  // Construct workspace-scoped details URLs dynamically using the active slugs
+  const getDetailsPath = (itemId: string) => {
+    if (tenantState.status !== "ready") return "#";
+    return `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items/${itemId}`;
+  };
 
   if (isLoading && !response) {
     return (
@@ -392,7 +399,7 @@ export const WorkItems: React.FC = () => {
                           </button>
                         )}
                         <Link
-                          to={ROUTES.WORK_ITEM_DETAILS.replace(":id", item.id)}
+                          to={getDetailsPath(item.id)}
                           title="View Details"
                           className="rounded-md border border-border bg-background p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.96]"
                         >
