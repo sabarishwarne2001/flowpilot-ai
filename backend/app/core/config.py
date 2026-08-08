@@ -46,7 +46,47 @@ class Settings(BaseSettings):
     # ships to production unset. Validated in validate_identity_configuration.
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
+
+    # Stays at 30 until Step 7. The plan moved it to 10 here, but a 10-minute
+    # access token is only tolerable once refresh exists to renew it silently;
+    # shortening it in this step would sign every user out three times an hour
+    # for as long as Steps 6 and 7 are apart, with no compensating benefit —
+    # nothing in this step consumes the shorter window.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # ------------------------------------------------------------------
+    # Refresh sessions (ARCH-03 §B.6, §B.7)
+    # ------------------------------------------------------------------
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+
+    #: How long after a rotation the superseded token is still tolerated.
+    #: Two browser tabs refreshing within milliseconds of each other both
+    #: present the same token; without this window the second one looks
+    #: exactly like a stolen-token replay and signs the user out everywhere.
+    #: Ten seconds is long enough to cover a tab race and short enough that a
+    #: token captured off the wire is almost certainly already useless.
+    SESSION_REUSE_GRACE_SECONDS: int = 10
+
+    #: Bound on how far rotate_session will walk a rotation chain when
+    #: resolving concurrent refreshes. A chain longer than this means the data
+    #: is wrong, and walking it forever would hang the request.
+    SESSION_CHAIN_WALK_LIMIT: int = 16
+
+    # ------------------------------------------------------------------
+    # Single-use identity tokens (ARCH-03 §B.2)
+    # ------------------------------------------------------------------
+    EMAIL_VERIFICATION_TTL_HOURS: int = 24
+
+    #: Deliberately much shorter than verification. A reset link is a
+    #: password-equivalent credential sitting in a mailbox; a verification link
+    #: grants nothing on its own.
+    PASSWORD_RESET_TTL_MINUTES: int = 60
+
+    #: Per-user issuance ceiling within the window below, applied per purpose.
+    #: Limits mailbox flooding and the offline guessing surface, without
+    #: locking a legitimate user out of a second attempt.
+    IDENTITY_TOKEN_MAX_PER_WINDOW: int = 5
+    IDENTITY_TOKEN_WINDOW_MINUTES: int = 60
 
     # File Ingestion & Storage Configurations
     UPLOAD_DIR: str = "uploads"
