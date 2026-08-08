@@ -26,15 +26,29 @@ def get_invitation_by_id(
     ).scalar_one_or_none()
 
 
-def get_invitation_by_token(
+def get_invitation_by_token_hash(
     db: Session,
-    token: str,
+    *,
+    token_hash: str,
 ) -> WorkspaceInvitation | None:
     """
-    Retrieves a workspace invitation by its unique secure token.
+    Retrieves a workspace invitation by the stored hash of its secret.
+
+    Takes the hash, never the plaintext. Hashing is a policy decision and
+    belongs in the service layer; keeping it out of CRUD means there is no
+    signature here that will accept a plaintext token, so no caller can
+    accidentally reintroduce a query against a column that no longer exists.
+
+    Keyword-only, deliberately. The old positional signature was
+    get_invitation_by_token(db, token); leaving it positional would let an
+    existing call site keep compiling while silently passing plaintext where a
+    hash is expected, which fails as a lookup miss — indistinguishable from an
+    invalid invitation, and therefore very hard to diagnose.
     """
     return db.execute(
-        select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
+        select(WorkspaceInvitation).where(
+            WorkspaceInvitation.token_hash == token_hash
+        )
     ).scalar_one_or_none()
 
 
@@ -117,7 +131,7 @@ def create_invitation(
     inviter_id: uuid.UUID,
     email: str,
     role: WorkspaceRole,
-    token: str,
+    token_hash: str,
     expires_at: datetime,
 ) -> WorkspaceInvitation:
     """
@@ -136,7 +150,7 @@ def create_invitation(
         inviter_id=inviter_id,
         email=normalized_email,
         role=role,
-        token=token,
+        token_hash=token_hash,
         expires_at=expires_at,
         status=InvitationStatus.PENDING,
     )

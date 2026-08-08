@@ -145,7 +145,21 @@ class NotificationService:
         *,
         invitation: WorkspaceInvitation,
         workspace_name: str,
+        plaintext_token: str,
     ) -> bool:
+        """
+        Sends the invitation email.
+
+        plaintext_token is passed in rather than read from the invitation,
+        because as of ARCH-03 CONTRACT there is nothing to read: the model
+        holds only token_hash. The caller obtained it from IssuedInvitation
+        and this is its last use.
+
+        The link must carry the plaintext, never the hash. Putting the stored
+        value in the link would make the database column itself the bearer
+        credential and hand workspace membership to anyone with read access —
+        which is the exact exposure this phase was opened to close.
+        """
         from app.core.smtp import resolve_smtp_config
         from app.templates.emails.workspace_invitation import render_workspace_invitation
         from app.core.config import settings as app_settings
@@ -164,7 +178,7 @@ class NotificationService:
         # read a fragment would break the one live pending invitation.
         accept_link = (
             f"{app_settings.FRONTEND_URL}/invitations/accept"
-            f"?token={invitation.token}"
+            f"?token={plaintext_token}"
         )
         
         role_display = invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role)

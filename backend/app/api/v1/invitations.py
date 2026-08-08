@@ -73,7 +73,7 @@ async def create_invitation(
     access = workspace_member_service.resolve_workspace_access(
         db, workspace=context.workspace, user_id=context.user_id
     )
-    invitation = workspace_invitation_service.create_workspace_invitation(
+    issued = workspace_invitation_service.create_workspace_invitation(
         db,
         workspace=context.workspace,
         actor_access=access,
@@ -81,13 +81,17 @@ async def create_invitation(
         role=payload.role,
     )
 
+    # plaintext_token is handed to the mailer and goes no further. It is absent
+    # from WorkspaceInvitationResponse, so the API never returns the secret to
+    # the inviter — only the invited mailbox receives it.
     background_tasks.add_task(
         notification_service.send_workspace_invitation,
         db=db,
-        invitation=invitation,
+        invitation=issued.invitation,
         workspace_name=context.workspace.workspace_name,
+        plaintext_token=issued.plaintext_token,
     )
-    return invitation
+    return issued.invitation
 
 
 @router.get(
@@ -159,7 +163,7 @@ async def resend_invitation(
     access = workspace_member_service.resolve_workspace_access(
         db, workspace=context.workspace, user_id=context.user_id
     )
-    invitation = workspace_invitation_service.resend_workspace_invitation(
+    issued = workspace_invitation_service.resend_workspace_invitation(
         db,
         workspace=context.workspace,
         actor_access=access,
@@ -169,10 +173,11 @@ async def resend_invitation(
     background_tasks.add_task(
         notification_service.send_workspace_invitation,
         db=db,
-        invitation=invitation,
+        invitation=issued.invitation,
         workspace_name=context.workspace.workspace_name,
+        plaintext_token=issued.plaintext_token,
     )
-    return invitation
+    return issued.invitation
 
 
 # ============================================================================

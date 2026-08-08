@@ -48,7 +48,7 @@ from app.core.exceptions import (
     InvitationNotFoundError,
     InvitationPermissionDeniedError,
 )
-from app.core.tokens import generate_secure_token
+from app.core.tokens import generate_secure_token, hash_token
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
 from app.core.workspace_permissions import can_assign_workspace_role
 from app.crud import organization_members as organization_members_crud
@@ -86,6 +86,26 @@ class AcceptedInvitation:
     workspace_role: WorkspaceRole
 
 
+@dataclass(frozen=True)
+class IssuedInvitation:
+    """
+    An invitation together with the plaintext token that addresses it.
+
+    The plaintext is returned rather than stored. After ARCH-03 CONTRACT the
+    database holds only the SHA-256 hash, so this is the single moment the
+    secret is available to the server, and the caller must hand it to the
+    mailer before it goes out of scope.
+
+    A separate carrier rather than an attribute on the ORM object: an
+    unmapped attribute would not survive commit_and_refresh, and a mapped one
+    would mean persisting the plaintext, which is the entire thing this phase
+    removed.
+    """
+
+    invitation: WorkspaceInvitation
+    plaintext_token: str
+
+
 # ============================================================================
 # Token resolution
 # ============================================================================
@@ -96,7 +116,17 @@ def validate_invitation_token(
     token: str,
 ) -> WorkspaceInvitation:
     """
-    Resolves a token to a live, pending invitation.
+    Resolves a plaintext token to a live, pending invitation.
+
+    This function is the trust boundary, and it still takes the plaintext on
+    purpose. The token that arrives from a request is plaintext; hashing it
+    here, once, means every caller below this line works in hashed terms and
+    no code path can query for a plaintext that is no longer stored.
+
+    The lookup is a constant-value equality match on a 256-bit random secret,
+    so there is no timing signal worth defending against: an attacker who
+    could distinguish a hit from a miss by timing would still need to guess
+    the secret to produce either.
 
     Expiry is evaluated on access and persisted, so an expired invitation stops
     appearing as pending the moment anyone touches it. ARCH-04 adds a scheduled
@@ -107,8 +137,8 @@ def validate_invitation_token(
         InvitationAlreadyProcessedError: Already accepted, rejected, or revoked.
         InvitationExpiredError: Past its expiry timestamp.
     """
-    invitation = workspace_invitation_crud.get_invitation_by_token(
-        db, token=token
+    invitation = workspace_invitation_crud.get_invitation_by_token_hash(
+        db, token_hash=hash_token(token)
     )
     if invitation is None:
         raise InvalidInvitationTokenError(
@@ -174,7 +204,7 @@ def create_workspace_invitation(
     email: str,
     role: WorkspaceRole,
     expires_in_hours: int = DEFAULT_EXPIRY_HOURS,
-) -> WorkspaceInvitation:
+) -> IssuedInvitation:
     """
     Creates a pending invitation to a workspace.
 
@@ -217,13 +247,18 @@ def create_workspace_invitation(
                 db, invitation=pending
             )
 
+        # Held in a local and never assigned to the model. This is the only
+        # moment the plaintext exists on the server; once this function
+        # returns it lives solely in the recipient's mailbox.
+        plaintext_token = generate_secure_token()
+
         invitation = workspace_invitation_crud.create_invitation(
             db,
             workspace_id=workspace.id,
             inviter_id=actor_access.actor_user_id,
             email=normalized_email,
             role=role,
-            token=generate_secure_token(),
+            token_hash=hash_token(plaintext_token),
             expires_at=(
                 datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
             ),
@@ -248,7 +283,14 @@ def create_workspace_invitation(
             role.value,
             actor_access.actor_user_id,
         )
-        return invitation
+        
+        # The plaintext is never logged. Until the recipient consumes it, it is
+        # a working credential for workspace membership, and an application log
+        # is not a secret store (ARCH-03 R4).
+        return IssuedInvitation(
+            invitation=invitation,
+            plaintext_token=plaintext_token,
+        )
 
     except Exception as exc:
         rollback_and_log_error(
@@ -271,7 +313,7 @@ def list_pending_invitations(
     Returns pending invitations for a workspace.
 
     Expiry is lazy, so a listed invitation may already be past its timestamp.
-    The response carries expires_at and the client filters on it. ARCH-04's
+    The response carries expires_at and the client filters on it; ARCH-04's
     sweeper removes the discrepancy entirely.
     """
     return workspace_invitation_crud.list_pending_workspace_invitations(
@@ -344,7 +386,7 @@ def resend_workspace_invitation(
     actor_access: WorkspaceAccess,
     invitation_id: uuid.UUID,
     expires_in_hours: int = DEFAULT_EXPIRY_HOURS,
-) -> WorkspaceInvitation:
+) -> IssuedInvitation:
     """
     Reissues an invitation with a fresh token and expiry.
 

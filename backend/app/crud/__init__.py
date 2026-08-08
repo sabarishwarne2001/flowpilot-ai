@@ -81,7 +81,7 @@ from app.crud.workspace import (
 )
 from app.crud.workspace_invitation import (
     get_invitation_by_id,
-    get_invitation_by_token,
+    get_invitation_by_token_hash,
     get_pending_invitation,
     list_workspace_invitations,
     list_pending_workspace_invitations,
@@ -228,7 +228,7 @@ __all__ = [
     
     # workspace_invitation
     "get_invitation_by_id",
-    "get_invitation_by_token",
+    "get_invitation_by_token_hash",
     "get_pending_invitation",
     "list_workspace_invitations",
     "list_pending_workspace_invitations",
