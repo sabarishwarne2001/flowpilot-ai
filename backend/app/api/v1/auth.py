@@ -39,6 +39,7 @@ from typing import Any
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Cookie,
     Depends,
     HTTPException,
@@ -59,12 +60,15 @@ from app.core.cookies import (
 from app.core.security import create_access_token
 from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
+    ResendVerificationResponse,
     SessionResponse,
     TokenResponse,
     UserRegister,
     UserResponse,
+    VerificationStatusResponse,
+    VerifyEmailRequest,
 )
-from app.services import session_service
+from app.services import auth_token_service, session_service, verification_service
 from app.services.auth_service import authenticate_user, register_new_user
 
 logger = logging.getLogger("app.api.v1.auth")
@@ -146,19 +150,63 @@ def _issue(response: Response, *, user_id, issued) -> dict[str, Any]:
 )
 async def register(
     user_in: UserRegister,
+    request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """
-    Enrols a new user account.
+    Enrols a new user account and mails a verification link.
 
-    No session and no tokens are issued. Registration is not authentication,
-    and Step 8 puts email verification between the two.
+    No session and no tokens are issued. Registration is not authentication.
+    The new account has email_verified_at NULL, which lets it sign in and see
+    itself but not reach any workspace (§B.4).
+
+    The email goes out in a background task, and its failure cannot fail this
+    request. A registration that 500s because SMTP is down converts a mail
+    outage into an inability to sign up (R7); the account exists either way and
+    /auth/resend-verification is one click.
     """
     try:
-        return register_new_user(db, user_in=user_in)
+        user = register_new_user(db, user_in=user_in)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        )
+
+    background_tasks.add_task(
+        _send_verification_safely,
+        db=db,
+        user=user,
+        ip_address=_client_ip(request),
+        user_agent=_user_agent(request),
+    )
+    return user
+
+
+def _send_verification_safely(
+    *,
+    db: Session,
+    user,
+    ip_address: str | None,
+    user_agent: str | None,
+) -> None:
+    """
+    Background wrapper that swallows every failure.
+
+    An exception escaping a BackgroundTask is logged by Starlette and nothing
+    else happens, but it also aborts any task queued after it. Catching here
+    keeps one unreachable mail server from silently cancelling unrelated work.
+    """
+    try:
+        verification_service.issue_and_send(
+            db,
+            user=user,
+            requested_ip=ip_address,
+            requested_user_agent=user_agent,
+        )
+    except Exception as exc:  # noqa: BLE001 — background, nothing to bubble to
+        logger.warning(
+            "VERIFY_EMAIL_BACKGROUND_FAILED | user=%s | %s", user.id, exc
         )
 
 
@@ -399,6 +447,118 @@ async def revoke_one_session(
         session_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ===========================================================================
+# Email verification (§B.4)
+# ===========================================================================
+
+@router.post("/verify-email", response_model=VerificationStatusResponse)
+async def verify_email(
+    payload: VerifyEmailRequest,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Proves the address on an account.
+
+    Unauthenticated by design. The token is the proof, and requiring a session
+    as well would break the ordinary case: the link arrives in a mail client
+    and opens in whatever browser is default, often signed out.
+
+    The token is submitted in the body, not read from a query parameter. It
+    reaches the frontend in the URL fragment (§B.9), which no server sees, and
+    posting it back keeps it out of access logs on the way in too.
+
+    A second click on the same link answers 200 with already_verified rather
+    than an error. From the user's side clicking their own link twice is not a
+    failure, and an error screen there generates support requests about an
+    account that is working perfectly.
+    """
+    try:
+        user = verification_service.verify_email(db, token=payload.token)
+    except auth_token_service.ExpiredAuthTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This verification link has expired. Sign in and request a "
+                "new one."
+            ),
+        )
+    except auth_token_service.InvalidAuthTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification link is invalid or has already been used.",
+        )
+
+    return VerificationStatusResponse(
+        email=user.email,
+        email_verified_at=user.email_verified_at,
+        already_verified=False,
+    )
+
+
+@router.post(
+    "/resend-verification",
+    response_model=ResendVerificationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def resend_verification(
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    current_user=Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Sends a fresh verification link to the caller's own address.
+
+    Authenticated, and it takes no email parameter. That is what keeps it from
+    being an account-enumeration oracle: there is no address to probe, because
+    the only address it will ever mail is the one on the session. An
+    unauthenticated "resend to this address" endpoint answers a different
+    question — does this account exist — to anyone who asks.
+
+    Unverified users can reach this because they can sign in; that is the whole
+    point of gating tenant access rather than login (§B.4).
+
+    Rate limiting is auth_token_service's, applied per user per purpose. It
+    answers 429 rather than pretending to succeed: the caller is authenticated,
+    so there is nothing to hide from them, and a silent no-op would have them
+    waiting for mail that is not coming.
+    """
+    try:
+        delivered = verification_service.issue_and_send(
+            db,
+            user=current_user,
+            requested_ip=_client_ip(request),
+            requested_user_agent=_user_agent(request),
+        )
+    except verification_service.AlreadyVerifiedError:
+        return ResendVerificationResponse(
+            delivered=False,
+            detail="This address is already verified.",
+        )
+    except auth_token_service.AuthTokenRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
+        )
+
+    if delivered:
+        return ResendVerificationResponse(
+            delivered=True,
+            detail="Verification email sent. Check your inbox.",
+        )
+
+    # 202 with delivered=False, not a 500. The token exists and is valid; only
+    # the delivery failed, and the account is not broken (R7).
+    logger.warning(
+        "VERIFY_EMAIL_RESEND_UNDELIVERED | user=%s", current_user.id
+    )
+    return ResendVerificationResponse(
+        delivered=False,
+        detail=(
+            "We could not send the email just now. Please try again in a "
+            "few minutes."
+        ),
+    )
 
 
 # ===========================================================================

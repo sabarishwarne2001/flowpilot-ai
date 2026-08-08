@@ -209,10 +209,54 @@ async def get_current_active_user(
     return current_user
 
 
+async def get_verified_user(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Requires a proved email address before any tenant-scoped access (§B.4).
+
+    THE GATE IS ON TENANT ACCESS, NOT ON LOGIN
+    ------------------------------------------
+    An unverified address may belong to someone else — a typo that reaches a
+    real stranger, or a deliberate registration on a colleague's address before
+    they sign up. The moment such an account holds a workspace seat it holds
+    another organization's data, and verifying afterwards does not undo what
+    was read.
+
+    So unverified users can sign in, see who they are at /auth/me and
+    /me/context, list their sessions, verify, and resend. They cannot resolve
+    an organization or a workspace, which is where this dependency sits.
+
+    DELIBERATELY EXEMPT: /invitations/accept and /invitations/reject.
+    Acceptance is itself a proof of address control (§B.4 Option 2) and is what
+    grants verification on that path — gating it here would make the exemption
+    unreachable and lock invited users out of the flow that verifies them.
+
+    403 rather than 404, unlike the tenancy denials below. Those hide whether a
+    tenant exists, because a 403 there is an enumeration oracle. This is not
+    about a tenant at all: the caller is told precisely what is wrong because
+    the caller is the only person who can fix it, and a 404 would send someone
+    with a perfectly valid account hunting for a workspace that is right there.
+    """
+    if current_user.email_verified_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Verify your email address to continue. Check your inbox for "
+                "the verification link, or request a new one."
+            ),
+        )
+    return current_user
+
+
 #: Reusable annotated dependencies. Keep route signatures readable and ensure
 #: every handler resolves the session and actor the same way.
 DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
+
+#: An authenticated, active actor whose email address has been proved. Use in
+#: place of CurrentUser on anything that touches tenant data directly.
+VerifiedUser = Annotated[User, Depends(get_verified_user)]
 
 
 # ===========================================================================
@@ -296,7 +340,7 @@ class TenantContext:
 async def get_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_verified_user),
 ) -> OrganizationContext:
     """
     Resolves and authorizes the actor's membership in the addressed organization.
@@ -333,7 +377,7 @@ async def get_organization_context(
 async def get_billing_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_verified_user),
 ) -> OrganizationContext:
     """
     Resolves organization context WITHOUT requiring the tenant to be operational.
@@ -370,7 +414,7 @@ async def get_billing_organization_context(
 async def get_workspace_context(
     workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_verified_user),
 ) -> TenantContext:
     """
     Resolves and authorizes the actor's standing in the addressed workspace.

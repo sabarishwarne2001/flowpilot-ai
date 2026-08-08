@@ -49,6 +49,7 @@ from app.core.exceptions import (
     InvitationPermissionDeniedError,
 )
 from app.core.tokens import generate_secure_token, hash_token
+from app.services import verification_service
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
 from app.core.workspace_permissions import can_assign_workspace_role
 from app.crud import organization_members as organization_members_crud
@@ -558,6 +559,25 @@ def accept_workspace_invitation(
             db, invitation=invitation
         )
 
+        # 4. Verification earned by acceptance (§B.4, Option 2).
+        #
+        #    Sound only because both conditions above already hold: the actor
+        #    presented a token that reached that mailbox, AND
+        #    _assert_actor_matches_invitation confirmed the signed-in account's
+        #    email equals the invited one. Together that is the same proof a
+        #    verification link provides, so asking for a second round trip
+        #    would make the user prove twice what they have already proved once.
+        #
+        #    If that email assertion is ever removed or weakened, this becomes
+        #    a way to verify an address you do not control, and it must be
+        #    deleted in the same commit.
+        #
+        #    Inside the transaction deliberately: the verification and the
+        #    membership it was earned by land together or not at all.
+        newly_verified = verification_service.mark_verified_via_invitation(
+            db, user=current_user, invitation_id=invitation.id
+        )
+
         commit_and_refresh(db, invitation)
         db.refresh(workspace)
 
@@ -570,6 +590,14 @@ def accept_workspace_invitation(
             current_user.id,
             invitation.role.value,
         )
+        if newly_verified:
+            logger.info(
+                "AUDIT | EMAIL_VERIFIED_BY_INVITATION | User: %s | "
+                "Invitation: %s | Address: %s",
+                current_user.id,
+                invitation.id,
+                invitation.email,
+            )
 
         return AcceptedInvitation(
             invitation=invitation,

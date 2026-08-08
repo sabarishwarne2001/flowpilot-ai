@@ -11,6 +11,7 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { Assistant } from "@/pages/Assistant/Assistant";
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
+import VerifyEmail from "@/pages/Auth/VerifyEmail";
 import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
 import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
@@ -51,6 +52,15 @@ export default function App() {
         <SessionBootstrap>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
+
+              {/* ======================================
+                  Email Verification (PUBLIC)
+
+                  The token arrives in the URL fragment, so this must be
+                  reachable without a session — the link opens from a mail
+                  client, usually in a signed-out browser (ARCH-03 §B.9).
+              ======================================= */}
+              <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
 
               {/* ======================================
                   Invitation Acceptance (PUBLIC)

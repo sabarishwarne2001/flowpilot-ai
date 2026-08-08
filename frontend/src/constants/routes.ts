@@ -25,6 +25,15 @@ export const ROUTES = {
   LOGIN: "/login",
   REGISTER: "/register",
 
+  /**
+   * Email verification landing page.
+   *
+   * Public. The token arrives in the URL fragment (ARCH-03 §B.9), so the page
+   * is reachable signed out — which is the common case, since the link opens
+   * from a mail client in whatever browser is default.
+   */
+  VERIFY_EMAIL: "/verify-email",
+
   /* ======================================================================
    * Authenticated, tenant-independent
    * ====================================================================== */

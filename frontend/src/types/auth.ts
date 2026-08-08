@@ -76,3 +76,23 @@ export interface SessionResponse {
   readonly ip_address: string | null;
   readonly user_agent: string | null;
 }
+
+/**
+ * Outcome of a verification attempt.
+ */
+export interface VerificationStatusResponse {
+  readonly email: string;
+  readonly email_verified_at: string;
+  readonly already_verified: boolean;
+}
+
+/**
+ * Acknowledgement of a resend request.
+ *
+ * delivered is false when the message could not be sent. The request still
+ * succeeded — an SMTP outage must not present as a broken account.
+ */
+export interface ResendVerificationResponse {
+  readonly delivered: boolean;
+  readonly detail: string;
+}

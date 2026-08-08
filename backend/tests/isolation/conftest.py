@@ -4,6 +4,7 @@ Fixtures and self-contained database factories for ARCH-02 testing.
 
 import pytest
 import uuid
+from datetime import datetime, timezone
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceStatus, WorkspaceRole
@@ -78,7 +79,17 @@ def make_workspace(db, organization, slug):
     return ws
 
 def make_user(db, email):
-    user = User(email=email, hashed_password="!mockpassword", is_active=True, is_superuser=False)
+    # email_verified_at is set because every fixture here exercises
+    # workspace-scoped routes, and as of ARCH-03 Step 8 those are behind the
+    # verification gate (§B.4). A fixture user without it produces 403 on every
+    # tenant route — which would look like a tenancy regression and is not one.
+    user = User(
+        email=email,
+        hashed_password="!mockpassword",
+        is_active=True,
+        is_superuser=False,
+        email_verified_at=datetime.now(timezone.utc),
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -35,6 +35,14 @@ export interface User {
   readonly is_superuser: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+
+  /**
+   * When this address was proved, or null if it has not been.
+   *
+   * null is a permanent, meaningful value rather than a missing field: the
+   * account works, it simply cannot reach a workspace yet (ARCH-03 §B.4).
+   */
+  readonly email_verified_at: string | null;
 }
 
 interface AuthState {
@@ -65,6 +73,16 @@ interface AuthState {
    * Clears the authenticated session.
    */
   readonly clearAuth: () => void;
+
+  /**
+   * Drops the cached user without ending the session.
+   *
+   * Used after verification: the server's gate reads the User row rather than
+   * a token claim, so access changes immediately — but the copy held here
+   * still says unverified, and the banner would linger over an account that
+   * is fine. Clearing forces the next /auth/me to repopulate it.
+   */
+  readonly clearUserCache: () => void;
 
   /**
    * Simple role helper.
@@ -138,6 +156,12 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
           });
         },
+
+        clearUserCache: () =>
+          set((state) => ({
+            ...state,
+            user: null,
+          })),
 
         /**
          * Authorization helper.

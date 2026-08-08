@@ -40,6 +40,12 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
 
+    # Exposed so the client can render the verification banner and route
+    # around the tenant gate before the server has to refuse a request. NULL
+    # means unverified and is a permanent, meaningful value — the account is
+    # usable, it simply cannot reach a workspace yet (§B.4).
+    email_verified_at: Union[datetime, None] = None
+
     model_config = {
         "from_attributes": True  # Instructs Pydantic v2 to load data from SQLAlchemy objects
     }
@@ -79,3 +85,42 @@ class SessionResponse(BaseModel):
     user_agent: Union[str, None] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VerifyEmailRequest(BaseModel):
+    """
+    Submits a verification token read from the URL fragment.
+
+    A POST body rather than a query parameter (§B.9). The token reaches the
+    frontend in the fragment, which no server ever sees; sending it back in a
+    body keeps it out of access logs and Referer headers on the way in too.
+    """
+
+    token: str = Field(..., min_length=1, description="Verification token.")
+
+
+class VerificationStatusResponse(BaseModel):
+    """
+    The outcome of a verification attempt.
+
+    already_verified distinguishes "your link worked" from "you were already
+    verified". Both are successes from the user's side — clicking a link twice
+    should not look like an error — but the UI wording differs.
+    """
+
+    email: EmailStr
+    email_verified_at: datetime
+    already_verified: bool = False
+
+
+class ResendVerificationResponse(BaseModel):
+    """
+    Acknowledges a resend request.
+
+    delivered is False when the message could not be sent. The request still
+    succeeds: an SMTP outage must not present as a broken account (R7), and the
+    user can try again.
+    """
+
+    delivered: bool
+    detail: str

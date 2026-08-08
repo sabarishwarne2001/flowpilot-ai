@@ -6,6 +6,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { ROUTES } from "@/constants/routes";
 import Sidebar from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { VerificationBanner } from "@/components/common/VerificationBanner";
 
 /**
  * Shell template wrapper encapsulating all gated workspace screens.
@@ -59,6 +60,10 @@ export const DashboardLayout: React.FC = () => {
       <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         {/* Consolidated top layout header bar */}
         <Header />
+
+        {/* Surfaces the unverified state where the user already is. Without
+            it every tenant request 403s and the shell looks broken (§B.4). */}
+        <VerificationBanner />
 
         {/* Core dynamic Main viewpoint scrolling container */}
         <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-6">

@@ -2,9 +2,11 @@ import apiClient from "@/services/api/client";
 import type {
   LoginRequest,
   RegisterRequest,
+  ResendVerificationResponse,
   SessionResponse,
   TokenResponse,
   UserResponse,
+  VerificationStatusResponse,
 } from "@/types/auth";
 
 /**
@@ -58,6 +60,43 @@ export const getMeRequest = async (): Promise<UserResponse> => {
 
   return response.data;
 };
+
+/**
+ * Submits a verification token read from the URL fragment.
+ *
+ * Sent in a POST body, never a query parameter. The token reached the browser
+ * in the fragment (ARCH-03 §B.9), which no server sees; posting it back keeps
+ * it out of access logs and Referer headers on the way in as well.
+ *
+ * Unauthenticated: the token is the proof, and the link usually opens in a
+ * browser with no session.
+ */
+export const verifyEmailRequest = async (
+  token: string
+): Promise<VerificationStatusResponse> => {
+  const response = await apiClient.post<VerificationStatusResponse>(
+    "/auth/verify-email",
+    { token }
+  );
+
+  return response.data;
+};
+
+/**
+ * Requests a fresh verification link for the signed-in account.
+ *
+ * Takes no address on purpose. The endpoint only ever mails the address on the
+ * session, which is what keeps it from answering "does this account exist" to
+ * anyone who asks.
+ */
+export const resendVerificationRequest =
+  async (): Promise<ResendVerificationResponse> => {
+    const response = await apiClient.post<ResendVerificationResponse>(
+      "/auth/resend-verification"
+    );
+
+    return response.data;
+  };
 
 /**
  * Ends this session on the server and clears the refresh cookie.
@@ -121,6 +160,8 @@ export const authApi = {
   logout,
   logoutRequest,
   logoutAllRequest,
+  verifyEmailRequest,
+  resendVerificationRequest,
   listSessionsRequest,
   revokeSessionRequest,
 };

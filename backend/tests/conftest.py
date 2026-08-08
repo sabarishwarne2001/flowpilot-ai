@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Generator
 
@@ -187,10 +188,14 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 # ===========================================================================
 
 def _make_user(db: Session, email: str) -> Persona:
+    # Verified, because every persona here is used to exercise tenant-scoped
+    # routes and those sit behind the ARCH-03 Step 8 gate (§B.4). Leaving it
+    # NULL would 403 the whole suite and read as a tenancy regression.
     user = User(
         email=email,
         hashed_password=security.get_password_hash("test-password"),
         is_active=True,
+        email_verified_at=datetime.now(timezone.utc),
     )
     db.add(user)
     db.flush()
