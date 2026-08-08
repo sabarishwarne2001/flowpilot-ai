@@ -8,7 +8,7 @@ and maps standardized, secure response payloads.
 import uuid
 from datetime import datetime
 from typing import Union
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
 class UserBase(BaseModel):
     """
@@ -56,3 +56,26 @@ class TokenData(BaseModel):
     Payload structure extracted from decoded JWT access tokens.
     """
     sub: Union[uuid.UUID, None] = None
+
+
+class SessionResponse(BaseModel):
+    """
+    One live refresh session, as shown in the device list.
+
+    Deliberately carries no token and no hash. A device list is a read-only
+    view; anything in it that could be replayed would turn the page that shows
+    a user their sessions into the page that gives them away.
+
+    last_used_at is None until the session's first refresh, which for a device
+    signed in within the last ten minutes is the normal state rather than an
+    error.
+    """
+
+    id: uuid.UUID
+    created_at: datetime
+    expires_at: datetime
+    last_used_at: Union[datetime, None] = None
+    ip_address: Union[str, None] = None
+    user_agent: Union[str, None] = None
+
+    model_config = ConfigDict(from_attributes=True)

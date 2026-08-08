@@ -47,12 +47,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
 
-    # Stays at 30 until Step 7. The plan moved it to 10 here, but a 10-minute
-    # access token is only tolerable once refresh exists to renew it silently;
-    # shortening it in this step would sign every user out three times an hour
-    # for as long as Steps 6 and 7 are apart, with no compensating benefit —
-    # nothing in this step consumes the shorter window.
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Ten minutes, as of Step 7. Short because the access token is a bearer
+    # credential the client holds in memory and cannot be revoked individually;
+    # tolerable because /auth/refresh renews it silently from the HttpOnly
+    # cookie. The two changes belong in one commit — a short TTL without
+    # refresh is just a shorter session.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
 
     # ------------------------------------------------------------------
     # Refresh sessions (ARCH-03 §B.6, §B.7)

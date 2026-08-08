@@ -1,5 +1,6 @@
 import React, { useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
+import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
 import { ROUTES } from "@/constants/routes";
@@ -26,12 +27,13 @@ export const DashboardLayout: React.FC = () => {
    *
    * Memoized with useCallback to maintain Sidebar's React.memo rendering optimizations.
    */
-  const handleLogout = useCallback((): void => {
-    // ----------------------------------------------------------------------
-    // SPRINT 7 NOTE:
-    // Revoke target active session tokens securely inside the DB if requested:
-    // await authApi.logoutRequest();
-    // ----------------------------------------------------------------------
+  const handleLogout = useCallback(async (): Promise<void> => {
+    // Revoke the refresh session server-side FIRST, then clear locally.
+    // Clearing first would drop the in-memory token, but the refresh cookie
+    // is what actually keeps the session alive — a purely local sign-out
+    // would leave a fourteen-day credential live in the browser, and the next
+    // page load would silently restore the session the user just ended.
+    await authApi.logoutRequest();
 
     // Clear local Zustand state persistent session records
     clearAuth();

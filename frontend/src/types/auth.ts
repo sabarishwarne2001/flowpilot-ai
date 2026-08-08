@@ -60,3 +60,19 @@ export interface AuthSessionPayload {
   readonly user: UserResponse;
   readonly token: string;
 }
+
+/**
+ * One live refresh session, as returned by GET /auth/sessions.
+ *
+ * Carries no token and no hash — a device list is a read-only view, and
+ * anything replayable in it would turn the screen that shows a user their
+ * sessions into the page that gives them away.
+ */
+export interface SessionResponse {
+  readonly id: string;
+  readonly created_at: string;
+  readonly expires_at: string;
+  readonly last_used_at: string | null;
+  readonly ip_address: string | null;
+  readonly user_agent: string | null;
+}

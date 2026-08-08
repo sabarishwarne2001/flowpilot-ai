@@ -40,6 +40,7 @@ workspace authorization, against four independent call sites before.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Generator, Sequence, Union
@@ -70,6 +71,8 @@ from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.services import organization_service
 from app.services import workspace_member_service
 from app.services import workspace_service
+
+logger = logging.getLogger("app.api.deps")
 
 # Instantiate standard OAuth2 authorization extractor targeting the unified login route
 oauth2_scheme = OAuth2PasswordBearer(
@@ -111,6 +114,16 @@ async def get_current_user(
     Raises HTTPException rather than a domain exception because a 401 must
     carry the WWW-Authenticate header, and because authentication failure is a
     protocol-level outcome rather than a business one.
+
+    The `sid` claim is deliberately NOT looked up here. Verifying that the
+    session still exists would put a query on every authenticated request,
+    which is precisely the cost §B.6 avoided by comparing `iat` against
+    sessions_revoked_at instead. sid is for attribution — knowing which device
+    a request came from — not for authorization.
+
+    Tokens issued before Step 7 carry no sid and are accepted. They expire
+    within the access TTL on their own, and rejecting them would sign every
+    user out a second time for no security gain.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -118,24 +131,68 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = security.decode_access_token(token)
-    if payload is None:
+    claims = security.decode_access_token_claims(token)
+    if claims is None:
         raise credentials_exception
 
-    token_sub: Union[str, None] = payload.get("sub")
-    if token_sub is None:
-        raise credentials_exception
-
-    try:
-        user_uuid = uuid.UUID(token_sub)
-    except ValueError:
-        raise credentials_exception
-
-    user = crud.get_user_by_id(db, user_id=user_uuid)
+    user = crud.get_user_by_id(db, user_id=claims.subject)
     if user is None:
         raise credentials_exception
 
+    if _token_predates_revocation(claims, user):
+        # Distinguished in the log, not in the response. The client's only
+        # useful reaction to either is to refresh or sign in again.
+        logger.info(
+            "AUTH_REJECTED | user=%s | jti=%s | reason=revoked_before_iat",
+            user.id,
+            claims.jti,
+        )
+        raise credentials_exception
+
     return user
+
+
+def _token_predates_revocation(
+    claims: security.AccessTokenClaims,
+    user: User,
+) -> bool:
+    """
+    Applies the global session cutoff to a stateless access token (§B.6).
+
+    This is what makes password reset and sign-out-everywhere immediate. Access
+    tokens are not recorded anywhere, so without this comparison they stay
+    valid until their own expiry — up to the full access TTL after the user
+    asked to be signed out.
+
+    The check costs nothing: users.sessions_revoked_at is already on the row
+    that was just loaded to resolve `sub`.
+
+    THE COMPARISON IS AT WHOLE-SECOND GRANULARITY, DELIBERATELY
+    -----------------------------------------------------------
+    `iat` is an integer number of seconds — that is what JWT numeric dates are.
+    sessions_revoked_at is a microsecond-precision timestamp. Comparing them
+    directly loses to rounding in the wrong direction:
+
+        revocation at 12:00:01.900  ->  sessions_revoked_at = ...01.900
+        login       at 12:00:01.950  ->  iat = ...01  (truncated)
+        01 < 01.900  ->  the brand-new token is rejected
+
+    That is a real flow, not a hypothetical: "change your password, stay signed
+    in" reissues a token immediately after revoking, and it would fail for any
+    request that happened to land in the sub-second tail of a revocation.
+
+    Truncating the cutoff to whole seconds too removes the asymmetry. The cost
+    is that a token issued in the same second as a revocation survives it — for
+    at most one second, during which the session rows are already revoked so no
+    refresh is possible. A sub-second survival is immaterial; intermittently
+    signing a user out of the session they just created is not.
+    """
+    if user.sessions_revoked_at is None:
+        return False
+
+    return int(claims.issued_at.timestamp()) < int(
+        user.sessions_revoked_at.timestamp()
+    )
 
 
 async def get_current_active_user(

@@ -8,6 +8,20 @@ import { useTenantStore } from "@/store/useTenantStore";
 
 /**
  * Storage key for persisted authentication state.
+ *
+ * ARCH-03 Step 7: the access token is NO LONGER persisted here.
+ *
+ * The point of moving the long-lived credential into an HttpOnly cookie is
+ * that injected script cannot reach it. Leaving the access token in
+ * localStorage keeps a readable credential on disk and hands most of that
+ * property back — a stolen token would still be usable, and it would survive
+ * closing the tab.
+ *
+ * The token now lives in memory for the life of the page. What survives a
+ * reload is the cookie, which the browser presents to /auth/refresh during
+ * startup. `user` and `hasSession` are still persisted, purely so the first
+ * paint after a reload can show the authenticated shell instead of a login
+ * flash; neither is a credential and neither is trusted by the server.
  */
 const AUTH_STORAGE_KEY = "flowpilot_auth_session";
 
@@ -86,6 +100,11 @@ export const useAuthStore = create<AuthState>()(
           set((state) => ({
             ...state,
             token,
+            // A token obtained from /auth/refresh at startup proves the
+            // session is live, so the flag follows it. Without this a
+            // restored session would hold a working token while every guard
+            // still believed the user was signed out.
+            isAuthenticated: true,
           })),
 
         /**
@@ -146,9 +165,10 @@ export const useAuthStore = create<AuthState>()(
           () => localStorage,
         ),
 
+        // token is deliberately absent. Adding it back would undo the
+        // XSS-exposure reduction that the refresh cookie exists to provide.
         partialize: (state) => ({
           user: state.user,
-          token: state.token,
           isAuthenticated:
             state.isAuthenticated,
         }),

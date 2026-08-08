@@ -2,6 +2,7 @@ import apiClient from "@/services/api/client";
 import type {
   LoginRequest,
   RegisterRequest,
+  SessionResponse,
   TokenResponse,
   UserResponse,
 } from "@/types/auth";
@@ -59,14 +60,54 @@ export const getMeRequest = async (): Promise<UserResponse> => {
 };
 
 /**
- * Client-side logout placeholder.
+ * Ends this session on the server and clears the refresh cookie.
  *
- * Reserved for future backend logout,
- * refresh-token revocation, or audit logging.
+ * Never rejects. A sign-out that fails because the network is down, or because
+ * the access token had already expired, must still clear local state — leaving
+ * the user on an authenticated screen after they asked to leave is worse than
+ * a session row that outlives its usefulness. The backend route is
+ * unauthenticated and if-empty idempotent for the same reason.
  */
-export const logout = async (): Promise<void> => {
-  return Promise.resolve();
+export const logoutRequest = async (): Promise<void> => {
+  try {
+    await apiClient.post("/auth/logout");
+  } catch {
+    // Deliberately swallowed. See above.
+  }
 };
+
+/**
+ * Ends every session on every device.
+ *
+ * Authenticated, unlike logoutRequest: this acts on sessions the caller is not
+ * holding. Offered from account settings and used after a password change.
+ */
+export const logoutAllRequest = async (): Promise<void> => {
+  await apiClient.post("/auth/logout-all");
+};
+
+/**
+ * Lists this account's live sessions — the device list.
+ */
+export const listSessionsRequest = async (): Promise<SessionResponse[]> => {
+  const response = await apiClient.get<SessionResponse[]>("/auth/sessions");
+  return response.data;
+};
+
+/**
+ * Ends one session from the device list.
+ */
+export const revokeSessionRequest = async (
+  sessionId: string
+): Promise<void> => {
+  await apiClient.delete(`/auth/sessions/${sessionId}`);
+};
+
+/**
+ * Retained for backwards compatibility with existing call sites.
+ */
+export const logout = logoutRequest;
+
 /**
  * Unified authentication API surface.
  *
@@ -78,4 +119,8 @@ export const authApi = {
   loginRequest,
   getMeRequest,
   logout,
+  logoutRequest,
+  logoutAllRequest,
+  listSessionsRequest,
+  revokeSessionRequest,
 };
