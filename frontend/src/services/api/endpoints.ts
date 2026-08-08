@@ -117,5 +117,5 @@ export const NOTIFICATION_ENDPOINTS = {
   detail: (workspaceId: string, notificationId: string): string =>
     `${scoped(workspaceId)}/notifications/${seg(notificationId)}`,
   markAllRead: (workspaceId: string): string =>
-    `${scoped(workspaceId)}/notifications/read-all`,
+    `${scoped(workspaceId)}/notifications/mark-all-read`,
 } as const;

@@ -9,6 +9,7 @@ from uuid import UUID
 from typing import Any
 from collections import defaultdict
 
+from app.core.config import settings
 from app.services.embedding_service import embedding_service
 from app.services.bm25_service import bm25_service
 from app.services.intent_service import intent_service
@@ -145,9 +146,6 @@ class RetrievalService:
         candidate_count = self._determine_candidate_count(query=query)
         adaptive_threshold = self._determine_similarity_threshold(query=query)
         similarity_threshold = min(similarity_threshold, adaptive_threshold)
-
-        logger.info("Adaptive similarity threshold: %.3f", similarity_threshold)
-        logger.info("Adaptive candidate count: %d", candidate_count)
 
         merged: dict[str, dict[str, Any]] = {}
 

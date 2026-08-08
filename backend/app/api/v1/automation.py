@@ -25,7 +25,7 @@ logger = logging.getLogger("app.api.v1.automation")
 
 
 @router.post(
-    "", 
+    "/rules", 
     response_model=AutomationRuleResponse, 
     status_code=status.HTTP_201_CREATED,
     summary="Create a new Automation Rule",
@@ -47,7 +47,7 @@ async def create_rule(
 
 
 @router.get(
-    "", 
+    "/rules", 
     response_model=list[AutomationRuleResponse],
     summary="List all Automation Rules",
     response_description="A paginated list of active and inactive Automation Rules."
@@ -109,7 +109,7 @@ async def list_rule_logs(
 
 
 @router.get(
-    "/{rule_id}", 
+    "/rules/{rule_id}", 
     response_model=AutomationRuleResponse,
     summary="Get an Automation Rule by ID",
     response_description="The details of the requested Automation Rule."
@@ -129,7 +129,7 @@ async def get_rule(
 
 
 @router.patch(
-    "/{rule_id}", 
+    "/rules/{rule_id}", 
     response_model=AutomationRuleResponse,
     summary="Update an Automation Rule",
     response_description="The updated Automation Rule."
@@ -153,7 +153,7 @@ async def update_rule(
 
 
 @router.delete(
-    "/{rule_id}", 
+    "/rules/{rule_id}", 
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an Automation Rule",
     response_description="Empty response indicating successful deletion."
@@ -176,7 +176,7 @@ async def delete_rule(
 
 
 @router.post(
-    "/{rule_id}/test",
+    "/rules/{rule_id}/test",
     response_model=AutomationRuleTestResponse,
     summary="Test an Automation Rule against a Work Item",
     response_description="Detailed results of the test match evaluation."

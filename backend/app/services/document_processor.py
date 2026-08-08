@@ -126,17 +126,18 @@ async def process_document_pipeline(
         crud.update_job(db, db_obj=job, obj_in=JobUpdate(progress=50))
 
         # -----------------------------
-        # Stage 3: Embedding Storage
+        # Stage 3: Embedding Storage (Isolated Scopes)
         # -----------------------------
         if chunks:
             embeddings = embedding_service.generate_embeddings([chunk.text for chunk in chunks])
             embedding_service.store_chunks(
+                workspace_id=workspace_id,  # Thread workspace_id strictly here
                 work_item_id=work_item.id,
                 original_filename=work_item.original_filename,
                 chunks=chunks,
                 embeddings=embeddings,
             )
-            bm25_service.rebuild_index()
+            bm25_service.rebuild_index(workspace_id=workspace_id)
             logger.info("BM25 index rebuilt after document ingestion.")
         else:
             logger.warning("No chunks generated for WorkItem %s.", work_item.id)
