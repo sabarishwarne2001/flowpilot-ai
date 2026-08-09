@@ -115,7 +115,7 @@ class VerificationStatusResponse(BaseModel):
 
 class ResendVerificationResponse(BaseModel):
     """
-    Acknowledges a resend request.
+    Acknowledgement of a resend request.
 
     delivered is False when the message could not be sent. The request still
     succeeds: an SMTP outage must not present as a broken account (R7), and the
@@ -124,3 +124,53 @@ class ResendVerificationResponse(BaseModel):
 
     delivered: bool
     detail: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """
+    Requests a reset link for an address.
+
+    Anonymous. The response is identical whether or not the address matches an
+    account, so nothing here can be used to test for membership.
+    """
+
+    email: EmailStr = Field(..., max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    """
+    Completes a reset with a token read from the URL fragment.
+
+    min_length matches registration's. Enforcing a floor at reset but not at
+    signup — or the reverse — leaves accounts whose password could not be set
+    today, which is the kind of inconsistency that surfaces as a confusing
+    validation error years later.
+    """
+
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Replaces a password the caller already knows.
+
+    The current password is required despite the caller being authenticated:
+    an access token is a bearer credential that may have been taken, and this
+    is what stops a stolen session from locking the real owner out.
+    """
+
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class PasswordActionResponse(BaseModel):
+    """
+    Acknowledgement of a completed password action.
+
+    sessions_revoked is reported so the client can say what just happened
+    rather than leaving a user to discover their other devices are signed out.
+    """
+
+    detail: str
+    sessions_revoked: bool = True

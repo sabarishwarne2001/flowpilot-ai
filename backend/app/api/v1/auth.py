@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import (
@@ -60,7 +61,11 @@ from app.core.cookies import (
 from app.core.security import create_access_token
 from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    PasswordActionResponse,
     ResendVerificationResponse,
+    ResetPasswordRequest,
     SessionResponse,
     TokenResponse,
     UserRegister,
@@ -68,7 +73,12 @@ from app.schemas.auth import (
     VerificationStatusResponse,
     VerifyEmailRequest,
 )
-from app.services import auth_token_service, session_service, verification_service
+from app.services import (
+    auth_token_service,
+    password_service,
+    session_service,
+    verification_service,
+)
 from app.services.auth_service import authenticate_user, register_new_user
 
 logger = logging.getLogger("app.api.v1.auth")
@@ -193,9 +203,9 @@ def _send_verification_safely(
     """
     Background wrapper that swallows every failure.
 
-    An exception escaping a BackgroundTask is logged by Starlette and nothing
-    else happens, but it also aborts any task queued after it. Catching here
-    keeps one unreachable mail server from silently cancelling unrelated work.
+    An exception escaping a BackgroundTask aborts any task queued after it, and
+    nothing here is worth surfacing anyway — the response has already gone out
+    and must not depend on the outcome.
     """
     try:
         verification_service.issue_and_send(
@@ -467,7 +477,8 @@ async def verify_email(
 
     The token is submitted in the body, not read from a query parameter. It
     reaches the frontend in the URL fragment (§B.9), which no server sees, and
-    posting it back keeps it out of access logs on the way in too.
+    posting it back keeps it out of access logs and Referer headers on the way in
+    too.
 
     A second click on the same link answers 200 with already_verified rather
     than an error. From the user's side clicking their own link twice is not a
@@ -559,6 +570,207 @@ async def resend_verification(
             "few minutes."
         ),
     )
+
+
+# ===========================================================================
+# Password reset and change (§B.2, §B.6)
+# ===========================================================================
+
+@router.post(
+    "/forgot-password",
+    response_model=PasswordActionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Requests a password reset link.
+
+    ALWAYS 202, with the same body, whatever happened. No account, inactive
+    account, rate limit reached, SMTP down — all identical from outside.
+
+    This endpoint takes an arbitrary address from an anonymous caller, so any
+    observable difference makes it a membership oracle: paste a list of
+    addresses in, learn which ones have accounts here. That is why the rate
+    limit does not surface as 429 the way it does on /auth/resend-verification,
+    which is authenticated and only ever mails the session's own address.
+
+    The work runs in a background task, which also flattens the timing: the
+    response does not wait on a database write or an SMTP connection, so a hit
+    and a miss take the same time from the caller's side.
+    """
+    background_tasks.add_task(
+        _request_reset_safely,
+        db=db,
+        email=payload.email,
+        ip_address=_client_ip(request),
+        user_agent=_user_agent(request),
+    )
+
+    return PasswordActionResponse(
+        detail=(
+            "If an account exists for that address, a password reset link is "
+            "on its way."
+        ),
+        sessions_revoked=False,
+    )
+
+
+def _request_reset_safely(
+    *,
+    db: Session,
+    email: str,
+    ip_address: str | None,
+    user_agent: str | None,
+) -> None:
+    """
+    Background wrapper that swallows every failure.
+
+    An exception escaping a BackgroundTask aborts any task queued after it, and
+    nothing here is worth surfacing anyway — the response has already gone out
+    and must not depend on the outcome.
+    """
+    try:
+        password_service.request_password_reset(
+            db,
+            email=email,
+            requested_ip=ip_address,
+            requested_user_agent=user_agent,
+        )
+    except Exception as exc:  # noqa: BLE001 — background, nothing to bubble to
+        logger.warning("PASSWORD_RESET_BACKGROUND_FAILED | %s", exc)
+
+
+@router.post("/reset-password", response_model=PasswordActionResponse)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Completes a reset and signs every device out.
+
+    No session is issued. Completing a reset does not sign the user in — they
+    sign in with the password they just chose, which is one extra step and one
+    fewer credential path to secure. Minting a session here would mean an
+    unauthenticated endpoint that sets a refresh cookie, reachable by anyone
+    holding a link that is sitting in a mailbox.
+
+    The refresh cookie is cleared, because whatever session this browser held
+    has just been revoked along with all the others and the cookie would
+    otherwise be retried until it expired.
+
+    Completing a reset also marks the address verified (§B.4). The token
+    reached the address on this account and nowhere else — forgot-password
+    looks the user up by that address (§B.4).
+    """
+    try:
+        user = password_service.reset_password(
+            db, token=payload.token, new_password=payload.new_password
+        )
+    except auth_token_service.ExpiredAuthTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This reset link has expired. Request a new one.",
+        )
+    except auth_token_service.InvalidAuthTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This reset link is invalid or has already been used.",
+        )
+    except password_service.PasswordUnchangedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )
+
+    background_tasks.add_task(
+        password_service.send_password_changed_notice,
+        user_email=user.email,
+        changed_at=datetime.now(UTC),
+    )
+    clear_refresh_cookie(response)
+
+    return PasswordActionResponse(
+        detail=(
+            "Your password has been reset and every device has been signed "
+            "out. Sign in with your new password."
+        )
+    )
+
+
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+    current_user=Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Replaces a known password and re-establishes this device only.
+
+    Everything is revoked, including the caller's own session, and then a fresh
+    session is issued for the device that made the request. So a user who
+    changes their password stays where they are while every other device — and
+    every access token anywhere — stops working immediately.
+
+    Revoking all and re-issuing, rather than sparing the current session, is
+    what makes this useful when the reason for the change is a suspected
+    compromise. Sparing the caller would also spare an attacker who happened to
+    be the caller.
+
+    This is where Step 7's whole-second revocation comparison earns its keep.
+    The cutoff and the new token's iat land in the same wall-clock second;
+    comparing an integer iat against a microsecond cutoff would reject the
+    token this endpoint just issued, on some fraction of calls, for no reason
+    a user could ever act on.
+
+    Deliberately NOT behind the verification gate. An unverified user with a
+    working password may change it — verification governs tenant access, not
+    account self-management.
+    """
+    try:
+        user = password_service.change_password(
+            db,
+            user=current_user,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    except password_service.IncorrectPasswordError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )
+    except password_service.PasswordUnchangedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )
+
+    issued = session_service.create_session(
+        db,
+        user=user,
+        ip_address=_client_ip(request),
+        user_agent=_user_agent(request),
+    )
+    db.commit()
+
+    background_tasks.add_task(
+        password_service.send_password_changed_notice,
+        user_email=user.email,
+        changed_at=datetime.now(UTC),
+    )
+
+    logger.info(
+        "AUTH_PASSWORD_CHANGED | user=%s | new session=%s",
+        user.id,
+        issued.session_id,
+    )
+    return _issue(response, user_id=user.id, issued=issued)
 
 
 # ===========================================================================

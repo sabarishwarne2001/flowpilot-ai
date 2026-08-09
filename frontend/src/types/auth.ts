@@ -41,6 +41,9 @@ export interface UserResponse {
   readonly is_superuser: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  // Exposed so the client can render the verification banner and route
+  // around the tenant gate before the server has to refuse a request.
+  readonly email_verified_at: string | null;
 }
 
 /**
@@ -50,6 +53,7 @@ export interface TokenResponse {
   readonly access_token: string;
   readonly token_type: "bearer";
 }
+
 /**
  * Internal authenticated session model.
  *
@@ -95,4 +99,15 @@ export interface VerificationStatusResponse {
 export interface ResendVerificationResponse {
   readonly delivered: boolean;
   readonly detail: string;
+}
+
+/**
+ * Acknowledgement of a password action.
+ *
+ * sessions_revoked is reported so the client can say what just happened
+ * rather than leaving a user to discover their other devices are signed out.
+ */
+export interface PasswordActionResponse {
+  readonly detail: string;
+  readonly sessions_revoked: boolean;
 }

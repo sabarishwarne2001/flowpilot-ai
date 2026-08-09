@@ -12,6 +12,8 @@ import { Assistant } from "@/pages/Assistant/Assistant";
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
 import VerifyEmail from "@/pages/Auth/VerifyEmail";
+import ForgotPassword from "@/pages/Auth/ForgotPassword";
+import ResetPassword from "@/pages/Auth/ResetPassword";
 import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
 import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
@@ -61,6 +63,21 @@ export default function App() {
                   client, usually in a signed-out browser (ARCH-03 §B.9).
               ======================================= */}
               <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
+
+              {/* ======================================
+                  Password recovery (PUBLIC)
+
+                  RESET_PASSWORD reads its token from the URL fragment, so it
+                  must be reachable without a session (ARCH-03 §B.9).
+              ======================================= */}
+              <Route
+                path={ROUTES.FORGOT_PASSWORD}
+                element={<ForgotPassword />}
+              />
+              <Route
+                path={ROUTES.RESET_PASSWORD}
+                element={<ResetPassword />}
+              />
 
               {/* ======================================
                   Invitation Acceptance (PUBLIC)

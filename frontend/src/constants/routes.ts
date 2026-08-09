@@ -34,6 +34,15 @@ export const ROUTES = {
    */
   VERIFY_EMAIL: "/verify-email",
 
+  /**
+   * Password recovery. Both public.
+   *
+   * RESET_PASSWORD reads its token from the URL fragment (ARCH-03 §B.9), so it
+   * must be reachable signed out — the link opens from a mail client.
+   */
+  FORGOT_PASSWORD: "/forgot-password",
+  RESET_PASSWORD: "/reset-password",
+
   /* ======================================================================
    * Authenticated, tenant-independent
    * ====================================================================== */
