@@ -108,30 +108,18 @@ def send_platform_email(
     subject: str,
     html_body: str,
     text_body: str,
+    reply_to: str | None = None,              # <-- ADD
 ) -> tuple[bool, str]:
     """
-    Delivers one identity message through the platform relay.
-
-    Returns `(success, detail)` rather than raising on delivery failure, so the
-    caller can record the outcome without a try/except at every call site. A
-    missing configuration still raises, because that is a deployment fault
-    rather than a transient one and should be loud.
-
+    ...
     Args:
-        recipient: Destination address.
-        subject: Message subject line.
-        html_body: Rendered HTML alternative.
-        text_body: Rendered plain-text alternative.
-
-    Returns:
-        (True, message) on success, (False, error) on delivery failure.
-
-    Raises:
-        PlatformEmailNotConfigured: if the relay is not configured.
+        ...
+        reply_to: Optional address a reply should reach. ARCH-04 D1.2 --
+            invitation mail sends as FlowPilot but should reply to the human
+            who sent it. Identity mail (verification, reset) leaves this None:
+            there is nobody to reply to, and inviting a reply to an automated
+            security message is worse than not.
     """
-    # Imported at call time: email_service imports app.core.smtp, and this
-    # module is imported *by* app.core.smtp. A module-level import here closes
-    # the cycle and breaks application startup.
     from app.services.email_service import email_service
 
     config = platform_smtp_config()
@@ -142,6 +130,7 @@ def send_platform_email(
         subject=subject,
         html_body=html_body,
         text_body=text_body,
+        reply_to=reply_to,                    # <-- ADD
     )
 
     if success:

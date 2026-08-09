@@ -180,15 +180,25 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: str,
+        reply_to: str | None = None,          
     ) -> tuple[bool, str]:
         """
         Sends a multipart HTML/text alternative email.
+
+        reply_to exists for ARCH-04 D1.2. Invitations send from the platform
+        relay, so the From header reads FlowPilot rather than the tenant.
+        Pointing Reply-To at the inviter means a recipient who replies reaches
+        the person who invited them, rather than whichever mailbox happens to
+        own a set of SMTP credentials.
         """
         config = self._resolve_config(settings)
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = f"{config.sender_name} <{config.sender_address}>"
         message["To"] = recipient
+
+        if reply_to:                          # <-- ADD
+            message["Reply-To"] = reply_to    # <-- ADD
 
         message.set_content(text_body)
         message.add_alternative(html_body, subtype="html")
