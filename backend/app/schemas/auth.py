@@ -174,3 +174,17 @@ class PasswordActionResponse(BaseModel):
 
     detail: str
     sessions_revoked: bool = True
+
+
+class RegistrationAcknowledgement(BaseModel):
+    """
+    The response to every registration attempt.
+
+    Carries no user object and no identifier, because in one of the two
+    branches there is no account this caller is entitled to know about. That
+    absence is the schema doing its job: a field that existed only when the
+    address was free would be the enumeration oracle again, in a different
+    shape.
+    """
+
+    detail: str

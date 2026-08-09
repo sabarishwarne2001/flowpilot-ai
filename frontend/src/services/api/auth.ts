@@ -2,6 +2,7 @@ import apiClient from "@/services/api/client";
 import type {
   LoginRequest,
   RegisterRequest,
+  RegistrationAcknowledgement,
   PasswordActionResponse,
   ResendVerificationResponse,
   SessionResponse,
@@ -15,8 +16,8 @@ import type {
  */
 export const registerRequest = async (
   data: RegisterRequest
-): Promise<UserResponse> => {
-  const response = await apiClient.post<UserResponse>("/auth/register", data, {
+): Promise<RegistrationAcknowledgement> => {
+  const response = await apiClient.post<RegistrationAcknowledgement>("/auth/register", data, {
     headers: {
       Accept: "application/json",
     },

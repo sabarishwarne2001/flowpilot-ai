@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
 
 import { registerSchema, type RegisterInput } from "@/utils/validation";
 
@@ -12,7 +12,6 @@ import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 
 export const Register: React.FC = () => {
-  const navigate = useNavigate();
   const location = useLocation();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -64,6 +63,9 @@ export const Register: React.FC = () => {
     },
   });
 
+  const [submitted, setSubmitted] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
+
   const togglePassword = () => setShowPassword((value) => !value);
   const toggleConfirmPassword = () => setShowConfirmPassword((value) => !value);
 
@@ -73,23 +75,22 @@ export const Register: React.FC = () => {
       password: data.password,
     };
 
-    const registerPromise = authApi.registerRequest(payload);
+    setSubmittedEmail(payload.email);
 
     try {
-      await toast.promise(registerPromise, {
+      await toast.promise(authApi.registerRequest(payload), {
         loading: "Creating your FlowPilot account...",
 
-        success: () => {
-          const loginTarget = validatedRedirectParam
-            ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}`
-            : ROUTES.LOGIN;
-
-          navigate(loginTarget, {
-            replace: true,
-          });
-
-          return "Account created successfully! Please sign in.";
-        },
+        // ARCH-03 Step 10: the backend answers 202 with the same body whether
+        // or not the address already has an account, so there is nothing here
+        // to branch on and nothing to navigate to. Showing "account created"
+        // would be a claim we can no longer make, and showing "that address is
+        // taken" is the enumeration oracle we just closed.
+        //
+        // The user is sent to a check-your-email screen instead. A typo now
+        // surfaces as silence rather than an error — the accepted cost, and
+        // the reason the screen says what to do if nothing arrives.
+        success: () => "Check your email to continue.",
 
         error: (error: unknown) => {
           if (error instanceof ApiError) {
@@ -99,10 +100,35 @@ export const Register: React.FC = () => {
           return "An unexpected registration error occurred.";
         },
       });
-    } finally {
-      // Reserved for future cleanup logic.
+
+      setSubmitted(true);
+    } catch {
+      // toast.promise has already surfaced it.
     }
   };
+
+  if (submitted) {
+    return (
+      <div className="flex w-full flex-col items-center justify-center gap-4 px-4 py-10 text-center select-none">
+        <MailCheck className="h-8 w-8 text-emerald-500" />
+        <h1 className="text-lg font-semibold tracking-tight">Check your email</h1>
+        <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+          We have sent a message to <strong>{submittedEmail}</strong>. Open the
+          link inside to finish setting up your account.
+        </p>
+        <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+          Nothing arrived after a few minutes? Check your spam folder, and
+          confirm the address above is spelled correctly.
+        </p>
+        <Link
+          to={ROUTES.LOGIN}
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

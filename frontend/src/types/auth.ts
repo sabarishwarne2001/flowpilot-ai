@@ -111,3 +111,16 @@ export interface PasswordActionResponse {
   readonly detail: string;
   readonly sessions_revoked: boolean;
 }
+
+/**
+ * The response to every registration attempt.
+ *
+ * Carries no user object and no identifier. As of ARCH-03 Step 10 the backend
+ * answers identically whether or not the address already has an account, so
+ * there is nothing account-shaped to return in one of the two branches —
+ * and a field that appeared only when the address was free would rebuild the
+ * enumeration oracle in the client instead of the server.
+ */
+export interface RegistrationAcknowledgement {
+  readonly detail: string;
+}

@@ -33,6 +33,15 @@ PASSWORD = "correct-horse-battery-staple"
 # ===========================================================================
 
 def test_registration_creates_an_unverified_account(client, db):
+    """
+    Updated in Step 10. Registration now answers 202 with a bare
+    acknowledgement rather than 201 with the user, because in the
+    already-registered branch there is no account this caller is entitled to
+    know about — see test_registration_is_indistinguishable_for_a_taken_address.
+
+    The account state is therefore asserted against the database rather than
+    the response body.
+    """
     from app.models.user import User
 
     email = f"new-{uuid.uuid4().hex[:8]}@example.com"
@@ -40,8 +49,7 @@ def test_registration_creates_an_unverified_account(client, db):
         "/api/v1/auth/register", json={"email": email, "password": PASSWORD}
     )
 
-    assert response.status_code == 201
-    assert response.json()["email_verified_at"] is None
+    assert response.status_code == 202
 
     row = db.query(User).filter(User.email == email).one()
     assert row.email_verified_at is None
@@ -120,17 +128,15 @@ def test_verified_user_passes_the_gate(client, registered):
     )
 
     # Past the gate. 404 because the workspace does not exist, which is the
-    # tenancy layer answering — a different refusal from a different guard.
+    # tenancy layer answering — a different refusal from a different guard,
+    # which is the whole point of keeping them separate.
     assert response.status_code == 404
 
 
-def test_the_gate_reads_current_state_not_the_token(client, unverified, db):
+def test_the_gate_reads_current_state(client, unverified, db):
     """
-    Verification is not a claim in the access token.
-
-    Putting it there would mean a user who verifies has to sign out and back in
-    before the gate opens. The check reads the User row that deps already
-    loaded, so it takes effect on the very next request.
+    Verification is not a token claim. As one it would require signing out and
+    back in before access changed.
     """
     token = _login(client, unverified)
     assert client.get(

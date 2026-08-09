@@ -53,6 +53,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.core.config import settings
 from app.core.cookies import (
     REFRESH_COOKIE_NAME,
     clear_refresh_cookie,
@@ -62,6 +63,7 @@ from app.core.security import create_access_token
 from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
     ChangePasswordRequest,
+    RegistrationAcknowledgement,
     ForgotPasswordRequest,
     PasswordActionResponse,
     ResendVerificationResponse,
@@ -155,8 +157,8 @@ def _issue(response: Response, *, user_id, issued) -> dict[str, Any]:
 
 @router.post(
     "/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
+    response_model=RegistrationAcknowledgement,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def register(
     user_in: UserRegister,
@@ -165,32 +167,83 @@ async def register(
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """
-    Enrols a new user account and mails a verification link.
+    Enrols a new account, or quietly notices the address was already taken.
 
-    No session and no tokens are issued. Registration is not authentication.
-    The new account has email_verified_at NULL, which lets it sign in and see
-    itself but not reach any workspace (§B.4).
+    ALWAYS 202, with the same body. As of Step 10 this endpoint does not reveal
+    whether an address already has an account — pasting a list of addresses
+    into a sign-up form is exactly the probe /auth/forgot-password was written
+    to defeat, and leaving it open here answered the same question one form
+    over.
 
-    The email goes out in a background task, and its failure cannot fail this
+    What differs is only what lands in the mailbox:
+
+        new address       a verification link
+        existing address  a notice that somebody tried to sign up with it
+
+    No session and no tokens are issued in either case. Registration is not
+    authentication, and the new account has email_verified_at NULL, which lets
+    it sign in and see itself but not reach any workspace (§B.4).
+
+    Both emails go out in background tasks whose failure cannot fail this
     request. A registration that 500s because SMTP is down converts a mail
-    outage into an inability to sign up (R7); the account exists either way and
-    /auth/resend-verification is one click.
+    outage into an inability to sign up (R7).
+
+    BREAKING CHANGE from the previous 201 + UserResponse. There is no user
+    object to return, because in one branch there is no user this caller is
+    entitled to know about. The frontend shows a "check your email" screen
+    instead of navigating straight to sign-in.
     """
-    try:
-        user = register_new_user(db, user_in=user_in)
-    except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+    outcome = register_new_user(db, user_in=user_in)
+
+    if outcome.created and outcome.user is not None:
+        db.commit()
+        background_tasks.add_task(
+            _send_verification_safely,
+            db=db,
+            user=outcome.user,
+            ip_address=_client_ip(request),
+            user_agent=_user_agent(request),
+        )
+    else:
+        background_tasks.add_task(
+            _send_account_exists_safely, email=outcome.email
         )
 
-    background_tasks.add_task(
-        _send_verification_safely,
-        db=db,
-        user=user,
-        ip_address=_client_ip(request),
-        user_agent=_user_agent(request),
+    return RegistrationAcknowledgement(
+        detail=(
+            "Check your email. If we could create an account for that "
+            "address, a verification link is on its way."
+        )
     )
-    return user
+
+
+def _send_account_exists_safely(*, email: str) -> None:
+    """
+    Tells an existing account holder that someone tried to register as them.
+
+    Swallows everything, like every other background mail task here: an
+    exception escaping a BackgroundTask aborts any task queued after it, and
+    the response has already gone out.
+    """
+    from app.core.platform_email import send_platform_email
+    from app.templates.emails.account_exists import render_account_exists
+
+    base = settings.FRONTEND_URL.rstrip("/")
+    try:
+        subject, html_body, text_body = render_account_exists(
+            recipient_email=email,
+            login_url=f"{base}/login",
+            reset_url=f"{base}/forgot-password",
+            brand_name=settings.PROJECT_NAME,
+        )
+        send_platform_email(
+            recipient=email,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+    except Exception as exc:  # noqa: BLE001 — background, nothing to bubble to
+        logger.warning("ACCOUNT_EXISTS_NOTICE_FAILED | %s", exc)
 
 
 def _send_verification_safely(
@@ -203,9 +256,9 @@ def _send_verification_safely(
     """
     Background wrapper that swallows every failure.
 
-    An exception escaping a BackgroundTask aborts any task queued after it, and
-    nothing here is worth surfacing anyway — the response has already gone out
-    and must not depend on the outcome.
+    An exception escaping a BackgroundTask is logged by Starlette and nothing
+    else happens, but it also aborts any task queued after it. Catching here
+    keeps one unreachable mail server from silently cancelling unrelated work.
     """
     try:
         verification_service.issue_and_send(
@@ -532,7 +585,7 @@ async def resend_verification(
 
     Rate limiting is auth_token_service's, applied per user per purpose. It
     answers 429 rather than pretending to succeed: the caller is authenticated,
-    so there is nothing to hide from them, and a silent no-op would have them
+    so there is nothing to hide from them, and a fake success leaves them
     waiting for mail that is not coming.
     """
     try:
