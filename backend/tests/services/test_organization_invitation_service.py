@@ -518,12 +518,14 @@ def test_sweeper_groups_by_inviter(db):
     inviter_a = _make_user(db)
     inviter_b = _make_user(db)
 
+    # Invitation A (expired)
     issued_a = service.create_invitation(
         db, organization=org, inviter=inviter_a, actor_role=OrganizationRole.OWNER,
         email="personA@example.com", organization_role=OrganizationRole.MEMBER
     )
     issued_a.invitation.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
+    # Invitation B (expired)
     issued_b = service.create_invitation(
         db, organization=org, inviter=inviter_b, actor_role=OrganizationRole.OWNER,
         email="personB@example.com", organization_role=OrganizationRole.MEMBER
@@ -532,11 +534,13 @@ def test_sweeper_groups_by_inviter(db):
 
     db.flush()
 
+    # Sweep expired
     expired_map = service.sweep_expired_invitations(db)
 
+    # Assert grouped correctly by inviter using the ExpiryDigestBatch schema
     assert inviter_a.id in expired_map
     assert inviter_b.id in expired_map
-    assert len(expired_map[inviter_a.id]) == 1
+    assert len(expired_map[inviter_a.id].lines) == 1
 
 
 def test_purge_old_never_deletes_pending_regardless_of_age(db):

@@ -34,11 +34,12 @@ from __future__ import annotations
 
 import logging
 import uuid
+import sqlalchemy as sa
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-import sqlalchemy as sa
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -77,7 +78,7 @@ from app.models.organization_invitation import (
 )
 from app.models.user import User
 from app.models.workspace import WorkspaceRole, WorkspaceStatus
-from app.templates.emails.common import GrantLine
+from app.templates.emails.common import ExpiredInvitationLine, GrantLine, format_timestamp
 
 logger = logging.getLogger("app.services.organization_invitation")
 
@@ -132,6 +133,16 @@ class ResolvedInvitationParties:
     inviter_email: str
     invited_email: str
     invitation_id: uuid.UUID
+
+
+@dataclass
+class ExpiryDigestBatch:
+    """
+    One inviter's lapsed invitations, ready to render.
+    """
+    inviter_email: str
+    organization_slug: str
+    lines: list[ExpiredInvitationLine]
 
 
 # ===========================================================================
@@ -798,9 +809,6 @@ def resend_invitation(
             f"This invitation was sent recently. Try again in a few minutes."
         )
 
-    # A resend re-checks seats: the organization may have filled up since the
-    # invitation was issued, and re-mailing a link that cannot be accepted
-    # sends the recipient into the §B.8 failure for no reason.
     _assert_seat_available(
         db,
         organization=organization,
@@ -863,36 +871,76 @@ def list_invitations(
 # Sweep — consumed by Step 8
 # ===========================================================================
 
-def sweep_expired_invitations(db: Session) -> dict[uuid.UUID, list[dict]]:
+def sweep_expired_invitations(
+    db: Session, *, commit: bool = True
+) -> dict[uuid.UUID, ExpiryDigestBatch]:
     """
-    Marks lapsed invitations EXPIRED and groups them by inviter for the digest.
+    Marks lapsed invitations EXPIRED and groups them by inviter, enriched with
+    the inviter's address and each organization's name.
 
-    Returns {inviter_id: [row, ...]}. One message per inviter per run (§B.7);
-    the sweeper must never iterate invitations.
+    Two bulk lookups, not one per row.
     """
     rows = invitation_crud.expire_stale_invitations(db, now=datetime.now(UTC))
     if not rows:
         return {}
 
-    commit_and_refresh(db)
+    if commit:
+        commit_and_refresh(db)
 
-    grouped: dict[uuid.UUID, list[dict]] = {}
+    inviter_ids = {r["inviter_id"] for r in rows}
+    org_ids = {r["organization_id"] for r in rows}
+
+    inviters = {
+        u.id: u.email
+        for u in db.execute(
+            select(User).where(User.id.in_(inviter_ids))
+        ).scalars()
+    }
+    organizations = {
+        o.id: (o.name, o.slug)
+        for o in db.execute(
+            select(Organization).where(Organization.id.in_(org_ids))
+        ).scalars()
+    }
+
+    batches: dict[uuid.UUID, ExpiryDigestBatch] = {}
     for row in rows:
-        grouped.setdefault(row["inviter_id"], []).append(row)
+        inviter_email = inviters.get(row["inviter_id"])
+        if inviter_email is None:
+            logger.warning(
+                "INVITATION_SWEEP_ORPHAN | invitation=%s | inviter=%s",
+                row["id"], row["inviter_id"],
+            )
+            continue
+
+        org_name, org_slug = organizations.get(
+            row["organization_id"], ("(unknown organization)", "")
+        )
+        batch = batches.setdefault(
+            row["inviter_id"],
+            ExpiryDigestBatch(
+                inviter_email=inviter_email,
+                organization_slug=org_slug,
+                lines=[],
+            ),
+        )
+        batch.lines.append(ExpiredInvitationLine(
+            invited_email=row["email"],
+            organization_name=org_name,
+            expired_at_display=format_timestamp(row["expires_at"]),
+        ))
 
     logger.info(
-        "INVITATION_SWEEP | expired=%s | inviters=%s", len(rows), len(grouped)
+        "INVITATION_SWEEP | expired=%s | inviters=%s", len(rows), len(batches)
     )
-    return grouped
+    return batches
 
 
-def purge_old_invitations(db: Session) -> int:
-    """Deletes terminal invitations past the retention window. Grants cascade."""
+def purge_old_invitations(db: Session, *, commit: bool = True) -> int:
     cutoff = datetime.now(UTC) - timedelta(
         days=settings.INVITATION_RETENTION_DAYS
     )
     deleted = invitation_crud.delete_invitations_before(db, cutoff=cutoff)
-    if deleted:
+    if deleted and commit:
         commit_and_refresh(db)
-        logger.info("INVITATION_PURGE | deleted=%s", deleted)
     return deleted
