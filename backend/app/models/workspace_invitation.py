@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -11,23 +10,12 @@ from sqlalchemy.types import UUID
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 from app.models.workspace import WorkspaceRole
+from app.models.organization_invitation import InvitationStatus  # noqa: F401
 
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.workspace import Workspace
-    # EDIT 2 (Part A): Import Organization in TYPE_CHECKING block
     from app.models.organization import Organization
-
-
-class InvitationStatus(str, enum.Enum):
-    """
-    Available states for a workspace invitation.
-    """
-    PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
-    REJECTED = "REJECTED"
-    EXPIRED = "EXPIRED"
-    REVOKED = "REVOKED"
 
 
 class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
@@ -37,10 +25,6 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "workspace_invitations"
     __table_args__ = (
-        # Production-grade partial unique index: ensures that at most ONE invitation 
-        # is active ('PENDING') per email per workspace at any given time.
-        # This allows users to be re-invited if their previous invites expired, 
-        # were rejected, or revoked, while preventing concurrent duplicates.
         Index(
             "uq_pending_invitation",
             "workspace_id",
@@ -56,7 +40,6 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    # EDIT 1: Added organization_id column immediately after workspace_id
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -101,9 +84,6 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    # The plaintext token column was dropped by the ARCH-03 CONTRACT revision.
-    # It is not coming back: a read of this table used to yield every live
-    # invitation secret, each of which grants workspace membership (§A.2.2).
     token_hash: Mapped[str] = mapped_column(
         String(64),
         unique=True,
@@ -111,19 +91,13 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         index=True,
         doc=(
             "SHA-256 of the invitation secret, hex encoded, always 64 "
-            "characters. The plaintext exists in exactly two places: the link "
-            "in the recipient's mailbox, and the request body when they submit "
-            "it. It is generated in the service layer, used to build the email, "
-            "and discarded — it is never persisted and cannot be recovered from "
-            "this column."
+            "characters."
         ),
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
     )
-    
-    # Audit timestamps mapping the full lifecycle of the invitation
     accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -137,19 +111,10 @@ class WorkspaceInvitation(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    # ------------------------------------------------------------------
-    # Unidirectional Relationships
-    # ------------------------------------------------------------------
-    # Unidirectional relationships are intentionally utilized for the current roadmap stage.
-    # While bidirectional back_populates to User and Workspace are architecturally elegant,
-    # adding them requires modifying those models directly, which would violate our constraint
-    # of editing ONLY the requested file in a single step. Unidirectional mapping remains 100% 
-    # compatible, prevents model lookup errors, and is easily upgraded when those models are modified.
     workspace: Mapped["Workspace"] = relationship(
         "Workspace",
         foreign_keys=[workspace_id],
     )
-    # EDIT 2 (Part B): Added organization relationship immediately after workspace
     organization: Mapped["Organization | None"] = relationship(
         "Organization",
         foreign_keys=[organization_id],

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -59,18 +60,43 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 from app.models.organization import OrganizationRole
 from app.models.workspace import WorkspaceRole
 
-# Borrowed for exactly one phase. §D2.2: the Postgres type this backs,
-# invitation_status, already carries the five states this table needs, and
-# reusing it means Step 3's EXPAND creates no new enum type here. When
-# workspace_invitations.py is deleted at Step 5 CONTRACT, this class moves
-# into this file (or a shared enums module) and this import is updated —
-# tracked in this file's own exit criteria so it is not lost between steps.
-from app.models.workspace_invitation import InvitationStatus
-
 if TYPE_CHECKING:
     from app.models.organization import Organization
     from app.models.user import User
     from app.models.workspace import Workspace
+
+
+# ============================================================================
+# Enumerations
+# ============================================================================
+
+class InvitationStatus(str, PyEnum):
+    """
+    Lifecycle states of an invitation.
+
+    Backs the PostgreSQL type `invitation_status`, created by ARCH-01 and
+    shared with workspace_invitations until that table is dropped at Step 5B.
+
+    Relocated here from workspace_invitation.py per ARCH-04 §D2.2. It lived
+    there because the workspace invitation was the only invitation the product
+    had; it lives here now because organization_invitations is. The move
+    happens before the deletion rather than as part of it, so that 5B is a
+    pure removal with no import to untangle and this change can be verified on
+    its own.
+
+    Permitted transitions:
+
+        PENDING ──► ACCEPTED    (terminal)
+            │
+            ├────► REJECTED     (terminal)
+            ├────► REVOKED      (terminal)
+            └────► EXPIRED      (terminal, set by the Step 8 sweeper)
+    """
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    REVOKED = "REVOKED"
 
 
 # ============================================================================
@@ -260,15 +286,21 @@ class InvitationWorkspaceGrant(Base, UUIDMixin, TimestampMixin):
 
     invitation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("organization_invitations.id", ondelete="CASCADE"),
+        ForeignKey(
+            "organization_invitations.id",
+            ondelete="CASCADE",
+            name="fk_invitation_workspace_grants_invitation_id",
+        ),
         nullable=False,
         index=True,
+        doc="§B.2 — ON DELETE CASCADE from the invitation.",
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+        doc="§B.2 — ON DELETE CASCADE from the workspace.",
     )
     role: Mapped[WorkspaceRole] = mapped_column(
         PgEnum(
