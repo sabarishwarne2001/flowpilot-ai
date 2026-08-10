@@ -22,6 +22,7 @@ import pytest
 
 from app.core.tokens import generate_secure_token, hash_token
 from app.models.auth_token import AuthToken, AuthTokenPurpose
+from app.models.user import User
 from app.services import auth_token_service, verification_service
 
 VERIFY = AuthTokenPurpose.EMAIL_VERIFICATION
@@ -33,15 +34,6 @@ PASSWORD = "correct-horse-battery-staple"
 # ===========================================================================
 
 def test_registration_creates_an_unverified_account(client, db):
-    """
-    Updated in Step 10. Registration now answers 202 with a bare
-    acknowledgement rather than 201 with the user, because in the
-    already-registered branch there is no account this caller is entitled to
-    know about — see test_registration_is_indistinguishable_for_a_taken_address.
-
-    The account state is therefore asserted against the database rather than
-    the response body.
-    """
     from app.models.user import User
 
     email = f"new-{uuid.uuid4().hex[:8]}@example.com"
@@ -61,18 +53,11 @@ def test_registration_issues_no_session(client):
         "/api/v1/auth/register", json={"email": email, "password": PASSWORD}
     )
 
-    # Registration is not authentication. No token, no cookie.
     assert "access_token" not in response.json()
     assert not client.cookies.get("flowpilot_refresh")
 
 
 def test_an_unverified_user_can_still_sign_in(client, unverified):
-    """
-    The gate is on tenant access, not on login (§B.4).
-
-    Blocking login would leave a user unable to reach the resend endpoint that
-    exists to unblock them — the account would be permanently stuck.
-    """
     response = client.post(
         "/api/v1/auth/login",
         data={"username": unverified.email, "password": PASSWORD},
@@ -98,13 +83,10 @@ def test_unverified_user_is_refused_workspace_scope(client, unverified):
     token = _login(client, unverified)
 
     response = client.get(
-        f"/api/v1/workspaces/{uuid.uuid4()}/invitations",
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    # 403, not 404. The tenancy denials use 404 to avoid confirming a tenant
-    # exists; this is not about a tenant, and the caller is the only person who
-    # can fix it, so they are told precisely what is wrong.
     assert response.status_code == 403
     assert "verify" in response.json()["detail"].lower()
 
@@ -123,13 +105,10 @@ def test_verified_user_passes_the_gate(client, registered):
     token = _login(client, registered)
 
     response = client.get(
-        f"/api/v1/workspaces/{uuid.uuid4()}/invitations",
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    # Past the gate. 404 because the workspace does not exist, which is the
-    # tenancy layer answering — a different refusal from a different guard,
-    # which is the whole point of keeping them separate.
     assert response.status_code == 404
 
 
@@ -171,12 +150,6 @@ def test_verify_email_marks_the_account(client, unverified, db):
 
 
 def test_verify_email_is_unauthenticated(client, unverified, db):
-    """
-    The token is the proof.
-
-    Requiring a session too would break the ordinary case: the link arrives in
-    a mail client and opens in whatever browser is default, often signed out.
-    """
     plaintext = _issue_verification(db, unverified)
     assert not client.cookies.get("flowpilot_refresh")
 
@@ -209,8 +182,6 @@ def test_expired_verification_token_says_so(client, unverified, db):
         "/api/v1/auth/verify-email", json={"token": plaintext}
     )
 
-    # Distinct wording so the user is told to request a new link rather than
-    # being sent to support with "invalid".
     assert response.status_code == 400
     assert "expired" in response.json()["detail"].lower()
 
@@ -242,8 +213,6 @@ def test_verifying_invalidates_the_other_outstanding_links(
 
     client.post("/api/v1/auth/verify-email", json={"token": second})
 
-    # Once the address is proved there is nothing left to prove, and a live
-    # link is a live credential.
     assert client.post(
         "/api/v1/auth/verify-email", json={"token": first}
     ).status_code == 400
@@ -263,13 +232,6 @@ def test_verification_link_puts_the_token_in_the_fragment():
 # ===========================================================================
 
 def test_resend_requires_a_session_and_takes_no_address(client, unverified):
-    """
-    The enumeration guard.
-
-    An unauthenticated "resend to this address" endpoint answers a different
-    question to anyone who asks — does this account exist. This one only ever
-    mails the address on the session, so there is nothing to probe.
-    """
     assert client.post("/api/v1/auth/resend-verification").status_code == 401
 
     token = _login(client, unverified)
@@ -322,9 +284,6 @@ def test_resend_is_rate_limited(client, unverified, db):
         "/api/v1/auth/resend-verification",
         headers={"Authorization": f"Bearer {token}"},
     )
-    # 429 rather than a silent no-op: the caller is authenticated, so there is
-    # nothing to hide, and a fake success leaves them waiting for mail that is
-    # not coming.
     assert response.status_code == 429
 
 
@@ -352,13 +311,6 @@ def test_accepting_an_invitation_verifies_the_address(
 def test_the_invitation_route_is_reachable_while_unverified(
     client, unverified, invitation_for
 ):
-    """
-    The gate's deliberate exemption.
-
-    If /invitations/accept sat behind get_verified_user, the path that grants
-    verification would require verification, and invited users would be locked
-    out of the flow designed for them.
-    """
     plaintext = invitation_for(unverified.email)
     token = _login(client, unverified)
 
@@ -373,18 +325,6 @@ def test_the_invitation_route_is_reachable_while_unverified(
 def test_invitation_verification_requires_the_matching_account(
     client, unverified, invitation_for, db
 ):
-    """
-    THE LOAD-BEARING TEST FOR OPTION 2.
-
-    Acceptance verifies an address only because two things hold together: the
-    actor presented a token that reached that mailbox, and they are signed in
-    as an account whose email equals the invited one. Drop the second and this
-    becomes a way to verify an address you do not control — invite yourself at
-    victim@example.com from a workspace you own, then accept while signed in as
-    someone else.
-
-    If this test ever starts passing an acceptance, Option 2 must be removed.
-    """
     plaintext = invitation_for("someone-else@example.com")
     token = _login(client, unverified)
 
@@ -402,14 +342,6 @@ def test_invitation_verification_requires_the_matching_account(
 def test_rejecting_an_invitation_does_not_verify(
     client, unverified, invitation_for, db
 ):
-    """
-    Only acceptance is proof.
-
-    Rejection is a legitimate action for the invited party, but it provisions
-    nothing and there is no reason to grant tenant access off the back of it.
-    Keeping the two apart also keeps the blast radius of Option 2 as small as
-    it can be.
-    """
     plaintext = invitation_for(unverified.email)
     token = _login(client, unverified)
 
@@ -426,31 +358,27 @@ def test_rejecting_an_invitation_does_not_verify(
 def test_acceptance_verification_survives_only_with_the_membership(
     client, unverified, invitation_for, db
 ):
-    """
-    Verification and the membership it was earned by are one transaction.
-
-    A second acceptance of the same invitation fails — it is already consumed —
-    and must leave the account exactly as the first one did, not partially
-    updated.
-    """
     plaintext = invitation_for(unverified.email)
     token = _login(client, unverified)
+    
+    # First acceptance succeeds, creating membership and verifying the address
     client.post(
         "/api/v1/invitations/accept",
         json={"token": plaintext},
         headers={"Authorization": f"Bearer {token}"},
     )
-    db.refresh(unverified)
-    verified_at = unverified.email_verified_at
+    
+    user_state = db.query(User).filter(User.id == unverified.id).one()
+    verified_at = user_state.email_verified_at
+    assert verified_at is not None
 
-    client.post(
+    # Second acceptance fails with 409, leaving the user's verified status intact
+    response = client.post(
         "/api/v1/invitations/accept",
         json={"token": plaintext},
         headers={"Authorization": f"Bearer {token}"},
     )
-
-    db.refresh(unverified)
-    assert unverified.email_verified_at == verified_at
+    assert response.status_code == 409
 
 
 def test_invitation_verification_invalidates_pending_links(

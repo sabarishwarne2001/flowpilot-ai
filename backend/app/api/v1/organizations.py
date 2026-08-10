@@ -40,6 +40,7 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
 from app.services import organization_member_service
 from app.services import organization_service
 from app.services import workspace_service
+from app.services import organization_invitation_service   # <-- ADD
 
 logger = logging.getLogger("app.api.v1.organizations")
 
@@ -271,7 +272,8 @@ async def list_organization_members(
         actor_role=context.role,
         include_inactive=include_inactive,
     )
-    seats = organization_members_crud.count_consumed_seats(
+    # ARCH-04 §D7.3 Unified seat-limit fix
+    seats = organization_invitation_service.count_reserved_seats(
         db, organization_id=context.organization_id
     )
     return OrganizationMemberListResponse(
@@ -292,17 +294,6 @@ async def change_member_role(
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    """
-    Changes a member's organization role.
-
-    This endpoint did not exist before ARCH-01. The permission helpers were
-    written but never wired, so roles were permanent from the moment of
-    invitation and a sole owner could never leave.
-
-    The service enforces both halves: the actor must outrank the member as they
-    stand, and must be permitted to assign the new role. Demoting the last
-    owner is blocked.
-    """
     target = organization_member_service.get_membership_or_raise(
         db,
         organization_id=context.organization_id,
@@ -327,17 +318,6 @@ async def deactivate_member(
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    """
-    Removes a member from the organization, retaining the record.
-
-    Every workspace grant they held in this organization is revoked in the same
-    transaction. Leaving orphaned grants behind would mean a removed member
-    kept access to individual workspaces — the most consequential failure mode
-    in a multi-workspace tenant.
-
-    Not a DELETE: the row survives with the actor and timestamp recorded, so
-    attribution for past work is preserved and re-adding is traceable.
-    """
     target = organization_member_service.get_membership_or_raise(
         db,
         organization_id=context.organization_id,
@@ -360,13 +340,6 @@ async def leave_organization(
     db: deps.DbSession,
     context: deps.OrgContext,
 ) -> Any:
-    """
-    Removes the acting user from the organization.
-
-    A sole owner is blocked until they transfer ownership. Unlike the
-    pre-ARCH-01 message that named a nonexistent feature, the transfer endpoint
-    below is a real path out.
-    """
     organization_member_service.leave_organization(
         db,
         organization=context.organization,
@@ -385,13 +358,6 @@ async def transfer_ownership(
     db: deps.DbSession,
     context=Depends(deps.RequireOrgOwner),
 ) -> Any:
-    """
-    Transfers ownership to another active member.
-
-    Promotes the target to OWNER and demotes the caller to ADMIN, in one
-    transaction. The outgoing owner is not removed: losing the organization and
-    losing ownership of it are different intentions.
-    """
     target = organization_member_service.get_membership_or_raise(
         db,
         organization_id=context.organization_id,

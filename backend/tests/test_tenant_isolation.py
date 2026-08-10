@@ -11,7 +11,7 @@ For a DENIED persona, the exact status code. For a PERMITTED persona, only
 that authorization did not reject the request — a 409 from a business rule is
 a pass, because that request cleared the boundary, which is what is under
 test. Asserting business outcomes here would make the gate break on every
-unrelated rule change and, worse, train people to ignore its failures.
+unrelated role change and, worse, train people to ignore its failures.
 
 THE PROPERTY THAT MATTERS MOST
 
@@ -230,15 +230,33 @@ def test_workspace_update_requires_admin(
         assert_denied(response, expected, label)
 
 
-@pytest.mark.parametrize("persona_name,expected", WRITE_MATRIX)
+# ARCH-04 Organization-scoped invitation writes matrix.
+# Only Organization OWNER and ADMIN can issue organization invitations.
+# ws_admin has organization role MEMBER, so they are denied (403).
+INVITATION_WRITE_MATRIX = [
+    ("owner", None),
+    ("org_admin", None),
+    ("ws_admin", 403),
+    ("contributor", 403),
+    ("viewer", 403),
+    ("other_org_member", 404),
+    ("non_member", 404),
+]
+
+
+@pytest.mark.parametrize("persona_name,expected", INVITATION_WRITE_MATRIX)
 def test_invitation_creation_requires_admin(
     client: TestClient, tenant: Fixture, persona_name: str, expected: int | None
 ) -> None:
     persona: Persona = getattr(tenant, persona_name)
     response = client.post(
-        f"{API}/workspaces/{tenant.workspace.id}/invitations",
+        f"{API}/organizations/{tenant.organization.id}/invitations",
         headers=persona.headers,
-        json={"email": f"invitee-{uuid.uuid4().hex[:6]}@example.com", "role": "VIEWER"},
+        json={
+            "email": f"invitee-{uuid.uuid4().hex[:6]}@example.com",
+            "organization_role": "MEMBER",
+            "grants": [{"workspace_id": str(tenant.workspace.id), "role": "VIEWER"}],
+        },
     )
 
     label = f"{persona_name} POST invitation"

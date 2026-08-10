@@ -31,7 +31,6 @@ from app.api.v1 import (
     dashboard,
     document_settings,
     email_settings,
-    invitations,
     me,
     notifications,
     organizations,
@@ -41,6 +40,8 @@ from app.api.v1 import (
 )
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
+# Swap the legacy router for the new organization-scoped router (§D7.2 / §3.6)
+from app.api.v1.organization_invitations import router as organization_invitation_router
 
 api_router = APIRouter()
 
@@ -56,7 +57,8 @@ WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 api_router.include_router(organizations.router)
 api_router.include_router(me.router)
 api_router.include_router(workspaces.router)
-api_router.include_router(invitations.router)
+# Mount the new organization invitation router with no prefix (handles /invitations/*)
+api_router.include_router(organization_invitation_router)
 
 
 # ============================================================================

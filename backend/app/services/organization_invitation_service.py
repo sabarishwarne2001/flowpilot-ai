@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
+import sqlalchemy as sa
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -115,6 +116,7 @@ class AcceptedInvitation:
     invitation_id: uuid.UUID
     organization_id: uuid.UUID
     organization_name: str
+    organization_slug: str
     inviter_email: str
     invited_email: str
     organization_role: OrganizationRole
@@ -126,6 +128,7 @@ class AcceptedInvitation:
 class ResolvedInvitationParties:
     """Addresses and names for a notice, resolved before the carrier is built."""
     organization_name: str
+    organization_slug: str
     inviter_email: str
     invited_email: str
     invitation_id: uuid.UUID
@@ -464,6 +467,28 @@ def preview_invitation(db: Session, *, token: str) -> dict:
     }
 
 
+def describe_seat_blocked(db: Session, *, token: str) -> dict:
+    """
+    Gathers what the seat-blocked notice needs, without mutating anything.
+
+    Safe to call after _assert_seat_available raises during acceptance: the
+    seat check runs BEFORE the claim (§D6.2), so the invitation is guaranteed
+    still PENDING and untouched at this point. This is a plain read, the same
+    shape as preview_invitation, not a second attempt at the transaction.
+    """
+    invitation = _load_by_token(db, token=token)
+    organization = invitation.organization
+    inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
+    return {
+        "invitation_id": invitation.id,
+        "invited_email": invitation.email,
+        "organization_name": organization.name,
+        "organization_slug": organization.slug,
+        "seat_limit": organization.seat_limit,
+        "inviter_email": inviter.email if inviter else "",
+    }
+
+
 # ===========================================================================
 # Acceptance
 # ===========================================================================
@@ -579,6 +604,19 @@ def accept_invitation(
                 role_display=grant.role.value,
             ))
 
+        # ARCH-03 §B.4 Option 2 side-effects: verify address and invalidate other pending verification links
+        if actor.email_verified_at is None:
+            actor.email_verified_at = now
+            db.add(actor)
+            
+            from app.models.auth_token import AuthToken, AuthTokenPurpose
+            db.execute(
+                sa.delete(AuthToken).where(
+                    AuthToken.user_id == actor.id,
+                    AuthToken.purpose == AuthTokenPurpose.EMAIL_VERIFICATION
+                )
+            )
+
         commit_and_refresh(db, invitation)
 
         logger.info(
@@ -592,6 +630,7 @@ def accept_invitation(
             invitation_id=invitation.id,
             organization_id=organization.id,
             organization_name=organization.name,
+            organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
             invited_email=invitation.email,
             organization_role=invitation.organization_role,
@@ -644,6 +683,7 @@ def reject_invitation(
         )
         return ResolvedInvitationParties(
             organization_name=organization.name,
+            organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
             invited_email=invitation.email,
             invitation_id=invitation.id,
@@ -704,6 +744,7 @@ def revoke_invitation(
         )
         return ResolvedInvitationParties(
             organization_name=organization.name,
+            organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
             invited_email=invitation.email,
             invitation_id=invitation.id,
@@ -804,6 +845,18 @@ def resend_invitation(
             db, logger, "Failed to resend invitation %s: %s",
             invitation.id, str(exc), exc=exc,
         )
+
+
+def list_invitations(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    statuses: list[InvitationStatus] | None = None,
+) -> list[OrganizationInvitation]:
+    """Thin pass-through — list views need no business rule beyond the query itself."""
+    return invitation_crud.list_invitations_for_organization(
+        db, organization_id=organization_id, statuses=statuses,
+    )
 
 
 # ===========================================================================

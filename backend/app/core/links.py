@@ -73,3 +73,17 @@ def build_legacy_invitation_accept_link(
         f"{_frontend_base(frontend_url)}"
         f"{INVITATION_ACCEPT_PATH}?token={quote(token, safe='')}"
     )
+
+
+def build_organization_members_link(
+    org_slug: str, *, frontend_url: str | None = None
+) -> str:
+    """/o/{org_slug}/members — confirmed at ARCH-04 Step 1 close."""
+    return f"{_frontend_base(frontend_url)}/o/{org_slug}/members"
+
+
+def build_organization_invitations_link(
+    org_slug: str, *, frontend_url: str | None = None
+) -> str:
+    """/o/{org_slug}/invitations — confirmed at ARCH-04 Step 1 close."""
+    return f"{_frontend_base(frontend_url)}/o/{org_slug}/invitations"

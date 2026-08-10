@@ -394,11 +394,6 @@ def test_R6_a_token_without_a_type_claim_is_rejected():
 def test_R6_a_token_of_another_type_is_rejected():
     """
     A validly signed JWT of some other kind must not authenticate.
-
-    Nothing issues a non-access JWT today. The check exists so that the first
-    thing which does — a websocket ticket, a signed download URL, an SSO state
-    parameter — cannot be replayed against get_current_user on nothing more
-    than a valid signature.
     """
     other = jwt.encode(
         {**_claims(), "type": "download"},
@@ -411,9 +406,6 @@ def test_R6_a_token_of_another_type_is_rejected():
 def test_R6_a_refresh_token_is_not_a_jwt_at_all(db, user):
     """
     The structural reason R6 is closed rather than merely guarded.
-
-    Refresh tokens are opaque 256-bit secrets stored hashed in `sessions`.
-    There is no signature to verify and nothing for jwt.decode to accept.
     """
     issued = session_service.create_session(db, user=user)
     db.flush()
@@ -546,13 +538,11 @@ def test_R8_the_sweep_indexes_exist(engine):
 
 def test_R9_verified_users_reach_the_tenancy_layer(client, registered):
     """
-    Past the gate. The 404 is the tenancy layer answering about a workspace
-    that does not exist — a different refusal from a different guard, which is
-    the whole point of keeping them separate.
+    Past the gate.
     """
     token = _login(client, registered)
     response = client.get(
-        f"/api/v1/workspaces/{uuid.uuid4()}/invitations",
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",  # <-- Swapped workspaces to organizations
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
@@ -561,7 +551,7 @@ def test_R9_verified_users_reach_the_tenancy_layer(client, registered):
 def test_R9_unverified_users_are_stopped_before_tenancy(client, unverified):
     token = _login(client, unverified)
     response = client.get(
-        f"/api/v1/workspaces/{uuid.uuid4()}/invitations",
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",  # <-- Swapped workspaces to organizations
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -573,9 +563,15 @@ def test_R9_the_gate_reads_current_state(client, unverified, db):
     back in before access changed.
     """
     token = _login(client, unverified)
+    assert client.get(
+        f"/api/v1/organizations/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {token}"},
+    ).status_code == 403
+
     unverified.email_verified_at = datetime.now(UTC)
     db.commit()
 
+    # Same token, no re-login.
     assert client.get(
         f"/api/v1/organizations/{uuid.uuid4()}",
         headers={"Authorization": f"Bearer {token}"},
@@ -591,8 +587,6 @@ def test_registration_is_indistinguishable_for_a_taken_address(
 ):
     """
     The oracle that sat edge-to-edge with /auth/forgot-password until Step 10.
-
-    Same status, same body, whether or not the address is taken.
     """
     taken = client.post(
         "/api/v1/auth/register",
@@ -637,8 +631,6 @@ def test_registration_response_carries_no_account_identifier(client):
     )
 
     body = response.json()
-    # A field present only when the address was free would be the same oracle
-    # in a different shape.
     assert set(body) == {"detail"}
 
 
@@ -682,7 +674,6 @@ class _LogBuffer(logging.Handler):
 
 @contextmanager
 def _captured_logs():
-    """Attaches a handler to the root logger at DEBUG for the block."""
     buffer = _LogBuffer()
     root = logging.getLogger()
     previous_level = root.level

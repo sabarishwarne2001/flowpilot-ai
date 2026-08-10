@@ -97,9 +97,6 @@ def other_user(db) -> User:
 
 # ===========================================================================
 # HTTP fixtures
-#
-# The app is imported lazily, inside each fixture, so the service-level tests
-# above still run without pulling in FastAPI and the rest of the stack.
 # ===========================================================================
 
 def _client_for(db):
@@ -169,11 +166,7 @@ def unverified(db) -> User:
 @pytest.fixture
 def invitation_for(db):
     """
-    Issues a real workspace invitation to an address and returns its plaintext.
-
-    A full organization and workspace are built because acceptance provisions
-    an organization seat and a workspace grant; a stubbed invitation row would
-    exercise the verification branch without the transaction it must share.
+    Issues a real organization invitation to an address and returns its plaintext.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -186,9 +179,10 @@ def invitation_for(db):
         OrganizationStatus,
     )
     from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
-    from app.models.workspace_invitation import (
+    from app.models.organization_invitation import (
         InvitationStatus,
-        WorkspaceInvitation,
+        OrganizationInvitation,
+        InvitationWorkspaceGrant,
     )
 
     def _make(email: str) -> str:
@@ -232,18 +226,25 @@ def invitation_for(db):
         db.flush()
 
         plaintext = generate_secure_token()
-        db.add(
-            WorkspaceInvitation(
-                workspace_id=workspace.id,
-                organization_id=org.id,
-                inviter_id=inviter.id,
-                email=email.strip().lower(),
-                role=WorkspaceRole.VIEWER,
-                status=InvitationStatus.PENDING,
-                token_hash=hash_token(plaintext),
-                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-            )
+        inv = OrganizationInvitation(
+            organization_id=org.id,
+            inviter_id=inviter.id,
+            email=email.strip().lower(),
+            organization_role=OrganizationRole.MEMBER,
+            status=InvitationStatus.PENDING,
+            token_hash=hash_token(plaintext),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            send_count=1,
         )
+        db.add(inv)
+        db.flush()
+
+        grant = InvitationWorkspaceGrant(
+            invitation_id=inv.id,
+            workspace_id=workspace.id,
+            role=WorkspaceRole.VIEWER,
+        )
+        db.add(grant)
         db.commit()
         return plaintext
 
