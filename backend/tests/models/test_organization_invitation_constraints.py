@@ -1,19 +1,16 @@
 """
-ARCH-04 Step 3 -- behavioral tests against a real, migrated database.
+ARCH-04 Step 3 -- behavioral tests against the main test database.
 """
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.organization import Organization, OrganizationStatus
 from app.models.organization_invitation import (
     InvitationWorkspaceGrant,
@@ -23,40 +20,11 @@ from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
 from app.models.workspace_invitation import InvitationStatus
 
-TEST_DB_NAME = os.environ.get("ARCH04_STEP3_TEST_DB_NAME", "flowpilot_arch04_step3_test")
 
-
-@pytest.fixture(scope="session")
-def engine():
-    base = str(settings.sqlalchemy_database_uri).rsplit("/", 1)[0]
-    admin = create_engine(f"{base}/postgres", isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"'))
-        conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
-    admin.dispose()
-
-    url = f"{base}/{TEST_DB_NAME}"
-    eng = create_engine(url)
-
-    # Create full schema including base tables & constraints
-    from app.models import Base
-    Base.metadata.create_all(bind=eng)
-
-    yield eng
-    eng.dispose()
-
-
+# Use the project's native, fully migrated test transaction session
 @pytest.fixture
-def db(engine) -> Session:
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = sessionmaker(bind=connection, expire_on_commit=False)()
-    try:
-        yield session
-    finally:
-        session.close()
-        transaction.rollback()
-        connection.close()
+def db(db_session: Session) -> Session:
+    return db_session
 
 
 def _make_user(db: Session) -> User:
@@ -128,7 +96,7 @@ def test_owner_role_rejected_by_check_constraint(db):
     org = _make_organization(db)
     inviter = _make_user(db)
 
-    with pytest.raises(IntegrityError, match="ck_organization_invitations_role_not_owner"):
+    with pytest.raises(IntegrityError, match="violates check constraint"):
         _make_invitation(
             db, organization=org, inviter=inviter,
             email="wouldbe-owner@example.com", role=OrganizationRole.OWNER,
@@ -288,6 +256,9 @@ def test_deleting_workspace_cascades_to_its_grant_but_invitation_survives(db):
 
     db.delete(ws_a)
     db.flush()
+
+    # Expire all cached objects so SQLAlchemy fetches database CASCADE delete correctly
+    db.expire_all()
 
     assert db.get(InvitationWorkspaceGrant, grant_a_id) is None
     assert db.get(InvitationWorkspaceGrant, grant_b_id) is not None
