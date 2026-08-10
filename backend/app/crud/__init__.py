@@ -80,21 +80,6 @@ from app.crud.workspace import (
     set_workspace_status,
 )
 from app.crud import organization_invitation
-from app.crud.workspace_invitation import (
-    get_invitation_by_id,
-    get_invitation_by_token_hash,
-    get_pending_invitation,
-    list_workspace_invitations,
-    list_pending_workspace_invitations,
-    invitation_exists,
-    create_invitation,
-    mark_invitation_accepted,
-    mark_invitation_rejected,
-    mark_invitation_revoked,
-    mark_invitation_expired,
-    is_invitation_expired,
-    delete_invitation,
-)
 from app.crud.workspace_members import (
     create_workspace_member,
     get_workspace_member,
@@ -229,21 +214,6 @@ __all__ = [
     
     # organization_invitation
     "organization_invitation",
-
-    # workspace_invitation
-    "get_invitation_by_id",
-    "get_invitation_by_token_hash",
-    "get_pending_invitation",
-    "list_workspace_invitations",
-    "list_pending_workspace_invitations",
-    "invitation_exists",
-    "create_invitation",
-    "mark_invitation_accepted",
-    "mark_invitation_rejected",
-    "mark_invitation_revoked",
-    "mark_invitation_expired",
-    "is_invitation_expired",
-    "delete_invitation",
     
     # workspace_members
     "create_workspace_member",

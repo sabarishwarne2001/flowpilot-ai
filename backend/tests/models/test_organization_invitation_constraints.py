@@ -15,13 +15,12 @@ from app.models.organization import Organization, OrganizationStatus
 from app.models.organization_invitation import (
     InvitationWorkspaceGrant,
     OrganizationInvitation,
+    InvitationStatus,
 )
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
-from app.models.workspace_invitation import InvitationStatus
 
 
-# Use the project's native, fully migrated test transaction session
 @pytest.fixture
 def db(db_session: Session) -> Session:
     return db_session
@@ -257,7 +256,6 @@ def test_deleting_workspace_cascades_to_its_grant_but_invitation_survives(db):
     db.delete(ws_a)
     db.flush()
 
-    # Expire all cached objects so SQLAlchemy fetches database CASCADE delete correctly
     db.expire_all()
 
     assert db.get(InvitationWorkspaceGrant, grant_a_id) is None
@@ -305,28 +303,3 @@ def test_send_count_defaults_to_one_at_the_orm_layer(db):
 
     assert invitation.status == InvitationStatus.PENDING
     assert invitation.send_count == 1
-
-
-# ---------------------------------------------------------------------------
-# workspace_invitations is untouched
-# ---------------------------------------------------------------------------
-
-def test_workspace_invitations_table_still_present_and_functional(db):
-    from app.models.workspace_invitation import WorkspaceInvitation
-
-    org = _make_organization(db)
-    inviter = _make_user(db)
-    ws = _make_workspace(db, org)
-
-    legacy = WorkspaceInvitation(
-        workspace_id=ws.id,
-        organization_id=org.id,
-        inviter_id=inviter.id,
-        email="legacy@example.com",
-        role=WorkspaceRole.VIEWER,
-        status=InvitationStatus.PENDING,
-        token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=72),
-    )
-    db.add(legacy)
-    db.flush()

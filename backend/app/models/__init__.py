@@ -16,7 +16,6 @@ from app.models.assistant import Conversation, ConversationMessage
 from app.models.email_settings import EmailSettings
 from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
-from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.organization_invitation import (
     OrganizationInvitation,
     InvitationWorkspaceGrant,
@@ -35,9 +34,6 @@ from app.models.organization import (
     MembershipStatus,
 )
 
-# All database schemas are imported here so that Base.metadata can 
-# detect them when compiling Alembic migration revisions.
-
 __all__ = [
     "Base",
     "User",
@@ -52,7 +48,6 @@ __all__ = [
     "EmailEncryption",
     "Workspace",
     "WorkspaceMember",
-    "WorkspaceInvitation",
     "OrganizationInvitation",
     "InvitationWorkspaceGrant",
     "AISettings",

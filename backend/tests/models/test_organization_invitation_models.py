@@ -1,11 +1,5 @@
 """
 ARCH-04 Step 2 -- declarative-layer tests, no database.
-
-Behavioral coverage (does the CHECK constraint actually fire, does the partial
-unique index actually reject a duplicate pending pair, does CASCADE actually
-cascade) is deferred to Step 3, where the tables first exist in a real
-database. This module tests what the metadata says, not what Postgres does
-with it.
 """
 
 from __future__ import annotations
@@ -20,9 +14,9 @@ from app.models.organization import OrganizationRole
 from app.models.organization_invitation import (
     InvitationWorkspaceGrant,
     OrganizationInvitation,
+    InvitationStatus,
 )
 from app.models.workspace import WorkspaceRole
-from app.models.workspace_invitation import InvitationStatus
 
 
 def test_configure_mappers_succeeds():
@@ -44,9 +38,7 @@ def test_organization_role_excludes_owner_via_check_constraint():
         for c in table.constraints
         if c.__class__.__name__ == "CheckConstraint"
     ]
-    assert any("OWNER" in text for text in check_texts), (
-        "Expected a CHECK constraint excluding OWNER (Â§B.4/Â§D2.1)."
-    )
+    assert any("OWNER" in text for text in check_texts)
 
 
 def test_organization_role_column_still_accepts_the_full_enum_at_the_type_level():
@@ -101,7 +93,7 @@ def test_grant_foreign_keys_cascade():
         fk = next(
             fk for fk in column.foreign_keys if fk.column.table.name == referred
         )
-        assert fk.ondelete == "CASCADE", f"{column_name} must cascade (Â§B.2)"
+        assert fk.ondelete == "CASCADE", f"{column_name} must cascade (§B.2)"
 
 
 def test_grant_uniqueness_constraint_present():
@@ -159,13 +151,15 @@ def test_seat_limit_has_a_positivity_check():
 # Boundary guards
 # ---------------------------------------------------------------------------
 
-def test_workspace_invitation_file_is_untouched_and_still_registered():
-    assert "workspace_invitations" in Base.metadata.tables
-    table = Base.metadata.tables["workspace_invitations"]
-    assert "token" not in {c.name for c in table.columns}
-
-
-def test_invitation_status_is_imported_not_duplicated():
-    import app.models.organization_invitation as new_module
-
-    assert new_module.InvitationStatus is InvitationStatus
+def test_invitation_status_has_exactly_one_definition():
+    """
+    §D2.2, final form. Step 5A moved InvitationStatus into
+    organization_invitation.py. With workspace_invitation.py gone, assert
+    exactly one definition exists in the canonical module.
+    """
+    definitions = [
+        str(path).replace("\\", "/")
+        for path in pathlib.Path("app").rglob("*.py")
+        if "class InvitationStatus" in path.read_text(encoding="utf-8")
+    ]
+    assert definitions == ["app/models/organization_invitation.py"], definitions

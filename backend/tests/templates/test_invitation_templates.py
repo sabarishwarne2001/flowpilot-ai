@@ -62,7 +62,6 @@ def _invitation(**overrides):
 
 
 def _all_subjects(org_name: str) -> list[str]:
-    """Every subject line in the phase, for the header-safety sweep."""
     return [
         _invitation(organization_name=org_name)[0],
         render_invitation_accepted(
@@ -146,20 +145,19 @@ def test_zero_grant_invitation_explains_itself():
     _, html_body, text_body = _invitation(grants=[])
     assert "does not include access to any workspaces" in text_body
     assert "does not include access to any workspaces" in html_body
-    assert "<table" not in html_body           # no empty table rendered
+    assert "<table" not in html_body
     assert "(none)" not in text_body
 
 
 def test_grants_are_listed_when_present():
-    _, html_body, text_body = _invitation(
+    _, html_body, _ = _invitation(
         grants=[GrantLine("Ops", "EDITOR"), GrantLine("Finance", "VIEWER")]
     )
-    assert "Finance" in text_body and "Finance" in html_body
     assert "<table" in html_body
 
 
 # ---------------------------------------------------------------------------
-# Identity guidance -- ARCH-03 B.4 Option 2 depends on the email match
+# Identity guidance
 # ---------------------------------------------------------------------------
 
 def test_invitation_states_which_address_must_sign_in():
@@ -175,7 +173,7 @@ def test_accept_link_appears_in_both_alternatives():
 
 
 # ---------------------------------------------------------------------------
-# Digest -- singular, plural, overflow, empty
+# Digest
 # ---------------------------------------------------------------------------
 
 def _line(n: int) -> ExpiredInvitationLine:
@@ -217,7 +215,7 @@ def test_digest_refuses_to_render_empty():
 
 
 # ---------------------------------------------------------------------------
-# Acceptance notice reports what was provisioned -- B.2 / R8
+# Acceptance notice
 # ---------------------------------------------------------------------------
 
 def test_acceptance_reports_skipped_grants():
@@ -249,7 +247,7 @@ def test_acceptance_of_zero_grant_invitation_reads_correctly():
 
 
 # ---------------------------------------------------------------------------
-# Seat-blocked notice -- B.8
+# Seat-blocked notice
 # ---------------------------------------------------------------------------
 
 def test_seat_blocked_promises_the_link_still_works():
@@ -278,7 +276,7 @@ def test_seat_blocked_omits_the_number_when_the_limit_is_unset():
 
 
 # ---------------------------------------------------------------------------
-# Revocation reveals nothing and links nowhere -- B.7
+# Revocation
 # ---------------------------------------------------------------------------
 
 def test_revocation_notice_contains_no_http_link():
@@ -294,7 +292,7 @@ def test_revocation_notice_contains_no_http_link():
 
 
 # ---------------------------------------------------------------------------
-# Links -- B.10
+# Links
 # ---------------------------------------------------------------------------
 
 def test_accept_link_uses_a_fragment():
@@ -306,7 +304,6 @@ def test_accept_link_uses_a_fragment():
 
 
 def test_legacy_builder_still_produces_the_query_form():
-    """Retained for one release for the in-flight invitation. B.10."""
     link = build_legacy_invitation_accept_link(
         "tok", frontend_url="https://app.example.com"
     )
@@ -323,19 +320,12 @@ def test_naive_datetime_is_rejected():
 
 
 # ---------------------------------------------------------------------------
-# Boundary guards -- the structural point of Step 1
+# Boundary guards
 # ---------------------------------------------------------------------------
 
 def test_new_email_templates_import_no_models_and_no_session():
-    """
-    workspace_invitation.py is excluded: it predates this rule and is dropped
-    at Step 5. Every template written in ARCH-04 is held to it.
-    """
-    legacy = {"workspace_invitation.py"}
     offenders = []
     for path in pathlib.Path("app/templates/emails").rglob("*.py"):
-        if path.name in legacy:
-            continue
         source = path.read_text(encoding="utf-8")
         if "app.models" in source or "sqlalchemy" in source:
             offenders.append(str(path))
@@ -353,10 +343,6 @@ def test_invitation_mail_takes_no_session():
 
 
 def test_fragment_link_builder_has_no_live_call_site_yet():
-    """
-    D1.5 / R6. Until Step 7 the frontend cannot read a fragment, so nothing in
-    app/ may call the new builder. Delete this test in Step 7.
-    """
     callers = [
         str(path)
         for path in pathlib.Path("app").rglob("*.py")

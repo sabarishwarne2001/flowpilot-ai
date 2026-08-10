@@ -93,11 +93,10 @@ def test_R1_invitation_plaintext_column_is_gone(engine):
     """
     The CONTRACT half of the same migration.
 
-    If this column ever reappears, something has re-added plaintext token
-    storage and §A.2.2 is open again.
+    Asserts that plaintext token storage is absent from organization_invitations.
     """
     columns = {
-        c["name"] for c in inspect(engine).get_columns("workspace_invitations")
+        c["name"] for c in inspect(engine).get_columns("organization_invitations")
     }
     assert "token" not in columns
     assert "token_hash" in columns
@@ -537,12 +536,9 @@ def test_R8_the_sweep_indexes_exist(engine):
 # ===========================================================================
 
 def test_R9_verified_users_reach_the_tenancy_layer(client, registered):
-    """
-    Past the gate.
-    """
     token = _login(client, registered)
     response = client.get(
-        f"/api/v1/organizations/{uuid.uuid4()}/invitations",  # <-- Swapped workspaces to organizations
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
@@ -551,7 +547,7 @@ def test_R9_verified_users_reach_the_tenancy_layer(client, registered):
 def test_R9_unverified_users_are_stopped_before_tenancy(client, unverified):
     token = _login(client, unverified)
     response = client.get(
-        f"/api/v1/organizations/{uuid.uuid4()}/invitations",  # <-- Swapped workspaces to organizations
+        f"/api/v1/organizations/{uuid.uuid4()}/invitations",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -585,9 +581,6 @@ def test_R9_the_gate_reads_current_state(client, unverified, db):
 def test_registration_is_indistinguishable_for_a_taken_address(
     client, registered
 ):
-    """
-    The oracle that sat edge-to-edge with /auth/forgot-password until Step 10.
-    """
     taken = client.post(
         "/api/v1/auth/register",
         json={"email": registered.email, "password": PASSWORD},
@@ -615,8 +608,6 @@ def test_registration_does_not_duplicate_an_existing_account(
     assert (
         db.query(User).filter(User.email == registered.email).count() == 1
     )
-    # And the existing password is untouched — otherwise the endpoint would be
-    # an unauthenticated password reset.
     db.refresh(registered)
     assert security.verify_password(PASSWORD, registered.hashed_password)
 
@@ -658,8 +649,6 @@ def test_login_does_not_distinguish_unknown_account_from_wrong_password(
 # ===========================================================================
 
 class _LogBuffer(logging.Handler):
-    """Collects formatted log messages for the R4 assertions."""
-
     def __init__(self) -> None:
         super().__init__(level=logging.DEBUG)
         self.records: list[str] = []
