@@ -45,7 +45,7 @@ def test_organization_role_excludes_owner_via_check_constraint():
         if c.__class__.__name__ == "CheckConstraint"
     ]
     assert any("OWNER" in text for text in check_texts), (
-        "Expected a CHECK constraint excluding OWNER (§B.4/§D2.1)."
+        "Expected a CHECK constraint excluding OWNER (Â§B.4/Â§D2.1)."
     )
 
 
@@ -101,7 +101,7 @@ def test_grant_foreign_keys_cascade():
         fk = next(
             fk for fk in column.foreign_keys if fk.column.table.name == referred
         )
-        assert fk.ondelete == "CASCADE", f"{column_name} must cascade (§B.2)"
+        assert fk.ondelete == "CASCADE", f"{column_name} must cascade (Â§B.2)"
 
 
 def test_grant_uniqueness_constraint_present():
@@ -158,23 +158,6 @@ def test_seat_limit_has_a_positivity_check():
 # ---------------------------------------------------------------------------
 # Boundary guards
 # ---------------------------------------------------------------------------
-
-def test_no_crud_service_schema_or_router_imports_the_new_models_yet():
-    offending: list[str] = []
-    scan_roots = ["app/crud", "app/services", "app/schemas", "app/api"]
-    needles = ["OrganizationInvitation", "InvitationWorkspaceGrant"]
-
-    for root in scan_roots:
-        root_path = pathlib.Path(root)
-        if not root_path.exists():
-            continue
-        for path in root_path.rglob("*.py"):
-            source = path.read_text(encoding="utf-8")
-            if any(needle in source for needle in needles):
-                offending.append(str(path))
-
-    assert not offending, f"New models referenced outside app/models/: {offending}"
-
 
 def test_workspace_invitation_file_is_untouched_and_still_registered():
     assert "workspace_invitations" in Base.metadata.tables

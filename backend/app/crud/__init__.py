@@ -79,6 +79,7 @@ from app.crud.workspace import (
     clear_workspace_logo,
     set_workspace_status,
 )
+from app.crud import organization_invitation
 from app.crud.workspace_invitation import (
     get_invitation_by_id,
     get_invitation_by_token_hash,
@@ -226,6 +227,9 @@ __all__ = [
     "clear_workspace_logo",
     "set_workspace_status",
     
+    # organization_invitation
+    "organization_invitation",
+
     # workspace_invitation
     "get_invitation_by_id",
     "get_invitation_by_token_hash",

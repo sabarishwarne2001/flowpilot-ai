@@ -48,6 +48,9 @@ from app.core.exceptions import (
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
     InvitationEmailMismatchError,
+    SeatLimitExceededError,
+    InvitationGrantError,
+    InvitationResendTooSoonError,
 )
 
 logger = logging.getLogger("app.core.exception_handlers")
@@ -110,6 +113,9 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     InvitationAlreadyMemberError: (409, "INVITATION_ALREADY_MEMBER"),
     InvitationAlreadyExistsError: (409, "INVITATION_ALREADY_EXISTS"),
     InvalidInvitationTokenError: (400, "INVALID_INVITATION_TOKEN"),
+    SeatLimitExceededError: (409, "SEAT_LIMIT_EXCEEDED"),
+    InvitationGrantError: (400, "INVITATION_GRANT_INVALID"),
+    InvitationResendTooSoonError: (429, "INVITATION_RESEND_TOO_SOON"),
     InvitationError: (400, "INVITATION_ERROR"),
 
     # --- Root --------------------------------------------------------------

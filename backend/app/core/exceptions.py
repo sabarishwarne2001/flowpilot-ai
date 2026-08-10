@@ -181,6 +181,7 @@ class InvitationPermissionDeniedError(InvitationError):
     """Raised when the actor lacks sufficient privileges."""
     pass
 
+
 class InvitationEmailMismatchError(InvitationError):
     """
     Raised when the authenticated actor's email does not match the invited
@@ -192,6 +193,7 @@ class InvitationEmailMismatchError(InvitationError):
     could accept it on the invitee's behalf.
     """
     pass
+
 
 class InvitationAlreadyExistsError(InvitationError):
     """Raised when a pending invitation already exists."""
@@ -210,4 +212,44 @@ class InvitationAlreadyMemberError(InvitationError):
 
 class InvalidInvitationTokenError(InvitationError):
     """Raised when an invitation token is invalid."""
+    pass
+
+
+class SeatLimitExceededError(InvitationError):
+    """
+    Raised when an organization has no seat available for a new member.
+
+    Checked twice (ARCH-04 §B.8): at invitation issuance, so a full
+    organization learns before an email goes out; and again at acceptance,
+    because between the two someone else may have taken the last seat.
+
+    The acceptance-side failure is deliberately non-destructive — the
+    invitation remains PENDING and its token unconsumed — so the message this
+    carries should read as recoverable rather than terminal. Maps to 409.
+    """
+    pass
+
+
+class InvitationGrantError(InvitationError):
+    """
+    Raised when a requested workspace grant is not attachable.
+
+    Covers a workspace belonging to a different organization, a workspace that
+    does not exist, one that is archived or suspended, and a grant list past
+    INVITATION_MAX_GRANTS.
+
+    The cross-organization case is a cross-tenant privilege escalation attempt
+    and the whole invitation is rejected rather than the offending grant being
+    filtered out — see ARCH-04 §D6.4. Maps to 400.
+    """
+    pass
+
+
+class InvitationResendTooSoonError(InvitationError):
+    """
+    Raised when a resend is requested inside the cooldown window.
+
+    A resend rotates the token (§D6.6), so an unbounded resend endpoint is
+    both a mail-volume amplifier and a token churn primitive. Maps to 429.
+    """
     pass

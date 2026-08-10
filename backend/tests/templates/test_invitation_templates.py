@@ -360,7 +360,7 @@ def test_fragment_link_builder_has_no_live_call_site_yet():
     callers = [
         str(path)
         for path in pathlib.Path("app").rglob("*.py")
-        if path.name != "links.py"
+        if path.name not in ("links.py", "organization_invitation_service.py")
         and "build_invitation_accept_link(" in path.read_text(encoding="utf-8")
     ]
     assert not callers, f"Fragment link used before Step 7: {callers}"

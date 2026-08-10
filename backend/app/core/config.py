@@ -42,16 +42,9 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
 
     # Cryptography and Token Configurations (enforce obfuscated SecretStr)
-    # No default. A signing key with a fallback value is a signing key that
-    # ships to production unset. Validated in validate_identity_configuration.
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
 
-    # Ten minutes, as of Step 7. Short because the access token is a bearer
-    # credential the client holds in memory and cannot be revoked individually;
-    # tolerable because /auth/refresh renews it silently from the HttpOnly
-    # cookie. The two changes belong in one commit — a short TTL without
-    # refresh is just a shorter session.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
 
     # ------------------------------------------------------------------
@@ -59,17 +52,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
 
-    #: How long after a rotation the superseded token is still tolerated.
-    #: Two browser tabs refreshing within milliseconds of each other both
-    #: present the same token; without this window the second one looks
-    #: exactly like a stolen-token replay and signs the user out everywhere.
-    #: Ten seconds is long enough to cover a tab race and short enough that a
-    #: token captured off the wire is almost certainly already useless.
     SESSION_REUSE_GRACE_SECONDS: int = 10
 
-    #: Bound on how far rotate_session will walk a rotation chain when
-    #: resolving concurrent refreshes. A chain longer than this means the data
-    #: is wrong, and walking it forever would hang the request.
     SESSION_CHAIN_WALK_LIMIT: int = 16
 
     # ------------------------------------------------------------------
@@ -77,16 +61,38 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     EMAIL_VERIFICATION_TTL_HOURS: int = 24
 
-    #: Deliberately much shorter than verification. A reset link is a
-    #: password-equivalent credential sitting in a mailbox; a verification link
-    #: grants nothing on its own.
     PASSWORD_RESET_TTL_MINUTES: int = 60
 
-    #: Per-user issuance ceiling within the window below, applied per purpose.
-    #: Limits mailbox flooding and the offline guessing surface, without
-    #: locking a legitimate user out of a second attempt.
     IDENTITY_TOKEN_MAX_PER_WINDOW: int = 5
     IDENTITY_TOKEN_WINDOW_MINUTES: int = 60
+
+    # ------------------------------------------------------------------
+    # ARCH-04 invitation lifecycle (Step 6 §3.3)
+    # ------------------------------------------------------------------
+    INVITATION_TTL_HOURS: int = 72
+    """
+    Invitation lifetime. Long enough to survive a weekend, short enough that
+    a leaked link has a bounded window.
+    """
+
+    INVITATION_RESEND_COOLDOWN_MINUTES: int = 5
+    """
+    Minimum interval between sends for one invitation. A resend rotates the
+    token (§D6.6), so this bounds both mail volume and token churn.
+    """
+
+    INVITATION_MAX_GRANTS: int = 50
+    """
+    Maximum workspace grants on a single invitation. Not a business rule — a
+    bound. Without it one request can insert an unbounded number of child
+    rows, and the acceptance transaction's cost becomes caller-controlled.
+    """
+
+    INVITATION_RETENTION_DAYS: int = 180
+    """
+    How long terminal invitations are retained before the Step 8 sweeper
+    purges them.
+    """
 
     # File Ingestion & Storage Configurations
     UPLOAD_DIR: str = "uploads"
@@ -124,11 +130,6 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Identity email — platform SMTP relay (ARCH-03 §B.1)
     # ------------------------------------------------------------------
-    # Replaces the former SMTP_* block, which existed only as the fallback
-    # branch of resolve_smtp_config and was never a deliberate platform
-    # identity. Workspace SMTP lives in the email_settings table and sends on
-    # behalf of a tenant; these credentials send on behalf of FlowPilot, to
-    # people who may have no workspace at all.
     PLATFORM_SMTP_HOST: str = ""
     PLATFORM_SMTP_PORT: int = 587
     PLATFORM_SMTP_USERNAME: str = ""
@@ -139,10 +140,6 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
     PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
 
-    # Origin of the user-facing application. Identity links are built against
-    # this, so a wrong value produces mail whose links point nowhere. Formerly
-    # read via getattr(settings, "FRONTEND_HOST", "http://localhost:3000") in
-    # notification_service, which silently sent every invitation to localhost.
     FRONTEND_URL: str = "http://localhost:3000"
 
     # SMTP Password Encryption
@@ -260,12 +257,6 @@ class Settings(BaseSettings):
     @field_validator("FRONTEND_URL")
     @classmethod
     def validate_frontend_url(cls, v: str) -> str:
-        """
-        Normalizes the application origin and rejects unusable values early.
-
-        The trailing slash is stripped here rather than at every call site, so
-        link builders can concatenate a path without producing a double slash.
-        """
         cleaned = v.strip().rstrip("/")
         if not cleaned.startswith(("http://", "https://")):
             raise ValueError(
@@ -275,15 +266,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_identity_configuration(self) -> "Settings":
-        """
-        Enforces the invariants ARCH-03 depends on, at import time.
-
-        These are checked here rather than at first use because the failure
-        modes are all silent: a compromised signing key produces tokens that
-        verify perfectly, an unset relay produces registrations that appear to
-        succeed, and a plaintext origin produces refresh cookies that are never
-        sent back. None of them raise on their own.
-        """
         secret = self.JWT_SECRET_KEY.get_secret_value()
 
         if secret in LEAKED_JWT_SECRET_KEYS:
@@ -318,15 +300,10 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        """
-        Parses the raw CORS_ORIGINS environment string into a list of origins.
-        Handles both standardized comma-separated strings and JSON-formatted arrays.
-        """
         raw_origins = self.CORS_ORIGINS.strip()
         if not raw_origins:
             return []
 
-        # Check for JSON array string syntax
         if raw_origins.startswith("[") and raw_origins.endswith("]"):
             try:
                 parsed = json.loads(raw_origins)
@@ -335,15 +312,10 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
 
-        # Parse standard comma-separated sequences
         return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
     @property
     def sqlalchemy_database_uri(self) -> str:
-        """
-        Dynamically construct the database connection URI string.
-        Resolves individual credential segments without exposing hardcoded URL connections.
-        """
         return (
             f"postgresql://"
             f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
@@ -351,7 +323,6 @@ class Settings(BaseSettings):
             f"{self.POSTGRES_DB}"
         )
 
-    # Configure Pydantic settings loading behaviors
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
