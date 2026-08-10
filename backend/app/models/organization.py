@@ -23,7 +23,14 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -114,6 +121,14 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "organizations"
 
+    # ARCH-04 §D2.5. Explicit __table_args__, name passed to naming convention
+    __table_args__ = (
+        CheckConstraint(
+            "seat_limit IS NULL OR seat_limit >= 1",
+            name="seat_limit_positive",
+        ),
+    )
+
     slug: Mapped[str] = mapped_column(
         String(63),
         nullable=False,
@@ -145,6 +160,16 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+    # --- ARCH-04 Step 2: seat ceiling ------------------------------------
+    seat_limit: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        doc=(
+            "Maximum active OrganizationMember rows this tenant may hold. "
+            "NULL means unlimited (§B.8) — the plan's assumption, confirmed "
+            "at Step 0."
+        ),
+    )
 
     # Relationships
     members: Mapped[list["OrganizationMember"]] = relationship(
@@ -163,12 +188,6 @@ class Organization(Base, UUIDMixin, TimestampMixin):
 class OrganizationMember(Base, UUIDMixin, TimestampMixin):
     """
     Maps a user to an organization with a commercial role.
-
-    This row is the billable seat. Workspace access is granted separately via
-    WorkspaceMember, except for OWNER and ADMIN, who receive workspace ADMIN
-    by derivation across every workspace in the organization. That elevation
-    is computed at request time and never persisted, so it cannot drift out of
-    sync when an organization role changes.
     """
     __tablename__ = "organization_members"
     __table_args__ = (
@@ -219,12 +238,7 @@ class OrganizationMember(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        doc=(
-            "Actor who deactivated this membership. SET NULL rather than "
-            "CASCADE: if the administrator is later deleted, the removal "
-            "record must survive with the actor blanked. Losing the "
-            "attribution is preferable to losing the record."
-        ),
+        doc="Actor who deactivated this membership.",
     )
 
     # Relationships

@@ -21,9 +21,10 @@ Deliberately not part of NotificationService (Step 1 D1.3):
     BackgroundTask and its validity depends on dependency-teardown ordering.
 
 Every function takes primitives, not ORM objects. Step 2 is what creates
-OrganizationInvitation; this module is written and tested before it exists, and
-keeping it that way means Step 6's service stays the only place that knows the
-model -- which is where the transaction and the seat check live anyway.
+the organization invitation database models; this module is written and tested
+before it exists, and keeping it that way means Step 6's service stays the only
+place that knows the model -- which is where the transaction and the seat check
+live anyway.
 
 Every function returns bool and raises nothing. Both reasons are load-bearing
 for later steps:
@@ -82,10 +83,6 @@ def _send(
 ) -> bool:
     """
     Renders and delivers one message, converting every failure into False.
-
-    Rendering is inside the guard as well as delivery. format_timestamp raises
-    on a naive datetime by design, and that is a programming error tests should
-    catch -- but it must not be able to fail an invitation already persisted.
     """
     try:
         subject, html_body, text_body = render()
@@ -106,10 +103,6 @@ def _send(
             reply_to=reply_to,
         )
     except PlatformEmailNotConfigured as exc:
-        # A deployment fault, not a transient one. ERROR so it is loud, and
-        # False so the caller carries on: an invitation that exists with no
-        # mail sent is recoverable via resend; one that failed to be created
-        # is not.
         logger.error(
             "INVITATION_MAIL_UNCONFIGURED | event=%s | invitation=%s | %s",
             event,
@@ -159,13 +152,6 @@ def send_invitation(
     expires_at: datetime,
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
-    """
-    Delivers the invitation.
-
-    accept_link is built by the caller via
-    app.core.links.build_invitation_accept_link. This module does not construct
-    it, so the B.10 fragment shape has exactly one definition.
-    """
     return _send(
         event="INVITATION_ISSUED",
         recipient=invited_email,
@@ -191,12 +177,6 @@ def send_invitation_revoked(
     inviter_email: str,
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
-    """
-    Tells the invitee their link has stopped working (B.7).
-
-    No Reply-To. The inviter's address is already in the body as a mailto, and
-    this message may reach a mailbox that is not the intended recipient's.
-    """
     return _send(
         event="INVITATION_REVOKED",
         recipient=invited_email,
@@ -225,7 +205,6 @@ def send_invitation_accepted(
     members_url: str,
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
-    """Tells the inviter the invitation was accepted. Call after commit."""
     return _send(
         event="INVITATION_ACCEPTED",
         recipient=inviter_email,
@@ -250,7 +229,6 @@ def send_invitation_rejected(
     invitations_url: str,
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
-    """Tells the inviter the invitation was declined. Call after commit."""
     return _send(
         event="INVITATION_REJECTED",
         recipient=inviter_email,
@@ -273,14 +251,6 @@ def send_invitation_seat_blocked(
     members_url: str,
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
-    """
-    Tells the inviter someone could not accept for want of a seat (B.8).
-
-    Call after the acceptance attempt has been rolled back and the invitation
-    confirmed still PENDING. The copy promises the invitee's link still works,
-    so sending this before the rollback is confirmed would be a promise the
-    database has not yet agreed to.
-    """
     return _send(
         event="INVITATION_SEAT_BLOCKED",
         recipient=inviter_email,
@@ -301,12 +271,6 @@ def send_expiry_digest(
     lines: Sequence[ExpiredInvitationLine],
     invitations_url: str,
 ) -> bool:
-    """
-    Sends one inviter their summary of what lapsed in this sweep run (B.7).
-
-    Returns False without attempting delivery when there is nothing to report,
-    so the Step 8 sweeper can call this per inviter without filtering first.
-    """
     if not lines:
         return False
 

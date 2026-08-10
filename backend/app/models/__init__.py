@@ -17,6 +17,10 @@ from app.models.email_settings import EmailSettings
 from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.workspace_invitation import WorkspaceInvitation
+from app.models.organization_invitation import (
+    OrganizationInvitation,
+    InvitationWorkspaceGrant,
+)
 from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
 from app.models.settings_migration_archive import SettingsMigrationArchive
@@ -49,6 +53,8 @@ __all__ = [
     "Workspace",
     "WorkspaceMember",
     "WorkspaceInvitation",
+    "OrganizationInvitation",
+    "InvitationWorkspaceGrant",
     "AISettings",
     "DocumentSettings",
     "Organization",
