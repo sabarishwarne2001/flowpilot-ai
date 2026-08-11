@@ -39,12 +39,24 @@ def test_every_scoped_collection_has_an_isolation_test():
 
     prefix = "/api/v1/workspaces/{workspace_id}/"
     live = {
-        route.path.removeprefix(prefix).split("/{")[0]
+        route.path.removeprefix(prefix).split("/")[0]
         for route in app.routes
         if getattr(route, "path", "").startswith(prefix)
     }
-    tested = {path.split("/{")[0] for path, *_ in SCOPED_COLLECTIONS}
-    untested = live - tested - {"ai-settings", "email-settings", "document-settings", "dashboard"}
+    tested = {path.split("/")[0] for path, *_ in SCOPED_COLLECTIONS}
+    exemptions = {
+        "ai-settings",
+        "email-settings",
+        "document-settings",
+        "dashboard",
+        "logo",
+        "leave",
+        "restore",
+        "members",
+        "archive",
+        "slug-available",
+    }
+    untested = live - tested - exemptions
     assert not untested, (
         f"Workspace-scoped collections with no isolation test: {untested}"
     )

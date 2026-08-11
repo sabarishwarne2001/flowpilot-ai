@@ -90,6 +90,74 @@ class User(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # Profile (ARCH-05 §A.2.4, §B.4)
+    # ------------------------------------------------------------------
+    #
+    # Before this, `users` had no profile at all — no name, no timezone, no
+    # locale. UserSummary said so in as many words: "Mirrors the User model
+    # exactly: it has no display-name column, so none is declared here." The
+    # sidebar rendered `user?.email`, the member directory showed raw
+    # addresses, and ARCH-04's invitation templates passed
+    # `inviter_display=inviter.email` because there was nothing else to pass.
+    #
+    # `avatar_url` was considered and deliberately excluded (§B.4). Upload
+    # infrastructure already exists elsewhere in the product, so it is
+    # possible — but it brings image validation, storage lifecycle, and a
+    # moderation question that belong to their own change, not to a phase
+    # about ownership transfer and profile immutability.
+    #
+    # No columns were added, renamed, or retyped on this table by ARCH-05
+    # beyond these three. In particular `email` is untouched: A.2.5 found
+    # that email mutability was an absence rather than a decision, and §B.5
+    # keeps it that way deliberately — see EmailImmutableError at the
+    # PATCH /me/profile boundary (Step 5). Nothing below changes that.
+
+    display_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        doc=(
+            "User-chosen display name, shown in the member directory, audit "
+            "lines, and mail sent to or about this person (§B.6). "
+            "NULL rather than defaulted from the email local-part: a NULL "
+            "that a caller renders as the email address is honest, where a "
+            "derived default ('jane' from 'jane@example.com') is a guess "
+            "the product would then treat as a fact. Every read site is "
+            "expected to fall back to `email` when this is NULL, not to "
+            "invent a name."
+        ),
+    )
+
+    timezone: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="UTC",
+        doc=(
+            "IANA timezone identifier (e.g. 'America/New_York'), used to "
+            "localize timestamps shown to this user. NOT NULL — every "
+            "account has a timezone whether or not it was ever chosen, and "
+            "'UTC' is the honest default for one that was not. Format is "
+            "validated at the PATCH /me/profile boundary (Step 5), not "
+            "here; the column itself accepts any string that fits, matching "
+            "the rest of this model's division of labour between schema "
+            "and service."
+        ),
+    )
+
+    locale: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="en",
+        doc=(
+            "BCP 47 language tag (e.g. 'en', 'pt-BR'), reserved for future "
+            "localized output. Bounded at 20 rather than 100 like the two "
+            "columns above it: the longest realistic tag "
+            "(language-Script-REGION-variant) does not approach that "
+            "length, and a column this narrow cannot silently accept "
+            "something that was never a locale."
+        ),
+    )
+
     # Keep these relationships
     memberships: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember",

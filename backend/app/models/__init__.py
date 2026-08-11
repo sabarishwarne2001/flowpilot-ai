@@ -33,6 +33,10 @@ from app.models.organization import (
     OrganizationStatus,
     MembershipStatus,
 )
+from app.models.ownership_transfer import (
+    OwnershipTransfer,
+    OwnershipTransferStatus,
+)
 
 __all__ = [
     "Base",
@@ -62,4 +66,6 @@ __all__ = [
     "AuthTokenPurpose",
     "UserSession",
     "SessionRevokedReason",
+    "OwnershipTransfer",
+    "OwnershipTransferStatus",
 ]
