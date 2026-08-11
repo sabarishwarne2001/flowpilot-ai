@@ -34,6 +34,7 @@ from app.api.v1 import (
     me,
     notifications,
     organizations,
+    ownership_transfers,
     upload,
     work_items,
     workspaces,
@@ -59,6 +60,10 @@ api_router.include_router(me.router)
 api_router.include_router(workspaces.router)
 # Mount the new organization invitation router with no prefix (handles /invitations/*)
 api_router.include_router(organization_invitation_router)
+# ARCH-05 Step 7 — ownership transfer. Declares its own full paths
+# (/organizations/{id}/ownership-transfers/* and /me/ownership-transfers),
+# so it registers with no prefix like every other tenancy router above.
+api_router.include_router(ownership_transfers.router)
 
 
 # ============================================================================

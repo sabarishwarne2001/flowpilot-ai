@@ -12,9 +12,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
+from app.models.organization import OrganizationMember
 from app.models.ownership_transfer import OwnershipTransfer, OwnershipTransferStatus
 
 
@@ -89,6 +90,49 @@ def get_transfer_by_id(
         OwnershipTransfer.organization_id == organization_id,
     )
     return db.execute(stmt).scalar_one_or_none()
+
+
+def list_pending_transfers_for_user(
+    db: Session, *, user_id: uuid.UUID
+) -> list[OwnershipTransfer]:
+    """
+    Every PENDING transfer this user is a party to — as target OR as
+    initiator.
+
+    Both sides, deliberately, not just the target. The target needs to see
+    what is waiting on them; the initiator needs to see what they are
+    waiting on, because §B.8 has no sweeper and
+    `uq_pending_ownership_transfer_per_org` means their outstanding proposal
+    is the reason a second one is refused. A list that showed only incoming
+    proposals would leave an owner unable to find the very row blocking
+    them.
+
+    Does NOT filter expired rows out in SQL. A PENDING row past its
+    `expires_at` is still PENDING in the database until something lazily
+    resolves it (§B.8) — the caller applies the clock comparison, which
+    keeps this function honest about what the table actually contains and
+    keeps the expiry rule in one place rather than duplicated into every
+    query's WHERE clause.
+
+    Joins to the target membership rather than issuing a second query per
+    row: this feeds a list view, and the N+1 would be per-proposal.
+    """
+    stmt = (
+        select(OwnershipTransfer)
+        .join(
+            OrganizationMember,
+            OwnershipTransfer.target_membership_id == OrganizationMember.id,
+        )
+        .where(
+            OwnershipTransfer.status == OwnershipTransferStatus.PENDING,
+            or_(
+                OrganizationMember.user_id == user_id,
+                OwnershipTransfer.initiated_by_id == user_id,
+            ),
+        )
+        .order_by(OwnershipTransfer.created_at.desc())
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 def update_transfer_status(

@@ -33,14 +33,13 @@ from app.schemas.organization import (
     OrganizationMemberRoleUpdate,
     OrganizationResponse,
     OrganizationUpdate,
-    OwnershipTransferRequest,
     SlugAvailabilityResponse,
 )
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
 from app.services import organization_member_service
 from app.services import organization_service
 from app.services import workspace_service
-from app.services import organization_invitation_service   # <-- ADD
+from app.services import organization_invitation_service
 
 logger = logging.getLogger("app.api.v1.organizations")
 
@@ -348,24 +347,29 @@ async def leave_organization(
     return MessageResponse(message="You have left the organization.")
 
 
-@router.post(
-    "/organizations/{organization_id}/transfer-ownership",
-    response_model=OrganizationMemberResponse,
-    summary="Transfer Organization Ownership",
-)
-async def transfer_ownership(
-    payload: OwnershipTransferRequest,
-    db: deps.DbSession,
-    context=Depends(deps.RequireOrgOwner),
-) -> Any:
-    target = organization_member_service.get_membership_or_raise(
-        db,
-        organization_id=context.organization_id,
-        membership_id=payload.target_membership_id,
-    )
-    return organization_member_service.transfer_ownership(
-        db,
-        organization=context.organization,
-        current_owner_membership=context.membership,
-        target_membership=target,
-    )
+# ============================================================================
+# REMOVED: POST /organizations/{organization_id}/transfer-ownership
+#
+# ARCH-05 Step 7. The single-phase endpoint that used to live here handed a
+# tenant to another member on one authenticated request — no re-authentication
+# (§B.2), no verified-target requirement (A.2.3), and above all no consent
+# from the person taking on the organization's seat authority and its Phase F
+# billing liability (§B.1).
+#
+# It is DELETED, not deprecated and not aliased, on the same reasoning
+# router.py already records for the ARCH-02 flat routes: "an alias would keep
+# the unscoped handler reachable, and the unscoped handler is the
+# vulnerability." Leaving this route in place would have meant every
+# protection ARCH-05 Steps 3 through 7 built was bypassable by calling the
+# old path instead.
+#
+# Replaced by the two-phase flow in app/api/v1/ownership_transfers.py:
+#     POST /organizations/{organization_id}/ownership-transfers
+#     POST /organizations/{organization_id}/ownership-transfers/{id}/accept
+#     POST /organizations/{organization_id}/ownership-transfers/{id}/decline
+#     POST /organizations/{organization_id}/ownership-transfers/{id}/cancel
+#
+# organization_member_service.transfer_ownership itself is UNCHANGED and still
+# very much in use — accept_transfer calls it verbatim. Only the unmediated
+# route to it is gone.
+# ============================================================================

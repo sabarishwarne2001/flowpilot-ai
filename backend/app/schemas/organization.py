@@ -136,16 +136,22 @@ class OrganizationMemberRoleUpdate(BaseModel):
     role: OrganizationRole = Field(..., description="The new organization role.")
 
 
-class OwnershipTransferRequest(BaseModel):
-    """
-    Transfers ownership to another active member.
-
-    The outgoing owner is demoted to ADMIN rather than removed: losing the
-    organization and losing ownership of it are different intentions.
-    """
-    target_membership_id: UUID = Field(
-        ..., description="Membership that will become the new owner."
-    )
+# ============================================================================
+# REMOVED: OwnershipTransferRequest
+#
+# ARCH-05 Step 7. This was the request body of the single-phase
+# POST /organizations/{id}/transfer-ownership endpoint, deleted in the same
+# step (see the removal note in app/api/v1/organizations.py). It carried
+# target_membership_id and nothing else — no current_password, because the
+# endpoint it served asked for no re-authentication.
+#
+# Deleted rather than left exported. It had no remaining consumer, and a
+# publicly exported request schema whose only purpose was an endpoint that no
+# longer exists is a name someone will eventually reach for and wire back to
+# something. Its replacement is OwnershipTransferInitiateRequest in
+# app/schemas/ownership_transfer.py, which additionally requires
+# current_password (§B.2).
+# ============================================================================
 
 
 # ============================================================================

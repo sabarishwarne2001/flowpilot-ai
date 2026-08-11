@@ -61,7 +61,6 @@ from app.schemas.organization import (
     OrganizationCreate,
     OrganizationUpdate,
     OrganizationMemberRoleUpdate,
-    OwnershipTransferRequest,
     OrganizationResponse,
     OrganizationMemberResponse,
     OrganizationMemberListResponse,
@@ -71,6 +70,19 @@ from app.schemas.me import (
     MeUser,
     OrganizationMembershipSummary,
     MeContextResponse,
+)
+
+# ARCH-05 Step 5: profile schemas
+from app.schemas.user import (
+    UserProfileUpdate,
+    UserProfileResponse,
+)
+
+# ARCH-05 Step 7: ownership transfer schemas
+from app.schemas.ownership_transfer import (
+    OwnershipTransferInitiateRequest,
+    OwnershipTransferResponse,
+    PendingOwnershipTransferResponse,
 )
 
 # EDIT 2: Added Workspace schema imports
@@ -88,12 +100,6 @@ from app.schemas.workspace_member import (
     WorkspaceMemberRoleUpdate,
     WorkspaceMemberResponse,
     WorkspaceMemberListResponse,
-)
-
-# ARCH-05 Step 5: profile schemas
-from app.schemas.user import (
-    UserProfileUpdate,
-    UserProfileResponse,
 )
 
 # EDIT 4: Updated __all__ with the new schema names
@@ -139,7 +145,6 @@ __all__ = [
     "OrganizationCreate",
     "OrganizationUpdate",
     "OrganizationMemberRoleUpdate",
-    "OwnershipTransferRequest",
     "OrganizationResponse",
     "OrganizationMemberResponse",
     "OrganizationMemberListResponse",
@@ -148,6 +153,13 @@ __all__ = [
     "MeUser",
     "OrganizationMembershipSummary",
     "MeContextResponse",
+    # Profile (ARCH-05 Step 5)
+    "UserProfileUpdate",
+    "UserProfileResponse",
+    # Ownership transfer (ARCH-05 Step 7)
+    "OwnershipTransferInitiateRequest",
+    "OwnershipTransferResponse",
+    "PendingOwnershipTransferResponse",
     # Workspace
     "WorkspaceCreate",
     "WorkspaceUpdate",
@@ -159,7 +171,4 @@ __all__ = [
     "WorkspaceMemberRoleUpdate",
     "WorkspaceMemberResponse",
     "WorkspaceMemberListResponse",
-    # Profile (ARCH-05 Step 5)
-    "UserProfileUpdate",
-    "UserProfileResponse",
 ]
