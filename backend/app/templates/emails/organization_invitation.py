@@ -33,7 +33,8 @@ def render_organization_invitation(
     *,
     invited_email: str,
     organization_name: str,
-    inviter_display: str,
+    inviter_email: str,
+    inviter_display: str | None = None,
     organization_role_display: str,
     grants: Sequence[GrantLine],
     accept_link: str,
@@ -51,8 +52,15 @@ def render_organization_invitation(
             they cannot interpret unless the email warned them first.
         organization_name: Tenant-supplied. Escaped, and sanitised before it
             reaches the subject.
-        inviter_display: The inviter's address. Also used as Reply-To by the
-            caller (D1.2).
+        inviter_email: The inviter's address. Always what any mailto: href
+            points at, and what invitation_mail sets as Reply-To. §B.6.
+        inviter_display: The inviter's name for prose, defaulting to
+            inviter_email when omitted. ARCH-05 Step 8 split this from the
+            single parameter that used to serve both roles. Before ARCH-05
+            `users` had no name column, so the one value passed here was
+            always an address and the conflation was safe by accident; now
+            that display_name exists, a real name reaching an href would
+            produce `mailto:Jane Smith`. Never used in an href.
         organization_role_display: ADMIN, BILLING or MEMBER. OWNER is not
             invitable (B.4) and this template will never see it.
         grants: Workspace grants attached to the invitation. May be empty.
@@ -64,6 +72,7 @@ def render_organization_invitation(
     Returns:
         (subject, html_body, text_body)
     """
+    display = inviter_display if inviter_display is not None else inviter_email
     subject = single_line(f"You have been invited to join {organization_name}")
     expiry_str = format_timestamp(expires_at)
 
@@ -82,7 +91,7 @@ def render_organization_invitation(
 
     text_body = (
         f"Hello,\n\n"
-        f"{inviter_display} has invited you to join {organization_name} on "
+        f"{display} has invited you to join {organization_name} on "
         f"{brand_name}.\n\n"
         f"Your role in the organization will be "
         f"{organization_role_display}.\n\n"
@@ -113,7 +122,7 @@ def render_organization_invitation(
         )
 
     content_html = f"""<p>Hello,</p>
-            <p><strong>{esc(inviter_display)}</strong> has invited you to join
+            <p><strong>{esc(display)}</strong> has invited you to join
                <strong>{esc(organization_name)}</strong> on {esc(brand_name)}.</p>
             <p>Your role in the organization will be
                <strong>{esc(organization_role_display)}</strong>.</p>
@@ -130,15 +139,20 @@ def render_organization_invitation(
 
     footer_text = (
         f"This invitation was sent by {brand_name} on behalf of "
-        f"{esc(organization_name)}. If you were not expecting it you can ignore "
+        f"{organization_name}. If you were not expecting it you can ignore "
         f"it -- nothing happens until the link is used."
     )
 
     html_body = BASE_EMAIL_HTML_LAYOUT.format(
         title=esc(subject),
-        brand_name=brand_name,
+        # ARCH-05 Step 8 (§0.b, extended). BASE_EMAIL_HTML_LAYOUT interpolates
+        # brand_name into <span class="logo">{brand_name}</span> and footer_text
+        # into <p>{footer_text}</p> — both raw HTML contexts, neither escaped by
+        # the layout. content_html is the ONLY slot that legitimately carries
+        # markup; every other slot is escaped here.
+        brand_name=esc(brand_name),
         content_html=content_html,
-        footer_text=footer_text,
+        footer_text=esc(footer_text),
     )
 
     return subject, html_body, text_body

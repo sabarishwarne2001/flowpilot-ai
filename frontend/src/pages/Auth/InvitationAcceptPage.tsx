@@ -52,10 +52,10 @@ import { useAuthStore } from "@/store/useAuthStore";
  *
  *   1. The FRAGMENT is the primary source, matching the ARCH-03 §B.9 rule and
  *      `takeTokenFromFragment` in VerifyEmail.tsx.
- *   2. The QUERY read is retained for exactly one release, because invitations
- *      mailed before the ARCH-04 Step 7 cutover carry `?token=` links and
- *      their recipients did nothing wrong. `QUERY_FALLBACK_REMOVAL` in
- *      app/core/links.py is the deadline; ARCH-05 Step 9 deletes both halves.
+ *   2. The QUERY read is GONE as of ARCH-05 Step 9, along with its backend
+ *      counterpart. It existed for exactly one release so that invitations
+ *      mailed before the ARCH-04 Step 7 cutover kept working; at 72-hour
+ *      invitation TTLs that window closed long ago.
  *   3. The token NEVER travels in a query string that this page constructs.
  *      The previous `handleAuthRedirect` rebuilt `?token=…` and wrapped it in
  *      `?redirect=…`, which put a live credential into the login URL, into
@@ -152,8 +152,8 @@ const stripCredentialFromAddressBar = (): void => {
 };
 
 /**
- * Resolves the invitation token from, in order: the fragment, the legacy query
- * parameter, the sign-in stash.
+ * Resolves the invitation token from, in order: the fragment, then the
+ * sign-in stash.
  *
  * Idempotent by construction. Every URL-sourced token is written to the stash
  * before the URL is cleared, so a second call — React 18 StrictMode remounting
@@ -171,15 +171,18 @@ const takeInvitationToken = (): string | null => {
     }
   }
 
-  // ARCH-04 §B.10 fallback. Retained for one release, for invitations mailed
-  // before the Step 7 cutover. Deleted at ARCH-05 Step 9 together with
-  // build_legacy_invitation_accept_link and QUERY_FALLBACK_REMOVAL.
-  const fromQuery = new URLSearchParams(window.location.search).get("token");
-  if (fromQuery) {
-    stashToken(fromQuery);
-    stripCredentialFromAddressBar();
-    return fromQuery;
-  }
+  // The ?token= fallback that used to sit here was removed at ARCH-05
+  // Step 9, together with build_legacy_invitation_accept_link and
+  // QUERY_FALLBACK_REMOVAL in app/core/links.py. Its one-release window has
+  // elapsed: INVITATION_TTL_HOURS is 72, so no invitation mailed before the
+  // ARCH-04 Step 7 fragment cutover can still be pending. A genuinely
+  // ancient ?token= link now falls through to the stash (which will not
+  // have it) and lands on the "invalid or expired" page — the correct
+  // answer for a link that no longer corresponds to a live invitation.
+  //
+  // stripCredentialFromAddressBar() still clears BOTH the fragment and the
+  // query, so a stale link's token is scrubbed from the address bar even
+  // though it is no longer honoured.
 
   return readStashedToken();
 };

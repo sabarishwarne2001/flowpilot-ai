@@ -90,10 +90,10 @@ def render_invitation_seat_blocked(
     )
 
     html_body = BASE_EMAIL_HTML_LAYOUT.format(
-        title=subject,
-        brand_name=brand_name,
+        title=esc(subject),
+        brand_name=esc(brand_name),
         content_html=content_html,
-        footer_text=footer_text,
+        footer_text=esc(footer_text),
     )
 
     return subject, html_body, text_body

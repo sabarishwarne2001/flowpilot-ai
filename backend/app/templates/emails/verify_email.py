@@ -72,10 +72,10 @@ def render_verify_email(
     )
 
     html_body = BASE_EMAIL_HTML_LAYOUT.format(
-        title=subject,
-        brand_name=brand_name,
+        title=html.escape(subject),
+        brand_name=html.escape(brand_name),
         content_html=content_html,
-        footer_text=footer_text,
+        footer_text=html.escape(footer_text),
     )
 
     return subject, html_body, text_body

@@ -10,15 +10,17 @@ plaintext token in the product travelling somewhere it could be recorded --
 ARCH-03 B.9 identified it and deferred it here, because moving it needs a
 coordinated frontend change and ARCH-04 is the phase that has one.
 
-NOTHING IN THE LIVE PATH MAY CALL THIS UNTIL STEP 7. R6: changing the link
-before the frontend can read a fragment breaks live invitations, and the Step 0
-audit found one PENDING invitation issued with a query link. In Step 1 this
-module is exercised by the smoke script and the tests, and by nothing else.
+ARCH-05 STEP 9 CLOSED THE MIGRATION. build_legacy_invitation_accept_link and
+QUERY_FALLBACK_REMOVAL are both gone, together with the frontend's
+query-parameter read in InvitationAcceptPage.tsx. The deadline constant did
+its job: removing this was a grep, not a memory.
 
-build_legacy_invitation_accept_link exists for exactly one release, so the
-accept page's dual read (B.10) can be tested against the form the in-flight
-invitation actually carries. QUERY_FALLBACK_REMOVAL carries the deadline so
-that removing it is a grep rather than a memory.
+The one-release window it protected has elapsed. Invitations issued before
+the ARCH-04 Step 7 cutover carried `?token=` links and have long since
+expired -- INVITATION_TTL_HOURS is 72, so nothing issued under the old form
+can still be pending. Anyone holding a genuinely ancient link now gets the
+"invalid or expired" page, which is the correct answer for a link that no
+longer corresponds to a live invitation.
 """
 
 from __future__ import annotations
@@ -29,11 +31,6 @@ from app.core.config import settings
 
 #: Frontend route that consumes an invitation token.
 INVITATION_ACCEPT_PATH = "/invitations/accept"
-
-#: Phase in which build_legacy_invitation_accept_link and the frontend's
-#: query-parameter read are both deleted. ARCH-04 B.10.
-QUERY_FALLBACK_REMOVAL = "ARCH-05"
-
 
 def _frontend_base(frontend_url: str | None = None) -> str:
     return (frontend_url or settings.FRONTEND_URL).rstrip("/")
@@ -57,36 +54,37 @@ def build_invitation_accept_link(
     )
 
 
-def build_legacy_invitation_accept_link(
-    token: str,
-    *,
-    frontend_url: str | None = None,
-) -> str:
-    """
-    The pre-ARCH-04 query-parameter form. Do not call from new code.
-
-    Retained only so a test can assert the frontend dual-read (B.10) handles
-    the one in-flight invitation from the Step 0 audit. Removed in
-    QUERY_FALLBACK_REMOVAL.
-    """
-    return (
-        f"{_frontend_base(frontend_url)}"
-        f"{INVITATION_ACCEPT_PATH}?token={quote(token, safe='')}"
-    )
-
-
 def build_organization_members_link(
     org_slug: str, *, frontend_url: str | None = None
 ) -> str:
-    """/o/{org_slug}/members — confirmed at ARCH-04 Step 1 close."""
-    return f"{_frontend_base(frontend_url)}/o/{org_slug}/members"
+    """
+    /organizations/{org_slug}/members
+
+    ARCH-05 §0.c. This emitted /o/{org_slug}/members until Step 8. `/o/` is
+    not a route this application serves and never has been -- the frontend
+    router namespaces tenants under `organizations` (see
+    frontend/src/routes/tenantPaths.ts, organizationMembersPath), and
+    grepping frontend/src for "/o/" returns nothing. Every acceptance notice
+    ARCH-04 sent therefore pointed its recipient at a 404.
+
+    Kept as a builder rather than inlined: the members page is linked from
+    two different messages, and one shared definition is what made this a
+    one-line fix instead of a hunt.
+    """
+    return f"{_frontend_base(frontend_url)}/organizations/{org_slug}/members"
 
 
 def build_organization_invitations_link(
     org_slug: str, *, frontend_url: str | None = None
 ) -> str:
-    """/o/{org_slug}/invitations — confirmed at ARCH-04 Step 1 close."""
-    return f"{_frontend_base(frontend_url)}/o/{org_slug}/invitations"
+    """
+    /organizations/{org_slug}/invitations
+
+    Same §0.c correction as build_organization_members_link above -- this
+    emitted /o/{org_slug}/invitations, which is not a served route. Consumed
+    by the Step 8 expiry digest.
+    """
+    return f"{_frontend_base(frontend_url)}/organizations/{org_slug}/invitations"
 
 
 def build_ownership_transfer_link(
@@ -101,15 +99,10 @@ def build_ownership_transfer_link(
     in-app by session, not by a credential in the URL. There is nothing here
     to percent-encode or move to a fragment.
 
-    THE PATH PREFIX HERE IS `/organizations/`, NOT `/o/` — deliberately
-    inconsistent with build_organization_members_link and
-    build_organization_invitations_link immediately above. Those two use a
-    prefix that does not exist as a frontend route (confirmed directly:
-    `/o/` is not registered anywhere in `frontend/src`; the actual route
-    namespace is `organizations`, per `tenantPaths.ts`). That is a live,
-    pre-existing bug in both — flagged during ARCH-05 Step 0/2 verification,
-    not fixed here because it is ARCH-04 surface. This builder is written
-    against the route that is actually served, rather than copying a
-    sibling that is already known to be wrong.
+    Uses the `/organizations/` prefix, consistent with the two builders
+    above. When this was written in Step 6 those two still emitted `/o/`,
+    which is not a served route; this builder was deliberately written
+    against the real one rather than copying a sibling already known to be
+    wrong. Step 8 (§0.c) corrected the other two, so all three now agree.
     """
     return f"{_frontend_base(frontend_url)}/organizations/{org_slug}/ownership-transfer"

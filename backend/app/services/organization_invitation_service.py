@@ -89,30 +89,45 @@ logger = logging.getLogger("app.services.organization_invitation")
 
 # ===========================================================================
 # Carriers
-#
-# Every one is built AFTER commit and carries only primitives. See the module
-# docstring: this is what makes "notices go out after the transaction" a
-# property of the types rather than a rule someone has to remember.
 # ===========================================================================
 
 @dataclass(frozen=True)
 class IssuedInvitation:
     """
     A new invitation plus the plaintext token that addresses it.
-
-    Same contract as IssuedAuthToken and IssuedSession: the plaintext is
-    returned, never persisted, and the caller must build the link before it
-    goes out of scope.
     """
     invitation: OrganizationInvitation
     plaintext_token: str
     organization_name: str
     inviter_email: str
+    #: §B.6. Prose only — never an href. See _display_name.
+    inviter_display: str
     grant_lines: list[GrantLine]
 
     @property
     def accept_link(self) -> str:
         return build_invitation_accept_link(self.plaintext_token)
+
+
+def _display_name(user: User | None, fallback: str = "") -> str:
+    """
+    A person's display_name, falling back to their address (ARCH-05 §B.4/§B.6).
+
+    THE SINGLE FALLBACK POINT for this service. `users.display_name` is
+    nullable and a NULL is honest — the User model's own docstring is
+    explicit that "every read site is expected to fall back to `email`, not
+    to invent a name" — so the fallback has to live somewhere, and one
+    helper is what keeps it from being reimplemented five slightly different
+    ways across the carriers and audit lines below.
+
+    Returns `fallback` for a missing user. Every caller here already treats
+    a deleted inviter as recoverable (`inviter.email if inviter else ""`),
+    and this preserves that rather than introducing a new failure mode into
+    a courtesy notice.
+    """
+    if user is None:
+        return fallback
+    return user.display_name or user.email
 
 
 @dataclass(frozen=True)
@@ -123,7 +138,9 @@ class AcceptedInvitation:
     organization_name: str
     organization_slug: str
     inviter_email: str
+    inviter_display: str
     invited_email: str
+    invited_display: str
     organization_role: OrganizationRole
     provisioned_grants: list[GrantLine] = field(default_factory=list)
     skipped_grant_count: int = 0
@@ -135,7 +152,9 @@ class ResolvedInvitationParties:
     organization_name: str
     organization_slug: str
     inviter_email: str
+    inviter_display: str
     invited_email: str
+    invited_display: str
     invitation_id: uuid.UUID
 
 
@@ -154,13 +173,6 @@ class ExpiryDigestBatch:
 # ===========================================================================
 
 def count_reserved_seats(db: Session, *, organization_id: uuid.UUID) -> int:
-    """
-    Seats occupied or reserved: active members plus outstanding invitations.
-
-    The ONLY correct seat figure under ARCH-04, and the only one any ceiling
-    is enforced against. See §0 of the Step 6 design for why
-    count_consumed_seats alone is not it.
-    """
     return (
         organization_members_crud.count_consumed_seats(
             db, organization_id=organization_id
@@ -177,13 +189,6 @@ def _assert_seat_available(
     organization: Organization,
     message: str,
 ) -> None:
-    """
-    Raises SeatLimitExceededError unless the organization has room for one more.
-
-    seat_limit IS NULL means unlimited (§B.8). Called at issuance and again at
-    acceptance, because between the two someone else may have taken the last
-    seat.
-    """
     if organization.seat_limit is None:
         return
 
@@ -202,17 +207,6 @@ def _resolve_grants(
     organization: Organization,
     requested: list[tuple[uuid.UUID, WorkspaceRole]],
 ) -> list[GrantLine]:
-    """
-    Validates every requested grant against the inviting organization.
-
-    THE cross-tenant check of this phase. Rejects the entire request if any
-    workspace belongs to another organization, does not exist, or is not
-    ACTIVE — see §D6.4 for why the whole request rather than the offending
-    entry.
-
-    Returns display lines for the invitation email. The caller writes the
-    grant rows from `requested`; this function's job is to make sure it may.
-    """
     if len(requested) > settings.INVITATION_MAX_GRANTS:
         raise InvitationGrantError(
             f"An invitation may carry at most "
@@ -233,10 +227,6 @@ def _resolve_grants(
             db, workspace_id=workspace_id
         )
 
-        # One message for "not yours" and "does not exist", deliberately. A
-        # distinct error would confirm to an administrator of one tenant that
-        # a workspace id belongs to another — the same enumeration-oracle
-        # reasoning behind returning 404 rather than 403 on foreign tenants.
         if workspace is None or workspace.organization_id != organization.id:
             raise InvitationGrantError(
                 "One or more workspaces in this invitation could not be found "
@@ -271,20 +261,6 @@ def create_invitation(
     organization_role: OrganizationRole,
     grants: list[tuple[uuid.UUID, WorkspaceRole]] | None = None,
 ) -> IssuedInvitation:
-    """
-    Issues an invitation to join an organization, with zero or more grants.
-
-    Zero grants is a first-class case (§B.1): it is how a BILLING manager is
-    onboarded, and it is why this phase exists.
-
-    Raises:
-        InvitationPermissionDeniedError: Actor may not invite, or may not
-            assign this role.
-        InvitationAlreadyMemberError: Address already holds a live membership.
-        InvitationAlreadyExistsError: A PENDING invitation already exists.
-        InvitationGrantError: A grant is not attachable (§D6.4).
-        SeatLimitExceededError: No seat available.
-    """
     grants = grants or []
     normalized = email.strip().lower()
 
@@ -293,9 +269,6 @@ def create_invitation(
             "You do not have permission to invite members to this organization."
         )
 
-    # OWNER is excluded by ck_organization_invitations_role_not_owner as well;
-    # checking here means the caller gets a readable 403 instead of an
-    # IntegrityError surfaced as a 500.
     if organization_role is OrganizationRole.OWNER:
         raise InvitationPermissionDeniedError(
             "Ownership cannot be granted by invitation. Invite the person as "
@@ -312,7 +285,6 @@ def create_invitation(
             "You are already a member of this organization."
         )
 
-    # §D6.7 — also what keeps the two seat counts in §0 disjoint.
     existing_user = user_crud.get_user_by_email(db, email=normalized)
     if existing_user is not None:
         membership = organization_members_crud.get_organization_member(
@@ -366,13 +338,12 @@ def create_invitation(
         )
         commit_and_refresh(db, invitation)
 
-        # Never the token, never the link — an application log is not a secret
-        # store (ARCH-03 R4).
         logger.info(
             "AUDIT | INVITATION_ISSUED | Org: %s | Invitation: %s | "
-            "To: %s | Role: %s | Grants: %s | Actor: %s",
+            "To: %s | Role: %s | Grants: %s | Actor: %s (%s)",
             organization.id, invitation.id, normalized,
             organization_role.value, len(grants), inviter.id,
+            _display_name(inviter, inviter.email),
         )
 
         return IssuedInvitation(
@@ -380,6 +351,7 @@ def create_invitation(
             plaintext_token=plaintext,
             organization_name=organization.name,
             inviter_email=inviter.email,
+            inviter_display=_display_name(inviter, inviter.email),
             grant_lines=grant_lines,
         )
 
@@ -396,15 +368,6 @@ def create_invitation(
 # ===========================================================================
 
 def _load_by_token(db: Session, *, token: str) -> OrganizationInvitation:
-    """
-    Resolves a plaintext token to its invitation, or raises.
-
-    Reads terminal rows too, so the caller can say "already accepted" instead
-    of "invalid link". Distinguishing these is safe: the token is 256 bits of
-    randomness, so an attacker cannot produce a value landing in either
-    bucket, and being told which bucket a value fell into reveals nothing
-    actionable. Same reasoning as _classify_consumption_failure in ARCH-03.
-    """
     invitation = invitation_crud.get_invitation_by_token_hash(
         db, token_hash=hash_token(token)
     )
@@ -414,7 +377,6 @@ def _load_by_token(db: Session, *, token: str) -> OrganizationInvitation:
 
 
 def _classify_claim_failure(invitation: OrganizationInvitation) -> Exception:
-    """Works out why the conditional UPDATE matched nothing."""
     if invitation.status is not InvitationStatus.PENDING:
         return InvitationAlreadyProcessedError(
             f"This invitation was already "
@@ -428,19 +390,6 @@ def _classify_claim_failure(invitation: OrganizationInvitation) -> Exception:
 def _assert_actor_matches(
     *, invitation: OrganizationInvitation, actor: User
 ) -> None:
-    """
-    The authorization check for accept and reject.
-
-    The token identifies the invitation; the session identifies the actor.
-    Before ARCH-01 both operations took only a token, so any holder could act
-    on the invitee's behalf — and reject in particular gave a token holder a
-    denial of service on the invitation.
-
-    Deliberately compares session email to invitation email rather than
-    consulting invited_user_id. That column is a stale binding written at
-    issuance; using it to authorize would let an invitation verify an address
-    nobody has proved control of.
-    """
     if actor.email.strip().lower() != invitation.email.strip().lower():
         raise InvitationEmailMismatchError(
             f"This invitation was sent to {invitation.email}. Sign in with "
@@ -449,13 +398,6 @@ def _assert_actor_matches(
 
 
 def preview_invitation(db: Session, *, token: str) -> dict:
-    """
-    Resolves an invitation for public display without mutating it.
-
-    Served unauthenticated so a recipient can see what they are joining before
-    creating an account. Read-only; every write operation below requires an
-    actor.
-    """
     invitation = _load_by_token(db, token=token)
 
     if invitation.status is not InvitationStatus.PENDING:
@@ -471,6 +413,7 @@ def preview_invitation(db: Session, *, token: str) -> dict:
     return {
         "organization_name": organization.name,
         "inviter_email": inviter.email if inviter else "",
+        "inviter_display": _display_name(inviter),
         "invited_email": invitation.email,
         "organization_role": invitation.organization_role,
         "workspaces": [
@@ -483,14 +426,6 @@ def preview_invitation(db: Session, *, token: str) -> dict:
 
 
 def describe_seat_blocked(db: Session, *, token: str) -> dict:
-    """
-    Gathers what the seat-blocked notice needs, without mutating anything.
-
-    Safe to call after _assert_seat_available raises during acceptance: the
-    seat check runs BEFORE the claim (§D6.2), so the invitation is guaranteed
-    still PENDING and untouched at this point. This is a plain read, the same
-    shape as preview_invitation, not a second attempt at the transaction.
-    """
     invitation = _load_by_token(db, token=token)
     organization = invitation.organization
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
@@ -514,35 +449,6 @@ def accept_invitation(
     token: str,
     actor: User,
 ) -> AcceptedInvitation:
-    """
-    Accepts an invitation, provisioning a seat and every live grant atomically.
-
-    ORDER INSIDE THE TRANSACTION IS LOAD-BEARING:
-
-        1. seat check     — must precede the claim, so a seat failure leaves
-                            the invitation PENDING and its token unspent (§B.8)
-        2. claim (UPDATE) — must precede provisioning, so two racing requests
-                            cannot both provision
-        3. provisioning   — inside the same transaction, so a failure here
-                            rolls the claim back and the link still works
-
-    ARCH-05 STEP 1.5 — THIS IS A WRITER OF THE OWNER SET.
-
-    The reactivation branch below (§D6.8) assigns invitation.organization_role
-    to an existing membership unconditionally. Because the already-member guard
-    at issuance exempts DEACTIVATED members, a person can be invited while
-    deactivated, then reactivated and made OWNER before they open the link, and
-    acceptance would demote them — with no last-owner check and no concurrency
-    involved. This function therefore takes the same organization lock as the
-    four members of the owner-set family and refuses to downgrade an active
-    owner.
-
-    Raises:
-        InvitationEmailMismatchError: The actor is not the invited party.
-        InvitationAlreadyProcessedError / InvitationExpiredError.
-        SeatLimitExceededError: Non-destructive — see §D6.2.
-        LastOwnerError: Provisioning would have left the tenant ownerless.
-    """
     invitation = _load_by_token(db, token=token)
     _assert_actor_matches(invitation=invitation, actor=actor)
 
@@ -550,28 +456,12 @@ def accept_invitation(
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
     now = datetime.now(UTC)
 
-    # 0. ARCH-05 Step 1.5. Taken here, before the seat check and therefore
-    #    before any organization_members row is read or written.
-    #
-    #    Position is a deadlock property, not a style choice. The four
-    #    owner-set functions take the organizations row and then write member
-    #    rows. If this function wrote a member row first and reached for the
-    #    organizations row afterwards, the two orders would form a cycle. Taken
-    #    first, both paths acquire the same single lock in the same order and
-    #    §D R3 continues to hold.
-    #
-    #    Serialising the seat check with member changes is a second, smaller
-    #    benefit that comes free with the position.
     lock_organization_for_owner_change(db, organization_id=organization.id)
 
-    # Captured under the lock, before any write, so the post-provisioning
-    # comparison below is against a state that cannot have moved underneath it.
     owners_before = organization_members_crud.count_active_owners(
         db, organization_id=organization.id
     )
 
-    # 1. Seat check FIRST. Nothing has been mutated at this point, so raising
-    #    here leaves the invitation exactly as it was.
     _assert_seat_available(
         db,
         organization=organization,
@@ -583,7 +473,6 @@ def accept_invitation(
     )
 
     try:
-        # 2. Claim.
         claimed_id = invitation_crud.claim_invitation(
             db,
             token_hash=hash_token(token),
@@ -594,16 +483,10 @@ def accept_invitation(
         if claimed_id is None:
             raise _classify_claim_failure(invitation)
 
-        # 3. Provision the seat. Reactivate rather than duplicate (§D6.8).
         membership = organization_members_crud.get_organization_member(
             db, organization_id=organization.id, user_id=actor.id
         )
 
-        #: The role actually written. Diverges from invitation.organization_role
-        #: only in the ownership-preserving branch below, and the caller is told
-        #: this value rather than what the invitation asked for — the acceptance
-        #: notice and the API response would otherwise report a demotion that
-        #: did not happen.
         applied_role = invitation.organization_role
         role_preserved = False
 
@@ -616,20 +499,8 @@ def accept_invitation(
                 status=MembershipStatus.ACTIVE,
             )
         else:
-            # Loaded after the lock was granted, but refreshed anyway: a
-            # membership already in the identity map from an earlier read in
-            # this Session would otherwise carry a pre-lock role.
             db.refresh(membership)
 
-            # ARCH-05 Step 1.5. An active owner is never downgraded by
-            # accepting an invitation. OWNER cannot be invited at all, so this
-            # branch can only ever have removed ownership, never conferred it,
-            # and removing it was never anyone's intent — not the inviter's,
-            # who could not have named the role, and not the invitee's, who
-            # clicked a link about joining.
-            #
-            # Refusing with LastOwnerError instead would land the error on the
-            # one person who can neither cause nor fix it.
             if (
                 membership.role is OrganizationRole.OWNER
                 and membership.status is MembershipStatus.ACTIVE
@@ -642,13 +513,9 @@ def accept_invitation(
                 )
 
             organization_members_crud.set_organization_member_status(
-                db, membership=membership, status=MembershipStatus.ACTIVE
+                db, membership=membership, status=MembershipStatus.ACTIVE,
             )
 
-        # 4. Provision grants. A workspace deleted since issuance took its
-        #    grant by cascade, so this list may already be shorter than what
-        #    was issued; a workspace archived since is skipped here. Both are
-        #    counted, not raised on (§B.2, R8).
         provisioned: list[GrantLine] = []
         skipped = 0
 
@@ -682,16 +549,6 @@ def accept_invitation(
                 role_display=grant.role.value,
             ))
 
-        # ARCH-05 Step 1.5, defence in depth. The branch above is the only
-        # write here that can touch the owner set and it is guarded, so this
-        # should be unreachable — which is exactly the property worth asserting,
-        # because the guard is one edit away from being removed by someone who
-        # does not know why it is there.
-        #
-        # Conditional on owners_before so that an organization that was ALREADY
-        # ownerless (A.2.1 realised before Step 1 shipped) does not have
-        # invitation acceptance blocked for an unrelated invitee. That is a
-        # repair job for the Step 0 runbook, not this transaction's to refuse.
         if owners_before >= 1:
             owners_after = organization_members_crud.count_active_owners(
                 db, organization_id=organization.id
@@ -702,7 +559,6 @@ def accept_invitation(
                     f"without an active owner."
                 )
 
-        # ARCH-03 §B.4 Option 2 side-effects: verify address and invalidate other pending verification links
         if actor.email_verified_at is None:
             actor.email_verified_at = now
             db.add(actor)
@@ -739,6 +595,8 @@ def accept_invitation(
             organization_name=organization.name,
             organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
+            inviter_display=_display_name(inviter),
+            invited_display=_display_name(actor, invitation.email),
             invited_email=invitation.email,
             organization_role=applied_role,
             provisioned_grants=provisioned,
@@ -760,12 +618,6 @@ def accept_invitation(
 def reject_invitation(
     db: Session, *, token: str, actor: User
 ) -> ResolvedInvitationParties:
-    """
-    Declines an invitation on behalf of the authenticated actor.
-
-    Requires the actor, not just the token: reject-by-token gave any holder a
-    denial of service on the invitation.
-    """
     invitation = _load_by_token(db, token=token)
     _assert_actor_matches(invitation=invitation, actor=actor)
 
@@ -792,6 +644,8 @@ def reject_invitation(
             organization_name=organization.name,
             organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
+            inviter_display=_display_name(inviter),
+            invited_display=_display_name(actor, invitation.email),
             invited_email=invitation.email,
             invitation_id=invitation.id,
         )
@@ -811,12 +665,6 @@ def revoke_invitation(
     actor: User,
     actor_role: OrganizationRole,
 ) -> ResolvedInvitationParties:
-    """
-    Withdraws a pending invitation.
-
-    The organization scope is not redundant: without it, an administrator of
-    one tenant could revoke an invitation in another by supplying its id.
-    """
     if not can_invite_members(actor_role):
         raise InvitationPermissionDeniedError(
             "You do not have permission to manage invitations."
@@ -853,6 +701,8 @@ def revoke_invitation(
             organization_name=organization.name,
             organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
+            inviter_display=_display_name(inviter),
+            invited_display=invitation.email,
             invited_email=invitation.email,
             invitation_id=invitation.id,
         )
@@ -871,17 +721,6 @@ def resend_invitation(
     invitation_id: uuid.UUID,
     actor_role: OrganizationRole,
 ) -> IssuedInvitation:
-    """
-    Reissues a pending invitation with a fresh token and expiry (§D6.6).
-
-    The previous link stops working. That is the point: a resend usually means
-    the first mail never arrived, so the old token is dead weight, and an
-    invitation grants organization membership — a higher-value credential than
-    an email verification.
-
-    Raises:
-        InvitationResendTooSoonError: Inside the cooldown window.
-    """
     if not can_invite_members(actor_role):
         raise InvitationPermissionDeniedError(
             "You do not have permission to manage invitations."
@@ -937,6 +776,7 @@ def resend_invitation(
             plaintext_token=plaintext,
             organization_name=organization.name,
             inviter_email=inviter.email if inviter else "",
+            inviter_display=_display_name(inviter),
             grant_lines=[
                 GrantLine(g.workspace.workspace_name, g.role.value)
                 for g in invitation.grants
@@ -957,10 +797,23 @@ def list_invitations(
     organization_id: uuid.UUID,
     statuses: list[InvitationStatus] | None = None,
 ) -> list[OrganizationInvitation]:
-    """Thin pass-through — list views need no business rule beyond the query itself."""
     return invitation_crud.list_invitations_for_organization(
         db, organization_id=organization_id, statuses=statuses,
     )
+
+
+def list_invitations_for_user(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+) -> list[OrganizationInvitation]:
+    """
+    Returns pending invitations issued to the user's email address.
+    """
+    user = user_crud.get_user_by_id(db, user_id=user_id)
+    if user is None:
+        return []
+    return invitation_crud.list_pending_invitations_for_email(db, email=user.email)
 
 
 # ===========================================================================
@@ -970,12 +823,6 @@ def list_invitations(
 def sweep_expired_invitations(
     db: Session, *, commit: bool = True
 ) -> dict[uuid.UUID, ExpiryDigestBatch]:
-    """
-    Marks lapsed invitations EXPIRED and groups them by inviter, enriched with
-    the inviter's address and each organization's name.
-
-    Two bulk lookups, not one per row.
-    """
     rows = invitation_crud.expire_stale_invitations(db, now=datetime.now(UTC))
     if not rows:
         return {}

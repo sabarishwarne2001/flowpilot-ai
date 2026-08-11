@@ -243,3 +243,12 @@ class MyPendingInvitation(BaseModel):
 
 class MyPendingInvitationsResponse(BaseModel):
     items: list[MyPendingInvitation]
+
+
+# ============================================================================
+# API Router Aliases
+# ============================================================================
+
+InvitationCreateRequest = OrganizationInvitationCreate
+InvitationResponse = OrganizationInvitationResponse
+InvitationPreviewResponse = OrganizationInvitationPreviewResponse

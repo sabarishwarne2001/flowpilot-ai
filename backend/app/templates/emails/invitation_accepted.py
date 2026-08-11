@@ -29,6 +29,7 @@ from app.templates.emails.common import (
 def render_invitation_accepted(
     *,
     invited_email: str,
+    invited_display: str | None = None,
     organization_name: str,
     organization_role_display: str,
     provisioned_grants: Sequence[GrantLine],
@@ -47,7 +48,11 @@ def render_invitation_accepted(
         members_url: Deep link to the organization member directory. Requires
             authentication; it is a destination, not a credential.
     """
-    subject = single_line(f"{invited_email} joined {organization_name}")
+    # §B.6: the address identifies, the display name is what a person reads.
+    # Defaults to the address, which is what every caller passed before
+    # ARCH-05 gave users a display_name, so existing behaviour is unchanged.
+    display = invited_display if invited_display is not None else invited_email
+    subject = single_line(f"{display} joined {organization_name}")
 
     if provisioned_grants:
         grants_text = (
@@ -80,7 +85,7 @@ def render_invitation_accepted(
 
     text_body = (
         f"Hello,\n\n"
-        f"{invited_email} accepted your invitation to {organization_name} and "
+        f"{display} ({invited_email}) accepted your invitation to {organization_name} and "
         f"joined as {organization_role_display}.\n\n"
         f"{grants_text}"
         f"You can review the member directory here:\n"
@@ -88,7 +93,7 @@ def render_invitation_accepted(
     )
 
     content_html = f"""<p>Hello,</p>
-            <p><strong>{esc(invited_email)}</strong> accepted your invitation to
+            <p><strong>{esc(display)}</strong> (<a href="mailto:{esc_attr(invited_email)}">{esc(invited_email)}</a>) accepted your invitation to
                <strong>{esc(organization_name)}</strong> and joined as
                <strong>{esc(organization_role_display)}</strong>.</p>
             {grants_html}
@@ -102,10 +107,21 @@ def render_invitation_accepted(
     )
 
     html_body = BASE_EMAIL_HTML_LAYOUT.format(
-        title=subject,
-        brand_name=brand_name,
+        # ARCH-05 Step 8 (§0.b). esc()/html.escape(), not the raw subject.
+        # BASE_EMAIL_HTML_LAYOUT interpolates this into <title>{title}</title>,
+        # which is RCDATA: a tenant name or address containing "</title>"
+        # closes the element early and everything after it becomes document
+        # markup. single_line() does not help — it strips control characters,
+        # and "<" is not one.
+        title=esc(subject),
+        # ARCH-05 Step 8 (§0.b, extended). BASE_EMAIL_HTML_LAYOUT interpolates
+        # brand_name into <span class="logo">{brand_name}</span> and footer_text
+        # into <p>{footer_text}</p> — both raw HTML contexts, neither escaped by
+        # the layout. content_html is the ONLY slot that legitimately carries
+        # markup; every other slot is escaped here.
+        brand_name=esc(brand_name),
         content_html=content_html,
-        footer_text=footer_text,
+        footer_text=esc(footer_text),
     )
 
     return subject, html_body, text_body

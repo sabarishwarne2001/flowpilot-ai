@@ -14,7 +14,8 @@ import pytest
 
 from app.core.links import (
     build_invitation_accept_link,
-    build_legacy_invitation_accept_link,
+    build_organization_invitations_link,
+    build_organization_members_link,
 )
 from app.templates.emails.common import (
     MAX_DIGEST_ROWS,
@@ -50,6 +51,7 @@ def _invitation(**overrides):
     kwargs = dict(
         invited_email="new@example.com",
         organization_name="Acme Ltd",
+        inviter_email="owner@acme.example",
         inviter_display="owner@acme.example",
         organization_role_display="MEMBER",
         grants=[GrantLine("Operations", "EDITOR")],
@@ -82,6 +84,7 @@ def _all_subjects(org_name: str) -> list[str]:
         render_invitation_revoked(
             invited_email="a@b.example",
             organization_name=org_name,
+            inviter_email="owner@acme.example",
             inviter_display="owner@acme.example",
             brand_name=BRAND,
         )[0],
@@ -283,6 +286,7 @@ def test_revocation_notice_contains_no_http_link():
     _, html_body, text_body = render_invitation_revoked(
         invited_email="a@b.example",
         organization_name="Acme Ltd",
+        inviter_email="owner@acme.example",
         inviter_display="owner@acme.example",
         brand_name=BRAND,
     )
@@ -303,11 +307,39 @@ def test_accept_link_uses_a_fragment():
     assert "?token=" not in link
 
 
-def test_legacy_builder_still_produces_the_query_form():
-    link = build_legacy_invitation_accept_link(
-        "tok", frontend_url="https://app.example.com"
+def test_the_legacy_query_builder_is_gone():
+    """
+    ARCH-05 Step 9. The one-release window for `?token=` links has elapsed;
+    build_legacy_invitation_accept_link and QUERY_FALLBACK_REMOVAL are both
+    deleted, together with the frontend's query-parameter read.
+
+    Asserts the ABSENCE rather than deleting the test outright: a removal
+    with no test is a removal someone re-adds. This fails loudly if the
+    builder or its deadline constant comes back.
+    """
+    import app.core.links as links
+
+    assert not hasattr(links, "build_legacy_invitation_accept_link")
+    assert not hasattr(links, "QUERY_FALLBACK_REMOVAL")
+
+
+def test_organization_links_use_the_served_route_prefix():
+    """
+    ARCH-05 §0.c. Both builders emitted /o/{slug}/... until Step 8, which is
+    not a route this application serves — the frontend namespaces tenants
+    under `organizations` (tenantPaths.ts). Every acceptance notice and
+    expiry digest ARCH-04 sent therefore pointed its recipient at a 404.
+    """
+    members = build_organization_members_link(
+        "acme", frontend_url="https://app.example.com"
     )
-    assert link.endswith("/invitations/accept?token=tok")
+    invitations = build_organization_invitations_link(
+        "acme", frontend_url="https://app.example.com"
+    )
+    assert members == "https://app.example.com/organizations/acme/members"
+    assert invitations == "https://app.example.com/organizations/acme/invitations"
+    assert "/o/acme" not in members
+    assert "/o/acme" not in invitations
 
 
 # ---------------------------------------------------------------------------
