@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import (
     InvalidInvitationTokenError,
+    LastOwnerError,
     InvitationAlreadyExistsError,
     InvitationAlreadyMemberError,
     InvitationAlreadyProcessedError,
@@ -67,6 +68,9 @@ from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
+from app.services.organization_member_service import (
+    lock_organization_for_owner_change,
+)
 from app.models.organization import (
     MembershipStatus,
     Organization,
@@ -522,10 +526,22 @@ def accept_invitation(
         3. provisioning   — inside the same transaction, so a failure here
                             rolls the claim back and the link still works
 
+    ARCH-05 STEP 1.5 — THIS IS A WRITER OF THE OWNER SET.
+
+    The reactivation branch below (§D6.8) assigns invitation.organization_role
+    to an existing membership unconditionally. Because the already-member guard
+    at issuance exempts DEACTIVATED members, a person can be invited while
+    deactivated, then reactivated and made OWNER before they open the link, and
+    acceptance would demote them — with no last-owner check and no concurrency
+    involved. This function therefore takes the same organization lock as the
+    four members of the owner-set family and refuses to downgrade an active
+    owner.
+
     Raises:
         InvitationEmailMismatchError: The actor is not the invited party.
         InvitationAlreadyProcessedError / InvitationExpiredError.
         SeatLimitExceededError: Non-destructive — see §D6.2.
+        LastOwnerError: Provisioning would have left the tenant ownerless.
     """
     invitation = _load_by_token(db, token=token)
     _assert_actor_matches(invitation=invitation, actor=actor)
@@ -533,6 +549,26 @@ def accept_invitation(
     organization = invitation.organization
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
     now = datetime.now(UTC)
+
+    # 0. ARCH-05 Step 1.5. Taken here, before the seat check and therefore
+    #    before any organization_members row is read or written.
+    #
+    #    Position is a deadlock property, not a style choice. The four
+    #    owner-set functions take the organizations row and then write member
+    #    rows. If this function wrote a member row first and reached for the
+    #    organizations row afterwards, the two orders would form a cycle. Taken
+    #    first, both paths acquire the same single lock in the same order and
+    #    §D R3 continues to hold.
+    #
+    #    Serialising the seat check with member changes is a second, smaller
+    #    benefit that comes free with the position.
+    lock_organization_for_owner_change(db, organization_id=organization.id)
+
+    # Captured under the lock, before any write, so the post-provisioning
+    # comparison below is against a state that cannot have moved underneath it.
+    owners_before = organization_members_crud.count_active_owners(
+        db, organization_id=organization.id
+    )
 
     # 1. Seat check FIRST. Nothing has been mutated at this point, so raising
     #    here leaves the invitation exactly as it was.
@@ -562,18 +598,49 @@ def accept_invitation(
         membership = organization_members_crud.get_organization_member(
             db, organization_id=organization.id, user_id=actor.id
         )
+
+        #: The role actually written. Diverges from invitation.organization_role
+        #: only in the ownership-preserving branch below, and the caller is told
+        #: this value rather than what the invitation asked for — the acceptance
+        #: notice and the API response would otherwise report a demotion that
+        #: did not happen.
+        applied_role = invitation.organization_role
+        role_preserved = False
+
         if membership is None:
             organization_members_crud.create_organization_member(
                 db,
                 organization_id=organization.id,
                 user_id=actor.id,
-                role=invitation.organization_role,
+                role=applied_role,
                 status=MembershipStatus.ACTIVE,
             )
         else:
-            organization_members_crud.update_organization_member_role(
-                db, membership=membership, role=invitation.organization_role
-            )
+            # Loaded after the lock was granted, but refreshed anyway: a
+            # membership already in the identity map from an earlier read in
+            # this Session would otherwise carry a pre-lock role.
+            db.refresh(membership)
+
+            # ARCH-05 Step 1.5. An active owner is never downgraded by
+            # accepting an invitation. OWNER cannot be invited at all, so this
+            # branch can only ever have removed ownership, never conferred it,
+            # and removing it was never anyone's intent — not the inviter's,
+            # who could not have named the role, and not the invitee's, who
+            # clicked a link about joining.
+            #
+            # Refusing with LastOwnerError instead would land the error on the
+            # one person who can neither cause nor fix it.
+            if (
+                membership.role is OrganizationRole.OWNER
+                and membership.status is MembershipStatus.ACTIVE
+            ):
+                applied_role = OrganizationRole.OWNER
+                role_preserved = True
+            else:
+                organization_members_crud.update_organization_member_role(
+                    db, membership=membership, role=applied_role
+                )
+
             organization_members_crud.set_organization_member_status(
                 db, membership=membership, status=MembershipStatus.ACTIVE
             )
@@ -615,6 +682,26 @@ def accept_invitation(
                 role_display=grant.role.value,
             ))
 
+        # ARCH-05 Step 1.5, defence in depth. The branch above is the only
+        # write here that can touch the owner set and it is guarded, so this
+        # should be unreachable — which is exactly the property worth asserting,
+        # because the guard is one edit away from being removed by someone who
+        # does not know why it is there.
+        #
+        # Conditional on owners_before so that an organization that was ALREADY
+        # ownerless (A.2.1 realised before Step 1 shipped) does not have
+        # invitation acceptance blocked for an unrelated invitee. That is a
+        # repair job for the Step 0 runbook, not this transaction's to refuse.
+        if owners_before >= 1:
+            owners_after = organization_members_crud.count_active_owners(
+                db, organization_id=organization.id
+            )
+            if owners_after < 1:
+                raise LastOwnerError(
+                    f"Accepting this invitation would leave {organization.name} "
+                    f"without an active owner."
+                )
+
         # ARCH-03 §B.4 Option 2 side-effects: verify address and invalidate other pending verification links
         if actor.email_verified_at is None:
             actor.email_verified_at = now
@@ -632,10 +719,19 @@ def accept_invitation(
 
         logger.info(
             "AUDIT | INVITATION_ACCEPTED | Org: %s | Invitation: %s | "
-            "User: %s | Role: %s | Provisioned: %s | Skipped: %s",
+            "User: %s | Role: %s | RolePreserved: %s | Provisioned: %s | "
+            "Skipped: %s",
             organization.id, invitation.id, actor.id,
-            invitation.organization_role.value, len(provisioned), skipped,
+            applied_role.value, role_preserved, len(provisioned), skipped,
         )
+
+        if role_preserved:
+            logger.warning(
+                "AUDIT | INVITATION_ROLE_NOT_APPLIED | Org: %s | "
+                "Invitation: %s | User: %s | Requested: %s | Retained: OWNER",
+                organization.id, invitation.id, actor.id,
+                invitation.organization_role.value,
+            )
 
         return AcceptedInvitation(
             invitation_id=invitation.id,
@@ -644,7 +740,7 @@ def accept_invitation(
             organization_slug=organization.slug,
             inviter_email=inviter.email if inviter else "",
             invited_email=invitation.email,
-            organization_role=invitation.organization_role,
+            organization_role=applied_role,
             provisioned_grants=provisioned,
             skipped_grant_count=skipped,
         )

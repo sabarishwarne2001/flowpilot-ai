@@ -400,7 +400,7 @@ def test_the_lock_is_the_first_statement_of_every_owner_set_mutation():
                 isinstance(first, ast.Expr)
                 and isinstance(first.value, ast.Call)
                 and getattr(first.value.func, "id", None)
-                == "_lock_organization_for_owner_change"
+                == "lock_organization_for_owner_change"
             )
 
     missing = set(LOCKED_CALL_SITES) - set(observed)

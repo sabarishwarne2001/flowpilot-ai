@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -35,6 +35,40 @@ import { useAuthStore } from "@/store/useAuthStore";
  * it against Python exception class names. Every branch was therefore dead,
  * and every failure fell through to a generic message. Branching is now on the
  * stable `code` from the ARCH-01 error envelope.
+ *
+ * ---------------------------------------------------------------------------
+ * ARCH-05 STEP 0.5 — WHY THE TOKEN SOURCE CHANGED
+ * ---------------------------------------------------------------------------
+ * This page previously read the token with `useSearchParams().get("token")`
+ * and nothing else, while the backend had already cut over to the fragment
+ * form at ARCH-04 Step 7 — `build_invitation_accept_link` emits
+ * `/invitations/accept#token=…`. A fragment is never transmitted to a server
+ * and never appears in `useSearchParams()`, so `token` was `null` on every
+ * link the product sent and invitation acceptance failed one hundred percent
+ * of the time. ARCH-03's VerifyEmail and ResetPassword were converted; this
+ * page was not.
+ *
+ * Three properties are load-bearing below, and none of them is cosmetic:
+ *
+ *   1. The FRAGMENT is the primary source, matching the ARCH-03 §B.9 rule and
+ *      `takeTokenFromFragment` in VerifyEmail.tsx.
+ *   2. The QUERY read is retained for exactly one release, because invitations
+ *      mailed before the ARCH-04 Step 7 cutover carry `?token=` links and
+ *      their recipients did nothing wrong. `QUERY_FALLBACK_REMOVAL` in
+ *      app/core/links.py is the deadline; ARCH-05 Step 9 deletes both halves.
+ *   3. The token NEVER travels in a query string that this page constructs.
+ *      The previous `handleAuthRedirect` rebuilt `?token=…` and wrapped it in
+ *      `?redirect=…`, which put a live credential into the login URL, into
+ *      the Referer header of every asset on the login page, and into every
+ *      access log between the browser and the origin — the exact exposure
+ *      ARCH-04 §B.10 moved the token to a fragment to prevent. The round trip
+ *      through login now carries the token in sessionStorage, which does not
+ *      traverse the network at all, and the redirect target is the bare path.
+ *
+ * Both URL forms are stripped from the address bar the instant they are read,
+ * for the reason VerifyEmail gives: until it is gone the token sits in browser
+ * history and in anything the user copies out of the address bar to paste into
+ * a support ticket.
  */
 
 type Phase =
@@ -46,11 +80,117 @@ type Phase =
   | "auth_required"
   | "email_mismatch";
 
+/**
+ * Where the token waits while the user signs in.
+ *
+ * sessionStorage rather than localStorage: an invitation token is scoped to
+ * one acceptance attempt in one tab, and localStorage would leave it readable
+ * by every later tab on this origin until something explicitly removed it.
+ */
+const TOKEN_STASH_KEY = "flowpilot.invitation.token";
+
+/**
+ * How long a stashed token stays usable.
+ *
+ * Bounded because the stash survives an abandoned sign-in. A user who walks
+ * away mid-flow should not have a credential sitting in their tab an hour
+ * later. The backend expiry is the real authority; this only limits how long
+ * the client keeps a copy.
+ */
+const TOKEN_STASH_TTL_MS = 30 * 60 * 1000;
+
+const stashToken = (token: string): void => {
+  try {
+    window.sessionStorage.setItem(
+      TOKEN_STASH_KEY,
+      JSON.stringify({ token, at: Date.now() }),
+    );
+  } catch {
+    // Private browsing modes and storage-partitioned embeds throw here. The
+    // flow still works for anyone already signed in; only the sign-in round
+    // trip degrades, and it degrades to "open the link again".
+  }
+};
+
+const readStashedToken = (): string | null => {
+  try {
+    const raw = window.sessionStorage.getItem(TOKEN_STASH_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as { token?: unknown; at?: unknown };
+    if (
+      typeof parsed.token !== "string" ||
+      typeof parsed.at !== "number" ||
+      Date.now() - parsed.at > TOKEN_STASH_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(TOKEN_STASH_KEY);
+      return null;
+    }
+    return parsed.token;
+  } catch {
+    return null;
+  }
+};
+
+const clearStashedToken = (): void => {
+  try {
+    window.sessionStorage.removeItem(TOKEN_STASH_KEY);
+  } catch {
+    // Nothing to do. A stash that cannot be cleared expires on its own.
+  }
+};
+
+/**
+ * Rewrites the address bar to the bare path, dropping fragment and query.
+ *
+ * `replaceState` rather than `navigate`: this must not push a history entry,
+ * because the entry it would push is the one containing the token.
+ */
+const stripCredentialFromAddressBar = (): void => {
+  window.history.replaceState(null, "", window.location.pathname);
+};
+
+/**
+ * Resolves the invitation token from, in order: the fragment, the legacy query
+ * parameter, the sign-in stash.
+ *
+ * Idempotent by construction. Every URL-sourced token is written to the stash
+ * before the URL is cleared, so a second call — React 18 StrictMode remounting
+ * in development, or the user refreshing the page — resolves the same value
+ * rather than reporting a missing token over a link that was perfectly valid.
+ */
+const takeInvitationToken = (): string | null => {
+  const fragment = window.location.hash.replace(/^#/, "");
+  if (fragment) {
+    const fromFragment = new URLSearchParams(fragment).get("token");
+    if (fromFragment) {
+      stashToken(fromFragment);
+      stripCredentialFromAddressBar();
+      return fromFragment;
+    }
+  }
+
+  // ARCH-04 §B.10 fallback. Retained for one release, for invitations mailed
+  // before the Step 7 cutover. Deleted at ARCH-05 Step 9 together with
+  // build_legacy_invitation_accept_link and QUERY_FALLBACK_REMOVAL.
+  const fromQuery = new URLSearchParams(window.location.search).get("token");
+  if (fromQuery) {
+    stashToken(fromQuery);
+    stripCredentialFromAddressBar();
+    return fromQuery;
+  }
+
+  return readStashedToken();
+};
+
 export const InvitationAcceptPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Lazy initializer, so the capture runs once per mount and before the first
+  // render reads it. Re-entry is safe regardless — see takeInvitationToken.
+  const [token] = useState<string | null>(takeInvitationToken);
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const currentEmail = useAuthStore((state) => state.user?.email ?? null);
@@ -113,12 +253,30 @@ export const InvitationAcceptPage: React.FC = () => {
     return "preview";
   }, [phase, token, previewError, preview, isAuthenticated, currentEmail]);
 
+  /**
+   * Discards the stashed token once the invitation can no longer be acted on.
+   *
+   * email_mismatch and auth_required are deliberately absent: both are states
+   * the user is expected to leave and return from, and clearing the stash
+   * there would strand them on the second visit.
+   */
+  useEffect(() => {
+    if (
+      resolvedPhase === "accepted" ||
+      resolvedPhase === "rejected" ||
+      resolvedPhase === "expired" ||
+      resolvedPhase === "invalid"
+    ) {
+      clearStashedToken();
+    }
+  }, [resolvedPhase]);
+
   const previewMessage = useMemo(() => {
     if (previewError instanceof ApiError) {
       return previewError.message;
     }
     if (!token) {
-      return "The secure invitation token is missing from the link.";
+      return "The secure invitation token is missing from the link. Open the link from your invitation email again, and copy the whole address if you are pasting it.";
     }
     return "This invitation is invalid or has expired.";
   }, [previewError, token]);
@@ -127,6 +285,7 @@ export const InvitationAcceptPage: React.FC = () => {
     mutationFn: () => acceptInvitation(token as string),
     onSuccess: async (result) => {
       setPhase("accepted");
+      clearStashedToken();
       toast.success("Invitation accepted. Welcome aboard.");
 
       // The bootstrap context now includes a tenant it did not before, so it
@@ -165,6 +324,7 @@ export const InvitationAcceptPage: React.FC = () => {
     mutationFn: () => rejectInvitation(token as string),
     onSuccess: () => {
       setPhase("rejected");
+      clearStashedToken();
       toast.success("Invitation declined.");
     },
     onError: (error: unknown) => {
@@ -180,9 +340,24 @@ export const InvitationAcceptPage: React.FC = () => {
     },
   });
 
+  /**
+   * Sends the user to sign in, and brings them back here afterwards.
+   *
+   * The redirect target is the bare accept path. The token rides in
+   * sessionStorage instead, because a `?redirect=` value is a query parameter
+   * and anything inside it — percent-encoded or not — is transmitted to the
+   * server, logged by every hop, and offered to third-party assets on the
+   * login page through the Referer header. The previous implementation built
+   * `?redirect=%2Finvitations%2Faccept%3Ftoken%3D…`, which undid ARCH-04
+   * §B.10 at the one moment the token is most likely to be intercepted.
+   */
   const handleAuthRedirect = (targetRoute: string): void => {
-    const acceptUrl = `${ROUTES.INVITATION_ACCEPT}?token=${encodeURIComponent(token ?? "")}`;
-    navigate(`${targetRoute}?redirect=${encodeURIComponent(acceptUrl)}`);
+    if (token) {
+      stashToken(token);
+    }
+    navigate(
+      `${targetRoute}?redirect=${encodeURIComponent(ROUTES.INVITATION_ACCEPT)}`,
+    );
   };
 
   const handleSwitchAccount = (): void => {

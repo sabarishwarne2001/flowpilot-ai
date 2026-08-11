@@ -15,6 +15,7 @@ first" while providing no promotion endpoint, which made every workspace a
 one-way trap.
 """
 
+
 from __future__ import annotations
 
 import logging
@@ -117,7 +118,7 @@ def change_member_role(
         OrganizationMemberError: Self-directed role change.
     """
     # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
-    _lock_organization_for_owner_change(
+    lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
         refresh=(actor_membership, target_membership),
@@ -202,7 +203,7 @@ def deactivate_member(
     claim.
     """
     # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
-    _lock_organization_for_owner_change(
+    lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
         refresh=(actor_membership, target_membership),
@@ -277,7 +278,7 @@ def leave_organization(
     # actually lands on: get_organization_context loaded `membership` before
     # this function was entered, so without the refresh below the role read on
     # the next line is a value from before the lock was granted.
-    _lock_organization_for_owner_change(
+    lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
         refresh=(membership,),
@@ -352,7 +353,7 @@ def transfer_ownership(
         The newly promoted owner's membership.
     """
     # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
-    _lock_organization_for_owner_change(
+    lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
         refresh=(current_owner_membership, target_membership),
@@ -429,7 +430,7 @@ def _assert_not_last_owner(
         )
 
 
-def _lock_organization_for_owner_change(
+def lock_organization_for_owner_change(
     db: Session,
     *,
     organization_id: uuid.UUID,
@@ -463,6 +464,12 @@ def _lock_organization_for_owner_change(
     statement. It is the only place `with_for_update` appears in the service
     layer; a second one would reintroduce a lock-ordering question that this
     design does not currently have (§D R3).
+
+    Public rather than module-private since ARCH-05 Step 1.5, because
+    organization_invitation_service.accept_invitation is a fifth writer of the
+    owner set and must take the same lock. A second copy of this logic there
+    would be a second FOR UPDATE, which is the thing R3's reasoning depends on
+    not existing.
 
     The lock is held until the caller's transaction ends. Callers that return
     early without committing still hold it until the request teardown closes

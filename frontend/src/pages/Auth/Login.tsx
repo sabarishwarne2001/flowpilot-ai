@@ -1,14 +1,42 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { authApi } from "@/services/api/auth";
 import { ROUTES } from "@/constants/routes";
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ApiError } from "@/services/api/client";
+import { isSafeRedirectPath } from "@/routes/tenantPaths";
 import { Mail, Lock, Loader2 } from "lucide-react";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /**
+   * Where to land after a successful sign-in.
+   *
+   * ARCH-05 Step 0.5 companion. Every guard in the application builds
+   * `/login?redirect=…` — loginPathWithRedirect exists for exactly that — and
+   * this page ignored the parameter entirely, sending everyone to the
+   * workspace picker. Session expiry on a deep link therefore lost the
+   * destination, which is half of the defect ARCH-01 set out to fix.
+   *
+   * It became load-bearing at Step 0.5: an invitee arriving without a session
+   * is the majority case for invitation acceptance, and without this they sign
+   * in, land on the picker, and never return to the invitation they were
+   * holding.
+   *
+   * Validated with isSafeRedirectPath rather than a local allowlist. That
+   * function is the one tenantPaths self-checks, it rejects protocol-relative
+   * and scheme-bearing values, and a second copy of open-redirect logic is a
+   * second place for it to be wrong.
+   */
+  const redirectTo = (() => {
+    const requested = new URLSearchParams(location.search).get("redirect");
+    return requested && isSafeRedirectPath(requested)
+      ? requested
+      : ROUTES.WORKSPACES;
+  })();
 
   // Local component states
   const [email, setEmail] = useState("");
@@ -40,8 +68,10 @@ export const Login: React.FC = () => {
       // 4. Commit the authenticated session
       setAuth(userResponse, tokenResponse.access_token);
 
-      // 5. Shift viewport to selection layout
-      navigate(ROUTES.WORKSPACES, { replace: true });
+      // 5. Shift viewport to the requested destination, or the picker.
+      //    `replace` so the back button does not return to a login form the
+      //    user has already satisfied.
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === API_ERROR_CODES.UNAUTHORIZED) {
