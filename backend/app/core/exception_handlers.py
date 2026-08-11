@@ -51,6 +51,8 @@ from app.core.exceptions import (
     SeatLimitExceededError,
     InvitationGrantError,
     InvitationResendTooSoonError,
+    EmailImmutableError,
+    UserError,
 )
 
 logger = logging.getLogger("app.core.exception_handlers")
@@ -117,6 +119,10 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     InvitationGrantError: (400, "INVITATION_GRANT_INVALID"),
     InvitationResendTooSoonError: (429, "INVITATION_RESEND_TOO_SOON"),
     InvitationError: (400, "INVITATION_ERROR"),
+
+    # --- Users ---------------------------------------------------------------
+    EmailImmutableError: (409, "EMAIL_IMMUTABLE"),
+    UserError: (400, "USER_ERROR"),
 
     # --- Root --------------------------------------------------------------
     FlowPilotError: _DEFAULT_MAPPING,

@@ -34,12 +34,36 @@ class UserSummary(BaseModel):
     member list needs the email immediately; returning bare identifiers would
     force a request waterfall.
 
-    Mirrors the User model exactly: it has no display-name column, so none is
-    declared here.
+    ARCH-05 Step 5: carries `display_name` and `timezone` now that `users`
+    has them. Since this schema uses `from_attributes=True`, both flow
+    through automatically at every existing call site
+    (`UserSummary.model_validate(member.user)` in `workspaces.py`) with no
+    change required there — the whole reason this update is a one-file,
+    additive change rather than a coordinated one across every membership
+    endpoint.
+
+    `display_name` is NULLABLE HERE TOO, deliberately mirroring the column
+    rather than resolving the NULL-to-email fallback at serialization time.
+    A member directory rendering `summary.display_name ?? summary.email`
+    client-side is one line; baking the fallback into this schema would mean
+    a consumer that wants the raw distinction — "does this person have a
+    display name set, yes or no" — has no way to ask, having lost that
+    information the moment it left the database. Every read site is still
+    expected to fall back to `email`, per the User model's own doc; this
+    schema hands over the material to do that, not a pre-decided string.
+
+    `timezone` is included — genuinely useful in a member directory ("it's
+    9am for them") — but `locale` deliberately is NOT. Locale governs how
+    output is rendered TO that person; it carries no information a viewer of
+    someone else's member-directory entry has any use for, unlike timezone.
+    Add it later if a real consumer needs it; there is no forward-compat cost
+    to adding a field, and a real cost to exposing one nobody asked for.
     """
     id: UUID
     email: EmailStr
     is_active: bool
+    display_name: str | None = None
+    timezone: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -23,10 +23,25 @@ def render_invitation_revoked(
     *,
     invited_email: str,
     organization_name: str,
-    inviter_display: str,
+    inviter_display: str | None = None,
+    inviter_email: str | None = None,
     brand_name: str,
 ) -> tuple[str, str, str]:
-    """Renders the subject, HTML body, and plain-text body."""
+    """
+    Renders the subject, HTML body, and plain-text body.
+
+    Args:
+        invited_email: Target recipient email address.
+        organization_name: Name of the organization.
+        inviter_display: The inviter's display name for prose. Defaults to
+            `inviter_email` when omitted.
+        inviter_email: The inviter's email address for the mailto: href.
+            Defaults to `inviter_display` for backward compatibility.
+        brand_name: Platform brand name.
+    """
+    email_for_href = inviter_email or inviter_display or ""
+    display = inviter_display or inviter_email or ""
+
     subject = single_line(
         f"Your invitation to {organization_name} was withdrawn"
     )
@@ -36,7 +51,7 @@ def render_invitation_revoked(
         f"The invitation sent to {invited_email} for {organization_name} on "
         f"{brand_name} has been withdrawn. The link in that email no longer "
         f"works.\n\n"
-        f"If you were expecting to join, contact {inviter_display} -- they "
+        f"If you were expecting to join, contact {display} -- they "
         f"can send a new invitation.\n\n"
         f"No action is needed otherwise."
     )
@@ -46,7 +61,7 @@ def render_invitation_revoked(
                <strong>{esc(organization_name)}</strong> has been withdrawn.
                The link in that email no longer works.</p>
             <p>If you were expecting to join, contact
-               <a href="mailto:{esc_attr(inviter_display)}">{esc(inviter_display)}</a>
+               <a href="mailto:{esc_attr(email_for_href)}">{esc(display)}</a>
                &mdash; they can send a new invitation.</p>
             <p>No action is needed otherwise.</p>"""
 

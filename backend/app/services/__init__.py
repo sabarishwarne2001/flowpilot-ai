@@ -6,6 +6,13 @@ verifications, OCR, document parsing, text chunking, vector operations,
 LLM promptings, and document processing pipelines) to decouple API routers.
 """
 
+from app.services import organization_invitation_service
+from app.services import organization_member_service
+from app.services import organization_service
+from app.services import ownership_mail
+from app.services import user_service
+from app.services import workspace_service
+
 from app.services.auth_service import register_new_user, authenticate_user
 from app.services.assistant_service import assistant_service
 from app.services.automation_service import automation_service
@@ -32,7 +39,13 @@ __all__ = [
     "llm_service",
     "notification_dispatcher",
     "ocr_service",
+    "organization_invitation_service",
+    "organization_member_service",
+    "organization_service",
+    "ownership_mail",
     "process_document_pipeline",
     "register_new_user",
     "split_text",
+    "user_service",
+    "workspace_service",
 ]

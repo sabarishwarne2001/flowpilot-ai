@@ -253,3 +253,44 @@ class InvitationResendTooSoonError(InvitationError):
     both a mail-volume amplifier and a token churn primitive. Maps to 429.
     """
     pass
+
+
+# ============================================================================
+# Users (account, profile)
+# ============================================================================
+
+class UserError(FlowPilotError):
+    """Base exception for all account- and profile-related failures."""
+    pass
+
+
+class EmailImmutableError(UserError):
+    """
+    Raised when a request attempts to change `users.email` outside signup.
+
+    ARCH-05 §B.5 / §A.2.5: email mutability was an absence in this product,
+    not a decision, and left open it would have silently broken invitation
+    matching (`_assert_actor_matches` compares session email to
+    `invitation.email`), `uq_pending_organization_invitation`'s
+    `lower(email)` index, password-reset targeting, and
+    `OrganizationInvitation.invited_user_id`'s documented status as a stale
+    binding that must never authorize. §B.5 closes the surface instead:
+    email is immutable for this phase, decided rather than merely unbuilt.
+
+    THIS IS DEFENCE IN DEPTH, NOT THE PRIMARY ENFORCEMENT. The primary
+    enforcement is that `UserProfileUpdate` has no `email` field for a
+    client to populate — FastAPI/Pydantic reject an unrecognised `email` key
+    in the request body before a handler ever runs, so most callers never
+    reach code that could raise this. This exception exists for every other
+    path to the same data: a service function called directly, a future
+    admin tool, a script — anywhere `email` might be assigned outside the
+    signup flow that is the sole legitimate writer of that column.
+
+    The message names the actual remedy (contact support; a full,
+    verified change flow is scheduled, see §B.5 Option B) rather than
+    stating "not allowed" and leaving the reader to guess whether this is
+    temporary, a bug, or permanent. Maps to 409 — the request conflicts with
+    an immutability rule on the resource, not a validation failure (422) or
+    a missing resource (404).
+    """
+    pass

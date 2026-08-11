@@ -90,6 +90,12 @@ from app.schemas.workspace_member import (
     WorkspaceMemberListResponse,
 )
 
+# ARCH-05 Step 5: profile schemas
+from app.schemas.user import (
+    UserProfileUpdate,
+    UserProfileResponse,
+)
+
 # EDIT 4: Updated __all__ with the new schema names
 __all__ = [
     "UserRegister",
@@ -153,4 +159,7 @@ __all__ = [
     "WorkspaceMemberRoleUpdate",
     "WorkspaceMemberResponse",
     "WorkspaceMemberListResponse",
+    # Profile (ARCH-05 Step 5)
+    "UserProfileUpdate",
+    "UserProfileResponse",
 ]

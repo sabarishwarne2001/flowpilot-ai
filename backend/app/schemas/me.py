@@ -32,11 +32,22 @@ class MeUser(BaseModel):
     """
     The authenticated actor.
 
-    Mirrors the User model, which has no display-name column.
+    ARCH-05 Step 5: carries `display_name` and `timezone` now that `users`
+    has them — this is the payload the sidebar and header render from on
+    every session start, and "the sidebar renders `user?.email`" was one of
+    A.2.4's own named symptoms. `locale` is intentionally absent: nothing at
+    boot time needs it yet, and `GET /me/profile` (`UserProfileResponse`,
+    `app/schemas/user.py`) is the fuller, deliberately-opened profile
+    contract for a settings screen. Keeping this projection minimal is the
+    same reasoning `UserProfileResponse`'s docstring gives for NOT reusing
+    this class there: a field added here for bootstrap reasons should not
+    show up on the settings page for no reason, and vice versa.
     """
     id: UUID
     email: EmailStr
     is_active: bool
+    display_name: str | None = None
+    timezone: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

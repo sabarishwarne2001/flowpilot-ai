@@ -31,9 +31,11 @@ from app.schemas.me import (
     OrganizationMembershipSummary,
 )
 from app.schemas.organization import OrganizationResponse
+from app.schemas.user import UserProfileResponse, UserProfileUpdate
 from app.schemas.workspace import WorkspaceSummary
 from app.models.workspace import WorkspaceStatus
 from app.services import organization_service
+from app.services import user_service
 from app.services import workspace_service
 
 logger = logging.getLogger("app.api.v1.me")
@@ -199,3 +201,60 @@ async def list_my_workspaces(
             )
         )
     return summaries
+
+
+# ============================================================================
+# Profile (ARCH-05 Step 5)
+# ============================================================================
+
+@router.get(
+    "/me/profile",
+    response_model=UserProfileResponse,
+    summary="Get My Profile",
+)
+async def get_my_profile(
+    current_user: deps.CurrentUser,
+) -> Any:
+    """
+    Returns the actor's own profile: email, display_name, timezone, locale.
+
+    No `db: deps.DbSession` parameter and no tenant-scoped dependency —
+    `CurrentUser` alone already holds the loaded row this returns, and this
+    route asks nothing about organizations or workspaces. Reachable by an
+    unverified account, same as the rest of this router (`get_verified_user`
+    gates tenant access, not identity — see its own docstring in
+    `app/api/deps.py`): a person mid-signup should be able to see and set
+    their own display name before they have proved their email or joined
+    anything.
+    """
+    return user_service.get_user_profile(current_user)
+
+
+@router.patch(
+    "/me/profile",
+    response_model=UserProfileResponse,
+    summary="Update My Profile",
+)
+async def update_my_profile(
+    payload: UserProfileUpdate,
+    db: deps.DbSession,
+    current_user: deps.CurrentUser,
+) -> Any:
+    """
+    Updates display_name, timezone, and/or locale. Omitted or null fields are
+    left unchanged (see UserProfileUpdate's docstring).
+
+    THIS IS §B.5's PRIMARY ENFORCEMENT, NOT `EmailImmutableError`.
+    `UserProfileUpdate` has no `email` field, so there is nothing here to
+    read even to reject — a request that includes an `email` key has it
+    silently dropped by Pydantic before this function is ever entered.
+    `EmailImmutableError` exists for other paths to the same column, not
+    this one.
+    """
+    return user_service.update_user_profile(
+        db,
+        user=current_user,
+        display_name=payload.display_name,
+        timezone=payload.timezone,
+        locale=payload.locale,
+    )
