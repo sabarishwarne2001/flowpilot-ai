@@ -52,7 +52,17 @@ from app.core.exceptions import (
     InvitationGrantError,
     InvitationResendTooSoonError,
     EmailImmutableError,
+    ReauthenticationFailedError,
     UserError,
+    OwnershipTransferError,
+    PendingTransferExistsError,
+    TransferNotFoundError,
+    TransferNotPendingError,
+    TransferExpiredError,
+    TransferTargetMismatchError,
+    TargetNotVerifiedError,
+    CannotTransferToSelfError,
+    TransferInitiatorMismatchError,
 )
 
 logger = logging.getLogger("app.core.exception_handlers")
@@ -122,7 +132,19 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
 
     # --- Users ---------------------------------------------------------------
     EmailImmutableError: (409, "EMAIL_IMMUTABLE"),
+    ReauthenticationFailedError: (401, "REAUTHENTICATION_FAILED"),
     UserError: (400, "USER_ERROR"),
+
+    # --- Ownership Transfer (ARCH-05 Step 6) --------------------------------
+    PendingTransferExistsError: (409, "PENDING_TRANSFER_EXISTS"),
+    TransferNotFoundError: (404, "TRANSFER_NOT_FOUND"),
+    TransferNotPendingError: (409, "TRANSFER_NOT_PENDING"),
+    TransferExpiredError: (410, "TRANSFER_EXPIRED"),
+    TransferTargetMismatchError: (403, "TRANSFER_TARGET_MISMATCH"),
+    TransferInitiatorMismatchError: (403, "TRANSFER_INITIATOR_MISMATCH"),
+    TargetNotVerifiedError: (409, "TARGET_NOT_VERIFIED"),
+    CannotTransferToSelfError: (400, "CANNOT_TRANSFER_TO_SELF"),
+    OwnershipTransferError: (400, "OWNERSHIP_TRANSFER_ERROR"),
 
     # --- Root --------------------------------------------------------------
     FlowPilotError: _DEFAULT_MAPPING,

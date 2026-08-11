@@ -94,6 +94,20 @@ class Settings(BaseSettings):
     purges them.
     """
 
+    # ------------------------------------------------------------------
+    # ARCH-05 ownership transfer (§B.8)
+    # ------------------------------------------------------------------
+    OWNERSHIP_TRANSFER_TTL_DAYS: int = 7
+    """
+    Pending-proposal lifetime. Longer than the invitation TTL, deliberately:
+    ownership is not something a person should be pressured to decide about
+    inside a workday, and §B.1's whole premise is that the target weighs a
+    financial responsibility (seat_limit authority now, billing under Phase
+    F) before agreeing to it. Enforced lazily (§B.8) — there is no sweeper
+    equivalent to the invitation one, since both parties are already active
+    members, not an unproven mailbox that needs reconciling on a schedule.
+    """
+
     # File Ingestion & Storage Configurations
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 104857600  # 100 MB in bytes

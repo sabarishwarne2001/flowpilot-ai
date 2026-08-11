@@ -87,3 +87,29 @@ def build_organization_invitations_link(
 ) -> str:
     """/o/{org_slug}/invitations — confirmed at ARCH-04 Step 1 close."""
     return f"{_frontend_base(frontend_url)}/o/{org_slug}/invitations"
+
+
+def build_ownership_transfer_link(
+    org_slug: str, *, frontend_url: str | None = None
+) -> str:
+    """
+    /organizations/{org_slug}/ownership-transfer — the review page for a
+    pending proposal.
+
+    NOT a token link. §B.1: the target is already an authenticated,
+    verified member of this organization, so acceptance is authorized
+    in-app by session, not by a credential in the URL. There is nothing here
+    to percent-encode or move to a fragment.
+
+    THE PATH PREFIX HERE IS `/organizations/`, NOT `/o/` — deliberately
+    inconsistent with build_organization_members_link and
+    build_organization_invitations_link immediately above. Those two use a
+    prefix that does not exist as a frontend route (confirmed directly:
+    `/o/` is not registered anywhere in `frontend/src`; the actual route
+    namespace is `organizations`, per `tenantPaths.ts`). That is a live,
+    pre-existing bug in both — flagged during ARCH-05 Step 0/2 verification,
+    not fixed here because it is ARCH-04 surface. This builder is written
+    against the route that is actually served, rather than copying a
+    sibling that is already known to be wrong.
+    """
+    return f"{_frontend_base(frontend_url)}/organizations/{org_slug}/ownership-transfer"

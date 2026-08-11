@@ -294,3 +294,168 @@ class EmailImmutableError(UserError):
     a missing resource (404).
     """
     pass
+
+
+class ReauthenticationFailedError(UserError):
+    """
+    Raised when a sensitive action's password confirmation is wrong.
+
+    ARCH-05 §B.2: initiating an ownership transfer requires the outgoing
+    owner's CURRENT password, re-entered at that moment, even though the
+    request already carries a valid session. The reasoning is the same
+    `change_password` already documents for itself (`password_service.py`):
+    an access token is a bearer credential that may have been taken, and a
+    stolen session should not be enough on its own to hand a tenant to an
+    address the attacker controls.
+
+    THIS IS A DIFFERENT EXCEPTION FROM `password_service.IncorrectPasswordError`,
+    DELIBERATELY, not an oversight. That class predates the centralized
+    `FlowPilotError` hierarchy this module belongs to (it subclasses plain
+    `Exception` and is caught with a manual `try/except -> HTTPException` in
+    `app/api/v1/auth.py`, rather than through `exception_handlers.py`'s
+    registry). Reusing it here would mean importing an exception type out of
+    an unrelated service module, and would tie this workflow to
+    `change_password`'s error handling being upgraded to the centralized
+    pattern before this one could be. A second class with a near-identical
+    name is a real cost — noted here so it is not mistaken for the same
+    class later — but it is smaller than the coupling the alternative would
+    create.
+
+    Maps to 401, not the legacy code's 400. A wrong password IS a failure to
+    prove identity for this specific action, which is what 401 signals; 400
+    would suggest the request itself was malformed, which it was not.
+    """
+    pass
+
+
+# ============================================================================
+# Ownership Transfer (ARCH-05 Step 6)
+# ============================================================================
+
+class OwnershipTransferError(FlowPilotError):
+    """Base exception for all ownership-transfer workflow failures."""
+    pass
+
+
+class PendingTransferExistsError(OwnershipTransferError):
+    """
+    Raised when initiation is attempted while the organization already has a
+    PENDING proposal.
+
+    Backed by `uq_pending_ownership_transfer_per_org` (ARCH-05 Step 3/4) as
+    the actual enforcement — this exception is the readable failure surfaced
+    when a pre-check finds that row, not a substitute for the constraint.
+    The constraint is what makes the invariant true under concurrency; the
+    pre-check exists only so two well-behaved sequential requests get a
+    clear 409 instead of a raw `IntegrityError`.
+    """
+    pass
+
+
+class TransferNotFoundError(OwnershipTransferError):
+    """
+    Raised when a transfer_id does not resolve within the given organization.
+
+    Deliberately the same failure whether the id is well-formed but wrong,
+    or belongs to a different organization entirely — an actor authorized
+    for one tenant must not be able to distinguish "no such transfer" from
+    "that transfer exists, but not here" by the error they get back. Mirrors
+    `get_membership_or_raise`'s own reasoning for the same shape of check.
+    """
+    pass
+
+
+class TransferNotPendingError(OwnershipTransferError):
+    """
+    Raised when accept/decline/cancel is attempted on a transfer that is no
+    longer PENDING.
+
+    This is the failure mode of the conditional UPDATE
+    (`ownership_transfer_crud.update_transfer_status`) finding no matching
+    row: the proposal was already accepted, declined, cancelled, or expired
+    — including by a concurrent request that won the race. The message does
+    not claim to know WHICH terminal state it landed in, because the
+    conditional UPDATE's WHERE clause does not tell you what it did not
+    match; a caller that needs to know re-reads the row on the failure path,
+    exactly as `claim_invitation`'s callers do.
+    """
+    pass
+
+
+class TransferExpiredError(OwnershipTransferError):
+    """
+    Raised when a PENDING transfer's `expires_at` has passed.
+
+    ARCH-05 §B.8: lazy expiry, no sweeper. This is not merely a read of a
+    stale `status` column — it is the SOLE place `OwnershipTransferStatus.EXPIRED`
+    is ever written (see the model's own docstring). Whichever service
+    function discovers the expiry first writes it, then raises this.
+
+    Maps to 410 Gone, not 409: the proposal existed and is now permanently
+    unavailable, which is precisely what 410 signals and 409 does not.
+    """
+    pass
+
+
+class TransferTargetMismatchError(OwnershipTransferError):
+    """
+    Raised when the acting session is not the transfer's target.
+
+    Compares `current_user.id` to `target_membership.user_id` directly — a
+    plain identifier comparison, not an email comparison. This deliberately
+    does NOT mirror `InvitationEmailMismatchError`'s reasoning
+    (`_assert_actor_matches` in `organization_invitation_service.py`),
+    because the two situations differ in the one respect that reasoning
+    turns on: an invitation's `email` column names an address nobody has
+    proved control of yet, so comparing session identity to a stale
+    `invited_user_id` would be unsound. `target_membership_id` here is a
+    foreign key to an EXISTING, ACTIVE membership of an ALREADY-VERIFIED
+    account (A.2.3 requires verification before a transfer can even be
+    proposed) — there is no unproven-address problem to route around, and an
+    identifier comparison is strictly more precise than a string comparison
+    of an immutable (§B.5) email would be.
+    """
+    pass
+
+
+class TargetNotVerifiedError(OwnershipTransferError):
+    """
+    Raised at initiation when the proposed target has no `email_verified_at`.
+
+    ARCH-05 A.2.3: ownership carries `seat_limit` authority today and billing
+    liability under Phase F. Handing that to an account that has never
+    proved control of its own mailbox is a materially different risk than an
+    unverified MEMBER seat — a verified target is what makes it meaningful
+    that a person, not an unproven inbox, is the one who will receive and
+    can act on the proposal notice.
+    """
+    pass
+
+
+class CannotTransferToSelfError(OwnershipTransferError):
+    """
+    Raised at initiation when the proposed target is the initiator's own
+    membership.
+
+    `transfer_ownership` (`organization_member_service.py`) already guards
+    the same condition at ACCEPT time, as a safety net that fires regardless
+    of how a transfer was created. This exception exists so the same
+    nonsensical request is rejected immediately at INITIATION, rather than
+    deferred to whoever happens to process acceptance up to seven days
+    later.
+    """
+    pass
+
+
+class TransferInitiatorMismatchError(OwnershipTransferError):
+    """
+    Raised when cancellation is attempted by anyone other than the transfer's
+    original initiator.
+
+    A deliberately narrower check than `TransferTargetMismatchError`'s: this
+    workflow does not let a DIFFERENT current owner cancel a proposal they
+    did not make, even to clean up a proposal from someone who has since lost
+    ownership themselves. §B.8's 7-day lazy expiry is the intended eventual
+    resolution for that specific case, not a broadened cancel permission.
+    """
+    pass
