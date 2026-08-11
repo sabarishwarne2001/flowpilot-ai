@@ -19,12 +19,16 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Sequence
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 
 from app.core.exceptions import (
     LastOwnerError,
     OrganizationMemberError,
+    OrganizationNotFoundError,
     OrganizationPermissionDeniedError,
 )
 from app.core.organization_permissions import (
@@ -112,6 +116,13 @@ def change_member_role(
         LastOwnerError: The change would remove the final active owner.
         OrganizationMemberError: Self-directed role change.
     """
+    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
+    _lock_organization_for_owner_change(
+        db,
+        organization_id=organization.id,
+        refresh=(actor_membership, target_membership),
+    )
+
     if actor_membership.id == target_membership.id:
         raise OrganizationMemberError(
             "You cannot change your own role. Ask another owner, or use "
@@ -190,6 +201,13 @@ def deactivate_member(
     membership from the database per request rather than trusting a token
     claim.
     """
+    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
+    _lock_organization_for_owner_change(
+        db,
+        organization_id=organization.id,
+        refresh=(actor_membership, target_membership),
+    )
+
     if actor_membership.id == target_membership.id:
         raise OrganizationMemberError(
             "Use the leave-organization operation to remove yourself."
@@ -255,6 +273,16 @@ def leave_organization(
     pre-ARCH-01 message that named a nonexistent feature, transfer_ownership
     below is a real path out.
     """
+    # ARCH-05 Step 1 / A.2.1. This is the call site the reported interleaving
+    # actually lands on: get_organization_context loaded `membership` before
+    # this function was entered, so without the refresh below the role read on
+    # the next line is a value from before the lock was granted.
+    _lock_organization_for_owner_change(
+        db,
+        organization_id=organization.id,
+        refresh=(membership,),
+    )
+
     if membership.role is OrganizationRole.OWNER:
         _assert_not_last_owner(
             db,
@@ -323,6 +351,13 @@ def transfer_ownership(
     Returns:
         The newly promoted owner's membership.
     """
+    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
+    _lock_organization_for_owner_change(
+        db,
+        organization_id=organization.id,
+        refresh=(current_owner_membership, target_membership),
+    )
+
     if not can_transfer_ownership(current_owner_membership.role):
         raise OrganizationPermissionDeniedError(
             "Only an organization owner can transfer ownership."
@@ -392,3 +427,72 @@ def _assert_not_last_owner(
                 "ownership or promote another member first."
             )
         )
+
+
+def _lock_organization_for_owner_change(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    refresh: Sequence[OrganizationMember] = (),
+) -> None:
+    """
+    Serializes every mutation of an organization's owner set. ARCH-05 §B.3.
+
+    Two things happen here, and the second is not optional decoration on the
+    first. Removing either one leaves A.2.1 reachable.
+
+    1. `SELECT organizations.id ... FOR UPDATE` takes an exclusive row lock on
+       the tenant root. Owner-set mutations for one organization therefore run
+       one at a time. The lock is taken on `organizations` rather than on the
+       owner membership rows because A.2.1 is a phantom: the row that becomes
+       an owner was not an owner when it was read, so locking the rows a query
+       found cannot lock the row it did not find (§B.3 option B). The tenant
+       root is the one row every owner-set operation can agree to contend on
+       without knowing the owner set first.
+
+    2. Every membership the caller is about to make a decision from is
+       refreshed. This is the half that is easy to omit and fatal to omit.
+       `get_organization_context` resolves the actor's membership through the
+       same Session before the route handler is entered, so `membership.role`
+       is already in the identity map, read *before* the lock existed. A lock
+       acquired afterwards does not retroactively invalidate that value:
+       without the refresh, the caller would serialize correctly and then
+       decide from a stale role anyway, which is exactly the A.2.1 outcome.
+
+    Every function that mutates the owner set calls this as its first
+    statement. It is the only place `with_for_update` appears in the service
+    layer; a second one would reintroduce a lock-ordering question that this
+    design does not currently have (§D R3).
+
+    The lock is held until the caller's transaction ends. Callers that return
+    early without committing still hold it until the request teardown closes
+    the session, which is acceptable for an operation that is rare and
+    human-initiated, and is the trade §B.3 accepted.
+
+    Args:
+        db: The active session. Must not have committed since the memberships
+            in `refresh` were loaded, or they belong to a different
+            transaction than the lock.
+        organization_id: The tenant root to lock.
+        refresh: Memberships whose role or status the caller is about to read.
+
+    Raises:
+        OrganizationNotFoundError: No such organization.
+        OrganizationMemberError: A membership disappeared under the lock.
+    """
+    locked = db.execute(
+        select(Organization.id)
+        .where(Organization.id == organization_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+
+    if locked is None:
+        raise OrganizationNotFoundError("Organization not found.")
+
+    for membership in refresh:
+        try:
+            db.refresh(membership)
+        except ObjectDeletedError as exc:
+            raise OrganizationMemberError(
+                "That membership no longer exists."
+            ) from exc
