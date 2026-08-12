@@ -6,10 +6,12 @@ and bidirectional relationship mappings targeting work items, rules, notificatio
 and conversational memory blocks.
 """
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy.types import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -112,6 +114,21 @@ class User(Base, UUIDMixin, TimestampMixin):
     # that email mutability was an absence rather than a decision, and §B.5
     # keeps it that way deliberately — see EmailImmutableError at the
     # PATCH /me/profile boundary (Step 5). Nothing below changes that.
+
+    avatar_file_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("uploaded_files.id", ondelete="SET NULL"),
+        nullable=True,
+        doc=(
+            "Pointer to this user's current avatar in uploaded_files "
+            "(ARCH-06 Step 7). NULL for the majority of accounts, which "
+            "never set one -- and left NULL rather than defaulted, matching "
+            "display_name's position that a rendering fallback belongs at "
+            "the read site, not in the column. SET NULL rather than CASCADE: "
+            "the file is the child here, so deleting it must clear this "
+            "pointer, never delete the person."
+        ),
+    )
 
     display_name: Mapped[str | None] = mapped_column(
         String(100),

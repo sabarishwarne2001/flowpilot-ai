@@ -65,6 +65,12 @@ class SessionRevokedReason(str, Enum):
     ROTATED          superseded by its replacement during a normal refresh
     REUSE_DETECTED   an already-rotated token was presented (§B.7)
     PASSWORD_CHANGE  password reset or change revoked all sessions (§B.6)
+    EMAIL_CHANGE     the account address changed (ARCH-06 Step 6). Distinct
+                     from PASSWORD_CHANGE deliberately: changing the address
+                     is the step that makes an account takeover permanent,
+                     and it is the event an incident review most needs to
+                     find. Reusing PASSWORD_CHANGE would write a false
+                     statement into every affected row.
     ACCOUNT_DISABLED administrative deactivation
     EXPIRED          closed by the sweeper past its expiry (R8)
     """
@@ -75,6 +81,7 @@ class SessionRevokedReason(str, Enum):
     PASSWORD_CHANGE = "PASSWORD_CHANGE"
     ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
     EXPIRED = "EXPIRED"
+    EMAIL_CHANGE = "EMAIL_CHANGE"
 
 
 # ============================================================================

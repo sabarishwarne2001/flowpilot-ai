@@ -43,6 +43,7 @@ from app.api.v1 import (
     organizations,
     ownership_transfers,
     upload,
+    avatar,
     work_items,
     workspaces,
 )
@@ -64,6 +65,7 @@ WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 
 api_router.include_router(organizations.router)
 api_router.include_router(me.router)
+api_router.include_router(avatar.router)
 api_router.include_router(workspaces.router)
 # Mount the new organization invitation router with no prefix (handles /invitations/*)
 api_router.include_router(organization_invitation_router)
