@@ -41,6 +41,7 @@ from app.models.email_change_request import (
     EmailChangeRequest,
     EmailChangeStatus,
 )
+from app.models.uploaded_file import UploadedFile
 
 __all__ = [
     "Base",
@@ -74,4 +75,5 @@ __all__ = [
     "OwnershipTransferStatus",
     "EmailChangeRequest",
     "EmailChangeStatus",
+    "UploadedFile",
 ]

@@ -52,6 +52,17 @@ degrade a live query path for a benefit that does not exist yet.
 they are workspace-only today and stay workspace-only until Step 6 is the
 step that teaches them about organization-level rows. This file adds what
 Step 6 will need without changing what today's code already relies on.
+
+ARCH-06 STEP 5 (CONTRACT) UPDATE
+-----------------------------------
+The CHECK constraint anticipated above by this docstring's own quoted line
+now exists, in `__table_args__` below, named `has_scope`. It is the OR form
+quoted here, not the stricter `organization_id NOT NULL` the approved plan's
+one-line Step 5 summary names — see the constraint's own inline comment for
+exactly why that stronger form is not yet safe to ship: `create_notification`
+still does not set `organization_id` on any row it writes, and asserting NOT
+NULL against a column its only writer never populates would fail on that
+writer's next call, not on bad data.
 """
 
 from __future__ import annotations
@@ -60,7 +71,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, Enum as SQLEnum, Index
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, Enum as SQLEnum, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -106,13 +117,14 @@ class Notification(Base, UUIDMixin, TimestampMixin):
     """
     Persistent notification record.
 
-    As of ARCH-06 Step 3, a row's scope is EITHER a workspace, an
-    organization, or (transiently, during Steps 3-4) neither newly-nullable
-    column enforced against the other — see the module docstring for exactly
-    which invariant exists now versus lands in Step 5. Every row in the
-    database today still carries a real workspace_id; this step only makes
-    room for the alternative, it does not yet produce any row shaped that
-    way.
+    As of ARCH-06 Step 5, a row's scope is a workspace, an organization, or
+    both — the `has_scope` CHECK constraint below enforces that it is never
+    neither. It is still not necessarily both: nothing before some future
+    step teaches `create_notification` to populate `organization_id`, so
+    every row written by today's code carries a real `workspace_id` and a
+    NULL `organization_id`, even though the column has held a backfilled
+    value on every EXISTING row since Step 4. See the module docstring for
+    exactly which invariant each step added.
     """
     __tablename__ = "notifications"
 
@@ -139,6 +151,33 @@ class Notification(Base, UUIDMixin, TimestampMixin):
             "user_id",
             "is_read",
             "created_at",
+        ),
+        # ARCH-06 Step 5 (CONTRACT). Every row must name at least one scope.
+        #
+        # This is deliberately the OR form, not organization_id NOT NULL —
+        # which is what the approved plan's own one-line Step 5 summary says
+        # ("organization_id -> NOT NULL; workspace_id -> nullable") and
+        # which this constraint does NOT implement. That summary describes
+        # where this column is eventually headed once something writes
+        # organization_id on every row; it does not hold today.
+        # create_notification (app/crud/notification.py) is UNCHANGED by
+        # this step and still constructs every Notification without setting
+        # organization_id at all — meaning every row it writes between this
+        # migration landing and whatever future step teaches it about
+        # organization_id would have organization_id NULL. A NOT NULL
+        # constraint here would make that column's own only writer fail on
+        # its very next INSERT: a self-inflicted outage, not a data
+        # invariant. The OR form is satisfied by workspace_id alone, which
+        # create_notification has always set, so it enforces the one thing
+        # actually true of every row that exists or that today's code can
+        # produce — "this row has SOME scope" — without asserting a stronger
+        # claim the write path cannot yet back up. Tightening this to
+        # organization_id NOT NULL is a future CONTRACT step's job, gated on
+        # first updating create_notification (or its Step 6+ successor) to
+        # populate organization_id unconditionally.
+        CheckConstraint(
+            "workspace_id IS NOT NULL OR organization_id IS NOT NULL",
+            name="has_scope",
         ),
     )
 
