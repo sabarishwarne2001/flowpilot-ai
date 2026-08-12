@@ -28,11 +28,6 @@ class SMTPConfig(BaseModel):
     sender_name: str
     encryption: EmailEncryption
 
-    # Optional visible sender. Hosted relays authenticate as an identity that
-    # is not an address at all — SendGrid as "apikey", Mailgun as
-    # "postmaster@mg.example.com" — so deriving the From header from the login
-    # username yields an unroutable address and a hard bounce. Workspace SMTP
-    # rows leave this None and keep the previous behaviour exactly.
     from_email: str | None = None
 
     @property
@@ -44,9 +39,14 @@ class SMTPConfig(BaseModel):
 def resolve_smtp_config(
     db: Session,
     workspace_id: uuid.UUID | None,
+    organization_id: uuid.UUID | None = None,
 ) -> SMTPConfig:
     """
-    Resolves active SMTP configuration strictly by workspace_id.
+    Resolves active SMTP configuration, most specific setting first.
+
+        1. enabled WORKSPACE row      (unchanged)
+        2. enabled ORGANIZATION row   (ARCH-06 Step 8, §B.5 Option B)
+        3. platform default           (unchanged)
     """
     if workspace_id:
         workspace_settings = get_email_settings(db, workspace_id=workspace_id)
@@ -61,12 +61,17 @@ def resolve_smtp_config(
                 encryption=workspace_settings.encryption,
             )
 
-    # No workspace, or a workspace with no enabled SMTP row: this is FlowPilot
-    # speaking for itself. Delegated so the platform credentials have exactly
-    # one definition and the two paths cannot drift. ARCH-03 §B.1.
-    #
-    # Imported at call time: platform_email imports SMTPConfig from this
-    # module, so a module-level import here would be circular.
+    if organization_id:
+        from app.services.organization_email_settings_service import (
+            resolve_organization_smtp_config,
+        )
+
+        organization_config = resolve_organization_smtp_config(
+            db, organization_id=organization_id
+        )
+        if organization_config is not None:
+            return organization_config
+
     from app.core.platform_email import platform_smtp_config
 
     return platform_smtp_config()

@@ -10,6 +10,7 @@ import { registerSchema, type RegisterInput } from "@/utils/validation";
 import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
+import { isSafeRedirectPath } from "@/routes/tenantPaths";
 
 export const Register: React.FC = () => {
   const location = useLocation();
@@ -17,37 +18,17 @@ export const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Securely whitelist redirect destinations to mitigate Open Redirect vulnerabilities
-  const isValidRedirect = (path: string): boolean => {
-    if (!path) {
-      return false;
-    }
-    if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("\\")) {
-      return false;
-    }
-    const cleanPath = path.split("?")[0]?.split("#")[0] || "";
-    const allowedPrefixes = [
-      "/",
-      "/work-items",
-      "/assistant",
-      "/automation",
-      "/notifications",
-      "/profile",
-      "/settings",
-      "/account",
-      "/invitations/accept"
-    ];
-    return allowedPrefixes.some(prefix => {
-      if (prefix === "/") {
-        return cleanPath === "/";
-      }
-      return cleanPath.startsWith(prefix);
-    });
-  };
-
-  const searchParams = new URLSearchParams(location.search);
-  const redirectParam = searchParams.get("redirect");
-  const validatedRedirectParam = redirectParam && isValidRedirect(redirectParam) ? redirectParam : null;
+  /**
+   * The redirect destination to resume after email verification (§B.8,
+   * Option A: carry the validated redirect path through verification).
+   *
+   * ARCH-06 Step 9 replaced a local `isValidRedirect` helper here with the
+   * shared `isSafeRedirectPath`.
+   */
+  const validatedRedirectParam = (() => {
+    const requested = new URLSearchParams(location.search).get("redirect");
+    return requested && isSafeRedirectPath(requested) ? requested : null;
+  })();
 
   const {
     register,
@@ -73,6 +54,7 @@ export const Register: React.FC = () => {
     const payload = {
       email: data.email.trim(),
       password: data.password,
+      ...(validatedRedirectParam ? { redirect: validatedRedirectParam } : {}),
     };
 
     setSubmittedEmail(payload.email);
@@ -81,15 +63,6 @@ export const Register: React.FC = () => {
       await toast.promise(authApi.registerRequest(payload), {
         loading: "Creating your FlowPilot account...",
 
-        // ARCH-03 Step 10: the backend answers 202 with the same body whether
-        // or not the address already has an account, so there is nothing here
-        // to branch on and nothing to navigate to. Showing "account created"
-        // would be a claim we can no longer make, and showing "that address is
-        // taken" is the enumeration oracle we just closed.
-        //
-        // The user is sent to a check-your-email screen instead. A typo now
-        // surfaces as silence rather than an error — the accepted cost, and
-        // the reason the screen says what to do if nothing arrives.
         success: () => "Check your email to continue.",
 
         error: (error: unknown) => {

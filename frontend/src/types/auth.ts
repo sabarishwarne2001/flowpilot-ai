@@ -25,6 +25,17 @@ export interface LoginRequest {
 export interface RegisterRequest {
   readonly email: string;
   readonly password: string;
+
+  /**
+   * Optional post-verification destination (§B.8, Option A).
+   *
+   * Always a validated same-origin path -- Register.tsx runs it through
+   * `isSafeRedirectPath` and omits the field entirely when absent or
+   * rejected, so an unsafe value never reaches the wire. The backend embeds
+   * it in the verification link and MUST re-validate before honouring it: a
+   * client-side check is a usability guarantee, never a security one.
+   */
+  readonly redirect?: string;
 }
 
 /* --------------------------------------------------------------------------
@@ -41,8 +52,6 @@ export interface UserResponse {
   readonly is_superuser: boolean;
   readonly created_at: string;
   readonly updated_at: string;
-  // Exposed so the client can render the verification banner and route
-  // around the tenant gate before the server has to refuse a request.
   readonly email_verified_at: string | null;
 }
 

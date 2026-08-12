@@ -1,20 +1,6 @@
 """
 Business orchestration for organization membership — the billable seat.
-
-Enforces the invariants that could not be expressed before ARCH-01:
-
-  - An organization always retains at least one active owner.
-  - Role changes respect precedence in both directions: the actor must outrank
-    the target as they stand, and must be permitted to assign the new role.
-  - Removing a member releases every workspace grant they held in that
-    organization, in the same transaction.
-
-Ownership transfer exists here for the first time. The pre-ARCH-01 codebase
-rejected the last owner's departure with "promote another member to Owner
-first" while providing no promotion endpoint, which made every workspace a
-one-way trap.
 """
-
 
 from __future__ import annotations
 
@@ -39,6 +25,7 @@ from app.core.organization_permissions import (
     can_transfer_ownership,
 )
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.services import organization_notification_service
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import DIRECTORY_STATUSES
@@ -58,13 +45,6 @@ def get_membership_or_raise(
     organization_id: uuid.UUID,
     membership_id: uuid.UUID,
 ) -> OrganizationMember:
-    """
-    Fetches a membership scoped to its organization.
-
-    The organization scope is not redundant: without it, an actor authorized
-    for one tenant could address a membership in another by supplying its
-    identifier.
-    """
     membership = organization_members_crud.get_organization_member_by_id(
         db, organization_id=organization_id, membership_id=membership_id
     )
@@ -80,12 +60,6 @@ def list_members(
     actor_role: OrganizationRole,
     include_inactive: bool = False,
 ) -> list[OrganizationMember]:
-    """
-    Returns the member directory.
-
-    Deactivated members are hidden unless an administrator asks for them, since
-    retained rows exist for attribution rather than for everyday display.
-    """
     if include_inactive and not can_manage_members(actor_role):
         raise OrganizationPermissionDeniedError(
             "You do not have permission to view deactivated members."
@@ -105,19 +79,6 @@ def change_member_role(
     target_membership: OrganizationMember,
     new_role: OrganizationRole,
 ) -> OrganizationMember:
-    """
-    Changes a member's organization role.
-
-    This capability did not exist before ARCH-01: the permission helpers were
-    written but never wired to an endpoint, so roles were permanent from the
-    moment of invitation and ownership could never move.
-
-    Raises:
-        OrganizationPermissionDeniedError: Precedence or assignment denied.
-        LastOwnerError: The change would remove the final active owner.
-        OrganizationMemberError: Self-directed role change.
-    """
-    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
     lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
@@ -140,8 +101,6 @@ def change_member_role(
     if target_membership.role is new_role:
         return target_membership
 
-    # Demoting the last owner would strand the tenant with nobody able to
-    # manage billing, configure SSO, or transfer ownership.
     if (
         target_membership.role is OrganizationRole.OWNER
         and new_role is not OrganizationRole.OWNER
@@ -154,6 +113,21 @@ def change_member_role(
         updated = organization_members_crud.update_organization_member_role(
             db, membership=target_membership, role=new_role
         )
+
+        organization_notification_service.notify_role_changed(
+            db,
+            organization_id=organization.id,
+            target_user_id=target_membership.user_id,
+            organization_name=organization.name,
+            previous_role=previous_role.value,
+            new_role=new_role.value,
+            actor_display=(
+                actor_membership.user.email
+                if actor_membership.user is not None
+                else "An administrator"
+            ),
+        )
+
         commit_and_refresh(db, updated)
 
         logger.info(
@@ -186,23 +160,6 @@ def deactivate_member(
     actor_membership: OrganizationMember,
     target_membership: OrganizationMember,
 ) -> OrganizationMember:
-    """
-    Removes a member from the organization, retaining the record.
-
-    Two properties distinguish this from the pre-ARCH-01 hard DELETE:
-
-      1. The row survives with the actor and timestamp recorded, so attribution
-         for past work is preserved and re-adding is traceable.
-      2. Every workspace grant the member held in this organization is revoked
-         in the same transaction. Leaving orphaned grants behind would mean a
-         removed member kept access to individual workspaces — the most
-         consequential failure mode in a multi-workspace tenant.
-
-    Access ends on the member's next request, because authorization resolves
-    membership from the database per request rather than trusting a token
-    claim.
-    """
-    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
     lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
@@ -267,17 +224,6 @@ def leave_organization(
     organization: Organization,
     membership: OrganizationMember,
 ) -> OrganizationMember:
-    """
-    Removes the acting user from the organization at their own request.
-
-    A sole owner is blocked until they transfer ownership. Unlike the
-    pre-ARCH-01 message that named a nonexistent feature, transfer_ownership
-    below is a real path out.
-    """
-    # ARCH-05 Step 1 / A.2.1. This is the call site the reported interleaving
-    # actually lands on: get_organization_context loaded `membership` before
-    # this function was entered, so without the refresh below the role read on
-    # the next line is a value from before the lock was granted.
     lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
@@ -337,22 +283,6 @@ def transfer_ownership(
     current_owner_membership: OrganizationMember,
     target_membership: OrganizationMember,
 ) -> OrganizationMember:
-    """
-    Transfers organization ownership to another active member.
-
-    Promotes the target to OWNER and demotes the outgoing owner to ADMIN, in
-    one transaction. Ordering matters: promoting first means the last-owner
-    invariant is never momentarily violated, so a failure between the two
-    writes cannot leave the tenant ownerless.
-
-    The outgoing owner is demoted to ADMIN rather than removed. Losing the
-    organization and losing ownership of it are different intentions, and
-    conflating them would surprise the one person least able to recover.
-
-    Returns:
-        The newly promoted owner's membership.
-    """
-    # ARCH-05 Step 1 / A.2.1. First statement, before any role is read.
     lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
@@ -409,12 +339,6 @@ def _assert_not_last_owner(
     organization_id: uuid.UUID,
     message: str | None = None,
 ) -> None:
-    """
-    Raises LastOwnerError if the organization has only one active owner.
-
-    Called before any operation that would demote, deactivate, or remove an
-    owner.
-    """
     if (
         organization_members_crud.count_active_owners(
             db, organization_id=organization_id
@@ -436,57 +360,6 @@ def lock_organization_for_owner_change(
     organization_id: uuid.UUID,
     refresh: Sequence[OrganizationMember] = (),
 ) -> None:
-    """
-    Serializes every mutation of an organization's owner set. ARCH-05 §B.3.
-
-    Two things happen here, and the second is not optional decoration on the
-    first. Removing either one leaves A.2.1 reachable.
-
-    1. `SELECT organizations.id ... FOR UPDATE` takes an exclusive row lock on
-       the tenant root. Owner-set mutations for one organization therefore run
-       one at a time. The lock is taken on `organizations` rather than on the
-       owner membership rows because A.2.1 is a phantom: the row that becomes
-       an owner was not an owner when it was read, so locking the rows a query
-       found cannot lock the row it did not find (§B.3 option B). The tenant
-       root is the one row every owner-set operation can agree to contend on
-       without knowing the owner set first.
-
-    2. Every membership the caller is about to make a decision from is
-       refreshed. This is the half that is easy to omit and fatal to omit.
-       `get_organization_context` resolves the actor's membership through the
-       same Session before the route handler is entered, so `membership.role`
-       is already in the identity map, read *before* the lock existed. A lock
-       acquired afterwards does not retroactively invalidate that value:
-       without the refresh, the caller would serialize correctly and then
-       decide from a stale role anyway, which is exactly the A.2.1 outcome.
-
-    Every function that mutates the owner set calls this as its first
-    statement. It is the only place `with_for_update` appears in the service
-    layer; a second one would reintroduce a lock-ordering question that this
-    design does not currently have (§D R3).
-
-    Public rather than module-private since ARCH-05 Step 1.5, because
-    organization_invitation_service.accept_invitation is a fifth writer of the
-    owner set and must take the same lock. A second copy of this logic there
-    would be a second FOR UPDATE, which is the thing R3's reasoning depends on
-    not existing.
-
-    The lock is held until the caller's transaction ends. Callers that return
-    early without committing still hold it until the request teardown closes
-    the session, which is acceptable for an operation that is rare and
-    human-initiated, and is the trade §B.3 accepted.
-
-    Args:
-        db: The active session. Must not have committed since the memberships
-            in `refresh` were loaded, or they belong to a different
-            transaction than the lock.
-        organization_id: The tenant root to lock.
-        refresh: Memberships whose role or status the caller is about to read.
-
-    Raises:
-        OrganizationNotFoundError: No such organization.
-        OrganizationMemberError: A membership disappeared under the lock.
-    """
     locked = db.execute(
         select(Organization.id)
         .where(Organization.id == organization_id)

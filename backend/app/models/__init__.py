@@ -42,6 +42,7 @@ from app.models.email_change_request import (
     EmailChangeStatus,
 )
 from app.models.uploaded_file import UploadedFile
+from app.models.organization_email_settings import OrganizationEmailSettings
 
 __all__ = [
     "Base",
@@ -76,4 +77,5 @@ __all__ = [
     "EmailChangeRequest",
     "EmailChangeStatus",
     "UploadedFile",
+    "OrganizationEmailSettings",
 ]
