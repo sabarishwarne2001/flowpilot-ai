@@ -18,8 +18,15 @@ addressing in ARCH-02 when their tables gained workspace_id. Their previous
 flat routes were REMOVED rather than redirected: an alias would keep the
 unscoped handler reachable, and the unscoped handler is the vulnerability.
 
-Remaining genuinely global routers: health, auth, and upload. None reads
-tenant-scoped tables.
+Remaining genuinely global routers: health and auth. None reads tenant-scoped
+tables.
+
+upload LEFT this family in ARCH-06 Step 1b. It was global because it took no
+workspace identifier, and it took no workspace identifier because nothing
+authorized it — DELETE /upload/logo would unlink any tenant's logo for any
+authenticated caller (A.2.1). RequireWorkspaceAdmin resolves workspace_id from
+the path, so the guard had nothing to bind to until the route moved. It is now
+mounted under WORKSPACE_PREFIX like every other tenant-scoped router.
 """
 
 from fastapi import APIRouter
@@ -72,7 +79,6 @@ api_router.include_router(ownership_transfers.router)
 
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-api_router.include_router(upload.router)
 
 
 # ============================================================================
@@ -92,6 +98,7 @@ _SCOPED = (
     (ai_settings.router,       "/ai-settings",        "AI Settings"),
     (email_settings.router,    "/email-settings",     "Email Settings"),
     (document_settings.router, "/document-settings",  "Document Settings"),
+    (upload.router,            "/upload",             "Upload"),
 )
 
 for _router, _suffix, _tag in _SCOPED:

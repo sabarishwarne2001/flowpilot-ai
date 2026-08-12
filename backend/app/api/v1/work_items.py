@@ -30,7 +30,7 @@ from app.schemas.work_item import (
     WorkItemListResponse,
     WorkItemStatus,
 )
-from app.services import process_document_pipeline
+from app.services.document_processor import process_document_pipeline
 from app.core.exceptions import WorkspacePermissionDeniedError
 
 router = APIRouter(tags=["Work Items"])

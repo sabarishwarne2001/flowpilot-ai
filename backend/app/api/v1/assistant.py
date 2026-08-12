@@ -28,7 +28,7 @@ from app.schemas.assistant import (
     ConversationResponse,
     ConversationUpdate,
 )
-from app.services import assistant_service
+from app.services.assistant_service import assistant_service
 
 logger = logging.getLogger("app.api.v1.assistant")
 

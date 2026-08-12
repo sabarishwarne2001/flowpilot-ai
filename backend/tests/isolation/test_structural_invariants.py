@@ -50,6 +50,7 @@ def test_every_scoped_collection_has_an_isolation_test():
         "document-settings",
         "dashboard",
         "logo",
+        "upload",
         "leave",
         "restore",
         "members",
