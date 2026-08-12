@@ -37,6 +37,10 @@ from app.models.ownership_transfer import (
     OwnershipTransfer,
     OwnershipTransferStatus,
 )
+from app.models.email_change_request import (
+    EmailChangeRequest,
+    EmailChangeStatus,
+)
 
 __all__ = [
     "Base",
@@ -68,4 +72,6 @@ __all__ = [
     "SessionRevokedReason",
     "OwnershipTransfer",
     "OwnershipTransferStatus",
+    "EmailChangeRequest",
+    "EmailChangeStatus",
 ]
