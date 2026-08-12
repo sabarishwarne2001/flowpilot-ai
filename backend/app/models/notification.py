@@ -1,3 +1,59 @@
+"""
+ARCH-06 Step 3 (EXPAND) — organization_id on notifications, workspace_id
+loosened to nullable.
+
+This file predates the ARCH-numbered discipline the rest of this codebase now
+follows (188ffda2ce99, "expand notifications schema" — no ARCH prefix, no
+rationale docstring). This revision brings the SCHEMA up to §B.4's approved
+shape without rewriting the parts of the model this step does not touch;
+NotificationType/Channel/Status/Priority and their columns are unchanged.
+
+WHY organization_id AT ALL (§B.4, approved Option A)
+------------------------------------------------------
+A.1.2/A.1.3 found every one of the 15 notification rows in the audited
+database scoped to a workspace only, with no path to an organization-level
+event: a seat-limit warning, a billing notice, an ownership-transfer proposal
+(see `ownership_transfer.py`) — none of these belongs to one workspace, and
+today's schema has nowhere to put them. Option A adds the missing column
+rather than routing every organization event through some nominated
+"default" workspace, which would make workspace_id lie about what the event
+actually concerns.
+
+WHY workspace_id BECOMES NULLABLE IN THIS SAME STEP, NOT LATER
+-----------------------------------------------------------------
+Loosening a NOT NULL constraint is additive — it rejects nothing that today's
+schema didn't already accept, and is safe to ship in the same EXPAND phase as
+a new nullable column, for the identical reason both changes are EXPAND and
+not CONTRACT: neither can reject a write that succeeds today. Waiting until
+Step 5 to loosen it would gain nothing and would only mean two migrations
+touching this column instead of one. What Step 5 CONTRACT actually enforces —
+and what this step deliberately does NOT — is the constraint this step's
+nullability makes representable but does not yet require:
+
+    (workspace_id IS NOT NULL) OR (organization_id IS NOT NULL)
+
+That CHECK constraint has no reason to exist yet. Every row written by
+existing code between this migration and Step 4's MIGRATE still carries a
+real workspace_id — `create_notification` (app/crud/notification.py) requires
+it as a keyword argument today and this step does not touch that function.
+Adding the CHECK now would enforce an invariant no code has been given the
+means to violate, and would need loosening again the moment Step 6 actually
+starts writing organization-level rows with workspace_id NULL. It lands in
+Step 5, against a table Step 4 has already backfilled, over the shape this
+step only makes legal.
+
+WHAT REMAINS DELIBERATELY UNCHANGED IN THIS STEP
+----------------------------------------------------
+`ix_notifications_workspace_user_read_created` is untouched. It still serves
+every existing workspace-scoped notification list, and dropping or narrowing
+it now — before Step 6 has written a single organization-level row — would
+degrade a live query path for a benefit that does not exist yet.
+`app/crud/notification.py`'s functions are untouched for the same reason:
+they are workspace-only today and stay workspace-only until Step 6 is the
+step that teaches them about organization-level rows. This file adds what
+Step 6 will need without changing what today's code already relies on.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -11,6 +67,7 @@ from sqlalchemy.types import UUID
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.organization import Organization
     from app.models.user import User
     from app.models.work_item import WorkItem
     from app.models.workspace import Workspace
@@ -48,6 +105,14 @@ class NotificationPriority(str, enum.Enum):
 class Notification(Base, UUIDMixin, TimestampMixin):
     """
     Persistent notification record.
+
+    As of ARCH-06 Step 3, a row's scope is EITHER a workspace, an
+    organization, or (transiently, during Steps 3-4) neither newly-nullable
+    column enforced against the other — see the module docstring for exactly
+    which invariant exists now versus lands in Step 5. Every row in the
+    database today still carries a real workspace_id; this step only makes
+    room for the alternative, it does not yet produce any row shaped that
+    way.
     """
     __tablename__ = "notifications"
 
@@ -55,6 +120,22 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         Index(
             "ix_notifications_workspace_user_read_created",
             "workspace_id",
+            "user_id",
+            "is_read",
+            "created_at",
+        ),
+        # ARCH-06 Step 3 (§B.4). Serves the organization-scoped read path
+        # Step 6 introduces (an org-admin's notification list, a seat-limit
+        # warning feed) the same way the workspace-scoped index above serves
+        # today's only read path. Added now, ahead of any row that needs it,
+        # for the same reason organization_id is added now rather than in
+        # Step 6 itself: an index on a column with no rows yet is
+        # instantaneous to build and never competes with production traffic
+        # the way adding it later — once Step 6 has been writing rows for a
+        # while — would.
+        Index(
+            "ix_notifications_organization_user_read_created",
+            "organization_id",
             "user_id",
             "is_read",
             "created_at",
@@ -132,10 +213,42 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         default=False,
     )
 
-    workspace_id: Mapped[uuid.UUID] = mapped_column(
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        doc=(
+            "NULLABLE as of ARCH-06 Step 3 (§B.4) — was NOT NULL. Every row "
+            "written by today's code still sets this; create_notification "
+            "(app/crud/notification.py) requires it and is unchanged by this "
+            "step. NULL becomes meaningful only once Step 6 writes an "
+            "organization-level row, at which point organization_id is what "
+            "carries the row's scope instead. See the module docstring for "
+            "why the loosening lands here rather than in Step 5, and for the "
+            "(workspace_id IS NOT NULL) OR (organization_id IS NOT NULL) "
+            "invariant Step 5 adds once Step 4 has made it true of every row."
+        ),
+    )
+
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+        doc=(
+            "ARCH-06 Step 3 (§B.4). NULL for every row that exists as of "
+            "this migration — see the module docstring. CASCADE, matching "
+            "workspace_id's existing ondelete and every other tenant-scope "
+            "FK in this schema (Workspace.organization_id, "
+            "OwnershipTransfer.organization_id): a deleted organization "
+            "takes its notifications with it. Populated going forward by "
+            "Step 6 for organization-level events, and backfilled onto "
+            "EXISTING workspace-scoped rows by Step 4's MIGRATE (derived "
+            "from workspace_id -> workspaces.organization_id, since a row "
+            "scoped to a workspace also belongs to that workspace's "
+            "organization) — Step 4 is what makes this column NOT NULL for "
+            "every row while workspace_id remains NOT NULL for the subset "
+            "that is actually workspace-scoped."
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -158,7 +271,20 @@ class Notification(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    workspace: Mapped["Workspace"] = relationship("Workspace")
+    # ------------------------------------------------------------------
+    # Relationships
+    # ------------------------------------------------------------------
+    # Both unidirectional — no `Workspace.notifications` or
+    # `Organization.notifications` collection. Matches the ARCH-02 discipline
+    # stated on auth_token.py and ownership_transfer.py: a back reference
+    # would load an unbounded, unfiltered collection by default on every
+    # access to the parent, and this table has the same shape of risk those
+    # docstrings describe. workspace is Optional to match the column's new
+    # nullability; organization is added fresh, also Optional, for the
+    # identical reason.
+    workspace: Mapped["Workspace | None"] = relationship("Workspace")
+
+    organization: Mapped["Organization | None"] = relationship("Organization")
 
     user: Mapped["User"] = relationship(
         "User",
