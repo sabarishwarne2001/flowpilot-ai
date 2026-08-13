@@ -43,6 +43,13 @@ from app.models.email_change_request import (
 )
 from app.models.uploaded_file import UploadedFile
 from app.models.organization_email_settings import OrganizationEmailSettings
+from app.models.audit_log import (
+    AUDIT_ACTION_ENUM_NAME,
+    AUDIT_RESOURCE_TYPE_ENUM_NAME,
+    AuditAction,
+    AuditLog,
+    AuditResourceType,
+)
 
 __all__ = [
     "Base",
@@ -78,4 +85,9 @@ __all__ = [
     "EmailChangeStatus",
     "UploadedFile",
     "OrganizationEmailSettings",
+    "AuditLog",
+    "AuditAction",
+    "AuditResourceType",
+    "AUDIT_ACTION_ENUM_NAME",
+    "AUDIT_RESOURCE_TYPE_ENUM_NAME",
 ]

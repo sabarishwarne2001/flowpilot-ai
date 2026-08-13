@@ -14,7 +14,6 @@ from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
 from app.utils import initialize_storage
-from app.services.bm25_service import bm25_service
 from app.core.exceptions import FlowPilotError
 from app.core.exception_handlers import domain_exception_handler
 
@@ -81,8 +80,6 @@ else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
 # Register the global domain exception handler.
-# One registration covers the entire taxonomy: Starlette resolves handlers by
-# walking type(exc).__mro__, and every domain exception inherits FlowPilotError.
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
 # Mount the consolidated versioned routing table

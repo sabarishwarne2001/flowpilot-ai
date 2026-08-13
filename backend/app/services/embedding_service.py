@@ -1,6 +1,9 @@
 """
 Semantic embedding generation and vector storage service for FlowPilot AI.
 Partitioned strictly into collections per workspace.
+
+ARCH-07 Step 1 — import-time decoupling (§B.10).
+Defers loading SentenceTransformer and ChromaDB until methods requiring them are called.
 """
 
 from __future__ import annotations
@@ -8,17 +11,18 @@ from __future__ import annotations
 import logging
 import uuid
 import re
+import threading
 from pathlib import Path
-from typing import Any, List
+from typing import TYPE_CHECKING, Any, List
 from collections import OrderedDict
-
-import chromadb
-from chromadb.config import Settings as ChromaSettings
-from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
 from app.services.document_models import DocumentChunk
 from app.services.query_service import query_service
+
+if TYPE_CHECKING:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger("app.services.embedding_service")
 
@@ -51,52 +55,64 @@ class EmbeddingService:
         return cls._instance
 
     def __init__(self) -> None:
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
 
-        try:
-            logger.info(
-                "Loading embedding model '%s'.",
-                settings.EMBEDDING_MODEL_NAME,
-            )
+        self._model: Any = None
+        self._client: Any = None
+        self._lock = threading.Lock()
 
-            self.model = SentenceTransformer(
-                settings.EMBEDDING_MODEL_NAME
-            )
+        # Bounded LRU Cache for workspace collections
+        self.collections: OrderedDict[str, Any] = OrderedDict()
 
-            chroma_path = Path(
-                settings.CHROMA_PERSIST_DIRECTORY
-            )
-            chroma_path.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
+        self._initialized = True
 
-            logger.info(
-                "Opening ChromaDB database at '%s'.",
-                chroma_path,
-            )
+    def _get_model(self) -> Any:
+        """Lazily load SentenceTransformer model on first vector generation."""
+        if self._model is not None:
+            return self._model
 
-            self.client = chromadb.PersistentClient(
+        with self._lock:
+            if self._model is not None:
+                return self._model
+
+            from sentence_transformers import SentenceTransformer
+
+            logger.info("Loading embedding model '%s'.", settings.EMBEDDING_MODEL_NAME)
+            self._model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+            return self._model
+
+    def _get_client(self) -> Any:
+        """Lazily initialize PersistentClient on first vector collection query."""
+        if self._client is not None:
+            return self._client
+
+        with self._lock:
+            if self._client is not None:
+                return self._client
+
+            import chromadb
+            from chromadb.config import Settings as ChromaSettings
+
+            chroma_path = Path(settings.CHROMA_PERSIST_DIRECTORY)
+            chroma_path.mkdir(parents=True, exist_ok=True)
+
+            logger.info("Opening ChromaDB database at '%s'.", chroma_path)
+            self._client = chromadb.PersistentClient(
                 path=str(chroma_path),
                 settings=ChromaSettings(
                     anonymized_telemetry=settings.CHROMA_TELEMETRY_ENABLED,
                 ),
             )
+            return self._client
 
-            # Bounded LRU Cache for workspace collections
-            self.collections: OrderedDict[str, Any] = OrderedDict()
+    @property
+    def model(self) -> Any:
+        return self._get_model()
 
-            self._initialized = True
-            logger.info(
-                "Embedding service initialized successfully."
-            )
-
-        except Exception:
-            logger.exception(
-                "Embedding service initialization failed."
-            )
-            raise
+    @property
+    def client(self) -> Any:
+        return self._get_client()
 
     def _get_collection(self, name: str) -> Any:
         """
@@ -106,7 +122,8 @@ class EmbeddingService:
             self.collections.move_to_end(name)
             return self.collections[name]
 
-        collection = self.client.get_or_create_collection(
+        client = self._get_client()
+        collection = client.get_or_create_collection(
             name=name,
             metadata={
                 "hnsw:space": "cosine",
@@ -136,7 +153,8 @@ class EmbeddingService:
         )
 
         try:
-            embeddings = self.model.encode(
+            model = self._get_model()
+            embeddings = model.encode(
                 texts,
                 batch_size=settings.EMBEDDING_BATCH_SIZE,
                 convert_to_numpy=True,
@@ -335,13 +353,6 @@ class EmbeddingService:
                 )
             )
 
-            logger.info(
-                "Distance=%f | Similarity=%f | Threshold=%s",
-                distance,
-                similarity_score,
-                similarity_threshold,
-            )
-
             if (
                 similarity_threshold is not None
                 and similarity_score < similarity_threshold
@@ -349,10 +360,6 @@ class EmbeddingService:
                 continue
 
             metadata = metadatas[index] or {}
-            logger.info(
-                "Retrieved metadata: %s",
-                metadata,
-            )
 
             formatted_results.append(
                 {
@@ -377,19 +384,6 @@ class EmbeddingService:
                 }
             )
 
-            logger.debug(
-                "Retrieved '%s' | Chunk=%s | Similarity=%.3f",
-                metadata.get("original_filename"),
-                metadata.get("chunk_index"),
-                similarity_score,
-            )
-
-        logger.info(
-            "Semantic search returned %d result(s) inside workspace %s.",
-            len(formatted_results),
-            workspace_id,
-                )
-
         return formatted_results
             
     def delete_vectors_by_work_item_id(
@@ -398,23 +392,12 @@ class EmbeddingService:
         workspace_id: uuid.UUID,
         work_item_id: uuid.UUID,
     ) -> None:
-        logger.info(
-            "Deleting vectors for WorkItem %s inside workspace %s.",
-            work_item_id,
-            workspace_id,
-        )
-
         try:
             collection = self.get_workspace_collection(workspace_id)
             collection.delete(
                 where={
                     "work_item_id": str(work_item_id)
                 }
-            )
-            logger.info(
-                "Successfully deleted vectors for WorkItem %s inside workspace %s.",
-                work_item_id,
-                workspace_id,
             )
         except Exception:
             logger.exception(
@@ -429,32 +412,14 @@ class EmbeddingService:
         *,
         workspace_id: uuid.UUID,
     ) -> int:
-        logger.info(
-            "Clearing workspace vector collection: %s",
-            workspace_id,
-        )
-
         collection = self.get_workspace_collection(workspace_id)
         existing = collection.get()
-        ids = existing.get(
-            "ids",
-            [],
-        )
+        ids = existing.get("ids", [])
 
         if not ids:
-            logger.info(
-                "Workspace vector collection already empty."
-            )
             return 0
 
-        collection.delete(
-            ids=ids,
-        )
-        logger.info(
-            "Deleted %d vector(s) inside workspace %s.",
-            len(ids),
-            workspace_id,
-        )
+        collection.delete(ids=ids)
         return len(ids)
 
     def delete_workspace_collection(
@@ -465,7 +430,8 @@ class EmbeddingService:
         name = workspace_collection_name(workspace_id)
         self.collections.pop(name, None)
         try:
-            self.client.delete_collection(name)
+            client = self._get_client()
+            client.delete_collection(name)
         except Exception:
             logger.exception("Failed to delete collection %s.", name)
             raise
@@ -476,18 +442,14 @@ class EmbeddingService:
         workspace_id: uuid.UUID,
     ) -> list[str]:
         collection = self.get_workspace_collection(workspace_id)
-        results = collection.get(
-            include=["metadatas"],
-        )
+        results = collection.get(include=["metadatas"])
 
         if not results["metadatas"]:
             return []
 
         ids = set()
         for metadata in results["metadatas"]:
-            work_item_id = metadata.get(
-                "work_item_id",
-            )
+            work_item_id = metadata.get("work_item_id")
             if work_item_id:
                 ids.add(work_item_id)
 
@@ -495,12 +457,11 @@ class EmbeddingService:
 
     def health_check(self) -> bool:
         try:
-            self.client.heartbeat()
+            client = self._get_client()
+            client.heartbeat()
             return True
         except Exception:
-            logger.exception(
-                "Embedding service health check failed."
-            )
+            logger.exception("Embedding service health check failed.")
             return False
 
 

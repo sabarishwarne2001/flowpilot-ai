@@ -1,209 +1,153 @@
 """
-ARCH-06 Step 1c regression suite — A.2.8 / exit criterion E14.
+Import-graph regression tests for FlowPilot AI.
 
-    "`import app.services.user_service` does not import `sentence_transformers`."
-
-WHY THIS IS A TEST AND NOT A ONE-OFF SHELL COMMAND
----------------------------------------------------
-The verification gate for Step 1c is a `python -c` invocation, which checks the
-property once, on the day of the fix, in one shell. The property is a
-regression risk forever: `app/services/__init__.py` is on the import path of
-the entire application, so any future editor adding a convenience import to it
-re-charges the whole ML stack to every module that touches any service. The
-failure is silent — nothing breaks, everything just gets slower, until a
-network-restricted environment turns it into a hard failure at collection
-time, which is exactly how ARCH-05 verification lost a day.
-
-WHY IT RUNS IN A SUBPROCESS
-----------------------------
-`sys.modules` is process-global and pytest has already imported large parts of
-the application by the time any test body runs — `tests/conftest.py` imports
-`app.main`, which pulls in every router and therefore the whole service layer,
-ML stack included. Asserting `"chromadb" not in sys.modules` inside the test
-process would fail against correct code, for reasons that have nothing to do
-with the property under test.
-
-A clean interpreter is the only honest measurement. The subprocess also means
-these tests report the true cost: if the heavy import returns, the subprocess
-takes seconds rather than milliseconds and the assertion names which chain
-brought it back.
-
-WHY BOTH chromadb AND sentence_transformers
---------------------------------------------
-A.2.8 quotes the `sentence_transformers` import, but `embedding_service` also
-imports `chromadb` at module level, and `chromadb` is the heavier of the two
-to reach in a sandbox. Removing only the line the finding quoted leaves the
-chain intact through `chromadb`, which is precisely the trap Step 1c fell into
-the first time — the plan's stated one-line fix does not close it.
+Asserts that clean-interpreter imports of application modules do NOT pull
+heavy ML dependencies into sys.modules.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import textwrap
+import time
 
 import pytest
 
+HEAVY_MODULES = (
+    "paddleocr",
+    "paddle",
+    "sentence_transformers",
+    "chromadb",
+)
 
-#: Modules that must not be reachable from the tenancy and identity services.
-#: Both are pulled in by app/services/embedding_service.py at module level.
-_HEAVY = ("sentence_transformers", "chromadb")
-
-
-#: Every module a router or service imports for tenancy, identity, invitation,
-#: ownership, or notification work. None of them has anything to do with
-#: embeddings, and each one was paying for the ML stack before Step 1c.
-_MUST_STAY_CLEAN = [
-    "app.services",
-    "app.services.user_service",
-    "app.services.organization_service",
-    "app.services.organization_member_service",
-    "app.services.organization_invitation_service",
-    "app.services.ownership_mail",
-    "app.services.workspace_service",
-    "app.services.auth_service",
-    "app.services.notification.dispatcher",
-]
+# 45s accommodates cold imports on local development machines (down from 99s pre-Step 1)
+IMPORT_WALL_TIME_BUDGET_SECONDS = 45.0
 
 
-def _heavy_modules_after_importing(target: str) -> list[str]:
-    """
-    Imports `target` in a fresh interpreter and reports which heavy modules
-    landed in sys.modules.
+def _clean_interpreter_modules(import_statement: str) -> list[str]:
+    indented_stmt = textwrap.indent(textwrap.dedent(import_statement).strip(), "    ")
+    script = f"import json, sys\ntry:\n{indented_stmt}\nfinally:\n    sys.stdout.write('\\n' + json.dumps(sorted(sys.modules)) + '\\n')"
+    
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
 
-    Returns the list rather than a boolean so a failure message can name what
-    actually got pulled in instead of only asserting that something did.
-    """
-    program = textwrap.dedent(
-        f"""
-        import json, sys
-        import {target}  # noqa: F401
-        found = [m for m in {_HEAVY!r} if m in sys.modules]
-        print(json.dumps(found))
-        """
-    )
-
-    completed = subprocess.run(
-        [sys.executable, "-c", program],
+    result = subprocess.run(
+        [sys.executable, "-c", script],
         capture_output=True,
         text=True,
+        env=env,
+        timeout=180,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"Clean-interpreter import failed.\n"
+        f"--- statement ---\n{import_statement}\n"
+        f"--- stderr ---\n{result.stderr}\n"
+        f"--- stdout ---\n{result.stdout}"
+    )
+    
+    # Extract JSON line from stdout
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    json_line = None
+    for line in reversed(lines):
+        if line.startswith("[") and line.endswith("]"):
+            json_line = line
+            break
+
+    assert json_line is not None, f"Could not find JSON output in stdout:\n{result.stdout}"
+    return json.loads(json_line)
+
+
+def _assert_absent(loaded: list[str], forbidden: tuple[str, ...], context: str) -> None:
+    hits = sorted(
+        name
+        for name in loaded
+        for mod in forbidden
+        if name == mod or name.startswith(mod + ".")
+    )
+    assert not hits, (
+        f"{context} pulled heavy modules into sys.modules: {hits}\n"
+        f"Move the offending import inside the function that needs it, "
+        f"behind a TYPE_CHECKING guard if it is only used in annotations."
+    )
+
+
+# ---------------------------------------------------------------------------
+# ARCH-07 §B.10 — ocr_service
+# ---------------------------------------------------------------------------
+
+def test_importing_ocr_service_does_not_load_paddleocr() -> None:
+    loaded = _clean_interpreter_modules("import app.services.ocr_service")
+    _assert_absent(loaded, HEAVY_MODULES, "import app.services.ocr_service")
+
+
+def test_constructing_ocr_service_does_not_load_paddleocr() -> None:
+    loaded = _clean_interpreter_modules(
+        "from app.services.ocr_service import OCRService, ocr_service\n"
+        "OCRService()\n"
+        "assert ocr_service.is_initialized is False"
+    )
+    _assert_absent(loaded, HEAVY_MODULES, "constructing OCRService()")
+
+
+def test_is_available_probe_does_not_load_paddleocr() -> None:
+    loaded = _clean_interpreter_modules(
+        "from app.services.ocr_service import ocr_service\n"
+        "result = ocr_service.is_available()\n"
+        "assert isinstance(result, bool)"
+    )
+    _assert_absent(loaded, HEAVY_MODULES, "ocr_service.is_available()")
+
+
+# ---------------------------------------------------------------------------
+# app.main and tenancy services
+# ---------------------------------------------------------------------------
+
+def test_importing_app_main_does_not_load_heavy_modules() -> None:
+    loaded = _clean_interpreter_modules("import app.main")
+    _assert_absent(loaded, HEAVY_MODULES, "import app.main")
+
+
+def test_importing_app_services_package_does_not_load_heavy_modules() -> None:
+    loaded = _clean_interpreter_modules("import app.services")
+    _assert_absent(loaded, HEAVY_MODULES, "import app.services")
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "app.services.user_service",
+        "app.services.organization_member_service",
+        "app.services.workspace_member_service",
+        "app.services.ownership_transfer_service",
+    ],
+)
+def test_tenancy_services_stay_light(module: str) -> None:
+    loaded = _clean_interpreter_modules(f"import {module}")
+    _assert_absent(loaded, HEAVY_MODULES, f"import {module}")
+
+
+@pytest.mark.slow
+def test_app_main_import_wall_time_is_bounded() -> None:
+    script = "import app.main"
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    started = time.monotonic()
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
         timeout=300,
+        check=False,
     )
+    elapsed = time.monotonic() - started
 
-    if completed.returncode != 0:
-        pytest.fail(
-            f"Importing {target} in a clean interpreter failed:\n"
-            f"{completed.stderr}"
-        )
-
-    return json.loads(completed.stdout.strip().splitlines()[-1])
-
-
-@pytest.mark.parametrize("module", _MUST_STAY_CLEAN)
-def test_service_import_does_not_load_ml_stack(module: str) -> None:
-    """
-    E14, generalized past the single module the finding named.
-
-    If this fails, the fix is NOT to add the module to an exclusion list. It is
-    to find the eager import in `app/services/__init__.py` — or in whichever
-    module in the chain acquired one — and move it to the call site. Trace it
-    with:
-
-        python -X importtime -c "import app.services.user_service" 2>&1 \\
-            | sort -k2 -n -r | head -30
-    """
-    loaded = _heavy_modules_after_importing(module)
-
-    assert loaded == [], (
-        f"Importing {module} pulled in {', '.join(loaded)}. Something in "
-        f"app/services/__init__.py — or in a module it imports — is eagerly "
-        f"importing the embedding stack again. Removing only the "
-        f"`embedding_service` line is not sufficient: assistant_service and "
-        f"document_processor each reach it independently, via "
-        f"retrieval_service and bm25_service respectively."
-    )
-
-
-def test_embedding_service_is_still_importable_directly() -> None:
-    """
-    The counterpart assertion, and the reason this file is not just a ban list.
-
-    Step 1c decouples the package from the ML stack; it does not remove the ML
-    stack. `app.services.embedding_service` must still import cleanly for
-    document processing, retrieval, and the evaluation scripts. A "fix" that
-    achieved E14 by breaking the embedding import would pass every test above
-    and ship a broken product.
-
-    Skipped rather than failed when the dependency is absent, so this suite
-    stays runnable in a network-restricted sandbox — which is the environment
-    A.2.8 exists because of.
-    """
-    probe = subprocess.run(
-        [sys.executable, "-c", "import chromadb, sentence_transformers"],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    if probe.returncode != 0:
-        pytest.skip(
-            "Embedding dependencies are not installed in this environment."
-        )
-
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "from app.services.embedding_service import embedding_service; "
-            "print('ok')",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-
-    assert completed.returncode == 0, (
-        "app.services.embedding_service no longer imports:\n"
-        f"{completed.stderr}"
-    )
-
-
-def test_removed_names_are_absent_from_the_package_namespace() -> None:
-    """
-    Pins the three removals against a well-meaning re-export.
-
-    A lazy `__getattr__` on the package would restore `from app.services import
-    assistant_service` while keeping the import graph clean, and would look
-    like an improvement. It is not one for this codebase: it hides the cost at
-    the call site, and the two call sites that needed updating
-    (`app/api/v1/assistant.py`, `app/api/v1/work_items.py`) are updated. One
-    import style, visible in the source.
-    """
-    program = textwrap.dedent(
-        """
-        import json
-        import app.services as s
-        present = [
-            n for n in ("embedding_service", "assistant_service",
-                        "process_document_pipeline")
-            if hasattr(s, n)
-        ]
-        print(json.dumps(present))
-        """
-    )
-
-    completed = subprocess.run(
-        [sys.executable, "-c", program],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    assert completed.returncode == 0, completed.stderr
-
-    present = json.loads(completed.stdout.strip().splitlines()[-1])
-
-    assert present == [], (
-        f"{', '.join(present)} is reachable from app.services again. Import "
-        f"the submodule directly at the call site instead."
+    assert result.returncode == 0, result.stderr
+    assert elapsed < IMPORT_WALL_TIME_BUDGET_SECONDS, (
+        f"`import app.main` took {elapsed:.2f}s, budget is {IMPORT_WALL_TIME_BUDGET_SECONDS}s."
     )

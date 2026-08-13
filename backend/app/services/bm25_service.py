@@ -12,8 +12,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from rank_bm25 import BM25Okapi
 
-from app.services.embedding_service import embedding_service
-
 logger = logging.getLogger("app.services.document_processor")
 
 _MAX_CACHED_INDEXES = 8
@@ -43,6 +41,9 @@ class BM25Service:
         *,
         workspace_id: uuid.UUID,
     ) -> None:
+        # Lazy import to prevent pulling chromadb/sentence_transformers at module import time
+        from app.services.embedding_service import embedding_service
+
         collection = embedding_service.get_workspace_collection(workspace_id)
         # Force Chroma to return documents and metadatas explicitly
         results = collection.get(include=["documents", "metadatas"])
