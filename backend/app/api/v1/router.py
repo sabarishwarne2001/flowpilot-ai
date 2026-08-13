@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai_settings,
     assistant,
+    audit_logs,
     automation,
     avatar,
     dashboard,
@@ -37,6 +38,7 @@ WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 
 api_router.include_router(organizations.router)
 api_router.include_router(organization_email_settings.router)
+api_router.include_router(audit_logs.router)
 api_router.include_router(me.router)
 api_router.include_router(avatar.router)
 api_router.include_router(email_change.router)

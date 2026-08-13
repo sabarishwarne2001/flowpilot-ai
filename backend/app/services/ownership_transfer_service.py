@@ -1,5 +1,8 @@
 """
-Ownership transfer orchestration for FlowPilot AI (ARCH-05 Step 6 & ARCH-06 Step 9).
+Ownership transfer orchestration for FlowPilot AI (ARCH-05 Step 6, ARCH-06 Step 9, ARCH-07 Step 3).
+
+ARCH-07 Step 3: Converted AUDIT log sites to structured audit_service.record().
+Writes TWO audit log rows upon acceptance (OWNERSHIP_TRANSFER/ACCEPTED and ORGANIZATION/TRANSFERRED).
 """
 
 from __future__ import annotations
@@ -8,6 +11,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +33,7 @@ from app.core.links import build_ownership_transfer_link
 from app.core.organization_permissions import can_transfer_ownership
 from app.core.security import verify_password
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
-from app.services import organization_notification_service
+from app.services import audit_service, organization_notification_service
 from app.crud import ownership_transfer as transfer_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
@@ -39,6 +43,7 @@ from app.models.organization import (
     OrganizationMember,
 )
 from app.models.ownership_transfer import OwnershipTransfer, OwnershipTransferStatus
+from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.user import User
 from app.services.organization_member_service import (
     get_membership_or_raise,
@@ -153,12 +158,11 @@ def initiate_transfer(
     initiator_membership: OrganizationMember,
     target_membership_id: uuid.UUID,
     current_password: str,
+    request: Any = None,
 ) -> InitiatedTransfer:
+    context = audit_service.context_from_request(request)
+
     if not verify_password(current_password, actor.hashed_password):
-        logger.warning(
-            "OWNERSHIP_TRANSFER_REAUTH_FAILED | Org: %s | User: %s",
-            organization.id, actor.id,
-        )
         raise ReauthenticationFailedError(
             "Your current password is incorrect. Re-enter your password to "
             "confirm this transfer."
@@ -223,14 +227,24 @@ def initiate_transfer(
             initiator_display=_display_name(actor),
         )
 
-        commit_and_refresh(db, transfer)
-
-        logger.info(
-            "AUDIT | OWNERSHIP_TRANSFER_INITIATED | Org: %s | Transfer: %s | "
-            "From: %s | To: %s | Expires: %s",
-            organization.id, transfer.id, actor.id,
-            target_membership.user_id, expires_at,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.OWNERSHIP_TRANSFER,
+            resource_id=transfer.id,
+            action=AuditAction.CREATED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "target_membership_id": str(target_membership.id),
+                "target_user_id": str(target_membership.user_id),
+                "target_email": target_membership.user.email,
+                "expires_at": expires_at.isoformat(),
+            },
+            **context,
         )
+
+        commit_and_refresh(db, transfer)
 
         return InitiatedTransfer(
             transfer_id=transfer.id,
@@ -257,7 +271,7 @@ def initiate_transfer(
 
 
 # ============================================================================
-# Accept, Decline, Cancel
+# Accept
 # ============================================================================
 
 def accept_transfer(
@@ -266,7 +280,10 @@ def accept_transfer(
     organization: Organization,
     transfer_id: uuid.UUID,
     actor: User,
+    request: Any = None,
 ) -> AcceptedTransfer:
+    context = audit_service.context_from_request(request)
+
     transfer = transfer_crud.get_transfer_by_id(
         db, organization_id=organization.id, transfer_id=transfer_id
     )
@@ -321,11 +338,37 @@ def accept_transfer(
             target_membership=target_membership,
         )
 
-        logger.info(
-            "AUDIT | OWNERSHIP_TRANSFER_ACCEPTED | Org: %s | Transfer: %s | "
-            "From: %s | To: %s",
-            organization.id, transfer.id,
-            initiator_membership.user_id, target_membership.user_id,
+        # 1. Proposal accepted
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.OWNERSHIP_TRANSFER,
+            resource_id=transfer.id,
+            action=AuditAction.ACCEPTED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "initiated_by_user_id": str(transfer.initiated_by_id),
+                "target_membership_id": str(transfer.target_membership_id),
+            },
+            **context,
+        )
+
+        # 2. Organization ownership moved
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.ORGANIZATION,
+            resource_id=organization.id,
+            action=AuditAction.TRANSFERRED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "previous_owner_user_id": str(transfer.initiated_by_id),
+                "new_owner_user_id": str(actor.id),
+                "via_transfer_id": str(transfer.id),
+            },
+            **context,
         )
 
         return AcceptedTransfer(
@@ -354,13 +397,20 @@ def accept_transfer(
         )
 
 
+# ============================================================================
+# Decline & Cancel
+# ============================================================================
+
 def decline_transfer(
     db: Session,
     *,
     organization: Organization,
     transfer_id: uuid.UUID,
     actor: User,
+    request: Any = None,
 ) -> DeclinedTransfer:
+    context = audit_service.context_from_request(request)
+
     transfer = transfer_crud.get_transfer_by_id(
         db, organization_id=organization.id, transfer_id=transfer_id
     )
@@ -391,21 +441,30 @@ def decline_transfer(
             new_status=OwnershipTransferStatus.DECLINED,
             now=now,
         )
-        commit_and_refresh(db, transfer)
 
         initiator = user_crud.get_user_by_id(db, user_id=transfer.initiated_by_id)
 
-        logger.info(
-            "AUDIT | OWNERSHIP_TRANSFER_DECLINED | Org: %s | Transfer: %s | "
-            "By: %s",
-            organization.id, transfer.id, actor.id,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.OWNERSHIP_TRANSFER,
+            resource_id=transfer.id,
+            action=AuditAction.DECLINED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "initiated_by_user_id": str(transfer.initiated_by_id),
+            },
+            **context,
         )
+
+        commit_and_refresh(db, transfer)
 
         return DeclinedTransfer(
             transfer_id=transfer.id,
             organization_id=organization.id,
             organization_name=organization.name,
-            initiator_email=initiator.email,
+            initiator_email=initiator.email if initiator else "unknown",
             target_email=target_membership.user.email,
             target_display=_display_name(target_membership.user),
             declined_at=now,
@@ -432,7 +491,10 @@ def cancel_transfer(
     organization: Organization,
     transfer_id: uuid.UUID,
     actor: User,
+    request: Any = None,
 ) -> CancelledTransfer:
+    context = audit_service.context_from_request(request)
+
     transfer = transfer_crud.get_transfer_by_id(
         db, organization_id=organization.id, transfer_id=transfer_id
     )
@@ -457,7 +519,6 @@ def cancel_transfer(
             new_status=OwnershipTransferStatus.CANCELLED,
             now=now,
         )
-        commit_and_refresh(db, transfer)
 
         target_membership = get_membership_or_raise(
             db,
@@ -465,11 +526,22 @@ def cancel_transfer(
             membership_id=transfer.target_membership_id,
         )
 
-        logger.info(
-            "AUDIT | OWNERSHIP_TRANSFER_CANCELLED | Org: %s | Transfer: %s | "
-            "By: %s",
-            organization.id, transfer.id, actor.id,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.OWNERSHIP_TRANSFER,
+            resource_id=transfer.id,
+            action=AuditAction.REVOKED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "target_membership_id": str(transfer.target_membership_id),
+                "target_user_id": str(target_membership.user_id),
+            },
+            **context,
         )
+
+        commit_and_refresh(db, transfer)
 
         return CancelledTransfer(
             transfer_id=transfer.id,

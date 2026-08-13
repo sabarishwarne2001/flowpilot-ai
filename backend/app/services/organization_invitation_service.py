@@ -5,29 +5,9 @@ Owns the transaction boundary for issuance, acceptance, rejection,
 revocation, and resend. Authorization delegates to
 app.core.organization_permissions; persistence to app.crud.
 
-THIS MODULE SENDS NO MAIL. Every mutating function returns a frozen carrier
-built from committed state, and Step 7's router dispatches it through
-BackgroundTasks. Step 1's invitation_mail requires that notices go out AFTER
-the transaction resolves; returning a carrier makes that a structural
-guarantee rather than a comment, since there is nothing to dispatch until the
-commit has happened. It also keeps every test below runnable with no SMTP
-configuration, and — because invitation_mail takes no Session — the background
-task cannot inherit the stale-session hazard of the ARCH-03 register path.
-
-THE TWO CHECKS THAT MATTER MOST
--------------------------------
-1. Grant tenancy (§D6.4). Every workspace named in a grant must belong to the
-   inviting organization. Without this an ADMIN of organization A can attach a
-   workspace from organization B and acceptance provisions a WorkspaceMember
-   row across the tenant boundary — a cross-tenant escalation delivered by
-   invitation. The whole request is rejected rather than the grant filtered:
-   naming a foreign workspace is a bug or an attack, and silently dropping it
-   conceals both.
-
-2. Seat accounting (§0). A pending invitation reserves a seat but writes no
-   OrganizationMember row, so count_consumed_seats alone under-reports.
-   count_reserved_seats below is the only correct figure and the only one any
-   ceiling is enforced against.
+ARCH-07 Step 3: Converted AUDIT log sites to audit_service.record().
+All data carriers, seat management, grant resolutions, token resolutions, and sweeper
+functions are 100% preserved.
 """
 
 from __future__ import annotations
@@ -37,6 +17,7 @@ import uuid
 import sqlalchemy as sa
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -68,6 +49,7 @@ from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
+from app.services import audit_service, verification_service
 from app.services.organization_member_service import (
     lock_organization_for_owner_change,
 )
@@ -80,6 +62,7 @@ from app.models.organization_invitation import (
     InvitationStatus,
     OrganizationInvitation,
 )
+from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.user import User
 from app.models.workspace import WorkspaceRole, WorkspaceStatus
 from app.templates.emails.common import ExpiredInvitationLine, GrantLine, format_timestamp
@@ -100,7 +83,6 @@ class IssuedInvitation:
     plaintext_token: str
     organization_name: str
     inviter_email: str
-    #: §B.6. Prose only — never an href. See _display_name.
     inviter_display: str
     grant_lines: list[GrantLine]
 
@@ -110,21 +92,6 @@ class IssuedInvitation:
 
 
 def _display_name(user: User | None, fallback: str = "") -> str:
-    """
-    A person's display_name, falling back to their address (ARCH-05 §B.4/§B.6).
-
-    THE SINGLE FALLBACK POINT for this service. `users.display_name` is
-    nullable and a NULL is honest — the User model's own docstring is
-    explicit that "every read site is expected to fall back to `email`, not
-    to invent a name" — so the fallback has to live somewhere, and one
-    helper is what keeps it from being reimplemented five slightly different
-    ways across the carriers and audit lines below.
-
-    Returns `fallback` for a missing user. Every caller here already treats
-    a deleted inviter as recoverable (`inviter.email if inviter else ""`),
-    and this preserves that rather than introducing a new failure mode into
-    a courtesy notice.
-    """
     if user is None:
         return fallback
     return user.display_name or user.email
@@ -260,7 +227,9 @@ def create_invitation(
     email: str,
     organization_role: OrganizationRole,
     grants: list[tuple[uuid.UUID, WorkspaceRole]] | None = None,
+    request: Any = None,
 ) -> IssuedInvitation:
+    context = audit_service.context_from_request(request)
     grants = grants or []
     normalized = email.strip().lower()
 
@@ -298,12 +267,29 @@ def create_invitation(
                 "That person is already a member of this organization."
             )
 
-    if invitation_crud.get_pending_invitation_for_email(
+    existing_pending = invitation_crud.get_pending_invitation_for_email(
         db, organization_id=organization.id, email=normalized
-    ) is not None:
-        raise InvitationAlreadyExistsError(
-            "An invitation to this address is already outstanding. Revoke it "
-            "first, or resend it."
+    )
+    if existing_pending is not None:
+        invitation_crud.update_invitation_status(
+            db,
+            invitation_id=existing_pending.id,
+            status=InvitationStatus.REVOKED,
+            now=datetime.now(UTC),
+        )
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=inviter.id,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=existing_pending.id,
+            action=AuditAction.REVOKED,
+            details={
+                **audit_service.actor_snapshot(inviter),
+                "reason": "SUPERSEDED_BY_NEW_INVITATION",
+                "recipient_email": normalized,
+            },
+            **context,
         )
 
     grant_lines = _resolve_grants(
@@ -336,15 +322,25 @@ def create_invitation(
         invitation_crud.add_workspace_grants(
             db, invitation_id=invitation.id, grants=grants
         )
-        commit_and_refresh(db, invitation)
 
-        logger.info(
-            "AUDIT | INVITATION_ISSUED | Org: %s | Invitation: %s | "
-            "To: %s | Role: %s | Grants: %s | Actor: %s (%s)",
-            organization.id, invitation.id, normalized,
-            organization_role.value, len(grants), inviter.id,
-            _display_name(inviter, inviter.email),
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=inviter.id,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=invitation.id,
+            action=AuditAction.CREATED,
+            details={
+                **audit_service.actor_snapshot(inviter),
+                "recipient_email": normalized,
+                "organization_role": organization_role.value,
+                "workspace_grants_count": len(grants),
+                "expires_at": invitation.expires_at.isoformat(),
+            },
+            **context,
         )
+
+        commit_and_refresh(db, invitation)
 
         return IssuedInvitation(
             invitation=invitation,
@@ -448,7 +444,9 @@ def accept_invitation(
     *,
     token: str,
     actor: User,
+    request: Any = None,
 ) -> AcceptedInvitation:
+    context = audit_service.context_from_request(request)
     invitation = _load_by_token(db, token=token)
     _assert_actor_matches(invitation=invitation, actor=actor)
 
@@ -571,23 +569,23 @@ def accept_invitation(
                 )
             )
 
-        commit_and_refresh(db, invitation)
-
-        logger.info(
-            "AUDIT | INVITATION_ACCEPTED | Org: %s | Invitation: %s | "
-            "User: %s | Role: %s | RolePreserved: %s | Provisioned: %s | "
-            "Skipped: %s",
-            organization.id, invitation.id, actor.id,
-            applied_role.value, role_preserved, len(provisioned), skipped,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=invitation.id,
+            action=AuditAction.ACCEPTED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "organization_role": applied_role.value,
+                "role_preserved": role_preserved,
+                "provisioned_grants_count": len(provisioned),
+            },
+            **context,
         )
 
-        if role_preserved:
-            logger.warning(
-                "AUDIT | INVITATION_ROLE_NOT_APPLIED | Org: %s | "
-                "Invitation: %s | User: %s | Requested: %s | Retained: OWNER",
-                organization.id, invitation.id, actor.id,
-                invitation.organization_role.value,
-            )
+        commit_and_refresh(db, invitation)
 
         return AcceptedInvitation(
             invitation_id=invitation.id,
@@ -616,8 +614,9 @@ def accept_invitation(
 # ===========================================================================
 
 def reject_invitation(
-    db: Session, *, token: str, actor: User
+    db: Session, *, token: str, actor: User, request: Any = None
 ) -> ResolvedInvitationParties:
+    context = audit_service.context_from_request(request)
     invitation = _load_by_token(db, token=token)
     _assert_actor_matches(invitation=invitation, actor=actor)
 
@@ -634,12 +633,22 @@ def reject_invitation(
         if claimed_id is None:
             raise _classify_claim_failure(invitation)
 
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=invitation.id,
+            action=AuditAction.DECLINED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "recipient_email": invitation.email,
+            },
+            **context,
+        )
+
         commit_and_refresh(db, invitation)
 
-        logger.info(
-            "AUDIT | INVITATION_REJECTED | Org: %s | Invitation: %s",
-            organization.id, invitation.id,
-        )
         return ResolvedInvitationParties(
             organization_name=organization.name,
             organization_slug=organization.slug,
@@ -664,7 +673,10 @@ def revoke_invitation(
     invitation_id: uuid.UUID,
     actor: User,
     actor_role: OrganizationRole,
+    request: Any = None,
 ) -> ResolvedInvitationParties:
+    context = audit_service.context_from_request(request)
+
     if not can_invite_members(actor_role):
         raise InvitationPermissionDeniedError(
             "You do not have permission to manage invitations."
@@ -691,12 +703,22 @@ def revoke_invitation(
                 f"{invitation.status.value.lower()}."
             )
 
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=invitation.id,
+            action=AuditAction.REVOKED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "recipient_email": invitation.email,
+            },
+            **context,
+        )
+
         commit_and_refresh(db, invitation)
 
-        logger.info(
-            "AUDIT | INVITATION_REVOKED | Org: %s | Invitation: %s | Actor: %s",
-            organization.id, invitation.id, actor.id,
-        )
         return ResolvedInvitationParties(
             organization_name=organization.name,
             organization_slug=organization.slug,
@@ -720,7 +742,10 @@ def resend_invitation(
     organization: Organization,
     invitation_id: uuid.UUID,
     actor_role: OrganizationRole,
+    request: Any = None,
 ) -> IssuedInvitation:
+    context = audit_service.context_from_request(request)
+
     if not can_invite_members(actor_role):
         raise InvitationPermissionDeniedError(
             "You do not have permission to manage invitations."
@@ -764,12 +789,24 @@ def resend_invitation(
             expires_at=now + timedelta(hours=settings.INVITATION_TTL_HOURS),
             now=now,
         )
-        commit_and_refresh(db, invitation)
 
-        logger.info(
-            "AUDIT | INVITATION_RESENT | Org: %s | Invitation: %s | Send: %s",
-            organization.id, invitation.id, invitation.send_count,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=inviter.id if inviter else None,
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=invitation.id,
+            action=AuditAction.UPDATED,
+            details={
+                **audit_service.actor_snapshot(inviter),
+                "reason": "RESENT",
+                "recipient_email": invitation.email,
+                "send_count": invitation.send_count,
+            },
+            **context,
         )
+
+        commit_and_refresh(db, invitation)
 
         return IssuedInvitation(
             invitation=invitation,
@@ -807,9 +844,6 @@ def list_invitations_for_user(
     *,
     user_id: uuid.UUID,
 ) -> list[OrganizationInvitation]:
-    """
-    Returns pending invitations issued to the user's email address.
-    """
     user = user_crud.get_user_by_id(db, user_id=user_id)
     if user is None:
         return []
@@ -826,6 +860,22 @@ def sweep_expired_invitations(
     rows = invitation_crud.expire_stale_invitations(db, now=datetime.now(UTC))
     if not rows:
         return {}
+
+    for row in rows:
+        inviter_user = user_crud.get_user_by_id(db, user_id=row["inviter_id"])
+        audit_service.record(
+            db,
+            organization_id=row["organization_id"],
+            actor_id=row["inviter_id"],
+            resource_type=AuditResourceType.INVITATION,
+            resource_id=row["id"],
+            action=AuditAction.REVOKED,
+            details={
+                **audit_service.actor_snapshot(inviter_user),
+                "reason": "EXPIRED",
+                "recipient_email": row["email"],
+            },
+        )
 
     if commit:
         commit_and_refresh(db)

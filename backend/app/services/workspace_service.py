@@ -1,5 +1,7 @@
 """
 Business orchestration for Workspaces within FlowPilot AI.
+
+ARCH-07 Step 3: Converted AUDIT log call sites to audit_service.record().
 """
 
 from __future__ import annotations
@@ -30,8 +32,9 @@ from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.models.organization import Organization, OrganizationRole
 from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
+from app.models.audit_log import AuditAction, AuditResourceType
+from app.services import audit_service
 
-# Seeding imports
 from app.crud.ai_settings import upsert_ai_settings
 from app.crud.document_settings import upsert_document_settings
 from app.schemas.ai_settings import AISettingsUpdate, AIProvider
@@ -166,7 +169,6 @@ def create_workspace_in_organization(
             role=WorkspaceRole.ADMIN,
         )
 
-        # --- Seed default configuration records for the new workspace ---
         upsert_ai_settings(
             db,
             workspace_id=workspace.id,
@@ -195,15 +197,21 @@ def create_workspace_in_organization(
             settings_in=DocumentSettingsCreate()
         )
 
-        commit_and_refresh(db, workspace)
-
-        logger.info(
-            "AUDIT | WORKSPACE_CREATED | Org: %s | Workspace: %s (%s) | Actor: %s",
-            organization.id,
-            workspace.id,
-            workspace.slug,
-            actor_id,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.WORKSPACE,
+            resource_id=workspace.id,
+            action=AuditAction.CREATED,
+            details={
+                "name": workspace.workspace_name,
+                "slug": workspace.slug,
+            },
         )
+
+        commit_and_refresh(db, workspace)
         return workspace
 
     except IntegrityError as exc:
@@ -264,13 +272,22 @@ def update_workspace_settings(
             date_format=date_format,
             company_logo_url=company_logo_url,
         )
-        commit_and_refresh(db, updated)
 
-        logger.info(
-            "AUDIT | WORKSPACE_UPDATED | Workspace: %s | Actor: %s",
-            workspace.id,
-            actor_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.WORKSPACE,
+            resource_id=workspace.id,
+            action=AuditAction.UPDATED,
+            details={
+                "workspace_name": updated.workspace_name,
+                "slug": updated.slug,
+            },
         )
+
+        commit_and_refresh(db, updated)
         return updated
 
     except Exception as exc:
@@ -298,13 +315,19 @@ def remove_workspace_logo(
 
     try:
         updated = workspace_crud.clear_workspace_logo(db, workspace=workspace)
-        commit_and_refresh(db, updated)
 
-        logger.info(
-            "AUDIT | WORKSPACE_LOGO_REMOVED | Workspace: %s | Actor: %s",
-            workspace.id,
-            actor_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.UPLOADED_FILE,
+            resource_id=workspace.id,
+            action=AuditAction.DELETED,
+            details={"kind": "WORKSPACE_LOGO"},
         )
+
+        commit_and_refresh(db, updated)
         return updated
 
     except Exception as exc:
@@ -344,14 +367,19 @@ def archive_workspace(
         archived = workspace_crud.set_workspace_status(
             db, workspace=workspace, status=WorkspaceStatus.ARCHIVED
         )
-        commit_and_refresh(db, archived)
 
-        logger.info(
-            "AUDIT | WORKSPACE_ARCHIVED | Org: %s | Workspace: %s | Actor: %s",
-            workspace.organization_id,
-            workspace.id,
-            actor_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.WORKSPACE,
+            resource_id=workspace.id,
+            action=AuditAction.ARCHIVED,
+            details={"slug": workspace.slug},
         )
+
+        commit_and_refresh(db, archived)
         return archived
 
     except Exception as exc:
@@ -381,13 +409,19 @@ def restore_workspace(
         restored = workspace_crud.set_workspace_status(
             db, workspace=workspace, status=WorkspaceStatus.ACTIVE
         )
-        commit_and_refresh(db, restored)
 
-        logger.info(
-            "AUDIT | WORKSPACE_RESTORED | Workspace: %s | Actor: %s",
-            workspace.id,
-            actor_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.WORKSPACE,
+            resource_id=workspace.id,
+            action=AuditAction.RESTORED,
+            details={"slug": workspace.slug},
         )
+
+        commit_and_refresh(db, restored)
         return restored
 
     except Exception as exc:

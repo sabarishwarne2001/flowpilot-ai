@@ -3,14 +3,10 @@ Business orchestration for workspace membership — the access grant.
 
 Distinct from organization membership, which is the billable seat. This module
 enforces invariant B.1 #2: a workspace grant may only exist where an ACTIVE
-organization membership exists for the same user and tenant. That constraint
-cannot be expressed in the database without denormalizing organization_id onto
-workspace_members, so it lives here and is asserted by the isolation tests.
+organization membership exists for the same user and tenant.
 
-resolve_workspace_access is the composition point for the ARCH-01 permission
-model. It joins both membership lookups with the derivation rule from
-app.core.workspace_permissions, and Step 9a's request context calls it on every
-tenant-scoped request.
+ARCH-07 Step 3: Converted AUDIT log call sites to structured audit_service.record().
+Preserves all original WorkspaceAccess dataclass, resolution, and grant mechanics.
 """
 
 from __future__ import annotations
@@ -41,6 +37,8 @@ from app.models.organization import (
     OrganizationRole,
 )
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.models.audit_log import AuditAction, AuditResourceType
+from app.services import audit_service
 
 logger = logging.getLogger("app.services.workspace_member_service")
 
@@ -49,14 +47,6 @@ logger = logging.getLogger("app.services.workspace_member_service")
 class WorkspaceAccess:
     """
     An actor's fully resolved standing in one workspace.
-
-    effective_role is None when the actor has no access at all, which the API
-    layer converts to 404 rather than 403 so the response cannot confirm that a
-    workspace exists.
-
-    organization_membership is carried alongside because several downstream
-    decisions — granting workspace ADMIN, for instance — legitimately span both
-    tiers and would otherwise require a second lookup.
     """
     organization_membership: OrganizationMember | None
     workspace_membership: WorkspaceMember | None
@@ -85,18 +75,6 @@ def resolve_workspace_access(
     workspace: Workspace,
     user_id: uuid.UUID,
 ) -> WorkspaceAccess:
-    """
-    Resolves an actor's effective standing in a workspace.
-
-    The single authority on workspace access, called on every tenant-scoped
-    request. Organization OWNER and ADMIN resolve to workspace ADMIN whether or
-    not an explicit grant exists; that elevation is derived here and never
-    persisted, so an organization role change takes effect on the very next
-    request instead of leaving stale grants behind.
-
-    Costs two indexed lookups, with the second skipped for organization
-    administrators. ARCH-11 introduces caching with invalidation on role change.
-    """
     organization_membership = (
         organization_members_crud.get_organization_member(
             db,
@@ -106,8 +84,6 @@ def resolve_workspace_access(
         )
     )
 
-    # Organization membership is a precondition for any workspace access. A
-    # grant without one is an invariant violation, not an access path.
     if organization_membership is None:
         return WorkspaceAccess(None, None, None)
 
@@ -135,13 +111,6 @@ def list_workspace_members(
     *,
     workspace: Workspace,
 ) -> list[WorkspaceMember]:
-    """
-    Returns explicit grants on a workspace.
-
-    Organization administrators holding only a derived grant do not appear
-    here. The API layer merges them into the presented directory so the UI
-    shows everyone with access rather than everyone with a stored row.
-    """
     return workspace_members_crud.list_workspace_members(
         db,
         workspace_id=workspace.id,
@@ -157,18 +126,6 @@ def grant_workspace_access(
     target_user_id: uuid.UUID,
     role: WorkspaceRole,
 ) -> WorkspaceMember:
-    """
-    Grants a user access to a workspace at the given role.
-
-    Enforces invariant B.1 #2: the target must already hold an ACTIVE
-    organization membership. A user cannot be added to a workspace of an
-    organization they do not belong to, because the seat is what authorizes
-    their presence in the tenant at all.
-
-    A previously revoked grant is reactivated rather than duplicated. The
-    unique constraint would reject a duplicate in any case, and reactivating
-    keeps the member's history on a single record.
-    """
     if not can_assign_workspace_role(
         actor_access.organization_role, actor_access.effective_role, role
     ):
@@ -197,7 +154,7 @@ def grant_workspace_access(
             membership = workspace_members_crud.reactivate_workspace_member(
                 db, membership=existing, role=role
             )
-            action = "WORKSPACE_ACCESS_RESTORED"
+            action = AuditAction.ENABLED
         else:
             membership = workspace_members_crud.create_workspace_member(
                 db,
@@ -206,18 +163,25 @@ def grant_workspace_access(
                 role=role,
                 status=MembershipStatus.ACTIVE,
             )
-            action = "WORKSPACE_ACCESS_GRANTED"
+            action = AuditAction.CREATED
+
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_access.actor_user_id,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=membership.id,
+            action=action,
+            details={
+                "scope": "WORKSPACE_GRANT",
+                "target_user_id": str(target_user_id),
+                "role": role.value,
+                "workspace_slug": workspace.slug,
+            },
+        )
 
         commit_and_refresh(db, membership)
-
-        logger.info(
-            "AUDIT | %s | Workspace: %s | User: %s | Role: %s | Actor: %s",
-            action,
-            workspace.id,
-            target_user_id,
-            role.value,
-            actor_access.actor_user_id,
-        )
         return membership
 
     except Exception as exc:
@@ -240,15 +204,6 @@ def change_workspace_member_role(
     target_membership: WorkspaceMember,
     new_role: WorkspaceRole,
 ) -> WorkspaceMember:
-    """
-    Changes an existing workspace grant.
-
-    Both halves are checked: the actor must be permitted to modify the target's
-    current role and to assign the new one. Granting or revoking workspace
-    ADMIN additionally requires organization-level standing, which resolves the
-    deadlock two workspace admins would otherwise create — neither able to
-    manage the other, with no higher workspace role to break the tie.
-    """
     if not can_modify_workspace_member(
         actor_access.organization_role,
         actor_access.effective_role,
@@ -274,17 +229,25 @@ def change_workspace_member_role(
         updated = workspace_members_crud.update_workspace_member_role(
             db, membership=target_membership, role=new_role
         )
-        commit_and_refresh(db, updated)
 
-        logger.info(
-            "AUDIT | WORKSPACE_ROLE_CHANGED | Workspace: %s | User: %s | "
-            "%s -> %s | Actor: %s",
-            workspace.id,
-            target_membership.user_id,
-            previous_role.value,
-            new_role.value,
-            actor_access.actor_user_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_access.actor_user_id,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=target_membership.id,
+            action=AuditAction.ROLE_CHANGED,
+            details={
+                "scope": "WORKSPACE_GRANT",
+                "target_user_id": str(target_membership.user_id),
+                "old_role": previous_role.value,
+                "new_role": new_role.value,
+                "workspace_slug": workspace.slug,
+            },
         )
+
+        commit_and_refresh(db, updated)
         return updated
 
     except Exception as exc:
@@ -305,17 +268,6 @@ def revoke_workspace_access(
     actor_access: WorkspaceAccess,
     target_membership: WorkspaceMember,
 ) -> WorkspaceMember:
-    """
-    Revokes a workspace grant, retaining the row.
-
-    The organization seat is untouched: losing access to one workspace is not
-    the same as leaving the company, and conflating them would make a routine
-    reassignment look like a termination.
-
-    Unlike an organization, a workspace cannot be orphaned by this operation.
-    Every organization OWNER and ADMIN retains a derived ADMIN grant, so no
-    last-admin guard is needed here.
-    """
     if not can_modify_workspace_member(
         actor_access.organization_role,
         actor_access.effective_role,
@@ -335,15 +287,23 @@ def revoke_workspace_access(
         revoked = workspace_members_crud.deactivate_workspace_member(
             db, membership=target_membership, actor_id=actor_user_id
         )
-        commit_and_refresh(db, revoked)
 
-        logger.info(
-            "AUDIT | WORKSPACE_ACCESS_REVOKED | Workspace: %s | User: %s | "
-            "Actor: %s",
-            workspace.id,
-            target_membership.user_id,
-            actor_user_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=actor_user_id,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=target_membership.id,
+            action=AuditAction.DISABLED,
+            details={
+                "scope": "WORKSPACE_GRANT",
+                "target_user_id": str(target_membership.user_id),
+                "workspace_slug": workspace.slug,
+            },
         )
+
+        commit_and_refresh(db, revoked)
         return revoked
 
     except Exception as exc:
@@ -363,14 +323,6 @@ def leave_workspace(
     workspace: Workspace,
     access: WorkspaceAccess,
 ) -> WorkspaceMember:
-    """
-    Removes the acting user's own workspace grant.
-
-    An organization administrator retains derived access afterward, so this
-    removes them from the member list without actually cutting them off. That
-    is the correct behavior and matches GitHub, where an organization owner
-    cannot lock themselves out of a repository they administer.
-    """
     if access.workspace_membership is None:
         raise WorkspaceAccessDeniedError("Workspace not found.")
 
@@ -380,13 +332,24 @@ def leave_workspace(
             membership=access.workspace_membership,
             actor_id=access.workspace_membership.user_id,
         )
-        commit_and_refresh(db, left)
 
-        logger.info(
-            "AUDIT | WORKSPACE_LEFT | Workspace: %s | User: %s",
-            workspace.id,
-            left.user_id,
+        audit_service.record(
+            db,
+            organization_id=workspace.organization_id,
+            workspace_id=workspace.id,
+            actor_id=left.user_id,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=left.id,
+            action=AuditAction.DISABLED,
+            details={
+                "scope": "WORKSPACE_GRANT",
+                "target_user_id": str(left.user_id),
+                "workspace_slug": workspace.slug,
+                "self_initiated": True,
+            },
         )
+
+        commit_and_refresh(db, left)
         return left
 
     except Exception as exc:

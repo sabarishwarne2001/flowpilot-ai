@@ -1,12 +1,16 @@
 """
 Business orchestration for organization membership — the billable seat.
+
+ARCH-07 Step 3: Converted AUDIT log sites to structured audit_service.record().
+Includes independent audit recording for role-change authorization denials.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Sequence
+from datetime import UTC, datetime
+from typing import Any, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,7 +29,7 @@ from app.core.organization_permissions import (
     can_transfer_ownership,
 )
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
-from app.services import organization_notification_service
+from app.services import audit_service, organization_notification_service
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import DIRECTORY_STATUSES
@@ -35,6 +39,8 @@ from app.models.organization import (
     OrganizationMember,
     OrganizationRole,
 )
+from app.models.audit_log import AuditAction, AuditResourceType
+from app.models.user import User
 
 logger = logging.getLogger("app.services.organization_member_service")
 
@@ -78,12 +84,16 @@ def change_member_role(
     actor_membership: OrganizationMember,
     target_membership: OrganizationMember,
     new_role: OrganizationRole,
+    request: Any = None,
 ) -> OrganizationMember:
     lock_organization_for_owner_change(
         db,
         organization_id=organization.id,
         refresh=(actor_membership, target_membership),
     )
+
+    actor = actor_membership.user
+    context = audit_service.context_from_request(request)
 
     if actor_membership.id == target_membership.id:
         raise OrganizationMemberError(
@@ -94,6 +104,23 @@ def change_member_role(
     if not can_modify_member_role(
         actor_membership.role, target_membership.role, new_role
     ):
+        audit_service.record_independently(
+            organization_id=organization.id,
+            actor_id=actor.id if actor else None,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=target_membership.id,
+            action=AuditAction.ROLE_CHANGED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "outcome": "DENIED",
+                "denial_reason": "INSUFFICIENT_ROLE",
+                "actor_role": actor_membership.role.value,
+                "target_user_id": str(target_membership.user_id),
+                "current_role": target_membership.role.value,
+                "attempted_role": new_role.value,
+            },
+            **context,
+        )
         raise OrganizationPermissionDeniedError(
             "You do not have permission to assign this role."
         )
@@ -122,23 +149,30 @@ def change_member_role(
             previous_role=previous_role.value,
             new_role=new_role.value,
             actor_display=(
-                actor_membership.user.email
-                if actor_membership.user is not None
-                else "An administrator"
+                actor.email if actor else "An administrator"
             ),
         )
 
-        commit_and_refresh(db, updated)
-
-        logger.info(
-            "AUDIT | ORG_MEMBER_ROLE_CHANGED | Org: %s | Member: %s | "
-            "%s -> %s | Actor: %s",
-            organization.id,
-            target_membership.user_id,
-            previous_role.value,
-            new_role.value,
-            actor_membership.user_id,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id if actor else None,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=target_membership.id,
+            action=AuditAction.ROLE_CHANGED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "outcome": "ALLOWED",
+                "scope": "ORGANIZATION",
+                "target_user_id": str(target_membership.user_id),
+                "target_email": target_membership.user.email if target_membership.user else None,
+                "old_role": previous_role.value,
+                "new_role": new_role.value,
+            },
+            **context,
         )
+
+        commit_and_refresh(db, updated)
         return updated
 
     except Exception as exc:
@@ -159,6 +193,8 @@ def deactivate_member(
     organization: Organization,
     actor_membership: OrganizationMember,
     target_membership: OrganizationMember,
+    self_initiated: bool = False,
+    request: Any = None,
 ) -> OrganizationMember:
     lock_organization_for_owner_change(
         db,
@@ -166,12 +202,15 @@ def deactivate_member(
         refresh=(actor_membership, target_membership),
     )
 
-    if actor_membership.id == target_membership.id:
+    actor = actor_membership.user
+    context = audit_service.context_from_request(request)
+
+    if actor_membership.id == target_membership.id and not self_initiated:
         raise OrganizationMemberError(
             "Use the leave-organization operation to remove yourself."
         )
 
-    if not can_modify_member(actor_membership.role, target_membership.role):
+    if not self_initiated and not can_modify_member(actor_membership.role, target_membership.role):
         raise OrganizationPermissionDeniedError(
             "You do not have permission to remove this member."
         )
@@ -194,16 +233,27 @@ def deactivate_member(
             membership=target_membership,
             actor_id=actor_membership.user_id,
         )
-        commit_and_refresh(db, deactivated)
 
-        logger.info(
-            "AUDIT | ORG_MEMBER_DEACTIVATED | Org: %s | Member: %s | "
-            "Workspace grants revoked: %d | Actor: %s",
-            organization.id,
-            target_membership.user_id,
-            revoked,
-            actor_membership.user_id,
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor.id if actor else None,
+            resource_type=AuditResourceType.MEMBERSHIP,
+            resource_id=target_membership.id,
+            action=AuditAction.DISABLED,
+            details={
+                **audit_service.actor_snapshot(actor),
+                "scope": "ORGANIZATION",
+                "self_initiated": self_initiated,
+                "target_user_id": str(target_membership.user_id),
+                "target_email": target_membership.user.email if target_membership.user else None,
+                "role_at_deactivation": target_membership.role.value,
+                "workspace_grants_revoked": revoked,
+            },
+            **context,
         )
+
+        commit_and_refresh(db, deactivated)
         return deactivated
 
     except Exception as exc:
@@ -223,57 +273,16 @@ def leave_organization(
     *,
     organization: Organization,
     membership: OrganizationMember,
+    request: Any = None,
 ) -> OrganizationMember:
-    lock_organization_for_owner_change(
+    return deactivate_member(
         db,
-        organization_id=organization.id,
-        refresh=(membership,),
+        organization=organization,
+        actor_membership=membership,
+        target_membership=membership,
+        self_initiated=True,
+        request=request,
     )
-
-    if membership.role is OrganizationRole.OWNER:
-        _assert_not_last_owner(
-            db,
-            organization_id=organization.id,
-            message=(
-                "You are the only owner of this organization. Transfer "
-                "ownership to another member before leaving."
-            ),
-        )
-
-    try:
-        revoked = (
-            workspace_members_crud.deactivate_all_workspace_grants_for_user(
-                db,
-                organization_id=organization.id,
-                user_id=membership.user_id,
-                actor_id=membership.user_id,
-            )
-        )
-
-        deactivated = organization_members_crud.deactivate_organization_member(
-            db, membership=membership, actor_id=membership.user_id
-        )
-        commit_and_refresh(db, deactivated)
-
-        logger.info(
-            "AUDIT | ORG_MEMBER_LEFT | Org: %s | Member: %s | "
-            "Workspace grants revoked: %d",
-            organization.id,
-            membership.user_id,
-            revoked,
-        )
-        return deactivated
-
-    except Exception as exc:
-        rollback_and_log_error(
-            db,
-            logger,
-            "Failed to remove member %s from organization %s: %s",
-            membership.id,
-            organization.id,
-            str(exc),
-            exc=exc,
-        )
 
 
 def transfer_ownership(
@@ -314,12 +323,6 @@ def transfer_ownership(
         commit_and_refresh(db, promoted)
         db.refresh(current_owner_membership)
 
-        logger.info(
-            "AUDIT | ORG_OWNERSHIP_TRANSFERRED | Org: %s | From: %s | To: %s",
-            organization.id,
-            current_owner_membership.user_id,
-            target_membership.user_id,
-        )
         return promoted
 
     except Exception as exc:

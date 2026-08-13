@@ -1,0 +1,5 @@
+module,line,event,function,source
+app\models\audit_log.py,3,DYNAMIC,<module>,Replaces 33 ``AUDIT | ...`` format strings scattered across the service layer
+app\services\avatar_service.py,207,AVATAR_SET,set_avatar,"""AUDIT | AVATAR_SET | user=%s | file=%s | bytes=%d | %dx%d | mime=%s"","
+app\services\avatar_service.py,239,AVATAR_CLEARED,clear_avatar,"""AUDIT | AVATAR_CLEARED | user=%s | file=%s"","
+app\services\user_service.py,87,USER_PROFILE_UPDATED,update_user_profile,"""AUDIT | USER_PROFILE_UPDATED | User: %s | Fields: %s"","
