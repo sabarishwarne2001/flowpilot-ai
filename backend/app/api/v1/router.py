@@ -17,6 +17,7 @@ from app.api.v1 import (
     me,
     notifications,
     organization_email_settings,
+    organization_notifications,
     organizations,
     ownership_transfers,
     upload,
@@ -38,6 +39,7 @@ WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 
 api_router.include_router(organizations.router)
 api_router.include_router(organization_email_settings.router)
+api_router.include_router(organization_notifications.router)
 api_router.include_router(audit_logs.router)
 api_router.include_router(me.router)
 api_router.include_router(avatar.router)

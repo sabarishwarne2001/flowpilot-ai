@@ -1,8 +1,17 @@
+"""
+Database operations layer for Notifications in FlowPilot AI.
+
+ARCH-07 Step 10: Preserves all 7 existing CRUD functions and adds
+list_organization_scoped_for_user (E20 - workspace_id IS NULL filter).
+"""
+
 import uuid
-from sqlalchemy import select, update
+from typing import Sequence
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from app.models.notification import Notification, NotificationStatus
 from app.schemas.notification import NotificationCreate
+
 
 def create_notification(
     db: Session,
@@ -29,6 +38,7 @@ def create_notification(
     db.refresh(notification)
     return notification
 
+
 def get_notification_by_id(
     db: Session,
     *,
@@ -42,6 +52,7 @@ def get_notification_by_id(
         Notification.user_id == user_id,
     )
     return db.execute(statement).scalar_one_or_none()
+
 
 def list_notifications(
     db: Session,
@@ -66,6 +77,56 @@ def list_notifications(
     )
     return list(db.execute(statement).scalars().all())
 
+
+def list_organization_scoped_for_user(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    user_id: uuid.UUID,
+    is_read: bool | None = None,
+    limit: int = 25,
+    offset: int = 0,
+) -> tuple[list[Notification], int, int]:
+    """Return the caller's ORGANIZATION-SCOPED notifications, newest first.
+
+    E20: workspace_id IS NULL filter prevents double-listing workspace notifications
+    in the organization feed.
+    """
+    base = select(Notification).where(
+        Notification.organization_id == organization_id,
+        Notification.user_id == user_id,
+        Notification.workspace_id.is_(None),
+    )
+    if is_read is not None:
+        base = base.where(Notification.is_read.is_(is_read))
+
+    total = db.execute(
+        select(func.count()).select_from(base.subquery())
+    ).scalar_one()
+
+    unread = db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.organization_id == organization_id,
+            Notification.user_id == user_id,
+            Notification.workspace_id.is_(None),
+            Notification.is_read.is_(False),
+        )
+    ).scalar_one()
+
+    rows = list(
+        db.execute(
+            base.order_by(Notification.created_at.desc(), Notification.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+    return rows, total, unread
+
+
 def update_notification_read_status(
     db: Session,
     *,
@@ -76,6 +137,7 @@ def update_notification_read_status(
     db.commit()
     db.refresh(notification)
     return notification
+
 
 def update_notification_delivery_status(
     db: Session,
@@ -92,6 +154,7 @@ def update_notification_delivery_status(
     db.commit()
     db.refresh(notification)
     return notification
+
 
 def mark_all_notifications_as_read(
     db: Session,
@@ -111,6 +174,7 @@ def mark_all_notifications_as_read(
     result = db.execute(statement)
     db.commit()
     return result.rowcount or 0
+
 
 def delete_notification(
     db: Session,

@@ -4,6 +4,8 @@ Pydantic v2 schemas for FlowPilot AI notifications.
 Defines request, response, and update models for in-app and external
 notifications while supporting future delivery channels such as Email,
 Slack, Teams, Webhooks, and Push Notifications.
+
+ARCH-07 Step 10: Adds NotificationRead and NotificationPage for organization-scoped feeds.
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ from app.models.notification import NotificationChannel
 from app.models.notification import NotificationPriority
 from app.models.notification import NotificationStatus
 from app.models.notification import NotificationType
+
+ORG_NOTIFICATIONS_MAX_PAGE_SIZE = 100
+ORG_NOTIFICATIONS_DEFAULT_PAGE_SIZE = 25
 
 
 # ============================================================================
@@ -149,7 +154,7 @@ class NotificationUpdate(BaseModel):
 
 
 # ============================================================================
-# Response Schema
+# Response Schemas
 # ============================================================================
 
 class NotificationResponse(NotificationBase):
@@ -168,3 +173,34 @@ class NotificationResponse(NotificationBase):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class NotificationRead(BaseModel):
+    """Reuses the existing notification shape for organization-level feeds (ARCH-07 Step 10)."""
+
+    id: uuid.UUID
+    created_at: datetime
+    organization_id: uuid.UUID
+    workspace_id: uuid.UUID | None = None
+    user_id: uuid.UUID
+    notification_type: NotificationType
+    priority: NotificationPriority
+    delivery_channel: NotificationChannel
+    delivery_status: NotificationStatus
+    title: str
+    message: str
+    is_read: bool
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+
+class NotificationPage(BaseModel):
+    """Paginated response contract for organization-level notifications."""
+
+    items: list[NotificationRead]
+    total: int
+    unread_count: int
+    limit: int
+    offset: int

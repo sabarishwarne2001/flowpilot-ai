@@ -320,6 +320,11 @@ RequireWorkspaceContributor = RequireWorkspaceRole(WorkspaceRole.CONTRIBUTOR)
 RequireWorkspaceAdmin = RequireWorkspaceRole(WorkspaceRole.ADMIN)
 RequireWorkspaceMember = RequireWorkspaceRole(WorkspaceRole.VIEWER)
 
+#: Convenience guard for organization membership (any active member: OWNER, ADMIN, MEMBER).
+RequireOrgMember = RequireOrgRole(
+    [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER]
+)
+
 #: Convenience guard for organization administration.
 RequireOrgAdmin = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN]

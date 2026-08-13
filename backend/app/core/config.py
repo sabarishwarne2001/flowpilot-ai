@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = Path("uploads")
     STORAGE_QUARANTINE_DIR: Path = Path("uploads/quarantine")
 
+    # ARCH-07 Step 11 Maintenance Sweeper Configurations
+    AUDIT_SWEEPER_DATABASE_URL: Optional[SecretStr] = None
+    FILE_RECLAMATION_DAYS: int = 30
+
     # File Ingestion & Storage Configurations
     MAX_UPLOAD_SIZE: int = 104857600
     ALLOWED_MIME_TYPES: list[str] = [
@@ -114,7 +118,7 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # SMTP Password Encryption (ARCH-07 Step 8: MultiFernet support)
+    # SMTP Password Encryption
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
     EMAIL_ENCRYPTION_KEY: Optional[SecretStr] = None
 

@@ -1,0 +1,2 @@
+# ARCH-07 §B.7 — FlowPilot AI maintenance sweepers
+17 3 * * *  flowpilot  cd /srv/flowpilot/backend && /srv/flowpilot/venv/bin/python scripts/sweep_arch07.py --all --apply --json >> /var/log/flowpilot/sweep_arch07.log 2>&1
