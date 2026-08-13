@@ -1,0 +1,32 @@
+{
+  "phase": "ARCH-07",
+  "step": 6,
+  "archived_at": "2026-08-13T11:55:29.496247+00:00",
+  "alembic_revision_at_adoption": "d5f60ab7c318",
+  "row_count": 2,
+  "note": "Pre-adoption filesystem state for workspace logos. Adopted uploaded_files rows carry owner_id = NULL because logos predate upload tracking (ARCH-07 Step 6).",
+  "rows": [
+    {
+      "storage_key": "logos/ad16f57b-202f-4230-a6c5-be5aeb8f39e5.jpg",
+      "workspace_id": "567b5233-a89b-4f48-92be-235261cccfa5",
+      "organization_id": "8047e508-8ba3-4b2f-b592-0c3ba1205c52",
+      "legacy_url": "/uploads/logos/ad16f57b-202f-4230-a6c5-be5aeb8f39e5.jpg",
+      "mime_type": "image/jpeg",
+      "size_bytes": 907144,
+      "checksum_sha256": "6785e420b1c2f6ad2e942e19ad07b59240b005cc79201469a8f78826eb9223e7",
+      "captured_at": "2026-08-13 07:03:27.329836+00:00",
+      "resulting_uploaded_file_id": "4674429a-4d52-4ec7-b6be-4a491ca1b602"
+    },
+    {
+      "storage_key": "logos/e096946f-5072-4fd4-b39e-3a217ac086ca.jpg",
+      "workspace_id": "c36a3517-2dcf-4b0d-8b19-9d1d09f58f49",
+      "organization_id": "8047e508-8ba3-4b2f-b592-0c3ba1205c52",
+      "legacy_url": "/uploads/logos/e096946f-5072-4fd4-b39e-3a217ac086ca.jpg",
+      "mime_type": "image/jpeg",
+      "size_bytes": 907144,
+      "checksum_sha256": "6785e420b1c2f6ad2e942e19ad07b59240b005cc79201469a8f78826eb9223e7",
+      "captured_at": "2026-08-13 07:03:27.329836+00:00",
+      "resulting_uploaded_file_id": "669398d7-f11b-47ef-9e80-4b01e57f0601"
+    }
+  ]
+}
