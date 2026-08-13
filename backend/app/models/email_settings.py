@@ -84,5 +84,4 @@ class EmailSettings(Base, UUIDMixin, TimestampMixin):
     )
 
     workspace: Mapped["Workspace"] = relationship("Workspace")
-
     updated_by: Mapped[Union["User", None]] = relationship("User")

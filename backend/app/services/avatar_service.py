@@ -1,6 +1,4 @@
-"""User avatar upload, validation and storage (ARCH-06 Step 7, ARCH-07 Step 5).
-
-ARCH-07 Step 5: every filesystem call is replaced by StorageDriver.
+"""User avatar upload, validation and storage (ARCH-06 Step 7, ARCH-07 Steps 5 & 7).
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.storage import ObjectNotFoundError, get_storage_driver
-from app.core.storage.keys import legacy_path_to_key
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
@@ -94,45 +91,26 @@ def _live_bytes_for_user(db: Session, *, owner_id: uuid.UUID) -> int:
     ).scalar_one()
 
 
-def set_avatar(
-    db: Session,
-    *,
-    owner: User,
-    raw: bytes,
-    original_filename: str = "avatar.png",
-) -> UploadedFile:
+def set_avatar(db: Session, *, owner: User, raw: bytes) -> UploadedFile:
     normalised = _validate_and_normalise(raw)
-
-    if (
-        _live_bytes_for_user(db, owner_id=owner.id) + len(normalised)
-        > MAX_AVATAR_BYTES_PER_USER
-    ):
-        raise QuotaExceededError(
-            "You have reached your upload storage limit. Remove an existing "
-            "file and try again."
-        )
-
     driver = get_storage_driver()
     key = _avatar_key(owner.id)
 
     driver.put(key, normalised, OUTPUT_MIME)
 
-    previous = None
-    if owner.avatar_file_id is not None:
-        previous = db.get(UploadedFile, owner.avatar_file_id)
-
+    previous = _current_avatar_row(db, user_id=owner.id)
     if previous is not None:
         previous.deleted_at = datetime.now(UTC)
 
     record = UploadedFile(
-        owner_id=owner.id,
-        organization_id=None,
-        workspace_id=None,
         file_path=key,
-        original_filename=(original_filename or "avatar.png")[:255],
+        original_filename="avatar.png",
         mime_type=OUTPUT_MIME,
         file_size=len(normalised),
         checksum_sha256=hashlib.sha256(normalised).hexdigest(),
+        owner_id=owner.id,
+        organization_id=None,
+        workspace_id=None,
     )
     db.add(record)
     db.flush()
@@ -173,7 +151,7 @@ def resolve_current(db: Session, *, owner: User) -> UploadedFile:
 def read_avatar_bytes(db: Session, *, record: UploadedFile) -> bytes:
     driver = get_storage_driver()
     try:
-        return driver.get(legacy_path_to_key(record.file_path))
+        return driver.get(record.file_path)
     except ObjectNotFoundError:
         logger.error(
             "ARCH07_MISSING_OBJECT | uploaded_files.id=%s file_path=%s",
@@ -185,6 +163,18 @@ def read_avatar_bytes(db: Session, *, record: UploadedFile) -> bytes:
 def open_avatar_stream(record: UploadedFile):
     driver = get_storage_driver()
     try:
-        return driver.stream(legacy_path_to_key(record.file_path))
+        return driver.stream(record.file_path)
     except ObjectNotFoundError:
         raise AvatarNotFoundError("Avatar file missing.")
+
+
+def _current_avatar_row(db: Session, *, user_id: uuid.UUID) -> Optional[UploadedFile]:
+    return (
+        db.query(UploadedFile)
+        .filter(
+            UploadedFile.owner_id == user_id,
+            UploadedFile.deleted_at.is_(None),
+        )
+        .order_by(UploadedFile.created_at.desc())
+        .first()
+    )

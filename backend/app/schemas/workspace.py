@@ -1,27 +1,17 @@
 """
 Request validation and serialization schemas for Workspaces.
 
-A workspace is the collaboration boundary and always belongs to an
-organization. Locale and branding live here rather than on the organization
-because a US and an India workspace on one contract legitimately need different
-currency, timezone, and date formatting.
-
-company_name was removed in ARCH-01 and now lives on the organization as
-`name`: it was the tenant's identity, not the workspace's. is_active was
-replaced by the WorkspaceStatus enum, which distinguishes archived from
-suspended where a boolean could not.
-
-Maximum lengths mirror the model exactly, including the wider language bound:
-BCP-47 tags such as "sr-Latn-RS-u-ca-gregory" exceed ten characters.
+ARCH-07 Step 7: company_logo_url is now a computed property derived from
+logo_file_id, pointing to the authenticated streaming route.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.core.slugs import MAX_SLUG_LENGTH, MIN_SLUG_LENGTH
 from app.models.workspace import WorkspaceRole, WorkspaceStatus
@@ -32,13 +22,6 @@ from app.models.workspace import WorkspaceRole, WorkspaceStatus
 # ============================================================================
 
 class WorkspaceCreate(BaseModel):
-    """
-    Creates an additional workspace inside an existing organization.
-
-    Distinct from founding an organization, which is an account-level
-    capability. Creating a workspace within a tenant is an administrative act
-    inside that tenant.
-    """
     workspace_name: str = Field(..., min_length=1, max_length=100)
     slug: str | None = Field(
         default=None,
@@ -57,20 +40,12 @@ class WorkspaceCreate(BaseModel):
         if isinstance(v, str):
             stripped = v.strip()
             if not stripped:
-                raise ValueError(
-                    "Field cannot be empty or contain only whitespace."
-                )
+                raise ValueError("Field cannot be empty or contain only whitespace.")
             return stripped
         return v
 
 
 class WorkspaceUpdate(BaseModel):
-    """
-    Partial workspace update. None means "leave unchanged".
-
-    Clearing the logo uses DELETE /workspaces/{id}/logo rather than passing
-    null here, since null is reserved for "unchanged".
-    """
     workspace_name: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = Field(
         default=None, min_length=MIN_SLUG_LENGTH, max_length=MAX_SLUG_LENGTH
@@ -87,9 +62,7 @@ class WorkspaceUpdate(BaseModel):
         if isinstance(v, str):
             stripped = v.strip()
             if not stripped:
-                raise ValueError(
-                    "Field cannot be empty or contain only whitespace."
-                )
+                raise ValueError("Field cannot be empty or contain only whitespace.")
             return stripped
         return v
 
@@ -109,33 +82,42 @@ class WorkspaceResponse(BaseModel):
     language: str
     currency: str
     date_format: str
-    company_logo_url: str | None = None
+    logo_file_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def company_logo_url(self) -> Optional[str]:
+        """Derived from logo_file_id, pointing to authenticated streaming route."""
+        if self.logo_file_id is None:
+            return None
+        return f"/api/v1/workspaces/{self.id}/logo"
+
 
 class WorkspaceSummary(BaseModel):
-    """
-    Compact workspace projection for switchers and bootstrap payloads.
-
-    Carries the caller's effective role so the client can render permission-
-    dependent affordances without a request per workspace.
-    """
+    """Compact workspace projection for switchers and bootstrap payloads."""
     id: UUID
     organization_id: UUID
     slug: str
     workspace_name: str
     status: WorkspaceStatus
-    company_logo_url: str | None = None
+    logo_file_id: Optional[UUID] = None
     effective_role: WorkspaceRole
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def company_logo_url(self) -> Optional[str]:
+        if self.logo_file_id is None:
+            return None
+        return f"/api/v1/workspaces/{self.id}/logo"
+
 
 class WorkspaceSlugAvailabilityResponse(BaseModel):
-    """Advisory availability check, scoped to one organization."""
     slug: str
     available: bool
     reason: str | None = None

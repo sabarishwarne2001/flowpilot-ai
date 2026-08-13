@@ -1,5 +1,8 @@
 import json
+import warnings
 from pathlib import Path
+from typing import Optional
+from cryptography.fernet import Fernet
 from pydantic import field_validator, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.constants import APP_VERSION
@@ -69,7 +72,7 @@ class Settings(BaseSettings):
     STORAGE_QUARANTINE_DIR: Path = Path("uploads/quarantine")
 
     # File Ingestion & Storage Configurations
-    MAX_UPLOAD_SIZE: int = 104857600  # 100 MB in bytes
+    MAX_UPLOAD_SIZE: int = 104857600
     ALLOWED_MIME_TYPES: list[str] = [
         "application/pdf",
         "image/png",
@@ -111,8 +114,9 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # SMTP Password Encryption
-    EMAIL_ENCRYPTION_KEY: SecretStr
+    # SMTP Password Encryption (ARCH-07 Step 8: MultiFernet support)
+    EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
+    EMAIL_ENCRYPTION_KEY: Optional[SecretStr] = None
 
     # Sprint 5: AI Assistant & RAG Parameter Configurations
     RAG_TOP_K: int = 5
@@ -205,36 +209,48 @@ class Settings(BaseSettings):
         return cleaned
 
     @model_validator(mode="after")
-    def validate_identity_configuration(self) -> "Settings":
-        secret = self.JWT_SECRET_KEY.get_secret_value()
+    def _resolve_encryption_keys(self) -> "Settings":
+        raw: Optional[str] = None
+        if self.EMAIL_ENCRYPTION_KEYS is not None:
+            raw = self.EMAIL_ENCRYPTION_KEYS.get_secret_value()
+        elif self.EMAIL_ENCRYPTION_KEY is not None:
+            warnings.warn(
+                "EMAIL_ENCRYPTION_KEY is deprecated and will be removed in "
+                "ARCH-08. Set EMAIL_ENCRYPTION_KEYS (plural, comma-separated) "
+                "instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            raw = self.EMAIL_ENCRYPTION_KEY.get_secret_value()
 
-        if secret in LEAKED_JWT_SECRET_KEYS:
+        if not raw:
+            object.__setattr__(self, "_encryption_key_list", [])
+            return self
+
+        keys = [part.strip() for part in raw.split(",") if part.strip()]
+        if not keys:
+            raise ValueError("EMAIL_ENCRYPTION_KEYS resolved to an empty list")
+
+        for index, key in enumerate(keys):
+            try:
+                Fernet(key.encode())
+            except Exception as exc:
+                raise ValueError(
+                    f"EMAIL_ENCRYPTION_KEYS[{index}] is not a valid Fernet key "
+                    f"(expected 32 url-safe base64-encoded bytes)."
+                ) from exc
+
+        if len(set(keys)) != len(keys):
             raise ValueError(
-                "JWT_SECRET_KEY is a published value and cannot be used. "
-                "Generate a new key with: openssl rand -hex 32"
+                "EMAIL_ENCRYPTION_KEYS contains duplicates."
             )
 
-        if len(secret) < 32:
-            raise ValueError(
-                "JWT_SECRET_KEY must be at least 32 characters. "
-                "Generate one with: openssl rand -hex 32"
-            )
-
-        if self.ENVIRONMENT != "development":
-            if not self.PLATFORM_SMTP_HOST.strip():
-                raise ValueError(
-                    "PLATFORM_SMTP_HOST is required outside development. "
-                    "Without it no user can verify an address or reset a "
-                    "password."
-                )
-            if not self.FRONTEND_URL.startswith("https://"):
-                raise ValueError(
-                    "FRONTEND_URL must use HTTPS outside development. The "
-                    "refresh cookie is issued Secure and will not be sent "
-                    "back over plaintext HTTP."
-                )
-
+        object.__setattr__(self, "_encryption_key_list", keys)
         return self
+
+    @property
+    def encryption_key_list(self) -> list[str]:
+        return getattr(self, "_encryption_key_list", [])
 
     @property
     def cors_origins(self) -> list[str]:

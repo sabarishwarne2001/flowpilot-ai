@@ -45,6 +45,7 @@ api_router.include_router(email_change.router)
 api_router.include_router(workspaces.router)
 api_router.include_router(organization_invitation_router)
 api_router.include_router(ownership_transfers.router)
+api_router.include_router(upload.logo_router)
 
 
 # ============================================================================

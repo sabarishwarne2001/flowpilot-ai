@@ -7,17 +7,10 @@ from __future__ import annotations
 import uuid
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from cryptography.fernet import Fernet
 
-from app.core.config import settings as app_settings
+from app.core.encryption import decrypt_password
 from app.crud.email_settings import get_email_settings
 from app.models.email_settings import EmailEncryption
-
-_fernet = Fernet(app_settings.EMAIL_ENCRYPTION_KEY.get_secret_value().encode())
-
-
-def decrypt_password(encrypted_password: str) -> str:
-    return _fernet.decrypt(encrypted_password.encode()).decode()
 
 
 class SMTPConfig(BaseModel):
@@ -32,7 +25,6 @@ class SMTPConfig(BaseModel):
 
     @property
     def sender_address(self) -> str:
-        """The address that appears in the From header."""
         return self.from_email or self.smtp_username
 
 
@@ -41,13 +33,6 @@ def resolve_smtp_config(
     workspace_id: uuid.UUID | None,
     organization_id: uuid.UUID | None = None,
 ) -> SMTPConfig:
-    """
-    Resolves active SMTP configuration, most specific setting first.
-
-        1. enabled WORKSPACE row      (unchanged)
-        2. enabled ORGANIZATION row   (ARCH-06 Step 8, §B.5 Option B)
-        3. platform default           (unchanged)
-    """
     if workspace_id:
         workspace_settings = get_email_settings(db, workspace_id=workspace_id)
         if workspace_settings and workspace_settings.is_enabled:

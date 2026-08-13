@@ -2,13 +2,16 @@
 Main entrypoint for the FlowPilot AI Backend API.
 Configures core framework engines, registers routing tables, manages CORS security configurations,
 and handles resource setups/teardowns via lifespan hooks.
+
+ARCH-07 Step 7: Legacy StaticFiles mount removed (§B.7 / §B.9).
+All media and files serve via authenticated API routes with nosniff security headers.
 """
+
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
@@ -17,22 +20,16 @@ from app.utils import initialize_storage
 from app.core.exceptions import FlowPilotError
 from app.core.exception_handlers import domain_exception_handler
 
-# Initialize early logging configuration before booting the ASGI application instance
 setup_logging()
 logger = logging.getLogger("app.main")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manages resource lifespan cycles for the FastAPI application context.
-    Executes startup operational declarations and cleans up resources at shutdown.
-    """
     logger.info("Starting FlowPilot AI Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
     logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
 
-    # Ensure physical upload directories are built and active on host storage on startup
     try:
         initialize_storage()
         logger.info(f"Target file upload directory initialized at path: '{settings.UPLOAD_DIR}'")
@@ -40,13 +37,12 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Critical startup failure: Failed to initialize file storage: {str(error)}")
         raise error
 
-    # Rebuild the BM25 index after storage/DB initialization
     try:
         logger.info("BM25 index successfully built and initialized.")
     except Exception:
         logger.exception("Failed to initialize BM25 index.")
 
-    yield  # Application runtime serves incoming HTTP requests
+    yield
 
     logger.info("Stopping FlowPilot AI Backend Core...")
 
@@ -59,14 +55,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Mount the static uploads directory to serve uploaded company logos and files
-app.mount(
-    "/uploads",
-    StaticFiles(directory="uploads"),
-    name="uploads",
-)
-
-# Apply CORS middleware properties to protect network pathways
 if settings.cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -79,9 +67,7 @@ if settings.cors_origins:
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
-# Register the global domain exception handler.
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
-# Mount the consolidated versioned routing table
 app.include_router(api_router, prefix=settings.API_V1_STR)
 logger.info(f"API endpoints registered under baseline prefix: {settings.API_V1_STR}")

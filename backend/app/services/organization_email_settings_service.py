@@ -1,7 +1,7 @@
 """
 Per-organization SMTP configuration service.
 
-ARCH-06 Step 8 / ARCH-07 Step 3: Converted AUDIT log call sites to audit_service.record().
+ARCH-06 Step 8 / ARCH-07 Step 3 / ARCH-07 Step 8: Uses central app.core.encryption.
 """
 
 from __future__ import annotations
@@ -10,12 +10,11 @@ import logging
 import uuid
 from typing import Any
 
-from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings as app_settings
-from app.core.smtp import SMTPConfig, decrypt_password
+from app.core.encryption import decrypt_password, encrypt_password
+from app.core.smtp import SMTPConfig
 from app.models.organization_email_settings import OrganizationEmailSettings
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.user import User
@@ -27,9 +26,6 @@ from app.services import audit_service
 logger = logging.getLogger("app.services.organization_email_settings")
 
 
-_fernet = Fernet(app_settings.EMAIL_ENCRYPTION_KEY.get_secret_value().encode())
-
-
 class OrganizationEmailSettingsError(Exception):
     """Base class for organization SMTP configuration failures."""
 
@@ -37,14 +33,6 @@ class OrganizationEmailSettingsError(Exception):
 class IncompleteConfigurationError(OrganizationEmailSettingsError):
     """Enabling was requested but required fields are missing."""
 
-
-def encrypt_password(plaintext: str) -> str:
-    return _fernet.encrypt(plaintext.encode()).decode()
-
-
-# ===========================================================================
-# Read
-# ===========================================================================
 
 def get_settings(
     db: Session, *, organization_id: uuid.UUID
@@ -72,10 +60,6 @@ def get_or_create_settings(
     db.refresh(created)
     return created
 
-
-# ===========================================================================
-# Write
-# ===========================================================================
 
 def set_settings(
     db: Session,
@@ -137,10 +121,6 @@ def set_settings(
     db.refresh(row)
     return row
 
-
-# ===========================================================================
-# Resolution
-# ===========================================================================
 
 def to_smtp_config(row: OrganizationEmailSettings) -> SMTPConfig:
     return SMTPConfig(

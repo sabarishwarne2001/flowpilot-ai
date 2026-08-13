@@ -1,23 +1,20 @@
 import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.core.encryption import encrypt_password
 from app.models.email_settings import EmailSettings
 from app.schemas.email_settings import EmailSettingsCreate, EmailSettingsUpdate
-from cryptography.fernet import Fernet
-from app.core.config import settings as app_settings
 
-_fernet = Fernet(app_settings.EMAIL_ENCRYPTION_KEY.get_secret_value().encode())
-
-def encrypt_password(password: str) -> str:
-    return _fernet.encrypt(password.encode()).decode()
 
 def get_email_settings(db: Session, *, workspace_id: uuid.UUID) -> EmailSettings | None:
     return db.execute(
         select(EmailSettings).where(EmailSettings.workspace_id == workspace_id)
     ).scalar_one_or_none()
 
+
 def email_settings_exist(db: Session, *, workspace_id: uuid.UUID) -> bool:
     return get_email_settings(db, workspace_id=workspace_id) is not None
+
 
 def create_email_settings(
     db: Session, *, workspace_id: uuid.UUID, updated_by_user_id: uuid.UUID, settings_in: EmailSettingsCreate
@@ -38,6 +35,7 @@ def create_email_settings(
     db.refresh(db_obj)
     return db_obj
 
+
 def update_email_settings(
     db: Session, *, db_obj: EmailSettings, updated_by_user_id: uuid.UUID, settings_in: EmailSettingsUpdate
 ) -> EmailSettings:
@@ -52,6 +50,7 @@ def update_email_settings(
     db.refresh(db_obj)
     return db_obj
 
+
 def upsert_email_settings(
     db: Session, *, workspace_id: uuid.UUID, updated_by_user_id: uuid.UUID, settings_in: EmailSettingsCreate
 ) -> EmailSettings:
@@ -60,6 +59,7 @@ def upsert_email_settings(
         return create_email_settings(db, workspace_id=workspace_id, updated_by_user_id=updated_by_user_id, settings_in=settings_in)
     update_in = EmailSettingsUpdate(**settings_in.model_dump())
     return update_email_settings(db, db_obj=db_obj, updated_by_user_id=updated_by_user_id, settings_in=update_in)
+
 
 def delete_email_settings(db: Session, *, db_obj: EmailSettings) -> None:
     db.delete(db_obj)

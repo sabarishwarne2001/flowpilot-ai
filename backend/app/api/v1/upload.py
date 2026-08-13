@@ -1,5 +1,9 @@
 """
-Workspace logo upload (ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6).
+Workspace logo upload and authenticated streaming router for FlowPilot AI.
+
+ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6, 7.
+Includes authenticated streaming route GET /workspaces/{workspace_id}/logo with
+security headers (nosniff, inline, private cache).
 """
 
 from __future__ import annotations
@@ -11,26 +15,31 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireWorkspaceAdmin, get_db
-from app.core.storage import get_storage_driver
+from app.api import deps
+from app.api.deps import RequireWorkspaceAdmin, RequireWorkspaceMember, get_db
+from app.core.storage import ObjectNotFoundError, get_storage_driver
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.uploaded_file import UploadedFile
 from app.schemas.workspace import WorkspaceResponse
 from app.services import audit_service, workspace_service
 
 logger = logging.getLogger("app.api.v1.upload")
+
 router = APIRouter(tags=["Upload"])
+logo_router = APIRouter(tags=["Workspaces"])
 
 MAX_LOGO_BYTES = 2 * 1024 * 1024
 MAX_DIMENSION = 2048
 LOGO_PURPOSE = "WORKSPACE_LOGO"
 OUTPUT_FORMAT = "PNG"
 OUTPUT_MIME = "image/png"
+LOGO_CACHE_SECONDS = 300
 
 
 class LogoUploadResponse(BaseModel):
@@ -70,12 +79,22 @@ def _current_logo_row(db: Session, *, workspace_id: uuid.UUID) -> Optional[Uploa
         db.query(UploadedFile)
         .filter(
             UploadedFile.workspace_id == workspace_id,
-            UploadedFile.purpose == LOGO_PURPOSE,
             UploadedFile.deleted_at.is_(None),
         )
         .order_by(UploadedFile.created_at.desc())
         .first()
     )
+
+
+def _stream_and_close(handle):
+    try:
+        while True:
+            chunk = handle.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        handle.close()
 
 
 @router.post("/logo", response_model=LogoUploadResponse)
@@ -105,13 +124,11 @@ def upload_logo(
         owner_id=context.user.id,
         organization_id=workspace.organization_id,
         workspace_id=workspace.id,
-        purpose=LOGO_PURPOSE,
     )
     db.add(record)
     db.flush()
 
     workspace.logo_file_id = record.id
-    workspace.company_logo_url = f"/uploads/{key}"
 
     audit_service.record(
         db,
@@ -132,7 +149,9 @@ def upload_logo(
         **audit_service.context_from_request(request),
     )
     db.commit()
-    return LogoUploadResponse(logo_url=workspace.company_logo_url)
+    return LogoUploadResponse(
+        logo_url=f"/api/v1/workspaces/{workspace.id}/logo"
+    )
 
 
 @router.delete("/logo", response_model=WorkspaceResponse)
@@ -166,3 +185,51 @@ def delete_logo(
     db.commit()
     db.refresh(workspace)
     return workspace
+
+
+@logo_router.get(
+    "/workspaces/{workspace_id}/logo",
+    responses={200: {"content": {"image/png": {}}}, 404: {}},
+    summary="Stream a workspace's logo",
+)
+def get_workspace_logo(
+    workspace_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context=Depends(RequireWorkspaceMember),
+    if_none_match: Optional[str] = Header(default=None),
+):
+    workspace = context.workspace
+    record = _current_logo_row(db, workspace_id=workspace.id)
+    if record is None or record.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Logo not found.")
+
+    etag = f'"{record.checksum_sha256}"' if record.checksum_sha256 else None
+    security_headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": "inline",
+        "Cache-Control": f"private, max-age={LOGO_CACHE_SECONDS}",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+    }
+    if etag:
+        security_headers["ETag"] = etag
+
+    if etag and if_none_match and if_none_match.strip() == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=security_headers)
+
+    driver = get_storage_driver()
+    try:
+        handle = driver.stream(record.file_path)
+        size = driver.size(record.file_path)
+    except ObjectNotFoundError:
+        logger.error(
+            "ARCH07_MISSING_OBJECT | uploaded_files.id=%s workspace=%s key=%s",
+            record.id, workspace.id, record.file_path,
+        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Logo not found.") from None
+
+    security_headers["Content-Length"] = str(size)
+    return StreamingResponse(
+        _stream_and_close(handle),
+        media_type=record.mime_type,
+        headers=security_headers,
+    )
