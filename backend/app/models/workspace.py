@@ -1,25 +1,6 @@
 """
 Database representation of the Workspace collaboration boundary for
 FlowPilot AI.
-
-A Workspace belongs to exactly one Organization and is where operational data
-lives: documents, conversations, automation rules, and workspace settings.
-Commercial concerns (subscription, seats, SSO, audit retention) belong to the
-Organization above it.
-
-WorkspaceRole deliberately has no OWNER. A workspace does not own itself; the
-organization owns it. This mirrors GitHub, where repositories have an `admin`
-permission level but no owner role, ownership residing with the organization.
-Retaining a workspace-level owner would create two competing ownership
-concepts, and every future billing or deletion question would have to
-disambiguate them.
-
-Locale and branding live here rather than on the Organization because a US and
-an India workspace on a single contract legitimately need different currency,
-timezone, and date formatting. Their column lengths are the project's original
-values, retained deliberately: BCP-47 language tags such as
-"sr-Latn-RS-u-ca-gregory" exceed ten characters, so the wider bound is the
-correct one.
 """
 
 from __future__ import annotations
@@ -39,6 +20,7 @@ from app.models.organization import MembershipStatus
 
 if TYPE_CHECKING:
     from app.models.organization import Organization
+    from app.models.uploaded_file import UploadedFile
     from app.models.user import User
 
 
@@ -47,32 +29,12 @@ if TYPE_CHECKING:
 # ============================================================================
 
 class WorkspaceRole(str, Enum):
-    """
-    Workspace-level access grants.
-
-    ADMIN         full control of this workspace: settings, member grants,
-                  automation, archival
-    CONTRIBUTOR   create, edit, and process documents; use the AI assistant
-    VIEWER        read-only
-
-    Organization OWNER and ADMIN receive an implicit, derived ADMIN grant on
-    every workspace in their organization. That elevation is resolved at
-    request time in app/core/workspace_permissions.py and is never written to
-    this table.
-    """
     ADMIN = "ADMIN"
     CONTRIBUTOR = "CONTRIBUTOR"
     VIEWER = "VIEWER"
 
 
 class WorkspaceStatus(str, Enum):
-    """
-    Lifecycle state of a collaboration boundary.
-
-    ARCHIVED is a soft delete: the workspace and its data are retained and
-    restorable within the organization's retention window.
-    SUSPENDED is an administrative or billing block and is reversible.
-    """
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
     SUSPENDED = "SUSPENDED"
@@ -83,15 +45,6 @@ class WorkspaceStatus(str, Enum):
 # ============================================================================
 
 class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
-    """
-    Grants a user access to a workspace at a specific role.
-
-    A WorkspaceMember row may only exist where a corresponding ACTIVE
-    OrganizationMember row exists for the same (user_id, organization_id).
-    That invariant is enforced in the service layer and asserted by the
-    isolation test suite; it is not expressible as a database constraint
-    without denormalizing organization_id onto this table.
-    """
     __tablename__ = "workspace_members"
     __table_args__ = (
         UniqueConstraint(
@@ -135,13 +88,11 @@ class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
     deactivated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        doc="Timestamp at which this grant entered DEACTIVATED.",
     )
     deactivated_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        doc="Actor who revoked this grant. SET NULL preserves the record.",
     )
 
     # Relationships
@@ -161,15 +112,6 @@ class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
 
 
 class Workspace(Base, UUIDMixin, TimestampMixin):
-    """
-    Persistent workspace configuration and collaboration boundary.
-
-    Ownership is NOT stored on this model, and is no longer expressible here:
-    ownership is an organization-level concept. A workspace is administered by
-    every WorkspaceMember row referencing it with role = WorkspaceRole.ADMIN,
-    plus every OrganizationMember of its parent organization holding
-    OrganizationRole.OWNER or OrganizationRole.ADMIN.
-    """
     __tablename__ = "workspaces"
     __table_args__ = (
         UniqueConstraint(
@@ -189,12 +131,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         String(63),
         nullable=False,
         index=True,
-        doc=(
-            "URL-safe identifier, unique within the parent organization. "
-            "Combined with the organization slug this yields the public "
-            "address /{organization}/{workspace}/... Bounded at 63 to match "
-            "the DNS label limit, keeping subdomain addressing available."
-        ),
     )
     workspace_name: Mapped[str] = mapped_column(
         String(100),
@@ -236,6 +172,12 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         String(500),
         nullable=True,
     )
+    logo_file_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("uploaded_files.id", ondelete="SET NULL"),
+        nullable=True,
+        doc="Durable link to adopted logo in uploaded_files (ARCH-07 Step 6).",
+    )
 
     # Relationships
     organization: Mapped["Organization"] = relationship(
@@ -246,4 +188,8 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         "WorkspaceMember",
         back_populates="workspace",
         cascade="all, delete-orphan",
+    )
+    logo_file: Mapped["UploadedFile | None"] = relationship(
+        "UploadedFile",
+        foreign_keys=[logo_file_id],
     )

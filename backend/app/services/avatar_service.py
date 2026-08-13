@@ -1,8 +1,6 @@
-"""
-Avatar upload, validation, and storage for FlowPilot AI (ARCH-06 Step 7 / ARCH-07 §B.6 Option B).
+"""User avatar upload, validation and storage (ARCH-06 Step 7, ARCH-07 Step 5).
 
-NOT converted to audit_logs table (site #32-33) — an avatar belongs to a User,
-not an organization. Retained as structured logs.
+ARCH-07 Step 5: every filesystem call is replaced by StorageDriver.
 """
 
 from __future__ import annotations
@@ -12,31 +10,24 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import Optional
 
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.storage import ObjectNotFoundError, get_storage_driver
+from app.core.storage.keys import legacy_path_to_key
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
 logger = logging.getLogger("app.services.avatar")
 
-AVATAR_DIR = Path("uploads/avatars")
-AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-_AVATAR_ROOT = AVATAR_DIR.resolve()
-
-ACCEPTED_FORMATS: dict[str, tuple[str, str]] = {
-    "PNG": (".png", "image/png"),
-    "JPEG": (".jpg", "image/jpeg"),
-    "WEBP": (".webp", "image/webp"),
-}
-
-MAX_FILE_SIZE = 2 * 1024 * 1024
-MAX_PIXELS = 8000 * 8000
-MIN_DIMENSION = 16
-MAX_DIMENSION = 4096
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+MAX_DIMENSION = 1024
+OUTPUT_FORMAT = "PNG"
+OUTPUT_MIME = "image/png"
+OUTPUT_EXTENSION = "png"
 MAX_AVATAR_BYTES_PER_USER = 10 * 1024 * 1024
 
 
@@ -44,77 +35,57 @@ class AvatarError(Exception):
     """Base class for avatar workflow failures."""
 
 
-class InvalidImageError(AvatarError):
-    """The bytes are not a decodable image of an accepted format."""
+class InvalidImageError(AvatarError, ValueError):
+    """The uploaded bytes are not an acceptable avatar."""
 
 
-class ImageTooLargeError(AvatarError):
-    """The file or its decoded dimensions exceed the permitted bounds."""
+class ImageTooLargeError(AvatarError, ValueError):
+    """Avatar file or dimension bounds exceeded."""
 
 
 class QuotaExceededError(AvatarError):
-    """This user is already at their storage ceiling."""
+    """Storage quota exceeded."""
 
 
 class AvatarNotFoundError(AvatarError):
-    """No live avatar for this user, or not one this caller may read."""
+    """Avatar record or file not found."""
 
 
-def _validate_and_normalize(raw: bytes) -> tuple[bytes, str, str, int, int]:
+def _avatar_key(user_id: uuid.UUID) -> str:
+    return f"avatars/{user_id}/{uuid.uuid4().hex}.{OUTPUT_EXTENSION}"
+
+
+def _validate_and_normalise(raw: bytes) -> bytes:
     if not raw:
-        raise InvalidImageError("The uploaded file is empty.")
-
-    if len(raw) > MAX_FILE_SIZE:
+        raise InvalidImageError("Empty upload.")
+    if len(raw) > MAX_AVATAR_BYTES:
         raise ImageTooLargeError(
-            f"Avatars must be smaller than {MAX_FILE_SIZE // (1024 * 1024)} MB."
+            f"Avatar exceeds {MAX_AVATAR_BYTES // (1024 * 1024)} MB."
         )
 
     try:
         with Image.open(io.BytesIO(raw)) as probe:
-            fmt = probe.format
-            width, height = probe.size
             probe.verify()
-    except UnidentifiedImageError:
-        raise InvalidImageError("That file is not a valid PNG, JPEG, or WebP image.")
-    except Image.DecompressionBombError:
-        raise ImageTooLargeError("That image's dimensions are too large.")
-    except Exception:
-        raise InvalidImageError("That file could not be read as an image.")
-
-    if fmt not in ACCEPTED_FORMATS:
-        raise InvalidImageError(f"{fmt or 'That format'} is not supported. Use PNG, JPEG, or WebP.")
-
-    if width * height > MAX_PIXELS:
-        raise ImageTooLargeError("That image's dimensions are too large.")
-    if width < MIN_DIMENSION or height < MIN_DIMENSION:
-        raise InvalidImageError(f"Avatars must be at least {MIN_DIMENSION}x{MIN_DIMENSION} pixels.")
-    if width > MAX_DIMENSION or height > MAX_DIMENSION:
-        raise ImageTooLargeError(f"Avatars must be at most {MAX_DIMENSION}x{MAX_DIMENSION} pixels.")
-
-    extension, mime_type = ACCEPTED_FORMATS[fmt]
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise InvalidImageError("File is not a valid image.") from exc
 
     try:
         with Image.open(io.BytesIO(raw)) as image:
-            if fmt == "JPEG":
-                clean = image.convert("RGB")
-            elif image.mode not in ("RGB", "RGBA", "L", "LA", "P"):
-                clean = image.convert("RGBA")
-            else:
-                clean = image.copy()
-
+            if max(image.size) > MAX_DIMENSION:
+                raise ImageTooLargeError(
+                    f"Avatar dimensions exceed {MAX_DIMENSION}px."
+                )
+            converted = image.convert("RGBA")
             buffer = io.BytesIO()
-            clean.save(buffer, format=fmt, optimize=True)
-            normalized = buffer.getvalue()
-    except Exception:
-        raise InvalidImageError("That image could not be processed.")
-
-    if not normalized:
-        raise InvalidImageError("That image could not be processed.")
-
-    return normalized, extension, mime_type, width, height
+            converted.save(buffer, format=OUTPUT_FORMAT, optimize=True)
+            return buffer.getvalue()
+    except (InvalidImageError, ImageTooLargeError):
+        raise
+    except (OSError, ValueError) as exc:
+        raise InvalidImageError("Image could not be processed.") from exc
 
 
-def _live_bytes_for_user(db: Session, *, owner_id) -> int:
+def _live_bytes_for_user(db: Session, *, owner_id: uuid.UUID) -> int:
     return db.execute(
         select(func.coalesce(func.sum(UploadedFile.file_size), 0)).where(
             UploadedFile.owner_id == owner_id,
@@ -123,11 +94,69 @@ def _live_bytes_for_user(db: Session, *, owner_id) -> int:
     ).scalar_one()
 
 
-def resolve_stored_path(uploaded: UploadedFile) -> Path:
-    candidate = (AVATAR_DIR / Path(uploaded.file_path).name).resolve()
-    if candidate.parent != _AVATAR_ROOT:
-        raise AvatarNotFoundError("Avatar not found.")
-    return candidate
+def set_avatar(
+    db: Session,
+    *,
+    owner: User,
+    raw: bytes,
+    original_filename: str = "avatar.png",
+) -> UploadedFile:
+    normalised = _validate_and_normalise(raw)
+
+    if (
+        _live_bytes_for_user(db, owner_id=owner.id) + len(normalised)
+        > MAX_AVATAR_BYTES_PER_USER
+    ):
+        raise QuotaExceededError(
+            "You have reached your upload storage limit. Remove an existing "
+            "file and try again."
+        )
+
+    driver = get_storage_driver()
+    key = _avatar_key(owner.id)
+
+    driver.put(key, normalised, OUTPUT_MIME)
+
+    previous = None
+    if owner.avatar_file_id is not None:
+        previous = db.get(UploadedFile, owner.avatar_file_id)
+
+    if previous is not None:
+        previous.deleted_at = datetime.now(UTC)
+
+    record = UploadedFile(
+        owner_id=owner.id,
+        organization_id=None,
+        workspace_id=None,
+        file_path=key,
+        original_filename=(original_filename or "avatar.png")[:255],
+        mime_type=OUTPUT_MIME,
+        file_size=len(normalised),
+        checksum_sha256=hashlib.sha256(normalised).hexdigest(),
+    )
+    db.add(record)
+    db.flush()
+
+    owner.avatar_file_id = record.id
+    db.add(owner)
+    db.commit()
+    db.refresh(record)
+
+    logger.info(
+        "AUDIT | AVATAR_SET | user=%s | file=%s | bytes=%d | mime=%s",
+        owner.id, record.id, len(normalised), OUTPUT_MIME,
+    )
+    return record
+
+
+def clear_avatar(db: Session, *, owner: User) -> None:
+    uploaded = resolve_current(db, owner=owner)
+    uploaded.deleted_at = datetime.now(UTC)
+    owner.avatar_file_id = None
+    db.add_all([uploaded, owner])
+    db.commit()
+
+    logger.info("AUDIT | AVATAR_CLEARED | user=%s | file=%s", owner.id, uploaded.id)
 
 
 def resolve_current(db: Session, *, owner: User) -> UploadedFile:
@@ -135,114 +164,27 @@ def resolve_current(db: Session, *, owner: User) -> UploadedFile:
         raise AvatarNotFoundError("Avatar not found.")
 
     uploaded = db.get(UploadedFile, owner.avatar_file_id)
-    if uploaded is None or uploaded.deleted_at is not None:
-        raise AvatarNotFoundError("Avatar not found.")
-
-    if uploaded.owner_id != owner.id:
+    if uploaded is None or uploaded.deleted_at is not None or uploaded.owner_id != owner.id:
         raise AvatarNotFoundError("Avatar not found.")
 
     return uploaded
 
 
-def set_avatar(
-    db: Session,
-    *,
-    owner: User,
-    raw: bytes,
-    original_filename: str,
-) -> UploadedFile:
-    normalized, extension, mime_type, width, height = _validate_and_normalize(raw)
-
-    if (
-        _live_bytes_for_user(db, owner_id=owner.id) + len(normalized)
-        > MAX_AVATAR_BYTES_PER_USER
-    ):
-        raise QuotaExceededError(
-            "You have reached your upload storage limit. Remove an existing file and try again."
-        )
-
-    previous = None
-    if owner.avatar_file_id is not None:
-        previous = db.get(UploadedFile, owner.avatar_file_id)
-
-    filename = f"{uuid.uuid4()}{extension}"
-    destination = AVATAR_DIR / filename
-    destination.write_bytes(normalized)
-
-    uploaded = UploadedFile(
-        owner_id=owner.id,
-        organization_id=None,
-        workspace_id=None,
-        file_path=f"avatars/{filename}",
-        original_filename=(original_filename or filename)[:255],
-        mime_type=mime_type,
-        file_size=len(normalized),
-        checksum_sha256=hashlib.sha256(normalized).hexdigest(),
-    )
-    db.add(uploaded)
-    db.flush()
-
-    owner.avatar_file_id = uploaded.id
-    db.add(owner)
-
-    old_path = None
-    if previous is not None and previous.id != uploaded.id:
-        previous.deleted_at = datetime.now(UTC)
-        db.add(previous)
-        try:
-            old_path = resolve_stored_path(previous)
-        except AvatarNotFoundError:
-            old_path = None
-
-    db.commit()
-    db.refresh(uploaded)
-
-    if old_path is not None:
-        try:
-            old_path.unlink(missing_ok=True)
-        except OSError as exc:
-            logger.error("AVATAR_UNLINK_FAILED | user=%s | path=%s | error=%s", owner.id, old_path, exc)
-
-    logger.info(
-        "AUDIT | AVATAR_SET | user=%s | file=%s | bytes=%d | %dx%d | mime=%s",
-        owner.id,
-        uploaded.id,
-        len(normalized),
-        width,
-        height,
-        mime_type,
-        extra={
-            "audit_event": "AVATAR_SET",
-            "audit_scope": "PLATFORM",
-            "user_id": str(owner.id),
-            "file_id": str(uploaded.id),
-        },
-    )
-    return uploaded
-
-
-def clear_avatar(db: Session, *, owner: User) -> None:
-    uploaded = resolve_current(db, owner=owner)
-    path = resolve_stored_path(uploaded)
-
-    uploaded.deleted_at = datetime.now(UTC)
-    owner.avatar_file_id = None
-    db.add_all([uploaded, owner])
-    db.commit()
-
+def read_avatar_bytes(db: Session, *, record: UploadedFile) -> bytes:
+    driver = get_storage_driver()
     try:
-        path.unlink(missing_ok=True)
-    except OSError as exc:
-        logger.error("AVATAR_UNLINK_FAILED | user=%s | path=%s | error=%s", owner.id, path, exc)
+        return driver.get(legacy_path_to_key(record.file_path))
+    except ObjectNotFoundError:
+        logger.error(
+            "ARCH07_MISSING_OBJECT | uploaded_files.id=%s file_path=%s",
+            record.id, record.file_path,
+        )
+        raise AvatarNotFoundError("Avatar file missing.")
 
-    logger.info(
-        "AUDIT | AVATAR_CLEARED | user=%s | file=%s",
-        owner.id,
-        uploaded.id,
-        extra={
-            "audit_event": "AVATAR_CLEARED",
-            "audit_scope": "PLATFORM",
-            "user_id": str(owner.id),
-            "file_id": str(uploaded.id),
-        },
-    )
+
+def open_avatar_stream(record: UploadedFile):
+    driver = get_storage_driver()
+    try:
+        return driver.stream(legacy_path_to_key(record.file_path))
+    except ObjectNotFoundError:
+        raise AvatarNotFoundError("Avatar file missing.")

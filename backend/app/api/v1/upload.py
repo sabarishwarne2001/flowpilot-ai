@@ -1,159 +1,168 @@
 """
-Workspace logo upload router for FlowPilot AI.
-
-ARCH-06 Step 1b / ARCH-07 Step 3: Converted AUDIT log calls to audit_service.record().
+Workspace logo upload (ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6).
 """
 
 from __future__ import annotations
 
+import hashlib
+import io
 import logging
-from pathlib import Path
-from typing import Any
-from uuid import uuid4
+import uuid
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from pydantic import BaseModel, Field
+from PIL import Image, UnidentifiedImageError
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from app.api import deps
-from app.core.exceptions import WorkspaceAccessDeniedError
-from app.models.workspace import Workspace
+from app.api.deps import RequireWorkspaceAdmin, get_db
+from app.core.storage import get_storage_driver
 from app.models.audit_log import AuditAction, AuditResourceType
+from app.models.uploaded_file import UploadedFile
 from app.schemas.workspace import WorkspaceResponse
 from app.services import audit_service, workspace_service
 
 logger = logging.getLogger("app.api.v1.upload")
-
 router = APIRouter(tags=["Upload"])
 
-UPLOAD_DIR = Path("uploads/logos")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-_UPLOAD_ROOT = UPLOAD_DIR.resolve()
-_PUBLIC_PREFIX = "/uploads/logos/"
-
-ALLOWED_TYPES: dict[str, str] = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-}
-
-MAX_FILE_SIZE = 2 * 1024 * 1024
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+MAX_DIMENSION = 2048
+LOGO_PURPOSE = "WORKSPACE_LOGO"
+OUTPUT_FORMAT = "PNG"
+OUTPUT_MIME = "image/png"
 
 
 class LogoUploadResponse(BaseModel):
-    logo_url: str = Field(...)
+    logo_url: str
 
 
-class DeleteLogoRequest(BaseModel):
-    logo_url: str = Field(..., min_length=1, max_length=500)
+def _validate_logo(raw: bytes) -> bytes:
+    if not raw:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty upload.")
+    if len(raw) > MAX_LOGO_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Logo exceeds {MAX_LOGO_BYTES // (1024 * 1024)} MB.",
+        )
+    try:
+        with Image.open(io.BytesIO(raw)) as probe:
+            probe.verify()
+        with Image.open(io.BytesIO(raw)) as image:
+            if max(image.size) > MAX_DIMENSION:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Logo dimensions exceed {MAX_DIMENSION}px.",
+                )
+            buffer = io.BytesIO()
+            image.convert("RGBA").save(buffer, format=OUTPUT_FORMAT, optimize=True)
+            return buffer.getvalue()
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "File is not a valid image."
+        ) from exc
 
 
-def _resolve_owned_logo_path(workspace: Workspace, submitted_url: str) -> Path:
-    stored = (workspace.company_logo_url or "").strip()
-    submitted = submitted_url.strip()
-
-    not_found = WorkspaceAccessDeniedError("Logo not found.")
-
-    if not stored or submitted != stored or not stored.startswith(_PUBLIC_PREFIX):
-        raise not_found
-
-    candidate = (UPLOAD_DIR / Path(stored).name).resolve()
-    if candidate.parent != _UPLOAD_ROOT:
-        raise not_found
-
-    return candidate
+def _current_logo_row(db: Session, *, workspace_id: uuid.UUID) -> Optional[UploadedFile]:
+    return (
+        db.query(UploadedFile)
+        .filter(
+            UploadedFile.workspace_id == workspace_id,
+            UploadedFile.purpose == LOGO_PURPOSE,
+            UploadedFile.deleted_at.is_(None),
+        )
+        .order_by(UploadedFile.created_at.desc())
+        .first()
+    )
 
 
-@router.post(
-    "/logo",
-    response_model=LogoUploadResponse,
-    summary="Upload Workspace Logo",
-)
-async def upload_logo(
+@router.post("/logo", response_model=LogoUploadResponse)
+def upload_logo(
     request: Request,
     file: UploadFile = File(...),
-    db: deps.DbSession = None,
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
-) -> Any:
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PNG, JPEG and WebP images are allowed.",
-        )
+    db: Session = Depends(get_db),
+    context=Depends(RequireWorkspaceAdmin),
+) -> LogoUploadResponse:
+    workspace = context.workspace
+    normalised = _validate_logo(file.file.read())
 
-    content = await file.read()
+    driver = get_storage_driver()
+    key = f"logos/{uuid.uuid4().hex}.png"
+    driver.put(key, normalised, OUTPUT_MIME)
 
-    if len(content) > MAX_FILE_SIZE or not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Logo must be smaller than 2 MB and non-empty.",
-        )
+    previous = _current_logo_row(db, workspace_id=workspace.id)
+    if previous is not None:
+        previous.deleted_at = datetime.now(UTC)
 
-    extension = ALLOWED_TYPES[file.content_type]
-    filename = f"{uuid4()}{extension}"
-    destination = UPLOAD_DIR / filename
-    destination.write_bytes(content)
+    record = UploadedFile(
+        file_path=key,
+        original_filename=file.filename or "logo.png",
+        mime_type=OUTPUT_MIME,
+        file_size=len(normalised),
+        checksum_sha256=hashlib.sha256(normalised).hexdigest(),
+        owner_id=context.user.id,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.id,
+        purpose=LOGO_PURPOSE,
+    )
+    db.add(record)
+    db.flush()
+
+    workspace.logo_file_id = record.id
+    workspace.company_logo_url = f"/uploads/{key}"
 
     audit_service.record(
         db,
-        organization_id=context.organization.id,
-        workspace_id=context.workspace_id,
-        actor_id=context.user_id,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.id,
+        actor_id=context.user.id,
         resource_type=AuditResourceType.UPLOADED_FILE,
-        resource_id=context.workspace_id,
+        resource_id=record.id,
         action=AuditAction.CREATED,
         details={
             **audit_service.actor_snapshot(context.user),
-            "kind": "WORKSPACE_LOGO",
-            "filename": filename,
+            "kind": LOGO_PURPOSE,
             "original_filename": file.filename,
-            "file_size": len(content),
-            "content_type": file.content_type,
+            "stored_mime_type": OUTPUT_MIME,
+            "size_bytes": len(normalised),
+            "storage_key": key,
         },
         **audit_service.context_from_request(request),
     )
+    db.commit()
+    return LogoUploadResponse(logo_url=workspace.company_logo_url)
 
-    return LogoUploadResponse(logo_url=f"{_PUBLIC_PREFIX}{filename}")
 
-
-@router.delete(
-    "/logo",
-    response_model=WorkspaceResponse,
-    summary="Delete Workspace Logo",
-)
-async def delete_logo(
+@router.delete("/logo", response_model=WorkspaceResponse)
+def delete_logo(
     request: Request,
-    payload: DeleteLogoRequest,
-    db: deps.DbSession = None,
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
+    db: Session = Depends(get_db),
+    context=Depends(RequireWorkspaceAdmin),
 ) -> Any:
-    file_path = _resolve_owned_logo_path(context.workspace, payload.logo_url)
+    workspace = context.workspace
+    record = _current_logo_row(db, workspace_id=workspace.id)
+    if record is not None:
+        record.deleted_at = datetime.now(UTC)
 
-    updated = workspace_service.remove_workspace_logo(
-        db,
-        workspace=context.workspace,
-        effective_role=context.effective_workspace_role,
-        actor_id=context.user_id,
-    )
+    workspace.logo_file_id = None
+    workspace.company_logo_url = None
 
     audit_service.record(
         db,
-        organization_id=context.organization.id,
-        workspace_id=context.workspace_id,
-        actor_id=context.user_id,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.id,
+        actor_id=context.user.id,
         resource_type=AuditResourceType.UPLOADED_FILE,
-        resource_id=context.workspace_id,
+        resource_id=workspace.id,
         action=AuditAction.DELETED,
         details={
             **audit_service.actor_snapshot(context.user),
-            "kind": "WORKSPACE_LOGO",
-            "filename": file_path.name,
+            "kind": LOGO_PURPOSE,
         },
         **audit_service.context_from_request(request),
     )
-
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError as exc:
-        logger.error("UPLOAD_UNLINK_FAILED | workspace=%s | path=%s | error=%s", context.workspace_id, file_path, exc)
-
-    return updated
+    db.commit()
+    db.refresh(workspace)
+    return workspace
