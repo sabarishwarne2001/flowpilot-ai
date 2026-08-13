@@ -1,8 +1,9 @@
 """
 Request validation and serialization schemas for Workspaces.
 
-ARCH-07 Step 7: company_logo_url is now a computed property derived from
-logo_file_id, pointing to the authenticated streaming route.
+ARCH-07 Step 7 / ARCH-08 Step 1: company_logo_url is a computed property
+derived from logo_file_id, pointing to the authenticated streaming route.
+The request column parameter was removed in ARCH-08 Step 1.
 """
 
 from __future__ import annotations
@@ -54,7 +55,6 @@ class WorkspaceUpdate(BaseModel):
     language: str | None = Field(default=None, max_length=20)
     currency: str | None = Field(default=None, max_length=10)
     date_format: str | None = Field(default=None, max_length=30)
-    company_logo_url: str | None = Field(default=None, max_length=500)
 
     @field_validator("workspace_name", mode="before")
     @classmethod

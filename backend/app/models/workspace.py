@@ -168,10 +168,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         default="YYYY-MM-DD",
         nullable=False,
     )
-    company_logo_url: Mapped[str | None] = mapped_column(
-        String(500),
-        nullable=True,
-    )
     logo_file_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("uploaded_files.id", ondelete="SET NULL"),

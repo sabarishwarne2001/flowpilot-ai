@@ -2,6 +2,7 @@
 Business orchestration for Workspaces within FlowPilot AI.
 
 ARCH-07 Step 3: Converted AUDIT log call sites to audit_service.record().
+ARCH-08 Step 1: Removed company_logo_url write parameter.
 """
 
 from __future__ import annotations
@@ -243,7 +244,6 @@ def update_workspace_settings(
     language: str | None = None,
     currency: str | None = None,
     date_format: str | None = None,
-    company_logo_url: str | None = None,
 ) -> Workspace:
     if not can_manage_workspace_settings(effective_role):
         raise WorkspacePermissionDeniedError(
@@ -270,7 +270,6 @@ def update_workspace_settings(
             language=language,
             currency=currency,
             date_format=date_format,
-            company_logo_url=company_logo_url,
         )
 
         audit_service.record(

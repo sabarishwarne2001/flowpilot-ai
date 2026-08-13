@@ -40,43 +40,6 @@ import { ROUTES } from "@/constants/routes";
 
 import type { WorkspaceMember, WorkspaceRole } from "@/types/tenancy";
 
-/**
- * Workspace settings page.
- *
- * ARCH-01 replaced every data source in this component. The previous version
- * called GET /workspace, /workspace/members, /workspace/members/me, and
- * /workspace/invitations/pending — four endpoints deleted in the backend
- * transformation because each resolved "the user's workspace" from a single
- * active membership, an assumption that returned HTTP 500 for any account
- * holding two.
- *
- * Three fields changed meaning:
- *
- *   company_name  Left the workspace model for Organization.name. The field
- *                 stays in place but submits to PATCH /organizations/{id},
- *                 and is disabled unless the actor can manage organization
- *                 settings — a workspace admin who is only an org member may
- *                 rename the workspace, not the company, because the company
- *                 name is shared across every workspace in the tenant.
- *
- *   is_active     Replaced by the WorkspaceStatus enum. A checkbox cannot
- *                 express ACTIVE / ARCHIVED / SUSPENDED, and archiving is not
- *                 a form field: it has server-side guards (organization role
- *                 required, last active workspace refused). It is now an
- *                 action in the same card position.
- *
- *   member.role   OWNER and MANAGER no longer exist. The invite picker offers
- *                 ADMIN only when the actor holds organization-level standing,
- *                 mirroring canAssignWorkspaceRole on the server — the check
- *                 whose absence let a Manager invite at OWNER level before
- *                 ARCH-01.
- *
- * The member list merges stored grants with organization OWNER and ADMIN
- * holding DERIVED admin. Those rows carry id === null: there is no workspace
- * grant to revoke, because the access follows from the organization role and
- * is changed there.
- */
-
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
 ).replace("/api/v1", "");
@@ -95,7 +58,6 @@ export const Workspace: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>("VIEWER");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -108,7 +70,6 @@ export const Workspace: React.FC = () => {
     register,
     handleSubmit,
     reset,
-    setValue,
     formState: { errors, isDirty },
   } = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
@@ -122,11 +83,6 @@ export const Workspace: React.FC = () => {
       date_format: "YYYY-MM-DD",
     },
   });
-
-  /* ======================================================================
-   * Queries — every key carries the workspace id, so switching tenants
-   * cannot serve the previous workspace's data from cache.
-   * ====================================================================== */
 
   const { data: workspaceDetail, isLoading: isLoadingWorkspace } = useQuery({
     queryKey: ["workspaces", "detail", workspaceId],
@@ -172,13 +128,7 @@ export const Workspace: React.FC = () => {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  /* ======================================================================
-   * Mutations
-   * ====================================================================== */
-
   const invalidateTenant = async (): Promise<void> => {
-    // /me/context carries the workspace name, slug, and logo that the sidebar
-    // and switcher render, so a settings save must refresh it too.
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["workspaces", "detail", workspaceId] }),
       queryClient.invalidateQueries({ queryKey: ["me"] }),
@@ -186,10 +136,7 @@ export const Workspace: React.FC = () => {
   };
 
   const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } = useMutation({
-    mutationFn: async (data: WorkspaceFormData & { resolvedLogoUrl: string | null }) => {
-      // The organization name is a separate resource with separate
-      // authorization. Submitted first so that a permission failure there does
-      // not leave a half-applied save.
+    mutationFn: async (data: WorkspaceFormData) => {
       if (
         canEditOrganization &&
         data.company_name !== organization.organization_name
@@ -203,14 +150,10 @@ export const Workspace: React.FC = () => {
         language: data.language,
         currency: data.currency,
         date_format: data.date_format,
-        ...(data.resolvedLogoUrl !== null
-          ? { company_logo_url: data.resolvedLogoUrl }
-          : {}),
       });
     },
     onSuccess: async () => {
       await invalidateTenant();
-      setSelectedLogoFile(null);
       reset(undefined, { keepDirty: false });
       toast.success("Workspace settings saved successfully.");
     },
@@ -273,9 +216,6 @@ export const Workspace: React.FC = () => {
 
   const { mutateAsync: removeMemberMutation, isPending: isRemoving } = useMutation({
     mutationFn: async (member: WorkspaceMember) => {
-      // Leaving and being removed are different operations on the server:
-      // leaving needs no permission over another member, and an organization
-      // admin who leaves retains derived access.
       if (member.user.id === user.id) {
         return leaveWorkspace(workspaceId);
       }
@@ -335,10 +275,6 @@ export const Workspace: React.FC = () => {
     },
   });
 
-  /* ======================================================================
-   * Handlers
-   * ====================================================================== */
-
   const handleReset = () => {
     if (!workspaceDetail) return;
 
@@ -352,12 +288,11 @@ export const Workspace: React.FC = () => {
       date_format: workspaceDetail.date_format as WorkspaceFormData["date_format"],
     });
 
-    setSelectedLogoFile(null);
     setLogoPreview(workspaceDetail.company_logo_url ?? null);
     toast.success("Changes discarded.");
   };
 
-  const handleLogoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -371,24 +306,22 @@ export const Workspace: React.FC = () => {
       return;
     }
 
-    setSelectedLogoFile(file);
-    const preview = URL.createObjectURL(file);
-    setLogoPreview(preview);
-    setValue("company_logo_url", preview, { shouldDirty: true });
-    event.target.value = "";
+    try {
+      const preview = URL.createObjectURL(file);
+      setLogoPreview(preview);
+      const response = await uploadLogo(file);
+      setLogoPreview(response.logo_url);
+      await invalidateTenant();
+      toast.success("Logo uploaded successfully.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to upload logo.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const onSubmit = async (data: WorkspaceFormData): Promise<void> => {
-    let resolvedLogoUrl: string | null = null;
-
-    if (selectedLogoFile) {
-      const response = await uploadLogo(selectedLogoFile);
-      resolvedLogoUrl = response.logo_url;
-    } else if (data.company_logo_url && !data.company_logo_url.startsWith("blob:")) {
-      resolvedLogoUrl = data.company_logo_url;
-    }
-
-    await saveWorkspaceMutation({ ...data, resolvedLogoUrl });
+    await saveWorkspaceMutation(data);
   };
 
   const handleSendInvite = async (e: React.FormEvent) => {
@@ -396,10 +329,6 @@ export const Workspace: React.FC = () => {
     if (!inviteEmail.trim()) return;
     await sendInviteMutation({ email: inviteEmail.trim(), role: inviteRole });
   };
-
-  /* ======================================================================
-   * Derived
-   * ====================================================================== */
 
   const assignableRoles = useMemo(() => {
     const candidates: WorkspaceRole[] = ["VIEWER", "CONTRIBUTOR", "ADMIN"];
@@ -439,7 +368,6 @@ export const Workspace: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 1. Branding Settings Card */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-bold">Workspace Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -514,19 +442,6 @@ export const Workspace: React.FC = () => {
                 >
                   Upload Logo
                 </button>
-                {logoPreview && canEditWorkspace && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedLogoFile(null);
-                      setLogoPreview(null);
-                      setValue("company_logo_url", "", { shouldDirty: true });
-                    }}
-                    className="rounded-lg border border-transparent text-destructive px-4 py-2 text-sm font-medium hover:bg-destructive/10 transition text-left"
-                  >
-                    Remove Logo
-                  </button>
-                )}
               </div>
 
               <input
@@ -674,7 +589,6 @@ export const Workspace: React.FC = () => {
         </form>
       </div>
 
-      {/* 2. Team Directory Table Card */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
         <h2 className="text-xl font-bold">Team Members</h2>
         <p className="text-sm text-muted-foreground">
@@ -724,9 +638,6 @@ export const Workspace: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {/* A derived grant has no membership row to revoke: the
-                          access follows from the organization role and is
-                          changed in organization settings. */}
                       {!mem.is_derived && (canManageTeam || isSelf) && (
                         <button
                           type="button"
@@ -745,14 +656,12 @@ export const Workspace: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Outbound / Pending Invitations Card */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-6">
         <h2 className="text-xl font-bold">Invitations Directory</h2>
         <p className="text-sm text-muted-foreground">
           Invite new collaborators to this workspace or manage active pending invitations.
         </p>
 
-        {/* Inline Invite Form */}
         {canManageTeam && (
           <form onSubmit={handleSendInvite} className="p-4 rounded-lg bg-muted/20 border border-border grid grid-cols-12 gap-4 items-end">
             <div className="col-span-12 md:col-span-6 space-y-2">
@@ -777,10 +686,6 @@ export const Workspace: React.FC = () => {
                 onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
-                {/* Only roles the actor may actually assign. Offering ADMIN to
-                    a workspace admin without organization standing would show
-                    an option the server rejects — the escalation gap ARCH-01
-                    closed. */}
                 {assignableRoles.map((role) => (
                   <option key={role} value={role}>
                     {role.charAt(0) + role.slice(1).toLowerCase()}
@@ -800,7 +705,6 @@ export const Workspace: React.FC = () => {
           </form>
         )}
 
-        {/* Pending Invites List */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
 
@@ -821,8 +725,6 @@ export const Workspace: React.FC = () => {
                 </thead>
                 <tbody>
                   {invitations.map((inv) => {
-                    // Expiry is evaluated lazily on the server, so a listed
-                    // invitation may already be past its timestamp.
                     const expired = new Date(inv.expires_at) <= new Date();
 
                     return (

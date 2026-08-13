@@ -1,0 +1,23 @@
+[
+  {
+    "id": "1283305e-d5f0-4e27-913b-e46bae4c308b",
+    "slug": "flowpilot1",
+    "organization_id": "9d8ac2ee-f4bf-4b7f-ab51-cdc8be92e62f",
+    "company_logo_url": "/uploads/logos/4fea3d4a-675d-4063-9376-5e63c5af8e56.jpg",
+    "logo_file_id": null
+  },
+  {
+    "id": "c36a3517-2dcf-4b0d-8b19-9d1d09f58f49",
+    "slug": "engineering",
+    "organization_id": "8047e508-8ba3-4b2f-b592-0c3ba1205c52",
+    "company_logo_url": "/uploads/logos/e096946f-5072-4fd4-b39e-3a217ac086ca.jpg",
+    "logo_file_id": "669398d7-f11b-47ef-9e80-4b01e57f0601"
+  },
+  {
+    "id": "567b5233-a89b-4f48-92be-235261cccfa5",
+    "slug": "flowpilot",
+    "organization_id": "8047e508-8ba3-4b2f-b592-0c3ba1205c52",
+    "company_logo_url": "/uploads/logos/ad16f57b-202f-4230-a6c5-be5aeb8f39e5.jpg",
+    "logo_file_id": "4674429a-4d52-4ec7-b6be-4a491ca1b602"
+  }
+]

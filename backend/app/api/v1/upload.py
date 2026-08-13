@@ -1,7 +1,7 @@
 """
 Workspace logo upload and authenticated streaming router for FlowPilot AI.
 
-ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6, 7.
+ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6, 7. ARCH-08 Step 1.
 Includes authenticated streaming route GET /workspaces/{workspace_id}/logo with
 security headers (nosniff, inline, private cache).
 """
@@ -27,7 +27,7 @@ from app.core.storage import ObjectNotFoundError, get_storage_driver
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.uploaded_file import UploadedFile
 from app.schemas.workspace import WorkspaceResponse
-from app.services import audit_service, workspace_service
+from app.services import audit_service
 
 logger = logging.getLogger("app.api.v1.upload")
 
@@ -166,7 +166,6 @@ def delete_logo(
         record.deleted_at = datetime.now(UTC)
 
     workspace.logo_file_id = None
-    workspace.company_logo_url = None
 
     audit_service.record(
         db,

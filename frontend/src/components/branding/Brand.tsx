@@ -4,17 +4,6 @@ import { useOptionalTenant } from "@/routes/TenantContext";
 
 /**
  * Brand mark for FlowPilot AI.
- *
- * ARCH-01 removed the workspace context this component read. workspace.company_name
- * no longer exists — it was the tenant's identity rather than the workspace's,
- * and moved to Organization.name, which is what the subtitle now shows.
- *
- * useOptionalTenant rather than useResolvedTenant: this renders in AuthLayout
- * on the login screen, outside any tenant provider, where useResolvedTenant
- * throws by design. Outside tenant scope the component falls back to the
- * product name — which is also the correct security posture, since the
- * previous per-tenant login branding came from an endpoint that disclosed the
- * oldest tenant's identity to every anonymous visitor.
  */
 
 export type BrandVariant =
@@ -61,12 +50,6 @@ const BRAND_VARIANTS = {
   },
 } as const;
 
-/**
- * Origin of the API server, for resolving relative logo paths.
- *
- * company_logo_url is stored as a server-relative path such as
- * /uploads/logos/x.png, so it needs the API origin rather than the app origin.
- */
 const API_ORIGIN = (
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
 ).replace("/api/v1", "");
@@ -101,10 +84,6 @@ export const Brand: React.FC<BrandProps> = ({
 
   const [logoError, setLogoError] = useState(false);
 
-  // No skeleton outside tenant scope. TenantGuard resolves the tenant before
-  // anything beneath it mounts, so there is no in-between state here — and on
-  // the login screen a permanent skeleton would be worse than the product
-  // name.
   const workspaceName = tenant?.workspace.workspace_name ?? "FlowPilot AI";
 
   const companyName =
@@ -118,7 +97,7 @@ export const Brand: React.FC<BrandProps> = ({
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
+    .map((word: string) => word.charAt(0).toUpperCase())
     .join("");
 
   const config = BRAND_VARIANTS[variant];

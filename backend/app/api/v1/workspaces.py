@@ -2,29 +2,9 @@
 Workspace API router for FlowPilot AI.
 
 Every route is addressed as /workspaces/{workspace_id}/... The workspace
-identifier is taken directly rather than nested under the organization, because
-a workspace identifier already determines its organization; requiring both
-would create two sources of truth and an inconsistency check on every request.
+identifier is taken directly rather than nested under the organization.
 
-Two legacy endpoints are deliberately NOT reproduced here:
-
-  PUT /workspace
-      Created a workspace when none existed and updated one when it did. That
-      conflation is why an existing owner revisiting the onboarding screen
-      silently overwrote their live settings. Creation is now
-      POST /organizations (first workspace) or
-      POST /organizations/{id}/workspaces (additional).
-
-  GET /workspace/public
-      Returned the oldest workspace row in the database to anonymous callers,
-      disclosing one tenant's name, logo, and locale to every visitor.
-
-This file is new rather than a replacement of app/api/v1/workspace.py, which
-also hosts the invitation endpoints. Step 9c lifts those out, applies the
-authentication fix, and removes the legacy module. Neither router is registered
-until then, so no route collision can occur.
-
-Routes carry their full path. Register with no prefix.
+ARCH-08 Step 1: Removed company_logo_url write parameter from update_workspace.
 """
 
 from __future__ import annotations
@@ -94,9 +74,6 @@ def _serialize_grant(membership) -> WorkspaceMemberResponse:
 async def get_workspace(context: deps.WorkspaceCtx) -> Any:
     """
     Returns the addressed workspace.
-
-    Any effective role may read it. A caller with no access receives 404 rather
-    than 403, so the response cannot confirm the workspace exists.
     """
     return context.workspace
 
@@ -112,10 +89,7 @@ async def update_workspace(
     context=Depends(deps.RequireWorkspaceAdmin),
 ) -> Any:
     """
-    Updates workspace name, locale, and branding.
-
-    Authorized by effective role, so an organization administrator may edit any
-    workspace through their derived grant without holding a stored row.
+    Updates workspace name, locale, and regional settings.
     """
     return workspace_service.update_workspace_settings(
         db,
@@ -128,7 +102,6 @@ async def update_workspace(
         language=payload.language,
         currency=payload.currency,
         date_format=payload.date_format,
-        company_logo_url=payload.company_logo_url,
     )
 
 
@@ -143,9 +116,6 @@ async def remove_workspace_logo(
 ) -> Any:
     """
     Clears the workspace logo.
-
-    A separate endpoint rather than a null in PATCH, which reserves null for
-    "leave unchanged".
     """
     return workspace_service.remove_workspace_logo(
         db,
@@ -167,9 +137,6 @@ async def check_workspace_slug(
 ) -> Any:
     """
     Advisory availability check, scoped to the parent organization.
-
-    Two tenants may both have a workspace called "engineering": uniqueness is
-    per organization, not global.
     """
     try:
         normalized = validate_slug(slug)
@@ -199,12 +166,6 @@ async def archive_workspace(
 ) -> Any:
     """
     Soft-deletes the workspace.
-
-    Authorized at organization level rather than workspace level: a workspace
-    does not own itself, so its destruction is a decision for the tenant that
-    does. A workspace ADMIN can configure and populate it but cannot destroy
-    it. The service also refuses to archive an organization's last active
-    workspace.
     """
     return workspace_service.archive_workspace(
         db,
@@ -225,9 +186,6 @@ async def restore_workspace(
 ) -> Any:
     """
     Restores an archived workspace.
-
-    The counterpart that makes archival a soft delete rather than a euphemism
-    for one.
     """
     return workspace_service.restore_workspace(
         db,
@@ -252,12 +210,6 @@ async def list_workspace_members(
 ) -> Any:
     """
     Returns everyone with access to this workspace.
-
-    Merges explicit grants with organization OWNER and ADMIN members holding
-    derived ADMIN. A directory of stored rows alone would omit the people with
-    the most access — accurate to the schema, misleading to the user. Derived
-    entries are marked is_derived so the client can disable revocation, which
-    is not meaningful at workspace level for them.
     """
     grants = workspace_member_service.list_workspace_members(
         db, workspace=context.workspace
@@ -304,13 +256,6 @@ async def grant_workspace_access(
 ) -> Any:
     """
     Grants an existing organization member access to this workspace.
-
-    The target must already hold an ACTIVE organization membership: the seat is
-    what authorizes their presence in the tenant. A previously revoked grant is
-    reactivated rather than duplicated, keeping the member's history on one
-    record.
-
-    Granting ADMIN additionally requires organization-level standing.
     """
     access = workspace_member_service.resolve_workspace_access(
         db, workspace=context.workspace, user_id=context.user_id
@@ -338,10 +283,6 @@ async def change_workspace_member_role(
 ) -> Any:
     """
     Changes an existing workspace grant.
-
-    Granting or revoking ADMIN requires organization-level standing, which
-    resolves the deadlock two workspace admins would otherwise create: neither
-    able to manage the other, with no higher workspace role to break the tie.
     """
     target = workspace_members_crud.get_workspace_member_by_id(
         db, workspace_id=context.workspace_id, membership_id=membership_id
@@ -374,10 +315,6 @@ async def revoke_workspace_access(
 ) -> Any:
     """
     Revokes a workspace grant, retaining the row.
-
-    The organization seat is untouched: losing access to one workspace is not
-    the same as leaving the company, and conflating them would make a routine
-    reassignment look like a termination.
     """
     target = workspace_members_crud.get_workspace_member_by_id(
         db, workspace_id=context.workspace_id, membership_id=membership_id
@@ -408,11 +345,6 @@ async def leave_workspace(
 ) -> Any:
     """
     Removes the acting user's own workspace grant.
-
-    An organization administrator retains derived access afterward, so this
-    removes them from the member list without cutting them off. That matches
-    GitHub, where an organization owner cannot lock themselves out of a
-    repository they administer.
     """
     access = workspace_member_service.resolve_workspace_access(
         db, workspace=context.workspace, user_id=context.user_id

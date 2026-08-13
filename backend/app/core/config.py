@@ -1,4 +1,5 @@
 import json
+import os
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,8 @@ LEAKED_JWT_SECRET_KEYS: frozenset[str] = frozenset(
         "e839e248b9409893d5f84893708e983cf4b1b88e17409c914e963df9bc0297da",
     }
 )
+
+_KEYLESS_ENVIRONMENTS: frozenset[str] = frozenset({"test", "development"})
 
 
 class Settings(BaseSettings):
@@ -118,9 +121,8 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # SMTP Password Encryption
+    # SMTP Password Encryption (Plural required in ARCH-08)
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
-    EMAIL_ENCRYPTION_KEY: Optional[SecretStr] = None
 
     # Sprint 5: AI Assistant & RAG Parameter Configurations
     RAG_TOP_K: int = 5
@@ -214,20 +216,27 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_encryption_keys(self) -> "Settings":
-        raw: Optional[str] = None
-        if self.EMAIL_ENCRYPTION_KEYS is not None:
-            raw = self.EMAIL_ENCRYPTION_KEYS.get_secret_value()
-        elif self.EMAIL_ENCRYPTION_KEY is not None:
-            warnings.warn(
-                "EMAIL_ENCRYPTION_KEY is deprecated and will be removed in "
-                "ARCH-08. Set EMAIL_ENCRYPTION_KEYS (plural, comma-separated) "
-                "instead.",
-                DeprecationWarning,
-                stacklevel=2,
+        # ARCH-08 Step 1 tombstone: fail fast if singular key is present in environment
+        if os.environ.get("EMAIL_ENCRYPTION_KEY") is not None:
+            raise ValueError(
+                "EMAIL_ENCRYPTION_KEY was removed in ARCH-08 Step 1. Set "
+                "EMAIL_ENCRYPTION_KEYS (plural, comma-separated, newest "
+                "first). See docs/runbooks/arch07-key-rotation.md."
             )
-            raw = self.EMAIL_ENCRYPTION_KEY.get_secret_value()
+
+        raw: Optional[str] = (
+            self.EMAIL_ENCRYPTION_KEYS.get_secret_value()
+            if self.EMAIL_ENCRYPTION_KEYS is not None
+            else None
+        )
 
         if not raw:
+            if self.ENVIRONMENT not in _KEYLESS_ENVIRONMENTS:
+                raise ValueError(
+                    "EMAIL_ENCRYPTION_KEYS is required. Generate one with: "
+                    'python -c "from cryptography.fernet import Fernet; '
+                    'print(Fernet.generate_key().decode())"'
+                )
             object.__setattr__(self, "_encryption_key_list", [])
             return self
 
