@@ -1,4 +1,4 @@
-"""Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.7, §B.9, §B.10).
+"""Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10).
 """
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import uuid
 from enum import Enum as PyEnum
 from typing import Any, Optional
 
-from sqlalchemy import ForeignKey, Index, String, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -98,6 +98,12 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
             postgresql_where=text("outcome = 'DENIED'::audit_outcome"),
         ),
         Index(
+            "ix_audit_logs_organization_id_api_key_id",
+            "organization_id",
+            "api_key_id",
+            postgresql_where=text("api_key_id IS NOT NULL"),
+        ),
+        Index(
             "ix_audit_logs_organization_id_resource_type_resource_id",
             "organization_id",
             "resource_type",
@@ -112,6 +118,10 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
             "ix_audit_logs_workspace_id",
             "workspace_id",
             postgresql_where=text("workspace_id IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "actor_id IS NULL OR api_key_id IS NULL",
+            name="ck_audit_logs_actor_xor_api_key",
         ),
     )
 
@@ -130,6 +140,12 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
     actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    api_key_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
         nullable=True,
     )
 

@@ -1,8 +1,5 @@
 """
 Business orchestration for organization membership — the billable seat.
-
-ARCH-07 Step 3: Converted AUDIT log sites to structured audit_service.record().
-Includes independent audit recording for role-change authorization denials.
 """
 
 from __future__ import annotations
@@ -29,18 +26,19 @@ from app.core.organization_permissions import (
     can_transfer_ownership,
 )
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
-from app.services import audit_service, organization_notification_service
+from app.crud import api_key as api_key_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import DIRECTORY_STATUSES
+from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.organization import (
     MembershipStatus,
     Organization,
     OrganizationMember,
     OrganizationRole,
 )
-from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.user import User
+from app.services import audit_service, organization_notification_service
 
 logger = logging.getLogger("app.services.organization_member_service")
 
@@ -110,9 +108,9 @@ def change_member_role(
             resource_type=AuditResourceType.MEMBERSHIP,
             resource_id=target_membership.id,
             action=AuditAction.ROLE_CHANGED,
+            outcome="DENIED",
             details={
                 **audit_service.actor_snapshot(actor),
-                "outcome": "DENIED",
                 "denial_reason": "INSUFFICIENT_ROLE",
                 "actor_role": actor_membership.role.value,
                 "target_user_id": str(target_membership.user_id),
@@ -160,9 +158,9 @@ def change_member_role(
             resource_type=AuditResourceType.MEMBERSHIP,
             resource_id=target_membership.id,
             action=AuditAction.ROLE_CHANGED,
+            outcome="ALLOWED",
             details={
                 **audit_service.actor_snapshot(actor),
-                "outcome": "ALLOWED",
                 "scope": "ORGANIZATION",
                 "target_user_id": str(target_membership.user_id),
                 "target_email": target_membership.user.email if target_membership.user else None,
@@ -219,7 +217,7 @@ def deactivate_member(
         _assert_not_last_owner(db, organization_id=organization.id)
 
     try:
-        revoked = (
+        revoked_grants = (
             workspace_members_crud.deactivate_all_workspace_grants_for_user(
                 db,
                 organization_id=organization.id,
@@ -227,6 +225,25 @@ def deactivate_member(
                 actor_id=actor_membership.user_id,
             )
         )
+
+        # ARCH-08 Step 10 (§B.3): Revoke all API keys issued by target member in SAME transaction
+        revoked_keys = api_key_crud.revoke_keys_for_issuer(
+            db,
+            organization_id=organization.id,
+            user_id=target_membership.user_id,
+            reason="OFFBOARDED",
+        )
+
+        for key in revoked_keys:
+            audit_service.record(
+                db,
+                organization_id=organization.id,
+                actor_id=actor.id if actor else None,
+                resource_type=AuditResourceType.API_KEY,
+                resource_id=key.id,
+                action=AuditAction.REVOKED,
+                details={"reason": "OFFBOARDED", "key_name": key.name},
+            )
 
         deactivated = organization_members_crud.deactivate_organization_member(
             db,
@@ -248,7 +265,8 @@ def deactivate_member(
                 "target_user_id": str(target_membership.user_id),
                 "target_email": target_membership.user.email if target_membership.user else None,
                 "role_at_deactivation": target_membership.role.value,
-                "workspace_grants_revoked": revoked,
+                "workspace_grants_revoked": revoked_grants,
+                "api_keys_revoked": len(revoked_keys),
             },
             **context,
         )

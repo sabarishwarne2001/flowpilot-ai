@@ -27,6 +27,7 @@ from app.core.exceptions import (
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import SessionLocal
+from app.models.audit_log import AuditOutcome, AuditResourceType
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -34,6 +35,7 @@ from app.models.organization import (
 )
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.services import api_key_service
 from app.services import organization_service
 from app.services import workspace_member_service
 from app.services import workspace_service
@@ -64,6 +66,15 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    # 1. API Key Token Authentication (ARCH-08 Step 9)
+    if token and token.startswith(("fp_live_", "fp_test_")):
+        res = api_key_service.authenticate_api_key_token(db, token=token)
+        if res is None:
+            raise credentials_exception
+        key, membership = res
+        return membership.user
+
+    # 2. Bearer JWT Session Authentication
     claims = security.decode_access_token_claims(token)
     if claims is None:
         raise credentials_exception

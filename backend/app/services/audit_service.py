@@ -1,9 +1,5 @@
 """
-Audit trail write service for FlowPilot AI (ARCH-07 §B.2 Option C, ARCH-08 §B.7 Option C).
-
-Provides two entry points:
-- record(db, ...): flushes into the caller's active transaction (caller commits).
-- record_independently([db], ...): uses an independent session or bound session for denials.
+Audit trail write service for FlowPilot AI (ARCH-07 §B.2 Option C, ARCH-08 §B.1, §B.7 Option C).
 """
 
 from __future__ import annotations
@@ -16,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.client_ip import client_ip
+from app.core.principal import Principal
 from app.db.session import SessionLocal
 from app.models.audit_log import AuditAction, AuditLog, AuditOutcome, AuditResourceType
 
@@ -150,7 +147,9 @@ def _build(
     *,
     organization_id: uuid.UUID,
     workspace_id: Optional[uuid.UUID],
+    principal: Optional[Principal],
     actor_id: Optional[uuid.UUID],
+    api_key_id: Optional[uuid.UUID],
     resource_type: ResourceTypeLike,
     resource_id: Optional[uuid.UUID],
     action: ActionLike,
@@ -162,10 +161,19 @@ def _build(
     if organization_id is None:
         raise ValueError("audit_service: organization_id is required")
 
+    resolved_actor_id = actor_id
+    resolved_api_key_id = api_key_id
+
+    if principal is not None:
+        cols = principal.audit_columns
+        resolved_actor_id = cols["actor_id"]
+        resolved_api_key_id = cols["api_key_id"]
+
     return AuditLog(
         organization_id=organization_id,
         workspace_id=workspace_id,
-        actor_id=actor_id,
+        actor_id=resolved_actor_id,
+        api_key_id=resolved_api_key_id,
         resource_type=_coerce_resource_type(resource_type),
         resource_id=resource_id,
         action=_coerce_action(action),
@@ -181,7 +189,9 @@ def record(
     *,
     organization_id: uuid.UUID,
     workspace_id: Optional[uuid.UUID] = None,
+    principal: Optional[Principal] = None,
     actor_id: Optional[uuid.UUID] = None,
+    api_key_id: Optional[uuid.UUID] = None,
     resource_type: ResourceTypeLike,
     resource_id: Optional[uuid.UUID] = None,
     action: ActionLike,
@@ -190,11 +200,12 @@ def record(
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> AuditLog:
-    """Record an audit event in the caller's transaction (caller commits)."""
     entry = _build(
         organization_id=organization_id,
         workspace_id=workspace_id,
+        principal=principal,
         actor_id=actor_id,
+        api_key_id=api_key_id,
         resource_type=resource_type,
         resource_id=resource_id,
         action=action,
@@ -213,7 +224,9 @@ def record_independently(
     *,
     organization_id: uuid.UUID,
     workspace_id: Optional[uuid.UUID] = None,
+    principal: Optional[Principal] = None,
     actor_id: Optional[uuid.UUID] = None,
+    api_key_id: Optional[uuid.UUID] = None,
     resource_type: ResourceTypeLike,
     resource_id: Optional[uuid.UUID] = None,
     action: ActionLike,
@@ -222,12 +235,13 @@ def record_independently(
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Optional[uuid.UUID]:
-    """Record an audit event for authorization denials independently."""
     try:
         entry = _build(
             organization_id=organization_id,
             workspace_id=workspace_id,
+            principal=principal,
             actor_id=actor_id,
+            api_key_id=api_key_id,
             resource_type=resource_type,
             resource_id=resource_id,
             action=action,

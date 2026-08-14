@@ -1,14 +1,12 @@
 """
-Audit log database reads (ARCH-07 Step 4, ARCH-08 Step 2, Step 3).
-
-Read-only database access layer. Writes happen through app.services.audit_service.
+Audit log database reads (ARCH-07 Step 4, ARCH-08 Step 2, Step 3, Step 8).
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import sqlalchemy as sa
 from sqlalchemy import ColumnElement, DateTime, Select, select, tuple_
@@ -29,8 +27,12 @@ def _predicates(
         preds.append(AuditLog.resource_type == filters.resource_type)
     if filters.action is not None:
         preds.append(AuditLog.action == filters.action)
+    if filters.outcome is not None:
+        preds.append(AuditLog.outcome == filters.outcome)
     if filters.actor_id is not None:
         preds.append(AuditLog.actor_id == filters.actor_id)
+    if filters.api_key_id is not None:
+        preds.append(AuditLog.api_key_id == filters.api_key_id)
     if filters.resource_id is not None:
         preds.append(AuditLog.resource_id == filters.resource_id)
     if filters.workspace_id is not None:
@@ -140,9 +142,11 @@ def fetch_export_batch(
         AuditLog.organization_id,
         AuditLog.workspace_id,
         AuditLog.actor_id,
+        AuditLog.api_key_id,
         AuditLog.resource_type,
         AuditLog.resource_id,
         AuditLog.action,
+        AuditLog.outcome,
         AuditLog.ip_address,
         AuditLog.user_agent,
         AuditLog.details,

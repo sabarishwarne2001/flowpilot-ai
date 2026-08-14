@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
 
+    # API Key & Redis Identity Peppers (ARCH-08 §B.4, §0.2)
+    API_KEY_PEPPER: SecretStr = SecretStr("flowpilot_default_api_key_pepper_secret_2026")
+    REDIS_IDENTITY_PEPPER: SecretStr = SecretStr("flowpilot_default_redis_identity_pepper_2026")
+
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
 
     # Refresh sessions

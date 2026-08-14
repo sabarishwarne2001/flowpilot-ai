@@ -1,7 +1,5 @@
 """
 Business orchestration for the Organization tenant root.
-
-ARCH-07 Step 3: Converted AUDIT log sites to audit_service.record().
 """
 
 from __future__ import annotations
@@ -9,6 +7,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -25,11 +24,13 @@ from app.core.organization_permissions import (
 )
 from app.core.slugs import generate_unique_slug, validate_slug
 from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.crud import api_key as api_key_crud
 from app.crud import organization as organization_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import ACTIVE_ONLY
+from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.organization import (
     MembershipStatus,
     Organization,
@@ -38,7 +39,6 @@ from app.models.organization import (
     OrganizationStatus,
 )
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
-from app.models.audit_log import AuditAction, AuditResourceType
 from app.services import audit_service
 
 logger = logging.getLogger("app.services.organization_service")
@@ -296,6 +296,16 @@ def archive_organization(
         )
 
     try:
+        # Deactivate all active API keys for this organization
+        active_keys = api_key_crud.list_api_keys_for_organization(
+            db, organization_id=organization.id, include_deactivated=False
+        )
+        now = datetime.now(UTC)
+        for key in active_keys:
+            key.deactivated_at = now
+            key.deactivated_reason = "ORG_ARCHIVED"
+            db.add(key)
+
         archived = organization_crud.set_organization_status(
             db,
             organization=organization,
@@ -312,6 +322,7 @@ def archive_organization(
             details={
                 "name": organization.name,
                 "slug": organization.slug,
+                "api_keys_deactivated": len(active_keys),
             },
         )
 
