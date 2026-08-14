@@ -1,13 +1,5 @@
 """
 Global domain exception translation for FlowPilot AI.
-
-Maps business-level exceptions raised in the service layer to standardized
-HTTP responses. Resolution walks the exception's method resolution order, so
-a new exception type inherits its base's status code and error code
-automatically and only needs an entry here when it requires distinct handling.
-
-Registering a handler for FlowPilotError in main.py is sufficient to cover the
-entire taxonomy, because Starlette resolves handlers by walking __mro__.
 """
 
 from __future__ import annotations
@@ -15,21 +7,26 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import Request
+from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.exceptions import (
+    CannotTransferToSelfError,
+    EmailImmutableError,
     FlowPilotError,
     InvalidInvitationTokenError,
     InvalidSlugError,
     InvitationAlreadyExistsError,
     InvitationAlreadyMemberError,
     InvitationAlreadyProcessedError,
+    InvitationEmailMismatchError,
     InvitationError,
     InvitationExpiredError,
+    InvitationGrantError,
     InvitationNotFoundError,
     InvitationPermissionDeniedError,
+    InvitationResendTooSoonError,
     LastOwnerError,
     OrganizationAccessDeniedError,
     OrganizationAlreadyExistsError,
@@ -37,59 +34,46 @@ from app.core.exceptions import (
     OrganizationMemberError,
     OrganizationNotFoundError,
     OrganizationPermissionDeniedError,
+    OwnershipTransferError,
+    PendingTransferExistsError,
+    RateLimitExceededError,
+    ReauthenticationFailedError,
     ReservedSlugError,
+    SeatLimitExceededError,
     SlugError,
     SlugUnavailableError,
+    TargetNotVerifiedError,
     TenantSuspendedError,
+    TransferExpiredError,
+    TransferInitiatorMismatchError,
+    TransferNotFoundError,
+    TransferNotPendingError,
+    TransferTargetMismatchError,
+    UserError,
     WorkspaceAccessDeniedError,
     WorkspaceAlreadyExistsError,
     WorkspaceError,
     WorkspaceMemberError,
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
-    InvitationEmailMismatchError,
-    SeatLimitExceededError,
-    InvitationGrantError,
-    InvitationResendTooSoonError,
-    EmailImmutableError,
-    ReauthenticationFailedError,
-    UserError,
-    OwnershipTransferError,
-    PendingTransferExistsError,
-    TransferNotFoundError,
-    TransferNotPendingError,
-    TransferExpiredError,
-    TransferTargetMismatchError,
-    TargetNotVerifiedError,
-    CannotTransferToSelfError,
-    TransferInitiatorMismatchError,
 )
 
 logger = logging.getLogger("app.core.exception_handlers")
 
 
 class ErrorResponse(BaseModel):
-    """
-    Standardized Error Contract across the FlowPilot AI platform.
-    """
     code: str
     message: str
     details: dict[str, Any] = Field(default_factory=dict)
 
 
-#: Default response for any domain exception without an explicit mapping.
 _DEFAULT_MAPPING: tuple[int, str] = (400, "BAD_REQUEST")
 
 
-#: Exception class to (HTTP status, stable error code).
-#:
-#: Only classes needing behavior distinct from their base appear here.
-#: Resolution walks __mro__, so subclasses inherit their base's entry.
-#:
-#: Note the deliberate 404 on both AccessDenied variants: a 403 would confirm
-#: that a tenant exists to an actor who is not a member, which is an
-#: enumeration oracle. GitHub applies the same rule to private repositories.
 _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
+    # --- Rate Limiting -----------------------------------------------------
+    RateLimitExceededError: (status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
+
     # --- Organizations -----------------------------------------------------
     OrganizationNotFoundError: (404, "RESOURCE_NOT_FOUND"),
     OrganizationAccessDeniedError: (404, "RESOURCE_NOT_FOUND"),
@@ -152,12 +136,6 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
 
 
 def resolve_exception_mapping(exc: Exception) -> tuple[int, str]:
-    """
-    Resolves an exception to its HTTP status code and stable error code.
-
-    Walks the method resolution order so that subclasses inherit their
-    nearest mapped ancestor's behavior.
-    """
     for klass in type(exc).__mro__:
         mapping = _EXCEPTION_MAPPING.get(klass)
         if mapping is not None:
@@ -166,10 +144,6 @@ def resolve_exception_mapping(exc: Exception) -> tuple[int, str]:
 
 
 async def domain_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """
-    Unified domain exception translator. Maps business-level custom exceptions
-    to standardized HTTP response codes and error contracts.
-    """
     status_code, code = resolve_exception_mapping(exc)
 
     logger.debug(
@@ -181,6 +155,8 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         code,
     )
 
+    headers = getattr(exc, "response_headers", None)
+
     return JSONResponse(
         status_code=status_code,
         content=ErrorResponse(
@@ -188,13 +164,9 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
             message=str(exc),
             details={},
         ).model_dump(),
+        headers=headers,
     )
 
 
 async def invitation_error_handler(request: Request, exc: InvitationError) -> JSONResponse:
-    """
-    Delegates to the standardized domain handler.
-
-    Retained for backwards compatibility with existing registrations.
-    """
     return await domain_exception_handler(request, exc)

@@ -1,10 +1,5 @@
 """
 Main entrypoint for the FlowPilot AI Backend API.
-Configures core framework engines, registers routing tables, manages CORS security configurations,
-and handles resource setups/teardowns via lifespan hooks.
-
-ARCH-07 Step 7: Legacy StaticFiles mount removed (§B.7 / §B.9).
-All media and files serve via authenticated API routes with nosniff security headers.
 """
 
 import logging
@@ -13,12 +8,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
-from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
-from app.utils import initialize_storage
-from app.core.exceptions import FlowPilotError
+from app.core.config import settings
 from app.core.exception_handlers import domain_exception_handler
+from app.core.exceptions import FlowPilotError
+from app.core.logging_config import setup_logging
+from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
+from app.utils import initialize_storage
 
 setup_logging()
 logger = logging.getLogger("app.main")
@@ -52,7 +48,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 if settings.cors_origins:
@@ -66,6 +62,9 @@ if settings.cors_origins:
     logger.info("CORS policies actively applied to HTTP pathways.")
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
+
+# Global Per-IP Rate Limit Middleware (ARCH-08 Step 6)
+app.add_middleware(GlobalRateLimitMiddleware)
 
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 

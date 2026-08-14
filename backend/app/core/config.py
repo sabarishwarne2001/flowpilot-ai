@@ -121,8 +121,23 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # SMTP Password Encryption (Plural required in ARCH-08)
+    # SMTP Password Encryption
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
+
+    # Redis & Rate Limiter Configurations (ARCH-08 Step 6)
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_BACKEND: str = "redis"
+    REDIS_URL: Optional[SecretStr] = SecretStr("redis://localhost:6379/0")
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = 0.25
+    REDIS_MAX_CONNECTIONS: int = 50
+
+    TRUSTED_PROXY_HOPS: int = 0
+
+    RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
+    RATE_LIMIT_USER_PER_MINUTE: int = 300
+    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
+    RATE_LIMIT_CREDENTIAL_PER_HOUR: int = 10
+    RATE_LIMIT_EXPORT_PER_HOUR: int = 5
 
     # Sprint 5: AI Assistant & RAG Parameter Configurations
     RAG_TOP_K: int = 5
@@ -216,7 +231,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_encryption_keys(self) -> "Settings":
-        # ARCH-08 Step 1 tombstone: fail fast if singular key is present in environment
         if os.environ.get("EMAIL_ENCRYPTION_KEY") is not None:
             raise ValueError(
                 "EMAIL_ENCRYPTION_KEY was removed in ARCH-08 Step 1. Set "

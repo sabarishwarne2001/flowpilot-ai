@@ -15,6 +15,7 @@ from typing import Any, Mapping, Optional, Union
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.client_ip import client_ip
 from app.db.session import SessionLocal
 from app.models.audit_log import AuditAction, AuditLog, AuditOutcome, AuditResourceType
 
@@ -272,14 +273,9 @@ def context_from_request(request: Any) -> dict[str, Optional[str]]:
         return {"ip_address": None, "user_agent": None}
 
     headers = getattr(request, "headers", {}) or {}
-    forwarded = headers.get("x-forwarded-for")
-    if forwarded:
-        ip_address: Optional[str] = forwarded.split(",")[0].strip()
-    else:
-        client = getattr(request, "client", None)
-        ip_address = getattr(client, "host", None) if client else None
+    user_agent = headers.get("user-agent") if headers else None
 
     return {
-        "ip_address": _truncate(ip_address, _IP_ADDRESS_MAX),
-        "user_agent": _truncate(headers.get("user-agent"), _USER_AGENT_MAX),
+        "ip_address": client_ip(request),
+        "user_agent": _truncate(user_agent, _USER_AGENT_MAX),
     }

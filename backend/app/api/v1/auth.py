@@ -24,19 +24,23 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.api.rate_limit_deps import RateLimiter
+from app.core.client_ip import client_ip
 from app.core.config import settings
 from app.core.cookies import (
     REFRESH_COOKIE_NAME,
     clear_refresh_cookie,
     set_refresh_cookie,
 )
+from app.core.rate_limit.policy import POLICY_LOGIN_IP
+from app.core.redirects import sanitize_redirect_path
 from app.core.security import create_access_token
 from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
     ChangePasswordRequest,
-    RegistrationAcknowledgement,
     ForgotPasswordRequest,
     PasswordActionResponse,
+    RegistrationAcknowledgement,
     ResendVerificationResponse,
     ResetPasswordRequest,
     SessionResponse,
@@ -52,8 +56,12 @@ from app.services import (
     session_service,
     verification_service,
 )
-from app.core.redirects import sanitize_redirect_path
 from app.services.auth_service import authenticate_user, register_new_user
+from app.services.login_backoff_service import (
+    check_login_backoff,
+    clear_login_backoff,
+    record_login_failure,
+)
 
 logger = logging.getLogger("app.api.v1.auth")
 
@@ -61,10 +69,7 @@ router = APIRouter(tags=["Authentication"])
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:45]
-    return request.client.host[:45] if request.client else None
+    return client_ip(request)
 
 
 def _user_agent(request: Request) -> str | None:
@@ -178,21 +183,45 @@ def _send_verification_safely(
 # Login, Refresh, Logout, Devices, Verify, Password
 # ===========================================================================
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(RateLimiter(POLICY_LOGIN_IP))],
+)
 async def login(
     request: Request,
     response: Response,
     db: Session = Depends(deps.get_db),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
-    user = authenticate_user(
-        db, email=form_data.username, password=form_data.password
-    )
+    ip = _client_ip(request) or "unknown"
+    email = form_data.username.strip().lower()
+
+    # 1. Check login backoff BEFORE bcrypt authentication
+    backoff = check_login_backoff(ip, email)
+    if backoff.is_backed_off:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "error": {
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": "Too many failed login attempts. Please retry shortly.",
+                }
+            },
+            headers={"Retry-After": str(backoff.retry_after_seconds)},
+        )
+
+    # 2. Authenticate user
+    user = authenticate_user(db, email=email, password=form_data.password)
     if not user:
+        delay = record_login_failure(ip, email)
+        headers = {"WWW-Authenticate": "Bearer"}
+        if delay > 0:
+            headers["Retry-After"] = str(delay)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers=headers,
         )
 
     if not user.is_active:
@@ -201,10 +230,13 @@ async def login(
             detail="User account is inactive",
         )
 
+    # 3. Successful login -> Clear backoff counters
+    clear_login_backoff(ip, email)
+
     issued = session_service.create_session(
         db,
         user=user,
-        ip_address=_client_ip(request),
+        ip_address=ip,
         user_agent=_user_agent(request),
     )
     db.commit()

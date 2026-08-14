@@ -6,7 +6,6 @@ resolution chain.
 """
 
 import logging
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Generator, Sequence, Union
@@ -28,7 +27,6 @@ from app.core.exceptions import (
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import SessionLocal
-from app.models.audit_log import AuditOutcome, AuditResourceType
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -36,28 +34,16 @@ from app.models.organization import (
 )
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
-from app.services import audit_service
 from app.services import organization_service
 from app.services import workspace_member_service
 from app.services import workspace_service
+from app.services.denial_aggregation_service import record_threshold_denial
 
 logger = logging.getLogger("app.api.deps")
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
-
-_DENIAL_SUPPRESSION_CACHE: dict[tuple[uuid.UUID, uuid.UUID, str, str], float] = {}
-_DENIAL_SUPPRESSION_WINDOW = 60.0
-
-
-def _should_record_denial(key: tuple[uuid.UUID, uuid.UUID, str, str]) -> bool:
-    now = time.time()
-    last = _DENIAL_SUPPRESSION_CACHE.get(key)
-    if last is not None and (now - last) < _DENIAL_SUPPRESSION_WINDOW:
-        return False
-    _DENIAL_SUPPRESSION_CACHE[key] = now
-    return True
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -287,25 +273,17 @@ class RequireOrgRole:
         context: OrganizationContext = Depends(get_organization_context),
     ) -> OrganizationContext:
         if context.role not in self.allowed_roles:
-            key = (context.organization_id, context.user_id, request.method, request.url.path)
-            if _should_record_denial(key):
-                res_type, action = resolve_route_audit(
-                    request, default_resource=AuditResourceType.ORGANIZATION
-                )
-                audit_service.record_independently(
-                    db=db,
-                    organization_id=context.organization_id,
-                    actor_id=context.user_id,
-                    resource_type=res_type,
-                    action=action,
-                    outcome=AuditOutcome.DENIED,
-                    details={
-                        **audit_service.actor_snapshot(context.user),
-                        "required_roles": [r.value for r in self.allowed_roles],
-                        "actual_role": context.role.value,
-                    },
-                    **audit_service.context_from_request(request),
-                )
+            res_type, action = resolve_route_audit(
+                request, default_resource=AuditResourceType.ORGANIZATION
+            )
+            record_threshold_denial(
+                db=db,
+                organization_id=context.organization_id,
+                actor_id=context.user_id,
+                resource_type=res_type,
+                action=action,
+                request=request,
+            )
             raise OrganizationPermissionDeniedError(
                 "You do not have permission to perform this action in this "
                 "organization."
@@ -324,26 +302,18 @@ class RequireWorkspaceRole:
         context: TenantContext = Depends(get_workspace_context),
     ) -> TenantContext:
         if not is_at_least(context.effective_workspace_role, self.minimum_role):
-            key = (context.organization_id, context.user_id, request.method, request.url.path)
-            if _should_record_denial(key):
-                res_type, action = resolve_route_audit(
-                    request, default_resource=AuditResourceType.WORKSPACE
-                )
-                audit_service.record_independently(
-                    db=db,
-                    organization_id=context.organization_id,
-                    workspace_id=context.workspace_id,
-                    actor_id=context.user_id,
-                    resource_type=res_type,
-                    action=action,
-                    outcome=AuditOutcome.DENIED,
-                    details={
-                        **audit_service.actor_snapshot(context.user),
-                        "minimum_role": self.minimum_role.value,
-                        "actual_role": context.effective_workspace_role.value,
-                    },
-                    **audit_service.context_from_request(request),
-                )
+            res_type, action = resolve_route_audit(
+                request, default_resource=AuditResourceType.WORKSPACE
+            )
+            record_threshold_denial(
+                db=db,
+                organization_id=context.organization_id,
+                workspace_id=context.workspace_id,
+                actor_id=context.user_id,
+                resource_type=res_type,
+                action=action,
+                request=request,
+            )
             raise WorkspacePermissionDeniedError(
                 "You do not have permission to perform this action in this "
                 "workspace."

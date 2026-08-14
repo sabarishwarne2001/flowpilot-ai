@@ -1,34 +1,55 @@
 services:
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+
     image: flowpilot-backend:latest
     container_name: flowpilot-backend
+
     ports:
       - "8000:8000"
+
     volumes:
       - ./app:/app/app
+
     env_file:
       - .env
+
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
     restart: unless-stopped
+
 
   db:
     image: postgres:16-alpine
+
     container_name: flowpilot-db
+
     ports:
       - "5432:5432"
+
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     restart: unless-stopped
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -36,5 +57,28 @@ services:
       retries: 5
 
 
+  redis:
+    image: redis:7-alpine
+
+    container_name: flowpilot-redis
+
+    ports:
+      - "6379:6379"
+
+    command: redis-server --maxmemory-policy noeviction
+
+    volumes:
+      - redis_data:/data
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+
 volumes:
   postgres_data:
+  redis_data:
