@@ -1,4 +1,4 @@
-"""Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.9, §B.10).
+"""Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.7, §B.9, §B.10).
 """
 
 from __future__ import annotations
@@ -17,6 +17,12 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 
 AUDIT_RESOURCE_TYPE_ENUM_NAME = "audit_resource_type"
 AUDIT_ACTION_ENUM_NAME = "audit_action"
+AUDIT_OUTCOME_ENUM_NAME = "audit_outcome"
+
+
+class AuditOutcome(str, PyEnum):
+    ALLOWED = "ALLOWED"
+    DENIED = "DENIED"
 
 
 class AuditResourceType(str, PyEnum):
@@ -48,6 +54,7 @@ class AuditAction(str, PyEnum):
     DISABLED = "DISABLED"
     EXPORTED = "EXPORTED"
     ROTATED = "ROTATED"
+    ACCESSED = "ACCESSED"
 
 
 _resource_type_pg = PgEnum(
@@ -64,6 +71,13 @@ _action_pg = PgEnum(
     values_callable=lambda enum_cls: [member.value for member in enum_cls],
 )
 
+_outcome_pg = PgEnum(
+    AuditOutcome,
+    name=AUDIT_OUTCOME_ENUM_NAME,
+    create_type=False,
+    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+)
+
 
 class AuditLog(Base, UUIDMixin, TimestampMixin):
     """One immutable record of one tenant-scoped state change."""
@@ -72,15 +86,16 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         Index(
-            "ix_audit_logs_organization_id_created_at",
-            "organization_id",
-            text("created_at DESC"),
-        ),
-        Index(
             "ix_audit_logs_organization_id_created_at_id",
             "organization_id",
             text("created_at DESC"),
             text("id DESC"),
+        ),
+        Index(
+            "ix_audit_logs_denied_organization_id_created_at",
+            "organization_id",
+            text("created_at DESC"),
+            postgresql_where=text("outcome = 'DENIED'::audit_outcome"),
         ),
         Index(
             "ix_audit_logs_organization_id_resource_type_resource_id",
@@ -133,6 +148,12 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    outcome: Mapped[AuditOutcome] = mapped_column(
+        _outcome_pg,
+        nullable=False,
+        server_default=text("'ALLOWED'"),
+    )
+
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=True,
@@ -151,5 +172,5 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
     def __repr__(self) -> str:
         return (
             f"<AuditLog {self.resource_type}/{self.action} "
-            f"org={self.organization_id} resource={self.resource_id}>"
+            f"outcome={self.outcome} org={self.organization_id} resource={self.resource_id}>"
         )

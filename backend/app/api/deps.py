@@ -5,19 +5,19 @@ Hosts database session factories, authentication guards, and the tenant context
 resolution chain.
 """
 
-from __future__ import annotations
-
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Generator, Sequence, Union
 
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, HTTPException, Path, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.core import security
+from app.core.audit_routes import resolve_route_audit
 from app.core.config import settings
 from app.core.exceptions import (
     OrganizationAccessDeniedError,
@@ -28,6 +28,7 @@ from app.core.exceptions import (
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import SessionLocal
+from app.models.audit_log import AuditOutcome, AuditResourceType
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -35,6 +36,7 @@ from app.models.organization import (
 )
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.services import audit_service
 from app.services import organization_service
 from app.services import workspace_member_service
 from app.services import workspace_service
@@ -45,10 +47,18 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
 
+_DENIAL_SUPPRESSION_CACHE: dict[tuple[uuid.UUID, uuid.UUID, str, str], float] = {}
+_DENIAL_SUPPRESSION_WINDOW = 60.0
 
-# ===========================================================================
-# Session
-# ===========================================================================
+
+def _should_record_denial(key: tuple[uuid.UUID, uuid.UUID, str, str]) -> bool:
+    now = time.time()
+    last = _DENIAL_SUPPRESSION_CACHE.get(key)
+    if last is not None and (now - last) < _DENIAL_SUPPRESSION_WINDOW:
+        return False
+    _DENIAL_SUPPRESSION_CACHE[key] = now
+    return True
+
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -57,10 +67,6 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-
-# ===========================================================================
-# Authentication
-# ===========================================================================
 
 async def get_current_user(
     db: Session = Depends(get_db),
@@ -133,10 +139,6 @@ CurrentUser = Annotated[User, Depends(get_current_active_user)]
 VerifiedUser = Annotated[User, Depends(get_verified_user)]
 
 
-# ===========================================================================
-# Context objects
-# ===========================================================================
-
 @dataclass(frozen=True)
 class OrganizationContext:
     user: User
@@ -162,7 +164,7 @@ class TenantContext:
     organization: Organization
     organization_membership: OrganizationMember
     workspace: Workspace
-    workspace_membership: WorkspaceMember | None
+    workspace_membership: Union[WorkspaceMember, None]
     effective_workspace_role: WorkspaceRole
 
     @property
@@ -185,10 +187,6 @@ class TenantContext:
     def role(self) -> WorkspaceRole:
         return self.effective_workspace_role
 
-
-# ===========================================================================
-# Context resolution
-# ===========================================================================
 
 async def get_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
@@ -278,19 +276,36 @@ OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
 
 
-# ===========================================================================
-# Role guards
-# ===========================================================================
-
 class RequireOrgRole:
     def __init__(self, allowed_roles: Sequence[OrganizationRole]) -> None:
         self.allowed_roles = frozenset(allowed_roles)
 
     def __call__(
         self,
+        request: Request,
+        db: Session = Depends(get_db),
         context: OrganizationContext = Depends(get_organization_context),
     ) -> OrganizationContext:
         if context.role not in self.allowed_roles:
+            key = (context.organization_id, context.user_id, request.method, request.url.path)
+            if _should_record_denial(key):
+                res_type, action = resolve_route_audit(
+                    request, default_resource=AuditResourceType.ORGANIZATION
+                )
+                audit_service.record_independently(
+                    db=db,
+                    organization_id=context.organization_id,
+                    actor_id=context.user_id,
+                    resource_type=res_type,
+                    action=action,
+                    outcome=AuditOutcome.DENIED,
+                    details={
+                        **audit_service.actor_snapshot(context.user),
+                        "required_roles": [r.value for r in self.allowed_roles],
+                        "actual_role": context.role.value,
+                    },
+                    **audit_service.context_from_request(request),
+                )
             raise OrganizationPermissionDeniedError(
                 "You do not have permission to perform this action in this "
                 "organization."
@@ -304,9 +319,31 @@ class RequireWorkspaceRole:
 
     def __call__(
         self,
+        request: Request,
+        db: Session = Depends(get_db),
         context: TenantContext = Depends(get_workspace_context),
     ) -> TenantContext:
         if not is_at_least(context.effective_workspace_role, self.minimum_role):
+            key = (context.organization_id, context.user_id, request.method, request.url.path)
+            if _should_record_denial(key):
+                res_type, action = resolve_route_audit(
+                    request, default_resource=AuditResourceType.WORKSPACE
+                )
+                audit_service.record_independently(
+                    db=db,
+                    organization_id=context.organization_id,
+                    workspace_id=context.workspace_id,
+                    actor_id=context.user_id,
+                    resource_type=res_type,
+                    action=action,
+                    outcome=AuditOutcome.DENIED,
+                    details={
+                        **audit_service.actor_snapshot(context.user),
+                        "minimum_role": self.minimum_role.value,
+                        "actual_role": context.effective_workspace_role.value,
+                    },
+                    **audit_service.context_from_request(request),
+                )
             raise WorkspacePermissionDeniedError(
                 "You do not have permission to perform this action in this "
                 "workspace."
@@ -314,21 +351,17 @@ class RequireWorkspaceRole:
         return context
 
 
-#: Convenience guards for workspace requirements.
 RequireWorkspaceViewer = RequireWorkspaceRole(WorkspaceRole.VIEWER)
 RequireWorkspaceContributor = RequireWorkspaceRole(WorkspaceRole.CONTRIBUTOR)
 RequireWorkspaceAdmin = RequireWorkspaceRole(WorkspaceRole.ADMIN)
 RequireWorkspaceMember = RequireWorkspaceRole(WorkspaceRole.VIEWER)
 
-#: Convenience guard for organization membership (any active member: OWNER, ADMIN, MEMBER).
 RequireOrgMember = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER]
 )
 
-#: Convenience guard for organization administration.
 RequireOrgAdmin = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN]
 )
 
-#: Convenience guard for owner-only operations.
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
