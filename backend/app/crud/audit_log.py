@@ -1,5 +1,5 @@
 """
-Audit log database reads (ARCH-07 Step 4).
+Audit log database reads (ARCH-07 Step 4, ARCH-08 Step 2, Step 3).
 
 Read-only database access layer. Writes happen through app.services.audit_service.
 """
@@ -7,34 +7,56 @@ Read-only database access layer. Writes happen through app.services.audit_servic
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional, Sequence
 
-from sqlalchemy import Select, func, select
+import sqlalchemy as sa
+from sqlalchemy import ColumnElement, DateTime, Select, select, tuple_
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Session
 
+from app.core.pagination import KeysetCursor
 from app.models.audit_log import AuditLog
 from app.schemas.audit_log import AuditLogFilters
 
 
-def _base_query(organization_id: uuid.UUID, filters: AuditLogFilters) -> Select:
-    stmt = select(AuditLog).where(AuditLog.organization_id == organization_id)
+def _predicates(
+    organization_id: uuid.UUID, filters: AuditLogFilters
+) -> list[ColumnElement[bool]]:
+    preds: list[ColumnElement[bool]] = [AuditLog.organization_id == organization_id]
 
     if filters.resource_type is not None:
-        stmt = stmt.where(AuditLog.resource_type == filters.resource_type)
+        preds.append(AuditLog.resource_type == filters.resource_type)
     if filters.action is not None:
-        stmt = stmt.where(AuditLog.action == filters.action)
+        preds.append(AuditLog.action == filters.action)
     if filters.actor_id is not None:
-        stmt = stmt.where(AuditLog.actor_id == filters.actor_id)
+        preds.append(AuditLog.actor_id == filters.actor_id)
     if filters.resource_id is not None:
-        stmt = stmt.where(AuditLog.resource_id == filters.resource_id)
+        preds.append(AuditLog.resource_id == filters.resource_id)
     if filters.workspace_id is not None:
-        stmt = stmt.where(AuditLog.workspace_id == filters.workspace_id)
+        preds.append(AuditLog.workspace_id == filters.workspace_id)
     if filters.date_from is not None:
-        stmt = stmt.where(AuditLog.created_at >= filters.date_from)
+        preds.append(AuditLog.created_at >= filters.date_from)
     if filters.date_to is not None:
-        stmt = stmt.where(AuditLog.created_at <= filters.date_to)
+        preds.append(AuditLog.created_at <= filters.date_to)
 
-    return stmt
+    return preds
+
+
+def _base_query(organization_id: uuid.UUID, filters: AuditLogFilters) -> Select:
+    return select(AuditLog).where(*_predicates(organization_id, filters))
+
+
+def _apply_cursor(stmt: Select, cursor: Optional[KeysetCursor]) -> Select:
+    if cursor is None:
+        return stmt
+    return stmt.where(
+        tuple_(AuditLog.created_at, AuditLog.id)
+        < tuple_(
+            sa.literal(cursor.created_at, type_=DateTime(timezone=True)),
+            sa.literal(cursor.id, type_=PgUUID(as_uuid=True)),
+        )
+    )
 
 
 def list_for_organization(
@@ -43,20 +65,16 @@ def list_for_organization(
     organization_id: uuid.UUID,
     filters: AuditLogFilters,
     limit: int,
-    offset: int,
-) -> tuple[list[AuditLog], int]:
-    stmt = _base_query(organization_id, filters)
-
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = db.execute(count_stmt).scalar_one()
-
-    page_stmt = (
-        stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-        .limit(limit)
-        .offset(offset)
+    cursor: Optional[KeysetCursor] = None,
+) -> tuple[list[AuditLog], bool]:
+    stmt = (
+        _apply_cursor(_base_query(organization_id, filters), cursor)
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(limit + 1)
     )
-    rows = list(db.execute(page_stmt).scalars().all())
-    return rows, total
+    rows = list(db.execute(stmt).scalars().all())
+    has_more = len(rows) > limit
+    return rows[:limit], has_more
 
 
 def get_for_organization(
@@ -67,3 +85,82 @@ def get_for_organization(
         AuditLog.id == audit_log_id,
     )
     return db.execute(stmt).scalar_one_or_none()
+
+
+def newest_cursor(
+    db: Session, *, organization_id: uuid.UUID, filters: AuditLogFilters
+) -> Optional[tuple[datetime, uuid.UUID]]:
+    stmt = (
+        select(AuditLog.created_at, AuditLog.id)
+        .where(*_predicates(organization_id, filters))
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(1)
+    )
+    res = db.execute(stmt).first()
+    return (res[0], res[1]) if res else None
+
+
+def cursor_at_offset(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    filters: AuditLogFilters,
+    anchor: tuple[datetime, uuid.UUID],
+    offset: int,
+) -> Optional[tuple[datetime, uuid.UUID]]:
+    stmt = (
+        select(AuditLog.created_at, AuditLog.id)
+        .where(
+            *_predicates(organization_id, filters),
+            tuple_(AuditLog.created_at, AuditLog.id) <= tuple_(
+                sa.literal(anchor[0], type_=DateTime(timezone=True)),
+                sa.literal(anchor[1], type_=PgUUID(as_uuid=True)),
+            )
+        )
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(1)
+        .offset(offset)
+    )
+    res = db.execute(stmt).first()
+    return (res[0], res[1]) if res else None
+
+
+def fetch_export_batch(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    filters: AuditLogFilters,
+    anchor: tuple[datetime, uuid.UUID],
+    cursor: Optional[KeysetCursor],
+    limit: int,
+) -> list[tuple[Any, ...]]:
+    stmt = select(
+        AuditLog.id,
+        AuditLog.created_at,
+        AuditLog.organization_id,
+        AuditLog.workspace_id,
+        AuditLog.actor_id,
+        AuditLog.resource_type,
+        AuditLog.resource_id,
+        AuditLog.action,
+        AuditLog.ip_address,
+        AuditLog.user_agent,
+        AuditLog.details,
+    ).where(
+        *_predicates(organization_id, filters),
+        tuple_(AuditLog.created_at, AuditLog.id) <= tuple_(
+            sa.literal(anchor[0], type_=DateTime(timezone=True)),
+            sa.literal(anchor[1], type_=PgUUID(as_uuid=True)),
+        )
+    )
+
+    if cursor is not None:
+        stmt = stmt.where(
+            tuple_(AuditLog.created_at, AuditLog.id) < tuple_(
+                sa.literal(cursor.created_at, type_=DateTime(timezone=True)),
+                sa.literal(cursor.id, type_=PgUUID(as_uuid=True)),
+            )
+        )
+
+    stmt = stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit)
+    return list(db.execute(stmt).all())

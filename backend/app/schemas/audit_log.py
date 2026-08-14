@@ -1,5 +1,5 @@
 """
-Audit log read contracts for FlowPilot AI (ARCH-07 Step 4).
+Audit log read contracts for FlowPilot AI (ARCH-07 Step 4, ARCH-08 Step 2).
 """
 
 from __future__ import annotations
@@ -36,10 +36,23 @@ class AuditLogRead(BaseModel):
 
 
 class AuditLogPage(BaseModel):
+    """ARCH-08 Step 2 (§B.9).
+
+    `total` and `offset` were removed. Keyset cursor pagination uses has_more and
+    next_cursor to achieve O(1) page access regardless of table depth.
+    """
     items: list[AuditLogRead]
-    total: int = Field(description="Total rows matching the filters, ignoring paging.")
     limit: int
-    offset: int
+    has_more: bool = Field(
+        description="True when at least one further row matches the filters."
+    )
+    next_cursor: Optional[str] = Field(
+        default=None,
+        description=(
+            "Opaque cursor for the following page. Present iff has_more. "
+            "Pass verbatim as ?cursor=; do not construct or modify."
+        ),
+    )
 
 
 class AuditLogFilters(BaseModel):
@@ -58,3 +71,16 @@ class AuditLogFilters(BaseModel):
         if value is not None and start is not None and value < start:
             raise ValueError("date_to must not precede date_from")
         return value
+
+    def digest_scope(self, *, organization_id: uuid.UUID) -> dict[str, Any]:
+        """Everything that changes the result set. Binds the cursor to it."""
+        return {
+            "organization_id": organization_id,
+            "resource_type": self.resource_type,
+            "action": self.action,
+            "actor_id": self.actor_id,
+            "resource_id": self.resource_id,
+            "workspace_id": self.workspace_id,
+            "date_from": self.date_from,
+            "date_to": self.date_to,
+        }
