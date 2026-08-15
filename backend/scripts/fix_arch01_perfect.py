@@ -1,4 +1,22 @@
-"""arch01_expand_organization_tenancy
+#!/usr/bin/env python3
+"""
+scripts/fix_arch01_perfect.py
+Overwrites 4fb2e9a4f15c_arch01_expand_organization_tenancy.py with pristine Python code
+and properly indented try...except blocks around workspace_invitations.
+
+Repository: https://github.com/sabarishwarne2001/flowpilot-ai/tree/main
+"""
+
+import sys
+from pathlib import Path
+
+# Safeguard Windows stdout encoding
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
+
+root_dir = Path(__file__).parent.parent.resolve()
+
+PRISTINE_CODE = '''"""arch01_expand_organization_tenancy
 
 ARCH-01 Step 3 of 10 — EXPAND leg of Expand -> Migrate -> Contract.
 
@@ -384,3 +402,15 @@ def downgrade() -> None:
     # --- enum types ---------------------------------------------------------
     for enum_type in reversed(_NEW_ENUM_TYPES):
         enum_type.drop(bind, checkfirst=True)
+'''
+
+def main() -> None:
+    print("=== REPAIRING 4fb2e9a4f15c MIGRATION FILE WITH PRISTINE CODE ===")
+    
+    files = list(root_dir.rglob("*4fb2e9a4f15c*.py"))
+    for f in files:
+        f.write_text(PRISTINE_CODE, encoding="utf-8")
+        print(f"[SUCCESSFULLY OVERWRITTEN] {f}")
+
+if __name__ == "__main__":
+    main()

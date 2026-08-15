@@ -1,4 +1,22 @@
-"""arch01_expand_organization_tenancy
+#!/usr/bin/env python3
+"""
+scripts/restore_clean_arch01_migration.py
+Restores 4fb2e9a4f15c_arch01_expand_organization_tenancy.py to clean Python syntax
+with workspace_invitations operations wrapped safely inside upgrade() and downgrade().
+
+Repository: https://github.com/sabarishwarne2001/flowpilot-ai/tree/main
+"""
+
+import sys
+from pathlib import Path
+
+# Safeguard Windows stdout encoding
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
+
+root_dir = Path(__file__).parent.parent.resolve()
+
+CLEAN_CODE = '''"""arch01_expand_organization_tenancy
 
 ARCH-01 Step 3 of 10 — EXPAND leg of Expand -> Migrate -> Contract.
 
@@ -384,3 +402,24 @@ def downgrade() -> None:
     # --- enum types ---------------------------------------------------------
     for enum_type in reversed(_NEW_ENUM_TYPES):
         enum_type.drop(bind, checkfirst=True)
+'''
+
+def main() -> None:
+    print("=== RESTORING PRISTINE 4fb2e9a4f15c MIGRATION FILE ===")
+    
+    files = [
+        root_dir / "alembic" / "versions" / "4fb2e9a4f15c_arch01_expand_organization_tenancy.py",
+        root_dir / "app" / "db" / "migrations" / "versions" / "4fb2e9a4f15c_arch01_expand_organization_tenancy.py",
+    ]
+
+    restored = 0
+    for p in files:
+        if p.parent.exists():
+            p.write_text(CLEAN_CODE, encoding="utf-8")
+            print(f"[RESTORED] {p}")
+            restored += 1
+
+    print(f"\nSuccessfully restored {restored} migration file(s).")
+
+if __name__ == "__main__":
+    main()

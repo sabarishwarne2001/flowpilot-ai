@@ -51,6 +51,8 @@ from app.models.audit_log import (
     AuditResourceType,
 )
 from app.models.outbox_event import OutboxEvent, OutboxEventStatus  # noqa: F401
+from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus  # noqa: F401
+from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus  # noqa: F401
 
 __all__ = [
     "Base",
@@ -93,4 +95,8 @@ __all__ = [
     "AUDIT_RESOURCE_TYPE_ENUM_NAME",
     "OutboxEvent",
     "OutboxEventStatus",
+    "WebhookEndpoint",
+    "WebhookEndpointStatus",
+    "WebhookDelivery",
+    "WebhookDeliveryStatus",
 ]
