@@ -50,6 +50,7 @@ from app.models.audit_log import (
     AuditLog,
     AuditResourceType,
 )
+from app.models.outbox_event import OutboxEvent, OutboxEventStatus  # noqa: F401
 
 __all__ = [
     "Base",
@@ -90,4 +91,6 @@ __all__ = [
     "AuditResourceType",
     "AUDIT_ACTION_ENUM_NAME",
     "AUDIT_RESOURCE_TYPE_ENUM_NAME",
+    "OutboxEvent",
+    "OutboxEventStatus",
 ]

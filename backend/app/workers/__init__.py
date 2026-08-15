@@ -1,1 +1,1 @@
-# Database Models Scaffold
+"""Workers package for FlowPilot AI async infrastructure."""
