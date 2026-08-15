@@ -6,10 +6,11 @@ resolution chain.
 """
 
 import logging
-import time
+import re
 import uuid
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Annotated, Generator, Sequence, Union
+from typing import Annotated, Generator, Optional, Sequence, Union
 
 from fastapi import Depends, HTTPException, Path, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -25,10 +26,12 @@ from app.core.exceptions import (
     WorkspaceAccessDeniedError,
     WorkspacePermissionDeniedError,
 )
+from app.core.principal import Principal
+from app.core.scopes import ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import SessionLocal
-from app.models.audit_log import AuditOutcome, AuditResourceType
+from app.models.audit_log import AuditResourceType
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -48,17 +51,11 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
 
-_DENIAL_SUPPRESSION_CACHE: dict[tuple[uuid.UUID, uuid.UUID, str, str], float] = {}
-_DENIAL_SUPPRESSION_WINDOW = 60.0
+_principal_var: ContextVar[Optional[Principal]] = ContextVar("principal", default=None)
 
 
-def _should_record_denial(key: tuple[uuid.UUID, uuid.UUID, str, str]) -> bool:
-    now = time.time()
-    last = _DENIAL_SUPPRESSION_CACHE.get(key)
-    if last is not None and (now - last) < _DENIAL_SUPPRESSION_WINDOW:
-        return False
-    _DENIAL_SUPPRESSION_CACHE[key] = now
-    return True
+def get_current_principal() -> Optional[Principal]:
+    return _principal_var.get()
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -87,10 +84,17 @@ async def get_current_user(
             raise credentials_exception
         key, membership = res
         user = membership.user
-        # ARCH-08 Step 11: Wire request.state for rate limiter identity resolution
+
+        principal = Principal(kind="API_KEY", user_id=user.id, api_key_id=key.id)
+        _principal_var.set(principal)
+
         if request is not None:
             request.state.user_id = user.id
             request.state.api_key_id = key.id
+            request.state.api_key_obj = key
+            request.state.api_key_membership = membership
+            request.state.principal = principal
+
         return user
 
     # 2. Bearer JWT Session Authentication
@@ -110,9 +114,12 @@ async def get_current_user(
         )
         raise credentials_exception
 
-    # ARCH-08 Step 11: Wire request.state.user_id for per-user rate limiters
+    principal = Principal(kind="USER", user_id=user.id, api_key_id=None)
+    _principal_var.set(principal)
+
     if request is not None:
         request.state.user_id = user.id
+        request.state.principal = principal
 
     return user
 
@@ -294,6 +301,53 @@ async def get_workspace_context(
 
 OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
+
+
+class RequireScope:
+    """Runtime scope enforcement for API keys with deny-by-default (ARCH-08.1 F1)."""
+
+    def __init__(self, required_scope: Optional[ApiKeyScope] = None) -> None:
+        self.required_scope = required_scope
+
+    def __call__(
+        self,
+        request: Request,
+        context: OrganizationContext = Depends(get_organization_context),
+    ) -> OrganizationContext:
+        principal = getattr(request.state, "principal", None) or get_current_principal()
+        if principal and principal.kind == "API_KEY":
+            target_scope = self.required_scope
+
+            if target_scope is None:
+                method = request.method.upper()
+                raw_path = request.url.path
+                clean_path = raw_path.replace(settings.API_V1_STR, "") if hasattr(settings, "API_V1_STR") else raw_path
+
+                for (m, route_template), mapped_scope in ROUTE_SCOPE_MAP.items():
+                    if m.upper() == method:
+                        pattern = "^" + re.sub(r"\{[^}]+\}", r"[^/]+", route_template) + "$"
+                        if re.match(pattern, clean_path) or clean_path.rstrip("/") == route_template.rstrip("/"):
+                            target_scope = mapped_scope
+                            break
+
+            if target_scope is None:
+                raise OrganizationPermissionDeniedError(
+                    "API key access is prohibited on unmapped routes with no scope declaration."
+                )
+
+            key_obj = getattr(request.state, "api_key_obj", None)
+            membership_obj = getattr(request.state, "api_key_membership", None)
+
+            if not key_obj or not membership_obj:
+                raise OrganizationPermissionDeniedError("API key authentication context missing.")
+
+            eff_scopes = effective_scopes(key_obj, membership_obj)
+            if target_scope not in eff_scopes:
+                raise OrganizationPermissionDeniedError(
+                    f"API key lacks the required scope: {target_scope.value}"
+                )
+
+        return context
 
 
 class RequireOrgRole:

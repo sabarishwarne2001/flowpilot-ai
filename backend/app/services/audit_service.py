@@ -167,9 +167,14 @@ def _build(
 
     resolved_actor_id = actor_id
     resolved_api_key_id = api_key_id
+    resolved_principal = principal
 
-    if principal is not None:
-        cols = principal.audit_columns
+    if resolved_principal is None:
+        from app.api.deps import get_current_principal
+        resolved_principal = get_current_principal()
+
+    if resolved_principal is not None:
+        cols = resolved_principal.audit_columns
         resolved_actor_id = cols["actor_id"]
         resolved_api_key_id = cols["api_key_id"]
 

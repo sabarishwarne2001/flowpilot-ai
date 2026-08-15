@@ -14,13 +14,12 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api import deps
 from app.core.exceptions import OrganizationPermissionDeniedError, WorkspacePermissionDeniedError
 from app.crud import api_key as api_key_crud
 from app.models.audit_log import AuditAction, AuditResourceType
-from app.models.organization import OrganizationRole
 from app.schemas.api_key import (
     ApiKeyCreate,
     ApiKeyRead,
@@ -34,8 +33,9 @@ logger = logging.getLogger("app.api.v1.api_keys")
 router = APIRouter(tags=["API Keys"])
 
 
-def _assert_human_admin(context: deps.OrganizationContext) -> None:
-    if getattr(context.user, "id", None) is None:
+def _assert_human_admin(request: Request, context: deps.OrganizationContext) -> None:
+    principal = getattr(request.state, "principal", None) or deps.get_current_principal()
+    if (principal and principal.kind == "API_KEY") or getattr(request.state, "api_key_id", None) is not None:
         raise OrganizationPermissionDeniedError(
             "API key management requires a human administrator session."
         )
@@ -50,9 +50,10 @@ def _assert_human_admin(context: deps.OrganizationContext) -> None:
 def create_api_key(
     payload: ApiKeyCreate,
     db: deps.DbSession,
+    request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    _assert_human_admin(context)
+    _assert_human_admin(request, context)
 
     key, token = api_key_service.issue_api_key(
         db,
@@ -78,9 +79,10 @@ def create_api_key(
 )
 def list_api_keys(
     db: deps.DbSession,
+    request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    _assert_human_admin(context)
+    _assert_human_admin(request, context)
     keys = api_key_crud.list_api_keys_for_organization(
         db, organization_id=context.organization_id, include_deactivated=True
     )
@@ -95,9 +97,10 @@ def list_api_keys(
 def get_api_key(
     key_id: UUID,
     db: deps.DbSession,
+    request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    _assert_human_admin(context)
+    _assert_human_admin(request, context)
     key = api_key_crud.get_api_key_by_id(
         db, organization_id=context.organization_id, key_id=key_id
     )
@@ -117,9 +120,10 @@ def rotate_api_key(
     key_id: UUID,
     payload: ApiKeyRotateRequest,
     db: deps.DbSession,
+    request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    _assert_human_admin(context)
+    _assert_human_admin(request, context)
     try:
         key, new_token = api_key_service.rotate_api_key(
             db,
@@ -148,9 +152,10 @@ def rotate_api_key(
 def revoke_api_key(
     key_id: UUID,
     db: deps.DbSession,
+    request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
-    _assert_human_admin(context)
+    _assert_human_admin(request, context)
     key = api_key_crud.get_api_key_by_id(
         db, organization_id=context.organization_id, key_id=key_id
     )

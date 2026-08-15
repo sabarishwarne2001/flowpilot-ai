@@ -8,10 +8,9 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Optional
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -21,7 +20,6 @@ from app.models.user import User
 
 logger = logging.getLogger("app.services.avatar")
 
-AVATAR_DIR = Path("uploads/avatars")
 MIN_DIMENSION = 32
 MAX_DIMENSION = 1024
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
@@ -163,10 +161,6 @@ def resolve_current(db: Session, *, owner: User) -> UploadedFile:
         raise AvatarNotFoundError("Avatar not found.")
 
     return uploaded
-
-
-def resolve_stored_path(record: UploadedFile) -> Path:
-    return Path("uploads") / record.file_path
 
 
 def read_avatar_bytes(db: Session, *, record: UploadedFile) -> bytes:

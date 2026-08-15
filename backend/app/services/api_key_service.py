@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional, Sequence
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -92,10 +92,8 @@ def authenticate_api_key_token(
     if key.expires_at is not None and key.expires_at <= now:
         return None
 
-    # Check primary secret hash
     valid_secret = verify_secret(parsed.secret, key.secret_hash)
 
-    # Check 7-day dual-secret rotation overlap
     if not valid_secret and key.previous_secret_hash is not None:
         if key.previous_secret_expires_at is not None and key.previous_secret_expires_at > now:
             valid_secret = verify_secret(parsed.secret, key.previous_secret_hash)
@@ -115,9 +113,10 @@ def authenticate_api_key_token(
     if membership is None:
         return None
 
-    key.last_used_at = now
-    db.add(key)
-    db.commit()
+    # Coarsen last_used_at update to 5 minutes (300 seconds); no commit on auth path (F7)
+    if key.last_used_at is None or (now - key.last_used_at).total_seconds() >= 300:
+        key.last_used_at = now
+        db.add(key)
 
     return key, membership
 
