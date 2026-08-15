@@ -1,12 +1,5 @@
 """
 ARCH-05 Step 6 -- ownership transfer concurrency gate.
-
-Real, separate PostgreSQL connections, not the db_session fixture. Two
-sessions bound to db_session's single wrapped transaction are one backend;
-a row lock is always immediately available and any "race" test written
-against it would pass for the wrong reason. This mirrors
-tests/isolation/test_owner_set_concurrency.py's own justification for the
-same NullPool setup, applied to a sixth writer of ownership-related state.
 """
 
 from __future__ import annotations
@@ -52,8 +45,6 @@ def sessions(engine_):
 
 @pytest.fixture()
 def scene(sessions):
-    """A committed org, owner, and two candidate targets, on their own
-    real connection, committed before any race attempts touch it."""
     setup: Session = sessions()
     suffix = uuid.uuid4().hex[:8]
 
@@ -105,6 +96,8 @@ def scene(sessions):
     yield ids
 
     cleanup: Session = sessions()
+    cleanup.execute(text("ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable;"))
+    cleanup.execute(text("DELETE FROM audit_logs WHERE organization_id = :o"), {"o": ids["org_id"]})
     cleanup.execute(text("DELETE FROM ownership_transfers WHERE organization_id = :o"), {"o": ids["org_id"]})
     cleanup.execute(text("DELETE FROM organization_members WHERE organization_id = :o"), {"o": ids["org_id"]})
     cleanup.execute(text("DELETE FROM organizations WHERE id = :o"), {"o": ids["org_id"]})
@@ -112,18 +105,12 @@ def scene(sessions):
         text("DELETE FROM users WHERE id IN (:a, :b, :c)"),
         {"a": ids["owner_id"], "b": ids["target_a_id"], "c": ids["target_b_id"]},
     )
+    cleanup.execute(text("ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable;"))
     cleanup.commit()
     cleanup.close()
 
 
 def test_two_concurrent_initiations_only_one_succeeds(sessions, scene):
-    """
-    uq_pending_ownership_transfer_per_org under real concurrency, not the
-    sequential pre-check. Two real connections both pass the pre-check
-    (neither sees the other's uncommitted row) and both attempt to commit a
-    PENDING row for the same organization; the partial unique index must
-    let exactly one through.
-    """
     db_a: Session = sessions()
     db_b: Session = sessions()
 
@@ -160,10 +147,7 @@ def test_two_concurrent_initiations_only_one_succeeds(sessions, scene):
     succeeded = [r for r in outcomes if r != "rejected"]
     rejected = [r for r in outcomes if r == "rejected"]
 
-    assert len(succeeded) == 1, (
-        f"exactly one initiation must succeed under real concurrency, got "
-        f"{len(succeeded)}: {outcomes}"
-    )
+    assert len(succeeded) == 1
     assert len(rejected) == 1
 
     audit: Session = sessions()
@@ -171,22 +155,15 @@ def test_two_concurrent_initiations_only_one_succeeds(sessions, scene):
         text("SELECT count(*) FROM ownership_transfers WHERE organization_id = :o AND status = 'PENDING'"),
         {"o": scene["org_id"]},
     ).scalar_one()
-    assert count == 1, "the database must show exactly one PENDING row, not zero or two"
+    assert count == 1
     audit.close()
 
 
 def test_two_concurrent_accepts_of_the_same_transfer_only_one_succeeds(sessions, scene):
-    """
-    The same shape as A.2.1's original interleaving, on the fifth writer of
-    the owner set added in Step 6: two requests both try to accept the SAME
-    proposal. update_transfer_status's conditional UPDATE is the
-    serialization point -- not application-level locking timing.
-    """
     setup: Session = sessions()
     org = setup.get(Organization, scene["org_id"])
     owner = setup.get(User, scene["owner_id"])
     owner_m = setup.get(OrganizationMember, scene["owner_m_id"])
-    target_a = setup.get(User, scene["target_a_id"])
 
     initiated = service.initiate_transfer(
         setup, organization=org, actor=owner, initiator_membership=owner_m,
@@ -221,10 +198,7 @@ def test_two_concurrent_accepts_of_the_same_transfer_only_one_succeeds(sessions,
 
     outcomes = [results["a"], results["b"]]
     succeeded = [r for r in outcomes if r != "rejected"]
-    assert len(succeeded) == 1, (
-        f"exactly one accept must succeed under real concurrency, got "
-        f"{len(succeeded)}: {outcomes}"
-    )
+    assert len(succeeded) == 1
 
     audit: Session = sessions()
     row = audit.get(OwnershipTransfer, initiated.transfer_id)
@@ -237,7 +211,5 @@ def test_two_concurrent_accepts_of_the_same_transfer_only_one_succeeds(sessions,
         ),
         {"o": scene["org_id"]},
     ).scalar_one()
-    assert active_owners == 1, (
-        "the exact invariant this entire phase protects: never zero, never two"
-    )
+    assert active_owners == 1
     audit.close()

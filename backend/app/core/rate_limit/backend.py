@@ -1,4 +1,4 @@
-"""Rate limit storage backends (ARCH-08 §B.5, §6.2, §6.3)."""
+"""Rate limit storage backends (ARCH-08 §B.5, §6.2, §6.3, §11.2)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.core.rate_limit.backend")
 
-# Atomic Sliding Window Counter Lua Script (ARCH-08 §6.3)
 _LUA_SLIDING_WINDOW_COUNTER = """
 local limit    = tonumber(ARGV[1])
 local window   = tonumber(ARGV[2])
@@ -65,7 +64,7 @@ class RedisBackend(RateLimitBackend):
             self._sha = self.client.script_load(_LUA_SLIDING_WINDOW_COUNTER)
         try:
             return self.client.evalsha(self._sha, len(keys), *keys, *args)
-        except redis.Exceptions.NoScriptError:
+        except redis.exceptions.NoScriptError:
             self._sha = self.client.script_load(_LUA_SLIDING_WINDOW_COUNTER)
             return self.client.evalsha(self._sha, len(keys), *keys, *args)
 
@@ -93,8 +92,6 @@ class RedisBackend(RateLimitBackend):
 
 
 class InMemoryBackend(RateLimitBackend):
-    """In-memory sliding window counter for test environments only."""
-
     def __init__(self) -> None:
         if settings.ENVIRONMENT != "test":
             raise RuntimeError(

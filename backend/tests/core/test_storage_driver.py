@@ -1,4 +1,4 @@
-"""Storage driver contract tests (ARCH-07 Step 5)."""
+"""Storage driver contract tests (ARCH-07 Step 5, ARCH-08 Step 12)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,20 @@ from app.core.storage import LocalStorageDriver, ObjectNotFoundError
 from app.core.storage.base import InvalidStorageKeyError, sanitize_key
 
 
-@pytest.fixture
-def driver(tmp_path):
-    return LocalStorageDriver(root=tmp_path / "uploads")
+@pytest.fixture(params=["local", "s3"])
+def driver(request, tmp_path):
+    if request.param == "local":
+        yield LocalStorageDriver(root=tmp_path / "uploads")
+        return
+
+    moto = pytest.importorskip("moto")
+    import boto3
+    from app.core.storage.s3 import S3StorageDriver
+
+    with moto.mock_aws():
+        client = boto3.client("s3", region_name="us-east-1")
+        client.create_bucket(Bucket="flowpilot-test")
+        yield S3StorageDriver(bucket="flowpilot-test", prefix="test", client=client)
 
 
 class TestKeyGrammar:
@@ -60,6 +71,9 @@ class TestKeyGrammar:
             driver.get("../../etc/passwd")
 
     def test_symlink_escape_is_contained(self, driver, tmp_path):
+        if not isinstance(driver, LocalStorageDriver):
+            pytest.skip("Symlink containment is specific to local filesystem driver.")
+
         outside = tmp_path / "outside"
         outside.mkdir()
         (outside / "secret.png").write_bytes(b"secret")
@@ -95,6 +109,8 @@ class TestRoundTrip:
         assert driver.get("logos/a.png") == b"new-and-longer"
 
     def test_put_leaves_no_temp_files(self, driver):
+        if not isinstance(driver, LocalStorageDriver):
+            pytest.skip("Temp file cleanup test is specific to local filesystem driver.")
         driver.put("logos/a.png", b"x", "image/png")
         leftovers = [p for p in driver.root.rglob(".tmp-*")]
         assert leftovers == []
@@ -127,6 +143,8 @@ class TestRoundTrip:
         assert driver.size("logos/a.png") == 5
 
     def test_iter_keys_skips_temp_files(self, driver):
+        if not isinstance(driver, LocalStorageDriver):
+            pytest.skip("Temp file filtering is specific to local filesystem driver.")
         driver.put("logos/a.png", b"x", "image/png")
         (driver.root / "logos" / ".tmp-junk.part").write_bytes(b"junk")
         assert driver.iter_keys("logos") == ["logos/a.png"]

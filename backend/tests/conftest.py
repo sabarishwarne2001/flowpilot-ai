@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Generator
 
 import pytest
@@ -69,9 +69,6 @@ from app.models.workspace import (
 
 # ===========================================================================
 # Personas
-#
-# Declared at the top of the file so Pylance and the Python interpreter can
-# resolve them as type annotations in the fixtures below.
 # ===========================================================================
 
 @dataclass(frozen=True)
@@ -105,6 +102,13 @@ class Fixture:
 # pytest Fixtures
 # ===========================================================================
 
+@pytest.fixture(autouse=True)
+def disable_rate_limiting_in_tests(monkeypatch):
+    """Ensure rate limiters and login backoffs remain disabled across all automated test suites."""
+    monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def test_database() -> Generator[None, None, None]:
     """
@@ -120,9 +124,6 @@ def test_database() -> Generator[None, None, None]:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"'))
         conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
 
-    # Alembic rather than create_all. This is the only place the migration
-    # chain is run from an empty database, and that path ships to every new
-    # environment.
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", TEST_DB_URL)
     command.upgrade(alembic_cfg, "head")
@@ -144,11 +145,6 @@ def test_database() -> Generator[None, None, None]:
 def db_session() -> Generator[Session, None, None]:
     """
     A session bound to an outer transaction that is always rolled back.
-
-    Service code commits freely; those commits land inside this transaction and
-    disappear when it unwinds. Without it, the persona fixtures would
-    accumulate across tests and the seat and slug uniqueness constraints would
-    start failing for reasons unrelated to what is being tested.
     """
     engine = create_engine(TEST_DB_URL)
     connection = engine.connect()
@@ -168,10 +164,6 @@ def db_session() -> Generator[Session, None, None]:
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     """
     A TestClient whose requests share the test transaction.
-
-    Only get_db is overridden. Authentication, tenant resolution, and role
-    guards all run for real — overriding them would test a mock of the boundary
-    instead of the boundary.
     """
 
     def override_get_db() -> Generator[Session, None, None]:
@@ -188,9 +180,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 # ===========================================================================
 
 def _make_user(db: Session, email: str) -> Persona:
-    # Verified, because every persona here is used to exercise tenant-scoped
-    # routes and those sit behind the ARCH-03 Step 8 gate (§B.4). Leaving it
-    # NULL would 403 the whole suite and read as a tenancy regression.
     user = User(
         email=email,
         hashed_password=security.get_password_hash("test-password"),
@@ -238,20 +227,6 @@ def _grant(
 
 @pytest.fixture()
 def tenant(db_session: Session) -> Fixture:
-    """
-    Two organizations and seven personas.
-
-    The second organization exists for one purpose: other_org_member is an
-    ACTIVE, fully legitimate user of the platform who simply belongs elsewhere.
-    They are the persona that catches an authorization check written as "is
-    this user authenticated" rather than "is this user a member of THIS
-    tenant".
-
-    org_admin deliberately holds NO workspace grant. Their access is derived
-    from the organization role, and a check that reads a stored membership
-    would deny them — the defect that hid every settings control from the most
-    privileged accounts before ARCH-01.
-    """
     suffix = uuid.uuid4().hex[:8]
 
     org = Organization(

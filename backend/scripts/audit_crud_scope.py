@@ -4,7 +4,6 @@ Automated isolation and workspace signature checker for FlowPilot AI CRUD layer.
 import os
 import sys
 
-# Insert parent directory of 'scripts' to python path to resolve 'app' module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import importlib
@@ -15,18 +14,19 @@ TENANT_MODULES = (
     "ai_settings", "email_settings", "document_settings",
 )
 
-# Explicit allowlist of pre-secured workspace scopes.
+# Explicit allowlist of pre-secured workspace scopes and organization-scoped queries.
 SCOPE_INHERITED = {
     "assistant.create_conversation_message": "conversation fetched under scope",
     "assistant.get_conversation_messages":   "conversation fetched under scope",
     "assistant.delete_conversation_messages":"conversation fetched under scope",
-    "assistant.update_conversation_title":   "conversation fetched under scope",  # Added
-    "assistant.delete_conversation":         "conversation fetched under scope",  # Added
+    "assistant.update_conversation_title":   "conversation fetched under scope",
+    "assistant.delete_conversation":         "conversation fetched under scope",
     "job.create_job":                        "work_item fetched under scope",
     "job.update_job":                        "job fetched under scope",
     "notification.update_notification_read_status":     "notification fetched under scope",
     "notification.update_notification_delivery_status": "notification fetched under scope",
     "notification.delete_notification":                 "notification fetched under scope",
+    "notification.list_organization_scoped_for_user":  "organization-scoped notifications query where workspace_id is null",
 }
 
 failures = []

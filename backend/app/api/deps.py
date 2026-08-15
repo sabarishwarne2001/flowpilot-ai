@@ -6,6 +6,7 @@ resolution chain.
 """
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Generator, Sequence, Union
@@ -47,6 +48,18 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
 
+_DENIAL_SUPPRESSION_CACHE: dict[tuple[uuid.UUID, uuid.UUID, str, str], float] = {}
+_DENIAL_SUPPRESSION_WINDOW = 60.0
+
+
+def _should_record_denial(key: tuple[uuid.UUID, uuid.UUID, str, str]) -> bool:
+    now = time.time()
+    last = _DENIAL_SUPPRESSION_CACHE.get(key)
+    if last is not None and (now - last) < _DENIAL_SUPPRESSION_WINDOW:
+        return False
+    _DENIAL_SUPPRESSION_CACHE[key] = now
+    return True
+
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -57,6 +70,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 async def get_current_user(
+    request: Request,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ) -> User:
@@ -66,13 +80,18 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # 1. API Key Token Authentication (ARCH-08 Step 9)
+    # 1. API Key Token Authentication (ARCH-08 Step 9, Step 11)
     if token and token.startswith(("fp_live_", "fp_test_")):
         res = api_key_service.authenticate_api_key_token(db, token=token)
         if res is None:
             raise credentials_exception
         key, membership = res
-        return membership.user
+        user = membership.user
+        # ARCH-08 Step 11: Wire request.state for rate limiter identity resolution
+        if request is not None:
+            request.state.user_id = user.id
+            request.state.api_key_id = key.id
+        return user
 
     # 2. Bearer JWT Session Authentication
     claims = security.decode_access_token_claims(token)
@@ -90,6 +109,10 @@ async def get_current_user(
             claims.jti,
         )
         raise credentials_exception
+
+    # ARCH-08 Step 11: Wire request.state.user_id for per-user rate limiters
+    if request is not None:
+        request.state.user_id = user.id
 
     return user
 

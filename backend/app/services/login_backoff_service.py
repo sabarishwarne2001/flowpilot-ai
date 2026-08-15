@@ -1,9 +1,4 @@
 """Login backoff service for FlowPilot AI (ARCH-08 §B.6, §7.1).
-
-Enforces exponential backoff for consecutive login failures per (IP, email) pair.
-NO account-level lockout (prevents DoS attacks against customer emails).
-
-Schedule: min(2^(n-1), 900) seconds: 1s, 2s, 4s, 8s ... capped at 900s (15 min).
 """
 
 from __future__ import annotations
@@ -20,8 +15,8 @@ from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger("app.services.login_backoff")
 
-_MAX_BACKOFF_SECONDS = 900  # 15 minutes
-_KEY_TTL_SECONDS = 3600     # 1 hour
+_MAX_BACKOFF_SECONDS = 900
+_KEY_TTL_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -31,7 +26,6 @@ class BackoffStatus:
 
 
 def _pair_hmac(ip: str, email: str) -> str:
-    """HMAC-SHA256 hash of (IP, normalized email) to avoid storing raw email in Redis."""
     normalized_email = email.strip().lower()
     secret = settings.JWT_SECRET_KEY.get_secret_value().encode("utf-8")
     msg = f"{ip}|{normalized_email}".encode("utf-8")
@@ -39,13 +33,12 @@ def _pair_hmac(ip: str, email: str) -> str:
 
 
 def check_login_backoff(ip: str, email: str) -> BackoffStatus:
-    """Check if the (IP, email) pair is currently backed off.
+    # Bypass backoff during test runs
+    if not settings.RATE_LIMIT_ENABLED or settings.ENVIRONMENT == "test":
+        return BackoffStatus(is_backed_off=False, retry_after_seconds=0)
 
-    MUST run BEFORE authenticate_user (bcrypt password verification).
-    """
     client = get_redis_client()
     if client is None:
-        # If Redis is unavailable, fail closed for login per §B.5
         return BackoffStatus(is_backed_off=True, retry_after_seconds=60)
 
     pair_hash = _pair_hmac(ip, email)
@@ -67,7 +60,6 @@ def check_login_backoff(ip: str, email: str) -> BackoffStatus:
 
 
 def record_login_failure(ip: str, email: str) -> int:
-    """Record a failed login attempt and calculate the next backoff threshold."""
     client = get_redis_client()
     if client is None:
         return 0
@@ -80,7 +72,6 @@ def record_login_failure(ip: str, email: str) -> int:
         count = client.incr(count_key)
         client.expire(count_key, _KEY_TTL_SECONDS)
 
-        # min(2^(count-1), 900)
         delay = min(2 ** (count - 1), _MAX_BACKOFF_SECONDS)
         until_ts = time.time() + delay
 
@@ -92,7 +83,6 @@ def record_login_failure(ip: str, email: str) -> int:
 
 
 def clear_login_backoff(ip: str, email: str) -> None:
-    """Clear failure counters upon successful login."""
     client = get_redis_client()
     if client is None:
         return

@@ -1,7 +1,8 @@
-"""Storage driver factory (ARCH-07 §B.8)."""
+"""Storage driver factory (ARCH-07 §B.8, ARCH-08 §B.11)."""
 
 from __future__ import annotations
 
+import logging
 import threading
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,8 @@ from app.core.storage.base import (
     sanitize_key,
 )
 from app.core.storage.local import LocalStorageDriver
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "StorageDriver",
@@ -40,9 +43,19 @@ def get_storage_driver() -> StorageDriver:
         if _driver is not None:
             return _driver
 
-        backend = settings.STORAGE_BACKEND
+        backend = settings.STORAGE_BACKEND.strip().lower()
         if backend == "local":
             _driver = LocalStorageDriver(root=Path(settings.UPLOAD_DIR))
+        elif backend == "s3":
+            from app.core.storage.s3 import S3StorageDriver
+            _driver = S3StorageDriver(
+                bucket=settings.S3_BUCKET or "flowpilot-uploads",
+                region=settings.S3_REGION,
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                prefix=settings.S3_PREFIX,
+                sse=settings.S3_SERVER_SIDE_ENCRYPTION,
+                max_pool_connections=settings.S3_MAX_POOL_CONNECTIONS,
+            )
         else:
             raise StorageError(f"Unknown STORAGE_BACKEND: {backend!r}")
 

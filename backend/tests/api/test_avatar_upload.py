@@ -1,17 +1,5 @@
 """
 ARCH-06 Step 7 — avatar upload and validated serving. Exit criteria E9–E11.
-
-Every assertion here was first proven directly against the real service and a
-live Postgres instance before this file was written; see
-STEP7-VERIFICATION-GATE.md for the captured output.
-
-WHY THE FIXTURES BUILD REAL IMAGES INSTEAD OF USING A CONSTANT BLOB
-----------------------------------------------------------------------
-Step 1b's suite used a hardcoded 1x1 PNG, which was correct then because
-nothing decoded it. Step 7 decodes everything, and a 1x1 image now fails
-`MIN_DIMENSION` — correctly. These fixtures generate real images with Pillow
-so the tests exercise the actual decode path rather than a byte string that
-happens to satisfy it.
 """
 
 from __future__ import annotations
@@ -33,13 +21,6 @@ def make_png(size: tuple[int, int] = (64, 64), colour=(10, 20, 30)) -> bytes:
 
 
 def make_jpeg_with_exif(marker: str = "SECRET-CAMERA-MAKE") -> bytes:
-    """
-    A JPEG carrying an identifiable EXIF tag.
-
-    EXIF on a phone photo routinely includes GPS. A user setting an avatar
-    should not thereby publish where they live, so the marker below stands in
-    for anything that must not survive the re-encode.
-    """
     buffer = io.BytesIO()
     image = Image.new("RGB", (64, 64), (1, 2, 3))
     exif = Image.Exif()
@@ -48,33 +29,32 @@ def make_jpeg_with_exif(marker: str = "SECRET-CAMERA-MAKE") -> bytes:
     return buffer.getvalue()
 
 
+def _get_avatar_files() -> list[Path]:
+    if not avatar_service.AVATAR_DIR.exists():
+        return []
+    return [p for p in avatar_service.AVATAR_DIR.rglob("*") if p.is_file()]
+
+
 @pytest.fixture(autouse=True)
 def clean_avatar_dir():
-    """
-    Removes files this test module wrote, in both directions.
-
-    Runs before as well as after: a previous failed run must not leave bytes
-    that make a later assertion about disk state pass for the wrong reason.
-    """
+    """Removes all files in AVATAR_DIR recursively before and after each test run."""
     def sweep():
-        for path in avatar_service.AVATAR_DIR.glob("*"):
-            if path.is_file():
-                path.unlink(missing_ok=True)
+        if avatar_service.AVATAR_DIR.exists():
+            for path in sorted(avatar_service.AVATAR_DIR.rglob("*"), reverse=True):
+                if path.is_file():
+                    path.unlink(missing_ok=True)
+                elif path.is_dir() and path != avatar_service.AVATAR_DIR:
+                    try:
+                        path.rmdir()
+                    except OSError:
+                        pass
 
     sweep()
     yield
     sweep()
 
 
-# ===========================================================================
-# E9 — the bytes are validated, not the header
-# ===========================================================================
-
 class TestE9MagicByteValidation:
-    """
-    A.2.2: `file.content_type` is whatever the client typed. These tests all
-    send a truthful-looking `image/png` header with untruthful bytes.
-    """
 
     @pytest.mark.parametrize(
         "label,payload",
@@ -96,16 +76,6 @@ class TestE9MagicByteValidation:
     def test_non_image_with_image_content_type_is_rejected(
         self, client, tenant, label, payload
     ):
-        """
-        E9. The `polyglot` case is the one that separates real validation from
-        a magic-number check: it opens with a genuine PNG signature and
-        carries a script payload after it.
-
-        The SVG case matters because A.2.2 named it specifically — "an SVG
-        variant would be immediately exploitable if .svg were ever added to
-        ALLOWED_TYPES". Pillow will not decode SVG, so it fails closed, but
-        the test pins that.
-        """
         response = client.post(
             "/api/v1/me/avatar",
             files={"file": ("avatar.png", payload, "image/png")},
@@ -115,18 +85,13 @@ class TestE9MagicByteValidation:
         assert response.status_code == 400, (
             f"{label} payload was accepted with a forged image/png header."
         )
-        assert list(avatar_service.AVATAR_DIR.glob("*")) == [], (
+        assert _get_avatar_files() == [], (
             f"{label} payload was written to disk before being rejected."
         )
 
     def test_a_real_image_with_a_wrong_header_is_still_accepted(
         self, client, tenant
     ):
-        """
-        The converse, and the reason this is validation rather than a
-        stricter header check: the header is not consulted AT ALL. A real PNG
-        mislabelled `application/octet-stream` is a real PNG.
-        """
         response = client.post(
             "/api/v1/me/avatar",
             files={
@@ -149,7 +114,7 @@ class TestE9MagicByteValidation:
         )
         assert response.status_code == 200
 
-        written = list(avatar_service.AVATAR_DIR.glob("*"))
+        written = _get_avatar_files()
         assert len(written) == 1
         assert b"SECRET-CAMERA-MAKE" not in written[0].read_bytes()
 
@@ -170,10 +135,6 @@ class TestE9MagicByteValidation:
         assert response.status_code == 401
 
 
-# ===========================================================================
-# E10 — cross-tenant isolation on read and delete
-# ===========================================================================
-
 class TestE10CrossTenantIsolation:
 
     @staticmethod
@@ -188,14 +149,6 @@ class TestE10CrossTenantIsolation:
     def test_foreign_tenant_member_cannot_read_an_avatar(
         self, client, tenant
     ):
-        """
-        E10, the load-bearing half.
-
-        `other_org_member` is a legitimate, ACTIVE platform user who simply
-        belongs to a different organization. 404 rather than 403 — a 403
-        would confirm the account exists, turning this route into a
-        membership oracle over arbitrary user ids.
-        """
         self._set_avatar(client, tenant.ws_admin)
 
         response = client.get(
@@ -207,13 +160,6 @@ class TestE10CrossTenantIsolation:
     def test_a_colleague_in_the_same_organization_can_read_it(
         self, client, tenant
     ):
-        """
-        The positive control, and the reason this route is not simply
-        owner-only. An avatar is meant to be seen by colleagues — a member
-        directory that 404s on every face is not isolation, it is a broken
-        feature. A test suite that only asserted refusals would pass on an
-        endpoint that refused everyone.
-        """
         self._set_avatar(client, tenant.ws_admin)
 
         response = client.get(
@@ -239,10 +185,6 @@ class TestE10CrossTenantIsolation:
         assert response.status_code == 404
 
     def test_unauthenticated_read_is_refused(self, client, tenant):
-        """
-        §B.7's whole point. Under the `StaticFiles` mount this replaces, an
-        avatar's bytes were reachable by anyone who knew or guessed the URL.
-        """
         self._set_avatar(client, tenant.ws_admin)
 
         response = client.get(
@@ -251,15 +193,8 @@ class TestE10CrossTenantIsolation:
         assert response.status_code == 401
 
     def test_delete_only_ever_affects_the_caller(self, client, tenant):
-        """
-        There is no route that deletes another user's avatar — DELETE is
-        `/me/avatar` and resolves its target from the token, so a
-        cross-tenant delete is not expressible as a request. This test pins
-        that property by confirming a foreign caller's delete leaves the
-        victim's avatar intact rather than merely returning an error code.
-        """
         self._set_avatar(client, tenant.ws_admin)
-        before = list(avatar_service.AVATAR_DIR.glob("*"))
+        before = _get_avatar_files()
         assert len(before) == 1
 
         response = client.delete(
@@ -267,7 +202,7 @@ class TestE10CrossTenantIsolation:
         )
         assert response.status_code == 404
 
-        assert list(avatar_service.AVATAR_DIR.glob("*")) == before
+        assert _get_avatar_files() == before
         assert (
             client.get(
                 f"/api/v1/users/{tenant.ws_admin.user.id}/avatar",
@@ -277,21 +212,9 @@ class TestE10CrossTenantIsolation:
         )
 
 
-# ===========================================================================
-# E11 — replacing an avatar removes the previous file
-# ===========================================================================
-
 class TestE11ReplacementCleansUp:
 
     def test_replacing_unlinks_the_previous_file(self, client, tenant):
-        """
-        E11, asserted on the filesystem rather than on the response.
-
-        A.2.3: "Replacing a workspace logo writes a new file and abandons the
-        old one." The single-file assertion is what catches a regression to
-        that behaviour — a version that wrote the new file and left the old
-        one would pass any check that only looked at the pointer.
-        """
         first = client.post(
             "/api/v1/me/avatar",
             files={"file": ("a.png", make_png(colour=(10, 20, 30)), "image/png")},
@@ -300,7 +223,7 @@ class TestE11ReplacementCleansUp:
         assert first.status_code == 200
         first_id = first.json()["file_id"]
 
-        on_disk = list(avatar_service.AVATAR_DIR.glob("*"))
+        on_disk = _get_avatar_files()
         assert len(on_disk) == 1
         original_path: Path = on_disk[0]
 
@@ -313,7 +236,7 @@ class TestE11ReplacementCleansUp:
         assert second.json()["file_id"] != first_id
 
         assert not original_path.exists(), "The previous avatar was abandoned."
-        assert len(list(avatar_service.AVATAR_DIR.glob("*"))) == 1
+        assert len(_get_avatar_files()) == 1
 
     def test_deleting_removes_the_file_and_the_pointer(self, client, tenant):
         client.post(
@@ -321,13 +244,13 @@ class TestE11ReplacementCleansUp:
             files={"file": ("a.png", make_png(), "image/png")},
             headers=tenant.ws_admin.headers,
         )
-        assert len(list(avatar_service.AVATAR_DIR.glob("*"))) == 1
+        assert len(_get_avatar_files()) == 1
 
         response = client.delete(
             "/api/v1/me/avatar", headers=tenant.ws_admin.headers
         )
         assert response.status_code == 204
-        assert list(avatar_service.AVATAR_DIR.glob("*")) == []
+        assert _get_avatar_files() == []
 
         assert (
             client.get(
@@ -344,24 +267,11 @@ class TestE11ReplacementCleansUp:
         assert response.status_code == 404
 
 
-# ===========================================================================
-# §B.7 — the response headers are the security property
-# ===========================================================================
-
 class TestB7ServingHeaders:
 
     def test_streamed_avatar_carries_the_validated_type_and_nosniff(
         self, client, tenant
     ):
-        """
-        §B.7. `nosniff` is what stops a browser overriding Content-Type by
-        inspecting content — A.2.2 describes the unmitigated version as "one
-        same-origin serving decision away from stored XSS".
-
-        The Content-Type assertion matters because it comes from the stored,
-        validated MIME rather than from the file extension, which is what the
-        `StaticFiles` mount this route replaces used.
-        """
         client.post(
             "/api/v1/me/avatar",
             files={"file": ("weird-name.bin", make_png(), "text/plain")},
@@ -380,10 +290,6 @@ class TestB7ServingHeaders:
         assert "private" in response.headers.get("cache-control", "")
 
     def test_response_does_not_leak_the_storage_path(self, client, tenant):
-        """
-        The upload response carries metadata only. Publishing a storage key
-        would reintroduce the guessable-URL surface §B.7 closes.
-        """
         response = client.post(
             "/api/v1/me/avatar",
             files={"file": ("a.png", make_png(), "image/png")},

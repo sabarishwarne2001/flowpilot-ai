@@ -1,5 +1,5 @@
 """
-ARCH-07 Step 4 — E7, E8, E9 plus filtering and pagination test suite.
+ARCH-07 Step 4, ARCH-08 Step 2 — E7, E8, E9 plus filtering and keyset pagination test suite.
 """
 
 from __future__ import annotations
@@ -38,10 +38,6 @@ def seed_audit_row(db_session, tenant):
     db_session.refresh(entry)
     return entry
 
-
-# ===========================================================================
-# E7 — the trigger
-# ===========================================================================
 
 class TestAuditLogImmutability:
 
@@ -104,10 +100,6 @@ class TestAuditLogImmutability:
         assert "trg_audit_logs_no_truncate" in rows
 
 
-# ===========================================================================
-# E8 / E9 — tenant isolation on the read API
-# ===========================================================================
-
 class TestAuditReadIsolation:
 
     def test_returns_only_callers_organization(self, client, db_session, tenant):
@@ -168,10 +160,6 @@ class TestAuditReadIsolation:
         response = client.get(f"/api/v1/organizations/{tenant.organization.id}/audit-logs")
         assert response.status_code == 401
 
-
-# ===========================================================================
-# Filtering and pagination
-# ===========================================================================
 
 class TestAuditReadFiltering:
 
@@ -270,7 +258,7 @@ class TestAuditReadFiltering:
 
 class TestAuditReadPagination:
 
-    def test_offset_paging_does_not_repeat_or_skip(self, client, db_session, tenant):
+    def test_keyset_cursor_paging_does_not_repeat_or_skip(self, client, db_session, tenant):
         for i in range(5):
             audit_service.record(
                 db_session,
@@ -281,25 +269,37 @@ class TestAuditReadPagination:
             )
         db_session.commit()
 
-        first = client.get(
+        first_res = client.get(
             f"/api/v1/organizations/{tenant.organization.id}/audit-logs",
-            params={"limit": 2, "offset": 0},
+            params={"limit": 2},
             headers=tenant.org_admin.headers,
-        ).json()
-        second = client.get(
+        )
+        assert first_res.status_code == 200
+        first = first_res.json()
+        assert "next_cursor" in first
+        next_cursor = first["next_cursor"]
+
+        second_res = client.get(
             f"/api/v1/organizations/{tenant.organization.id}/audit-logs",
-            params={"limit": 2, "offset": 2},
+            params={"limit": 2, "cursor": next_cursor},
             headers=tenant.org_admin.headers,
-        ).json()
+        )
+        assert second_res.status_code == 200
+        second = second_res.json()
 
         first_ids = {item["id"] for item in first["items"]}
         second_ids = {item["id"] for item in second["items"]}
         assert not (first_ids & second_ids)
 
+    def test_offset_parameter_returns_422_tombstone(self, client, tenant):
+        res = client.get(
+            f"/api/v1/organizations/{tenant.organization.id}/audit-logs",
+            params={"offset": 2},
+            headers=tenant.org_admin.headers,
+        )
+        assert res.status_code == 422
+        assert "offset pagination was removed" in res.json()["detail"]
 
-# ===========================================================================
-# Write semantics
-# ===========================================================================
 
 class TestAuditWriteSemantics:
 
@@ -317,10 +317,8 @@ class TestAuditWriteSemantics:
         assert db_session.query(AuditLog).count() == before
 
     def test_independent_write_survives_rollback(self, db_session, tenant):
-        # 1. Create a savepoint for the business transaction
         sp = db_session.begin_nested()
 
-        # 2. Record independent write using db_session's connection
         entry_id = audit_service.record_independently(
             db_session,
             organization_id=tenant.organization.id,
@@ -331,10 +329,8 @@ class TestAuditWriteSemantics:
         )
         assert entry_id is not None
 
-        # 3. Roll back the business transaction savepoint
         sp.rollback()
 
-        # 4. Verify independent entry persisted on the connection
         persisted = db_session.get(AuditLog, entry_id)
         assert persisted is not None
         assert persisted.details["outcome"] == "DENIED"

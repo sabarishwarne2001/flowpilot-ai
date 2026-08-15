@@ -1,4 +1,4 @@
-"""Rate limit policy models (ARCH-08 §B.5, §6.6)."""
+"""Rate limit policy models (ARCH-08 §B.5, §6.6, §11.3)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from enum import Enum
 
 
 class FailureMode(str, Enum):
-    FAIL_OPEN = "FAIL_OPEN"      # Backend error -> allow request, log warning
-    FAIL_CLOSED = "FAIL_CLOSED"  # Backend error -> HTTP 503 Service Unavailable
+    FAIL_OPEN = "FAIL_OPEN"
+    FAIL_CLOSED = "FAIL_CLOSED"
 
 
 class RateLimitScope(str, Enum):
@@ -29,7 +29,6 @@ class RateLimitPolicy:
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
 
 
-# Standard Policy Definitions
 POLICY_GLOBAL_IP = RateLimitPolicy(
     name="global_ip",
     scope=RateLimitScope.GLOBAL_IP,
@@ -51,7 +50,7 @@ POLICY_LOGIN_IP = RateLimitPolicy(
     scope=RateLimitScope.LOGIN_IP,
     limit=20,
     window_seconds=300,
-    failure_mode=FailureMode.FAIL_CLOSED,  # Credential endpoint fails closed
+    failure_mode=FailureMode.FAIL_CLOSED,
 )
 
 POLICY_CREDENTIAL_OPS = RateLimitPolicy(
@@ -68,4 +67,12 @@ POLICY_AUDIT_EXPORT = RateLimitPolicy(
     limit=5,
     window_seconds=3600,
     failure_mode=FailureMode.FAIL_CLOSED,
+)
+
+POLICY_API_KEY_DEFAULT = RateLimitPolicy(
+    name="api_key_default",
+    scope=RateLimitScope.API_KEY,
+    limit=600,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_OPEN,
 )

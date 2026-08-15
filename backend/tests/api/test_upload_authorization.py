@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.organization import OrganizationMember, OrganizationRole
 from app.models.uploaded_file import UploadedFile
 from app.models.workspace import Workspace
 
@@ -33,13 +34,24 @@ _PNG_BYTES = bytes.fromhex(
 
 def _write_logo(db: Session, workspace: Workspace) -> UploadedFile:
     filename = f"logos/{uuid.uuid4().hex}.png"
+
+    owner_member = (
+        db.query(OrganizationMember)
+        .filter(
+            OrganizationMember.organization_id == workspace.organization_id,
+            OrganizationMember.role == OrganizationRole.OWNER,
+        )
+        .first()
+    )
+    owner_id = owner_member.user_id if owner_member else workspace.organization.members[0].user_id
+
     record = UploadedFile(
         file_path=filename,
         original_filename="logo.png",
         mime_type="image/png",
         file_size=len(_PNG_BYTES),
         checksum_sha256="dummychecksum",
-        owner_id=workspace.organization.owner_id,
+        owner_id=owner_id,
         organization_id=workspace.organization_id,
         workspace_id=workspace.id,
     )
@@ -155,18 +167,15 @@ class TestLegitimateDeletion:
 class TestUploadAuthorization:
 
     @staticmethod
-    def _post(client: TestClient, workspace_id, headers: dict):
+    def _post(client: TestClient, workspace_id, headers: dict = None):
         return client.post(
-            "/api/v1/logo",
+            f"/api/v1/workspaces/{workspace_id}/upload/logo",
             files={"file": ("logo.png", _PNG_BYTES, "image/png")},
-            headers=headers,
+            headers=headers or {},
         )
 
     def test_unauthenticated_cannot_upload(
         self, client: TestClient, tenant
     ) -> None:
-        response = client.post(
-            "/api/v1/logo",
-            files={"file": ("logo.png", _PNG_BYTES, "image/png")},
-        )
+        response = self._post(client, tenant.workspace.id)
         assert response.status_code == 401

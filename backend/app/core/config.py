@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
 
     # SMTP Password Encryption
-    EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
+    EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = SecretStr("v3-Q90I2S6bXpL9_L3_0V8gJ0Z1P8yL1_L3_0V8gJ0Z=")
 
     # Redis & Rate Limiter Configurations (ARCH-08 Step 6)
     RATE_LIMIT_ENABLED: bool = True

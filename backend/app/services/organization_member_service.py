@@ -226,7 +226,6 @@ def deactivate_member(
             )
         )
 
-        # ARCH-08 Step 10 (§B.3): Revoke all API keys issued by target member in SAME transaction
         revoked_keys = api_key_crud.revoke_keys_for_issuer(
             db,
             organization_id=organization.id,
@@ -293,6 +292,11 @@ def leave_organization(
     membership: OrganizationMember,
     request: Any = None,
 ) -> OrganizationMember:
+    lock_organization_for_owner_change(
+        db,
+        organization_id=organization.id,
+        refresh=(membership,),
+    )
     return deactivate_member(
         db,
         organization=organization,

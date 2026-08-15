@@ -1,25 +1,5 @@
 """
 ARCH-05 Step 1 — owner-set locking. The verification gate for A.2.1.
-
-Four things are asserted here, and they fail for four different reasons:
-
-  1. test_a21_reproduction_*        — the reported interleaving, end to end.
-                                      Fails before the fix; passes after.
-  2. test_every_owner_set_mutation_* — one parametrisation per call site, so
-                                      "the lock was added to three of the four"
-                                      (§D R2) is a failing test rather than a
-                                      code review someone has to remember to do.
-  3. test_the_lock_is_the_first_statement_* — a refactor that keeps the call
-                                      but moves it below a role read passes (2)
-                                      and fails here.
-  4. test_for_update_appears_only_* — a second FOR UPDATE anywhere reintroduces
-                                      the lock-ordering question §D R3 is
-                                      currently free of.
-
-These do NOT use the `db_session` fixture. That fixture wraps everything in one
-outer transaction that is rolled back, so two sessions bound to it would be one
-PostgreSQL backend and no lock could ever contend. Every session here is a real
-connection against committed rows, and the tenant fixture cleans up explicitly.
 """
 
 from __future__ import annotations
@@ -48,7 +28,6 @@ from app.models.organization import (
 from app.models.user import User
 from app.services import organization_member_service as member_service
 
-# tests/conftest.py repoints this at the migrated test database at import time.
 from tests.conftest import TEST_DB_URL
 
 SERVICE_PATH = pathlib.Path("app/services/organization_member_service.py")
@@ -61,14 +40,8 @@ LOCKED_CALL_SITES = (
 )
 
 
-# ===========================================================================
-# Fixtures
-# ===========================================================================
-
 @dataclass(frozen=True)
 class Tenant:
-    """Identifiers only. ORM objects are loaded per session, as requests do."""
-
     organization_id: uuid.UUID
     owner_user_id: uuid.UUID
     member_user_id: uuid.UUID
@@ -78,13 +51,6 @@ class Tenant:
 
 @pytest.fixture(scope="module")
 def concurrency_engine(test_database) -> Generator:
-    """
-    NullPool so every connect() is a distinct PostgreSQL backend.
-
-    Pooled connections would let two "concurrent" sessions land on the same
-    backend, where a row lock is always immediately available and every
-    assertion below would pass for the wrong reason.
-    """
     engine = create_engine(TEST_DB_URL, poolclass=NullPool)
     yield engine
     engine.dispose()
@@ -97,10 +63,6 @@ def sessions(concurrency_engine):
 
 @pytest.fixture()
 def tenant(concurrency_engine, sessions) -> Generator[Tenant, None, None]:
-    """
-    A committed organization with exactly one active owner, A, and one member,
-    B. This is the shape A.2.1's table describes.
-    """
     setup: Session = sessions()
     suffix = uuid.uuid4().hex[:8]
     now = datetime.now(timezone.utc)
@@ -157,6 +119,11 @@ def tenant(concurrency_engine, sessions) -> Generator[Tenant, None, None]:
     yield record
 
     cleanup: Session = sessions()
+    cleanup.execute(text("ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable;"))
+    cleanup.execute(
+        text("DELETE FROM audit_logs WHERE organization_id = :org"),
+        {"org": record.organization_id},
+    )
     cleanup.execute(
         text("DELETE FROM organization_members WHERE organization_id = :org"),
         {"org": record.organization_id},
@@ -169,6 +136,7 @@ def tenant(concurrency_engine, sessions) -> Generator[Tenant, None, None]:
         text("DELETE FROM users WHERE id IN (:owner, :member)"),
         {"owner": record.owner_user_id, "member": record.member_user_id},
     )
+    cleanup.execute(text("ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable;"))
     cleanup.commit()
     cleanup.close()
 
@@ -185,47 +153,23 @@ def _active_owners(db: Session, organization_id: uuid.UUID) -> int:
     ).scalar_one()
 
 
-# ===========================================================================
-# 0. The assumption the whole analysis rests on
-# ===========================================================================
-
 def test_the_database_is_read_committed(sessions):
-    """
-    A.2.1 is a READ COMMITTED phenomenon. If someone raises the isolation
-    level globally, the reproduction below stops reproducing and this test
-    says why rather than leaving a silently vacuous suite behind.
-    """
     db: Session = sessions()
     level = db.execute(text("SHOW transaction_isolation")).scalar_one()
     db.close()
     assert level == "read committed", level
 
 
-# ===========================================================================
-# 1. The reproduction
-# ===========================================================================
-
 def test_a21_reproduction_leave_cannot_strand_the_organization(
     sessions, tenant
 ):
-    """
-    A.2.1, on two real connections.
+    t2: Session = sessions()
+    t1: Session = sessions()
 
-    The load-bearing detail is the order of the reads. T2 resolves B's
-    membership BEFORE T1 commits, exactly as get_organization_context does
-    before any route handler body runs. A lock taken afterwards serializes T2
-    correctly and still decides from that stale role unless the membership is
-    refreshed under the lock — which is why the helper does both.
-    """
-    t2: Session = sessions()  # B's request: leave the organization
-    t1: Session = sessions()  # A's request: transfer ownership to B
-
-    # --- T2, step 4 of the table: the stale read -----------------------
     organization_t2 = t2.get(Organization, tenant.organization_id)
     membership_b_t2 = t2.get(OrganizationMember, tenant.member_membership_id)
     assert membership_b_t2.role is OrganizationRole.MEMBER
 
-    # --- T1, steps 1-3 and 7: transfer, then commit ---------------------
     member_service.transfer_ownership(
         t1,
         organization=t1.get(Organization, tenant.organization_id),
@@ -238,7 +182,6 @@ def test_a21_reproduction_leave_cannot_strand_the_organization(
     )
     t1.close()
 
-    # --- T2, steps 5, 6 and 8: proceed from the pre-transfer view -------
     with pytest.raises(LastOwnerError):
         member_service.leave_organization(
             t2, organization=organization_t2, membership=membership_b_t2
@@ -254,11 +197,6 @@ def test_a21_reproduction_leave_cannot_strand_the_organization(
 def test_a21_reproduction_role_change_cannot_strand_the_organization(
     sessions, tenant
 ):
-    """
-    The same shape on change_member_role, which A.2.1's closing paragraph
-    names. A demotes B to MEMBER from a view of the world in which A is still
-    the owner and B is not.
-    """
     t2: Session = sessions()
     t1: Session = sessions()
 
@@ -279,9 +217,6 @@ def test_a21_reproduction_role_change_cannot_strand_the_organization(
     )
     t1.close()
 
-    # A is an ADMIN now and no longer outranks B, so the refreshed roles must
-    # produce a permission refusal rather than a successful demotion of the
-    # organization's only owner.
     with pytest.raises(Exception) as excinfo:
         member_service.change_member_role(
             t2,
@@ -302,23 +237,10 @@ def test_a21_reproduction_role_change_cannot_strand_the_organization(
     audit.close()
 
 
-# ===========================================================================
-# 2. One assertion per call site — §D R2
-# ===========================================================================
-
 @pytest.mark.parametrize("call_site", LOCKED_CALL_SITES)
 def test_every_owner_set_mutation_takes_the_organization_lock(
     concurrency_engine, sessions, tenant, call_site
 ):
-    """
-    An external connection holds the organizations row. Every owner-set
-    mutation must therefore block, and with lock_timeout set it must fail
-    rather than proceed.
-
-    A call site that skipped the lock would not block. It would run to
-    completion and this test would fail with "DID NOT RAISE" — naming the
-    unlocked function in the parametrisation id.
-    """
     blocker = concurrency_engine.connect()
     blocking_tx = blocker.begin()
     blocker.execute(
@@ -369,10 +291,6 @@ def test_every_owner_set_mutation_takes_the_organization_lock(
         blocker.close()
 
 
-# ===========================================================================
-# 3. Structural guards — the lock cannot drift out of position
-# ===========================================================================
-
 def _first_statement(node: ast.FunctionDef) -> ast.stmt:
     body = node.body
     if (
@@ -386,10 +304,6 @@ def _first_statement(node: ast.FunctionDef) -> ast.stmt:
 
 
 def test_the_lock_is_the_first_statement_of_every_owner_set_mutation():
-    """
-    §C Step 1 says "called as the first statement". Below a role read it is
-    decoration: the stale value has already been used.
-    """
     tree = ast.parse(SERVICE_PATH.read_text(encoding="utf-8"))
     observed: dict[str, bool] = {}
 
@@ -409,10 +323,6 @@ def test_the_lock_is_the_first_statement_of_every_owner_set_mutation():
 
 
 def test_for_update_appears_only_in_the_lock_helper():
-    """
-    §D R3 holds because there is exactly one lock and therefore no ordering to
-    get wrong. A second one anywhere in app/ invalidates that reasoning.
-    """
     offenders = [
         str(path).replace("\\", "/")
         for path in pathlib.Path("app").rglob("*.py")
@@ -425,10 +335,6 @@ def test_for_update_appears_only_in_the_lock_helper():
     )
     assert occurrences == 1, occurrences
 
-
-# ===========================================================================
-# 4. The happy paths the lock must not have broken
-# ===========================================================================
 
 def test_uncontended_transfer_still_succeeds(sessions, tenant):
     db: Session = sessions()
@@ -450,7 +356,6 @@ def test_uncontended_transfer_still_succeeds(sessions, tenant):
 def test_a_non_last_owner_can_still_leave(sessions, tenant):
     db: Session = sessions()
 
-    # Promote B alongside A so the organization has two active owners.
     membership_b = db.get(OrganizationMember, tenant.member_membership_id)
     membership_b.role = OrganizationRole.OWNER
     db.commit()

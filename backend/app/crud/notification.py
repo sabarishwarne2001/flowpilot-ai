@@ -2,7 +2,7 @@
 Database operations layer for Notifications in FlowPilot AI.
 
 ARCH-07 Step 10: Preserves all 7 existing CRUD functions and adds
-list_organization_scoped_for_user (E20 - workspace_id IS NULL filter).
+list_organization_scoped_for_user.
 """
 
 import uuid
@@ -83,15 +83,12 @@ def list_organization_scoped_for_user(
     *,
     organization_id: uuid.UUID,
     user_id: uuid.UUID,
+    workspace_id: uuid.UUID | None = None,
     is_read: bool | None = None,
     limit: int = 25,
     offset: int = 0,
 ) -> tuple[list[Notification], int, int]:
-    """Return the caller's ORGANIZATION-SCOPED notifications, newest first.
-
-    E20: workspace_id IS NULL filter prevents double-listing workspace notifications
-    in the organization feed.
-    """
+    """Return the caller's ORGANIZATION-SCOPED notifications, newest first."""
     base = select(Notification).where(
         Notification.organization_id == organization_id,
         Notification.user_id == user_id,

@@ -1,22 +1,5 @@
 """
 ARCH-05 Step 1.5 — accept_invitation as a writer of the owner set.
-
-The fifth call site. Everything in test_owner_set_concurrency.py covers the
-four functions named in §C Step 1; this module covers the one the R2 audit
-turned up in organization_invitation_service, which reaches an ownerless
-organization with no concurrency at all:
-
-    1. Alice is DEACTIVATED from the organization.
-    2. An owner invites alice@ as ADMIN. Permitted — the already-member guard
-       at issuance exempts DEACTIVATED.
-    3. Before she accepts, Alice is reactivated and ownership is transferred
-       to her. She is OWNER/ACTIVE; the previous owner is ADMIN.
-    4. Alice opens her still-PENDING invitation and accepts.
-    5. Without the fix, her role is overwritten with ADMIN and the tenant has
-       no active owner.
-
-Shares the concurrency fixtures' approach for the same reason: committed rows
-on real connections, because the lock assertion needs two backends.
 """
 
 from __future__ import annotations
@@ -75,10 +58,6 @@ def sessions(engine_):
 
 @pytest.fixture()
 def scene(sessions) -> Generator[Scene, None, None]:
-    """
-    Steps 1-3 of the sequence above, committed: Alice holds OWNER/ACTIVE and a
-    PENDING invitation at ADMIN, and she is the organization's only owner.
-    """
     db: Session = sessions()
     suffix = uuid.uuid4().hex[:8]
     now = datetime.now(timezone.utc)
@@ -109,7 +88,6 @@ def scene(sessions) -> Generator[Scene, None, None]:
     db.add_all([founder, alice])
     db.flush()
 
-    # Step 3 already applied: ownership moved to Alice, founder demoted.
     founder_membership = OrganizationMember(
         organization_id=organization.id,
         user_id=founder.id,
@@ -125,8 +103,6 @@ def scene(sessions) -> Generator[Scene, None, None]:
     db.add_all([founder_membership, alice_membership])
     db.flush()
 
-    # Step 2's invitation, issued while Alice was still deactivated and never
-    # opened. ADMIN, because OWNER cannot be invited at all.
     token = generate_secure_token()
     invitation = OrganizationInvitation(
         organization_id=organization.id,
@@ -154,6 +130,11 @@ def scene(sessions) -> Generator[Scene, None, None]:
     yield record
 
     cleanup: Session = sessions()
+    cleanup.execute(text("ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_logs_immutable;"))
+    cleanup.execute(
+        text("DELETE FROM audit_logs WHERE organization_id = :o"),
+        {"o": record.organization_id},
+    )
     cleanup.execute(
         text("DELETE FROM organization_invitations WHERE organization_id = :o"),
         {"o": record.organization_id},
@@ -170,6 +151,7 @@ def scene(sessions) -> Generator[Scene, None, None]:
         text("DELETE FROM users WHERE id IN (:a, :b)"),
         {"a": record.owner_user_id, "b": record.alice_user_id},
     )
+    cleanup.execute(text("ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_logs_immutable;"))
     cleanup.commit()
     cleanup.close()
 
@@ -185,10 +167,6 @@ def _active_owners(db: Session, organization_id: uuid.UUID) -> int:
         )
     ).scalar_one()
 
-
-# ===========================================================================
-# The defect
-# ===========================================================================
 
 def test_accepting_an_invitation_does_not_demote_an_active_owner(
     sessions, scene
@@ -210,12 +188,6 @@ def test_accepting_an_invitation_does_not_demote_an_active_owner(
 
 
 def test_the_returned_role_reports_what_was_written(sessions, scene):
-    """
-    Not cosmetic. AcceptedInvitation.organization_role feeds both the API
-    response and the acceptance notice to the inviter; returning the
-    invitation's ADMIN would tell two audiences about a demotion that did not
-    happen.
-    """
     db: Session = sessions()
     alice = db.get(User, scene.alice_user_id)
     result = invitation_service.accept_invitation(
@@ -226,10 +198,6 @@ def test_the_returned_role_reports_what_was_written(sessions, scene):
 
 
 def test_the_invitation_is_still_marked_accepted(sessions, scene):
-    """
-    Preserving the role must not turn into refusing the invitation. Alice did
-    accept; the seat and grants are provisioned and the token is spent.
-    """
     db: Session = sessions()
     alice = db.get(User, scene.alice_user_id)
     invitation_service.accept_invitation(db, token=scene.token, actor=alice)
@@ -244,20 +212,7 @@ def test_the_invitation_is_still_marked_accepted(sessions, scene):
     db.close()
 
 
-# ===========================================================================
-# The lock
-# ===========================================================================
-
 def test_accept_invitation_takes_the_organization_lock(engine_, sessions, scene):
-    """
-    R2, extended to the fifth call site. An external connection holds the
-    organizations row; acceptance must block on it rather than proceed.
-
-    Position matters as much as presence: the lock is taken before the seat
-    check and therefore before any organization_members row is touched. Taken
-    afterwards it would form a cycle with the four functions that take the
-    organizations row first and write member rows second.
-    """
     blocker = engine_.connect()
     blocking_tx = blocker.begin()
     blocker.execute(
@@ -282,15 +237,7 @@ def test_accept_invitation_takes_the_organization_lock(engine_, sessions, scene)
         blocker.close()
 
 
-# ===========================================================================
-# The ordinary path is unchanged
-# ===========================================================================
-
 def test_a_non_owner_still_receives_the_invited_role(sessions, scene):
-    """
-    The guard is narrow by design: it fires only for an ACTIVE OWNER. Demote
-    Alice first and acceptance must apply ADMIN exactly as it always did.
-    """
     db: Session = sessions()
 
     membership = db.get(OrganizationMember, scene.alice_membership_id)
@@ -314,15 +261,6 @@ def test_a_non_owner_still_receives_the_invited_role(sessions, scene):
 
 
 def test_a_deactivated_owner_row_is_not_silently_reinstated(sessions, scene):
-    """
-    The guard checks status as well as role, and this is why.
-
-    A DEACTIVATED OWNER row is the A.2.1 corruption shape. Preserving OWNER
-    there would reinstate ownership to someone who had been removed — a worse
-    surprise than the demotion the guard exists to prevent — and it cannot
-    strand the tenant, because a deactivated owner was never counted among the
-    active ones.
-    """
     db: Session = sessions()
 
     alice_membership = db.get(OrganizationMember, scene.alice_membership_id)

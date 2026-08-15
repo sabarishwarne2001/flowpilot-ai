@@ -1,5 +1,9 @@
 """
 Audit trail write service for FlowPilot AI (ARCH-07 §B.2 Option C, ARCH-08 §B.1, §B.7 Option C).
+
+Provides two entry points:
+- record(db, ...): flushes into the caller's active transaction (caller commits).
+- record_independently([db], ...): uses an independent session for denials that survive rollbacks.
 """
 
 from __future__ import annotations
@@ -230,7 +234,7 @@ def record_independently(
     resource_type: ResourceTypeLike,
     resource_id: Optional[uuid.UUID] = None,
     action: ActionLike,
-    outcome: OutcomeLike,
+    outcome: OutcomeLike = AuditOutcome.DENIED,
     details: Optional[Mapping[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
@@ -255,31 +259,29 @@ def record_independently(
         return None
 
     if db is not None:
+        session = Session(bind=db.get_bind())
         try:
-            db.add(entry)
-            db.flush([entry])
+            session.add(entry)
+            session.commit()
             return entry.id
         except SQLAlchemyError:
             logger.exception("audit_service: independent audit write (bound) FAILED")
+            session.rollback()
             return None
+        finally:
+            session.close()
 
-    session: Optional[Session] = None
+    session = SessionLocal()
     try:
-        session = SessionLocal()
         session.add(entry)
         session.commit()
         return entry.id
     except SQLAlchemyError:
         logger.exception("audit_service: independent audit write FAILED")
-        if session is not None:
-            try:
-                session.rollback()
-            except SQLAlchemyError:
-                pass
+        session.rollback()
         return None
     finally:
-        if session is not None:
-            session.close()
+        session.close()
 
 
 def context_from_request(request: Any) -> dict[str, Optional[str]]:
