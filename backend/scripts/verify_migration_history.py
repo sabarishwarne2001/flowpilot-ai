@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Migration history integrity — replay the DDL graph statically and prove that
+r"""Migration history integrity — replay the DDL graph statically and prove that
 every table is created before it is touched.
 
     python scripts/verify_migration_history.py
@@ -8,44 +8,6 @@ every table is created before it is touched.
 
 Exit 0 = history is replayable on an empty database, 1 = it is not, 2 = could
 not run.
-
-What this catches, and why it exists
-------------------------------------
-A migration chain has an invariant that nothing in Alembic enforces:
-
-    for every DDL operation on table T at revision N,
-    some revision M < N must have created T, and no revision between
-    M and N may have dropped it.
-
-Violate that and the chain still "works" on any database that was migrated
-*before* the violation was introduced -- because those databases already have
-the table -- while failing on every fresh database with
-`UndefinedTable: relation "T" does not exist`. Development databases are, by
-definition, always the former. CI and new environments are always the latter.
-
-This is exactly the failure mode that hides a deleted revision: removing a
-migration that CREATE'd a table leaves every later ALTER and the eventual DROP
-pointing at nothing, and no existing database notices.
-
-Method
-------
-Parse each revision file with `ast` (never import it -- migrations have side
-effects and import-time dependencies). Order by walking `down_revision` from
-the root. Replay a symbolic table set: `create_table` adds, `drop_table`
-removes, `rename_table` moves. Every other table-targeting operation asserts
-membership.
-
-Limitations, stated rather than hidden
---------------------------------------
-* Raw `op.execute("...")` is matched by regex for CREATE/DROP/ALTER TABLE.
-  Dynamically built SQL strings are not resolvable statically and are
-  reported as UNRESOLVED rather than silently ignored.
-* Conditional DDL (`if <cond>: op.add_column(...)`) is treated as
-  unconditional. That is deliberate: a guard means the migration does
-  different things on different databases, which is the property this script
-  exists to discourage. Guarded operations are reported separately as GUARDED
-  so you can see how much of the chain has become state-dependent.
-* Tables created outside Alembic (PostGIS, extensions) need `--seed-tables`.
 """
 
 from __future__ import annotations
@@ -59,19 +21,17 @@ from typing import Optional
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# op.<name>(...) → index of the positional arg holding the table name,
-# or the keyword that holds it.
 _TABLE_ARG_POS: dict[str, int] = {
     "add_column": 0,
     "alter_column": 0,
     "drop_column": 0,
-    "create_index": 1,          # (index_name, table_name, cols)
+    "create_index": 1,
     "create_unique_constraint": 1,
     "create_check_constraint": 1,
     "create_primary_key": 1,
-    "drop_constraint": 1,       # (constraint_name, table_name)
-    "create_foreign_key": 1,    # (name, source_table, referent_table, ...)
-    "bulk_insert": None,        # table object, not a name — skipped
+    "drop_constraint": 1,
+    "create_foreign_key": 1,
+    "bulk_insert": None,
 }
 _TABLE_KW: dict[str, str] = {
     "drop_index": "table_name",
@@ -135,8 +95,6 @@ def _parse_revisions(versions_dir: pathlib.Path) -> dict[str, Revision]:
 
 
 def _order(revs: dict[str, Revision]) -> tuple[list[Revision], list[str]]:
-    """Linearise by walking children from the root. Reports problems rather
-    than raising, so a broken graph still yields a partial report."""
     problems: list[str] = []
     children: dict[Optional[str], list[str]] = {}
     for rev in revs.values():
@@ -186,7 +144,6 @@ def _find_upgrade(tree: ast.AST) -> Optional[ast.FunctionDef]:
 
 
 def _guarded_lines(fn: ast.FunctionDef) -> set[int]:
-    """Line numbers of statements nested inside an `if` or `try`."""
     guarded: set[int] = set()
     for node in ast.walk(fn):
         if isinstance(node, (ast.If, ast.Try)):
@@ -225,7 +182,6 @@ def replay(
             loc = f"{rev.path.name}:{node.lineno}"
             is_guarded = node.lineno in guarded
 
-            # --- lifecycle ------------------------------------------------
             if opname == "create_table":
                 name = _literal(node.args[0]) if node.args else None
                 if name:
@@ -273,7 +229,6 @@ def replay(
                     tables.discard(t)
                 continue
 
-            # --- table-targeting operations -------------------------------
             if opname not in _TABLE_ARG_POS and opname not in _TABLE_KW:
                 continue
             name = None
@@ -298,6 +253,11 @@ def replay(
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="Migration history integrity")
     parser.add_argument("--versions-dir", default="alembic/versions")
     parser.add_argument("--seed-tables", default="", help="comma-separated")
@@ -330,9 +290,6 @@ def main() -> int:
 
     if errors:
         print("── DDL ON A TABLE THAT DOES NOT EXIST YET ───────────────────")
-        print("  These fail with UndefinedTable on any FRESH database. They")
-        print("  succeed on databases migrated before the defect appeared,")
-        print("  which is why development never sees them.\n")
         by_table: dict[str, list[str]] = {}
         for e in errors:
             m = re.search(r"[\('\"](\w+)['\"\)]", e.split("--")[0].split("  ", 1)[-1])
@@ -348,19 +305,10 @@ def main() -> int:
 
     if guarded_ops:
         print("── GUARDED / STATE-DEPENDENT DDL ────────────────────────────")
-        print("  These run differently depending on database state. Each one")
-        print("  is a place where two databases at the same revision can hold")
-        print("  different schemas.\n")
         for g in guarded_ops[:40]:
             print(f"  [WARN] {g}")
         if len(guarded_ops) > 40:
             print(f"  ... and {len(guarded_ops) - 40} more")
-        print()
-
-    if unresolved and args.verbose:
-        print("── UNRESOLVED (dynamic SQL / non-literal args) ──────────────")
-        for u in unresolved[:20]:
-            print(f"  [INFO] {u}")
         print()
 
     print("─────────────────────────────────────────────────────────────")
