@@ -1,4 +1,4 @@
-"""ARCH-09 Step 3 & Step 4 — the claim primitive."""
+"""ARCH-09 Step 3 — the claim primitive."""
 
 from __future__ import annotations
 
@@ -16,11 +16,6 @@ from app.models.outbox_event import (
     CLAIMABLE_STATUSES,
     OutboxEvent,
     OutboxEventStatus,
-)
-from app.models.webhook_delivery import (
-    CLAIMABLE_DELIVERY_STATUSES,
-    WebhookDelivery,
-    WebhookDeliveryStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,7 +76,7 @@ def claim_batch(
             updated_at=now,
         )
         .returning(table)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
 
     rows = db.execute(stmt).fetchall()
@@ -110,7 +105,7 @@ def mark_published(db: Session, event_id: uuid.UUID) -> None:
             last_error=None,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
 
 
@@ -132,7 +127,7 @@ def mark_failed(
                 last_error=_truncate(error),
                 updated_at=func.now(),
             )
-            .execution_options(synchronize_session=False)
+            .execution_options(synchronize_session="fetch")
         )
         logger.warning(
             "outbox.dead_letter",
@@ -155,7 +150,7 @@ def mark_failed(
             last_error=_truncate(error),
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
     return OutboxEventStatus.FAILED
 
@@ -186,7 +181,7 @@ def reap_expired_leases(db: Session, *, limit: int = 500) -> int:
             updated_at=func.now(),
         )
         .returning(table.c.id)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     ).fetchall()
 
     if rows:
@@ -200,9 +195,12 @@ def _truncate(value: str, limit: int = 4000) -> str:
     return value[: limit - 3] + "..."
 
 
-# ============================================================================
-# ARCH-09 Step 4 — Webhook Delivery Claim Path
-# ============================================================================
+from app.models.webhook_delivery import (  # noqa: E402
+    CLAIMABLE_DELIVERY_STATUSES,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+)
+
 DELIVERY_MAX_ATTEMPTS: int = MAX_ATTEMPTS
 DELIVERY_RETRY_BASE_SECONDS: int = RETRY_BASE_SECONDS
 DELIVERY_RETRY_CEILING_SECONDS: int = RETRY_CEILING_SECONDS
@@ -242,7 +240,7 @@ def claim_webhook_deliveries(
             updated_at=now,
         )
         .returning(table)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
 
     rows = db.execute(stmt).fetchall()
@@ -276,7 +274,7 @@ def mark_delivered(
             last_response_status=response_status,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
 
 
@@ -287,6 +285,7 @@ def mark_delivery_failed(
     attempts: int,
     error: str,
     response_status: Optional[int] = None,
+    retry_after: Optional[timedelta] = None,
 ) -> WebhookDeliveryStatus:
     if attempts >= DELIVERY_MAX_ATTEMPTS:
         db.execute(
@@ -299,15 +298,23 @@ def mark_delivery_failed(
                 last_response_status=response_status,
                 updated_at=func.now(),
             )
-            .execution_options(synchronize_session=False)
+            .execution_options(synchronize_session="fetch")
         )
         logger.warning(
             "webhook_delivery.dead_letter",
-            extra={"webhook_delivery_id": str(delivery_id), "attempts": attempts},
+            extra={
+                "webhook_delivery_id": str(delivery_id),
+                "attempts": attempts,
+                "reason": "attempt_ceiling",
+            },
         )
         return WebhookDeliveryStatus.DEAD
 
-    delay = _full_jitter_delay(attempts)
+    if retry_after is not None:
+        delay = min(retry_after, timedelta(seconds=DELIVERY_RETRY_CEILING_SECONDS))
+    else:
+        delay = _full_jitter_delay(attempts)
+
     db.execute(
         update(WebhookDelivery)
         .where(WebhookDelivery.id == delivery_id)
@@ -319,9 +326,39 @@ def mark_delivery_failed(
             last_response_status=response_status,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
     return WebhookDeliveryStatus.FAILED
+
+
+def mark_delivery_dead(
+    db: Session,
+    delivery_id: uuid.UUID,
+    *,
+    error: str,
+    response_status: Optional[int] = None,
+) -> WebhookDeliveryStatus:
+    db.execute(
+        update(WebhookDelivery)
+        .where(WebhookDelivery.id == delivery_id)
+        .values(
+            status=WebhookDeliveryStatus.DEAD,
+            claim_expires_at=None,
+            last_error=_truncate(error),
+            last_response_status=response_status,
+            updated_at=func.now(),
+        )
+        .execution_options(synchronize_session="fetch")
+    )
+    logger.warning(
+        "webhook_delivery.dead_letter",
+        extra={
+            "webhook_delivery_id": str(delivery_id),
+            "reason": "fast_fail",
+            "status": response_status,
+        },
+    )
+    return WebhookDeliveryStatus.DEAD
 
 
 def reap_expired_webhook_leases(db: Session, *, limit: int = 500) -> int:
@@ -350,7 +387,7 @@ def reap_expired_webhook_leases(db: Session, *, limit: int = 500) -> int:
             updated_at=func.now(),
         )
         .returning(table.c.id)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     ).fetchall()
 
     if rows:

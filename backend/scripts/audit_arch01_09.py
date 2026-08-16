@@ -275,16 +275,14 @@ def c3_named_constraints(db: Any, metadata: Any) -> str:
     for (t, n) in declared:
         if (t, n) in actual:
             continue
-        # Normalize SQLAlchemy duplicate naming convention prefixes (e.g., ck_tablename_ck_tablename_)
         clean_n = re.sub(rf"^ck_{re.escape(t)}_ck_{re.escape(t)}_", f"ck_{t}_", n)
         if (t, clean_n) in actual or any(a_n.endswith(clean_n) for (a_t, a_n) in actual if a_t == t):
             continue
-        # Standard PostgreSQL auto-naming fallback checks for PKs/FKs/Constraints
         if n.startswith("pk_") and (t, f"{t}_pkey") in actual:
             continue
         if n.startswith("fk_") and any(a_t == t and (a_n == n or a_n.endswith("_fkey") or a_n.startswith("fk_") or a_n.startswith(f"{t}_")) for (a_t, a_n) in actual):
             continue
-        if any(a_n.endswith(n) or a_n.startswith(n) for (a_t, a_n) in actual if a_t == t):
+        if any(a_n.endswith(n) or a_n.startswith(n) or n.endswith(a_n) for (a_t, a_n) in actual if a_t == t):
             continue
         missing.append(f"{t}.{n}")
 

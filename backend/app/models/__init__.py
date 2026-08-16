@@ -53,6 +53,7 @@ from app.models.audit_log import (
 from app.models.outbox_event import OutboxEvent, OutboxEventStatus  # noqa: F401
 from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus  # noqa: F401
 from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus  # noqa: F401
+from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt, AttemptDisposition
 
 __all__ = [
     "Base",
@@ -99,4 +100,6 @@ __all__ = [
     "WebhookEndpointStatus",
     "WebhookDelivery",
     "WebhookDeliveryStatus",
+    "WebhookDeliveryAttempt",
+    "AttemptDisposition",
 ]
