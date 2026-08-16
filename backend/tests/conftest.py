@@ -99,8 +99,25 @@ class Fixture:
 
 
 # ===========================================================================
-# pytest Fixtures
+# pytest Configuration & Safety Guards
 # ===========================================================================
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers", "no_db: test must run without any database dependency"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _enforce_no_db(request: pytest.FixtureRequest) -> None:
+    if request.node.get_closest_marker("no_db"):
+        for name in ("db_session", "client", "test_database"):
+            if name in request.fixturenames:
+                pytest.fail(
+                    f"Test is marked no_db but requested the {name!r} fixture. "
+                    "Either drop the mark or remove the database dependency."
+                )
+
 
 @pytest.fixture(autouse=True)
 def disable_rate_limiting_in_tests(monkeypatch):
@@ -109,13 +126,13 @@ def disable_rate_limiting_in_tests(monkeypatch):
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def test_database() -> Generator[None, None, None]:
     """
     Creates a dedicated test database, migrates it, and drops it afterwards.
 
     AUTOCOMMIT is required: PostgreSQL refuses CREATE DATABASE inside a
-    transaction block.
+    transaction block. Lazy session-scoped schema construction (not autouse).
     """
     admin_url = BASE_URL.rsplit("/", 1)[0] + "/postgres"
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
@@ -142,9 +159,10 @@ def test_database() -> Generator[None, None, None]:
 
 
 @pytest.fixture()
-def db_session() -> Generator[Session, None, None]:
+def db_session(test_database) -> Generator[Session, None, None]:
     """
     A session bound to an outer transaction that is always rolled back.
+    Requires `test_database` to ensure schema is constructed before sessions open.
     """
     engine = create_engine(TEST_DB_URL)
     connection = engine.connect()

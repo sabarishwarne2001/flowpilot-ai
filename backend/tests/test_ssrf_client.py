@@ -1,4 +1,18 @@
-"""ARCH-09 Step 5 — the SSRF-safe HTTP client's own test suite."""
+"""ARCH-09 Step 5 — the SSRF-safe HTTP client's own test suite.
+
+Per the phase plan: "building it against its own tests, with no delivery
+logic in the way — is the only way it gets the attention it needs." This file
+has zero dependency on `webhook_service`, `outbox_service`, or any database —
+it can be run standalone:
+
+    pytest tests/test_ssrf_client.py -v
+
+All server fixtures bind to 127.0.0.1 on an OS-assigned ephemeral port. No
+external network access is required or used; the certificate is generated
+in-process via `cryptography` (already a transitive dependency through
+`MultiFernet`/Fernet, ARCH-07 §B.5), so this suite has no dependency on the
+`openssl` CLI being present.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +38,16 @@ from app.core.ssrf_client import (
     TimeoutExceededError,
 )
 
+# This module has NO database dependency, by design (ARCH-09 Step 5: "built
+# against its own tests, with no delivery logic in the way"). The mark makes
+# that contract enforceable rather than incidental -- see
+# tests/conftest_reference_pattern.py::_enforce_no_db.
+pytestmark = pytest.mark.no_db
 
+
+# ----------------------------------------------------------------------
+# In-process self-signed cert for 127.0.0.1 — no openssl CLI, no network.
+# ----------------------------------------------------------------------
 def _generate_self_signed_cert() -> tuple[bytes, bytes]:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name(
@@ -55,10 +78,10 @@ def _generate_self_signed_cert() -> tuple[bytes, bytes]:
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *_args) -> None:
+    def log_message(self, *_args) -> None:  # silence stdout during tests
         pass
 
-    def do_POST(self) -> None:
+    def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
 
@@ -67,9 +90,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/octet-stream")
             self.end_headers()
             try:
-                self.wfile.write(b"x" * (2 * 1024 * 1024))
+                self.wfile.write(b"x" * (2 * 1024 * 1024))  # over the 1MB cap
             except (BrokenPipeError, ConnectionResetError):
-                pass
+                pass  # expected: the client aborts once the cap is crossed
             return
 
         if self.path == "/slow":
@@ -94,6 +117,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def mock_server() -> Iterator[tuple[str, ssl.SSLContext]]:
+    """A real HTTPS server on 127.0.0.1 plus an ssl.SSLContext that trusts it."""
     cert_pem, key_pem = _generate_self_signed_cert()
     import tempfile
     import os
@@ -125,6 +149,9 @@ def mock_server() -> Iterator[tuple[str, ssl.SSLContext]]:
     thread.join(timeout=2)
 
 
+# ----------------------------------------------------------------------
+# Offline: no server needed.
+# ----------------------------------------------------------------------
 def test_rejects_non_https_scheme() -> None:
     client = SSRFSafeHTTPClient()
     with pytest.raises(InvalidURLError):
@@ -143,7 +170,7 @@ def test_rejects_non_https_scheme() -> None:
         ("100.64.0.1", "carrier-grade NAT"),
         ("224.0.0.1", "multicast"),
         ("[::1]", "loopback"),
-        ("[fc00::1]", None),
+        ("[fc00::1]", None),  # unique local; accept any forbidden reason
     ],
 )
 def test_rejects_forbidden_ip_literals(ip: str, reason_substring: str | None) -> None:
@@ -158,11 +185,14 @@ def test_default_client_refuses_a_real_loopback_server(
     mock_server: tuple[str, ssl.SSLContext]
 ) -> None:
     base_url, _trust_ctx = mock_server
-    client = SSRFSafeHTTPClient()
+    client = SSRFSafeHTTPClient()  # allow_private_ranges defaults False
     with pytest.raises(ForbiddenAddressError):
         client.request("POST", f"{base_url}/deliver", body=b"{}")
 
 
+# ----------------------------------------------------------------------
+# Against the local mock (allow_private_ranges=True, test_ssl_context=trusted)
+# ----------------------------------------------------------------------
 def test_happy_path_signed_delivery(mock_server: tuple[str, ssl.SSLContext]) -> None:
     base_url, trust_ctx = mock_server
     client = SSRFSafeHTTPClient(allow_private_ranges=True, test_ssl_context=trust_ctx)
@@ -209,7 +239,7 @@ def test_untrusted_self_signed_cert_is_rejected() -> None:
     time.sleep(0.1)
 
     try:
-        client = SSRFSafeHTTPClient(allow_private_ranges=True)
+        client = SSRFSafeHTTPClient(allow_private_ranges=True)  # no test_ssl_context
         with pytest.raises(Exception) as excinfo:
             client.request("POST", f"https://127.0.0.1:{port}/deliver", body=b"{}")
         assert "TLS" in type(excinfo.value).__name__ or "certificate" in str(

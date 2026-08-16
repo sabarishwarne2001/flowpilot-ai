@@ -1,10 +1,35 @@
 #!/usr/bin/env python
 """ARCH-01 → ARCH-09 Step 5 compatibility & contract audit.
 
-    python scripts/audit_arch01_09.py
-    python scripts/audit_arch01_09.py --offline
+    python scripts/audit_arch01_09.py                 # everything
+    python scripts/audit_arch01_09.py --offline       # no DB required
+    python scripts/audit_arch01_09.py --section C     # one section
+    python scripts/audit_arch01_09.py --verbose
 
-Repository: https://github.com/sabarishwarne2001/flowpilot-ai/tree/main
+Exit 0 = clean, 1 = findings, 2 = could not run.
+
+Scope note, stated plainly
+--------------------------
+This script audits what is MECHANICALLY CHECKABLE: migration graph health,
+model↔database agreement, mapper configuration, and the specific carry-forward
+contracts each prior phase committed to. It cannot audit design intent, and it
+is not a substitute for reading a diff.
+
+It is deliberately built around the lesson from §1.4 of the ARCH-01→08 audit:
+"every gate in this phase checked for presence, none checked for wiring."
+Where a check CAN be behavioural it is; where it can only be structural, the
+output says so, so a green line is never mistaken for more assurance than it
+carries.
+
+Sections
+--------
+  A  Migration graph health          (offline)
+  B  Swallowed-exception scan        (offline)  ← the bug class that just bit
+  C  Model ↔ database agreement      (needs DB)
+  D  Mapper / MRO health             (offline)
+  E  Carry-forward contracts         (mixed)
+  F  Vocabulary & enum drift         (needs DB)
+  G  Migration history replayability (offline)
 """
 
 from __future__ import annotations
@@ -22,13 +47,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
-
 APP = REPO_ROOT / "app"
 VERSIONS = REPO_ROOT / "alembic" / "versions"
 
-_results: list[tuple[str, str, str, str]] = []
+_results: list[tuple[str, str, str, str]] = []  # (id, desc, status, note)
 _verbose = False
 
 PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
@@ -39,6 +61,9 @@ def record(cid: str, desc: str, status: str, note: str = "") -> None:
 
 
 def check(cid: str, desc: str) -> Callable:
+    """Wrap a check. Return None/str for PASS, raise AssertionError for FAIL,
+    raise Warning for WARN, raise LookupError for SKIP."""
+
     def wrapper(fn: Callable[..., Optional[str]]) -> Callable[..., None]:
         def runner(*a: Any, **k: Any) -> None:
             try:
@@ -61,6 +86,9 @@ def _py_files(root: pathlib.Path) -> list[pathlib.Path]:
     return [p for p in root.rglob("*.py") if "__pycache__" not in str(p)]
 
 
+# ======================================================================
+# SECTION A — migration graph health (offline)
+# ======================================================================
 @check("A.1", "alembic heads == 1")
 def a1_single_head() -> str:
     out = subprocess.run(
@@ -132,10 +160,14 @@ def a4_enum_autocommit() -> str:
     assert not offenders, (
         "ALTER TYPE ADD VALUE without autocommit_block() in: "
         + ", ".join(offenders)
+        + " -- PostgreSQL refuses this inside a transaction block"
     )
     return "clean"
 
 
+# ======================================================================
+# SECTION B — swallowed-exception scan (offline)
+# ======================================================================
 _DDL_CALLS = re.compile(
     r"\bop\.(drop_constraint|drop_index|drop_column|drop_table|add_column|"
     r"create_index|create_constraint|alter_column|create_table|execute|"
@@ -146,6 +178,7 @@ _DDL_CALLS = re.compile(
 
 @check("B.1", "no migration swallows an exception around DDL")
 def b1_swallowed_ddl() -> str:
+    """THE bug class behind `InFailedSqlTransaction` on a fresh database."""
     offenders: list[str] = []
     if not VERSIONS.exists():
         raise LookupError(f"{VERSIONS} not found")
@@ -189,12 +222,18 @@ def b1_swallowed_ddl() -> str:
     assert not offenders, (
         "DDL wrapped in a swallowing try/except at: "
         + ", ".join(sorted(set(offenders)))
+        + "\n         → In PostgreSQL this aborts the transaction and hides "
+        "the cause.\n         → Fix: inspect first, or use IF EXISTS, or wrap "
+        "in `with bind.begin_nested():`.\n"
+        "         → See scripts/diagnose_migration_abort.py for the patterns."
     )
     return "clean"
 
 
 @check("B.2", "no migration imports mutable application code")
 def b2_no_app_imports() -> str:
+    """A migration is a historical snapshot. Importing `app.*` means a future
+    edit silently rewrites what an already-applied migration meant."""
     offenders = []
     for path in VERSIONS.glob("*.py"):
         src = path.read_text(encoding="utf-8", errors="replace")
@@ -205,6 +244,9 @@ def b2_no_app_imports() -> str:
     return "clean"
 
 
+# ======================================================================
+# SECTION C — model ↔ database agreement (needs DB)
+# ======================================================================
 @check("C.1", "every mapped table exists in the database")
 def c1_tables_exist(db: Any, metadata: Any) -> str:
     from sqlalchemy import inspect as sa_inspect
@@ -242,12 +284,12 @@ def c2_nullability(db: Any, metadata: Any) -> str:
 
 @check("C.3", "every named constraint in __table_args__ exists in the database")
 def c3_named_constraints(db: Any, metadata: Any) -> str:
-    from sqlalchemy import PrimaryKeyConstraint, text
+    from sqlalchemy import text
 
     declared: set[tuple[str, str]] = set()
     for tname, table in metadata.tables.items():
         for c in table.constraints:
-            if c.name and not str(c.name).startswith("_unnamed") and not isinstance(c, PrimaryKeyConstraint):
+            if c.name and not str(c.name).startswith("_unnamed"):
                 declared.add((tname, str(c.name)))
         for ix in table.indexes:
             if ix.name:
@@ -283,6 +325,9 @@ def c4_autogenerate_drift() -> str:
     return "no drift"
 
 
+# ======================================================================
+# SECTION D — mapper / MRO health (offline)
+# ======================================================================
 @check("D.1", "all models import and configure_mappers() succeeds")
 def d1_mappers(metadata: Any) -> str:
     from sqlalchemy.orm import configure_mappers
@@ -365,11 +410,14 @@ def d5_enum_create_type() -> str:
     return "clean"
 
 
+# ======================================================================
+# SECTION E — carry-forward contracts
+# ======================================================================
 def _grep(pattern: str, root: pathlib.Path, exclude: tuple[str, ...] = ()) -> list[str]:
     hits = []
     rx = re.compile(pattern)
     for path in _py_files(root):
-        rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+        rel = str(path.relative_to(REPO_ROOT))
         if any(x in rel for x in exclude):
             continue
         for i, line in enumerate(
@@ -399,7 +447,10 @@ def e2_no_storage_bypass() -> str:
 @check("E.3", "ARCH-08 §B.9 / R1: no `id < last_id` keyset predicate")
 def e3_no_uuid_keyset() -> str:
     hits = _grep(r"\.id\s*<\s*(last_id|cursor_id|last_seen_id)", APP)
-    assert not hits, f"random-UUID ordering predicate present: {hits}"
+    assert not hits, (
+        f"random-UUID ordering predicate present: {hits} -- this silently "
+        "drops rows (ARCH-08 §B.9)"
+    )
     return "absent"
 
 
@@ -436,15 +487,17 @@ def e5_no_commit_in_outbox() -> str:
             continue
         for lineno in _commit_call_lines(path):
             problems.append(f"{rel}:{lineno}")
-    assert not problems, f"commit() call in the emit path: {problems}"
+    assert not problems, (
+        f"commit() call in the emit path: {problems} -- recreates the dual "
+        "write ARCH-09 §B.1 exists to eliminate"
+    )
     return "clean"
 
 
 @check("E.6", "ARCH-09 A.1.3: no BackgroundTasks / asyncio.create_task")
 def e6_no_background_tasks() -> str:
     hits = _grep(r"\bBackgroundTasks\b|asyncio\.create_task\s*\(", APP)
-    if hits:
-        raise Warning(f"in-process background tasks present (will be migrated in Steps 10-11): {hits[:4]}")
+    assert not hits, f"in-process background work present: {hits}"
     return "clean"
 
 
@@ -452,8 +505,8 @@ def e6_no_background_tasks() -> str:
 def e7_web_import_isolation() -> str:
     code = (
         "import sys, app.main; "
-        "modules = [m for m in ('paddleocr','chromadb','sentence_transformers','torch') if m in sys.modules]; "
-        "print(','.join(modules))"
+        "print(','.join(m for m in ('paddleocr','chromadb',"
+        "'sentence_transformers','torch') if m in sys.modules))"
     )
     out = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=300
@@ -461,8 +514,7 @@ def e7_web_import_isolation() -> str:
     if out.returncode != 0:
         raise LookupError(f"importing app.main failed: {out.stderr[-300:]}")
     leaked = out.stdout.strip()
-    heavy_hits = [m for m in leaked.split(",") if m.strip() in ('paddleocr','chromadb','sentence_transformers','torch')]
-    assert not heavy_hits, f"heavy modules reachable from app.main: {heavy_hits}"
+    assert not leaked, f"heavy modules reachable from app.main: {leaked}"
     return "clean"
 
 
@@ -508,7 +560,8 @@ def e10_audit_xor_exercised(db: Any) -> str:
     if machine_rows == 0:
         raise Warning(
             "0 audit rows carry api_key_id. The XOR constraint has never been "
-            "exercised on the machine side."
+            "exercised on the machine side -- it is structurally present and "
+            "behaviourally unproven. Drive one API-key write and re-run."
         )
     both = db.execute(
         text(
@@ -516,7 +569,7 @@ def e10_audit_xor_exercised(db: Any) -> str:
             "WHERE actor_id IS NOT NULL AND api_key_id IS NOT NULL"
         )
     ).scalar_one()
-    assert both == 0, f"{both} rows violate the XOR"
+    assert both == 0, f"{both} rows violate the XOR (constraint not enforcing)"
     return f"{machine_rows} machine-attributed rows, 0 violations"
 
 
@@ -545,10 +598,13 @@ def e12_metadata_blocked() -> str:
         rc = s.connect_ex(("169.254.169.254", 80))
     finally:
         s.close()
-    assert rc != 0, "cloud metadata endpoint is REACHABLE"
+    assert rc != 0, "cloud metadata endpoint is REACHABLE -- SSRF blast radius"
     return f"blocked (connect_ex={rc})"
 
 
+# ======================================================================
+# SECTION F — vocabulary & enum drift (needs DB)
+# ======================================================================
 @check("F.1", "webhook event vocabulary agrees across Python and both CHECKs")
 def f1_webhook_vocab(db: Any) -> str:
     from sqlalchemy import text
@@ -623,11 +679,41 @@ def f2_enum_parity(db: Any, base: Any) -> str:
     return f"{len(seen)} enum types in parity"
 
 
+# ======================================================================
+# Runner
+# ======================================================================
+@check("G.1", "migration history replays on an empty database")
+def g1_history_replayable() -> str:
+    script = REPO_ROOT / "scripts" / "verify_migration_history.py"
+    if not script.exists():
+        raise LookupError("scripts/verify_migration_history.py not present")
+    out = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    combined = out.stdout + out.stderr
+    if out.returncode == 2:
+        raise LookupError(combined.strip().splitlines()[-1][:200] if combined else "skipped")
+    if out.returncode != 0:
+        summary = [l for l in combined.splitlines() if "graph problem" in l]
+        raise AssertionError(
+            (summary[-1] if summary else "history is not replayable")
+            + "  → run scripts/verify_migration_history.py for the detail"
+        )
+    guarded = [l for l in combined.splitlines() if "guarded op(s)" in l]
+    if guarded and " 0 guarded op(s)" not in guarded[-1]:
+        raise Warning(guarded[-1].strip())
+    return "replays cleanly from empty"
+
+
 def main() -> int:
     global _verbose
     parser = argparse.ArgumentParser(description="ARCH-01→09.5 compatibility audit")
     parser.add_argument("--offline", action="store_true", help="skip DB checks")
-    parser.add_argument("--section", default=None, help="A/B/C/D/E/F")
+    parser.add_argument("--section", default=None, help="A/B/C/D/E/F/G")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     _verbose = args.verbose
@@ -640,12 +726,14 @@ def main() -> int:
 
     print("ARCH-01 → ARCH-09 Step 5 — compatibility & contract audit\n")
 
+    # ---- offline sections ------------------------------------------
     run("A", a1_single_head)
     run("A", a2_graph_resolves)
     run("A", a3_no_branch_labels)
     run("A", a4_enum_autocommit)
     run("B", b1_swallowed_ddl)
     run("B", b2_no_app_imports)
+    run("G", g1_history_replayable)
     run("D", d5_enum_create_type)
     run("E", e1_encryption_boundary)
     run("E", e2_no_storage_bypass)
@@ -657,6 +745,7 @@ def main() -> int:
     run("E", e8_worker_import_isolation)
     run("E", e12_metadata_blocked)
 
+    # ---- model metadata --------------------------------------------
     base = metadata = None
     if not want or want in {"C", "D", "F"}:
         try:
@@ -674,6 +763,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             record("D.0", "import app.db.base", SKIP, f"{type(exc).__name__}: {exc}")
 
+    # ---- DB sections ------------------------------------------------
     if not args.offline and (not want or want in {"C", "E", "F"}):
         try:
             from app.db.session import SessionLocal
@@ -694,6 +784,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             record("C/E/F", "database-backed checks", SKIP, f"{type(exc).__name__}: {exc}")
 
+    # ---- report -----------------------------------------------------
     icons = {PASS: "[PASS]", FAIL: "[FAIL]", WARN: "[WARN]", SKIP: "[SKIP]"}
     for cid, desc, status, note in _results:
         suffix = f"  — {note}" if note and (_verbose or status != PASS) else ""
@@ -708,7 +799,11 @@ def main() -> int:
         f"\n{passes} passed · {fails} failed · {warns} warnings · {skips} skipped"
     )
     if skips:
-        print("⚠️  A SKIP is not a PASS.")
+        print(
+            "⚠️  A SKIP is not a PASS. Each skipped check is an unverified "
+            "contract -- resolve the cause and re-run before treating this "
+            "audit as complete."
+        )
     if fails:
         print("\n❌ AUDIT FAILED — do not begin Step 6.")
         return 1
