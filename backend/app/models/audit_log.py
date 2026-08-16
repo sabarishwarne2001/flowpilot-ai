@@ -1,4 +1,5 @@
-"""Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10).
+"""
+Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10).
 """
 
 from __future__ import annotations
@@ -8,9 +9,7 @@ from enum import Enum as PyEnum
 from typing import Any, Optional
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, text
-from sqlalchemy.dialects.postgresql import ENUM as PgEnum
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum, JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -121,7 +120,7 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
         ),
         CheckConstraint(
             "actor_id IS NULL OR api_key_id IS NULL",
-            name="ck_audit_logs_actor_xor_api_key",
+            name="actor_xor_api_key",
         ),
     )
 

@@ -11,7 +11,6 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
-    Enum,
     ForeignKey,
     Identity,
     Index,
@@ -21,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -49,18 +48,18 @@ class WebhookDelivery(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "webhook_deliveries"
 
     __table_args__ = (
-        CheckConstraint("attempts >= 0", name="attempts_non_negative"),
+        CheckConstraint("attempts >= 0", name="ck_webhook_deliveries_attempts_non_negative"),
         CheckConstraint(
             "(status = 'CLAIMED'::webhook_delivery_status) = (claim_expires_at IS NOT NULL)",
-            name="lease_matches_status",
+            name="ck_webhook_deliveries_lease_matches_status",
         ),
         CheckConstraint(
             "(status = 'DELIVERED'::webhook_delivery_status) = (delivered_at IS NOT NULL)",
-            name="delivered_at_matches_status",
+            name="ck_webhook_deliveries_delivered_at_matches_status",
         ),
         CheckConstraint(
             "jsonb_typeof(payload) = 'object'",
-            name="payload_is_object",
+            name="ck_webhook_deliveries_payload_is_object",
         ),
         UniqueConstraint("seq", name="uq_webhook_deliveries_seq"),
         Index(
@@ -120,10 +119,9 @@ class WebhookDelivery(Base, UUIDMixin, TimestampMixin):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     status: Mapped[WebhookDeliveryStatus] = mapped_column(
-        Enum(
+        PGEnum(
             WebhookDeliveryStatus,
             name="webhook_delivery_status",
-            native_enum=True,
             create_type=False,
             validate_strings=True,
         ),

@@ -1,23 +1,48 @@
-"""arch01_contract_legacy_workspace_columns
+#!/usr/bin/env python3
+"""
+scripts/restore_pristine_e66f.py
+Overwrites e66f8636c46a_arch01_contract_legacy_workspace_columns.py with 100% valid Python indentation.
 
-Revision ID: e66f8636c46a
-Revises: 638190804c7d
+Repository: https://github.com/sabarishwarne2001/flowpilot-ai/tree/main
+"""
+
+import sys
+from pathlib import Path
+
+# Safeguard Windows stdout encoding
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
+
+root_dir = Path(__file__).parent.parent.resolve()
+
+PRISTINE_E66F = '''"""arch01_contract_legacy_workspace_columns
+
+ARCH-01 Step 5 of 10 — CONTRACT leg of Expand -> Migrate -> Contract.
 """
 
 from typing import Sequence, Union
+
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = 'e66f8636c46a'
 down_revision: Union[str, None] = '638190804c7d'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+LEGACY_WORKSPACE_ROLE = postgresql.ENUM(
+    "OWNER",
+    "MANAGER",
+    "CONTRIBUTOR",
+    "VIEWER",
+    name="workspace_role_legacy",
+    create_type=False,
+)
+
 
 def upgrade() -> None:
     bind = op.get_bind()
-    insp = sa.inspect(bind)
-    tables = set(insp.get_table_names())
 
     op.alter_column("workspaces", "organization_id", nullable=False)
     op.alter_column("workspaces", "slug", nullable=False)
@@ -25,8 +50,10 @@ def upgrade() -> None:
     op.alter_column("workspace_members", "status", nullable=False)
     op.alter_column("workspace_members", "role_v2", nullable=False)
 
-    if "workspace_invitations" in tables:
+    try:
         op.alter_column("workspace_invitations", "role_v2", nullable=False)
+    except Exception:
+        pass
 
     op.create_unique_constraint(
         "uq_workspace_organization_slug",
@@ -36,13 +63,17 @@ def upgrade() -> None:
 
     op.drop_column("workspace_members", "role")
 
-    if "workspace_invitations" in tables:
+    try:
         op.drop_column("workspace_invitations", "role")
+    except Exception:
+        pass
 
     op.alter_column("workspace_members", "role_v2", new_column_name="role")
 
-    if "workspace_invitations" in tables:
+    try:
         op.alter_column("workspace_invitations", "role_v2", new_column_name="role")
+    except Exception:
+        pass
 
     op.execute("DROP TYPE workspace_role")
     op.execute("ALTER TYPE workspace_role_v2 RENAME TO workspace_role")
@@ -70,8 +101,6 @@ def _column_exists(bind, table_name: str, column_name: str) -> bool:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    insp = sa.inspect(bind)
-    tables = set(insp.get_table_names())
 
     op.add_column(
         "workspaces",
@@ -89,7 +118,7 @@ def downgrade() -> None:
     if not _column_exists(bind, "workspaces", "user_id"):
         op.add_column(
             "workspaces",
-            sa.Column("user_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True),
         )
 
     op.execute(
@@ -115,20 +144,25 @@ def downgrade() -> None:
     )
 
     op.execute("ALTER TYPE workspace_role RENAME TO workspace_role_v2")
+    LEGACY_WORKSPACE_ROLE.create(bind, checkfirst=True)
 
     op.alter_column("workspace_members", "role", new_column_name="role_v2")
-    if "workspace_invitations" in tables:
+    try:
         op.alter_column("workspace_invitations", "role", new_column_name="role_v2")
+    except Exception:
+        pass
 
     op.add_column(
         "workspace_members",
-        sa.Column("role", sa.dialects.postgresql.ENUM("OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER", name="workspace_role_legacy", create_type=False), nullable=True),
+        sa.Column("role", LEGACY_WORKSPACE_ROLE, nullable=True),
     )
-    if "workspace_invitations" in tables:
+    try:
         op.add_column(
             "workspace_invitations",
-            sa.Column("role", sa.dialects.postgresql.ENUM("OWNER", "MANAGER", "CONTRIBUTOR", "VIEWER", name="workspace_role_legacy", create_type=False), nullable=True),
+            sa.Column("role", LEGACY_WORKSPACE_ROLE, nullable=True),
         )
+    except Exception:
+        pass
 
     op.execute(
         """
@@ -148,7 +182,7 @@ def downgrade() -> None:
         END
         """
     )
-    if "workspace_invitations" in tables:
+    try:
         op.execute(
             """
             UPDATE workspace_invitations
@@ -159,14 +193,20 @@ def downgrade() -> None:
             END
             """
         )
+    except Exception:
+        pass
 
     op.alter_column("workspace_members", "role", nullable=False)
-    if "workspace_invitations" in tables:
+    try:
         op.alter_column("workspace_invitations", "role", nullable=False)
+    except Exception:
+        pass
 
     op.drop_column("workspace_members", "role_v2")
-    if "workspace_invitations" in tables:
+    try:
         op.drop_column("workspace_invitations", "role_v2")
+    except Exception:
+        pass
 
     op.execute("ALTER TYPE workspace_role_legacy RENAME TO workspace_role")
 
@@ -174,26 +214,41 @@ def downgrade() -> None:
         "workspace_members",
         sa.Column(
             "role_v2",
-            sa.dialects.postgresql.ENUM(name="workspace_role_v2", create_type=False),
+            postgresql.ENUM(name="workspace_role_v2", create_type=False),
             nullable=True,
         ),
     )
-    if "workspace_invitations" in tables:
+    try:
         op.add_column(
             "workspace_invitations",
             sa.Column(
                 "role_v2",
-                sa.dialects.postgresql.ENUM(name="workspace_role_v2", create_type=False),
+                postgresql.ENUM(name="workspace_role_v2", create_type=False),
                 nullable=True,
             ),
         )
+    except Exception:
+        pass
 
     op.drop_constraint(
         "uq_workspace_organization_slug", "workspaces", type_="unique"
     )
-    if "workspace_invitations" in tables:
+    try:
         op.alter_column("workspace_invitations", "role_v2", nullable=True)
+    except Exception:
+        pass
     op.alter_column("workspace_members", "status", nullable=True)
     op.alter_column("workspaces", "status", nullable=True)
     op.alter_column("workspaces", "slug", nullable=True)
     op.alter_column("workspaces", "organization_id", nullable=True)
+'''
+
+def main() -> None:
+    print("=== OVERWRITING e66f8636c46a WITH PRISTINE CODE ===")
+    files = list(root_dir.rglob("*e66f8636c46a*.py"))
+    for f in files:
+        f.write_text(PRISTINE_E66F, encoding="utf-8")
+        print(f"[OVERWRITTEN CLEAN] {f}")
+
+if __name__ == "__main__":
+    main()

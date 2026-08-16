@@ -1,26 +1,6 @@
 """arch01_expand_organization_tenancy
 
 ARCH-01 Step 3 of 10 — EXPAND leg of Expand -> Migrate -> Contract.
-
-Introduces the Organization tenant root alongside the existing flat workspace
-schema. Purely additive: no column is renamed, retyped, or dropped, and no
-data is moved. Legacy application code continues to operate against the
-database after this revision is applied.
-
-New columns are nullable with no server default. They are populated by the
-MIGRATE revision, which derives each value from legacy state (for example
-MembershipStatus from the is_active boolean). A NULL is deliberate: it makes
-an unmigrated row provable, where a plausible-but-wrong default would hide it.
-
-The workspace_role enum is not mutated. PostgreSQL cannot remove a value from
-an enum type, so OWNER could never be eliminated in place, and value renames
-are not cleanly reversible. A parallel workspace_role_v2 type is created here
-and swapped in the CONTRACT revision instead. Both workspace_members and
-workspace_invitations depend on workspace_role, so both receive a parallel
-role_v2 column.
-
-Revision ID: 4fb2e9a4f15c
-Revises: c4e81a9f2b73
 """
 
 from typing import Sequence, Union
@@ -29,16 +9,11 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-# revision identifiers, used by Alembic.
-revision: str = '4fb2e9a4f15c'
-down_revision: Union[str, None] = 'c4e81a9f2b73'
+revision: str = "4fb2e9a4f15c"
+down_revision: Union[str, None] = "c4e81a9f2b73"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-
-# ===========================================================================
-# Enum type definitions
-# ===========================================================================
 
 ORGANIZATION_ROLE = postgresql.ENUM(
     "OWNER",
@@ -93,16 +68,12 @@ _NEW_ENUM_TYPES = (
 
 def upgrade() -> None:
     bind = op.get_bind()
+    insp = sa.inspect(bind)
+    existing_tables = set(insp.get_table_names())
 
-    # =======================================================================
-    # 1. Enum types
-    # =======================================================================
     for enum_type in _NEW_ENUM_TYPES:
         enum_type.create(bind, checkfirst=True)
 
-    # =======================================================================
-    # 2. organizations — the commercial tenant root
-    # =======================================================================
     op.create_table(
         "organizations",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -137,9 +108,6 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # =======================================================================
-    # 3. organization_members — the billable seat
-    # =======================================================================
     op.create_table(
         "organization_members",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -209,9 +177,6 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # =======================================================================
-    # 4. workspaces — attach to the tenant root
-    # =======================================================================
     op.add_column(
         "workspaces",
         sa.Column(
@@ -253,9 +218,6 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # =======================================================================
-    # 5. workspace_members — status lifecycle and parallel role column
-    # =======================================================================
     op.add_column(
         "workspace_members",
         sa.Column("status", MEMBERSHIP_STATUS, nullable=True),
@@ -289,10 +251,8 @@ def upgrade() -> None:
         unique=False,
     )
 
-    # =======================================================================
-    # 6. workspace_invitations — safely guarded if table exists
-    # =======================================================================
-    try:
+    # 6. workspace_invitations — inspect table existence explicitly
+    if "workspace_invitations" in existing_tables:
         op.add_column(
             "workspace_invitations",
             sa.Column(
@@ -317,15 +277,14 @@ def upgrade() -> None:
             ["organization_id"],
             unique=False,
         )
-    except Exception:
-        pass
 
 
 def downgrade() -> None:
     bind = op.get_bind()
+    insp = sa.inspect(bind)
+    existing_tables = set(insp.get_table_names())
 
-    # --- workspace_invitations ---------------------------------------------
-    try:
+    if "workspace_invitations" in existing_tables:
         op.drop_index(
             "ix_workspace_invitations_organization_id",
             table_name="workspace_invitations",
@@ -337,10 +296,7 @@ def downgrade() -> None:
         )
         op.drop_column("workspace_invitations", "role_v2")
         op.drop_column("workspace_invitations", "organization_id")
-    except Exception:
-        pass
 
-    # --- workspace_members --------------------------------------------------
     op.drop_index("ix_workspace_members_status", table_name="workspace_members")
     op.drop_constraint(
         "fk_workspace_members_deactivated_by_id",
@@ -352,7 +308,6 @@ def downgrade() -> None:
     op.drop_column("workspace_members", "role_v2")
     op.drop_column("workspace_members", "status")
 
-    # --- workspaces ---------------------------------------------------------
     op.drop_index("ix_workspaces_status", table_name="workspaces")
     op.drop_index("ix_workspaces_slug", table_name="workspaces")
     op.drop_index("ix_workspaces_organization_id", table_name="workspaces")
@@ -363,7 +318,6 @@ def downgrade() -> None:
     op.drop_column("workspaces", "slug")
     op.drop_column("workspaces", "organization_id")
 
-    # --- organization_members -----------------------------------------------
     op.drop_index(
         "ix_organization_members_status", table_name="organization_members"
     )
@@ -376,11 +330,9 @@ def downgrade() -> None:
     )
     op.drop_table("organization_members")
 
-    # --- organizations ------------------------------------------------------
     op.drop_index("ix_organizations_status", table_name="organizations")
     op.drop_index("ix_organizations_slug", table_name="organizations")
     op.drop_table("organizations")
 
-    # --- enum types ---------------------------------------------------------
     for enum_type in reversed(_NEW_ENUM_TYPES):
         enum_type.drop(bind, checkfirst=True)

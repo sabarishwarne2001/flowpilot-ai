@@ -2,12 +2,14 @@
 Database representation of Automation Rules and Audit History Logs for FlowPilot AI.
 """
 
-import uuid
-from typing import Any, TYPE_CHECKING, Union
+from __future__ import annotations
 
-from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, Integer, Enum, Index
+import uuid
+from typing import TYPE_CHECKING, Any, Union
+
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import UUID
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
@@ -21,6 +23,7 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     """
     Persistent representation of a user-defined automation rule.
     """
+
     __tablename__ = "automation_rules"
 
     __table_args__ = (
@@ -46,13 +49,13 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     )
 
     conditions: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSON,
+        JSONB,
         nullable=False,
         default=list,
     )
 
     logic_operator: Mapped[str] = mapped_column(
-        Enum(
+        PGEnum(
             "AND",
             "OR",
             name="logic_operator",
@@ -63,7 +66,7 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     )
 
     actions: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSON,
+        JSONB,
         nullable=False,
         default=list,
     )
@@ -87,11 +90,11 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    workspace: Mapped["Workspace"] = relationship("Workspace")
+    workspace: Mapped[Workspace] = relationship("Workspace")
 
-    created_by: Mapped[Union["User", None]] = relationship("User")
+    created_by: Mapped[Union[User, None]] = relationship("User")
 
-    logs: Mapped[list["AutomationLog"]] = relationship(
+    logs: Mapped[list[AutomationLog]] = relationship(
         "AutomationLog",
         back_populates="rule",
         cascade="all, delete-orphan",
@@ -103,6 +106,7 @@ class AutomationLog(Base, UUIDMixin, TimestampMixin):
     """
     Stores the execution history of automation rule runs.
     """
+
     __tablename__ = "automation_logs"
 
     __table_args__ = (
@@ -140,14 +144,14 @@ class AutomationLog(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    workspace: Mapped["Workspace"] = relationship("Workspace")
+    workspace: Mapped[Workspace] = relationship("Workspace")
 
-    rule: Mapped["AutomationRule"] = relationship(
+    rule: Mapped[AutomationRule] = relationship(
         "AutomationRule",
         back_populates="logs",
     )
 
-    work_item: Mapped["WorkItem"] = relationship(
+    work_item: Mapped[WorkItem] = relationship(
         "WorkItem",
         back_populates="automation_logs",
         passive_deletes=True,

@@ -1,4 +1,22 @@
-"""arch01_contract_legacy_workspace_columns
+#!/usr/bin/env python3
+"""
+scripts/fix_e66f_inspection.py
+Replaces swallowing try/except in e66f8636c46a with explicit table inspection
+so PostgreSQL transactions never enter the aborted state.
+
+Repository: https://github.com/sabarishwarne2001/flowpilot-ai/tree/main
+"""
+
+import sys
+from pathlib import Path
+
+# Safeguard Windows stdout encoding
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
+
+root_dir = Path(__file__).parent.parent.resolve()
+
+E66F_INSPECTION_CODE = '''"""arch01_contract_legacy_workspace_columns
 
 Revision ID: e66f8636c46a
 Revises: 638190804c7d
@@ -197,3 +215,14 @@ def downgrade() -> None:
     op.alter_column("workspaces", "status", nullable=True)
     op.alter_column("workspaces", "slug", nullable=True)
     op.alter_column("workspaces", "organization_id", nullable=True)
+'''
+
+def main() -> None:
+    print("=== OVERWRITING e66f8636c46a WITH INSPECTION GUARD ===")
+    files = list(root_dir.rglob("*e66f8636c46a*.py"))
+    for f in files:
+        f.write_text(E66F_INSPECTION_CODE, encoding="utf-8")
+        print(f"[SUCCESSFULLY OVERWRITTEN] {f}")
+
+if __name__ == "__main__":
+    main()

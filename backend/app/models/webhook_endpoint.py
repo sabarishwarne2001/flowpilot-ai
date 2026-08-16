@@ -10,14 +10,13 @@ from typing import Optional
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     String,
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, ENUM as PGEnum, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.webhook_events import WEBHOOK_EVENT_TYPES
@@ -30,23 +29,21 @@ class WebhookEndpointStatus(str, PyEnum):
 
 
 class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
-    """A customer's registered delivery target."""
-
     __tablename__ = "webhook_endpoints"
 
     __table_args__ = (
-        CheckConstraint("url LIKE 'https://%'", name="https_only"),
+        CheckConstraint("url LIKE 'https://%'", name="ck_webhook_endpoints_https_only"),
         CheckConstraint(
             "cardinality(event_types) >= 1",
-            name="event_types_non_empty",
+            name="ck_webhook_endpoints_event_types_non_empty",
         ),
         CheckConstraint(
             "(status = 'DISABLED'::webhook_endpoint_status) = (disabled_at IS NOT NULL)",
-            name="disabled_at_matches_status",
+            name="ck_webhook_endpoints_disabled_at_matches_status",
         ),
         CheckConstraint(
             "(previous_secret_encrypted IS NULL) = (previous_secret_expires_at IS NOT NULL)",
-            name="previous_secret_paired",
+            name="ck_webhook_endpoints_previous_secret_paired",
         ),
         Index("ix_webhook_endpoints_organization_id", "organization_id"),
         Index(
@@ -73,10 +70,9 @@ class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
     event_types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
 
     status: Mapped[WebhookEndpointStatus] = mapped_column(
-        Enum(
+        PGEnum(
             WebhookEndpointStatus,
             name="webhook_endpoint_status",
-            native_enum=True,
             create_type=False,
             validate_strings=True,
         ),

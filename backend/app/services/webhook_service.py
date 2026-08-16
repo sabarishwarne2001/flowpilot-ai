@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import secrets
@@ -15,6 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.encryption import decrypt_password, encrypt_password
 from app.core.webhook_events import is_publishable
 from app.models.outbox_event import OutboxEvent
 from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus
@@ -48,67 +48,11 @@ def _generate_secret(*, live: bool = True) -> str:
 
 
 def _encrypt_secret(plaintext: str) -> str:
-    from app.core import encryption
-
-    for fn_name in ("encrypt_value", "encrypt", "encrypt_text", "encrypt_string", "encrypt_bytes"):
-        if hasattr(encryption, fn_name):
-            fn = getattr(encryption, fn_name)
-            res = fn(plaintext.encode("utf-8") if fn_name == "encrypt_bytes" else plaintext)
-            return res.decode("utf-8") if isinstance(res, bytes) else res
-
-    for attr in ("cipher", "fernet", "multi_fernet", "_fernet", "_multi_fernet"):
-        if hasattr(encryption, attr):
-            obj = getattr(encryption, attr)
-            if hasattr(obj, "encrypt"):
-                res = obj.encrypt(plaintext.encode("utf-8"))
-                return res.decode("utf-8") if isinstance(res, bytes) else res
-
-    try:
-        from cryptography.fernet import Fernet
-        from app.core.config import settings
-
-        key = getattr(settings, "ENCRYPTION_KEY", None) or getattr(settings, "SECRET_KEY", None)
-        if key:
-            k_bytes = key.encode("utf-8") if isinstance(key, str) else key
-            b64_key = base64.urlsafe_b64encode(k_bytes[:32].ljust(32, b"0"))
-            f = Fernet(b64_key)
-            return f.encrypt(plaintext.encode("utf-8")).decode("utf-8")
-    except Exception:
-        pass
-
-    raise AttributeError("No encryption helper found in app.core.encryption")
+    return encrypt_password(plaintext)
 
 
 def _decrypt_secret(ciphertext: str) -> str:
-    from app.core import encryption
-
-    for fn_name in ("decrypt_value", "decrypt", "decrypt_text", "decrypt_string", "decrypt_bytes"):
-        if hasattr(encryption, fn_name):
-            fn = getattr(encryption, fn_name)
-            res = fn(ciphertext.encode("utf-8") if fn_name == "decrypt_bytes" else ciphertext)
-            return res.decode("utf-8") if isinstance(res, bytes) else res
-
-    for attr in ("cipher", "fernet", "multi_fernet", "_fernet", "_multi_fernet"):
-        if hasattr(encryption, attr):
-            obj = getattr(encryption, attr)
-            if hasattr(obj, "decrypt"):
-                res = obj.decrypt(ciphertext.encode("utf-8"))
-                return res.decode("utf-8") if isinstance(res, bytes) else res
-
-    try:
-        from cryptography.fernet import Fernet
-        from app.core.config import settings
-
-        key = getattr(settings, "ENCRYPTION_KEY", None) or getattr(settings, "SECRET_KEY", None)
-        if key:
-            k_bytes = key.encode("utf-8") if isinstance(key, str) else key
-            b64_key = base64.urlsafe_b64encode(k_bytes[:32].ljust(32, b"0"))
-            f = Fernet(b64_key)
-            return f.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
-    except Exception:
-        pass
-
-    raise AttributeError("No decryption helper found in app.core.encryption")
+    return decrypt_password(ciphertext)
 
 
 def decrypt_current_secret(endpoint: WebhookEndpoint) -> str:
@@ -137,7 +81,6 @@ def _preflight_check_url(url: str) -> None:
         raise InvalidURLError("Webhook URL has no hostname.")
 
     hostname = parsed.hostname.lower()
-    # RFC 2606 reserved test domains skip live public DNS lookup
     if hostname.endswith((
         ".example.com", ".example.org", ".example.net",
         ".example", ".test", ".invalid", ".localhost"
@@ -281,7 +224,7 @@ def fan_out_event(db: Session, event: OutboxEvent) -> list[WebhookDelivery]:
         .values(rows)
         .on_conflict_do_nothing(
             index_elements=["outbox_event_id", "webhook_endpoint_id"],
-            index_predicate=text("outbox_event_id IS NOT NULL"),
+            index_where=text("outbox_event_id IS NOT NULL"),
         )
         .returning(table.c.id)
     )
