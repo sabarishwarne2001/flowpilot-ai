@@ -8,7 +8,6 @@ from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import (
-    ARRAY,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -20,8 +19,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import ENUM as PGEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, ENUM as PGEnum, UUID
 
 from app.core.webhook_events import WEBHOOK_EVENT_TYPES
 from app.db.base import Base, TimestampMixin, UUIDMixin

@@ -1,7 +1,8 @@
-"""ARCH-09 Step 6b — the worker entrypoint, two loops.
+"""ARCH-09 Step 6b, 9, 10 — the worker entrypoint, three loops.
 
     python -m app.worker --loop relay       # outbox_events -> webhook_deliveries
     python -m app.worker --loop delivery    # webhook_deliveries -> the network
+    python -m app.worker --loop jobs        # jobs -> local handler execution
 """
 
 from __future__ import annotations
@@ -71,6 +72,7 @@ def run_relay_loop(
     lease_seconds: int,
     idle_sleep_seconds: float,
     reap_every_n_passes: int = 20,
+    per_org_cap: Optional[int] = None,
 ) -> None:
     from app.core.principal import system_principal
     from app.db.session import SessionLocal
@@ -104,6 +106,7 @@ def run_relay_loop(
                 worker_id=worker,
                 batch_size=batch_size,
                 lease_seconds=lease_seconds,
+                per_org_cap=per_org_cap,
             )
             for event in claimed:
                 event_id, attempts = event.id, event.attempts
@@ -153,6 +156,7 @@ def run_delivery_loop(
     lease_seconds: int,
     idle_sleep_seconds: float,
     reap_every_n_passes: int = 20,
+    per_org_cap: Optional[int] = None,
 ) -> None:
     from sqlalchemy import select
 
@@ -190,6 +194,7 @@ def run_delivery_loop(
                 worker_id=worker,
                 batch_size=batch_size,
                 lease_seconds=lease_seconds,
+                per_org_cap=per_org_cap,
             )
             for delivery in claimed:
                 endpoint = db.execute(
@@ -264,22 +269,126 @@ def run_delivery_loop(
 
 
 # ======================================================================
+# Loop 3 — jobs: the generic system job queue (ARCH-09 Step 10)
+# ======================================================================
+def run_jobs_loop(
+    *,
+    shutdown: GracefulShutdown,
+    batch_size: int,
+    lease_seconds: int,
+    idle_sleep_seconds: float,
+    reap_every_n_passes: int = 20,
+) -> None:
+    from app.core.principal import system_principal
+    from app.db.session import SessionLocal
+    from app.services.job_service import JOB_HANDLERS
+    from app.workers.claim import (
+        claim_jobs,
+        mark_job_dead,
+        mark_job_failed,
+        mark_job_succeeded,
+        reap_expired_job_leases,
+        worker_identity,
+    )
+
+    worker = worker_identity()
+    logger.info("worker.start", extra={"worker": worker, "loop": "jobs"})
+    passes = 0
+
+    while not shutdown.requested:
+        passes += 1
+
+        if passes % reap_every_n_passes == 0:
+            with SessionLocal() as db:
+                reaped = reap_expired_job_leases(db)
+                db.commit()
+            if reaped:
+                logger.warning("jobs.reaped", extra={"count": reaped})
+
+        with SessionLocal() as db:
+            claimed = claim_jobs(
+                db, worker_id=worker, batch_size=batch_size, lease_seconds=lease_seconds
+            )
+            snapshot = [
+                (j.id, j.job_type, j.payload, j.attempts, j.max_attempts, j.organization_id)
+                for j in claimed
+            ]
+            db.commit()
+
+        if not snapshot:
+            _idle_sleep(idle_sleep_seconds)
+            continue
+
+        if shutdown.requested:
+            logger.info("jobs.draining", extra={"remaining": len(snapshot)})
+
+        for job_id, job_type, payload, attempts, max_attempts, org_id in snapshot:
+            with system_principal(job_name=f"jobs.{job_type}", job_id=job_id):
+                handler = JOB_HANDLERS.get(job_type)
+                if handler is None:
+                    with SessionLocal() as db:
+                        mark_job_dead(
+                            db,
+                            job_id,
+                            error=(
+                                f"UNKNOWN_JOB_TYPE: no handler registered for "
+                                f"{job_type!r} on this worker"
+                            ),
+                        )
+                        db.commit()
+                    continue
+
+                try:
+                    result = handler(payload)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        "jobs.handler_failed",
+                        extra={"job_id": str(job_id), "job_type": job_type},
+                    )
+                    with SessionLocal() as db:
+                        if attempts >= max_attempts:
+                            mark_job_dead(db, job_id, error=f"{type(exc).__name__}: {exc}")
+                        else:
+                            mark_job_failed(
+                                db, job_id, attempts=attempts,
+                                error=f"{type(exc).__name__}: {exc}",
+                            )
+                        db.commit()
+                    continue
+
+                with SessionLocal() as db:
+                    mark_job_succeeded(db, job_id, result=result)
+                    db.commit()
+
+    logger.info("worker.stopped", extra={"worker": worker, "loop": "jobs", "passes": passes})
+
+
+# ======================================================================
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="app.worker")
     parser.add_argument(
         "--loop",
-        choices=["relay", "delivery"],
+        choices=["relay", "delivery", "jobs"],
         required=True,
-        help="relay: outbox -> deliveries. delivery: deliveries -> network.",
+        help="relay: outbox -> deliveries (database only). "
+        "delivery: deliveries -> network (HTTPS). "
+        "jobs: the generic system job queue (ARCH-09 Step 10). "
+        "Run each as a separate process.",
     )
     parser.add_argument("--batch-size", type=int, default=25)
     parser.add_argument(
         "--lease-seconds",
         type=int,
         default=None,
-        help="defaults to 60 (relay) / 120 (delivery).",
+        help="defaults to 60 (relay/jobs) / 120 (delivery).",
     )
     parser.add_argument("--idle-sleep", type=float, default=1.0)
+    parser.add_argument(
+        "--per-org-cap",
+        type=int,
+        default=None,
+        help="ARCH-09 §B.9. Applies to --loop relay and --loop delivery only.",
+    )
     parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING"]
     )
@@ -292,19 +401,32 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     assert_no_heavy_imports()
 
+    if args.per_org_cap is not None and args.per_org_cap >= args.batch_size:
+        logger.warning(
+            "worker.per_org_cap_ineffective",
+            extra={"per_org_cap": args.per_org_cap, "batch_size": args.batch_size},
+        )
+
     lease = args.lease_seconds
     if lease is None:
-        lease = 60 if args.loop == "relay" else 120
+        lease = 120 if args.loop == "delivery" else 60
 
     shutdown = GracefulShutdown().install()
-    runner = run_relay_loop if args.loop == "relay" else run_delivery_loop
+    kwargs = dict(
+        shutdown=shutdown,
+        batch_size=args.batch_size,
+        lease_seconds=lease,
+        idle_sleep_seconds=args.idle_sleep,
+    )
+    if args.loop == "relay":
+        runner, extra = run_relay_loop, {"per_org_cap": args.per_org_cap}
+    elif args.loop == "delivery":
+        runner, extra = run_delivery_loop, {"per_org_cap": args.per_org_cap}
+    else:
+        runner, extra = run_jobs_loop, {}
+
     try:
-        runner(
-            shutdown=shutdown,
-            batch_size=args.batch_size,
-            lease_seconds=lease,
-            idle_sleep_seconds=args.idle_sleep,
-        )
+        runner(**kwargs, **extra)
     except SystemExit as exc:
         return int(exc.code or 0)
     return 0

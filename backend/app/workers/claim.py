@@ -1,4 +1,8 @@
-"""ARCH-09 Step 3 — the claim primitive."""
+"""ARCH-09 Step 3, 9, 10 — the claim primitive.
+
+ONE claim implementation, used by every queue-shaped table in the phase:
+`outbox_events` (Step 2/9), `webhook_deliveries` (Step 4/9), and `jobs` (Step 10).
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence, Type
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, select, text, true as sa_true, update
 from sqlalchemy.orm import Session
 
 from app.models.outbox_event import (
@@ -40,6 +44,39 @@ def _full_jitter_delay(attempts: int) -> timedelta:
     return timedelta(seconds=random.uniform(0, window))
 
 
+def _rank_eligible_ids(
+    db: Session,
+    table: Any,
+    *,
+    claimable_values: Sequence[str],
+    per_org_cap: int,
+    batch_size: int,
+    org_column_name: str = "organization_id",
+) -> list[Any]:
+    org_col = table.c[org_column_name]
+    now = func.now()
+
+    ranked = (
+        select(
+            table.c.id,
+            table.c.available_at,
+            table.c.seq,
+            func.row_number()
+            .over(partition_by=org_col, order_by=(table.c.available_at, table.c.seq))
+            .label("rn"),
+        )
+        .where(table.c.status.in_(claimable_values), table.c.available_at <= now)
+        .subquery()
+    )
+    eligible_stmt = (
+        select(ranked.c.id)
+        .where(ranked.c.rn <= per_org_cap)
+        .order_by(ranked.c.available_at.asc(), ranked.c.seq.asc())
+        .limit(batch_size)
+    )
+    return [row.id for row in db.execute(eligible_stmt).all()]
+
+
 def claim_batch(
     db: Session,
     *,
@@ -48,15 +85,34 @@ def claim_batch(
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     model: Type[Any] = OutboxEvent,
     claimable_statuses: Sequence[OutboxEventStatus] = CLAIMABLE_STATUSES,
+    per_org_cap: Optional[int] = None,
 ) -> list[Any]:
     worker = worker_id or worker_identity()
     table = model.__table__
     now = func.now()
+    claimable_values = [
+        getattr(s, "value", s) for s in claimable_statuses
+    ]
+
+    if per_org_cap is not None:
+        eligible_ids = _rank_eligible_ids(
+            db,
+            table,
+            claimable_values=claimable_values,
+            per_org_cap=per_org_cap,
+            batch_size=batch_size,
+        )
+        if not eligible_ids:
+            return []
+        id_filter = table.c.id.in_(eligible_ids)
+    else:
+        id_filter = sa_true()
 
     candidates = (
         select(table.c.id)
         .where(
-            table.c.status.in_([s.value for s in claimable_statuses]),
+            id_filter,
+            table.c.status.in_(claimable_values),
             table.c.available_at <= now,
         )
         .order_by(table.c.available_at.asc(), table.c.seq.asc())
@@ -76,7 +132,7 @@ def claim_batch(
             updated_at=now,
         )
         .returning(table)
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
 
     rows = db.execute(stmt).fetchall()
@@ -89,7 +145,12 @@ def claim_batch(
     )
     logger.info(
         "outbox.claim",
-        extra={"worker": worker, "claimed": len(claimed), "batch": batch_size},
+        extra={
+            "worker": worker,
+            "claimed": len(claimed),
+            "batch": batch_size,
+            "per_org_cap": per_org_cap,
+        },
     )
     return list(claimed)
 
@@ -105,7 +166,7 @@ def mark_published(db: Session, event_id: uuid.UUID) -> None:
             last_error=None,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
 
 
@@ -127,7 +188,7 @@ def mark_failed(
                 last_error=_truncate(error),
                 updated_at=func.now(),
             )
-            .execution_options(synchronize_session="fetch")
+            .execution_options(synchronize_session=False)
         )
         logger.warning(
             "outbox.dead_letter",
@@ -150,7 +211,7 @@ def mark_failed(
             last_error=_truncate(error),
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
     return OutboxEventStatus.FAILED
 
@@ -181,7 +242,7 @@ def reap_expired_leases(db: Session, *, limit: int = 500) -> int:
             updated_at=func.now(),
         )
         .returning(table.c.id)
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     ).fetchall()
 
     if rows:
@@ -212,15 +273,32 @@ def claim_webhook_deliveries(
     worker_id: Optional[str] = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    per_org_cap: Optional[int] = None,
 ) -> list[WebhookDelivery]:
     worker = worker_id or worker_identity()
     table = WebhookDelivery.__table__
     now = func.now()
+    claimable_values = [s.value for s in CLAIMABLE_DELIVERY_STATUSES]
+
+    if per_org_cap is not None:
+        eligible_ids = _rank_eligible_ids(
+            db,
+            table,
+            claimable_values=claimable_values,
+            per_org_cap=per_org_cap,
+            batch_size=batch_size,
+        )
+        if not eligible_ids:
+            return []
+        id_filter = table.c.id.in_(eligible_ids)
+    else:
+        id_filter = sa_true()
 
     candidates = (
         select(table.c.id)
         .where(
-            table.c.status.in_([s.value for s in CLAIMABLE_DELIVERY_STATUSES]),
+            id_filter,
+            table.c.status.in_(claimable_values),
             table.c.available_at <= now,
         )
         .order_by(table.c.available_at.asc(), table.c.seq.asc())
@@ -240,7 +318,7 @@ def claim_webhook_deliveries(
             updated_at=now,
         )
         .returning(table)
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
 
     rows = db.execute(stmt).fetchall()
@@ -255,7 +333,12 @@ def claim_webhook_deliveries(
     )
     logger.info(
         "webhook_delivery.claim",
-        extra={"worker": worker, "claimed": len(claimed), "batch": batch_size},
+        extra={
+            "worker": worker,
+            "claimed": len(claimed),
+            "batch": batch_size,
+            "per_org_cap": per_org_cap,
+        },
     )
     return list(claimed)
 
@@ -274,7 +357,7 @@ def mark_delivered(
             last_response_status=response_status,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
 
 
@@ -298,7 +381,7 @@ def mark_delivery_failed(
                 last_response_status=response_status,
                 updated_at=func.now(),
             )
-            .execution_options(synchronize_session="fetch")
+            .execution_options(synchronize_session=False)
         )
         logger.warning(
             "webhook_delivery.dead_letter",
@@ -326,7 +409,7 @@ def mark_delivery_failed(
             last_response_status=response_status,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
     return WebhookDeliveryStatus.FAILED
 
@@ -348,7 +431,7 @@ def mark_delivery_dead(
             last_response_status=response_status,
             updated_at=func.now(),
         )
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     )
     logger.warning(
         "webhook_delivery.dead_letter",
@@ -387,9 +470,143 @@ def reap_expired_webhook_leases(db: Session, *, limit: int = 500) -> int:
             updated_at=func.now(),
         )
         .returning(table.c.id)
-        .execution_options(synchronize_session="fetch")
+        .execution_options(synchronize_session=False)
     ).fetchall()
 
     if rows:
         logger.warning("webhook_delivery.reaped", extra={"count": len(rows)})
+    return len(rows)
+
+
+# ============================================================================
+# ARCH-09 Step 10 — jobs claim path
+# ============================================================================
+from app.models.job import CLAIMABLE_JOB_STATUSES, Job, JobStatus  # noqa: E402
+
+JOB_MAX_ATTEMPTS_DEFAULT: int = 5
+
+
+def claim_jobs(
+    db: Session,
+    *,
+    worker_id: Optional[str] = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+) -> list[Job]:
+    worker = worker_id or worker_identity()
+    table = Job.__table__
+    now = func.now()
+
+    candidates = (
+        select(table.c.id)
+        .where(
+            table.c.status.in_([s.value for s in CLAIMABLE_JOB_STATUSES]),
+            table.c.available_at <= now,
+        )
+        .order_by(table.c.available_at.asc(), table.c.seq.asc())
+        .limit(batch_size)
+        .with_for_update(skip_locked=True)
+    )
+
+    stmt = (
+        update(table)
+        .where(table.c.id.in_(candidates))
+        .values(
+            status=JobStatus.CLAIMED.value,
+            claimed_at=now,
+            claimed_by=worker,
+            claim_expires_at=now + text(f"interval '{int(lease_seconds)} seconds'"),
+            attempts=table.c.attempts + 1,
+            updated_at=now,
+        )
+        .returning(table)
+        .execution_options(synchronize_session=False)
+    )
+
+    rows = db.execute(stmt).fetchall()
+    if not rows:
+        return []
+
+    ids = [row.id for row in rows]
+    claimed = db.execute(select(Job).where(Job.id.in_(ids))).scalars().all()
+    logger.info(
+        "jobs.claim", extra={"worker": worker, "claimed": len(claimed), "batch": batch_size}
+    )
+    return list(claimed)
+
+
+def mark_job_succeeded(db: Session, job_id: uuid.UUID, *, result: Optional[dict] = None) -> None:
+    db.execute(
+        update(Job)
+        .where(Job.id == job_id)
+        .values(
+            status=JobStatus.SUCCEEDED,
+            succeeded_at=func.now(),
+            claim_expires_at=None,
+            last_error=None,
+            result=result,
+            updated_at=func.now(),
+        )
+        .execution_options(synchronize_session=False)
+    )
+
+
+def mark_job_failed(db: Session, job_id: uuid.UUID, *, attempts: int, error: str) -> None:
+    delay = _full_jitter_delay(attempts)
+    db.execute(
+        update(Job)
+        .where(Job.id == job_id)
+        .values(
+            status=JobStatus.FAILED,
+            claim_expires_at=None,
+            available_at=datetime.now(timezone.utc) + delay,
+            last_error=_truncate(error),
+            updated_at=func.now(),
+        )
+        .execution_options(synchronize_session=False)
+    )
+
+
+def mark_job_dead(db: Session, job_id: uuid.UUID, *, error: str) -> None:
+    db.execute(
+        update(Job)
+        .where(Job.id == job_id)
+        .values(
+            status=JobStatus.DEAD,
+            claim_expires_at=None,
+            last_error=_truncate(error),
+            updated_at=func.now(),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    logger.warning("jobs.dead_letter", extra={"job_id": str(job_id)})
+
+
+def reap_expired_job_leases(db: Session, *, limit: int = 500) -> int:
+    table = Job.__table__
+    candidates = (
+        select(table.c.id)
+        .where(
+            table.c.status == JobStatus.CLAIMED.value,
+            table.c.claim_expires_at < func.now(),
+        )
+        .order_by(table.c.claim_expires_at.asc())
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    rows = db.execute(
+        update(table)
+        .where(table.c.id.in_(candidates))
+        .values(
+            status=JobStatus.FAILED.value,
+            claim_expires_at=None,
+            available_at=func.now() + text(f"interval '{RETRY_BASE_SECONDS} seconds'"),
+            last_error="Lease expired; reclaimed from a worker that did not report a result.",
+            updated_at=func.now(),
+        )
+        .returning(table.c.id)
+        .execution_options(synchronize_session=False)
+    ).fetchall()
+    if rows:
+        logger.warning("jobs.reaped", extra={"count": len(rows)})
     return len(rows)

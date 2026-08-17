@@ -9,7 +9,13 @@ imported here to register their metadata prior to running migrations.
 from app.db.base import Base
 from app.models.user import User
 from app.models.work_item import WorkItem
-from app.models.job import ProcessingJob
+from app.models.job import (
+    ProcessingJob,
+    Job,
+    JobStatus,
+    CLAIMABLE_JOB_STATUSES,
+    TERMINAL_JOB_STATUSES,
+)
 from app.models.automation import AutomationRule, AutomationLog
 from app.models.notification import Notification
 from app.models.assistant import Conversation, ConversationMessage
@@ -60,6 +66,10 @@ __all__ = [
     "User",
     "WorkItem",
     "ProcessingJob",
+    "Job",
+    "JobStatus",
+    "CLAIMABLE_JOB_STATUSES",
+    "TERMINAL_JOB_STATUSES",
     "AutomationRule",
     "AutomationLog",
     "Notification",
