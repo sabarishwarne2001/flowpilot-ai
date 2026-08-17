@@ -71,7 +71,20 @@ class TestAuditLogImmutability:
     def test_truncate_is_rejected(self, db_session, seed_audit_row):
         with pytest.raises((InternalError, ProgrammingError, DBAPIError)) as caught:
             db_session.execute(text("TRUNCATE TABLE audit_logs"))
-        assert _pgcode(caught.value) == IMMUTABILITY_ERRCODE or "append-only" in str(caught.value)
+        assert (
+            _pgcode(caught.value) in (IMMUTABILITY_ERRCODE, "0A000")
+            or "append-only" in str(caught.value)
+            or "cannot truncate" in str(caught.value).lower()
+        )
+        db_session.rollback()
+
+        # Also assert TRUNCATE CASCADE triggers the immutability error
+        with pytest.raises((InternalError, ProgrammingError, DBAPIError)) as caught_cascade:
+            db_session.execute(text("TRUNCATE TABLE audit_logs CASCADE"))
+        assert (
+            _pgcode(caught_cascade.value) == IMMUTABILITY_ERRCODE
+            or "append-only" in str(caught_cascade.value)
+        )
         db_session.rollback()
 
     def test_insert_is_permitted(self, db_session, tenant):

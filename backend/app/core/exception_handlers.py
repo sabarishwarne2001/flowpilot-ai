@@ -42,6 +42,9 @@ from app.core.exceptions import (
     SeatLimitExceededError,
     SlugError,
     SlugUnavailableError,
+    SpendControlError,
+    SpendLimitExceededError,
+    SpendLimitMisconfiguredError,
     TargetNotVerifiedError,
     TenantSuspendedError,
     TransferExpiredError,
@@ -73,6 +76,11 @@ _DEFAULT_MAPPING: tuple[int, str] = (400, "BAD_REQUEST")
 _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     # --- Rate Limiting -----------------------------------------------------
     RateLimitExceededError: (status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
+
+    # --- Spend Controls (ARCH-10 Step 3) -----------------------------------
+    SpendLimitExceededError: (status.HTTP_402_PAYMENT_REQUIRED, "SPEND_LIMIT_EXCEEDED"),
+    SpendLimitMisconfiguredError: (400, "SPEND_LIMIT_MISCONFIGURED"),
+    SpendControlError: (400, "SPEND_CONTROL_ERROR"),
 
     # --- Organizations -----------------------------------------------------
     OrganizationNotFoundError: (404, "RESOURCE_NOT_FOUND"),

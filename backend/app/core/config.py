@@ -185,6 +185,23 @@ class Settings(BaseSettings):
     RETRIEVAL_MAX_LATENCY_MS: float = 300.0
     RETRIEVAL_FAIL_FAST: bool = False
 
+    # --- ARCH-10 Step 3: default spend ceilings -------------------------
+    # Applied to any organization with no explicit spend_limits row.
+    SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000   # $25.00
+    SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000      # $5.00
+    SPEND_DEFAULT_MONTHLY_OCR_PAGES: Optional[int] = 2_000
+    SPEND_DEFAULT_MONTHLY_LLM_INPUT_TOKENS: Optional[int] = 2_000_000
+    SPEND_DEFAULT_MONTHLY_LLM_OUTPUT_TOKENS: Optional[int] = 500_000
+    SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS: Optional[int] = 5_000_000
+
+    def spend_default_quantities(self) -> dict[str, Optional[int]]:
+        return {
+            "ocr.page": self.SPEND_DEFAULT_MONTHLY_OCR_PAGES,
+            "llm.input_token": self.SPEND_DEFAULT_MONTHLY_LLM_INPUT_TOKENS,
+            "llm.output_token": self.SPEND_DEFAULT_MONTHLY_LLM_OUTPUT_TOKENS,
+            "embedding.token": self.SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS,
+        }
+
     @field_validator("RAG_TOP_K")
     @classmethod
     def validate_rag_top_k(cls, v: int) -> int:

@@ -37,12 +37,6 @@ def upgrade() -> None:
             sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column(
-            "organization_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
-            nullable=True,
-        ),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("role", sa.String(length=32), nullable=False),
         sa.Column(
@@ -58,8 +52,10 @@ def upgrade() -> None:
         sa.Column("token", sa.String(length=255), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("rejected_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "invited_by_id",
+            "inviter_id",
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("users.id", ondelete="SET NULL"),
             nullable=True,
@@ -89,6 +85,11 @@ def upgrade() -> None:
         ["email"],
     )
     op.create_index(
+        "ix_workspace_invitations_token",
+        "workspace_invitations",
+        ["token"],
+    )
+    op.create_index(
         "uq_pending_invitation",
         "workspace_invitations",
         ["workspace_id", "email"],
@@ -99,6 +100,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("uq_pending_invitation", table_name="workspace_invitations")
+    op.drop_index("ix_workspace_invitations_token", table_name="workspace_invitations")
     op.drop_index("ix_workspace_invitations_email", table_name="workspace_invitations")
     op.drop_index(
         "ix_workspace_invitations_workspace_id", table_name="workspace_invitations"

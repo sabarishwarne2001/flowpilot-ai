@@ -4,6 +4,9 @@ Database representations for Job entities in FlowPilot AI:
 2. Job (jobs table) - Generic system job queue for offloading async tasks (ARCH-09 Step 10).
 """
 
+from __future__ import annotations
+
+import logging
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
@@ -31,15 +34,29 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.work_item import WorkItem
 
+logger = logging.getLogger(__name__)
+
 
 # ============================================================================
 # 1. ProcessingJob (Work Item execution pipeline runs)
+# ----------------------------------------------------------------------------
+# RETIRED (ARCH-10 Step 1). New background work goes on `jobs` via
+# app.services.job_service.enqueue(). This model is kept mapped only
+# until document_processor.py is rewritten in Steps 6-7; the table is
+# dropped in the Step 7 CONTRACT revision. Do not add call sites.
 # ============================================================================
 class ProcessingJob(Base, UUIDMixin, TimestampMixin):
     """
     Persistent representation of a single background pipeline execution run.
     """
     __tablename__ = "processing_jobs"
+
+    def __init__(self, **kwargs: Any) -> None:
+        logger.warning(
+            "processing_jobs.deprecated_write",
+            extra={"caller": "ProcessingJob()", "arch": "ARCH-10 Step 1"},
+        )
+        super().__init__(**kwargs)
 
     progress: Mapped[int] = mapped_column(
         Integer, 

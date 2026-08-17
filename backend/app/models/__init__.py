@@ -31,6 +31,7 @@ from app.models.document_settings import DocumentSettings
 from app.models.settings_migration_archive import SettingsMigrationArchive
 from app.models.auth_token import AuthToken, AuthTokenPurpose
 from app.models.user_session import UserSession, SessionRevokedReason
+from app.models.api_key import ApiKey
 
 from app.models.organization import (
     Organization,
@@ -60,6 +61,9 @@ from app.models.outbox_event import OutboxEvent, OutboxEventStatus  # noqa: F401
 from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus  # noqa: F401
 from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus  # noqa: F401
 from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt, AttemptDisposition
+
+from app.models.usage_event import UsageEvent  # noqa: F401
+from app.models.spend_limit import SpendLimit, SpendLimitPeriod  # noqa: F401
 
 __all__ = [
     "Base",
@@ -93,6 +97,7 @@ __all__ = [
     "AuthTokenPurpose",
     "UserSession",
     "SessionRevokedReason",
+    "ApiKey",
     "OwnershipTransfer",
     "OwnershipTransferStatus",
     "EmailChangeRequest",
@@ -112,4 +117,7 @@ __all__ = [
     "WebhookDeliveryStatus",
     "WebhookDeliveryAttempt",
     "AttemptDisposition",
+    "UsageEvent",
+    "SpendLimit",
+    "SpendLimitPeriod",
 ]

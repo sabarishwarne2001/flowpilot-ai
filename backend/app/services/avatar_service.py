@@ -8,18 +8,21 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Optional
 
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.storage import ObjectNotFoundError, get_storage_driver
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
 logger = logging.getLogger("app.services.avatar")
 
+AVATAR_DIR = Path(settings.UPLOAD_DIR) / "avatars"
 MIN_DIMENSION = 32
 MAX_DIMENSION = 1024
 MAX_AVATAR_BYTES = 2 * 1024 * 1024

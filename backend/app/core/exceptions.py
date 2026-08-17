@@ -7,6 +7,9 @@ FlowPilotError.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Optional
+
 
 # ============================================================================
 # Root
@@ -37,6 +40,66 @@ class RateLimitExceededError(FlowPilotError):
     @property
     def response_headers(self) -> dict[str, str]:
         return {"Retry-After": str(self.retry_after)}
+
+
+# ============================================================================
+# Spend controls (ARCH-10 Step 3)
+# ============================================================================
+
+class SpendControlError(FlowPilotError):
+    """Base exception for per-tenant spend ceiling failures."""
+    pass
+
+
+class SpendLimitMisconfiguredError(SpendControlError):
+    """A limit was defined against an unknown key or with no ceiling at all."""
+    pass
+
+
+class SpendLimitExceededError(SpendControlError):
+    """The operation would take the tenant past a configured ceiling.
+
+    Distinct from RateLimitExceededError: a rate limit protects the platform
+    from request volume and clears in seconds. A spend ceiling protects the
+    business from provider cost and clears at the end of a billing period.
+    Collapsing them into one 429 tells the customer to retry in a minute for
+    something that will still refuse in three weeks.
+    """
+
+    def __init__(
+        self,
+        *,
+        limit_key: str,
+        period: str,
+        dimension: str,
+        ceiling: str,
+        current: str,
+        requested: str,
+        resets_at: Optional[datetime] = None,
+        is_platform_default: bool = False,
+    ) -> None:
+        super().__init__(
+            f"Spend limit reached for '{limit_key}' ({period}): "
+            f"{current} + {requested} exceeds {ceiling} {dimension}."
+        )
+        self.limit_key = limit_key
+        self.period = period
+        self.dimension = dimension
+        self.ceiling = ceiling
+        self.current = current
+        self.requested = requested
+        self.resets_at = resets_at
+        self.is_platform_default = is_platform_default
+
+    @property
+    def response_headers(self) -> dict[str, str]:
+        headers = {
+            "X-FlowPilot-Spend-Limit": self.limit_key,
+            "X-FlowPilot-Spend-Period": self.period,
+        }
+        if self.resets_at is not None:
+            headers["X-FlowPilot-Spend-Resets-At"] = self.resets_at.isoformat()
+        return headers
 
 
 # ============================================================================

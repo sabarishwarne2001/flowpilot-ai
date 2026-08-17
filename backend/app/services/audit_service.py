@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.client_ip import client_ip
-from app.core.principal import Principal
+from app.core.principal import Principal, get_current_principal
 from app.db.session import SessionLocal
 from app.models.audit_log import AuditAction, AuditLog, AuditOutcome, AuditResourceType
 
@@ -169,14 +169,15 @@ def _build(
     resolved_api_key_id = api_key_id
     resolved_principal = principal
 
-    if resolved_principal is None:
-        from app.api.deps import get_current_principal
+    if resolved_principal is None and resolved_actor_id is None and resolved_api_key_id is None:
         resolved_principal = get_current_principal()
 
+    resolved_details: dict[str, Any] = dict(details or {})
     if resolved_principal is not None:
-        cols = resolved_principal.audit_columns
+        cols = resolved_principal.audit_columns()
         resolved_actor_id = cols["actor_id"]
         resolved_api_key_id = cols["api_key_id"]
+        resolved_details = {**resolved_principal.audit_details(), **resolved_details}
 
     return AuditLog(
         organization_id=organization_id,
@@ -187,7 +188,7 @@ def _build(
         resource_id=resource_id,
         action=_coerce_action(action),
         outcome=_coerce_outcome(outcome),
-        details=_sanitize_details(details),
+        details=_sanitize_details(resolved_details or None),
         ip_address=_truncate(ip_address, _IP_ADDRESS_MAX),
         user_agent=_truncate(user_agent, _USER_AGENT_MAX),
     )

@@ -2,28 +2,16 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.services.ai_settings_service import (
-    ai_settings_service,
-)
-from app.schemas.ai_settings import (
-    AISettingsResponse,
-    AISettingsUpdate,
-)
-from app.schemas.available_providers import (
-    AvailableProvidersResponse,
-)
-from app.schemas.ai_connection_test import (
-    AIConnectionTestResponse,
-)
 from app.core.ai_models import AI_MODELS
+from app.schemas.ai_connection_test import AIConnectionTestResponse
+from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdate
+from app.schemas.available_providers import AvailableProvidersResponse
+from app.services.ai_settings_service import ai_settings_service
 
 logger = logging.getLogger("app.api.v1.ai_settings")
 
@@ -39,7 +27,7 @@ router = APIRouter(
 )
 async def get_ai_settings(
     db: Session = Depends(deps.get_db),
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> AISettingsResponse:
     settings = crud.get_ai_settings(
         db,
@@ -63,7 +51,7 @@ async def get_ai_settings(
 async def upsert_ai_settings(
     settings_in: AISettingsUpdate,
     db: Session = Depends(deps.get_db),
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> AISettingsResponse:
     settings = crud.upsert_ai_settings(
         db,
@@ -86,7 +74,7 @@ async def upsert_ai_settings(
     summary="Get Supported AI Models",
 )
 async def get_supported_models(
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ):
     return {
         provider.value: models
@@ -100,7 +88,7 @@ async def get_supported_models(
     summary="Get Available AI Providers",
 )
 async def get_available_providers(
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ):
     return ai_settings_service.get_available_providers()
 
@@ -112,7 +100,7 @@ async def get_available_providers(
 )
 async def test_ai_configuration(
     settings_in: AISettingsUpdate,
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ):
     return ai_settings_service.test_connection(
         ai_settings=settings_in,

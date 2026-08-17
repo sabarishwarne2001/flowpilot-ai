@@ -8,7 +8,6 @@ resolution chain.
 import logging
 import re
 import uuid
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Annotated, Any, Generator, Optional, Sequence, Union
 
@@ -27,7 +26,12 @@ from app.core.exceptions import (
     WorkspaceAccessDeniedError,
     WorkspacePermissionDeniedError,
 )
-from app.core.principal import Principal
+from app.core.principal import (
+    Principal,
+    PrincipalKind,
+    get_current_principal,
+    set_current_principal,
+)
 from app.core.scopes import ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
@@ -51,12 +55,6 @@ logger = logging.getLogger("app.api.deps")
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
-
-_principal_var: ContextVar[Optional[Principal]] = ContextVar("principal", default=None)
-
-
-def get_current_principal() -> Optional[Principal]:
-    return _principal_var.get()
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -85,8 +83,8 @@ async def get_current_user(
         key, membership = res
         user = membership.user
 
-        principal = Principal(kind="API_KEY", user_id=user.id, api_key_id=key.id)
-        _principal_var.set(principal)
+        principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=user.id)
+        set_current_principal(principal)
 
         if request is not None:
             request.state.user_id = user.id
@@ -113,8 +111,8 @@ async def get_current_user(
         )
         raise credentials_exception
 
-    principal = Principal(kind="USER", user_id=user.id, api_key_id=None)
-    _principal_var.set(principal)
+    principal = Principal.for_user(user.id)
+    set_current_principal(principal)
 
     if request is not None:
         request.state.user_id = user.id
@@ -314,7 +312,7 @@ class RequireScope:
         context: OrganizationContext = Depends(get_organization_context),
     ) -> OrganizationContext:
         principal = getattr(request.state, "principal", None) or get_current_principal()
-        if principal and principal.kind == "API_KEY":
+        if principal and (principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY):
             target_scope = self.required_scope
 
             if target_scope is None:

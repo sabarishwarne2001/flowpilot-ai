@@ -4,6 +4,7 @@ ARCH-06 Step 7 — avatar upload and validated serving. Exit criteria E9–E11.
 
 from __future__ import annotations
 
+import gc
 import io
 import uuid
 from pathlib import Path
@@ -11,7 +12,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from app.core.config import settings
 from app.services import avatar_service
+
+
+def _avatar_dir() -> Path:
+    return Path(settings.UPLOAD_DIR) / "avatars"
 
 
 def make_png(size: tuple[int, int] = (64, 64), colour=(10, 20, 30)) -> bytes:
@@ -30,20 +36,27 @@ def make_jpeg_with_exif(marker: str = "SECRET-CAMERA-MAKE") -> bytes:
 
 
 def _get_avatar_files() -> list[Path]:
-    if not avatar_service.AVATAR_DIR.exists():
+    avatar_dir = _avatar_dir()
+    if not avatar_dir.exists():
         return []
-    return [p for p in avatar_service.AVATAR_DIR.rglob("*") if p.is_file()]
+    return [p for p in avatar_dir.rglob("*") if p.is_file()]
 
 
 @pytest.fixture(autouse=True)
 def clean_avatar_dir():
-    """Removes all files in AVATAR_DIR recursively before and after each test run."""
+    """Removes all files in avatar directory recursively before and after each test run."""
+    avatar_dir = _avatar_dir()
+
     def sweep():
-        if avatar_service.AVATAR_DIR.exists():
-            for path in sorted(avatar_service.AVATAR_DIR.rglob("*"), reverse=True):
+        gc.collect()
+        if avatar_dir.exists():
+            for path in sorted(avatar_dir.rglob("*"), reverse=True):
                 if path.is_file():
-                    path.unlink(missing_ok=True)
-                elif path.is_dir() and path != avatar_service.AVATAR_DIR:
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                elif path.is_dir() and path != avatar_dir:
                     try:
                         path.rmdir()
                     except OSError:
