@@ -37,7 +37,7 @@ USER_AGENT = "FlowPilot-Webhooks/1.0"
 RESPONSE_EXCERPT_BYTES: int = 1024
 RETRY_AFTER_CEILING = timedelta(hours=6)
 
-TRANSIENT_4XX: frozenset[int] = frozenset({408, 429})
+TRANSIENT_4XX: frozenset[int] = frozenset({408, 425, 429})
 PERMANENT_4XX_KNOWN: frozenset[int] = frozenset({400, 401, 403, 404, 410})
 
 _REDACTED_REQUEST_HEADERS: frozenset[str] = frozenset(
@@ -47,6 +47,7 @@ _REDACTED_RESPONSE_HEADERS: frozenset[str] = frozenset(
     {"set-cookie", "authorization", "www-authenticate", "proxy-authenticate"}
 )
 _REDACTION_MARKER = "[REDACTED]"
+SSRF_REFUSED_PREFIX = "SSRF_REFUSED:"
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +182,10 @@ def _describe_status(status: int) -> str:
     return f"HTTP {status}: server error; will retry."
 
 
+def is_ssrf_refusal(outcome: AttemptOutcome) -> bool:
+    return bool(outcome.error and outcome.error.startswith(SSRF_REFUSED_PREFIX))
+
+
 def attempt_delivery(
     endpoint: WebhookEndpoint,
     delivery: WebhookDelivery,
@@ -240,7 +245,7 @@ def attempt_delivery(
                 "reason": str(exc),
             },
         )
-        return _fail(AttemptDisposition.DEAD, f"SSRF_REFUSED: {exc}")
+        return _fail(AttemptDisposition.DEAD, f"{SSRF_REFUSED_PREFIX} {exc}")
     except DNSResolutionError as exc:
         return _fail(AttemptDisposition.RETRY, f"DNS_FAILED: {exc}")
     except TLSError as exc:
@@ -286,7 +291,8 @@ def record_outcome(
     delivery: WebhookDelivery,
     outcome: AttemptOutcome,
 ) -> WebhookDeliveryAttempt:
-    """Write the attempt row and the delivery's status change together."""
+    """Write attempt, delivery status, AND circuit-breaker state in ONE transaction."""
+    from app.services import circuit_breaker
     from app.workers.claim import (
         mark_delivered,
         mark_delivery_dead,
@@ -311,12 +317,19 @@ def record_outcome(
 
     if outcome.disposition is AttemptDisposition.DELIVERED:
         mark_delivered(db, delivery.id, response_status=outcome.response_status or 200)
+        circuit_breaker.record_success(db, delivery.webhook_endpoint_id)
     elif outcome.disposition is AttemptDisposition.DEAD:
         mark_delivery_dead(
             db,
             delivery.id,
             error=outcome.error or "Terminal failure.",
             response_status=outcome.response_status,
+        )
+        circuit_breaker.record_failure(
+            db,
+            delivery.webhook_endpoint_id,
+            error=outcome.error,
+            ssrf_refused=is_ssrf_refusal(outcome),
         )
     else:
         mark_delivery_failed(
@@ -327,6 +340,7 @@ def record_outcome(
             response_status=outcome.response_status,
             retry_after=outcome.retry_after,
         )
+        circuit_breaker.record_failure(db, delivery.webhook_endpoint_id, error=outcome.error)
 
     db.flush()
     logger.info(

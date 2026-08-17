@@ -8,16 +8,20 @@ from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import (
+    ARRAY,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, ENUM as PGEnum, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.webhook_events import WEBHOOK_EVENT_TYPES
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -29,6 +33,8 @@ class WebhookEndpointStatus(str, PyEnum):
 
 
 class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
+    """A customer's registered delivery target."""
+
     __tablename__ = "webhook_endpoints"
 
     __table_args__ = (
@@ -42,8 +48,27 @@ class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
             name="ck_webhook_endpoints_disabled_at_matches_status",
         ),
         CheckConstraint(
-            "(previous_secret_encrypted IS NULL) = (previous_secret_expires_at IS NOT NULL)",
+            "(previous_secret_encrypted IS NULL) = (previous_secret_expires_at IS NULL)",
             name="ck_webhook_endpoints_previous_secret_paired",
+        ),
+        # --- ARCH-09 Step 7: circuit breaker ---------------------------
+        CheckConstraint(
+            "consecutive_failures >= 0",
+            name="consecutive_failures_non_negative",
+        ),
+        CheckConstraint(
+            "(consecutive_failures = 0) = (first_failure_at IS NULL)",
+            name="failure_streak_consistent",
+        ),
+        CheckConstraint(
+            "NOT auto_disabled OR status = 'DISABLED'::webhook_endpoint_status",
+            name="auto_disabled_implies_disabled",
+        ),
+        Index(
+            "ix_webhook_endpoints_auto_disabled",
+            "organization_id",
+            text("disabled_at DESC"),
+            postgresql_where=text("auto_disabled"),
         ),
         Index("ix_webhook_endpoints_organization_id", "organization_id"),
         Index(
@@ -100,6 +125,34 @@ class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
+    # ------------------------------------------------------------------
+    # ARCH-09 §B.5 — circuit breaker state
+    # ------------------------------------------------------------------
+    consecutive_failures: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    first_failure_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_failure_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_success_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_disabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )
+
+    @property
+    def is_auto_disabled(self) -> bool:
+        return self.auto_disabled and not self.is_active
+
     @property
     def is_active(self) -> bool:
         return self.status is WebhookEndpointStatus.ACTIVE
@@ -111,7 +164,7 @@ class WebhookEndpoint(Base, UUIDMixin, TimestampMixin):
     def subscribes_to(self, event_type: str) -> bool:
         return event_type in self.event_types
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"<WebhookEndpoint {self.id} org={self.organization_id} url={self.url!r}>"
 
 

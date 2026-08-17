@@ -36,6 +36,7 @@ class AuditResourceType(str, PyEnum):
     SESSION = "SESSION"
     AUDIT_LOG = "AUDIT_LOG"
     API_KEY = "API_KEY"
+    WEBHOOK_ENDPOINT = "WEBHOOK_ENDPOINT"
 
 
 class AuditAction(str, PyEnum):
@@ -54,6 +55,7 @@ class AuditAction(str, PyEnum):
     EXPORTED = "EXPORTED"
     ROTATED = "ROTATED"
     ACCESSED = "ACCESSED"
+    WEBHOOK_ENDPOINT_AUTO_DISABLED = "WEBHOOK_ENDPOINT_AUTO_DISABLED"
 
 
 _resource_type_pg = PgEnum(
