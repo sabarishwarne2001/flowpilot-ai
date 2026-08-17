@@ -15,6 +15,7 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.utils import initialize_storage
+from app.api.v1 import webhooks as webhooks_v1
 
 setup_logging()
 logger = logging.getLogger("app.main")
@@ -70,3 +71,5 @@ app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 logger.info(f"API endpoints registered under baseline prefix: {settings.API_V1_STR}")
+
+app.include_router(webhooks_v1.router, prefix=settings.API_V1_STR)

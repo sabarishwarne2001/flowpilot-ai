@@ -10,11 +10,12 @@ import re
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Annotated, Generator, Optional, Sequence, Union
+from typing import Annotated, Any, Generator, Optional, Sequence, Union
 
-from fastapi import Depends, HTTPException, Path, Request, status
+from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from app import crud
 from app.core import security
@@ -77,7 +78,6 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # 1. API Key Token Authentication (ARCH-08 Step 9, Step 11)
     if token and token.startswith(("fp_live_", "fp_test_")):
         res = api_key_service.authenticate_api_key_token(db, token=token)
         if res is None:
@@ -97,7 +97,6 @@ async def get_current_user(
 
         return user
 
-    # 2. Bearer JWT Session Authentication
     claims = security.decode_access_token_claims(token)
     if claims is None:
         raise credentials_exception
@@ -423,3 +422,5 @@ RequireOrgAdmin = RequireOrgRole(
 )
 
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
+
+OrgAdminCtx = Annotated[OrganizationContext, Depends(RequireOrgAdmin)]

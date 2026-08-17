@@ -1,4 +1,7 @@
-"""Named scope taxonomy and effective permission calculation (ARCH-08 §B.2, §9.3)."""
+"""Named scope taxonomy and effective permission calculation (ARCH-08 §B.2, §9.3).
+
+ARCH-09 Step 8 addition: WEBHOOKS_READ / WEBHOOKS_WRITE / WEBHOOKS_ADMIN.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +22,10 @@ class ApiKeyScope(str, Enum):
     AUDIT_LOGS_READ = "audit_logs:read"
     FILES_READ = "files:read"
     FILES_WRITE = "files:write"
+    # --- ARCH-09 Step 8 -----------------------------------------------
+    WEBHOOKS_READ = "webhooks:read"
+    WEBHOOKS_WRITE = "webhooks:write"
+    WEBHOOKS_ADMIN = "webhooks:admin"
 
 
 PERMANENTLY_EXCLUDED_SCOPES = frozenset({
@@ -44,7 +51,6 @@ SCOPES_BY_ROLE: dict[OrganizationRole, frozenset[ApiKeyScope]] = {
     }),
 }
 
-# Route template mapping for scope enforcement
 ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
     ("GET", "/organizations/{organization_id}"): ApiKeyScope.ORGANIZATIONS_READ,
     ("GET", "/organizations/{organization_id}/workspaces"): ApiKeyScope.WORKSPACES_READ,
@@ -57,6 +63,25 @@ ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
     ("GET", "/workspaces/{workspace_id}/logo"): ApiKeyScope.FILES_READ,
     ("POST", "/logo"): ApiKeyScope.FILES_WRITE,
     ("DELETE", "/logo"): ApiKeyScope.FILES_WRITE,
+    # --- ARCH-09 Step 8 --------------------------------------------------
+    ("POST", "/organizations/{organization_id}/webhooks/endpoints"):
+        ApiKeyScope.WEBHOOKS_WRITE,
+    ("GET", "/organizations/{organization_id}/webhooks/endpoints"):
+        ApiKeyScope.WEBHOOKS_READ,
+    ("GET", "/organizations/{organization_id}/webhooks/endpoints/{endpoint_id}"):
+        ApiKeyScope.WEBHOOKS_READ,
+    ("PATCH", "/organizations/{organization_id}/webhooks/endpoints/{endpoint_id}"):
+        ApiKeyScope.WEBHOOKS_WRITE,
+    ("DELETE", "/organizations/{organization_id}/webhooks/endpoints/{endpoint_id}"):
+        ApiKeyScope.WEBHOOKS_WRITE,
+    ("POST", "/organizations/{organization_id}/webhooks/endpoints/{endpoint_id}/rotate-secret"):
+        ApiKeyScope.WEBHOOKS_ADMIN,
+    ("GET", "/organizations/{organization_id}/webhooks/endpoints/{endpoint_id}/deliveries"):
+        ApiKeyScope.WEBHOOKS_READ,
+    ("GET", "/organizations/{organization_id}/webhooks/deliveries/{delivery_id}/attempts"):
+        ApiKeyScope.WEBHOOKS_READ,
+    ("POST", "/organizations/{organization_id}/webhooks/deliveries/{delivery_id}/redeliver"):
+        ApiKeyScope.WEBHOOKS_WRITE,
 }
 
 
