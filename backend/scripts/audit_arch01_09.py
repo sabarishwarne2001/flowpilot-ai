@@ -27,7 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 APP = REPO_ROOT / "app"
 VERSIONS = REPO_ROOT / "alembic" / "versions"
 
-_results: list[tuple[str, str, str, str]] = []  # (id, desc, status, note)
+_results: list[tuple[str, str, str, str]] = []
 _verbose = False
 
 PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
@@ -672,6 +672,40 @@ def f2_enum_parity(db: Any, base: Any) -> str:
     return f"{len(seen)} enum types in parity"
 
 
+@check("F.3", "no column carries TWO overlapping vocabulary CHECK constraints")
+def f3_duplicate_vocabulary_constraints(db: Any) -> str:
+    from sqlalchemy import text
+
+    rows = db.execute(
+        text(
+            "SELECT conrelid::regclass::text AS tbl, conname, "
+            "       pg_get_constraintdef(oid) AS def "
+            "FROM pg_constraint "
+            "WHERE contype = 'c' "
+            "  AND (pg_get_constraintdef(oid) ILIKE '%<@%' "
+            "       OR pg_get_constraintdef(oid) ILIKE '% IN (%')"
+        )
+    ).all()
+
+    import re as _re
+
+    buckets: dict[tuple[str, str], list[str]] = {}
+    for tbl, name, definition in rows:
+        cols = set(_re.findall(r"\(\(?([a-z_]+)\s*(?:<@|IN\s*\()", definition or ""))
+        for col in cols:
+            buckets.setdefault((tbl, col), []).append(name)
+
+    dupes = {k: v for k, v in buckets.items() if len(v) > 1}
+    if dupes:
+        detail = "; ".join(
+            f"{tbl}.{col}: {sorted(names)}" for (tbl, col), names in sorted(dupes.items())
+        )
+        raise AssertionError(
+            f"overlapping vocabulary constraints: {detail}"
+        )
+    return f"{len(buckets)} vocabulary-constrained column(s), none doubled"
+
+
 # ======================================================================
 # Runner
 # ======================================================================
@@ -780,6 +814,7 @@ def main() -> int:
                 if base is not None:
                     run("F", f1_webhook_vocab, db)
                     run("F", f2_enum_parity, db, base)
+                run("F", f3_duplicate_vocabulary_constraints, db)
         except Exception as exc:  # noqa: BLE001
             record("C/E/F", "database-backed checks", SKIP, f"{type(exc).__name__}: {exc}")
 
