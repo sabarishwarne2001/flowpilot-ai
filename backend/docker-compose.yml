@@ -26,7 +26,7 @@ services:
   # Infrastructure: PostgreSQL Database
   # ---------------------------------------------------------------------------
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: flowpilot-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
