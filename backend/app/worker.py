@@ -1,9 +1,4 @@
-"""ARCH-09 Step 6b, 9, 10 — the worker entrypoint, three loops.
-
-    python -m app.worker --loop relay       # outbox_events -> webhook_deliveries
-    python -m app.worker --loop delivery    # webhook_deliveries -> the network
-    python -m app.worker --loop jobs        # jobs -> local handler execution
-"""
+"""ARCH-09 Step 6b, 9, 10, ARCH-10 Step 8 — the worker entrypoint."""
 
 from __future__ import annotations
 
@@ -14,30 +9,19 @@ import signal
 import sys
 import time
 from types import FrameType
-from typing import Optional
+from typing import Optional, Sequence
 
 from app.workers.handlers import register_all
+from app.workers.profiles import (
+    assert_imports_match_profile,
+    claimable_job_types,
+    get_profile,
+)
 
 logger = logging.getLogger("app.worker")
 
-_HEAVY_MODULES = ("paddleocr", "chromadb", "sentence_transformers", "torch")
-
-
-def assert_no_heavy_imports(*, allow: tuple[str, ...] = ()) -> None:
-    """Fail at startup rather than at first OOM."""
-    leaked = [
-        name for name in _HEAVY_MODULES if name not in allow and name in sys.modules
-    ]
-    if leaked:
-        raise RuntimeError(
-            "ARCH-09 §B.8 import isolation violated: "
-            f"{', '.join(leaked)} loaded into the worker."
-        )
-
 
 class GracefulShutdown:
-    """SIGTERM means 'finish the batch you hold, then stop'."""
-
     def __init__(self) -> None:
         self.requested = False
         self._first_signal_at: Optional[float] = None
@@ -64,9 +48,6 @@ def _idle_sleep(seconds: float) -> None:
     time.sleep(seconds * random.uniform(0.5, 1.5))
 
 
-# ======================================================================
-# Loop 1 — relay: outbox_events -> webhook_deliveries
-# ======================================================================
 def run_relay_loop(
     *,
     shutdown: GracefulShutdown,
@@ -148,9 +129,6 @@ def run_relay_loop(
     )
 
 
-# ======================================================================
-# Loop 2 — delivery: webhook_deliveries -> the network
-# ======================================================================
 def run_delivery_loop(
     *,
     shutdown: GracefulShutdown,
@@ -270,9 +248,6 @@ def run_delivery_loop(
     )
 
 
-# ======================================================================
-# Loop 3 — jobs: the generic system job queue (ARCH-09 Step 10)
-# ======================================================================
 def run_jobs_loop(
     *,
     shutdown: GracefulShutdown,
@@ -280,6 +255,7 @@ def run_jobs_loop(
     lease_seconds: int,
     idle_sleep_seconds: float,
     reap_every_n_passes: int = 20,
+    job_types: Optional[Sequence[str]] = None,
 ) -> None:
     from app.core.principal import system_principal
     from app.db.session import SessionLocal
@@ -294,7 +270,10 @@ def run_jobs_loop(
     )
 
     worker = worker_identity()
-    logger.info("worker.start", extra={"worker": worker, "loop": "jobs"})
+    logger.info(
+        "worker.start",
+        extra={"worker": worker, "loop": "jobs", "job_types": list(job_types) if job_types else "*"},
+    )
     passes = 0
 
     while not shutdown.requested:
@@ -309,7 +288,11 @@ def run_jobs_loop(
 
         with SessionLocal() as db:
             claimed = claim_jobs(
-                db, worker_id=worker, batch_size=batch_size, lease_seconds=lease_seconds
+                db,
+                worker_id=worker,
+                batch_size=batch_size,
+                lease_seconds=lease_seconds,
+                job_types=job_types,
             )
             snapshot = [
                 (j.id, j.job_type, j.payload, j.attempts, j.max_attempts, j.organization_id)
@@ -332,16 +315,15 @@ def run_jobs_loop(
                         mark_job_dead(
                             db,
                             job_id,
-                            error=(
-                                f"UNKNOWN_JOB_TYPE: no handler registered for "
-                                f"{job_type!r} on this worker"
-                            ),
+                            error=f"UNKNOWN_JOB_TYPE: no handler registered for {job_type!r}",
                         )
                         db.commit()
                     continue
 
                 try:
-                    result = handler(payload)
+                    payload_dict = dict(payload or {})
+                    payload_dict["job_id"] = str(job_id)
+                    result = handler(payload_dict)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(
                         "jobs.handler_failed",
@@ -352,7 +334,9 @@ def run_jobs_loop(
                             mark_job_dead(db, job_id, error=f"{type(exc).__name__}: {exc}")
                         else:
                             mark_job_failed(
-                                db, job_id, attempts=attempts,
+                                db,
+                                job_id,
+                                attempts=attempts,
                                 error=f"{type(exc).__name__}: {exc}",
                             )
                         db.commit()
@@ -365,32 +349,19 @@ def run_jobs_loop(
     logger.info("worker.stopped", extra={"worker": worker, "loop": "jobs", "passes": passes})
 
 
-# ======================================================================
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="app.worker")
     parser.add_argument(
         "--loop",
         choices=["relay", "delivery", "jobs"],
         required=True,
-        help="relay: outbox -> deliveries (database only). "
-        "delivery: deliveries -> network (HTTPS). "
-        "jobs: the generic system job queue (ARCH-09 Step 10). "
-        "Run each as a separate process.",
+        help="relay | delivery | jobs",
     )
+    parser.add_argument("--profile", default=None, help="light | ocr | enrich | all")
     parser.add_argument("--batch-size", type=int, default=25)
-    parser.add_argument(
-        "--lease-seconds",
-        type=int,
-        default=None,
-        help="defaults to 60 (relay/jobs) / 120 (delivery).",
-    )
+    parser.add_argument("--lease-seconds", type=int, default=None)
     parser.add_argument("--idle-sleep", type=float, default=1.0)
-    parser.add_argument(
-        "--per-org-cap",
-        type=int,
-        default=None,
-        help="ARCH-09 §B.9. Applies to --loop relay and --loop delivery only.",
-    )
+    parser.add_argument("--per-org-cap", type=int, default=None)
     parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING"]
     )
@@ -402,7 +373,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     register_all()
-    assert_no_heavy_imports()
+    profile = get_profile(args.profile)
+    assert_imports_match_profile(profile)
 
     if args.per_org_cap is not None and args.per_org_cap >= args.batch_size:
         logger.warning(
@@ -426,7 +398,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.loop == "delivery":
         runner, extra = run_delivery_loop, {"per_org_cap": args.per_org_cap}
     else:
-        runner, extra = run_jobs_loop, {}
+        runner, extra = run_jobs_loop, {"job_types": claimable_job_types(profile)}
 
     try:
         runner(**kwargs, **extra)

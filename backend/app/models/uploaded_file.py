@@ -44,7 +44,7 @@ class UploadedFile(Base, UUIDMixin, TimestampMixin):
 
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", name="fk_uploaded_files_owner_id_users", ondelete="SET NULL"),
         nullable=True,
         doc="The uploader. Nullable matching database schema.",
     )

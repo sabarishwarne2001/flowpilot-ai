@@ -69,3 +69,10 @@ Thumbs.db
 # ChromaDB persistent vector database
 # ==========================
 chromadb/
+
+# ==========================
+# Uploads
+# ==========================
+# Ignore uploaded files, but keep the directory placeholder tracked.
+uploads/*
+!uploads/.gitkeep

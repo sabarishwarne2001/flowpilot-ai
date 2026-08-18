@@ -1,16 +1,15 @@
 """
-Database representations for Job entities in FlowPilot AI:
-1. ProcessingJob (processing_jobs table) - Discrete execution runs linked to parent Work Items.
-2. Job (jobs table) - Generic system job queue for offloading async tasks (ARCH-09 Step 10).
+Database representation for Job entities in FlowPilot AI.
+Generic system job queue for offloading async tasks (ARCH-09 Step 10).
 """
 
 from __future__ import annotations
 
+import enum
 import logging
 import uuid
 from datetime import datetime
-from enum import Enum as PyEnum
-from typing import Any, Optional, TYPE_CHECKING, Union
+from typing import Any, Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -20,87 +19,20 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
-
-if TYPE_CHECKING:
-    from app.models.work_item import WorkItem
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# 1. ProcessingJob (Work Item execution pipeline runs)
-# ----------------------------------------------------------------------------
-# RETIRED (ARCH-10 Step 1). New background work goes on `jobs` via
-# app.services.job_service.enqueue(). This model is kept mapped only
-# until document_processor.py is rewritten in Steps 6-7; the table is
-# dropped in the Step 7 CONTRACT revision. Do not add call sites.
-# ============================================================================
-class ProcessingJob(Base, UUIDMixin, TimestampMixin):
-    """
-    Persistent representation of a single background pipeline execution run.
-    """
-    __tablename__ = "processing_jobs"
-
-    def __init__(self, **kwargs: Any) -> None:
-        logger.warning(
-            "processing_jobs.deprecated_write",
-            extra={"caller": "ProcessingJob()", "arch": "ARCH-10 Step 1"},
-        )
-        super().__init__(**kwargs)
-
-    progress: Mapped[int] = mapped_column(
-        Integer, 
-        default=0, 
-        nullable=False
-    )
-    status: Mapped[str] = mapped_column(
-        String(50),
-        default="PENDING",
-        index=True,
-        nullable=False
-    )
-    retry_count: Mapped[int] = mapped_column(
-        Integer, 
-        default=0, 
-        nullable=False
-    )
-    error_message: Mapped[Union[str, None]] = mapped_column(
-        String(5000),
-        nullable=True
-    )
-    
-    execution_metadata: Mapped[Union[dict[str, Any], None]] = mapped_column(
-        JSON, 
-        nullable=True
-    )
-
-    work_item_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("work_items.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False
-    )
-
-    work_item: Mapped["WorkItem"] = relationship(
-        "WorkItem", 
-        back_populates="jobs"
-    )
-
-
-# ============================================================================
-# 2. Job (ARCH-09 Step 10 — Generic System Job Queue)
-# ============================================================================
-class JobStatus(str, PyEnum):
+class JobStatus(str, enum.Enum):
     PENDING = "PENDING"
     CLAIMED = "CLAIMED"
     SUCCEEDED = "SUCCEEDED"
@@ -130,6 +62,13 @@ class Job(Base, UUIDMixin, TimestampMixin):
         UniqueConstraint("seq", name="uq_jobs_seq"),
         Index(
             "ix_jobs_claimable",
+            "available_at",
+            "seq",
+            postgresql_where=text("status IN ('PENDING'::job_status, 'FAILED'::job_status)"),
+        ),
+        Index(
+            "ix_jobs_claimable_by_type",
+            "job_type",
             "available_at",
             "seq",
             postgresql_where=text("status IN ('PENDING'::job_status, 'FAILED'::job_status)"),
@@ -199,7 +138,7 @@ class Job(Base, UUIDMixin, TimestampMixin):
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_JOB_STATUSES
 
-    def __repr__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:
         return (
             f"<Job seq={self.seq} type={self.job_type} "
             f"status={self.status.value if self.status else None}>"

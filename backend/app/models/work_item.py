@@ -5,9 +5,10 @@ Database representation of the Work Item entity for FlowPilot AI.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any, Optional, TYPE_CHECKING, Union
-from sqlalchemy import String, Text, Integer, ForeignKey, JSON, Index
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
+from sqlalchemy import DateTime, String, Text, Integer, ForeignKey, JSON, Index, text
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum, JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 from app.db.base import Base, UUIDMixin, TimestampMixin
@@ -15,7 +16,6 @@ from app.schemas.work_item import WorkItemStatus
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.job import ProcessingJob
     from app.models.automation import AutomationLog
     from app.models.notification import Notification
     from app.models.assistant import Conversation
@@ -32,7 +32,19 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_work_items_workspace_created", "workspace_id", "created_at"),
         Index("ix_work_items_workspace_status", "workspace_id", "status"),
-        Index("ix_work_items_page_count", "page_count", postgresql_where="page_count IS NOT NULL"),
+        Index("ix_work_items_page_count", "page_count", postgresql_where=text("page_count IS NOT NULL")),
+        Index("ix_work_items_workspace_pipeline_stage", "workspace_id", "pipeline_stage"),
+        Index(
+            "ix_work_items_stage_stuck",
+            "stage_updated_at",
+            postgresql_where=text("pipeline_stage IN ('QUEUED','EXTRACTING','EXTRACTED','ENRICHING')"),
+        ),
+        Index(
+            "uq_work_items_uploaded_file_id",
+            "uploaded_file_id",
+            unique=True,
+            postgresql_where=text("uploaded_file_id IS NOT NULL"),
+        ),
     )
 
     original_filename: Mapped[str] = mapped_column(
@@ -44,10 +56,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         unique=True,
         index=True,
         nullable=False,
-        doc=(
-            "Storage key in object storage driver. The unique index is a "
-            "data-integrity guarantee."
-        ),
+        doc="Storage key in object storage driver.",
     )
     file_type: Mapped[str] = mapped_column(
         String(100), 
@@ -62,13 +71,41 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         default=WorkItemStatus.QUEUED.value,
         nullable=False
     )
+    
+    # --- ARCH-10 Step 7 Pipeline State Machine ---------------------------
+    pipeline_stage: Mapped[str] = mapped_column(
+        PGEnum(
+            "QUEUED",
+            "EXTRACTING",
+            "EXTRACTED",
+            "ENRICHING",
+            "COMPLETED",
+            "FAILED",
+            "QUOTA_BLOCKED",
+            name="work_item_pipeline_stage",
+            create_type=False,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default="QUEUED",
+        server_default="QUEUED",
+    )
+    stage_updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failure_stage: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+    failure_reason: Mapped[Optional[str]] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
     summary: Mapped[Union[str, None]] = mapped_column(
         Text,
         nullable=True,
-        doc=(
-            "Unbounded AI-generated prose. Declared Text rather than String "
-            "so the model states the absence of a length bound explicitly."
-        ),
     )
     extracted_entities: Mapped[Union[dict[str, Any], None]] = mapped_column(
         JSON, 
@@ -80,7 +117,6 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         PgUUID(as_uuid=True),
         ForeignKey("uploaded_files.id", ondelete="SET NULL"),
         nullable=True,
-        unique=True,
     )
     page_count: Mapped[Optional[int]] = mapped_column(
         Integer,
@@ -115,14 +151,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     created_by: Mapped[Union["User", None]] = relationship("User")
     uploaded_file: Mapped[Optional["UploadedFile"]] = relationship("UploadedFile")
 
-    # Child object relationships
-    jobs: Mapped[list["ProcessingJob"]] = relationship(
-        "ProcessingJob",
-        back_populates="work_item",
-        cascade="all, delete-orphan",
-        passive_deletes=True  
-    )
-
+    # Child relationships
     automation_logs: Mapped[list["AutomationLog"]] = relationship(
         "AutomationLog",
         back_populates="work_item",

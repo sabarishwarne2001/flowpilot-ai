@@ -10,7 +10,6 @@ from app.db.base import Base
 from app.models.user import User
 from app.models.work_item import WorkItem
 from app.models.job import (
-    ProcessingJob,
     Job,
     JobStatus,
     CLAIMABLE_JOB_STATUSES,
@@ -69,7 +68,6 @@ __all__ = [
     "Base",
     "User",
     "WorkItem",
-    "ProcessingJob",
     "Job",
     "JobStatus",
     "CLAIMABLE_JOB_STATUSES",

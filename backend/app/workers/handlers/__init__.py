@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6 — job handler registration."""
+"""ARCH-10 Step 6/7 — job handler registration."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.services import job_service
 logger = logging.getLogger("app.workers.handlers")
 
 ARCH10_JOB_TYPES: frozenset[str] = frozenset(
-    {"document.extract", "storage.sample"}
+    {"document.extract", "document.enrich", "storage.sample"}
 )
 
 
@@ -18,6 +18,12 @@ def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.ocr import handle_document_extract
 
     return handle_document_extract(payload)
+
+
+def _document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.enrich import handle_document_enrich
+
+    return handle_document_enrich(payload)
 
 
 def _storage_sample(payload: dict[str, Any]) -> dict[str, Any]:
@@ -28,6 +34,7 @@ def _storage_sample(payload: dict[str, Any]) -> dict[str, Any]:
 
 _HANDLERS = {
     "document.extract": _document_extract,
+    "document.enrich": _document_enrich,
     "storage.sample": _storage_sample,
 }
 

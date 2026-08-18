@@ -12,7 +12,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from rank_bm25 import BM25Okapi
 
-logger = logging.getLogger("app.services.document_processor")
+logger = logging.getLogger("app.services.bm25")
 
 _MAX_CACHED_INDEXES = 8
 
@@ -41,11 +41,9 @@ class BM25Service:
         *,
         workspace_id: uuid.UUID,
     ) -> None:
-        # Lazy import to prevent pulling chromadb/sentence_transformers at module import time
         from app.services.embedding_service import embedding_service
 
         collection = embedding_service.get_workspace_collection(workspace_id)
-        # Force Chroma to return documents and metadatas explicitly
         results = collection.get(include=["documents", "metadatas"])
 
         ids = results.get("ids", [])
@@ -70,7 +68,7 @@ class BM25Service:
                     **(metadata or {}),
                 }
                 for chunk_id, metadata in zip(ids, metadatas)
-            ]
+            ],
         )
 
         self._indexes[workspace_id] = index
@@ -92,9 +90,6 @@ class BM25Service:
         top_k: int = 10,
         work_item_ids: list[str] | None = None,
     ) -> list[dict]:
-        """
-        Execute sparse keyword retrieval using BM25 strictly scoped inside a workspace.
-        """
         index = self._indexes.get(workspace_id)
         if index is None or index.bm25 is None:
             self.rebuild_index(workspace_id=workspace_id)

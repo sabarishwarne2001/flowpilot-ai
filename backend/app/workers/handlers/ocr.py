@@ -23,7 +23,7 @@ from app.core.storage import (
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
 from app.models.work_item import WorkItem
 from app.models.workspace import Workspace
-from app.services import audit_service
+from app.services import audit_service, job_service
 from app.services import spend_control_service as spend
 from app.services.ocr.base import (
     OCRError,
@@ -31,15 +31,13 @@ from app.services.ocr.base import (
     OCRUnavailableError,
     OCRUnsupportedError,
 )
+from app.services.pipeline_state import PipelineStage, transition_by_id
 
 logger = logging.getLogger("app.workers.handlers.ocr")
 
 JOB_TYPE = "document.extract"
+ENRICH_JOB_TYPE = "document.enrich"
 USAGE_EVENT_TYPE = "ocr.page"
-
-STATUS_PROCESSING = "PROCESSING"
-STATUS_COMPLETED = "COMPLETED"
-STATUS_FAILED = "FAILED"
 
 
 class Outcome:
@@ -92,23 +90,8 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         storage_key=storage_key,
         mime_type=payload.get("mime_type") or work_item.file_type,
         estimated_pages=max(1, estimated),
-        already_done=work_item.status == STATUS_COMPLETED,
+        already_done=work_item.pipeline_stage in {PipelineStage.EXTRACTED.value, PipelineStage.ENRICHING.value, PipelineStage.COMPLETED.value},
     )
-
-
-def _mark_status(
-    db: Session, work_item_id: uuid.UUID, status: str, **fields: Any
-) -> None:
-    work_item = db.execute(
-        select(WorkItem).where(WorkItem.id == work_item_id)
-    ).scalar_one_or_none()
-    if work_item is None:
-        return
-    work_item.status = status
-    for name, value in fields.items():
-        if hasattr(work_item, name):
-            setattr(work_item, name, value)
-    db.flush([work_item])
 
 
 def _download_and_extract(target: _Target) -> OCRResult:
@@ -170,47 +153,61 @@ def _guard_before_extraction(target: _Target) -> None:
         db.commit()
 
 
-def _persist(db: Session, target: _Target, result: OCRResult) -> dict[str, Any]:
+def _persist(db: Session, target: _Target, result: OCRResult, job_id: Optional[uuid.UUID] = None) -> dict[str, Any]:
     from app.services.ocr.paddle import get_provider
 
     provider = get_provider()
     billable = result.billable_pages
 
-    if billable <= 0:
-        _mark_status(db, target.work_item_id, STATUS_COMPLETED)
-        _store_extraction(db, target, result)
-        return {
-            "outcome": Outcome.COMPLETED,
-            "billable_pages": 0,
-            **result.summary(),
-        }
-
-    with spend.guard_usage(
-        db,
-        organization_id=target.organization_id,
-        event_type=USAGE_EVENT_TYPE,
-        estimated_quantity=billable,
-        estimated_cost_micros=provider.estimated_cost_micros(billable),
-        workspace_id=target.workspace_id,
-        resource_type="WORK_ITEM",
-        resource_id=target.work_item_id,
-        idempotency_key=f"ocr:{target.work_item_id}",
-    ) as guard:
-        guard.record(
-            quantity=billable,
-            cost_micros=provider.estimated_cost_micros(billable),
-            provider=provider.name,
-            details={
-                "pages_total": result.page_count,
-                "pages_text_layer": result.page_count - billable,
-                "mean_confidence": result.mean_confidence,
-                "model": result.model,
-                "duration_seconds": round(result.duration_seconds, 3),
-            },
-        )
+    if billable > 0:
+        # Bill against job_id so repeated retries collide while reprocess runs succeed
+        idemp_key = f"ocr:{job_id}" if job_id else f"ocr:{target.work_item_id}"
+        with spend.guard_usage(
+            db,
+            organization_id=target.organization_id,
+            event_type=USAGE_EVENT_TYPE,
+            estimated_quantity=billable,
+            estimated_cost_micros=provider.estimated_cost_micros(billable),
+            workspace_id=target.workspace_id,
+            resource_type="WORK_ITEM",
+            resource_id=target.work_item_id,
+            idempotency_key=idemp_key,
+        ) as guard:
+            guard.record(
+                quantity=billable,
+                cost_micros=provider.estimated_cost_micros(billable),
+                provider=provider.name,
+                details={
+                    "pages_total": result.page_count,
+                    "pages_text_layer": result.page_count - billable,
+                    "mean_confidence": result.mean_confidence,
+                    "model": result.model,
+                    "duration_seconds": round(result.duration_seconds, 3),
+                },
+            )
 
     _store_extraction(db, target, result)
-    _mark_status(db, target.work_item_id, STATUS_COMPLETED)
+
+    # Transition state to EXTRACTED
+    transition_by_id(
+        db,
+        work_item_id=target.work_item_id,
+        to_stage=PipelineStage.EXTRACTED,
+        organization_id=target.organization_id,
+    )
+
+    # Chain downstream document.enrich job
+    job_service.enqueue(
+        db,
+        job_type=ENRICH_JOB_TYPE,
+        payload={
+            "work_item_id": str(target.work_item_id),
+            "organization_id": str(target.organization_id),
+            "workspace_id": str(target.workspace_id),
+        },
+        organization_id=target.organization_id,
+        idempotency_key=f"{ENRICH_JOB_TYPE}:{target.work_item_id}",
+    )
 
     audit_service.record(
         db,
@@ -248,6 +245,8 @@ def _store_extraction(db: Session, target: _Target, result: OCRResult) -> None:
 def handle_document_extract(payload: dict[str, Any]) -> dict[str, Any]:
     from app.db.session import SessionLocal
 
+    job_id = uuid.UUID(str(payload["job_id"])) if "job_id" in payload else None
+
     with SessionLocal() as db:
         target = _resolve(db, payload)
         if target is None:
@@ -255,8 +254,14 @@ def handle_document_extract(payload: dict[str, Any]) -> dict[str, Any]:
             return {"outcome": Outcome.SKIPPED, "reason": "work item no longer exists"}
         if target.already_done:
             db.commit()
-            return {"outcome": Outcome.SKIPPED, "reason": "already COMPLETED"}
-        _mark_status(db, target.work_item_id, STATUS_PROCESSING)
+            return {"outcome": Outcome.SKIPPED, "reason": "already EXTRACTED"}
+
+        transition_by_id(
+            db,
+            work_item_id=target.work_item_id,
+            to_stage=PipelineStage.EXTRACTING,
+            organization_id=target.organization_id,
+        )
         db.commit()
 
     try:
@@ -288,7 +293,7 @@ def handle_document_extract(payload: dict[str, Any]) -> dict[str, Any]:
 
     with SessionLocal() as db:
         try:
-            summary = _persist(db, target, result)
+            summary = _persist(db, target, result, job_id=job_id)
             db.commit()
             return summary
         except SpendLimitExceededError as exc:
@@ -307,7 +312,13 @@ def _permanent_failure(target: _Target, exc: Exception) -> dict[str, Any]:
         },
     )
     with SessionLocal() as db:
-        _mark_status(db, target.work_item_id, STATUS_FAILED)
+        transition_by_id(
+            db,
+            work_item_id=target.work_item_id,
+            to_stage=PipelineStage.FAILED,
+            organization_id=target.organization_id,
+            failure_reason=f"{type(exc).__name__}: {exc}",
+        )
         audit_service.record(
             db,
             organization_id=target.organization_id,
@@ -344,7 +355,13 @@ def _block_on_quota(
         },
     )
     with SessionLocal() as db:
-        _mark_status(db, target.work_item_id, STATUS_FAILED)
+        transition_by_id(
+            db,
+            work_item_id=target.work_item_id,
+            to_stage=PipelineStage.QUOTA_BLOCKED,
+            organization_id=target.organization_id,
+            failure_reason=str(exc),
+        )
         db.commit()
     return {
         "outcome": Outcome.QUOTA_BLOCKED,

@@ -1,15 +1,4 @@
-"""ARCH-10 Step 1 — the single claim primitive.
-
-Supersedes the three parallel claim/mark/reap implementations that ARCH-09
-accreted across Steps 3, 9 and 10 (`claim_batch`, `claim_webhook_deliveries`,
-`claim_jobs`). All three were the same SQL with different table names; the only
-behavioural difference was that `claim_jobs` silently lacked the per-tenant
-fairness cap the other two had.
-
-The generic primitive is `claim_eligible_rows()`. Every queue-shaped table
-declares a `QueueSpec` describing its status vocabulary and tenancy column,
-and the primitive does the rest.
-"""
+"""ARCH-10 Step 8 — the single claim primitive with profile routing."""
 
 from __future__ import annotations
 
@@ -56,22 +45,15 @@ _LEASE_EXPIRED_MESSAGE = (
 )
 
 
-# ============================================================================
-# Queue descriptors
-# ============================================================================
-
-
 @dataclass(frozen=True)
 class QueueSpec:
-    """Everything the claim primitive needs to know about one queue table."""
-
     name: str
     model: Type[Any]
     claimable_statuses: tuple[Any, ...]
     claimed_status: Any
     failed_status: Any
-    #: Tenancy column used for per-org fairness ranking. None disables capping.
     org_column: Optional[str] = "organization_id"
+    type_column: Optional[str] = None
     retry_base_seconds: int = RETRY_BASE_SECONDS
 
     @property
@@ -114,17 +96,13 @@ JOBS_QUEUE = QueueSpec(
     claimable_statuses=CLAIMABLE_JOB_STATUSES,
     claimed_status=JobStatus.CLAIMED,
     failed_status=JobStatus.FAILED,
+    type_column="job_type",
 )
 
 QUEUE_SPECS: dict[str, QueueSpec] = {
     spec.name: spec
     for spec in (OUTBOX_QUEUE, WEBHOOK_DELIVERY_QUEUE, JOBS_QUEUE)
 }
-
-
-# ============================================================================
-# Shared helpers
-# ============================================================================
 
 
 def worker_identity() -> str:
@@ -149,8 +127,8 @@ def _rank_eligible_ids(
     *,
     per_org_cap: int,
     batch_size: int,
+    type_filter: Any = None,
 ) -> list[Any]:
-    """Rank claimable rows within each tenant, returning only the top N per org."""
     table = spec.table
     org_col = table.c[spec.org_column]
     now = func.now()
@@ -165,6 +143,7 @@ def _rank_eligible_ids(
             .label("rn"),
         )
         .where(
+            type_filter if type_filter is not None else sa_true(),
             table.c.status.in_(spec.claimable_values),
             table.c.available_at <= now,
         )
@@ -179,11 +158,6 @@ def _rank_eligible_ids(
     return [row.id for row in db.execute(eligible_stmt).all()]
 
 
-# ============================================================================
-# The primitive
-# ============================================================================
-
-
 def claim_eligible_rows(
     db: Session,
     spec: QueueSpec,
@@ -192,21 +166,36 @@ def claim_eligible_rows(
     batch_size: int = DEFAULT_BATCH_SIZE,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     per_org_cap: Optional[int] = None,
+    job_types: Optional[Sequence[str]] = None,
 ) -> list[Any]:
-    """Atomically lease up to `batch_size` claimable rows from one queue table."""
     worker = worker_id or worker_identity()
     table = spec.table
     model = spec.model
     now = func.now()
 
+    if job_types is not None:
+        if spec.type_column is None:
+            raise ValueError(
+                f"queue {spec.name!r} has no type column; job_types is not meaningful."
+            )
+        wanted = list(job_types)
+        if not wanted:
+            return []
+        type_filter = table.c[spec.type_column].in_(wanted)
+    else:
+        type_filter = sa_true()
+
     if per_org_cap is not None:
         if spec.org_column is None:
             raise ValueError(
-                f"queue {spec.name!r} declares no tenancy column; "
-                "per_org_cap is not meaningful."
+                f"queue {spec.name!r} declares no tenancy column; per_org_cap is not meaningful."
             )
         eligible_ids = _rank_eligible_ids(
-            db, spec, per_org_cap=per_org_cap, batch_size=batch_size
+            db,
+            spec,
+            per_org_cap=per_org_cap,
+            batch_size=batch_size,
+            type_filter=type_filter,
         )
         if not eligible_ids:
             return []
@@ -218,6 +207,7 @@ def claim_eligible_rows(
         select(table.c.id)
         .where(
             id_filter,
+            type_filter,
             table.c.status.in_(spec.claimable_values),
             table.c.available_at <= now,
         )
@@ -254,6 +244,7 @@ def claim_eligible_rows(
             "claimed": len(claimed),
             "batch": batch_size,
             "per_org_cap": per_org_cap,
+            "job_types": list(job_types) if job_types else None,
         },
     )
     return list(claimed)
@@ -262,7 +253,6 @@ def claim_eligible_rows(
 def release_expired_leases(
     db: Session, spec: QueueSpec, *, limit: int = 500
 ) -> int:
-    """Return rows whose lease expired to the claimable pool."""
     table = spec.table
 
     candidates = (
@@ -515,7 +505,7 @@ def mark_job_dead(db: Session, job_id: uuid.UUID, *, error: str) -> None:
 
 
 # ============================================================================
-# Deprecated shims — retained so callers continue working unchanged.
+# Deprecated shims
 # ============================================================================
 
 
@@ -574,6 +564,7 @@ def claim_jobs(
     batch_size: int = DEFAULT_BATCH_SIZE,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     per_org_cap: Optional[int] = None,
+    job_types: Optional[Sequence[str]] = None,
 ) -> list[Job]:
     return claim_eligible_rows(
         db,
@@ -582,6 +573,7 @@ def claim_jobs(
         batch_size=batch_size,
         lease_seconds=lease_seconds,
         per_org_cap=per_org_cap,
+        job_types=job_types,
     )
 
 

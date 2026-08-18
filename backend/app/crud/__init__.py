@@ -1,7 +1,5 @@
 """
 Database transaction operations registry for FlowPilot AI.
-
-Centralizes and exposes functional CRUD methods targeting individual entities.
 """
 
 from app.crud.user import (
@@ -21,12 +19,6 @@ from app.crud.work_item import (
     create_work_item,
     update_work_item_state,
     delete_work_item,
-)
-from app.crud.job import (
-    get_job_by_id,
-    get_jobs_for_work_item,
-    create_job,
-    update_job,
 )
 from app.crud.automation import (
     create_automation_rule,
@@ -154,12 +146,6 @@ __all__ = [
     "create_work_item",
     "update_work_item_state",
     "delete_work_item",
-    
-    # job
-    "get_job_by_id",
-    "get_jobs_for_work_item",
-    "create_job",
-    "update_job",
     
     # automation
     "create_automation_rule",

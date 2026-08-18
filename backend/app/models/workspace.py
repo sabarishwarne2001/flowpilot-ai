@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -118,6 +118,11 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
             "organization_id",
             "slug",
             name="uq_workspace_organization_slug",
+        ),
+        Index(
+            "ix_workspaces_logo_file_id",
+            "logo_file_id",
+            postgresql_where=text("logo_file_id IS NOT NULL"),
         ),
     )
 

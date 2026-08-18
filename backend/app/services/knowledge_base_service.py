@@ -6,17 +6,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.core.config import settings
-from app.services.embedding_service import embedding_service
+from app.core.storage import get_storage_driver
 from app.services.bm25_service import bm25_service
-from app.services.document_processor import document_vocabulary_service
+from app.services.document_vocabulary_service import document_vocabulary_service
+from app.services.embedding_service import embedding_service
 from app.services.query_service import query_service
 
-logger = logging.getLogger("app.services.document_processor")
+logger = logging.getLogger("app.services.knowledge_base")
 
 
 class KnowledgeBaseService:
@@ -35,12 +34,15 @@ class KnowledgeBaseService:
 
         documents_deleted = 0
         files_deleted = 0
+        driver = get_storage_driver()
 
         for work_item in work_items:
-            file_path = Path(settings.UPLOAD_DIR) / work_item.stored_filename
-            if file_path.exists():
-                file_path.unlink()
-                files_deleted += 1
+            if work_item.stored_filename and driver.exists(work_item.stored_filename):
+                try:
+                    driver.delete(work_item.stored_filename)
+                    files_deleted += 1
+                except Exception:
+                    pass
             db.delete(work_item)
             documents_deleted += 1
 
@@ -66,5 +68,6 @@ class KnowledgeBaseService:
             "files_deleted": files_deleted,
             "vectors_deleted": vectors_deleted,
         }
+
 
 knowledge_base_service = KnowledgeBaseService()
