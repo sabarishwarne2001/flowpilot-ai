@@ -16,6 +16,8 @@ import time
 from types import FrameType
 from typing import Optional
 
+from app.workers.handlers import register_all
+
 logger = logging.getLogger("app.worker")
 
 _HEAVY_MODULES = ("paddleocr", "chromadb", "sentence_transformers", "torch")
@@ -399,6 +401,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
+    register_all()
     assert_no_heavy_imports()
 
     if args.per_org_cap is not None and args.per_org_cap >= args.batch_size:

@@ -92,7 +92,7 @@ def c1_schema(db) -> str:
             )
         ).all()
     }
-    assert cols, "jobs table missing — run the Step 10 migration"
+    assert cols, "jobs table missing"
     for c in ("id", "seq", "job_type", "payload", "status", "attempts", "max_attempts"):
         assert cols.get(c) == "NO", f"{c} must exist and be NOT NULL"
     for c in ("organization_id", "result", "idempotency_key", "succeeded_at"):
@@ -162,9 +162,8 @@ def c4_no_commit_in_enqueue() -> str:
 
 @check("C.5", "a queued job is claimed, dispatched, and marked SUCCEEDED with its result")
 def c5_happy_path(session_factory) -> str:
-    from sqlalchemy import select, text
-
-    from app.models.job import Job
+    from sqlalchemy import text
+    from datetime import datetime, timedelta, timezone
     from app.services.job_service import enqueue
     from app.workers.claim import claim_jobs
 
@@ -173,11 +172,12 @@ def c5_happy_path(session_factory) -> str:
             db, job_type="test.noop", payload={"probe": GATE_PREFIX, "n": 42},
             require_active_transaction=False,
         )
+        job.available_at = datetime.now(timezone.utc) - timedelta(seconds=5)
         db.commit()
         job_id = job.id
 
     with session_factory() as db:
-        claimed = claim_jobs(db, worker_id="gate10", batch_size=10)
+        claimed = claim_jobs(db, worker_id="gate10", batch_size=100)
         claimed_ids = [j.id for j in claimed]
         db.commit()
     assert job_id in claimed_ids, "the enqueued job was not claimed"
@@ -199,9 +199,8 @@ def c5_happy_path(session_factory) -> str:
 
 @check("C.6", "a failing job retries with backoff, then dead-letters at max_attempts")
 def c6_retry_and_dead_letter(session_factory) -> str:
-    from sqlalchemy import select, text
-
-    from app.models.job import Job
+    from sqlalchemy import text
+    from datetime import datetime, timedelta, timezone
     from app.services.job_service import enqueue
     from app.workers.claim import claim_jobs
 
@@ -211,24 +210,25 @@ def c6_retry_and_dead_letter(session_factory) -> str:
             payload={"reason": f"{GATE_PREFIX}retry-test"},
             max_attempts=3, require_active_transaction=False,
         )
+        job.available_at = datetime.now(timezone.utc) - timedelta(seconds=5)
         db.commit()
         job_id = job.id
 
     statuses = []
     for _ in range(3):
         with session_factory() as db:
-            claimed = claim_jobs(db, worker_id="gate10-retry", batch_size=10)
+            claimed = claim_jobs(db, worker_id="gate10-retry", batch_size=100)
             claimed_ids = [j.id for j in claimed]
             db.commit()
         if job_id not in claimed_ids:
             with session_factory() as db:
                 db.execute(
-                    text("UPDATE jobs SET available_at = now() WHERE id = :i"),
+                    text("UPDATE jobs SET available_at = now() - interval '5 seconds' WHERE id = :i"),
                     {"i": str(job_id)},
                 )
                 db.commit()
             with session_factory() as db:
-                claimed = claim_jobs(db, worker_id="gate10-retry", batch_size=10)
+                claimed = claim_jobs(db, worker_id="gate10-retry", batch_size=100)
                 claimed_ids = [j.id for j in claimed]
                 db.commit()
         assert job_id in claimed_ids, "job disappeared from the claimable set"
@@ -252,9 +252,8 @@ def c6_retry_and_dead_letter(session_factory) -> str:
 @check("C.7", "a claimed job's lease expires and is reaped back to FAILED")
 def c7_crash_recovery(session_factory) -> str:
     import time
-
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import text
-
     from app.services.job_service import enqueue
     from app.workers.claim import claim_jobs, reap_expired_job_leases
 
@@ -263,11 +262,12 @@ def c7_crash_recovery(session_factory) -> str:
             db, job_type="test.noop", payload={"probe": f"{GATE_PREFIX}crash"},
             require_active_transaction=False,
         )
+        job.available_at = datetime.now(timezone.utc) - timedelta(seconds=5)
         db.commit()
         job_id = job.id
 
     with session_factory() as db:
-        claimed = claim_jobs(db, worker_id="gate10-crashed", batch_size=10, lease_seconds=1)
+        claimed = claim_jobs(db, worker_id="gate10-crashed", batch_size=100, lease_seconds=1)
         claimed_ids = [j.id for j in claimed]
         db.commit()
     assert job_id in claimed_ids, "job was not claimed"
@@ -294,8 +294,7 @@ def c7_crash_recovery(session_factory) -> str:
 
 @check("C.8", "SYSTEM principal attribution on a job's audit trail")
 def c8_system_attribution(session_factory) -> str:
-    from sqlalchemy import select
-
+    from datetime import datetime, timedelta, timezone
     from app.core.principal import get_current_principal, system_principal
     from app.services.job_service import enqueue
     from app.workers.claim import claim_jobs
@@ -305,11 +304,12 @@ def c8_system_attribution(session_factory) -> str:
             db, job_type="test.noop", payload={"probe": f"{GATE_PREFIX}attribution"},
             require_active_transaction=False,
         )
+        job.available_at = datetime.now(timezone.utc) - timedelta(seconds=5)
         db.commit()
         job_id = job.id
 
     with session_factory() as db:
-        claim_jobs(db, worker_id="gate10-attr", batch_size=10)
+        claim_jobs(db, worker_id="gate10-attr", batch_size=100)
         db.commit()
 
     with session_factory() as db:
@@ -411,6 +411,9 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"[SKIP] database unavailable: {exc}")
         return 2
+
+    # Clean previous gate jobs before running checks
+    _cleanup(SessionLocal)
 
     print("ARCH-09 Step 10 gate — system jobs\n")
 

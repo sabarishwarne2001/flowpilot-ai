@@ -2,9 +2,12 @@
 Database representation of the Work Item entity for FlowPilot AI.
 """
 
+from __future__ import annotations
+
 import uuid
-from typing import Any, TYPE_CHECKING, Union
+from typing import Any, Optional, TYPE_CHECKING, Union
 from sqlalchemy import String, Text, Integer, ForeignKey, JSON, Index
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 from app.db.base import Base, UUIDMixin, TimestampMixin
@@ -17,6 +20,7 @@ if TYPE_CHECKING:
     from app.models.notification import Notification
     from app.models.assistant import Conversation
     from app.models.workspace import Workspace
+    from app.models.uploaded_file import UploadedFile
 
 
 class WorkItem(Base, UUIDMixin, TimestampMixin):
@@ -28,6 +32,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_work_items_workspace_created", "workspace_id", "created_at"),
         Index("ix_work_items_workspace_status", "workspace_id", "status"),
+        Index("ix_work_items_page_count", "page_count", postgresql_where="page_count IS NOT NULL"),
     )
 
     original_filename: Mapped[str] = mapped_column(
@@ -40,8 +45,8 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         index=True,
         nullable=False,
         doc=(
-            "Filesystem storage key. The unique index is a data-integrity "
-            "guarantee, not an optimisation."
+            "Storage key in object storage driver. The unique index is a "
+            "data-integrity guarantee."
         ),
     )
     file_type: Mapped[str] = mapped_column(
@@ -69,6 +74,26 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         JSON, 
         nullable=True
     )
+
+    # --- ARCH-10 Step 5 Linkage ------------------------------------------
+    uploaded_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("uploaded_files.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+    page_count: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    extracted_text: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    extraction_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     
     # --- Scope: the workspace owns this document -------------------------
     workspace_id: Mapped[uuid.UUID] = mapped_column(
@@ -77,26 +102,20 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    # --- Attribution: who uploaded it. Nullable by necessity -------------
+    # --- Attribution: who uploaded it ------------------------------------
     created_by_user_id: Mapped[Union[uuid.UUID, None]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-        doc=(
-            "Author, not scope. Nullable because ON DELETE SET NULL cannot "
-            "fire against a NOT NULL column — deleting a user would raise "
-            "instead of orphaning the attribution. A NULL here reads as "
-            "'uploaded by a former member', which is the correct semantics."
-        ),
     )
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship("Workspace")
-
     created_by: Mapped[Union["User", None]] = relationship("User")
+    uploaded_file: Mapped[Optional["UploadedFile"]] = relationship("UploadedFile")
 
-    # Bidirectional SQLAlchemy relationships referencing child objects
+    # Child object relationships
     jobs: Mapped[list["ProcessingJob"]] = relationship(
         "ProcessingJob",
         back_populates="work_item",

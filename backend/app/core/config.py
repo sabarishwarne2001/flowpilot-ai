@@ -88,7 +88,11 @@ class Settings(BaseSettings):
         "application/pdf",
         "image/png",
         "image/jpeg",
-        "image/jpg"
+        "image/jpg",
+        "image/tiff",
+        "image/webp",
+        "image/gif",
+        "image/bmp",
     ]
 
     # Sprint 3: AI Processing & LLM Gateways
@@ -186,7 +190,6 @@ class Settings(BaseSettings):
     RETRIEVAL_FAIL_FAST: bool = False
 
     # --- ARCH-10 Step 3: default spend ceilings -------------------------
-    # Applied to any organization with no explicit spend_limits row.
     SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000   # $25.00
     SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000      # $5.00
     SPEND_DEFAULT_MONTHLY_OCR_PAGES: Optional[int] = 2_000
@@ -201,6 +204,29 @@ class Settings(BaseSettings):
             "llm.output_token": self.SPEND_DEFAULT_MONTHLY_LLM_OUTPUT_TOKENS,
             "embedding.token": self.SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS,
         }
+
+    # --- ARCH-10 Step 4: object storage ---------------------------------
+    # STORAGE_BACKEND accepts: local | s3 | r2 | minio
+    S3_BUCKET: Optional[str] = None
+    S3_REGION: Optional[str] = "auto"
+    S3_ENDPOINT_URL: Optional[str] = None
+    S3_PREFIX: str = ""
+    S3_SERVER_SIDE_ENCRYPTION: Optional[str] = "AES256"   # ignored for r2/minio
+    S3_MAX_POOL_CONNECTIONS: int = 20
+    S3_MULTIPART_THRESHOLD: int = 16 * 1024 * 1024
+    S3_MULTIPART_CHUNKSIZE: int = 16 * 1024 * 1024
+    S3_MAX_CONCURRENCY: int = 4
+    STORAGE_SAMPLE_INTERVAL_MINUTES: int = 60
+
+    # --- ARCH-10 Step 5: validation -------------------------------------
+    MAX_DOCUMENT_PAGES: int = 500
+    SCRUB_UPLOAD_METADATA: bool = True
+
+    # --- ARCH-10 Step 6: OCR --------------------------------------------
+    OCR_PROVIDER: str = "paddleocr"
+    OCR_MAX_PAGES_PER_DOCUMENT: int = 500
+    OCR_JOB_MAX_ATTEMPTS: int = 5
+    OCR_GUARD_BEFORE_EXTRACTION: bool = False
 
     @field_validator("RAG_TOP_K")
     @classmethod

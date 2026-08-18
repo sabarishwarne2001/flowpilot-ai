@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exception_handlers import domain_exception_handler
@@ -15,7 +16,7 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.utils import initialize_storage
-from app.api.v1 import webhooks as webhooks_v1
+from app.workers.handlers import register_all
 
 setup_logging()
 logger = logging.getLogger("app.main")
@@ -33,6 +34,12 @@ async def lifespan(app: FastAPI):
     except Exception as error:
         logger.critical(f"Critical startup failure: Failed to initialize file storage: {str(error)}")
         raise error
+
+    try:
+        register_all()
+        logger.info("ARCH-10 asynchronous job handlers registered.")
+    except Exception:
+        logger.exception("Failed to register background job handlers.")
 
     try:
         logger.info("BM25 index successfully built and initialized.")
