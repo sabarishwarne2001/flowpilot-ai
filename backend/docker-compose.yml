@@ -1,84 +1,240 @@
+# =============================================================================
+# FlowPilot AI — Separated Process Fleet (ARCH-10 Step 8)
+# =============================================================================
+
+name: flowpilot
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-flowpilot}:${POSTGRES_PASSWORD:-flowpilot}@db:5432/${POSTGRES_DB:-flowpilot}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
+  POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-e839e248b9409893d5f84893708e983cf4b1b88e17409c914e963df9bc0297da}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
+  S3_BUCKET: ${S3_BUCKET:-flowpilot-dev}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+  UPLOAD_DIR: uploads
+
 services:
-
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
-    image: flowpilot-backend:latest
-    container_name: flowpilot-backend
-
-    ports:
-      - "8000:8000"
-
-    volumes:
-      - ./app:/app/app
-
-    env_file:
-      - .env
-
-    environment:
-      POSTGRES_HOST: db
-      REDIS_URL: redis://redis:6379/0
-
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-    restart: unless-stopped
-
-
+  # ---------------------------------------------------------------------------
+  # Infrastructure: PostgreSQL Database
+  # ---------------------------------------------------------------------------
   db:
     image: postgres:16-alpine
-
     container_name: flowpilot-db
-
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
+      POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
     ports:
       - "5432:5432"
-
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowpilot} -d ${POSTGRES_DB:-flowpilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-
+  # ---------------------------------------------------------------------------
+  # Infrastructure: Redis Cache & Identity Token Store
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
-
     container_name: flowpilot-redis
-
     ports:
       - "6379:6379"
-
     command: redis-server --maxmemory-policy noeviction
-
     volumes:
       - redis_data:/data
-
-    restart: unless-stopped
-
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # Infrastructure: MinIO S3-Compatible Object Storage
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: flowpilot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Pre-creates the bucket and configures the incomplete multipart abort rule
+  minio-init:
+    image: minio/mc:latest
+    container_name: flowpilot-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${AWS_ACCESS_KEY_ID:-minioadmin} ${AWS_SECRET_ACCESS_KEY:-minioadmin} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-flowpilot-dev} &&
+      mc ilm rule add --expire-delete-marker --noncurrent-expire-days 1 local/${S3_BUCKET:-flowpilot-dev} || true
+      "
+
+  # ---------------------------------------------------------------------------
+  # Database Migration Runner (Runs to completion before app boot)
+  # ---------------------------------------------------------------------------
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    container_name: flowpilot-migrate
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Web Tier: FastAPI REST API
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    container_name: flowpilot-web
+    environment: *app-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 1: Transactional Outbox Relay
+  # ---------------------------------------------------------------------------
+  worker-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: flowpilot-worker-relay
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker", "--loop", "relay", "--per-org-cap", "5"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 2: SSRF-Safe Webhook Delivery Worker
+  # ---------------------------------------------------------------------------
+  worker-delivery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: flowpilot-worker-delivery
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker", "--loop", "delivery", "--per-org-cap", "5"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 3: Light Profile Worker (Storage Sampler & Housekeeping)
+  # ---------------------------------------------------------------------------
+  worker-light:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: flowpilot-worker-light
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker", "--loop", "jobs", "--profile", "light"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 4: Dedicated OCR Worker (PaddleOCR Heavy Image)
+  # ---------------------------------------------------------------------------
+  worker-ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ocr
+    container_name: flowpilot-worker-ocr
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: [
+      "python", "-m", "app.worker",
+      "--loop", "jobs",
+      "--profile", "ocr",
+      "--batch-size", "4",
+      "--per-org-cap", "2",
+      "--lease-seconds", "600"
+    ]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 5: Dedicated Enrichment Worker (Embeddings, ChromaDB, BM25, LLM)
+  # ---------------------------------------------------------------------------
+  worker-enrich:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: enrich
+    container_name: flowpilot-worker-enrich
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: [
+      "python", "-m", "app.worker",
+      "--loop", "jobs",
+      "--profile", "enrich",
+      "--batch-size", "4",
+      "--per-org-cap", "2",
+      "--lease-seconds", "600"
+    ]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
