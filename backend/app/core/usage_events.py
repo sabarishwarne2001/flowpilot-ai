@@ -1,28 +1,10 @@
-"""ARCH-10 Step 2 — the billable-usage vocabulary.
+"""ARCH-10 Step 2 & ARCH-11 Step 4 — the billable-usage vocabulary.
 
 Deliberately a service-layer constant module rather than a PostgreSQL enum,
 following ARCH-07 §B.1's reasoning: the taxonomy grows with every provider and
 every feature, so `ALTER TYPE ADD VALUE` friction on each addition is a tax on
 the wrong axis. The vocabulary is still *closed* — `record_usage()` refuses an
 unknown type — it is just closed in Python rather than in the type system.
-
-Two deliberate amendments to the ARCH-10 Part III taxonomy, both recorded here
-so the next reader inherits the reasoning rather than the conclusion:
-
-1. `llm.token` is split into `llm.input_token` and `llm.output_token`.
-   Every commercial provider prices output at 3–5x input. A single
-   `llm.token` counter cannot be converted into a cost after the fact, which
-   means ARCH-14 would have to re-derive the split from data that was never
-   recorded. The split costs one extra constant now and is unrecoverable
-   later.
-
-2. `storage.gb_month` is marked `SAMPLED` rather than `OCCURRENCE`.
-   The other three are *flows* — something happened, emit an event. Storage
-   is a *stock*: there is no moment at which a gigabyte-month occurs. It is
-   produced by a periodic sweeper sampling total durable bytes per tenant and
-   emitting the elapsed fraction. Recording it at upload time would bill a
-   1 GB file once instead of monthly, forever. The `EmissionKind` field exists
-   so a handler cannot accidentally emit a sampled type inline.
 """
 
 from __future__ import annotations
@@ -73,6 +55,20 @@ _TYPES: tuple[UsageEventType, ...] = (
         emission=EmissionKind.OCCURRENCE,
         default_provider="sentence_transformers",
         description="One token submitted to an embedding model.",
+    ),
+    UsageEventType(
+        name="embedding.backfill_token",
+        unit=UsageUnit.TOKEN,
+        emission=EmissionKind.OCCURRENCE,
+        billable=False,
+        default_provider="sentence_transformers",
+        description=(
+            "One token embedded by knowledge.reindex during the ARCH-11 "
+            "migration. Recorded against the tenant for capacity planning and "
+            "NOT invoiced: the corpus is being re-embedded because the "
+            "platform changed its vector store. `billable=False` is load-bearing "
+            "— it is what makes this type exempt from spend ceilings."
+        ),
     ),
     UsageEventType(
         name="llm.input_token",

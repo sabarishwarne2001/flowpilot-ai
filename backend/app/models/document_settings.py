@@ -2,7 +2,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -18,7 +18,37 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
     Persistent document settings owned by a single workspace.
     """
     __tablename__ = "document_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "chunk_size_tokens BETWEEN 32 AND 254",
+            name="chunk_size_tokens_range",
+        ),
+        CheckConstraint(
+            "chunk_overlap_pct BETWEEN 0 AND 40",
+            name="chunk_overlap_pct_range",
+        ),
+        CheckConstraint(
+            "embedding_model = 'sentence-transformers/all-MiniLM-L6-v2'",
+            name="embedding_model_pinned",
+        ),
+    )
 
+    #: ARCH-11 Step 3: Token-aware chunking configuration
+    chunk_size_tokens: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=220,
+        server_default="220",
+    )
+
+    chunk_overlap_pct: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+        server_default="10",
+    )
+
+    #: DEPRECATED (ARCH-11 Step 3). Character-based. Dropped in Step 9 CONTRACT.
     chunk_size: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

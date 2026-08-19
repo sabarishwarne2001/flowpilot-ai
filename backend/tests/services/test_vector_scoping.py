@@ -49,6 +49,9 @@ SCOPE_ALLOW_LIST = {
     "app/services/document_models.py",
     "app/services/chunking_service.py",
     "app/services/embedding_service.py",
+    "app/services/chunk_writer.py",
+    "app/services/chunk_retrieval_service.py",
+    "app/services/lexical_search_service.py",
 }
 
 _RAW_REFERENCE = re.compile(r"\bdocument_chunks\b|\bDocumentChunk\b")

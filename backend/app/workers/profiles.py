@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8 — worker profiles."""
+"""ARCH-10 Step 8 & ARCH-11 Step 4 — worker profiles."""
 
 from __future__ import annotations
 
@@ -46,9 +46,9 @@ OCR = WorkerProfile(
 
 ENRICH = WorkerProfile(
     name="enrich",
-    job_types=frozenset({"document.enrich"}),
+    job_types=frozenset({"document.enrich", "knowledge.reindex"}),
     allow_heavy=frozenset({"chromadb", "sentence_transformers", "torch", "transformers"}),
-    description="Embedding and LLM enrichment.",
+    description="Embedding, enrichment, and the ARCH-11 knowledge backfill.",
 )
 
 ALL = WorkerProfile(

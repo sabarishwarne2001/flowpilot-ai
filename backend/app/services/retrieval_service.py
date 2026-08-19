@@ -1,23 +1,30 @@
 """
 Central Retrieval Service, strictly partitioned by workspace.
+ARCH-11 Step 4 & 5 dual-read enabled.
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
-from uuid import UUID
-from typing import Any
 from collections import defaultdict
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.services.embedding_service import embedding_service
 from app.services.bm25_service import bm25_service
+from app.services.chunk_retrieval_service import (
+    chunk_retrieval_service,
+    knowledge_router,
+)
+from app.services.document_filter_service import document_filter_service
+from app.services.embedding_service import embedding_service
 from app.services.intent_service import intent_service
+from app.services.lexical_search_service import lexical_search_service
 from app.services.query_service import query_service
 from app.services.reranker_service import reranker_service
-from app.services.document_filter_service import document_filter_service
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -221,24 +228,54 @@ class RetrievalService:
         work_item_ids: list[str],
         top_k: int,
         similarity_threshold: float,
+        db: Session | None = None,
     ):
         intent = intent_service.detect_intent(query)
         logger.info("Detected retrieval intent: %s", intent)
 
-        semantic_results = self._semantic_multi_query_search(
-            workspace_id=workspace_id,
-            query=query,
-            top_k=top_k,
-            similarity_threshold=similarity_threshold,
-            filter_work_item_ids=[UUID(work_item_id) for work_item_id in work_item_ids],
+        plan = knowledge_router.plan(
+            db, workspace_id=workspace_id, work_item_ids=work_item_ids
+        )
+        logger.info(
+            "Retrieval routing: %d document(s) on pgvector, %d on Chroma.",
+            len(plan.indexed),
+            len(plan.legacy),
         )
 
-        lexical_results = bm25_service.search(
-            workspace_id=workspace_id,
-            query=query,
-            work_item_ids=work_item_ids,
-            top_k=top_k,
-        )
+        semantic_results: list[dict[str, Any]] = []
+        lexical_results: list[dict[str, Any]] = []
+
+        if plan.indexed and db is not None:
+            semantic_results += chunk_retrieval_service.semantic_search(
+                db,
+                workspace_id=workspace_id,
+                query=query,
+                work_item_ids=plan.indexed,
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+            )
+            lexical_results += lexical_search_service.search(
+                db,
+                workspace_id=workspace_id,
+                query=query,
+                work_item_ids=plan.indexed,
+                top_k=top_k,
+            )
+
+        if plan.legacy:
+            semantic_results += self._semantic_multi_query_search(
+                workspace_id=workspace_id,
+                query=query,
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+                filter_work_item_ids=[UUID(i) for i in plan.legacy],
+            )
+            lexical_results += bm25_service.search(
+                workspace_id=workspace_id,
+                query=query,
+                work_item_ids=list(plan.legacy),
+                top_k=top_k,
+            )
 
         merged_results = self._rrf_merge(
             semantic_results=semantic_results,

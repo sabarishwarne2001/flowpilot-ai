@@ -1,38 +1,10 @@
-"""ARCH-11 Step 1 — `embedding.token` metering (closes ARCH-10 R20).
+"""ARCH-11 Step 1 & Step 4 — `embedding.token` & `embedding.backfill_token` metering.
 
 Everything needed to bill embeddings already exists: the taxonomy entry, the
 `record_usage` write path, `guard_usage`, `SpendLimitExceededError`, the
 `QUOTA_BLOCKED` pipeline stage, and `SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS`.
-The only missing piece is the call. This module is that call, kept out of the
-handler so it can be unit-tested without a job, and so the token arithmetic
-lives in one place.
-
-Three decisions worth reading before changing anything here.
-
-**1. Tokens come from the tokenizer, never from `len(text) / 4`.**
-An estimate that drifts 20% is an invoice that drifts 20%, and it drifts
-systematically rather than randomly: the ratio depends on the language, on
-whether the document is prose or a table of part numbers, and on how the OCR
-engine spaced the text. `_count_tokens` calls the model's own tokenizer with
-padding off, which is exactly the number the encoder will consume.
-
-**2. Billable tokens are capped at the model's sequence window.**
-`all-MiniLM-L6-v2` truncates at 256 word-pieces. Tokens past that are never
-seen by the encoder, cost nothing to produce, and must not be billed. The
-difference is recorded as `truncated_tokens` in the event details — not for
-billing, but because it is the honest measure of how much of each chunk is
-actually being embedded, and Step 3 needs that number to choose a chunk size.
-See finding F1 in the Step 1 notes: the masterplan's 300-500 token target does
-not fit a 256-token window.
-
-**3. Idempotency is keyed on the work item, not the job.**
-`embed:{work_item_id}:{start}-{end}`. A reaped enrich job re-runs and re-embeds
-— that is correct and unavoidable — but it must not re-bill, because the tenant
-did not ask for the work twice. This differs deliberately from `ocr.page`,
-which keys on `job_id` so that an explicit reprocess *does* bill again. The
-consequence is that the second run collides on
-`uq_usage_events_org_idempotency_key`, so every write goes through a SAVEPOINT
-and a collision is a no-op rather than an aborted transaction.
+This module prices and meters embedding batches with exact tokenizer counts,
+sequence window caps, and idempotent savepoint-protected recording.
 """
 
 from __future__ import annotations
@@ -60,9 +32,7 @@ USAGE_EVENT_TYPE = "embedding.token"
 USAGE_PROVIDER = "sentence_transformers"
 RESOURCE_TYPE = "WORK_ITEM"
 
-#: Name of the partial unique index that enforces idempotency. Matched against
-#: the driver's constraint diagnostic so an unrelated IntegrityError is
-#: re-raised rather than swallowed.
+#: Name of the partial unique index that enforces idempotency.
 _IDEMPOTENCY_INDEX = "uq_usage_events_org_idempotency_key"
 
 
@@ -141,19 +111,13 @@ class EmbeddingPlan:
 
 
 def _count_tokens(model: Any, texts: Sequence[str]) -> list[int]:
-    """Untruncated word-piece counts from the model's own tokenizer.
-
-    `padding=False` matters: with padding on, every sequence in the batch is
-    counted at the length of the longest one, which would inflate a batch
-    containing one long chunk by a factor of the batch size.
-    """
+    """Untruncated word-piece counts from the model's own tokenizer."""
     tokenizer = getattr(model, "tokenizer", None)
     if tokenizer is None:
         raise EmbeddingMeteringError(
             "The loaded embedding model exposes no `.tokenizer`. Token counts "
             "must come from the tokenizer; refusing to fall back to a "
-            "character-length estimate, which would bill wrong rather than "
-            "fail loudly."
+            "character-length estimate."
         )
     encoded = tokenizer(
         list(texts),
@@ -227,8 +191,10 @@ def plan_embedding_usage(
 # ===========================================================================
 
 
-def idempotency_key(work_item_id: uuid.UUID, batch: EmbeddingBatch) -> str:
-    return f"embed:{work_item_id}:{batch.chunk_range}"
+def idempotency_key(
+    work_item_id: uuid.UUID, batch: EmbeddingBatch, *, prefix: str = "embed"
+) -> str:
+    return f"{prefix}:{work_item_id}:{batch.chunk_range}"
 
 
 def _is_idempotency_collision(exc: IntegrityError) -> bool:
@@ -258,25 +224,17 @@ def record_batch_usage(
     batch: EmbeddingBatch,
     plan: EmbeddingPlan,
     job_id: Optional[uuid.UUID] = None,
+    event_type: str = USAGE_EVENT_TYPE,
+    idempotency_prefix: str = "embed",
 ) -> bool:
-    """Check the ceiling, then record one batch. Returns False if already billed.
-
-    The ceiling check happens *before* the encoder call for this batch, which is
-    what makes the control a control: a runaway document stops at the batch that
-    would cross the limit rather than after the whole corpus has been encoded.
-    Rows flushed by earlier batches are visible to this session's aggregate, so
-    the accumulation is correct within the transaction.
-    """
-    key = idempotency_key(work_item_id, batch)
+    """Check the ceiling, then record one batch. Returns False if already billed."""
+    key = idempotency_key(work_item_id, batch, prefix=idempotency_prefix)
 
     with spend.guard_usage(
         db,
         organization_id=organization_id,
-        event_type=USAGE_EVENT_TYPE,
+        event_type=event_type,
         estimated_quantity=batch.billable_tokens,
-        # Self-hosted sentence-transformers has no per-call provider cost.
-        # The ceiling that bites here is the quantity ceiling, which is why
-        # ARCH-10 Step 3 caps on quantity *and* cost rather than cost alone.
         estimated_cost_micros=None,
         workspace_id=workspace_id,
         job_id=job_id,
@@ -307,8 +265,6 @@ def record_batch_usage(
                 raise
             prior = _existing_event(db, organization_id=organization_id, key=key)
             if prior is not None:
-                # Keep guard.recorded honest so guard_usage does not log
-                # "recorded nothing" for a batch that was billed on a prior run.
                 guard.recorded.append(prior)
             logger.info(
                 "embedding.already_billed",
@@ -335,15 +291,10 @@ def embed_texts_with_metering(
     texts: Sequence[str],
     job_id: Optional[uuid.UUID] = None,
     encode: Optional[Any] = None,
+    event_type: str = USAGE_EVENT_TYPE,
+    idempotency_prefix: str = "embed",
 ) -> tuple[list[list[float]], EmbeddingPlan]:
-    """Meter and embed one work item's chunks, in order.
-
-    Raises `SpendLimitExceededError` from `guard_usage` when a batch would cross
-    the tenant's ceiling. The caller is expected to let that propagate: the
-    enrich handler already converts it into a `QUOTA_BLOCKED` transition, and
-    because nothing is written to the vector store until every batch has
-    returned, a refusal leaves no half-embedded document behind.
-    """
+    """Meter and embed one work item's chunks, in order."""
     from app.services.embedding_service import embedding_service
 
     if not texts:
@@ -355,7 +306,7 @@ def embed_texts_with_metering(
         return [], empty
 
     encoder = encode or embedding_service.generate_embeddings
-    model = embedding_service._get_model()  # noqa: SLF001 — the tokenizer lives here
+    model = embedding_service._get_model()  # noqa: SLF001
 
     plan = plan_embedding_usage(texts, model=model)
 
@@ -366,12 +317,11 @@ def embed_texts_with_metering(
         )
         return list(encoder(list(texts))), plan
 
-    # Fail fast on the whole document before the first encoder call. This is a
-    # convenience, not the enforcement point — the per-batch guard below is.
+    # Fail fast on the whole document before the first encoder call
     spend.ensure_within_limits(
         db,
         organization_id=organization_id,
-        event_type=USAGE_EVENT_TYPE,
+        event_type=event_type,
         quantity=plan.total_billable_tokens,
         workspace_id=workspace_id,
     )
@@ -387,6 +337,8 @@ def embed_texts_with_metering(
             batch=batch,
             plan=plan,
             job_id=job_id,
+            event_type=event_type,
+            idempotency_prefix=idempotency_prefix,
         )
         billed_batches += int(newly_billed)
         embeddings.extend(encoder(list(batch.texts)))

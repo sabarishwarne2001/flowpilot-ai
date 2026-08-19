@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7 — job handler registration."""
+"""ARCH-10 Step 6/7 & ARCH-11 Step 4 — job handler registration."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ logger = logging.getLogger("app.workers.handlers")
 ARCH10_JOB_TYPES: frozenset[str] = frozenset(
     {"document.extract", "document.enrich", "storage.sample"}
 )
+ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -32,10 +33,17 @@ def _storage_sample(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_storage_sample(payload)
 
 
+def _knowledge_reindex(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.knowledge_reindex import handle_knowledge_reindex
+
+    return handle_knowledge_reindex(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
     "storage.sample": _storage_sample,
+    "knowledge.reindex": _knowledge_reindex,
 }
 
 
@@ -61,4 +69,4 @@ def register_all(*, replace: bool = False) -> list[str]:
     return registered
 
 
-__all__ = ["register_all", "ARCH10_JOB_TYPES"]
+__all__ = ["register_all", "ARCH10_JOB_TYPES", "ARCH11_JOB_TYPES"]

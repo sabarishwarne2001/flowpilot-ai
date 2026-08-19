@@ -6,27 +6,26 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
 from collections import OrderedDict
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.models.ai_settings import AISettings
 from app.core.config import settings
+from app.models.ai_settings import AISettings
 from app.models.assistant import Conversation
 from app.models.work_item import WorkItem
 from app.schemas.assistant import (
     ChatResponse,
     ConversationRole,
     SourceCitation,
-    TokenUsage
+    TokenUsage,
 )
-
+from app.services.citation_service import citation_service
 from app.services.llm_service import llm_service
 from app.services.retrieval_service import retrieval_service
-from app.services.citation_service import citation_service
 from app.services.snippet_service import snippet_service
 
 logger = logging.getLogger("app.services.assistant_service")
@@ -136,9 +135,6 @@ class AssistantService:
         conversation_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> Conversation:
-        """
-        Retrieve a conversation while enforcing workspace and user ownership.
-        """
         statement = select(Conversation).where(
             Conversation.id == conversation_id,
             Conversation.user_id == user_id,
@@ -162,10 +158,6 @@ class AssistantService:
         conversation: Conversation,
         user_id: uuid.UUID,
     ) -> list[WorkItem]:
-        """
-        Resolve the searchable WorkItems within the active workspace.
-        """
-        # Document Assistant
         if conversation.work_item_id is not None:
             work_item = crud.get_work_item(
                 db,
@@ -184,7 +176,6 @@ class AssistantService:
             logger.info("Document Assistant mode activated.")
             return [work_item]
 
-        # Global Assistant (Resolves every document in the active workspace)
         work_items = crud.list_work_items(
             db,
             workspace_id=conversation.workspace_id,
@@ -342,13 +333,14 @@ class AssistantService:
         top_k = self._determine_top_k(query)
         similarity_threshold = self._determine_similarity_threshold(query)
 
-        # Thread workspace_id strictly into our hybrid retriever
+        # Thread workspace_id and active database session into hybrid retriever
         results = retrieval_service.hybrid_search(
             workspace_id=conversation.workspace_id,
             query=query,
             work_item_ids=[str(work_item_id) for work_item_id in work_item_ids],
             top_k=top_k,
             similarity_threshold=similarity_threshold,
+            db=db,
         )
         logger.info("Hybrid retrieval returned %d result(s).", len(results))
 
@@ -482,9 +474,6 @@ class AssistantService:
         db: Session,
         workspace_id: uuid.UUID,
     ) -> AISettings:
-        """
-        Load the workspace's AI settings configuration.
-        """
         ai_settings = crud.get_ai_settings(
             db=db,
             workspace_id=workspace_id,
