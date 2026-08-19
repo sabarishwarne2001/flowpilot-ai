@@ -106,12 +106,6 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32
 
-    # Sprint 3: Vector Store (ChromaDB) Configurations
-    CHROMA_PERSIST_DIRECTORY: str = "chromadb"
-    CHROMA_COLLECTION_NAME: str = "flowpilot_chunks"
-    CHROMA_TELEMETRY_ENABLED: bool = False
-    CHROMA_ALLOW_RESET: bool = False
-
     # Sprint 3: OCR Configurations
     OCR_LANGUAGE: str = "en"
 
@@ -245,12 +239,29 @@ class Settings(BaseSettings):
 
     # --- ARCH-11 Step 4: backfill ---------------------------------------
     SPEND_PLATFORM_MONTHLY_BACKFILL_TOKENS: Optional[int] = 200_000_000
-    KNOWLEDGE_DUAL_READ: bool = True
 
     # --- ARCH-11 Step 5: lexical retrieval -------------------------------
     LEXICAL_TSVECTOR_CONFIG: str = "english"
     LEXICAL_TRIGRAM_THRESHOLD: float = 0.3
     LEXICAL_CANDIDATES: int = 50
+
+    # --- ARCH-11 Step 6: hybrid fusion ------------------------------------
+    HYBRID_CANDIDATES: int = 150
+    HYBRID_WEIGHT_DENSE: float = 1.0
+    HYBRID_WEIGHT_FULL_TEXT: float = 1.0
+    HYBRID_WEIGHT_FUZZY: float = 0.5
+
+    # --- ARCH-11 Step 7: reranker service ---------------------------------
+    RERANKER_ENABLED: bool = True
+    RERANKER_URL: str = "http://reranker:8081"
+    RERANKER_INTERNAL_TOKEN: Optional[SecretStr] = None
+    RERANKER_TIMEOUT: float = 2.0
+    RERANKER_CONNECT_TIMEOUT: float = 0.5
+    RERANKER_BREAKER_THRESHOLD: int = 5
+    RERANKER_BREAKER_RESET_SECONDS: float = 30.0
+
+    # --- ARCH-11 hardening: context assembly ------------------------------
+    CONTEXT_INJECTION_BLOCK_THRESHOLD: int = 3
 
     @field_validator("RAG_TOP_K")
     @classmethod

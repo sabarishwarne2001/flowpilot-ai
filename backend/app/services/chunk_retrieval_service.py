@@ -1,4 +1,4 @@
-"""ARCH-11 Steps 4 & 6 — dense retrieval out of PostgreSQL and dual-read router."""
+"""ARCH-11 Steps 4, 6 & 9 — dense retrieval out of PostgreSQL and router."""
 
 from __future__ import annotations
 
@@ -151,15 +151,8 @@ class ChunkRetrievalService:
 chunk_retrieval_service = ChunkRetrievalService()
 
 
-# ===========================================================================
-# Dual-read routing
-# ===========================================================================
-
-
 @dataclass(frozen=True)
 class RoutingPlan:
-    """Which documents are served from where for a retrieval request."""
-
     indexed: tuple[str, ...]
     legacy: tuple[str, ...]
 
@@ -176,8 +169,6 @@ class RoutingPlan:
 
 
 class KnowledgeRouter:
-    """Prefer `document_chunks`; fall back to Chroma for pending documents."""
-
     def plan(
         self,
         db: Optional[Session],
@@ -189,7 +180,8 @@ class KnowledgeRouter:
         if not requested:
             return RoutingPlan(indexed=(), legacy=())
 
-        if db is None or not settings.KNOWLEDGE_DUAL_READ:
+        dual_read = getattr(settings, "KNOWLEDGE_DUAL_READ", True)
+        if db is None or not dual_read:
             return RoutingPlan(indexed=(), legacy=requested)
 
         from app.services.chunk_writer import indexed_work_item_ids
@@ -200,10 +192,6 @@ class KnowledgeRouter:
                 for value in indexed_work_item_ids(db, workspace_id=workspace_id)
             }
         except Exception:  # noqa: BLE001
-            logger.warning(
-                "knowledge_router.probe_failed — routing everything to Chroma",
-                exc_info=True,
-            )
             return RoutingPlan(indexed=(), legacy=requested)
 
         indexed = tuple(value for value in requested if value in present)

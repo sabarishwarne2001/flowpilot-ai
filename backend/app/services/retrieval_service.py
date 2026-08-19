@@ -1,6 +1,6 @@
 """
 Central Retrieval Service, strictly partitioned by workspace.
-ARCH-11 Step 4 & 5 dual-read enabled.
+ARCH-11 Step 9 cutover version: 100% SQL RRF hybrid search & reranker client.
 """
 
 from __future__ import annotations
@@ -14,211 +14,18 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.services.bm25_service import bm25_service
-from app.services.chunk_retrieval_service import (
-    chunk_retrieval_service,
-    knowledge_router,
-)
 from app.services.document_filter_service import document_filter_service
-from app.services.embedding_service import embedding_service
+from app.services.hybrid_search_service import hybrid_search_service
 from app.services.intent_service import intent_service
-from app.services.lexical_search_service import lexical_search_service
-from app.services.query_service import query_service
-from app.services.reranker_service import reranker_service
+from app.services.reranker_client import reranker_client
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.services.retrieval")
 
 
 class RetrievalService:
     """
     Production retrieval abstraction scoped per workspace.
     """
-
-    def _determine_similarity_threshold(
-        self,
-        *,
-        query: str,
-    ) -> float:
-        words = len(query.split())
-        if words <= 2:
-            return 0.12
-        if words <= 5:
-            return 0.18
-        if words <= 10:
-            return 0.22
-        return 0.28
-
-    def _retry_similarity_search(
-        self,
-        *,
-        workspace_id: UUID,
-        query: str,
-        top_k: int,
-        similarity_threshold: float,
-        filter_work_item_id: UUID | None = None,
-        filter_work_item_ids: list[UUID] | None = None,
-    ) -> list[dict[str, Any]]:
-        retry_thresholds = [
-            similarity_threshold,
-            max(0.08, similarity_threshold - 0.05),
-            max(0.05, similarity_threshold - 0.10),
-        ]
-
-        best_results: list[dict[str, Any]] = []
-
-        for threshold in retry_thresholds:
-            logger.info(
-                "Semantic retrieval attempt inside workspace %s (threshold=%.3f)",
-                workspace_id,
-                threshold,
-            )
-
-            results = embedding_service.similarity_search(
-                workspace_id=workspace_id,
-                query=query,
-                top_k=top_k,
-                similarity_threshold=threshold,
-                filter_work_item_id=filter_work_item_id,
-                filter_work_item_ids=filter_work_item_ids,
-            )
-
-            if len(results) > len(best_results):
-                best_results = results
-
-            if len(results) >= 8:
-                logger.info(
-                    "Retrieval retry satisfied with %d candidates.",
-                    len(results),
-                )
-                return results
-
-        logger.info(
-            "Returning best retry result (%d candidates).",
-            len(best_results),
-        )
-        return best_results
-
-    def _lexical_score(
-        self,
-        *,
-        query: str,
-        text: str,
-        filename: str,
-    ) -> float:
-        query_words = {
-            word.lower()
-            for word in query.split()
-            if len(word) >= 3
-        }
-
-        text_lower = text.lower()
-        filename_lower = filename.lower()
-        score = 0.0
-
-        for word in query_words:
-            if word in filename_lower:
-                score += 2.0
-
-        for word in query_words:
-            if word in text_lower:
-                score += 1.0
-
-        return score
-
-    def _determine_candidate_count(
-        self,
-        *,
-        query: str,
-    ) -> int:
-        word_count = len(query.split())
-        if word_count <= 2:
-            return 25
-        if word_count <= 5:
-            return 18
-        if word_count <= 10:
-            return 14
-        return 10
-
-    def _semantic_multi_query_search(
-        self,
-        *,
-        workspace_id: UUID,
-        query: str,
-        top_k: int,
-        similarity_threshold: float,
-        filter_work_item_id: UUID | None = None,
-        filter_work_item_ids: list[UUID] | None = None,
-    ) -> list[dict[str, Any]]:
-        search_queries = query_service.generate_search_queries(query)
-        candidate_count = self._determine_candidate_count(query=query)
-        adaptive_threshold = self._determine_similarity_threshold(query=query)
-        similarity_threshold = min(similarity_threshold, adaptive_threshold)
-
-        merged: dict[str, dict[str, Any]] = {}
-
-        for search_query in search_queries:
-            logger.info("Semantic search using query: %s", search_query)
-            results = self._retry_similarity_search(
-                workspace_id=workspace_id,
-                query=search_query,
-                top_k=max(top_k, candidate_count),
-                similarity_threshold=similarity_threshold,
-                filter_work_item_id=filter_work_item_id,
-                filter_work_item_ids=filter_work_item_ids,
-            )
-
-            for result in results:
-                chunk_id = result["id"]
-                existing = merged.get(chunk_id)
-
-                if existing is None:
-                    merged[chunk_id] = result
-                    continue
-
-                if result.get("similarity_score", 0.0) > existing.get("similarity_score", 0.0):
-                    merged[chunk_id] = result
-
-        merged_results = sorted(
-            merged.values(),
-            key=lambda item: item.get("similarity_score", 0.0),
-            reverse=True,
-        )
-
-        logger.info(
-            "Multi-query semantic retrieval produced %d unique chunk(s).",
-            len(merged_results),
-        )
-        return merged_results
-
-    def retrieve(
-        self,
-        *,
-        workspace_id: UUID,
-        query: str,
-        top_k: int,
-        similarity_threshold: float,
-        filter_work_item_id: UUID | None = None,
-        filter_work_item_ids: list[UUID] | None = None,
-    ) -> list[dict[str, Any]]:
-        dense_results = embedding_service.similarity_search(
-            workspace_id=workspace_id,
-            query=query,
-            top_k=top_k,
-            similarity_threshold=similarity_threshold,
-            filter_work_item_id=filter_work_item_id,
-            filter_work_item_ids=filter_work_item_ids,
-        )
-
-        for result in dense_results:
-            metadata = result.get("metadata", {})
-            lexical_score = self._lexical_score(
-                query=query,
-                text=result["text"],
-                filename=metadata.get("original_filename", ""),
-            )
-            result["lexical_score"] = lexical_score
-
-        return dense_results
 
     def hybrid_search(
         self,
@@ -229,115 +36,41 @@ class RetrievalService:
         top_k: int,
         similarity_threshold: float,
         db: Session | None = None,
-    ):
+        request_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if db is None:
+            raise ValueError("RetrievalService.hybrid_search requires an active database session.")
+
         intent = intent_service.detect_intent(query)
-        logger.info("Detected retrieval intent: %s", intent)
-
-        plan = knowledge_router.plan(
-            db, workspace_id=workspace_id, work_item_ids=work_item_ids
+        outcome = hybrid_search_service.search(
+            db,
+            workspace_id=workspace_id,
+            query=query,
+            work_item_ids=work_item_ids,
+            top_k=max(top_k, settings.RERANK_MAX_CANDIDATES),
+            similarity_threshold=similarity_threshold,
         )
-        logger.info(
-            "Retrieval routing: %d document(s) on pgvector, %d on Chroma.",
-            len(plan.indexed),
-            len(plan.legacy),
-        )
-
-        semantic_results: list[dict[str, Any]] = []
-        lexical_results: list[dict[str, Any]] = []
-
-        if plan.indexed and db is not None:
-            semantic_results += chunk_retrieval_service.semantic_search(
-                db,
-                workspace_id=workspace_id,
-                query=query,
-                work_item_ids=plan.indexed,
-                top_k=top_k,
-                similarity_threshold=similarity_threshold,
-            )
-            lexical_results += lexical_search_service.search(
-                db,
-                workspace_id=workspace_id,
-                query=query,
-                work_item_ids=plan.indexed,
-                top_k=top_k,
-            )
-
-        if plan.legacy:
-            semantic_results += self._semantic_multi_query_search(
-                workspace_id=workspace_id,
-                query=query,
-                top_k=top_k,
-                similarity_threshold=similarity_threshold,
-                filter_work_item_ids=[UUID(i) for i in plan.legacy],
-            )
-            lexical_results += bm25_service.search(
-                workspace_id=workspace_id,
-                query=query,
-                work_item_ids=list(plan.legacy),
-                top_k=top_k,
-            )
-
-        merged_results = self._rrf_merge(
-            semantic_results=semantic_results,
-            lexical_results=lexical_results,
-        )
+        merged_results = outcome.results
 
         merged_results = self._boost_intent_documents(merged_results, intent)
-        merged_results = reranker_service.rerank(query=query, results=merged_results)
+        merged_results = reranker_client.rerank(
+            query=query, results=merged_results, request_id=request_id
+        )
         merged_results = self._estimate_retrieval_confidence(merged_results)
         merged_results = self._apply_metadata_prior(query=query, results=merged_results)
         merged_results = self._apply_document_prior(merged_results)
 
-        reranker_service.log_top_results(merged_results, top_n=3)
         merged_results = document_filter_service.filter_documents(merged_results)
 
         document_count = len({result["metadata"]["work_item_id"] for result in merged_results})
-
         if document_count > 1 and self._should_balance_context(merged_results):
-            logger.info("Applying context balancing across %d documents.", document_count)
             merged_results = self._balance_documents(merged_results)
-        else:
-            logger.info("Skipping context balancing.")
 
         logger.info(
             "Hybrid retrieval pipeline completed with %d final chunk(s).",
             len(merged_results),
         )
         return merged_results
-
-    def _rrf_merge(
-        self,
-        *,
-        semantic_results: list[dict],
-        lexical_results: list[dict],
-        k: int = 60,
-    ) -> list[dict]:
-        fused_scores: dict[str, float] = {}
-        result_lookup: dict[str, dict] = {}
-
-        for rank, result in enumerate(semantic_results, start=1):
-            chunk_id = result["id"]
-            fused_scores.setdefault(chunk_id, 0.0)
-            fused_scores[chunk_id] += 1 / (k + rank)
-            result_lookup[chunk_id] = result
-
-        for rank, result in enumerate(lexical_results, start=1):
-            chunk_id = result["id"]
-            fused_scores.setdefault(chunk_id, 0.0)
-            fused_scores[chunk_id] += 1 / (k + rank)
-            result_lookup[chunk_id] = result
-
-        for chunk_id, result in result_lookup.items():
-            result["rrf_score"] = fused_scores[chunk_id]
-            
-        merged = sorted(
-            result_lookup.values(),
-            key=lambda item: fused_scores[item["id"]],
-            reverse=True,
-        )
-
-        logger.info("Hybrid retrieval produced %d merged result(s).", len(merged))
-        return merged
 
     def _estimate_retrieval_confidence(
         self,
@@ -346,7 +79,11 @@ class RetrievalService:
         if not results:
             return results
 
-        rerank_scores = [float(result.get("rerank_score", 0.0)) for result in results]
+        rerank_scores = [
+            float(result.get("rerank_score", 0.0))
+            for result in results
+            if result.get("rerank_score") is not None
+        ]
         semantic_scores = [float(result.get("similarity_score", 0.0)) for result in results]
         lexical_scores = [float(result.get("lexical_score", 0.0)) for result in results]
 
@@ -358,14 +95,14 @@ class RetrievalService:
         lexical_range = max(max_lexical, 1e-6)
 
         for result in results:
-            rerank = (float(result.get("rerank_score", 0.0)) - min_rerank) / rerank_range
+            raw_rerank = result.get("rerank_score")
+            rerank = (float(raw_rerank) - min_rerank) / rerank_range if raw_rerank is not None else 0.5
             semantic = float(result.get("similarity_score", 0.0))
             lexical = (float(result.get("lexical_score", 0.0))) / lexical_range
 
             confidence = (0.55 * rerank + 0.30 * semantic + 0.15 * lexical)
             result["retrieval_confidence"] = max(0.0, min(confidence, 1.0))
 
-        logger.info("Retrieval confidence estimated for %d chunks.", len(results))
         return results
 
     def _apply_metadata_prior(
@@ -397,12 +134,10 @@ class RetrievalService:
             key=lambda item: (
                 item.get("intent_match", False),
                 item.get("retrieval_confidence", 0.0),
-                item.get("rerank_score", 0.0),
+                item.get("rerank_score", float("-inf")) if item.get("rerank_score") is not None else float("-inf"),
             ),
             reverse=True,
         )
-
-        logger.info("Metadata prior applied.")
         return results
 
     def _apply_document_prior(
@@ -432,12 +167,10 @@ class RetrievalService:
         results.sort(
             key=lambda item: (
                 item.get("retrieval_confidence", 0.0),
-                item.get("rerank_score", 0.0),
+                item.get("rerank_score", float("-inf")) if item.get("rerank_score") is not None else float("-inf"),
             ),
             reverse=True,
         )
-
-        logger.info("Semantic document prior applied.")
         return results
 
     def _boost_intent_documents(
@@ -484,7 +217,6 @@ class RetrievalService:
             for result in results
             if result.get("metadata", {}).get("work_item_id") == top_document
         )
-
         return top_document_chunks < 3
 
     def _balance_documents(
@@ -499,7 +231,7 @@ class RetrievalService:
 
         for chunks in grouped.values():
             chunks.sort(
-                key=lambda item: item.get("rerank_score", float("-inf")),
+                key=lambda item: item.get("rerank_score", float("-inf")) if item.get("rerank_score") is not None else float("-inf"),
                 reverse=True,
             )
 
@@ -518,12 +250,9 @@ class RetrievalService:
             for work_item_id in completed:
                 grouped.pop(work_item_id, None)
 
-        logger.info(
-            "Balanced %d chunks across %d document(s).",
-            len(balanced),
-            len({r["metadata"]["work_item_id"] for r in balanced}),
-        )
         return balanced
 
 
 retrieval_service = RetrievalService()
+
+__all__ = ["RetrievalService", "retrieval_service"]

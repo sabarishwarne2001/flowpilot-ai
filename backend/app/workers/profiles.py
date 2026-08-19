@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8 & ARCH-11 Step 4 — worker profiles."""
+"""ARCH-10 Step 8 & ARCH-11 Step 9 — worker profiles."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ logger = logging.getLogger("app.workers.profiles")
 HEAVY_MODULES: tuple[str, ...] = (
     "paddleocr",
     "paddle",
-    "chromadb",
     "sentence_transformers",
     "torch",
     "transformers",
@@ -47,7 +46,7 @@ OCR = WorkerProfile(
 ENRICH = WorkerProfile(
     name="enrich",
     job_types=frozenset({"document.enrich", "knowledge.reindex"}),
-    allow_heavy=frozenset({"chromadb", "sentence_transformers", "torch", "transformers"}),
+    allow_heavy=frozenset({"sentence_transformers", "torch", "transformers"}),
     description="Embedding, enrichment, and the ARCH-11 knowledge backfill.",
 )
 

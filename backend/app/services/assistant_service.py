@@ -1,5 +1,6 @@
 """
 AI Assistant orchestration service for FlowPilot AI.
+ARCH-11 context assembly and prompt-injection containment enabled.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.schemas.assistant import (
     TokenUsage,
 )
 from app.services.citation_service import citation_service
+from app.services.context_assembly_service import context_assembly_service
 from app.services.llm_service import llm_service
 from app.services.retrieval_service import retrieval_service
 from app.services.snippet_service import snippet_service
@@ -124,10 +126,6 @@ class AssistantService:
             token_usage=token_usage,
         )
 
-    # ========================================================================
-    # Conversation & Authorization
-    # ========================================================================
-
     def _get_conversation(
         self,
         *,
@@ -142,11 +140,6 @@ class AssistantService:
         conversation = db.execute(statement).scalar_one_or_none()
 
         if conversation is None:
-            logger.error(
-                "Conversation %s not found for user %s.",
-                conversation_id,
-                user_id,
-            )
             raise ValueError("Conversation not found or access denied.")
 
         return conversation
@@ -166,154 +159,15 @@ class AssistantService:
             )
 
             if work_item is None:
-                logger.error(
-                    "WorkItem %s not found in workspace %s.",
-                    conversation.work_item_id,
-                    conversation.workspace_id,
-                )
                 raise ValueError("Associated document not found.")
 
-            logger.info("Document Assistant mode activated.")
             return [work_item]
 
-        work_items = crud.list_work_items(
+        return crud.list_work_items(
             db,
             workspace_id=conversation.workspace_id,
             limit=1000,
         )
-
-        logger.info(
-            "Global Assistant resolved %d searchable documents.",
-            len(work_items),
-        )
-        return work_items
-
-    # ========================================================================
-    # Context Retrieval
-    # ========================================================================
-
-    def _deduplicate_results(
-        self,
-        results: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        unique: OrderedDict[tuple[str, int, int], dict[str, Any]] = OrderedDict()
-
-        for result in sorted(
-            results,
-            key=lambda item: item.get("similarity_score", 0.0),
-            reverse=True,
-        ):
-            metadata = result.get("metadata", {})
-            key = (
-                metadata.get("work_item_id", ""),
-                metadata.get("page_number", -1),
-                metadata.get("chunk_index", -1),
-            )
-            if key not in unique:
-                unique[key] = result
-
-        logger.info(
-            "Deduplicated %d semantic matches to %d.",
-            len(results),
-            len(unique),
-        )
-        return list(unique.values())
-
-    def _rank_documents(
-        self,
-        results: list[dict[str, Any]],
-    ) -> dict[str, float]:
-        document_scores: dict[str, float] = {}
-        for result in results:
-            metadata = result.get("metadata", {})
-            work_item_id = metadata.get("work_item_id")
-            if not work_item_id:
-                continue
-
-            similarity = result.get("similarity_score", 0.0)
-            document_scores[work_item_id] = document_scores.get(work_item_id, 0.0) + similarity
-
-        logger.info("Document ranking scores: %s", document_scores)
-        return document_scores
-
-    def _compute_chunk_score(
-        self,
-        *,
-        query: str,
-        chunk_text: str,
-        similarity_score: float,
-        lexical_score: float,
-        document_name: str,
-    ) -> float:
-        query_lower = query.lower()
-        chunk_lower = chunk_text.lower()
-        score = similarity_score * 0.30
-
-        query_words = {word for word in query_lower.split() if len(word) >= 3}
-        chunk_words = set(chunk_lower.split())
-        overlap = len(query_words.intersection(chunk_words))
-
-        if query_words:
-            score += (overlap / len(query_words)) * 0.30
-
-        if query_lower in chunk_lower:
-            score += 0.20
-
-        if any(word in document_name.lower() for word in query_words):
-            score += 0.10
-
-        score += (lexical_score * 0.25)
-        return score
-
-    def _compress_context_results(
-        self,
-        results: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        compressed: list[dict[str, Any]] = []
-        seen_prefixes: set[str] = set()
-
-        for result in results:
-            text = result["text"].strip()
-            prefix = text[:120].lower()
-            if prefix in seen_prefixes:
-                continue
-            seen_prefixes.add(prefix)
-            compressed.append(result)
-
-        logger.info(
-            "Compressed retrieved context from %d to %d chunk(s).",
-            len(results),
-            len(compressed),
-        )
-        return compressed
-
-    def _determine_top_k(
-        self,
-        query: str,
-    ) -> int:
-        query = query.lower().strip()
-        broad_keywords = ("summarize", "summary", "overview", "everything", "all", "entire", "complete", "explain")
-        factual_keywords = ("email", "phone", "date", "salary", "amount", "id", "address", "who", "when", "where")
-
-        if any(keyword in query for keyword in broad_keywords):
-            return min(settings.RAG_TOP_K + 3, 10)
-        if any(keyword in query for keyword in factual_keywords):
-            return max(3, settings.RAG_TOP_K - 2)
-        return settings.RAG_TOP_K
-
-    def _determine_similarity_threshold(
-        self,
-        query: str,
-    ) -> float:
-        query = query.lower().strip()
-        broad_keywords = ("summarize", "summary", "overview", "all", "everything", "entire", "complete", "explain")
-        factual_keywords = ("email", "phone", "address", "salary", "id", "date", "where", "who", "when")
-
-        if any(keyword in query for keyword in broad_keywords):
-            return max(settings.RAG_SIMILARITY_THRESHOLD - 0.05, 0.15)
-        if any(keyword in query for keyword in factual_keywords):
-            return min(settings.RAG_SIMILARITY_THRESHOLD + 0.10, 0.40)
-        return settings.RAG_SIMILARITY_THRESHOLD
 
     def _retrieve_context(
         self,
@@ -324,16 +178,14 @@ class AssistantService:
         query: str,
     ) -> tuple[str, list[SourceCitation]]:
         if not work_items:
-            logger.info("No searchable documents available.")
             return "", []
 
         filename_lookup = {item.id: item.original_filename for item in work_items}
         work_item_ids = [item.id for item in work_items]
         
-        top_k = self._determine_top_k(query)
-        similarity_threshold = self._determine_similarity_threshold(query)
+        top_k = settings.RAG_TOP_K
+        similarity_threshold = settings.RAG_SIMILARITY_THRESHOLD
 
-        # Thread workspace_id and active database session into hybrid retriever
         results = retrieval_service.hybrid_search(
             workspace_id=conversation.workspace_id,
             query=query,
@@ -341,66 +193,19 @@ class AssistantService:
             top_k=top_k,
             similarity_threshold=similarity_threshold,
             db=db,
+            request_id=str(getattr(conversation, "id", "")),
         )
-        logger.info("Hybrid retrieval returned %d result(s).", len(results))
-
-        results = self._deduplicate_results(results)
-        results = self._compress_context_results(results)
 
         if not results:
-            logger.info("No retrieval results after filtering.")
             return "", []
 
-        document_scores = self._rank_documents(results)
-
-        results.sort(
-            key=lambda item: (
-                -document_scores.get(item.get("metadata", {}).get("work_item_id", ""), 0.0),
-                -self._compute_chunk_score(
-                    query=query,
-                    chunk_text=item["text"],
-                    similarity_score=item.get("similarity_score", 0.0),
-                    document_name=item.get("metadata", {}).get("original_filename", ""),
-                    lexical_score=item.get("lexical_score", 0.0),
-                ),
-                item.get("metadata", {}).get("page_number", 0),
-                item.get("metadata", {}).get("chunk_index", 0),
-            ),
+        # Assemble prompt-injection-safe fenced context block
+        assembled = context_assembly_service.assemble(
+            results,
+            max_characters=settings.RAG_MAX_CONTEXT_LENGTH,
+            block_threshold=settings.CONTEXT_INJECTION_BLOCK_THRESHOLD,
         )
-
-        context_chunks: list[str] = []
-        context_length = 0
-        current_document: str | None = None
-        current_page: int | None = None
-
-        for result in results:
-            metadata = result.get("metadata", {})
-            document_name = metadata.get("original_filename", "Unknown Document")
-            page_number = metadata.get("page_number")
-            text = result["text"].strip()
-
-            if context_length + len(text) > settings.RAG_MAX_CONTEXT_LENGTH:
-                remaining = settings.RAG_MAX_CONTEXT_LENGTH - context_length
-                if remaining <= 50:
-                    break
-                text = text[:remaining]
-
-            if document_name != current_document:
-                current_document = document_name
-                current_page = None
-                context_chunks.append(
-                    "\n" + "=" * 70 + "\n" + f"Document: {document_name}\n" + "=" * 70
-                )
-
-            if page_number != current_page:
-                current_page = page_number
-                if page_number is not None:
-                    context_chunks.append(f"\nPage {page_number}\n" + "-" * 25)
-
-            context_chunks.append(text)
-            context_length += len(text)
-
-        context = "\n\n".join(context_chunks)
+        context = assembled.text
 
         ranked_results = citation_service.rank_citations(results)
         citations: list[SourceCitation] = []
@@ -418,7 +223,6 @@ class AssistantService:
             )
             citations.append(citation)
 
-        logger.info("Final context length: %d characters.", len(context))
         return context, citations
 
     def _build_citation(
@@ -444,10 +248,6 @@ class AssistantService:
             similarity_score=similarity_score,
             snippet=snippet,
         )
-
-    # ========================================================================
-    # Conversation Memory & LLM
-    # ========================================================================
 
     def _load_history(
         self,
@@ -492,17 +292,12 @@ class AssistantService:
         history: list[dict[str, str]],
         ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
-        response, token_usage = llm_service.synthesize_response(
+        return llm_service.synthesize_response(
             query=query,
             context=context,
             history=history,
             ai_settings=ai_settings,
         )
-        return response, token_usage
-
-    # ========================================================================
-    # Persistence
-    # ========================================================================
 
     def _save_messages(
         self,
@@ -557,10 +352,6 @@ class AssistantService:
             conversation=conversation,
             title=title,
         )
-
-    # ========================================================================
-    # Response Builder
-    # ========================================================================
 
     def _build_chat_response(
         self,

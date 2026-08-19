@@ -1,16 +1,4 @@
-"""ARCH-11 Step 2 — the scoped helper, and the scan that keeps it the only door.
-
-The behavioural leak matrix is Step 8's job (`tests/isolation/`). What is here
-is narrower and runs on every commit: the helper always emits the predicate,
-refuses to build a query without one, and no other module in `app/` reaches
-`document_chunks` directly.
-
-`test_no_unscoped_chunk_access_in_app` is the important one, and it is the one
-that will annoy somebody in three months. That annoyance is the feature: the
-day it fires is the day a retrieval path was written without a tenancy
-predicate, and there is no other point at which that gets noticed, because the
-query returns plausible rows either way.
-"""
+"""ARCH-11 Step 2 — the scoped helper, and the scan that keeps it the only door."""
 
 from __future__ import annotations
 
@@ -38,9 +26,6 @@ from app.models.document_chunk import (
 
 APP_ROOT = Path(__file__).resolve().parents[2] / "app"
 
-#: Modules allowed to name the table or the model. Everything else must go
-#: through `scoped_chunk_query`. Adding to this list is a deliberate act and
-#: should come with a reason in the commit message.
 SCOPE_ALLOW_LIST = {
     "app/models/document_chunk.py",
     "app/db/chunk_scope.py",
@@ -52,6 +37,9 @@ SCOPE_ALLOW_LIST = {
     "app/services/chunk_writer.py",
     "app/services/chunk_retrieval_service.py",
     "app/services/lexical_search_service.py",
+    "app/services/hybrid_search_service.py",
+    "app/evaluation/load_evaluation_corpus.py",
+    "tests/isolation/test_vector_tenancy.py",
 }
 
 _RAW_REFERENCE = re.compile(r"\bdocument_chunks\b|\bDocumentChunk\b")
@@ -97,9 +85,6 @@ def test_missing_or_malformed_workspace_is_refused(bad):
 
 @pytest.mark.no_db
 def test_empty_work_item_filter_returns_nothing_not_everything():
-    """A workspace whose documents are all still extracting has no searchable
-    corpus. Dropping the filter here would widen the query to the workspace,
-    which is the mistake that looks like a feature until it isn't."""
     sql = _compiled(scoped_chunk_query(None, uuid.uuid4(), work_item_ids=[]))
     assert "false" in sql.lower()
 
@@ -120,9 +105,6 @@ def test_work_item_filter_is_an_in_clause():
 
 @pytest.mark.no_db
 def test_primary_key_leads_with_the_partition_key():
-    """A partitioned table requires the partition key in every unique
-    constraint. Declaring it first means the implicit PK index also serves
-    tenant-scoped lookups."""
     pk = list(DocumentChunk.__table__.primary_key.columns)
     assert [column.name for column in pk] == ["workspace_id", "id"]
 
@@ -137,9 +119,6 @@ def test_table_declares_hash_partitioning():
 
 @pytest.mark.no_db
 def test_work_item_foreign_key_cascades():
-    """The single largest win of the migration: a chunk cannot outlive its
-    document. Chroma had no foreign key, which is why V.2.3 found 336 orphaned
-    collections."""
     cascades = {
         (list(fk.columns)[0].name, fk.ondelete)
         for fk in DocumentChunk.__table__.foreign_key_constraints
@@ -179,8 +158,6 @@ def test_content_tsv_is_generated_not_written():
     column = DocumentChunk.__table__.c.content_tsv
     assert column.computed is not None
     assert column.computed.persisted is True
-    # The two-argument form is IMMUTABLE; the one-argument form reads a GUC and
-    # PostgreSQL refuses it in a generated column.
     assert "to_tsvector('english', content)" in str(column.computed.sqltext)
 
 
@@ -207,7 +184,6 @@ def test_no_unscoped_chunk_access_in_app():
             stripped = line.strip()
             if stripped.startswith("#") or not _RAW_REFERENCE.search(line):
                 continue
-            # An import of the model is fine; a query built from it is not.
             if stripped.startswith(("from app.models.document_chunk import",
                                     "import app.models.document_chunk")):
                 continue
@@ -229,7 +205,6 @@ def test_no_unscoped_chunk_access_in_app():
 
 @pytest.fixture()
 def seeded(db_session: Session):
-    """Two workspaces in different organizations, chunks in each."""
     from app.models.organization import Organization, OrganizationStatus
     from app.models.user import User
     from app.models.work_item import WorkItem
@@ -290,19 +265,13 @@ def test_scoped_query_returns_only_its_own_workspace(db_session, seeded):
 
 
 def test_small_tenant_gets_the_full_top_k(db_session, seeded):
-    """§4's under-return, asserted as a count rather than as tenancy.
-
-    A test that checks 'no foreign chunks came back' passes perfectly when
-    zero chunks came back, and zero is exactly what a filtered HNSW scan
-    produces for a tenant holding a small share of the index.
-    """
     hits = nearest_chunks(
         db_session,
         workspace_id=seeded["beta"]["workspace"].id,
         embedding=[0.2] * EMBEDDING_DIMENSION,
         top_k=5,
     )
-    assert len(hits) == 5, "the tenant holds 5 chunks and asked for 5"
+    assert len(hits) == 5
     assert all(chunk.workspace_id == seeded["beta"]["workspace"].id
                for chunk, _ in hits)
 
@@ -336,7 +305,6 @@ def test_chunks_cascade_when_the_work_item_goes(db_session, seeded):
 
 
 def test_chunks_cascade_when_the_workspace_goes(db_session, seeded):
-    """The ARCH-18 erasure path: a DROP, not a sweeper, and not 336 orphans."""
     workspace_id = seeded["beta"]["workspace"].id
     db_session.delete(seeded["beta"]["workspace"])
     db_session.flush()

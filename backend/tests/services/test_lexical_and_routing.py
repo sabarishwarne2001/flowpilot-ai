@@ -35,7 +35,6 @@ def _vector(seed: float) -> list[float]:
 
 @pytest.fixture()
 def tenants(db_session: Session):
-    """Two organizations, one workspace each, with near-identical documents."""
     from app.models.organization import Organization, OrganizationStatus
     from app.models.work_item import WorkItem
     from app.models.workspace import Workspace, WorkspaceStatus
@@ -153,7 +152,7 @@ def test_quoted_phrase_is_honoured(db_session, tenants):
 
 
 # ===========================================================================
-# Trigram — the arm full text is structurally bad at
+# Trigram
 # ===========================================================================
 
 
@@ -274,17 +273,11 @@ def test_work_item_filter_is_respected(db_session, tenants):
 
 
 # ===========================================================================
-# The property BM25 could not have — §0.2
+# The property BM25 could not have
 # ===========================================================================
 
 
 def test_index_survives_a_new_session(db_session, tenants):
-    """A second session sees the same lexical index with no rebuild.
-
-    `BM25Service.rebuild_index` was called from `document.enrich` and populated
-    a dict inside that worker process. Nothing else could ever see it. This is
-    that property, inverted and asserted.
-    """
     workspace_id = tenants["alpha"]["workspace"].id
     db_session.flush()
 
@@ -299,7 +292,6 @@ def test_index_survives_a_new_session(db_session, tenants):
 
 
 def test_no_rebuild_entry_point_exists():
-    """There is no index to rebuild, and there must never be one."""
     assert not hasattr(lexical_search_service, "rebuild_index")
     assert not hasattr(lexical_search_service, "invalidate")
 
@@ -361,17 +353,20 @@ def test_router_falls_back_to_chroma_without_a_session(tenants):
     assert plan.legacy == ("a", "b")
 
 
-def test_router_respects_the_rollback_flag(db_session, tenants, monkeypatch):
+def test_router_respects_the_rollback_flag(db_session, tenants):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "KNOWLEDGE_DUAL_READ", False)
-    plan = knowledge_router.plan(
-        db_session,
-        workspace_id=tenants["alpha"]["workspace"].id,
-        work_item_ids=[str(tenants["alpha"]["work_item"].id)],
-    )
-    assert plan.indexed == ()
-    assert len(plan.legacy) == 1
+    object.__setattr__(settings, "KNOWLEDGE_DUAL_READ", False)
+    try:
+        plan = knowledge_router.plan(
+            db_session,
+            workspace_id=tenants["alpha"]["workspace"].id,
+            work_item_ids=[str(tenants["alpha"]["work_item"].id)],
+        )
+        assert plan.indexed == ()
+        assert len(plan.legacy) == 1
+    finally:
+        object.__delattr__(settings, "KNOWLEDGE_DUAL_READ")
 
 
 # ===========================================================================

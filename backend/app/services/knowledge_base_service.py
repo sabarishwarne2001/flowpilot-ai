@@ -10,9 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.core.storage import get_storage_driver
-from app.services.bm25_service import bm25_service
 from app.services.document_vocabulary_service import document_vocabulary_service
-from app.services.embedding_service import embedding_service
 from app.services.query_service import query_service
 
 logger = logging.getLogger("app.services.knowledge_base")
@@ -30,7 +28,7 @@ class KnowledgeBaseService:
             workspace_id,
         )
 
-        work_items = crud.list_work_items(db, workspace_id=workspace_id, limit=100)
+        work_items = crud.list_work_items(db, workspace_id=workspace_id, limit=500)
 
         documents_deleted = 0
         files_deleted = 0
@@ -43,17 +41,13 @@ class KnowledgeBaseService:
                     files_deleted += 1
                 except Exception:
                     pass
+            # Deleting the WorkItem automatically cascades and drops its rows in document_chunks
             db.delete(work_item)
             documents_deleted += 1
 
         db.commit()
 
-        vectors_deleted = embedding_service.clear_workspace_collection(
-            workspace_id=workspace_id
-        )
-        bm25_service.invalidate(workspace_id=workspace_id)
         document_vocabulary_service.clear()
-
         query_service.document_strategy.update_document_vocabulary(
             document_vocabulary_service.get_expansion_map(),
         )
@@ -66,8 +60,9 @@ class KnowledgeBaseService:
         return {
             "documents_deleted": documents_deleted,
             "files_deleted": files_deleted,
-            "vectors_deleted": vectors_deleted,
         }
 
 
 knowledge_base_service = KnowledgeBaseService()
+
+__all__ = ["KnowledgeBaseService", "knowledge_base_service"]

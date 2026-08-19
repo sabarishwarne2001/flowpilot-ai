@@ -132,7 +132,6 @@ class DocumentVocabularyService(VocabularyProvider):
         "gpt-4",
         "gemini",
         "claude",
-        "chromadb",
     }
     _URL_PATTERN = re.compile(
         r"https?://\S+|www\.\S+",
@@ -372,3 +371,5 @@ class DocumentVocabularyService(VocabularyProvider):
 
 
 document_vocabulary_service = DocumentVocabularyService()
+
+__all__ = ["DocumentVocabularyService", "document_vocabulary_service"]

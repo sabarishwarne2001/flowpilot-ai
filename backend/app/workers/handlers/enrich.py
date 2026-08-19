@@ -1,4 +1,4 @@
-"""ARCH-10 Step 7 / ARCH-11 Step 1 — the `document.enrich` job handler."""
+"""ARCH-10 Step 7 / ARCH-11 Step 9 — the `document.enrich` job handler."""
 
 from __future__ import annotations
 
@@ -37,7 +37,8 @@ class _Target:
     original_filename: str
     created_by_user_id: Optional[uuid.UUID]
     stage: str
-    job_id: Optional[uuid.UUID] = None  # ARCH-11 Step 1
+    job_id: Optional[uuid.UUID] = None
+    uploaded_file_id: Optional[uuid.UUID] = None
 
 
 def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
@@ -64,35 +65,27 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         created_by_user_id=work_item.created_by_user_id,
         stage=work_item.pipeline_stage,
         job_id=uuid.UUID(str(raw_job_id)) if raw_job_id else None,
+        uploaded_file_id=work_item.uploaded_file_id,
     )
 
 
 def _pages_from_extraction(work_item: WorkItem) -> list[DocumentPage]:
-    metadata = work_item.extraction_metadata or {}
-    raw_pages = metadata.get("pages") or []
+    from app.services.document_models import pages_from_work_item
 
-    pages: list[DocumentPage] = []
-    for entry in raw_pages:
-        text = (entry.get("text") or "").strip()
-        if not text:
-            continue
-        pages.append(
-            DocumentPage(page_number=int(entry.get("page_number") or 1), text=text)
-        )
-
-    if pages:
-        return pages
-
-    full_text = (work_item.extracted_text or "").strip()
-    if not full_text:
-        return []
-    return [DocumentPage(page_number=1, text=full_text)]
+    return pages_from_work_item(
+        work_item.extraction_metadata, work_item.extracted_text
+    )
 
 
 def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     from app import crud
-    from app.services.bm25_service import bm25_service
-    from app.services.chunking_service import split_text
+    from app.services.chunk_writer import replace_document_chunks
+    from app.services.chunking_service import (
+        DEFAULT_CHUNK_OVERLAP_PCT,
+        DEFAULT_CHUNK_SIZE_TOKENS,
+        chunking_summary,
+        split_pages,
+    )
     from app.services.document_vocabulary_service import DocumentVocabularyService
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
@@ -135,38 +128,44 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     )
 
     # --- chunking + embedding ------------------------------------------
-    chunks = split_text(
-        pages,
-        chunk_size=document_settings.chunk_size,
-        chunk_overlap=document_settings.chunk_overlap,
+    size_tokens = getattr(
+        document_settings, "chunk_size_tokens", DEFAULT_CHUNK_SIZE_TOKENS
     )
-    stats["chunks"] = len(chunks)
+    overlap_pct = getattr(
+        document_settings, "chunk_overlap_pct", DEFAULT_CHUNK_OVERLAP_PCT
+    )
 
-    if chunks:
-        # ARCH-11 Step 1 / ARCH-10 R20 — meter before the encoder runs.
-        # `embed_texts_with_metering` raises SpendLimitExceededError from the
-        # batch that would cross the ceiling; the handler's existing except
-        # clause turns that into a QUOTA_BLOCKED transition. Nothing is written
-        # to the vector store until every batch has returned, so a refusal
-        # never leaves a half-embedded document behind.
+    model = embedding_service._get_model()
+    candidates = split_pages(
+        pages,
+        tokenizer=model.tokenizer,
+        chunk_size_tokens=size_tokens,
+        chunk_overlap_pct=overlap_pct,
+    )
+    stats["chunks"] = len(candidates)
+    stats.update(chunking_summary(candidates))
+
+    if candidates:
         embeddings, embedding_plan = embed_texts_with_metering(
             db,
             organization_id=target.organization_id,
             workspace_id=target.workspace_id,
             work_item_id=work_item.id,
-            texts=[chunk.text for chunk in chunks],
+            texts=[c.content for c in candidates],
             job_id=target.job_id,
         )
         stats["embedding"] = embedding_plan.as_details()
 
-        embedding_service.store_chunks(
+        replace_document_chunks(
+            db,
             workspace_id=target.workspace_id,
+            organization_id=target.organization_id,
             work_item_id=work_item.id,
-            original_filename=work_item.original_filename,
-            chunks=chunks,
+            uploaded_file_id=target.uploaded_file_id,
+            candidates=candidates,
             embeddings=embeddings,
+            embedding_model=embedding_plan.model_name,
         )
-        bm25_service.rebuild_index(workspace_id=target.workspace_id)
     else:
         logger.warning(
             "enrich.no_chunks", extra={"work_item_id": str(target.work_item_id)}
