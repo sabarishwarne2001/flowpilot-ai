@@ -1,4 +1,4 @@
-"""ARCH-10 Step 7 / ARCH-11.5 Step 3 — the `document.enrich` job handler."""
+"""ARCH-10 Step 7 / ARCH-11.5 Step 1b — the `document.enrich` job handler with LLM metering."""
 
 from __future__ import annotations
 
@@ -79,6 +79,7 @@ def _pages_from_extraction(work_item: WorkItem) -> list[DocumentPage]:
 
 def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     from app import crud
+    from app.services import spend_control_service as spend
     from app.services.chunk_writer import replace_document_chunks
     from app.services.chunking_service import (
         DEFAULT_CHUNK_OVERLAP_PCT,
@@ -88,6 +89,8 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     )
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
+    from app.services.llm_metering import already_recorded, estimate_enrichment_tokens, INPUT_EVENT
+    from app.services.llm_resilience import LLMPermanentError, LLMUnavailable
     from app.services.llm_service import llm_service
     from app.services.vocabulary_service import workspace_vocabulary_service
 
@@ -114,7 +117,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         )
         return {**stats, "chunks": 0, "skipped": "no extracted text"}
 
-    # Invalidate workspace vocabulary cache so next query re-derives fresh terms
+    # Invalidate workspace vocabulary cache
     workspace_vocabulary_service.invalidate(target.workspace_id)
 
     # --- chunking + embedding ------------------------------------------
@@ -161,29 +164,116 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
             "enrich.no_chunks", extra={"work_item_id": str(target.work_item_id)}
         )
 
-    # --- classification + entities --------------------------------------
-    if document_settings.automatic_classification:
-        classification = llm_service.classify_document(
-            full_text, ai_settings=ai_settings
+    # --- classification, entities, summarisation (LLM metered) ---------
+    enrichment = {
+        "classify": bool(document_settings.automatic_classification),
+        "entities": bool(document_settings.automatic_entity_extraction),
+        "summary": bool(document_settings.automatic_summarization),
+    }
+    skipped: dict[str, str] = {}
+
+    for operation in list(enrichment):
+        if enrichment[operation] and already_recorded(
+            db,
+            organization_id=target.organization_id,
+            scope=f"llm:{work_item.id}:enrich:{operation}",
+        ):
+            enrichment[operation] = False
+            skipped[operation] = "already_recorded"
+
+    if any(enrichment.values()):
+        prompts = llm_service.enrichment_prompts(text=full_text)
+        estimated = estimate_enrichment_tokens(
+            {op: prompts[op] for op, wanted in enrichment.items() if wanted}
         )
-    else:
+        try:
+            spend.ensure_within_limits(
+                db,
+                organization_id=target.organization_id,
+                event_type=INPUT_EVENT,
+                quantity=estimated,
+                workspace_id=target.workspace_id,
+            )
+        except SpendLimitExceededError as exc:
+            logger.warning(
+                "enrich.llm_quota_blocked",
+                extra={
+                    "work_item_id": str(work_item.id),
+                    "limit_key": exc.limit_key,
+                    "estimated_input_tokens": estimated,
+                    "note": "document remains searchable; AI enrichment skipped",
+                },
+            )
+            for operation, wanted in enrichment.items():
+                if wanted:
+                    skipped[operation] = "quota"
+                enrichment[operation] = False
+
+    metering_kwargs = {
+        "db": db,
+        "organization_id": target.organization_id,
+        "workspace_id": target.workspace_id,
+        "work_item_id": work_item.id,
+    }
+
+    def _guarded(operation: str, call):
+        try:
+            return call()
+        except SpendLimitExceededError as exc:
+            skipped[operation] = "quota"
+            logger.warning(
+                "enrich.llm_quota_blocked",
+                extra={
+                    "work_item_id": str(work_item.id),
+                    "operation": operation,
+                    "limit_key": exc.limit_key,
+                },
+            )
+        except LLMPermanentError as exc:
+            skipped[operation] = "permanent_error"
+            logger.warning(
+                "enrich.llm_permanent_error",
+                extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
+            )
+        except LLMUnavailable as exc:
+            skipped[operation] = "provider_unavailable"
+            logger.warning(
+                "enrich.llm_unavailable",
+                extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
+            )
+        return None
+
+    classification = None
+    if enrichment["classify"]:
+        classification = _guarded(
+            "classify",
+            lambda: llm_service.classify_document(
+                full_text, ai_settings=ai_settings, **metering_kwargs
+            ),
+        )
+    if classification is None:
         classification = {"document_classification": "Other"}
     document_class = classification.get("document_classification", "Other")
 
-    if document_settings.automatic_entity_extraction:
-        entities = llm_service.extract_entities(
-            full_text, document_class, ai_settings=ai_settings
+    entities = None
+    if enrichment["entities"]:
+        entities = _guarded(
+            "entities",
+            lambda: llm_service.extract_entities(
+                full_text, document_class, ai_settings=ai_settings, **metering_kwargs
+            ),
         )
-    else:
-        entities = {}
+    entities = entities or {}
     entities["classification_details"] = classification
 
-    # --- summarisation ---------------------------------------------------
-    summary = (
-        llm_service.generate_summary(full_text, ai_settings=ai_settings)
-        if document_settings.automatic_summarization
-        else None
-    )
+    summary = None
+    if enrichment["summary"]:
+        summary = _guarded(
+            "summary",
+            lambda: llm_service.generate_summary(
+                full_text, ai_settings=ai_settings, **metering_kwargs
+            ),
+        )
 
     work_item.summary = summary
     work_item.extracted_entities = entities
@@ -191,6 +281,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
 
     stats["classification"] = document_class
     stats["summarised"] = summary is not None
+    stats["enrichment_skipped"] = skipped
     return stats
 
 

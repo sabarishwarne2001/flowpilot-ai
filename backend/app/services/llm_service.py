@@ -1,6 +1,6 @@
 """
 Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
-ARCH-11.5 Step 1 & 2: LLM spend ceilings, token metering, and resilient execution.
+ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
 """
 
 from __future__ import annotations
@@ -362,6 +362,50 @@ class LLMService:
 
         return outcome.value
 
+    def _enrichment_call(
+        self,
+        *,
+        operation: str,
+        prompt: str,
+        temperature: float,
+        ai_settings: AISettings,
+        db: Session | None = None,
+        organization_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        work_item_id: uuid.UUID | None = None,
+    ) -> tuple[str, TokenUsage | None]:
+        """Reserve, call, settle for enrichment tasks."""
+        from app.core.request_context import stage
+        from app.services import llm_metering
+
+        metered = (
+            db is not None
+            and organization_id is not None
+            and work_item_id is not None
+        )
+
+        reservation = None
+        if metered:
+            reservation = llm_metering.reserve_for_enrichment(
+                db,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                work_item_id=work_item_id,
+                operation=operation,
+                prompt=prompt,
+                ai_settings=ai_settings,
+            )
+
+        with stage("llm", provider=ai_settings.provider.value, operation=operation):
+            response, token_usage = self._execute_query(
+                prompt=prompt, temperature=temperature, ai_settings=ai_settings
+            )
+
+        if reservation is not None and db is not None:
+            llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
+
+        return response, token_usage
+
     def _extract_json(self, raw_text: str) -> dict[str, Any]:
         cleaned = raw_text.strip()
         if cleaned.startswith("```json"):
@@ -414,6 +458,18 @@ class LLMService:
     def _build_summary_prompt(self, text: str) -> str:
         return SUMMARIZATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
 
+    def enrichment_prompts(
+        self, *, text: str, document_classification: str = "Other"
+    ) -> dict[str, str]:
+        """Exposed so callers can price enrichment before execution."""
+        return {
+            "classify": self._build_classification_prompt(text),
+            "entities": self._build_entity_prompt(
+                text=text, document_classification=document_classification
+            ),
+            "summary": self._build_summary_prompt(text),
+        }
+
     def _build_rag_prompt(
         self,
         *,
@@ -438,34 +494,72 @@ class LLMService:
             intent_instructions=intent_instructions,
         )
 
-    def classify_document(self, text: str, *, ai_settings: AISettings) -> dict[str, Any]:
-        prompt = self._build_classification_prompt(text)
-        response, _ = self._execute_query(
-            prompt=prompt,
+    def classify_document(
+        self,
+        text: str,
+        *,
+        ai_settings: AISettings,
+        db: Session | None = None,
+        organization_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        work_item_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        response, _ = self._enrichment_call(
+            operation="classify",
+            prompt=self._build_classification_prompt(text),
             temperature=settings.LLM_CLASSIFICATION_TEMPERATURE,
             ai_settings=ai_settings,
+            db=db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            work_item_id=work_item_id,
         )
         return self._extract_json(response)
 
     def extract_entities(
-        self, text: str, document_classification: str, *, ai_settings: AISettings
+        self,
+        text: str,
+        document_classification: str,
+        *,
+        ai_settings: AISettings,
+        db: Session | None = None,
+        organization_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        work_item_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
-        prompt = self._build_entity_prompt(
-            text=text, document_classification=document_classification
-        )
-        response, _ = self._execute_query(
-            prompt=prompt,
+        response, _ = self._enrichment_call(
+            operation="entities",
+            prompt=self._build_entity_prompt(
+                text=text, document_classification=document_classification
+            ),
             temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
             ai_settings=ai_settings,
+            db=db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            work_item_id=work_item_id,
         )
         return self._extract_json(response)
 
-    def generate_summary(self, text: str, *, ai_settings: AISettings) -> str:
-        prompt = self._build_summary_prompt(text)
-        response, _ = self._execute_query(
-            prompt=prompt,
+    def generate_summary(
+        self,
+        text: str,
+        *,
+        ai_settings: AISettings,
+        db: Session | None = None,
+        organization_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        work_item_id: uuid.UUID | None = None,
+    ) -> str:
+        response, _ = self._enrichment_call(
+            operation="summary",
+            prompt=self._build_summary_prompt(text),
             temperature=settings.LLM_SUMMARIZATION_TEMPERATURE,
             ai_settings=ai_settings,
+            db=db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            work_item_id=work_item_id,
         )
         return response.strip()
 
