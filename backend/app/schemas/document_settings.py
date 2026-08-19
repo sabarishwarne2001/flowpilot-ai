@@ -1,13 +1,10 @@
+import re
 from datetime import datetime
 from uuid import UUID
-from typing import Union
+from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-# ============================================================================
-# Base
-# ============================================================================
 
 class DocumentSettingsBase(BaseModel):
     """
@@ -25,6 +22,11 @@ class DocumentSettingsBase(BaseModel):
         ge=0,
         le=40,
         description="Overlap percentage between consecutive chunks.",
+    )
+
+    intent_config: Optional[dict[str, list[str]]] = Field(
+        default=None,
+        description="Per-workspace intent keywords. NULL follows platform defaults.",
     )
 
     chunk_size: int = Field(
@@ -65,55 +67,64 @@ class DocumentSettingsBase(BaseModel):
     )
 
     duplicate_detection: bool = True
-
     automatic_classification: bool = True
-
     automatic_summarization: bool = False
-
     automatic_entity_extraction: bool = False
 
+    @field_validator("intent_config")
+    @classmethod
+    def _validate_intents(cls, value: Optional[dict[str, list[str]]]) -> Optional[dict[str, list[str]]]:
+        if value is None:
+            return value
+        if len(value) > 20:
+            raise ValueError("at most 20 intents")
+        for intent, keywords in value.items():
+            if not re.fullmatch(r"[a-z][a-z0-9_]{1,30}", intent):
+                raise ValueError(f"invalid intent name {intent!r}")
+            if not isinstance(keywords, list) or not 1 <= len(keywords) <= 50:
+                raise ValueError(f"intent {intent!r} needs 1-50 keywords")
+            for keyword in keywords:
+                if not isinstance(keyword, str) or not 2 <= len(keyword) <= 60:
+                    raise ValueError(f"invalid keyword in {intent!r}")
+        return value
 
-# ============================================================================
-# Create
-# ============================================================================
 
 class DocumentSettingsCreate(DocumentSettingsBase):
     pass
 
 
-# ============================================================================
-# Update
-# ============================================================================
-
 class DocumentSettingsUpdate(BaseModel):
     chunk_size_tokens: int | None = Field(default=None, ge=32, le=254)
-
     chunk_overlap_pct: int | None = Field(default=None, ge=0, le=40)
-
+    intent_config: Optional[dict[str, list[str]]] = None
     chunk_size: int | None = Field(default=None, ge=100, le=4000)
-
     chunk_overlap: int | None = Field(default=None, ge=0, le=1000)
-
     embedding_model: str | None = Field(default=None, max_length=100)
-
     ocr_language: str | None = Field(default=None, max_length=20)
-
     max_upload_size: int | None = Field(default=None, ge=1, le=500)
-
     allowed_file_types: str | None = Field(default=None, max_length=255)
-
     duplicate_detection: bool | None = None
-
     automatic_classification: bool | None = None
-
     automatic_summarization: bool | None = None
-
     automatic_entity_extraction: bool | None = None
 
+    @field_validator("intent_config")
+    @classmethod
+    def _validate_intents(cls, value: Optional[dict[str, list[str]]]) -> Optional[dict[str, list[str]]]:
+        if value is None:
+            return value
+        if len(value) > 20:
+            raise ValueError("at most 20 intents")
+        for intent, keywords in value.items():
+            if not re.fullmatch(r"[a-z][a-z0-9_]{1,30}", intent):
+                raise ValueError(f"invalid intent name {intent!r}")
+            if not isinstance(keywords, list) or not 1 <= len(keywords) <= 50:
+                raise ValueError(f"intent {intent!r} needs 1-50 keywords")
+            for keyword in keywords:
+                if not isinstance(keyword, str) or not 2 <= len(keyword) <= 60:
+                    raise ValueError(f"invalid keyword in {intent!r}")
+        return value
 
-# ============================================================================
-# Response
-# ============================================================================
 
 class DocumentSettingsResponse(DocumentSettingsBase):
     id: UUID
@@ -122,6 +133,4 @@ class DocumentSettingsResponse(DocumentSettingsBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(
-        from_attributes=True,
-    )
+    model_config = ConfigDict(from_attributes=True)

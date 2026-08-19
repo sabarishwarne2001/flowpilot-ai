@@ -1,4 +1,4 @@
-"""ARCH-10 Step 7 / ARCH-11 Step 9 — the `document.enrich` job handler."""
+"""ARCH-10 Step 7 / ARCH-11.5 Step 3 — the `document.enrich` job handler."""
 
 from __future__ import annotations
 
@@ -86,11 +86,10 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         chunking_summary,
         split_pages,
     )
-    from app.services.document_vocabulary_service import DocumentVocabularyService
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
     from app.services.llm_service import llm_service
-    from app.services.query_service import query_service
+    from app.services.vocabulary_service import workspace_vocabulary_service
 
     work_item = db.execute(
         select(WorkItem).where(WorkItem.id == target.work_item_id)
@@ -115,17 +114,8 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         )
         return {**stats, "chunks": 0, "skipped": "no extracted text"}
 
-    # --- vocabulary -----------------------------------------------------
-    vocabulary = DocumentVocabularyService()
-    vocabulary.update_document(
-        work_item_id=work_item.id,
-        original_filename=work_item.original_filename,
-        title=work_item.original_filename,
-        full_text=full_text,
-    )
-    query_service.document_strategy.update_document_vocabulary(
-        vocabulary.get_expansion_map()
-    )
+    # Invalidate workspace vocabulary cache so next query re-derives fresh terms
+    workspace_vocabulary_service.invalidate(target.workspace_id)
 
     # --- chunking + embedding ------------------------------------------
     size_tokens = getattr(
@@ -332,3 +322,6 @@ def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
 
     _run_side_effects(target)
     return {"outcome": Outcome.COMPLETED, **stats}
+
+
+__all__ = ["Outcome", "handle_document_enrich"]

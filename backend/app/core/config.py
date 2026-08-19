@@ -182,8 +182,8 @@ class Settings(BaseSettings):
     RETRIEVAL_FAIL_FAST: bool = False
 
     # --- ARCH-10 Step 3: default spend ceilings -------------------------
-    SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000   # $25.00
-    SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000      # $5.00
+    SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000
+    SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000
     SPEND_DEFAULT_MONTHLY_OCR_PAGES: Optional[int] = 2_000
     SPEND_DEFAULT_MONTHLY_LLM_INPUT_TOKENS: Optional[int] = 2_000_000
     SPEND_DEFAULT_MONTHLY_LLM_OUTPUT_TOKENS: Optional[int] = 500_000
@@ -262,6 +262,32 @@ class Settings(BaseSettings):
 
     # --- ARCH-11 hardening: context assembly ------------------------------
     CONTEXT_INJECTION_BLOCK_THRESHOLD: int = 3
+
+    # --- ARCH-11.5 Step 1: LLM metering -----------------------------------
+    LLM_METERING_ENABLED: bool = True
+
+    # --- ARCH-11.5 Step 2: resilience -------------------------------------
+    LLM_REQUEST_DEADLINE_SECONDS: float = 25.0
+    LLM_MAX_ATTEMPTS: int = 3
+    LLM_BACKOFF_BASE_SECONDS: float = 0.5
+    LLM_BACKOFF_CAP_SECONDS: float = 4.0
+    LLM_BREAKER_THRESHOLD: int = 5
+    LLM_BREAKER_RESET_SECONDS: float = 30.0
+    LLM_FAILOVER_ENABLED: bool = False
+    LLM_FALLBACK_PROVIDER: Optional[str] = None
+
+    # --- ARCH-11.5 Step 3: vocabulary -------------------------------------
+    VOCABULARY_MAX_TERMS: int = 400
+    VOCABULARY_CACHE_TTL_SECONDS: float = 900.0
+    VOCABULARY_CACHE_MAX_WORKSPACES: int = 32
+
+    # --- ARCH-11.5 Step 4: intent -----------------------------------------
+    INTENT_DETECTION_ENABLED: bool = True
+    INTENT_BOOST_ENABLED: bool = True
+
+    # --- ARCH-11.5 Step 5: citations --------------------------------------
+    MAX_CITATIONS: int = 5
+    SNIPPET_MAX_LENGTH: int = 300
 
     @field_validator("RAG_TOP_K")
     @classmethod

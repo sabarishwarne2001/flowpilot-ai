@@ -38,6 +38,7 @@ SCOPE_ALLOW_LIST = {
     "app/services/chunk_retrieval_service.py",
     "app/services/lexical_search_service.py",
     "app/services/hybrid_search_service.py",
+    "app/services/vocabulary_service.py",
     "app/evaluation/load_evaluation_corpus.py",
     "tests/isolation/test_vector_tenancy.py",
 }

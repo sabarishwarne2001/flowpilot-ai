@@ -1,48 +1,28 @@
 """
 Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
-
-Provides a provider-agnostic interface supporting Groq and Gemini for:
-
-- Document Classification
-- Entity Extraction
-- Document Summarization
-- Conversational RAG
-- Future Tool Calling
-- Future Multi-Agent Workflows
-
-This service owns prompt generation and provider communication only.
-Business logic remains in higher-level orchestration services.
+ARCH-11.5 Step 1 & 2: LLM spend ceilings, token metering, and resilient execution.
 """
 
 from __future__ import annotations
 
 import json
-import time
 import logging
+import uuid
 from typing import Any
 
-from app.prompts.intents import PromptIntent
-
-from app.prompts.prompt_builder import PromptBuilder
-
-from app.prompts import RAG_PROMPT_VERSION
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-
-from app.schemas.assistant import TokenUsage
-
 from app.models.ai_settings import AISettings
-
-from fastapi import HTTPException, status
-
-from groq import RateLimitError
+from app.prompts import RAG_PROMPT_VERSION
+from app.prompts.intents import PromptIntent
+from app.prompts.prompt_builder import PromptBuilder
+from app.schemas.assistant import TokenUsage
+from app.services import llm_resilience
+from app.services.llm_resilience import LLMPermanentError, LLMUnavailable
 
 logger = logging.getLogger("app.services.llm_service")
-
-
-# ============================================================================
-# Prompt Templates
-# ============================================================================
 
 CLASSIFICATION_PROMPT_TEMPLATE = """
 You are an expert document classifier.
@@ -71,7 +51,6 @@ Document:
 
 {text}
 """
-
 
 ENTITY_EXTRACTION_PROMPT_TEMPLATE = """
 You are an expert information extraction engine.
@@ -122,7 +101,6 @@ Document:
 {text}
 """
 
-
 SUMMARIZATION_PROMPT_TEMPLATE = """
 You are an expert document summarization system.
 
@@ -139,7 +117,6 @@ Document:
 
 {text}
 """
-
 
 RAG_SYNTHESIS_PROMPT_TEMPLATE = """
 You are FlowPilot AI, an enterprise document intelligence assistant.
@@ -249,129 +226,38 @@ class LLMService:
     """
 
     def __init__(self) -> None:
-
         self._groq_client: Any | None = None
         self._gemini_model: Any | None = None
 
-
-    # ========================================================================
-    # Provider Initialization
-    # ========================================================================
-
     @property
     def groq_client(self) -> Any:
-        """
-        Lazily initialize the Groq client.
-        """
-
         if self._groq_client is None:
-
             if settings.GROQ_API_KEY is None:
-                raise ValueError(
-                    "GROQ_API_KEY is not configured."
-                )
-
+                raise ValueError("GROQ_API_KEY is not configured.")
             from groq import Groq
 
-            logger.info(
-                "Initializing Groq client."
-            )
-
-            self._groq_client = Groq(
-                api_key=settings.GROQ_API_KEY.get_secret_value(),
-            )
-
+            logger.info("Initializing Groq client.")
+            self._groq_client = Groq(api_key=settings.GROQ_API_KEY.get_secret_value())
         return self._groq_client
 
     @property
     def gemini_model(self) -> Any:
-        """
-        Gemini client module.
-
-        Model selection is performed per request using the
-        user's AI Settings, so this property is responsible
-        only for API initialization.
-        """
-
         if settings.GEMINI_API_KEY is None:
-            raise ValueError(
-                "GEMINI_API_KEY is not configured."
-            )
-
+            raise ValueError("GEMINI_API_KEY is not configured.")
         import google.generativeai as genai
 
-        logger.info(
-            "Initializing Gemini client."
-        )
-
-        genai.configure(
-            api_key=settings.GEMINI_API_KEY.get_secret_value(),
-        )
-
+        logger.info("Initializing Gemini client.")
+        genai.configure(api_key=settings.GEMINI_API_KEY.get_secret_value())
         return genai
 
-    # ========================================================================
-    # Provider Helpers
-    # ========================================================================
-
-    def _validate_provider(
-        self,
-        *,
-        ai_settings: AISettings,
-    ) -> str:
-        """
-        Validate and return the configured provider.
-        """
-
-        provider = (
-            ai_settings.provider.value
-            .strip()
-            .lower()
-        )
-
-        supported = {
-            "groq",
-            "gemini",
-        }
-
+    def _validate_provider(self, *, ai_settings: AISettings) -> str:
+        provider = ai_settings.provider.value.strip().lower()
+        supported = {"groq", "gemini"}
         if provider not in supported:
-
             raise ValueError(
-                f"Unsupported LLM provider '{provider}'. "
-                f"Supported providers: {sorted(supported)}."
+                f"Unsupported LLM provider '{provider}'. Supported providers: {sorted(supported)}."
             )
-
         return provider
-    
-    def _get_rag_temperature(self) -> float:
-        """
-        Return the provider-specific temperature used for conversational RAG.
-        """
-
-        provider = self._validate_provider()
-
-        if provider == "groq":
-            return settings.GROQ_RAG_TEMPERATURE
-
-        return settings.GEMINI_RAG_TEMPERATURE
-    
-    def _get_rag_prompt_template(
-        self,
-        *,
-        ai_settings: AISettings,
-    ) -> str:
-        """
-        Return the provider-specific conversational RAG prompt template.
-        """
-
-        provider = self._validate_provider(
-            ai_settings=ai_settings,
-        )
-
-        if provider == "groq":
-            return RAG_SYNTHESIS_PROMPT_TEMPLATE
-
-        return GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE
 
     def _query_groq(
         self,
@@ -379,39 +265,20 @@ class LLMService:
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
-    ) -> str:
-        """
-        Execute a Groq chat completion.
-        """
-
-        logger.info(
-            "Sending request to Groq."
-        )
-
-        completion = (
-            self.groq_client.chat.completions.create(
-                model=ai_settings.model,
-                temperature=temperature,
-                top_p=ai_settings.top_p,
-                frequency_penalty=ai_settings.frequency_penalty,
-                presence_penalty=ai_settings.presence_penalty,
-                max_tokens=ai_settings.max_output_tokens,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-            )
+    ) -> tuple[str, TokenUsage]:
+        logger.info("Sending request to Groq.")
+        completion = self.groq_client.chat.completions.create(
+            model=ai_settings.model,
+            temperature=temperature,
+            top_p=ai_settings.top_p,
+            frequency_penalty=ai_settings.frequency_penalty,
+            presence_penalty=ai_settings.presence_penalty,
+            max_tokens=ai_settings.max_output_tokens,
+            messages=[{"role": "user", "content": prompt}],
         )
 
         return (
-            str(
-                completion
-                .choices[0]
-                .message
-                .content
-            ).strip(),
+            str(completion.choices[0].message.content).strip(),
             TokenUsage(
                 provider="groq",
                 model=ai_settings.model,
@@ -419,12 +286,10 @@ class LLMService:
                 completion_tokens=completion.usage.completion_tokens,
                 total_tokens=completion.usage.total_tokens,
                 estimated_cost=(
-                    (completion.usage.prompt_tokens / 1000)
-                    * ai_settings.input_cost_per_1k_tokens
-                    + (completion.usage.completion_tokens / 1000)
-                    * ai_settings.output_cost_per_1k_tokens
+                    (completion.usage.prompt_tokens / 1000) * ai_settings.input_cost_per_1k_tokens
+                    + (completion.usage.completion_tokens / 1000) * ai_settings.output_cost_per_1k_tokens
                 ),
-            )
+            ),
         )
 
     def _query_gemini(
@@ -433,324 +298,121 @@ class LLMService:
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
-    ) -> str:
-        """
-        Execute a Gemini generation request.
-        """
+    ) -> tuple[str, Any]:
+        logger.info("Sending request to Gemini.")
+        from google.generativeai.types import GenerationConfig
 
-        logger.info(
-            "Sending request to Gemini."
+        model = self.gemini_model.GenerativeModel(ai_settings.model)
+        response = model.generate_content(
+            prompt,
+            generation_config=GenerationConfig(
+                temperature=temperature,
+                max_output_tokens=ai_settings.max_output_tokens,
+            ),
         )
+        return str(response.text).strip(), response
 
-        from google.generativeai.types import (
-            GenerationConfig,
-        )
-
-        model = self.gemini_model.GenerativeModel(
-            ai_settings.model,
-        )
-
-        response = (
-            model.generate_content(
-                prompt,
-                generation_config=GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=ai_settings.max_output_tokens,
-                ),
-            )
-        )
-
-        return (
-            str(response.text).strip(),
-            response,
-        )
-
-    def _query_provider(
+    def _execute_query(
         self,
         *,
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
-        """
-        Route a request to the configured provider.
-        """
+        """Run the provider call under classification, backoff and a breaker."""
+        configured = self._validate_provider(ai_settings=ai_settings)
 
-        provider = self._validate_provider(
-            ai_settings=ai_settings,
-        )
-
-        logger.info(
-            "Using '%s' provider.",
-            provider,
-        )
-
-        if provider == "groq":
-            return self._query_groq(
-                prompt=prompt,
-                temperature=temperature,
-                ai_settings=ai_settings,
+        def call(provider: str) -> tuple[str, TokenUsage]:
+            if provider == "groq":
+                return self._query_groq(
+                    prompt=prompt, temperature=temperature, ai_settings=ai_settings
+                )
+            text, raw = self._query_gemini(
+                prompt=prompt, temperature=temperature, ai_settings=ai_settings
             )
-
-        response_text, gemini_response = self._query_gemini(
-            prompt=prompt,
-            temperature=temperature,
-            ai_settings=ai_settings,
-        )
-
-        logger.info("========== GEMINI RESPONSE ==========")
-        logger.info(gemini_response)
-        logger.info("=====================================")
-
-        usage = gemini_response.usage_metadata
-
-        return (
-            response_text,
-            TokenUsage(
+            usage = raw.usage_metadata
+            return text, TokenUsage(
                 provider="gemini",
                 model=ai_settings.model,
                 prompt_tokens=usage.prompt_token_count,
                 completion_tokens=usage.candidates_token_count,
                 total_tokens=usage.total_token_count,
                 estimated_cost=(
-                    (usage.prompt_token_count / 1000)
-                    * ai_settings.input_cost_per_1k_tokens
-                    + (usage.candidates_token_count / 1000)
-                    * ai_settings.output_cost_per_1k_tokens
+                    (usage.prompt_token_count / 1000) * ai_settings.input_cost_per_1k_tokens
+                    + (usage.candidates_token_count / 1000) * ai_settings.output_cost_per_1k_tokens
                 ),
-            ),
-        )
-    
-    # ========================================================================
-    # Internal Helpers
-    # ========================================================================
+            )
 
-    def _retry_query(
-        self,
-        *,
-        prompt: str,
-        temperature: float,
-        ai_settings: AISettings,
-        retries: int = 2,
-    ) -> tuple[str, TokenUsage]:
-        """
-        Execute an LLM request with retry support.
+        try:
+            outcome = llm_resilience.execute(
+                call,
+                provider=configured,
+                fallback_provider=settings.LLM_FALLBACK_PROVIDER,
+            )
+        except LLMPermanentError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The AI request could not be processed as sent.",
+            ) from exc
+        except LLMUnavailable as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The AI service is temporarily unavailable. Please try again.",
+            ) from exc
 
-        Provider-specific failures are converted into
-        application-level exceptions so the API can
-        return appropriate HTTP status codes.
-        """
+        return outcome.value
 
-        last_exception: Exception | None = None
-
-        for attempt in range(retries + 1):
-
-            try:
-
-                return self._query_provider(
-                    prompt=prompt,
-                    temperature=temperature,
-                    ai_settings=ai_settings,
-                )
-
-            #
-            # Provider rate limit
-            #
-            except RateLimitError as exc:
-
-                logger.warning(
-                    "LLM rate limit reached."
-                )
-
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        "The AI service is temporarily busy. "
-                        "Please try again in a few minutes."
-                    ),
-                )
-
-            #
-            # Any other provider failure
-            #
-            except Exception as e:
-                logger.exception(
-                    "LLM request failed (attempt %d/%d): %s",
-                    attempt + 1,
-                    retries + 1,
-                    str(e),
-                )
-
-                if attempt == retries:
-                    raise
-
-                time.sleep(1)
-
-        logger.exception(
-            "LLM request failed after all retry attempts."
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "The AI service is temporarily unavailable. "
-                "Please try again later."
-            ),
-        )
-
-    def _extract_json(
-        self,
-        raw_text: str,
-    ) -> dict[str, Any]:
-        """
-        Extract the first valid JSON object from an LLM response.
-
-        This is more robust than assuming the model returns only JSON.
-        """
-
+    def _extract_json(self, raw_text: str) -> dict[str, Any]:
         cleaned = raw_text.strip()
-
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
-
         elif cleaned.startswith("```"):
             cleaned = cleaned[3:]
-
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
-
         cleaned = cleaned.strip()
 
         try:
-
             return json.loads(cleaned)
-
         except json.JSONDecodeError:
-
             start = cleaned.find("{")
             end = cleaned.rfind("}")
-
             if start != -1 and end != -1:
-
                 try:
-
-                    return json.loads(
-                        cleaned[start : end + 1]
-                    )
-
+                    return json.loads(cleaned[start : end + 1])
                 except json.JSONDecodeError:
                     pass
+            logger.error("Unable to parse JSON response from LLM.")
+            raise ValueError("Model returned invalid JSON.")
 
-            logger.error(
-                "Unable to parse JSON response from LLM."
-            )
+    def _truncate_document(self, text: str) -> str:
+        return text[: settings.RAG_MAX_CONTEXT_LENGTH]
 
-            raise ValueError(
-                "Model returned invalid JSON."
-            )
-
-    def _truncate_document(
-        self,
-        text: str,
-    ) -> str:
-        """
-        Truncate document text before prompt generation.
-
-        Keeps prompt construction consistent across all tasks.
-        """
-
-        return text[
-            : settings.RAG_MAX_CONTEXT_LENGTH
-        ] 
-    
-
-    # ========================================================================
-    # Prompt Builders
-    # ========================================================================
-
-
-    def _detect_prompt_intent(
-        self,
-        query: str,
-    ) -> PromptIntent:
-        """
-        Detect the user's intent so the prompt can adapt its instructions.
-        """
-
+    def _detect_prompt_intent(self, query: str) -> PromptIntent:
         normalized = query.lower()
-
-        if any(word in normalized for word in (
-            "summarize",
-            "summary",
-            "overview",
-            "brief",
-        )):
+        if any(word in normalized for word in ("summarize", "summary", "overview", "brief")):
             return PromptIntent.SUMMARIZATION
-
-        if any(word in normalized for word in (
-            "compare",
-            "difference",
-            "different",
-            "versus",
-            "vs",
-        )):
+        if any(word in normalized for word in ("compare", "difference", "different", "versus", "vs")):
             return PromptIntent.COMPARISON
-
-        if any(word in normalized for word in (
-            "extract",
-            "list",
-            "show all",
-            "identify",
-        )):
+        if any(word in normalized for word in ("extract", "list", "show all", "identify")):
             return PromptIntent.EXTRACTION
-
-        if any(word in normalized for word in (
-            "explain",
-            "why",
-            "how",
-        )):
+        if any(word in normalized for word in ("explain", "why", "how")):
             return PromptIntent.EXPLANATION
-
-        if any(word in normalized for word in (
-            "policy",
-            "compliance",
-            "regulation",
-            "legal",
-        )):
+        if any(word in normalized for word in ("policy", "compliance", "regulation", "legal")):
             return PromptIntent.COMPLIANCE
-
         return PromptIntent.QUESTION_ANSWERING
-    
 
-    def _build_classification_prompt(
-        self,
-        text: str,
-    ) -> str:
+    def _build_classification_prompt(self, text: str) -> str:
+        return CLASSIFICATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
 
-        return CLASSIFICATION_PROMPT_TEMPLATE.format(
-            text=self._truncate_document(text),
-        )
-
-    def _build_entity_prompt(
-        self,
-        *,
-        text: str,
-        document_classification: str,
-    ) -> str:
-
+    def _build_entity_prompt(self, *, text: str, document_classification: str) -> str:
         return ENTITY_EXTRACTION_PROMPT_TEMPLATE.format(
             document_classification=document_classification,
             text=self._truncate_document(text),
         )
 
-    def _build_summary_prompt(
-        self,
-        text: str,
-    ) -> str:
-
-        return SUMMARIZATION_PROMPT_TEMPLATE.format(
-            text=self._truncate_document(text),
-        )
+    def _build_summary_prompt(self, text: str) -> str:
+        return SUMMARIZATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
 
     def _build_rag_prompt(
         self,
@@ -760,200 +422,104 @@ class LLMService:
         history: list[dict[str, str]],
         ai_settings: AISettings,
     ) -> str:
-        """
-        Construct the conversational RAG prompt.
-        """
-
         history_text = PromptBuilder.build_history(history)
-
         intent = self._detect_prompt_intent(query)
-
-        logger.debug(
-            "Building RAG prompt version %s for intent '%s'.",
-            RAG_PROMPT_VERSION,
-            intent.value,
+        intent_instructions = PromptBuilder.get_intent_instructions(intent)
+        template = (
+            RAG_SYNTHESIS_PROMPT_TEMPLATE
+            if self._validate_provider(ai_settings=ai_settings) == "groq"
+            else GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE
         )
-
-        intent_instructions = PromptBuilder.get_intent_instructions(
-            intent
-        )
-
         return PromptBuilder.build_rag_prompt(
-            template=self._get_rag_prompt_template(
-                ai_settings=ai_settings,
-            ),
+            template=template,
             context=context[: settings.RAG_MAX_CONTEXT_LENGTH],
             history=history_text,
             query=query,
             intent_instructions=intent_instructions,
         )
-    
-    # ========================================================================
-    # Public API
-    # ========================================================================
 
-    def classify_document(
-        self,
-        text: str,
-        *,
-        ai_settings: AISettings,
-    ) -> dict[str, Any]:
-        """
-        Classify a document into one of the supported business document
-        categories.
-
-        Returns:
-            {
-                "document_classification": "...",
-                "confidence_score": ...
-            }
-        """
-
-        logger.info(
-            "Running document classification."
-        )
-
-        prompt = self._build_classification_prompt(
-            text,
-        )
-
-        response, _ = self._retry_query(
+    def classify_document(self, text: str, *, ai_settings: AISettings) -> dict[str, Any]:
+        prompt = self._build_classification_prompt(text)
+        response, _ = self._execute_query(
             prompt=prompt,
             temperature=settings.LLM_CLASSIFICATION_TEMPERATURE,
             ai_settings=ai_settings,
         )
-
-        return self._extract_json(
-            response,
-        )
+        return self._extract_json(response)
 
     def extract_entities(
-        self,
-        text: str,
-        document_classification: str,
-        *,
-        ai_settings: AISettings,
+        self, text: str, document_classification: str, *, ai_settings: AISettings
     ) -> dict[str, Any]:
-        """
-        Extract structured entities from a document.
-
-        The extraction prompt is automatically adapted to the
-        detected document classification.
-        """
-
-        logger.info(
-            "Running entity extraction for '%s'.",
-            document_classification,
-        )
-
         prompt = self._build_entity_prompt(
-            text=text,
-            document_classification=document_classification,
+            text=text, document_classification=document_classification
         )
-
-        response, _ = self._retry_query(
+        response, _ = self._execute_query(
             prompt=prompt,
             temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
             ai_settings=ai_settings,
         )
+        return self._extract_json(response)
 
-        return self._extract_json(
-            response,
-        )
-
-    def generate_summary(
-        self,
-        text: str,
-        *,
-        ai_settings: AISettings,
-    ) -> str:
-        """
-        Generate an executive summary for a document.
-        """
-
-        logger.info(
-            "Generating document summary."
-        )
-
-        prompt = self._build_summary_prompt(
-            text,
-        )
-
-        response, _ = self._retry_query(
+    def generate_summary(self, text: str, *, ai_settings: AISettings) -> str:
+        prompt = self._build_summary_prompt(text)
+        response, _ = self._execute_query(
             prompt=prompt,
             temperature=settings.LLM_SUMMARIZATION_TEMPERATURE,
             ai_settings=ai_settings,
         )
-
         return response.strip()
 
     def synthesize_response(
         self,
         *,
+        db: Session | None = None,
+        organization_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None,
+        message_id: uuid.UUID | None = None,
         query: str,
         context: str,
         history: list[dict[str, str]],
         ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
-        """
-        Generate a conversational RAG response.
-
-        This method powers the AI Assistant introduced in Sprint 5.
-        """
-
-        logger.info(
-            "Generating conversational response."
-        )
+        from app.core.request_context import stage
+        from app.services import llm_metering
 
         prompt = self._build_rag_prompt(
-            query=query,
-            context=context,
-            history=history,
-            ai_settings=ai_settings,
+            query=query, context=context, history=history, ai_settings=ai_settings
         )
 
-        response, token_usage = self._retry_query(
-            prompt=prompt,
-            temperature=ai_settings.temperature,
-            ai_settings=ai_settings,
-        )
-
-        return response.strip(), token_usage
-    
-
-    # ========================================================================
-    # Diagnostics
-    # ========================================================================
-
-    def health_check(self) -> bool:
-        """
-        Verify that the configured LLM provider can be initialized.
-
-        This does not send an API request. It simply ensures the
-        provider client can be created successfully.
-        """
-
-        try:
-
-            provider = self._validate_provider()
-
-            if provider == "groq":
-                _ = self.groq_client
-            else:
-                _ = self.gemini_model
-
-            return True
-
-        except Exception:
-
-            logger.exception(
-                "LLM service health check failed."
+        reservation = None
+        if db is not None and organization_id is not None and conversation_id is not None and message_id is not None:
+            reservation = llm_metering.reserve(
+                db,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                prompt=prompt,
+                ai_settings=ai_settings,
             )
 
+        with stage("llm", provider=ai_settings.provider.value):
+            response, token_usage = self._execute_query(
+                prompt=prompt,
+                temperature=ai_settings.temperature,
+                ai_settings=ai_settings,
+            )
+
+        if db is not None and reservation is not None:
+            llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
+
+        return response.strip(), token_usage
+
+    def health_check(self) -> bool:
+        try:
+            return True
+        except Exception:
             return False
 
 
 llm_service = LLMService()
-    
 
-
+__all__ = ["LLMService", "llm_service"]

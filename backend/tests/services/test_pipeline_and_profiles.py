@@ -1,4 +1,4 @@
-"""ARCH-10 Steps 7-8 — unit tests for the state machine and worker profiles."""
+"""ARCH-10 Steps 7-8 & ARCH-11 Step 9 — unit tests for the state machine and worker profiles."""
 
 from __future__ import annotations
 
@@ -133,12 +133,11 @@ def test_light_profile_permits_no_heavy_modules():
 
 def test_ocr_profile_permits_paddle_only():
     assert OCR.allow_heavy == frozenset({"paddleocr", "paddle"})
-    assert "chromadb" not in OCR.allow_heavy
 
 
 def test_enrich_profile_does_not_permit_paddleocr():
     assert "paddleocr" not in ENRICH.allow_heavy
-    assert "chromadb" in ENRICH.allow_heavy
+    assert "sentence_transformers" in ENRICH.allow_heavy
 
 
 def test_all_profile_claims_everything():
@@ -152,6 +151,7 @@ def test_profile_routing():
     assert not OCR.may_claim("document.enrich")
     assert not LIGHT.may_claim("document.extract")
     assert ENRICH.may_claim("document.enrich")
+    assert ENRICH.may_claim("knowledge.reindex")
 
 
 def test_unknown_profile_raises():
@@ -172,7 +172,7 @@ def test_light_profile_refuses_a_process_with_paddleocr_loaded(monkeypatch):
 
 def test_uncovered_job_types_ignores_test_handlers():
     registered = ["document.extract", "document.enrich", "storage.sample",
-                  "test.noop", "test.always_fails"]
+                  "knowledge.reindex", "test.noop", "test.always_fails"]
     assert uncovered_job_types(registered) == set()
 
 
@@ -182,5 +182,5 @@ def test_uncovered_job_types_catches_an_unrouted_handler():
 
 
 def test_heavy_module_list_covers_the_ml_stack():
-    for name in ("paddleocr", "paddle", "chromadb", "sentence_transformers", "torch"):
+    for name in ("paddleocr", "paddle", "sentence_transformers", "torch"):
         assert name in HEAVY_MODULES

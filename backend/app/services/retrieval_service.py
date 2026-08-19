@@ -1,6 +1,6 @@
 """
 Central Retrieval Service, strictly partitioned by workspace.
-ARCH-11 Step 9 cutover version: 100% SQL RRF hybrid search & reranker client.
+ARCH-11.5 Step 4 & 6: Staged execution timing and confident intent boosting.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.request_context import stage
 from app.services.document_filter_service import document_filter_service
 from app.services.hybrid_search_service import hybrid_search_service
 from app.services.intent_service import intent_service
@@ -41,21 +42,30 @@ class RetrievalService:
         if db is None:
             raise ValueError("RetrievalService.hybrid_search requires an active database session.")
 
-        intent = intent_service.detect_intent(query)
-        outcome = hybrid_search_service.search(
-            db,
-            workspace_id=workspace_id,
-            query=query,
-            work_item_ids=work_item_ids,
-            top_k=max(top_k, settings.RERANK_MAX_CANDIDATES),
-            similarity_threshold=similarity_threshold,
-        )
-        merged_results = outcome.results
+        with stage("retrieval.intent"):
+            match = intent_service.detect(query, db=db, workspace_id=workspace_id)
 
-        merged_results = self._boost_intent_documents(merged_results, intent)
-        merged_results = reranker_client.rerank(
-            query=query, results=merged_results, request_id=request_id
-        )
+        with stage("retrieval.hybrid_sql") as details:
+            outcome = hybrid_search_service.search(
+                db,
+                workspace_id=workspace_id,
+                query=query,
+                work_item_ids=work_item_ids,
+                top_k=max(top_k, settings.RERANK_MAX_CANDIDATES),
+                similarity_threshold=similarity_threshold,
+            )
+            details["returned"] = len(outcome.results)
+            merged_results = outcome.results
+
+        if settings.INTENT_BOOST_ENABLED and match.confident:
+            merged_results = self._boost_intent_documents(merged_results, match.intent)
+
+        with stage("rerank") as details:
+            merged_results = reranker_client.rerank(
+                query=query, results=merged_results, request_id=request_id
+            )
+            details["status"] = merged_results[0].get("rerank_status") if merged_results else None
+
         merged_results = self._estimate_retrieval_confidence(merged_results)
         merged_results = self._apply_metadata_prior(query=query, results=merged_results)
         merged_results = self._apply_document_prior(merged_results)

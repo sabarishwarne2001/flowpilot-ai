@@ -1,6 +1,6 @@
 """
 AI Assistant orchestration service for FlowPilot AI.
-ARCH-11 context assembly and prompt-injection containment enabled.
+ARCH-11.5 Step 1 & 6: Request tracing, pre-generated message IDs, and HTTP 402 quota conversions.
 """
 
 from __future__ import annotations
@@ -10,11 +10,14 @@ import uuid
 from collections import OrderedDict
 from typing import Any
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.core.config import settings
+from app.core.exceptions import SpendLimitExceededError
+from app.core.request_context import context_fields, request_scope, stage
 from app.models.ai_settings import AISettings
 from app.models.assistant import Conversation
 from app.models.work_item import WorkItem
@@ -24,11 +27,10 @@ from app.schemas.assistant import (
     SourceCitation,
     TokenUsage,
 )
-from app.services.citation_service import citation_service
+from app.services.citation_service import citation_service, snippet_service
 from app.services.context_assembly_service import context_assembly_service
 from app.services.llm_service import llm_service
 from app.services.retrieval_service import retrieval_service
-from app.services.snippet_service import snippet_service
 
 logger = logging.getLogger("app.services.assistant_service")
 
@@ -45,86 +47,119 @@ class AssistantService:
         conversation_id: uuid.UUID,
         user_id: uuid.UUID,
         query_text: str,
+        request_id: str | None = None,
     ) -> ChatResponse:
-        logger.info(
-            "Conversation %s received a new message from user %s.",
-            conversation_id,
-            user_id,
-        )
-
         conversation = self._get_conversation(
             db=db,
             conversation_id=conversation_id,
             user_id=user_id,
         )
 
-        work_items = self._resolve_scope(
-            db=db,
-            conversation=conversation,
-            user_id=user_id,
-        )
-
-        context, citations = self._retrieve_context(
-            db=db,
-            conversation=conversation,
-            work_items=work_items,
-            query=query_text,
-        )
-
-        history = self._load_history(
-            db=db,
-            conversation=conversation,
-        )
-
-        if not context.strip():
-            logger.info("Knowledge base is empty. Returning canned response.")
-            response = (
-                "Your knowledge base is currently empty.\n\n"
-                "Please upload one or more documents before asking questions."
+        with request_scope(
+            request_id=request_id or str(uuid.uuid4()),
+            workspace_id=conversation.workspace_id,
+            organization_id=conversation.organization_id if hasattr(conversation, "organization_id") else None,
+        ) as trace:
+            logger.info(
+                "Conversation %s received a new message from user %s.",
+                conversation_id,
+                user_id,
             )
 
-            token_usage = TokenUsage(
-                provider="none",
-                model="none",
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                estimated_cost=0.0,
-            )
-        else:
-            ai_settings = self._get_ai_settings(
+            work_items = self._resolve_scope(
                 db=db,
-                workspace_id=conversation.workspace_id,
+                conversation=conversation,
+                user_id=user_id,
             )
 
-            response, token_usage = self._generate_response(
+            with stage("retrieval"):
+                context, citations = self._retrieve_context(
+                    db=db,
+                    conversation=conversation,
+                    work_items=work_items,
+                    query=query_text,
+                )
+
+            history = self._load_history(
+                db=db,
+                conversation=conversation,
+            )
+
+            assistant_message_id = uuid.uuid4()
+
+            if not context.strip():
+                logger.info("Knowledge base is empty. Returning canned response.")
+                response = (
+                    "Your knowledge base is currently empty.\n\n"
+                    "Please upload one or more documents before asking questions."
+                )
+
+                token_usage = TokenUsage(
+                    provider="none",
+                    model="none",
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    estimated_cost=0.0,
+                )
+            else:
+                ai_settings = self._get_ai_settings(
+                    db=db,
+                    workspace_id=conversation.workspace_id,
+                )
+
+                workspace = crud.get_workspace(db, workspace_id=conversation.workspace_id)
+                organization_id = workspace.organization_id if workspace else conversation.workspace_id
+
+                try:
+                    response, token_usage = llm_service.synthesize_response(
+                        db=db,
+                        organization_id=organization_id,
+                        workspace_id=conversation.workspace_id,
+                        conversation_id=conversation.id,
+                        message_id=assistant_message_id,
+                        query=query_text,
+                        context=context,
+                        history=history,
+                        ai_settings=ai_settings,
+                    )
+                except SpendLimitExceededError as exc:
+                    logger.warning(
+                        "assistant.quota_blocked",
+                        extra={"limit_key": exc.limit_key, **context_fields()},
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail=(
+                            "This workspace has reached its monthly AI usage limit. "
+                            "Retrieval still works; generation is paused until the "
+                            "limit resets or is raised."
+                        ),
+                    ) from exc
+
+            self._save_messages(
+                db=db,
+                conversation=conversation,
                 query=query_text,
-                context=context,
-                history=history,
-                ai_settings=ai_settings,
+                response=response,
+                citations=citations,
+                token_usage=token_usage,
+                assistant_message_id=assistant_message_id,
             )
 
-        self._save_messages(
-            db=db,
-            conversation=conversation,
-            query=query_text,
-            response=response,
-            citations=citations,
-            token_usage=token_usage,
-        )
+            self._initialize_title(
+                db=db,
+                conversation=conversation,
+                first_message=query_text,
+                history=history,
+            )
 
-        self._initialize_title(
-            db=db,
-            conversation=conversation,
-            first_message=query_text,
-            history=history,
-        )
-
-        return self._build_chat_response(
-            response=response,
-            citations=citations,
-            token_usage=token_usage,
-        )
+            logger.info("assistant.complete", extra=trace.as_details())
+            return self._build_chat_response(
+                response=response,
+                citations=citations,
+                token_usage=token_usage,
+            )
 
     def _get_conversation(
         self,
@@ -157,10 +192,8 @@ class AssistantService:
                 workspace_id=conversation.workspace_id,
                 work_item_id=conversation.work_item_id,
             )
-
             if work_item is None:
                 raise ValueError("Associated document not found.")
-
             return [work_item]
 
         return crud.list_work_items(
@@ -182,16 +215,13 @@ class AssistantService:
 
         filename_lookup = {item.id: item.original_filename for item in work_items}
         work_item_ids = [item.id for item in work_items]
-        
-        top_k = settings.RAG_TOP_K
-        similarity_threshold = settings.RAG_SIMILARITY_THRESHOLD
 
         results = retrieval_service.hybrid_search(
             workspace_id=conversation.workspace_id,
             query=query,
             work_item_ids=[str(work_item_id) for work_item_id in work_item_ids],
-            top_k=top_k,
-            similarity_threshold=similarity_threshold,
+            top_k=settings.RAG_TOP_K,
+            similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
             db=db,
             request_id=str(getattr(conversation, "id", "")),
         )
@@ -199,29 +229,30 @@ class AssistantService:
         if not results:
             return "", []
 
-        # Assemble prompt-injection-safe fenced context block
-        assembled = context_assembly_service.assemble(
-            results,
-            max_characters=settings.RAG_MAX_CONTEXT_LENGTH,
-            block_threshold=settings.CONTEXT_INJECTION_BLOCK_THRESHOLD,
-        )
-        context = assembled.text
-
-        ranked_results = citation_service.rank_citations(results)
-        citations: list[SourceCitation] = []
-
-        for result in ranked_results:
-            metadata = result.get("metadata", {})
-            work_item_id = uuid.UUID(metadata["work_item_id"])
-            citation = self._build_citation(
-                work_item_id=work_item_id,
-                filename=filename_lookup.get(work_item_id, "Unknown Source"),
-                metadata=metadata,
-                text=result["text"],
-                query=query,
-                similarity_score=result.get("similarity_score", 0.0),
+        with stage("context_assembly"):
+            assembled = context_assembly_service.assemble(
+                results,
+                max_characters=settings.RAG_MAX_CONTEXT_LENGTH,
+                block_threshold=settings.CONTEXT_INJECTION_BLOCK_THRESHOLD,
             )
-            citations.append(citation)
+            context = assembled.text
+
+        with stage("citation"):
+            ranked_results = citation_service.rank_citations(results)
+            citations: list[SourceCitation] = []
+
+            for result in ranked_results:
+                metadata = result.get("metadata", {})
+                work_item_id = uuid.UUID(metadata["work_item_id"])
+                citation = self._build_citation(
+                    work_item_id=work_item_id,
+                    filename=filename_lookup.get(work_item_id, "Unknown Source"),
+                    metadata=metadata,
+                    text=result["text"],
+                    query=query,
+                    similarity_score=result.get("similarity_score", 0.0),
+                )
+                citations.append(citation)
 
         return context, citations
 
@@ -235,9 +266,10 @@ class AssistantService:
         query: str,
         similarity_score: float,
     ) -> SourceCitation:
-        snippet = snippet_service.generate_snippet(
+        snippet = snippet_service.generate(
             text=text,
             query=query,
+            chunk_page_start=metadata.get("page_start_char"),
         )
 
         return SourceCitation(
@@ -246,7 +278,7 @@ class AssistantService:
             chunk_index=metadata.get("chunk_index", 0),
             page_number=metadata.get("page_number"),
             similarity_score=similarity_score,
-            snippet=snippet,
+            snippet=snippet.text,
         )
 
     def _load_history(
@@ -278,26 +310,9 @@ class AssistantService:
             db=db,
             workspace_id=workspace_id,
         )
-
         if ai_settings is None:
             raise ValueError("AI settings have not been configured.")
-
         return ai_settings
-
-    def _generate_response(
-        self,
-        *,
-        query: str,
-        context: str,
-        history: list[dict[str, str]],
-        ai_settings: AISettings,
-    ) -> tuple[str, TokenUsage]:
-        return llm_service.synthesize_response(
-            query=query,
-            context=context,
-            history=history,
-            ai_settings=ai_settings,
-        )
 
     def _save_messages(
         self,
@@ -308,6 +323,7 @@ class AssistantService:
         response: str,
         citations: list[SourceCitation],
         token_usage: TokenUsage,
+        assistant_message_id: uuid.UUID | None = None,
     ) -> None:
         crud.create_conversation_message(
             db,
@@ -317,18 +333,21 @@ class AssistantService:
         )
 
         serialized_sources = [
-            citation.model_dump(mode="json")
-            for citation in citations
+            citation.model_dump(mode="json") for citation in citations
         ]
 
-        crud.create_conversation_message(
-            db,
+        from app.models.assistant import ConversationMessage
+
+        msg = ConversationMessage(
+            id=assistant_message_id or uuid.uuid4(),
             conversation_id=conversation.id,
             role=ConversationRole.ASSISTANT.value,
             content=response,
             sources=serialized_sources,
             token_usage=token_usage.model_dump(mode="json"),
         )
+        db.add(msg)
+        db.flush([msg])
 
     def _initialize_title(
         self,
@@ -368,3 +387,5 @@ class AssistantService:
 
 
 assistant_service = AssistantService()
+
+__all__ = ["AssistantService", "assistant_service"]

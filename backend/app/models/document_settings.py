@@ -1,8 +1,9 @@
 from __future__ import annotations
 import uuid
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
 
@@ -31,6 +32,10 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
             "embedding_model = 'sentence-transformers/all-MiniLM-L6-v2'",
             name="embedding_model_pinned",
         ),
+        CheckConstraint(
+            "intent_config IS NULL OR jsonb_typeof(intent_config) = 'object'",
+            name="ck_document_settings_intent_config_object",
+        ),
     )
 
     #: ARCH-11 Step 3: Token-aware chunking configuration
@@ -46,6 +51,13 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=10,
         server_default="10",
+    )
+
+    #: ARCH-11.5 Step 4: Per-workspace intent configuration
+    intent_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="ARCH-11.5. {intent: [keyword, ...]}. NULL follows platform defaults.",
     )
 
     #: DEPRECATED (ARCH-11 Step 3). Character-based. Dropped in Step 9 CONTRACT.
