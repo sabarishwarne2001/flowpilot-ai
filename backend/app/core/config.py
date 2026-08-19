@@ -228,6 +228,46 @@ class Settings(BaseSettings):
     OCR_JOB_MAX_ATTEMPTS: int = 5
     OCR_GUARD_BEFORE_EXTRACTION: bool = False
 
+    # --- ARCH-11 Step 1: embedding metering & the frozen baseline --------
+    #: Kill switch. False embeds without recording, and logs loudly. It exists
+    #: for one situation: a metering bug must never be able to stop document
+    #: processing. It is not a performance knob and it must be True in prod.
+    EMBEDDING_METERING_ENABLED: bool = True
+
+    #: The encoder's input window in word-piece tokens. Input beyond this is
+    #: silently truncated by sentence-transformers, so it is not billed. None
+    #: defers to the registry in app/core/embeddings.py.
+    EMBEDDING_MAX_SEQUENCE_TOKENS: Optional[int] = None
+
+    #: Declared output dimension. Cross-checked against the model registry at
+    #: import time; a mismatch is a failed insert against vector(n) later.
+    EMBEDDING_DIMENSION: int = 384
+
+    #: The frozen golden set, and where baselines are written.
+    GOLDEN_SET_PATH: str = "evaluation/golden/arch11_golden_v1.json"
+    RETRIEVAL_BASELINE_DIR: str = "evaluation/baselines"
+
+    # --- ARCH-11 Step 2: pgvector ----------------------------------------
+    #: Hash partitions on document_chunks. Changing this later is a table
+    #: rewrite (R36) — it is fixed at migration time and this setting exists
+    #: only so verification scripts and tests assert against one number.
+    DOCUMENT_CHUNK_PARTITIONS: int = 16
+
+    #: pgvector >= 0.8. `relaxed_order` re-enters the HNSW index until it has
+    #: enough rows after the tenancy predicate is applied — the fix for the
+    #: filtered-under-return failure in §4. `strict_order` preserves exact
+    #: ordering at higher cost; `off` restores 0.7 behaviour and will
+    #: under-return for small tenants.
+    HNSW_ITERATIVE_SCAN: str = "relaxed_order"
+
+    #: Candidate list size per scan. 40 is pgvector's default; raise it only
+    #: with a measurement in hand.
+    HNSW_EF_SEARCH: int = 40
+
+    #: Applied by the session connect hook. Set False if you would rather
+    #: manage these GUCs with `ALTER ROLE ... SET`.
+    APPLY_HNSW_SESSION_DEFAULTS: bool = True
+
     @field_validator("RAG_TOP_K")
     @classmethod
     def validate_rag_top_k(cls, v: int) -> int:

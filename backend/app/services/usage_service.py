@@ -48,6 +48,23 @@ _SENSITIVE_KEY_FRAGMENTS: tuple[str, ...] = (
     "private_key",
 )
 
+#: Metric counter keys that contain 'token' but represent quantities/limits,
+#: not auth credentials or secrets.
+_EXEMPT_DETAIL_KEYS: frozenset[str] = frozenset(
+    {
+        "truncated_tokens",
+        "max_sequence_tokens",
+        "billable_tokens",
+        "total_billable_tokens",
+        "total_truncated_tokens",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+    }
+)
+
 
 class UsageError(Exception):
     """Base class for metering-path refusals."""
@@ -115,7 +132,19 @@ def _sanitize_details(
             cleaned["__truncated__"] = f"{len(details) - MAX_DETAILS_KEYS} more keys"
             break
         key_str = str(key)
-        if any(f in key_str.lower() for f in _SENSITIVE_KEY_FRAGMENTS):
+        key_lower = key_str.lower()
+        if key_lower in _EXEMPT_DETAIL_KEYS:
+            if isinstance(value, uuid.UUID):
+                cleaned[key_str] = str(value)
+            elif isinstance(value, Decimal):
+                cleaned[key_str] = float(value)
+            elif value is None or isinstance(value, (str, int, float, bool, list, dict)):
+                cleaned[key_str] = value
+            elif hasattr(value, "isoformat"):
+                cleaned[key_str] = value.isoformat()
+            else:
+                cleaned[key_str] = str(value)
+        elif any(f in key_lower for f in _SENSITIVE_KEY_FRAGMENTS):
             cleaned[key_str] = "[REDACTED]"
         elif isinstance(value, uuid.UUID):
             cleaned[key_str] = str(value)

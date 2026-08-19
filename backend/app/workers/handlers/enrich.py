@@ -1,4 +1,4 @@
-"""ARCH-10 Step 7 — the `document.enrich` job handler."""
+"""ARCH-10 Step 7 / ARCH-11 Step 1 — the `document.enrich` job handler."""
 
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ class _Target:
     original_filename: str
     created_by_user_id: Optional[uuid.UUID]
     stage: str
+    job_id: Optional[uuid.UUID] = None  # ARCH-11 Step 1
 
 
 def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
@@ -54,6 +55,7 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         return None
 
     work_item, organization_id = row
+    raw_job_id = payload.get("job_id")
     return _Target(
         work_item_id=work_item.id,
         organization_id=organization_id,
@@ -61,6 +63,7 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         original_filename=work_item.original_filename,
         created_by_user_id=work_item.created_by_user_id,
         stage=work_item.pipeline_stage,
+        job_id=uuid.UUID(str(raw_job_id)) if raw_job_id else None,
     )
 
 
@@ -91,6 +94,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     from app.services.bm25_service import bm25_service
     from app.services.chunking_service import split_text
     from app.services.document_vocabulary_service import DocumentVocabularyService
+    from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
     from app.services.llm_service import llm_service
     from app.services.query_service import query_service
@@ -139,9 +143,22 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     stats["chunks"] = len(chunks)
 
     if chunks:
-        embeddings = embedding_service.generate_embeddings(
-            [chunk.text for chunk in chunks]
+        # ARCH-11 Step 1 / ARCH-10 R20 — meter before the encoder runs.
+        # `embed_texts_with_metering` raises SpendLimitExceededError from the
+        # batch that would cross the ceiling; the handler's existing except
+        # clause turns that into a QUOTA_BLOCKED transition. Nothing is written
+        # to the vector store until every batch has returned, so a refusal
+        # never leaves a half-embedded document behind.
+        embeddings, embedding_plan = embed_texts_with_metering(
+            db,
+            organization_id=target.organization_id,
+            workspace_id=target.workspace_id,
+            work_item_id=work_item.id,
+            texts=[chunk.text for chunk in chunks],
+            job_id=target.job_id,
         )
+        stats["embedding"] = embedding_plan.as_details()
+
         embedding_service.store_chunks(
             workspace_id=target.workspace_id,
             work_item_id=work_item.id,

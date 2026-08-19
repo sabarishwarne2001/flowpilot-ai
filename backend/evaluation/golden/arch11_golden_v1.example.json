@@ -1,0 +1,106 @@
+{
+  "version": "arch11-golden-v1",
+  "notes": "FORMAT EXAMPLE ONLY. Four questions, so it deliberately fails load_golden_set()'s 40-60 contract. It exists to show the shape and is loaded by tests with strict_size=False. The real set lives at arch11_golden_v1.json and is produced by scripts/build_golden_scaffold.py plus a human.",
+  "workspaces": [
+    {
+      "alias": "engineering",
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "organization_id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+      "label": "Acme / Engineering"
+    },
+    {
+      "alias": "operations",
+      "workspace_id": "22222222-2222-4222-8222-222222222222",
+      "organization_id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+      "label": "Acme / Operations"
+    }
+  ],
+  "documents": [
+    {
+      "alias": "leave_policy",
+      "workspace_alias": "engineering",
+      "work_item_id": "33333333-3333-4333-8333-333333333333",
+      "original_filename": "Company_Leave_Policy_v4.pdf",
+      "page_count": 11,
+      "extracted_text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "alias": "handbook",
+      "workspace_alias": "engineering",
+      "work_item_id": "44444444-4444-4444-8444-444444444444",
+      "original_filename": "Employee_Handbook_2026.pdf",
+      "page_count": 48,
+      "extracted_text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "alias": "vendor_msa",
+      "workspace_alias": "operations",
+      "work_item_id": "55555555-5555-4555-8555-555555555555",
+      "original_filename": "Northwind_MSA_2025.pdf",
+      "page_count": 23,
+      "extracted_text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q001",
+      "workspace_alias": "engineering",
+      "query": "How many days of annual leave does a full-time employee accrue?",
+      "answer_spans": [
+        "Full-time employees accrue 1.75 days of annual leave per completed calendar month of service"
+      ],
+      "relevant_document_aliases": ["leave_policy"],
+      "forbidden_document_aliases": ["handbook"],
+      "intent": "natural_language_question",
+      "category": "policy",
+      "difficulty": "easy",
+      "observed_chunk_ids": ["33333333-3333-4333-8333-333333333333_chunk_7"],
+      "notes": "The handbook paraphrases the same rule with a different number; it is forbidden here on purpose so a retrieval that prefers the stale copy is visible as contamination rather than as a near-miss."
+    },
+    {
+      "id": "q002",
+      "workspace_alias": "engineering",
+      "query": "carry over unused leave",
+      "answer_spans": [
+        "A maximum of five unused days may be carried into the following leave year and must be taken before 31 March"
+      ],
+      "relevant_document_aliases": ["leave_policy"],
+      "forbidden_document_aliases": [],
+      "intent": "keyword_search",
+      "category": "policy",
+      "difficulty": "medium",
+      "observed_chunk_ids": ["33333333-3333-4333-8333-333333333333_chunk_9"],
+      "notes": "Page 6 of 11 — deliberately not near the start of the document."
+    },
+    {
+      "id": "q003",
+      "workspace_alias": "operations",
+      "query": "What is the notice period for termination for convenience under the Northwind agreement?",
+      "answer_spans": [
+        "either party may terminate this Agreement for convenience upon ninety (90) days prior written notice"
+      ],
+      "relevant_document_aliases": ["vendor_msa"],
+      "forbidden_document_aliases": [],
+      "intent": "natural_language_question",
+      "category": "contract",
+      "difficulty": "medium",
+      "observed_chunk_ids": ["55555555-5555-4555-8555-555555555555_chunk_31"],
+      "notes": "Asked in operations. If any engineering chunk is returned, cross_tenant_hits is non-zero and the run fails regardless of recall."
+    },
+    {
+      "id": "q004",
+      "workspace_alias": "operations",
+      "query": "PO-2025-4471",
+      "answer_spans": [
+        "Purchase Order PO-2025-4471 authorises spend of USD 128,400 against cost centre OPS-EU-03"
+      ],
+      "relevant_document_aliases": ["vendor_msa"],
+      "forbidden_document_aliases": [],
+      "intent": "exact_identifier",
+      "category": "contract",
+      "difficulty": "hard",
+      "observed_chunk_ids": [],
+      "notes": "The class of query dense retrieval is worst at, and the reason pg_trgm is in the Step 5 plan. observed_chunk_ids is empty because the current dense-only stack does not find it — that is the finding, not an omission."
+    }
+  ]
+}

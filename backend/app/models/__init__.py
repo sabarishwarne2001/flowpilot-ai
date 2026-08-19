@@ -63,6 +63,7 @@ from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt, AttemptD
 
 from app.models.usage_event import UsageEvent  # noqa: F401
 from app.models.spend_limit import SpendLimit, SpendLimitPeriod  # noqa: F401
+from app.models.document_chunk import DocumentChunk  # noqa: F401
 
 __all__ = [
     "Base",
@@ -118,4 +119,5 @@ __all__ = [
     "UsageEvent",
     "SpendLimit",
     "SpendLimitPeriod",
+    "DocumentChunk",
 ]

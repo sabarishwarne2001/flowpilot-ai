@@ -1,1 +1,1 @@
-# Empty
+"""ARCH-11 Retrieval evaluation and golden set package."""
