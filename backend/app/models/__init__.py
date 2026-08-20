@@ -78,6 +78,12 @@ from app.models.usage_rollup import (
     RollupWindowStatus,
     UsageRollup,
 )
+from app.models.quota_tier import (
+    OveragePolicy,
+    QuotaTier,
+    QuotaTierEntry,
+    QuotaTierKey,
+)
 
 __all__ = [
     "Base",
@@ -147,4 +153,8 @@ __all__ = [
     "RollupWindowStatus",
     "NIL_UUID",
     "TOTAL_EVENT_TYPE",
+    "QuotaTier",
+    "QuotaTierEntry",
+    "QuotaTierKey",
+    "OveragePolicy",
 ]

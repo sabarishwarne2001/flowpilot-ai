@@ -101,16 +101,14 @@ def check_no_tenant_cost_reads() -> Check:
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if node.value in TENANT_COST_FIELDS:
                     findings.append(
-                        f"{rel}:{node.lineno} string literal {node.value!r} "
-                        "(getattr / dict key)"
+                        f"{rel}:{node.lineno} string literal {node.value!r} (getattr / dict key)"
                     )
 
     if findings:
         return Check(
             "no_tenant_cost_reads",
             FAIL,
-            "A tenant-writable price field is referenced outside the "
-            "allowlist. Resolve the price through pricing_service.resolve(...) instead.",
+            "A tenant-writable price field is referenced outside the allowlist.",
             findings,
         )
     return Check(
@@ -189,6 +187,70 @@ def check_publish_has_no_http_surface() -> Check:
     return Check("publish_has_no_http_surface", PASS, "no route reaches publish()")
 
 
+def check_usage_api_reads_rollups_only() -> Check:
+    targets = [
+        APP / "api" / "v1" / "usage.py",
+        APP / "services" / "usage_metrics_service.py",
+    ]
+    findings: list[str] = []
+    for path in targets:
+        if not path.exists():
+            return Check(
+                "usage_api_reads_rollups_only", PENDING, "Step 14.7 not shipped"
+            )
+        tree = _parse(path)
+        if tree is None:
+            continue
+        rel = _rel(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "UsageEvent":
+                findings.append(f"{rel}:{node.lineno} references UsageEvent")
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if "usage_events" in node.value.lower():
+                    findings.append(f"{rel}:{node.lineno} names usage_events")
+
+    if findings:
+        return Check(
+            "usage_api_reads_rollups_only",
+            FAIL,
+            "The usage API reads the ledger. It must read rollups only.",
+            findings,
+        )
+    return Check("usage_api_reads_rollups_only", PASS, "rollups only")
+
+
+def check_tier_publish_has_no_http_surface() -> Check:
+    findings: list[str] = []
+    api_root = APP / "api"
+    if api_root.exists():
+        for path in _python_files(api_root):
+            tree = _parse(path)
+            if tree is None:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    if "quota_service" in node.module:
+                        if {"publish_tier", "assign_tier"} & {
+                            a.name for a in node.names
+                        }:
+                            findings.append(f"{_rel(path)}:{node.lineno}")
+                if isinstance(node, ast.Attribute) and node.attr in {
+                    "publish_tier",
+                    "assign_tier",
+                }:
+                    value = node.value
+                    if isinstance(value, ast.Name) and "quota" in value.id:
+                        findings.append(f"{_rel(path)}:{node.lineno}")
+    if findings:
+        return Check(
+            "tier_publish_has_no_http_surface",
+            FAIL,
+            "A route can publish or assign a quota tier.",
+            findings,
+        )
+    return Check("tier_publish_has_no_http_surface", PASS, "no route reaches it")
+
+
 def check_reconciliation_never_writes_ledger() -> Check:
     recon = APP / "services" / "reconciliation"
     if not recon.exists():
@@ -226,7 +288,6 @@ def check_statement_sources_declare_fidelity() -> Check:
             "statement_sources_declare_fidelity", PENDING, "Step 14.5 not shipped"
         )
 
-    tree = _parse(base)
     sources_dir = APP / "services" / "reconciliation"
     findings: list[str] = []
     for path in _python_files(sources_dir):
@@ -381,6 +442,10 @@ def check_db_triggers_installed(db) -> Check:
         "trg_usage_events_immutable",
         "trg_price_books_publish_immutable",
         "trg_price_book_entries_publish_immutable",
+        "trg_usage_rollups_seal_immutable",
+        "trg_rollup_windows_seal_immutable",
+        "trg_quota_tiers_publish_immutable",
+        "trg_quota_tier_entries_publish_immutable",
     }
     present = {
         row[0]
@@ -459,11 +524,53 @@ def check_db_sealed_rollups_untouched(db) -> Check:
     return Check("db_sealed_rollups_untouched", PASS, "seals hold")
 
 
+def check_db_overage_rows_priced(db) -> Check:
+    from sqlalchemy import text
+
+    if not _table_exists(db, "quota_tier_entries"):
+        return Check("db_overage_rows_priced", PENDING, "Step 14.4 not shipped")
+
+    unpriced = db.execute(
+        text(
+            "SELECT count(*) FROM usage_events "
+            "WHERE event_type LIKE '%.overage' AND price_book_id IS NULL"
+        )
+    ).scalar_one()
+
+    orphaned = db.execute(
+        text(
+            """
+            SELECT count(*) FROM quota_tier_entries qte
+             WHERE qte.overage_policy = 'ALLOW_AND_BILL'
+               AND NOT EXISTS (
+                   SELECT 1 FROM price_book_entries pbe
+                    WHERE pbe.tier_key = qte.overage_price_tier_key
+               )
+            """
+        )
+    ).scalar_one()
+
+    if unpriced or orphaned:
+        return Check(
+            "db_overage_rows_priced",
+            FAIL,
+            "An overage line was written without a price, or a live "
+            "ALLOW_AND_BILL entry points at an unpriced tier_key.",
+            [
+                f"{unpriced} unpriced overage rows",
+                f"{orphaned} ALLOW_AND_BILL entries with no book entry",
+            ],
+        )
+    return Check("db_overage_rows_priced", PASS, "every overage line is priced")
+
+
 def run(static_only: bool) -> list[Check]:
     checks = [
         check_no_tenant_cost_reads(),
         check_no_usage_event_updates(),
         check_publish_has_no_http_surface(),
+        check_usage_api_reads_rollups_only(),
+        check_tier_publish_has_no_http_surface(),
         check_reconciliation_never_writes_ledger(),
         check_statement_sources_declare_fidelity(),
     ]
@@ -482,6 +589,7 @@ def run(static_only: bool) -> list[Check]:
                 check_db_published_books_unmutated(db),
                 check_db_no_stranded_unaggregated(db),
                 check_db_sealed_rollups_untouched(db),
+                check_db_overage_rows_priced(db),
             ]
         )
     finally:

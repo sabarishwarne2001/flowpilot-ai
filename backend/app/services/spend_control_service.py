@@ -1,4 +1,4 @@
-"""ARCH-10 Step 3 & ARCH-14 Step 14.3 — per-tenant spend ceilings, enforced via bounded reads."""
+"""ARCH-10 Step 3, ARCH-14 Step 14.3 & ARCH-14 Step 14.4 — per-tenant spend ceilings & quota tiers."""
 
 from __future__ import annotations
 
@@ -28,11 +28,11 @@ from app.models.audit_log import (
     AuditResourceType,
 )
 from app.models.spend_limit import SpendLimit, SpendLimitPeriod
-from app.services import audit_service, usage_service
+from app.services import audit_service, quota_service, usage_service
 
 logger = logging.getLogger("app.services.spend_control")
 
-_ADVISORY_LOCK_NAMESPACE: int = 0x5350_4E44  # "SPND"
+_ADVISORY_LOCK_NAMESPACE: int = 0x5350_4E44
 
 
 @dataclass(frozen=True)
@@ -44,12 +44,17 @@ class EffectiveLimit:
     hard_stop: bool
     is_default: bool
     limit_id: Optional[uuid.UUID] = None
+    source: str = "ORGANIZATION"
+    overage_policy: str = "REFUSE"
+    overage_price_tier_key: Optional[str] = None
+    grace_quantity: Optional[Decimal] = None
+    quota_tier_id: Optional[uuid.UUID] = None
+    quota_tier_key: Optional[str] = None
+    quota_tier_version: Optional[int] = None
 
 
 @dataclass
 class UsageGuard:
-    """Handle yielded by `guard_usage`; records the actual usage."""
-
     db: Session
     organization_id: uuid.UUID
     event_type: str
@@ -86,6 +91,20 @@ class UsageGuard:
             details=details,
             principal=self.principal,
         )
+
+        quota_service.bill_overage_if_any(
+            self.db,
+            organization_id=self.organization_id,
+            event_type=self.event_type,
+            quantity=quantity,
+            workspace_id=self.workspace_id,
+            occurred_at=occurred_at,
+            idempotency_key=self.idempotency_key,
+            provider=provider,
+            resource_type=self.resource_type,
+            resource_id=self.resource_id,
+        )
+
         self.recorded.append(event)
         return event
 
@@ -118,6 +137,7 @@ def _platform_defaults(limit_key: str) -> list[EffectiveLimit]:
                     max_cost_micros=settings.SPEND_DEFAULT_MONTHLY_COST_MICROS,
                     hard_stop=True,
                     is_default=True,
+                    source="PLATFORM_DEFAULT",
                 )
             )
         if settings.SPEND_DEFAULT_DAILY_COST_MICROS is not None:
@@ -129,6 +149,7 @@ def _platform_defaults(limit_key: str) -> list[EffectiveLimit]:
                     max_cost_micros=settings.SPEND_DEFAULT_DAILY_COST_MICROS,
                     hard_stop=True,
                     is_default=True,
+                    source="PLATFORM_DEFAULT",
                 )
             )
         return defaults
@@ -143,6 +164,7 @@ def _platform_defaults(limit_key: str) -> list[EffectiveLimit]:
                 max_cost_micros=None,
                 hard_stop=True,
                 is_default=True,
+                source="PLATFORM_DEFAULT",
             )
         )
     return defaults
@@ -159,6 +181,36 @@ def _lock_organization(db: Session, organization_id: uuid.UUID) -> None:
     )
 
 
+def explicit_limits(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    limit_key: str,
+    lock: bool = True,
+) -> list[EffectiveLimit]:
+    stmt = select(SpendLimit).where(
+        SpendLimit.organization_id == organization_id,
+        SpendLimit.limit_key == limit_key,
+        SpendLimit.is_active.is_(True),
+    )
+    if lock:
+        stmt = stmt.with_for_update()
+
+    return [
+        EffectiveLimit(
+            limit_key=row.limit_key,
+            period=row.period,
+            max_quantity=row.max_quantity,
+            max_cost_micros=row.max_cost_micros,
+            hard_stop=row.hard_stop,
+            is_default=False,
+            limit_id=row.id,
+            source="ORGANIZATION",
+        )
+        for row in db.execute(stmt).scalars().all()
+    ]
+
+
 def effective_limits(
     db: Session,
     *,
@@ -168,32 +220,39 @@ def effective_limits(
 ) -> list[EffectiveLimit]:
     if not is_limit_key(limit_key):
         raise SpendLimitMisconfiguredError(
-            f"'{limit_key}' is neither the wildcard '{TOTAL_COST_KEY}' nor a "
-            f"billable usage event type."
+            f"'{limit_key}' is neither the wildcard '{TOTAL_COST_KEY}' nor a billable usage event type."
         )
 
-    stmt = select(SpendLimit).where(
-        SpendLimit.organization_id == organization_id,
-        SpendLimit.limit_key == limit_key,
-        SpendLimit.is_active.is_(True),
+    explicit = explicit_limits(
+        db, organization_id=organization_id, limit_key=limit_key, lock=lock
     )
-    if lock:
-        stmt = stmt.with_for_update()
+    if explicit:
+        return explicit
 
-    rows = db.execute(stmt).scalars().all()
-
-    if rows:
+    tier = quota_service.tier_limits(
+        db, organization_id=organization_id, limit_key=limit_key
+    )
+    if tier:
+        if lock:
+            _lock_organization(db, organization_id)
         return [
             EffectiveLimit(
-                limit_key=row.limit_key,
-                period=row.period,
-                max_quantity=row.max_quantity,
-                max_cost_micros=row.max_cost_micros,
-                hard_stop=row.hard_stop,
+                limit_key=entry.limit_key,
+                period=entry.period,
+                max_quantity=entry.max_quantity,
+                max_cost_micros=entry.max_cost_micros,
+                hard_stop=entry.hard_stop,
                 is_default=False,
-                limit_id=row.id,
+                limit_id=None,
+                source="TIER",
+                overage_policy=entry.overage_policy,
+                overage_price_tier_key=entry.overage_price_tier_key,
+                grace_quantity=entry.grace_quantity,
+                quota_tier_id=entry.quota_tier_id,
+                quota_tier_key=entry.quota_tier_key,
+                quota_tier_version=entry.quota_tier_version,
             )
-            for row in rows
+            for entry in tier
         ]
 
     if lock:
@@ -268,7 +327,7 @@ def _audit_denial(
             "ceiling": str(limit.max_quantity or limit.max_cost_micros),
             "current": str(current),
             "requested": str(requested),
-            "source": "PLATFORM_DEFAULT" if limit.is_default else "ORGANIZATION",
+            "source": limit.source,
             "note": "aggregated: one row per organization per limit per hour",
         },
     )
@@ -306,7 +365,6 @@ def ensure_within_limits(
     for limit in checks:
         since = period_start(limit.period)
 
-        # ARCH-14 Step 14.3 (finding B2). Bounded reads instead of unbounded scans
         if limit.limit_key == TOTAL_COST_KEY:
             current_cost = usage_service.total_cost_micros_bounded(
                 db, organization_id=organization_id, since=since
@@ -321,9 +379,13 @@ def ensure_within_limits(
             ).get(limit.limit_key, (Decimal(0), 0))
             current_qty, current_cost = totals
 
+        quantity_ceiling = limit.max_quantity
+        if quantity_ceiling is not None and limit.grace_quantity:
+            quantity_ceiling = quantity_ceiling + limit.grace_quantity
+
         if (
-            limit.max_quantity is not None
-            and current_qty + requested_qty > limit.max_quantity
+            quantity_ceiling is not None
+            and current_qty + requested_qty > quantity_ceiling
         ):
             _deny_or_warn(
                 db,
@@ -331,7 +393,7 @@ def ensure_within_limits(
                 dimension="quantity",
                 current=current_qty,
                 requested=requested_qty,
-                ceiling=limit.max_quantity,
+                ceiling=quantity_ceiling,
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 principal=principal,

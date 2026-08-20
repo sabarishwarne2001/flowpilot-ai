@@ -23,6 +23,7 @@ from app.api.v1 import (
     organizations,
     ownership_transfers,
     upload,
+    usage,
     work_items,
     workspaces,
 )
@@ -51,6 +52,7 @@ api_router.include_router(workspaces.router)
 api_router.include_router(organization_invitation_router)
 api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
+api_router.include_router(usage.router)
 
 
 # ============================================================================
@@ -76,6 +78,7 @@ _SCOPED = (
     (email_settings.router,    "/email-settings",     "Email Settings"),
     (document_settings.router, "/document-settings",  "Document Settings"),
     (upload.router,            "/upload",             "Upload"),
+    (usage.workspace_router,   "/usage",              "Usage"),
 )
 
 for _router, _suffix, _tag in _SCOPED:

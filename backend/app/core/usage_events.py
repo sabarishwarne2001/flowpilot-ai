@@ -1,11 +1,4 @@
-"""ARCH-10 Step 2 & ARCH-11 Step 4 — the billable-usage vocabulary.
-
-Deliberately a service-layer constant module rather than a PostgreSQL enum,
-following ARCH-07 §B.1's reasoning: the taxonomy grows with every provider and
-every feature, so `ALTER TYPE ADD VALUE` friction on each addition is a tax on
-the wrong axis. The vocabulary is still *closed* — `record_usage()` refuses an
-unknown type — it is just closed in Python rather than in the type system.
-"""
+"""ARCH-10 Step 2, ARCH-11 Step 4 & ARCH-14 Step 4 — the billable-usage vocabulary with derived overage types."""
 
 from __future__ import annotations
 
@@ -23,9 +16,7 @@ class UsageUnit(str, PyEnum):
 
 
 class EmissionKind(str, PyEnum):
-    #: Emitted at the moment the work happens, inside the work's transaction.
     OCCURRENCE = "OCCURRENCE"
-    #: Emitted by a periodic sampler measuring a stock over elapsed time.
     SAMPLED = "SAMPLED"
 
 
@@ -34,14 +25,12 @@ class UsageEventType:
     name: str
     unit: UsageUnit
     emission: EmissionKind
-    #: False for types metered for capacity planning but never invoiced.
     billable: bool = True
-    #: Free-text provider hint; the recorded value wins when they disagree.
     default_provider: Optional[str] = None
     description: str = ""
 
 
-_TYPES: tuple[UsageEventType, ...] = (
+_BASE_TYPES: tuple[UsageEventType, ...] = (
     UsageEventType(
         name="ocr.page",
         unit=UsageUnit.PAGE,
@@ -62,13 +51,7 @@ _TYPES: tuple[UsageEventType, ...] = (
         emission=EmissionKind.OCCURRENCE,
         billable=False,
         default_provider="sentence_transformers",
-        description=(
-            "One token embedded by knowledge.reindex during the ARCH-11 "
-            "migration. Recorded against the tenant for capacity planning and "
-            "NOT invoiced: the corpus is being re-embedded because the "
-            "platform changed its vector store. `billable=False` is load-bearing "
-            "— it is what makes this type exempt from spend ceilings."
-        ),
+        description="Non-billable embedding during vector re-indexing.",
     ),
     UsageEventType(
         name="llm.input_token",
@@ -87,10 +70,7 @@ _TYPES: tuple[UsageEventType, ...] = (
         unit=UsageUnit.GB_MONTH,
         emission=EmissionKind.SAMPLED,
         default_provider="internal",
-        description=(
-            "Gigabyte-months of durable object storage, emitted by the storage "
-            "sampler, never inline."
-        ),
+        description="Gigabyte-months of durable object storage.",
     ),
     UsageEventType(
         name="document.processed",
@@ -98,23 +78,39 @@ _TYPES: tuple[UsageEventType, ...] = (
         emission=EmissionKind.OCCURRENCE,
         billable=False,
         default_provider="internal",
-        description=(
-            "One document completing the extraction pipeline. Not invoiced; "
-            "recorded so quota tiers can be expressed in units a customer "
-            "recognises."
-        ),
+        description="One document completing the extraction pipeline.",
     ),
 )
 
+OVERAGE_SUFFIX: str = ".overage"
+
+
+def _overage_variants(
+    base_types: tuple[UsageEventType, ...]
+) -> tuple[UsageEventType, ...]:
+    return tuple(
+        UsageEventType(
+            name=f"{base.name}{OVERAGE_SUFFIX}",
+            unit=base.unit,
+            emission=base.emission,
+            billable=True,
+            default_provider=base.default_provider,
+            description=(
+                f"Units of '{base.name}' consumed above a quota ceiling whose "
+                "overage policy is ALLOW_AND_BILL."
+            ),
+        )
+        for base in base_types
+        if base.billable
+    )
+
+
+_TYPES: tuple[UsageEventType, ...] = _BASE_TYPES + _overage_variants(_BASE_TYPES)
+
 USAGE_EVENT_TYPES: dict[str, UsageEventType] = {t.name: t for t in _TYPES}
 
-#: Namespaces that must never appear in `usage_events`. Anything auth- or
-#: audit-shaped belongs in `audit_logs`; metering is not a second audit trail.
 FORBIDDEN_USAGE_PREFIXES: tuple[str, ...] = ("auth.", "audit.", "session.")
-
-#: The wildcard limit key in `spend_limits`, meaning "all billable cost".
 TOTAL_COST_KEY: str = "*"
-
 MAX_EVENT_TYPE_LENGTH: int = 64
 
 
@@ -127,12 +123,10 @@ def billable_usage_types() -> list[str]:
 
 
 def resolve(event_type: str) -> UsageEventType:
-    """Return the descriptor for `event_type`, or raise ValueError."""
     for prefix in FORBIDDEN_USAGE_PREFIXES:
         if event_type.startswith(prefix):
             raise ValueError(
-                f"'{event_type}' is in the permanently excluded '{prefix}*' "
-                "namespace; that belongs in audit_logs, not usage_events."
+                f"'{event_type}' is in the permanently excluded '{prefix}*' namespace."
             )
     try:
         return USAGE_EVENT_TYPES[event_type]
@@ -144,8 +138,28 @@ def resolve(event_type: str) -> UsageEventType:
 
 
 def is_limit_key(key: str) -> bool:
-    """A spend-limit key is either the wildcard or a billable event type."""
     if key == TOTAL_COST_KEY:
         return True
     descriptor = USAGE_EVENT_TYPES.get(key)
     return descriptor is not None and descriptor.billable
+
+
+def is_overage_type(event_type: str) -> bool:
+    return event_type.endswith(OVERAGE_SUFFIX)
+
+
+def overage_type_for(event_type: str) -> str:
+    if is_overage_type(event_type):
+        raise ValueError(f"'{event_type}' is already an overage type.")
+    candidate = f"{event_type}{OVERAGE_SUFFIX}"
+    if candidate not in USAGE_EVENT_TYPES:
+        raise ValueError(
+            f"'{event_type}' has no overage counterpart; it is either unknown or not billable."
+        )
+    return candidate
+
+
+def base_type_for(event_type: str) -> str:
+    if not is_overage_type(event_type):
+        return event_type
+    return event_type[: -len(OVERAGE_SUFFIX)]

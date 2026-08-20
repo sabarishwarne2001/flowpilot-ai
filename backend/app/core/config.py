@@ -18,71 +18,53 @@ _KEYLESS_ENVIRONMENTS: frozenset[str] = frozenset({"test", "development"})
 
 
 class Settings(BaseSettings):
-    """
-    Application settings container managing environment parsing and validation.
-    Integrates with Pydantic Settings v2 and enforces strict SecretStr security on tokens.
-    """
     PROJECT_NAME: str = "FlowPilot AI"
     APP_VERSION: str = APP_VERSION
     API_TITLE: str = "FlowPilot AI Core API"
     ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     
-    # Server runtime configurations
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
 
-    # CORS configurations
     CORS_ORIGINS: str = "http://localhost:3000"
 
-    # Database credential segments (PostgreSQL configurations)
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "flowpilot"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
-    # Cryptography and Token Configurations
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
 
-    # API Key & Redis Identity Peppers (ARCH-08 §B.4, §0.2)
     API_KEY_PEPPER: SecretStr = SecretStr("flowpilot_default_api_key_pepper_secret_2026")
     REDIS_IDENTITY_PEPPER: SecretStr = SecretStr("flowpilot_default_redis_identity_pepper_2026")
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
-
-    # Refresh sessions
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
     SESSION_REUSE_GRACE_SECONDS: int = 10
     SESSION_CHAIN_WALK_LIMIT: int = 16
 
-    # Single-use identity tokens
     EMAIL_VERIFICATION_TTL_HOURS: int = 24
     PASSWORD_RESET_TTL_MINUTES: int = 60
     IDENTITY_TOKEN_MAX_PER_WINDOW: int = 5
     IDENTITY_TOKEN_WINDOW_MINUTES: int = 60
 
-    # ARCH-04 invitation lifecycle
     INVITATION_TTL_HOURS: int = 72
     INVITATION_RESEND_COOLDOWN_MINUTES: int = 5
     INVITATION_MAX_GRANTS: int = 50
     INVITATION_RETENTION_DAYS: int = 180
 
-    # ARCH-05 ownership transfer
     OWNERSHIP_TRANSFER_TTL_DAYS: int = 7
 
-    # ARCH-07 Step 5 Storage Driver Configurations
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: Path = Path("uploads")
     STORAGE_QUARANTINE_DIR: Path = Path("uploads/quarantine")
-
-    # ARCH-07 Step 11 Maintenance Sweeper Configurations
     AUDIT_SWEEPER_DATABASE_URL: Optional[SecretStr] = None
     FILE_RECLAMATION_DAYS: int = 30
 
-    # File Ingestion & Storage Configurations
     MAX_UPLOAD_SIZE: int = 104857600
     ALLOWED_MIME_TYPES: list[str] = [
         "application/pdf",
@@ -95,36 +77,27 @@ class Settings(BaseSettings):
         "image/bmp",
     ]
 
-    # Sprint 3: AI Processing & LLM Gateways
     GROQ_API_KEY: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
     LLM_PROVIDER: str = "groq"
     GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
     GEMINI_MODEL_NAME: str = "gemini-3.5-flash"
 
-    # Sprint 3: Embedding Model Configurations
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32
-
-    # Sprint 3: OCR Configurations
     OCR_LANGUAGE: str = "en"
 
-    # Identity email — platform SMTP relay
     PLATFORM_SMTP_HOST: str = ""
     PLATFORM_SMTP_PORT: int = 587
     PLATFORM_SMTP_USERNAME: str = ""
     PLATFORM_SMTP_PASSWORD: SecretStr | None = None
     PLATFORM_SMTP_ENCRYPTION: str = "TLS"
-
     PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
     PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
 
     FRONTEND_URL: str = "http://localhost:3000"
-
-    # SMTP Password Encryption
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = SecretStr("v3-Q90I2S6bXpL9_L3_0V8gJ0Z1P8yL1_L3_0V8gJ0Z=")
 
-    # Redis & Rate Limiter Configurations (ARCH-08 Step 6)
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_BACKEND: str = "redis"
     REDIS_URL: Optional[SecretStr] = SecretStr("redis://localhost:6379/0")
@@ -132,14 +105,12 @@ class Settings(BaseSettings):
     REDIS_MAX_CONNECTIONS: int = 50
 
     TRUSTED_PROXY_HOPS: int = 0
-
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
     RATE_LIMIT_USER_PER_MINUTE: int = 300
     RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
     RATE_LIMIT_CREDENTIAL_PER_HOUR: int = 10
     RATE_LIMIT_EXPORT_PER_HOUR: int = 5
 
-    # Sprint 5: AI Assistant & RAG Parameter Configurations
     RAG_TOP_K: int = 5
     RAG_SIMILARITY_THRESHOLD: float = 0.20
     RAG_MAX_CONTEXT_LENGTH: int = 15000
@@ -165,7 +136,6 @@ class Settings(BaseSettings):
     
     DOCUMENT_FILTER_MARGIN: float = 0.25
     DOCUMENT_SCORE_TOP_K: int = 3
-
     MAX_RESPONSE_CITATIONS: int = 3
     CITATION_RERANK_WEIGHT: float = 0.60
     CITATION_RRF_WEIGHT: float = 0.25
@@ -173,7 +143,6 @@ class Settings(BaseSettings):
 
     SNIPPET_MAX_SENTENCES: int = 2
     MAX_SNIPPET_LENGTH: int = 240
-
     RETRIEVAL_MIN_RECALL: float = 0.95
     RETRIEVAL_MIN_PRECISION: float = 0.90
     RETRIEVAL_MIN_MRR: float = 0.85
@@ -181,7 +150,6 @@ class Settings(BaseSettings):
     RETRIEVAL_MAX_LATENCY_MS: float = 300.0
     RETRIEVAL_FAIL_FAST: bool = False
 
-    # --- ARCH-10 Step 3: default spend ceilings -------------------------
     SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000
     SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000
     SPEND_DEFAULT_MONTHLY_OCR_PAGES: Optional[int] = 2_000
@@ -197,7 +165,6 @@ class Settings(BaseSettings):
             "embedding.token": self.SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS,
         }
 
-    # --- ARCH-10 Step 4: object storage ---------------------------------
     STORAGE_BACKEND: str = "local"
     S3_BUCKET: Optional[str] = None
     S3_REGION: Optional[str] = "auto"
@@ -210,48 +177,35 @@ class Settings(BaseSettings):
     S3_MAX_CONCURRENCY: int = 4
     STORAGE_SAMPLE_INTERVAL_MINUTES: int = 60
 
-    # --- ARCH-10 Step 5: validation -------------------------------------
     MAX_DOCUMENT_PAGES: int = 500
     SCRUB_UPLOAD_METADATA: bool = True
-
-    # --- ARCH-10 Step 6: OCR --------------------------------------------
     OCR_PROVIDER: str = "paddleocr"
     OCR_MAX_PAGES_PER_DOCUMENT: int = 500
     OCR_JOB_MAX_ATTEMPTS: int = 5
     OCR_GUARD_BEFORE_EXTRACTION: bool = False
 
-    # --- ARCH-11 Step 1: embedding metering & the frozen baseline --------
     EMBEDDING_METERING_ENABLED: bool = True
     EMBEDDING_MAX_SEQUENCE_TOKENS: Optional[int] = None
     EMBEDDING_DIMENSION: int = 384
     GOLDEN_SET_PATH: str = "evaluation/golden/arch11_golden_v1.json"
     RETRIEVAL_BASELINE_DIR: str = "evaluation/baselines"
 
-    # --- ARCH-11 Step 2: pgvector ----------------------------------------
     DOCUMENT_CHUNK_PARTITIONS: int = 16
     HNSW_ITERATIVE_SCAN: str = "relaxed_order"
     HNSW_EF_SEARCH: int = 40
     APPLY_HNSW_SESSION_DEFAULTS: bool = True
-
-    # --- ARCH-11 Step 3: chunking ---------------------------------------
     CHUNK_SIZE_TOKENS: int = 220
     CHUNK_OVERLAP_PCT: int = 10
-
-    # --- ARCH-11 Step 4: backfill ---------------------------------------
     SPEND_PLATFORM_MONTHLY_BACKFILL_TOKENS: Optional[int] = 200_000_000
 
-    # --- ARCH-11 Step 5: lexical retrieval -------------------------------
     LEXICAL_TSVECTOR_CONFIG: str = "english"
     LEXICAL_TRIGRAM_THRESHOLD: float = 0.3
     LEXICAL_CANDIDATES: int = 50
-
-    # --- ARCH-11 Step 6: hybrid fusion ------------------------------------
     HYBRID_CANDIDATES: int = 150
     HYBRID_WEIGHT_DENSE: float = 1.0
     HYBRID_WEIGHT_FULL_TEXT: float = 1.0
     HYBRID_WEIGHT_FUZZY: float = 0.5
 
-    # --- ARCH-11 Step 7: reranker service ---------------------------------
     RERANKER_ENABLED: bool = True
     RERANKER_URL: str = "http://reranker:8081"
     RERANKER_INTERNAL_TOKEN: Optional[SecretStr] = None
@@ -260,13 +214,8 @@ class Settings(BaseSettings):
     RERANKER_BREAKER_THRESHOLD: int = 5
     RERANKER_BREAKER_RESET_SECONDS: float = 30.0
 
-    # --- ARCH-11 hardening: context assembly ------------------------------
     CONTEXT_INJECTION_BLOCK_THRESHOLD: int = 3
-
-    # --- ARCH-11.5 Step 1: LLM metering -----------------------------------
     LLM_METERING_ENABLED: bool = True
-
-    # --- ARCH-11.5 Step 2: resilience -------------------------------------
     LLM_REQUEST_DEADLINE_SECONDS: float = 25.0
     LLM_MAX_ATTEMPTS: int = 3
     LLM_BACKOFF_BASE_SECONDS: float = 0.5
@@ -276,20 +225,14 @@ class Settings(BaseSettings):
     LLM_FAILOVER_ENABLED: bool = False
     LLM_FALLBACK_PROVIDER: Optional[str] = None
 
-    # --- ARCH-11.5 Step 3: vocabulary -------------------------------------
     VOCABULARY_MAX_TERMS: int = 400
     VOCABULARY_CACHE_TTL_SECONDS: float = 900.0
     VOCABULARY_CACHE_MAX_WORKSPACES: int = 32
-
-    # --- ARCH-11.5 Step 4: intent -----------------------------------------
     INTENT_DETECTION_ENABLED: bool = True
     INTENT_BOOST_ENABLED: bool = True
-
-    # --- ARCH-11.5 Step 5: citations --------------------------------------
     MAX_CITATIONS: int = 5
     SNIPPET_MAX_LENGTH: int = 300
 
-    # ---- ARCH-12: streaming, budgeting, and generation limits ----------
     LLM_CONTEXT_WINDOW_TOKENS: int = 32_768
     STREAM_DEADLINE_SECONDS: float = 120.0
     STREAM_MAX_CONCURRENT_PER_USER: int = 2
@@ -300,11 +243,13 @@ class Settings(BaseSettings):
     # ---- ARCH-14: pricing -------------------------------------------------
     PRICE_BOOK_CACHE_TTL_SECONDS: float = 300.0
     ROLLUP_SEAL_GRACE_HOURS: int = 26
-
-    # ---- ARCH-14 Step 14.2 & 14.3: rollups and bounded spend reads --------
     ROLLUP_BATCH_SIZE: int = 2_000
     ROLLUP_MAX_BATCHES: int = 20
     SPEND_USE_ROLLUP_READS: bool = True
+
+    # ---- ARCH-14 Step 4: quota tiers --------------------------------------
+    QUOTA_TIER_CACHE_TTL_SECONDS: float = 300.0
+    QUOTA_DEFAULT_TIER_KEY: Optional[str] = None
 
     # ---- ARCH-14 Step 14.6: Gemini billing labels -------------------------
     GEMINI_BILLING_LABELS_ENABLED: bool = False

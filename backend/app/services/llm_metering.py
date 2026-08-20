@@ -1,4 +1,4 @@
-"""ARCH-11.5 Step 1, ARCH-12 Step 1/3, ARCH-14 Step 1 — LLM spend ceilings and token metering."""
+"""ARCH-11.5 Step 1, ARCH-12 Step 1/3, ARCH-14 Step 1 & ARCH-14 Step 4 — LLM spend ceilings, token metering and overages."""
 
 from __future__ import annotations
 
@@ -37,14 +37,12 @@ class LLMMeteringError(RuntimeError):
 
 
 def estimate_prompt_tokens(prompt: str, *, model: Optional[str] = None) -> int:
-    """Conservative pre-call estimate of prompt tokens."""
     if not prompt:
         return 0
     return max(1, int(len(prompt) / _CHARS_PER_TOKEN) + 1)
 
 
 def estimate_enrichment_tokens(prompts: dict[str, str]) -> int:
-    """Total estimated input across every operation that will run."""
     return sum(estimate_prompt_tokens(prompt) for prompt in prompts.values())
 
 
@@ -56,8 +54,6 @@ def _provider_of(ai_settings: Any) -> str:
 
 @dataclass
 class LLMReservation:
-    """A ceiling check that passed. Holds no usage rows until `settle`."""
-
     organization_id: uuid.UUID
     workspace_id: Optional[uuid.UUID]
     scope: str
@@ -208,7 +204,6 @@ def reserve(
     prompt: str,
     ai_settings: Any,
 ) -> LLMReservation:
-    """Conversation turn reservation."""
     return _reserve(
         db,
         organization_id=organization_id,
@@ -231,7 +226,6 @@ def reserve_for_enrichment(
     prompt: str,
     ai_settings: Any,
 ) -> LLMReservation:
-    """One enrichment operation against one document."""
     if operation not in ENRICH_OPERATIONS:
         raise LLMMeteringError(
             f"unknown enrichment operation {operation!r}; expected one of {ENRICH_OPERATIONS}"
@@ -258,7 +252,6 @@ def reserve_for_summary(
     prompt: str,
     ai_settings: Any,
 ) -> LLMReservation:
-    """Rolling conversation digest (ARCH-12 Step 3)."""
     return _reserve(
         db,
         organization_id=organization_id,
@@ -380,7 +373,6 @@ def _record(
             details={"model": model, **price_details, **details},
         )
         savepoint.commit()
-        return True
     except IntegrityError as exc:
         savepoint.rollback()
         if not _is_collision(exc):
@@ -390,6 +382,24 @@ def _record(
             extra={"idempotency_key": key, **reservation.as_details()},
         )
         return False
+
+    # ARCH-14 Step 4 — Bill overage if applicable
+    from app.services import quota_service
+
+    quota_service.bill_overage_if_any(
+        db,
+        organization_id=reservation.organization_id,
+        event_type=event_type,
+        quantity=quantity,
+        workspace_id=reservation.workspace_id,
+        occurred_at=occurred_at,
+        idempotency_key=key,
+        provider=provider,
+        model=model,
+        resource_type=reservation.resource_type,
+        resource_id=reservation.resource_id,
+    )
+    return True
 
 
 def settle(
