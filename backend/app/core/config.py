@@ -289,6 +289,30 @@ class Settings(BaseSettings):
     MAX_CITATIONS: int = 5
     SNIPPET_MAX_LENGTH: int = 300
 
+    # ---- ARCH-12: streaming, budgeting, and generation limits ----------
+    #
+    # LLM_CONTEXT_WINDOW_TOKENS is the denominator for the 60/30/10
+    # allocation in context_budget.py. It is deliberately conservative
+    # against the smallest model in the supported set rather than the
+    # largest: over-allocating produces a provider-side truncation that
+    # silently drops whichever component the provider happens to cut, which
+    # is precisely the invisible degradation A3 was about.
+    LLM_CONTEXT_WINDOW_TOKENS: int = 32_768
+
+    # A stream that has not finished in this long is not going to. Also the
+    # cutoff sweep_in_flight() uses to find rows stranded in STREAMING.
+    STREAM_DEADLINE_SECONDS: float = 120.0
+
+    # ARCH-12 Step 2. A monthly spend ceiling is a budget, not a rate limit.
+    STREAM_MAX_CONCURRENT_PER_USER: int = 2
+    STREAM_MAX_CONCURRENT_PER_ORG: int = 20
+    STREAM_MAX_MESSAGES_PER_MINUTE_PER_CONVERSATION: int = 10
+
+    # ARCH-12 Step 5 (F7). Digital PDFs get line boxes from the text layer
+    # rather than an empty block list. Set False only to reproduce
+    # pre-ARCH-12 extraction while debugging a specific document.
+    PDF_TEXT_LAYER_BBOXES_ENABLED: bool = True
+
     @field_validator("RAG_TOP_K")
     @classmethod
     def validate_rag_top_k(cls, v: int) -> int:

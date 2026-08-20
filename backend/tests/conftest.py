@@ -7,9 +7,9 @@ than metadata.create_all, which means the migration chain is exercised on
 every CI run — the from-scratch build path that has otherwise never been
 tested.
 
-Each test runs inside a transaction that is rolled back afterwards, so the
-persona fixtures are rebuilt identically for every test and no test can
-observe another's writes.
+Each test runs against the shared test engine, with tenant/user tables
+truncated between tests under session_replication_role = 'replica' so that
+append-only audit triggers are bypassed during test teardown.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core import security
@@ -50,6 +50,7 @@ if hasattr(settings, "sqlalchemy_database_uri"):
         pass
 
 # Now safe to import the application
+from app.db.session import SessionLocal, engine as global_engine
 from app.main import app
 from app.models.organization import (
     MembershipStatus,
@@ -161,27 +162,28 @@ def test_database() -> Generator[None, None, None]:
 @pytest.fixture()
 def db_session(test_database) -> Generator[Session, None, None]:
     """
-    A session bound to an outer transaction that is always rolled back.
-    Requires `test_database` to ensure schema is constructed before sessions open.
+    A session connected to the test database, cleaned up after each test run.
     """
-    engine = create_engine(TEST_DB_URL)
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = sessionmaker(bind=connection, expire_on_commit=False)()
-
+    session = SessionLocal()
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
-        engine.dispose()
+        with global_engine.connect() as conn:
+            with conn.begin():
+                conn.execute(text("SET session_replication_role = 'replica';"))
+                conn.execute(
+                    text(
+                        "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events CASCADE;"
+                    )
+                )
+                conn.execute(text("SET session_replication_role = 'origin';"))
 
 
 @pytest.fixture()
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     """
-    A TestClient whose requests share the test transaction.
+    A TestClient whose requests share the test session.
     """
 
     def override_get_db() -> Generator[Session, None, None]:

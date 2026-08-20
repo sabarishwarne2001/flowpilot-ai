@@ -1,6 +1,7 @@
 """
 AI Assistant orchestration service for FlowPilot AI.
 ARCH-11.5 Step 1 & 6: Request tracing, pre-generated message IDs, and HTTP 402 quota conversions.
+ARCH-12 Step 3 & 4: Unbounded history loading with budget delegation, and unified output redaction.
 """
 
 from __future__ import annotations
@@ -80,7 +81,11 @@ class AssistantService:
                     query=query_text,
                 )
 
-            history = self._load_history(
+            # ARCH-12 Step 3: no message-count cap. The window is bounded in
+            # tokens by context_budget_service, after retrieved context has
+            # already been allocated its share. Capping the count here is the
+            # A3 bug — it bounded the wrong dimension.
+            history = self._load_history_unbounded(
                 db=db,
                 conversation=conversation,
             )
@@ -136,6 +141,12 @@ class AssistantService:
                             "limit resets or is raised."
                         ),
                     ) from exc
+
+            # Same filter, same rules, same module as the stream. A redaction
+            # that applies to one path and not the other is not a redaction.
+            from app.services.output_filter import redact_text
+
+            response = redact_text(response)
 
             self._save_messages(
                 db=db,
@@ -298,6 +309,18 @@ class AssistantService:
                 "content": message.content,
             }
             for message in messages
+        ]
+
+    def _load_history_unbounded(
+        self, *, db: Session, conversation: Conversation
+    ) -> list[dict[str, str]]:
+        messages = crud.get_conversation_messages(
+            db, conversation_id=conversation.id
+        )
+        return [
+            {"role": message.role, "content": message.content}
+            for message in messages
+            if (message.content or "").strip()
         ]
 
     def _get_ai_settings(

@@ -1,8 +1,8 @@
-"""ARCH-11.5 Step 1 — LLM spend ceilings and token metering.
+"""ARCH-11.5 Step 1 & ARCH-12 Step 1/3 — LLM spend ceilings and token metering.
 
 Enforces pre-call spend limits (reserving prompt tokens and worst-case max output tokens)
-and post-call settlement with true provider counts inside transactional savepoints.
-Supports conversations and background document enrichment.
+and post-call settlement with true provider counts or marked estimates inside transactional savepoints.
+Supports conversations, background document enrichment, and metered rolling digests.
 """
 
 from __future__ import annotations
@@ -207,6 +207,35 @@ def reserve_for_enrichment(
     )
 
 
+def reserve_for_summary(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    workspace_id: Optional[uuid.UUID],
+    conversation_id: uuid.UUID,
+    turn: int,
+    prompt: str,
+    ai_settings: Any,
+) -> LLMReservation:
+    """Rolling conversation digest (ARCH-12 Step 3).
+
+    This is the second place in the system where generation happens with
+    nobody watching — the first being enrichment. The scope is keyed on the
+    turn so a retried request collides on the idempotency index instead of
+    billing the same digest twice.
+    """
+    return _reserve(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        scope=f"llm:{conversation_id}:summary:{turn}",
+        resource_type=CONVERSATION_RESOURCE,
+        resource_id=conversation_id,
+        prompt=prompt,
+        ai_settings=ai_settings,
+    )
+
+
 def already_recorded(
     db: Session, *, organization_id: uuid.UUID, scope: str
 ) -> bool:
@@ -273,8 +302,19 @@ def settle(
     *,
     reservation: LLMReservation,
     token_usage: Any,
+    estimated: bool = False,
 ) -> dict[str, Any]:
-    """Record the provider's true counts. Flushes; the caller commits."""
+    """Record the provider's counts. Flushes; the caller commits.
+
+    ARCH-12 Step 1: `estimated=True` marks a row whose counts came from a
+    local emission count rather than provider usage metadata, which is what a
+    stream abandoned before its final chunk produces. The row is written
+    either way — the provider billed for the tokens whether or not the client
+    stayed to receive them — and the flag is what makes ARCH-14's provider
+    reconciliation (A8) able to quantify drift instead of merely observing it.
+
+    A missing row cannot be reconciled. An estimate you have flagged can.
+    """
     if not settings.LLM_METERING_ENABLED or reservation.settled:
         return {}
 
@@ -296,6 +336,7 @@ def settle(
         details={
             "estimated_tokens": reservation.estimated_input_tokens,
             "estimate_drift_tokens": drift,
+            "estimated": estimated,
         },
     )
     recorded_output = _record(
@@ -310,6 +351,7 @@ def settle(
         details={
             "max_output_tokens": reservation.max_output_tokens,
             "hit_output_ceiling": completion_tokens >= reservation.max_output_tokens,
+            "estimated": estimated,
         },
     )
     reservation.settled = True
@@ -322,6 +364,7 @@ def settle(
         "estimate_drift_tokens": drift,
         "recorded_input": recorded_input,
         "recorded_output": recorded_output,
+        "estimated": estimated,
     }
     logger.info("llm.settled", extra={**reservation.as_details(), **summary})
     return summary
@@ -356,5 +399,6 @@ __all__ = [
     "recorded_for_message",
     "reserve",
     "reserve_for_enrichment",
+    "reserve_for_summary",
     "settle",
 ]

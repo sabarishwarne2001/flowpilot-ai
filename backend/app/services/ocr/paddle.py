@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6 — the self-hosted PaddleOCR provider."""
+"""ARCH-10 Step 6 & ARCH-12 Step 5 (F7) — the self-hosted PaddleOCR provider with digital text layer bounding boxes."""
 
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ try:
 except Exception:
     pass
 
+from app.core.config import settings
 from app.services.ocr.base import (
     BoundingBox,
     OCRBlock,
@@ -58,6 +59,7 @@ from app.services.ocr.base import (
     OCRUnavailableError,
     OCRUnsupportedError,
 )
+from app.services.ocr.pdf_text_layer import extract_page as extract_text_layer_page
 
 logger = logging.getLogger("app.services.ocr.paddle")
 
@@ -329,27 +331,84 @@ class PaddleOCRProvider(OCRProvider):
         pages: list[OCRPage] = []
         needs_ocr: list[int] = []
 
-        for index in range(limit):
+        # ARCH-12 Step 5 (F7). A digital page's text layer carries geometry;
+        # the previous implementation discarded it and emitted blocks=[],
+        # which meant `DocumentPage.block_spans()` returned BBOX_NO_BLOCKS and
+        # every digital PDF chunk landed with a NULL bbox. Boxes are captured
+        # at chunk time, so closing this later would mean a second backfill
+        # over a larger corpus — and the page text changing under existing
+        # chunks would invalidate their page_start_char offsets.
+        text_layer_document = None
+        if settings.PDF_TEXT_LAYER_BBOXES_ENABLED:
             try:
-                layer = (reader.pages[index].extract_text() or "").strip()
-            except Exception:
-                layer = ""
-            if len(layer) >= MIN_TEXT_LAYER_CHARS:
-                pages.append(
-                    OCRPage(
-                        page_number=index + 1,
-                        text=layer,
-                        blocks=[],
-                        ocr_applied=False,
+                import pypdfium2 as pdfium  # noqa: PLC0415
+
+                text_layer_document = pdfium.PdfDocument(str(path))
+            except Exception:  # noqa: BLE001
+                logger.warning("ocr.text_layer_open_failed", exc_info=True)
+                text_layer_document = None
+
+        boxed_pages = 0
+        try:
+            for index in range(limit):
+                boxed = None
+                if text_layer_document is not None:
+                    try:
+                        boxed = extract_text_layer_page(
+                            text_layer_document[index], raster_dpi=RASTER_DPI
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.warning(
+                            "ocr.text_layer_page_failed",
+                            extra={"page": index + 1},
+                            exc_info=True,
+                        )
+                        boxed = None
+
+                if boxed is not None and len(boxed.text) >= MIN_TEXT_LAYER_CHARS:
+                    pages.append(
+                        OCRPage(
+                            page_number=index + 1,
+                            text=boxed.text,
+                            blocks=boxed.blocks,
+                            ocr_applied=False,
+                            width=boxed.width,
+                            height=boxed.height,
+                        )
                     )
-                )
-            else:
-                pages.append(
-                    OCRPage(
-                        page_number=index + 1, text="", blocks=[], ocr_applied=True
+                    boxed_pages += 1
+                    continue
+
+                # Fallback: the pre-ARCH-12 path. A page with a text layer
+                # pypdfium2 could not geometrically resolve still yields text,
+                # just without boxes — which is strictly what shipped before
+                # and therefore not a regression.
+                try:
+                    layer = (reader.pages[index].extract_text() or "").strip()
+                except Exception:
+                    layer = ""
+
+                if len(layer) >= MIN_TEXT_LAYER_CHARS:
+                    pages.append(
+                        OCRPage(
+                            page_number=index + 1,
+                            text=layer,
+                            blocks=[],
+                            ocr_applied=False,
+                        )
                     )
-                )
-                needs_ocr.append(index)
+                else:
+                    pages.append(
+                        OCRPage(
+                            page_number=index + 1, text="", blocks=[], ocr_applied=True
+                        )
+                    )
+                    needs_ocr.append(index)
+        finally:
+            if text_layer_document is not None:
+                close = getattr(text_layer_document, "close", None)
+                if callable(close):
+                    close()
 
         if needs_ocr:
             self._ocr_pdf_pages(path, pages, needs_ocr)
@@ -360,6 +419,7 @@ class PaddleOCRProvider(OCRProvider):
                 "pages": len(pages),
                 "text_layer_pages": len(pages) - len(needs_ocr),
                 "ocr_pages": len(needs_ocr),
+                "boxed_text_layer_pages": boxed_pages,
             },
         )
         return pages

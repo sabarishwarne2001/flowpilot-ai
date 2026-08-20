@@ -1,4 +1,4 @@
-"""Rate limit policy models (ARCH-08 §B.5, §6.6, §11.3)."""
+"""Rate limit policy models (ARCH-08 §B.5, §6.6, §11.3, ARCH-12 Step 2)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ class RateLimitScope(str, Enum):
     CREDENTIAL = "credential"
     EXPORT = "export"
     API_KEY = "api_key"
+    GENERATION = "generation"
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,19 @@ POLICY_API_KEY_DEFAULT = RateLimitPolicy(
     name="api_key_default",
     scope=RateLimitScope.API_KEY,
     limit=600,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_OPEN,
+)
+
+# ARCH-12 Step 2 (A2). Generation-specific limits.
+#
+# FAIL_OPEN, matching every other non-credential policy: a Redis outage must
+# not become a full outage, and the spend ceiling in PostgreSQL is still
+# enforcing the thing that actually costs money.
+POLICY_ASSISTANT_GENERATE = RateLimitPolicy(
+    name="assistant_generate",
+    scope=RateLimitScope.USER,
+    limit=10,
     window_seconds=60,
     failure_mode=FailureMode.FAIL_OPEN,
 )

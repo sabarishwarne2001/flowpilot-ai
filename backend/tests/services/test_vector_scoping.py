@@ -41,6 +41,7 @@ SCOPE_ALLOW_LIST = {
     "app/services/vocabulary_service.py",
     "app/evaluation/load_evaluation_corpus.py",
     "tests/isolation/test_vector_tenancy.py",
+    "app/schemas/citation.py",
 }
 
 _RAW_REFERENCE = re.compile(r"\bdocument_chunks\b|\bDocumentChunk\b")

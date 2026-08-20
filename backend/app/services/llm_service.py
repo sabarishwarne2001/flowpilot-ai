@@ -1,6 +1,7 @@
 """
 Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
 ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
+ARCH-12 Step 1 & 3: Streaming prompt preparation, system prompt isolation, and metered prompt execution.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.ai_settings import AISettings
-from app.prompts import RAG_PROMPT_VERSION
 from app.prompts.intents import PromptIntent
 from app.prompts.prompt_builder import PromptBuilder
 from app.schemas.assistant import TokenUsage
@@ -606,6 +606,85 @@ class LLMService:
             llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
 
         return response.strip(), token_usage
+
+    # ------------------------------------------------------------------
+    # ARCH-12 — the streaming path needs the prompt in pieces.
+    # ------------------------------------------------------------------
+
+    def execute_prompt(
+        self, *, prompt: str, temperature: float, ai_settings: AISettings
+    ) -> tuple[str, TokenUsage]:
+        """Public wrapper over `_execute_query`.
+
+        `context_budget_service` needs to make one metered, non-streaming call
+        for the rolling digest. Reaching into `_execute_query` from another
+        module would make a private method load-bearing across a package
+        boundary; this names the contract instead.
+        """
+        return self._execute_query(
+            prompt=prompt, temperature=temperature, ai_settings=ai_settings
+        )
+
+    def system_prompt_for(self, *, query: str, ai_settings: AISettings) -> str:
+        """The fixed, never-trimmed part of the window.
+
+        ARCH-12 Step 3 allocates shares of the window *after* subtracting
+        this, so it has to be measurable on its own — which means the
+        template's static text with the three variable slots empty.
+        """
+        intent = self._detect_prompt_intent(query)
+        template = (
+            RAG_SYNTHESIS_PROMPT_TEMPLATE
+            if self._validate_provider(ai_settings=ai_settings) == "groq"
+            else GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE
+        )
+        return template.format(
+            intent_instructions=PromptBuilder.get_intent_instructions(intent),
+            context="",
+            history="",
+            query="",
+        )
+
+    def build_streaming_prompt(
+        self,
+        *,
+        query: str,
+        fenced: Any,
+        history: list[dict[str, str]],
+        digest: str,
+        ai_settings: AISettings,
+    ) -> str:
+        """Assemble the prompt from an already-budgeted payload.
+
+        Note what is absent: there is no post-budget context truncation here.
+        The budget allocator has already sized every component.
+
+        `fenced.render_for_prompt()` is the single audited exit from the R33
+        boundary. Grep for that method name to enumerate every call site.
+        """
+        intent = self._detect_prompt_intent(query)
+        template = (
+            RAG_SYNTHESIS_PROMPT_TEMPLATE
+            if self._validate_provider(ai_settings=ai_settings) == "groq"
+            else GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE
+        )
+
+        history_text = PromptBuilder.build_history(history)
+        if digest:
+            history_text = (
+                "Summary of earlier turns:\n"
+                f"{digest}\n\n"
+                "Recent turns:\n"
+                f"{history_text}"
+            )
+
+        return PromptBuilder.build_rag_prompt(
+            template=template,
+            context=fenced.render_for_prompt(),
+            history=history_text,
+            query=query,
+            intent_instructions=PromptBuilder.get_intent_instructions(intent),
+        )
 
     def health_check(self) -> bool:
         try:

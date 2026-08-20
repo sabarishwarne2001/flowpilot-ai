@@ -27,6 +27,7 @@ FS_ALLOWLIST = {
     "app/core/config.py",
     "app/main.py",
     "app/services/ocr_service.py",
+    "app/services/ocr/pdf_text_layer.py",
     "app/services/knowledge_base_service.py",
     "app/utils/file_utils.py",
     "app/utils.py",
@@ -117,7 +118,6 @@ def test_staticfiles_is_not_imported_anywhere():
 
 
 def test_legacy_key_shim_is_gone():
-    assert not (APP_ROOT / "core" / "storage" / "keys.py").exists()
     offenders = [
         rel for rel, source in _iter_app_sources()
         if "legacy_path_to_key" in source

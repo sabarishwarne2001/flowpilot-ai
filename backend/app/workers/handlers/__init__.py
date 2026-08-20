@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7 & ARCH-11 Step 4 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4 & ARCH-12 Step 7 — job handler registration."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ ARCH10_JOB_TYPES: frozenset[str] = frozenset(
     {"document.extract", "document.enrich", "storage.sample"}
 )
 ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
+ARCH12_JOB_TYPES: frozenset[str] = frozenset({"notification.deliver"})
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -39,11 +40,18 @@ def _knowledge_reindex(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_knowledge_reindex(payload)
 
 
+def _notification_deliver(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.notify import handle_notification_deliver
+
+    return handle_notification_deliver(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
     "storage.sample": _storage_sample,
     "knowledge.reindex": _knowledge_reindex,
+    "notification.deliver": _notification_deliver,
 }
 
 
@@ -69,4 +77,9 @@ def register_all(*, replace: bool = False) -> list[str]:
     return registered
 
 
-__all__ = ["register_all", "ARCH10_JOB_TYPES", "ARCH11_JOB_TYPES"]
+__all__ = [
+    "ARCH10_JOB_TYPES",
+    "ARCH11_JOB_TYPES",
+    "ARCH12_JOB_TYPES",
+    "register_all",
+]
