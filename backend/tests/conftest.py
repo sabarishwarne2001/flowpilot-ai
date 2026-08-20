@@ -7,9 +7,9 @@ than metadata.create_all, which means the migration chain is exercised on
 every CI run — the from-scratch build path that has otherwise never been
 tested.
 
-Each test runs against the shared test engine, with tenant/user tables
-truncated between tests under session_replication_role = 'replica' so that
-append-only audit triggers are bypassed during test teardown.
+Each test runs against the shared test engine, with tenant/user/pricing tables
+truncated before and after each test under session_replication_role = 'replica'
+so that append-only audit and price triggers are bypassed during test cleanup.
 """
 
 from __future__ import annotations
@@ -159,25 +159,31 @@ def test_database() -> Generator[None, None, None]:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"'))
 
 
+def _truncate_all_test_tables() -> None:
+    """Helper to wipe test tables cleanly under replica mode."""
+    with global_engine.connect() as conn:
+        with conn.begin():
+            conn.execute(text("SET session_replication_role = 'replica';"))
+            conn.execute(
+                text(
+                    "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries CASCADE;"
+                )
+            )
+            conn.execute(text("SET session_replication_role = 'origin';"))
+
+
 @pytest.fixture()
 def db_session(test_database) -> Generator[Session, None, None]:
     """
-    A session connected to the test database, cleaned up after each test run.
+    A session connected to the test database, guaranteed clean before and after each test.
     """
+    _truncate_all_test_tables()
     session = SessionLocal()
     try:
         yield session
     finally:
         session.close()
-        with global_engine.connect() as conn:
-            with conn.begin():
-                conn.execute(text("SET session_replication_role = 'replica';"))
-                conn.execute(
-                    text(
-                        "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events CASCADE;"
-                    )
-                )
-                conn.execute(text("SET session_replication_role = 'origin';"))
+        _truncate_all_test_tables()
 
 
 @pytest.fixture()

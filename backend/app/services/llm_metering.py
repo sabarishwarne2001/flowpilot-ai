@@ -1,15 +1,11 @@
-"""ARCH-11.5 Step 1 & ARCH-12 Step 1/3 — LLM spend ceilings and token metering.
-
-Enforces pre-call spend limits (reserving prompt tokens and worst-case max output tokens)
-and post-call settlement with true provider counts or marked estimates inside transactional savepoints.
-Supports conversations, background document enrichment, and metered rolling digests.
-"""
+"""ARCH-11.5 Step 1, ARCH-12 Step 1/3, ARCH-14 Step 1 — LLM spend ceilings and token metering."""
 
 from __future__ import annotations
 
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -19,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.usage_event import UsageEvent
+from app.services import pricing_service
 from app.services import spend_control_service as spend
+from app.services.pricing_service import PriceUnavailableError, ResolvedPrice
 
 logger = logging.getLogger("app.services.llm_metering")
 
@@ -50,8 +48,10 @@ def estimate_enrichment_tokens(prompts: dict[str, str]) -> int:
     return sum(estimate_prompt_tokens(prompt) for prompt in prompts.values())
 
 
-def _cost_micros(tokens: int, cost_per_1k: float) -> int:
-    return int(round((tokens / 1000.0) * float(cost_per_1k or 0.0) * 1_000_000))
+def _provider_of(ai_settings: Any) -> str:
+    raw = getattr(ai_settings, "provider", None)
+    value = getattr(raw, "value", raw)
+    return str(value or "").strip().lower()
 
 
 @dataclass
@@ -65,9 +65,25 @@ class LLMReservation:
     resource_id: uuid.UUID
     estimated_input_tokens: int
     max_output_tokens: int
-    input_cost_per_1k: float
-    output_cost_per_1k: float
+    input_price: Optional[ResolvedPrice] = None
+    output_price: Optional[ResolvedPrice] = None
     settled: bool = False
+
+    @property
+    def input_cost_per_1k(self) -> float:
+        if self.input_price is None:
+            return 0.0
+        return pricing_service.per_1k_from_unit_micros(
+            self.input_price.unit_price_micros
+        )
+
+    @property
+    def output_cost_per_1k(self) -> float:
+        if self.output_price is None:
+            return 0.0
+        return pricing_service.per_1k_from_unit_micros(
+            self.output_price.unit_price_micros
+        )
 
     def key(self, suffix: str) -> str:
         return f"{self.scope}:{suffix}"
@@ -79,6 +95,9 @@ class LLMReservation:
             "resource_id": str(self.resource_id),
             "estimated_input_tokens": self.estimated_input_tokens,
             "max_output_tokens": self.max_output_tokens,
+            "price_book_version": (
+                self.input_price.price_book_version if self.input_price else None
+            ),
         }
 
 
@@ -110,8 +129,6 @@ def _reserve(
             resource_id=resource_id,
             estimated_input_tokens=0,
             max_output_tokens=0,
-            input_cost_per_1k=0.0,
-            output_cost_per_1k=0.0,
         )
 
     estimated_input = estimate_prompt_tokens(prompt)
@@ -122,15 +139,39 @@ def _reserve(
             "output ceiling there is no worst case to check a limit against."
         )
 
-    input_cost = float(getattr(ai_settings, "input_cost_per_1k_tokens", 0.0) or 0.0)
-    output_cost = float(getattr(ai_settings, "output_cost_per_1k_tokens", 0.0) or 0.0)
+    provider = _provider_of(ai_settings)
+    model = getattr(ai_settings, "model", None)
+    at = datetime.now(timezone.utc)
+
+    try:
+        input_price = pricing_service.resolve(
+            db, event_type=INPUT_EVENT, provider=provider, model=model, at=at
+        )
+        output_price = pricing_service.resolve(
+            db, event_type=OUTPUT_EVENT, provider=provider, model=model, at=at
+        )
+    except PriceUnavailableError as exc:
+        logger.error(
+            "llm.price_unavailable",
+            extra={
+                "scope": scope,
+                "provider": provider,
+                "model": model,
+                "organization_id": str(organization_id),
+            },
+        )
+        raise LLMMeteringError(
+            f"No published price covers {provider}/{model}. Refusing the "
+            "generation: an unpriced call is revenue that cannot be invoiced "
+            "and spend that cannot be capped."
+        ) from exc
 
     spend.ensure_within_limits(
         db,
         organization_id=organization_id,
         event_type=INPUT_EVENT,
         quantity=estimated_input,
-        cost_micros=_cost_micros(estimated_input, input_cost),
+        cost_micros=input_price.cost_micros(estimated_input),
         workspace_id=workspace_id,
     )
     spend.ensure_within_limits(
@@ -138,7 +179,7 @@ def _reserve(
         organization_id=organization_id,
         event_type=OUTPUT_EVENT,
         quantity=max_output,
-        cost_micros=_cost_micros(max_output, output_cost),
+        cost_micros=output_price.cost_micros(max_output),
         workspace_id=workspace_id,
     )
 
@@ -150,8 +191,8 @@ def _reserve(
         resource_id=resource_id,
         estimated_input_tokens=estimated_input,
         max_output_tokens=max_output,
-        input_cost_per_1k=input_cost,
-        output_cost_per_1k=output_cost,
+        input_price=input_price,
+        output_price=output_price,
     )
     logger.info("llm.reserved", extra=reservation.as_details())
     return reservation
@@ -217,13 +258,7 @@ def reserve_for_summary(
     prompt: str,
     ai_settings: Any,
 ) -> LLMReservation:
-    """Rolling conversation digest (ARCH-12 Step 3).
-
-    This is the second place in the system where generation happens with
-    nobody watching — the first being enrichment. The scope is keyed on the
-    turn so a retried request collides on the idempotency index instead of
-    billing the same digest twice.
-    """
+    """Rolling conversation digest (ARCH-12 Step 3)."""
     return _reserve(
         db,
         organization_id=organization_id,
@@ -239,7 +274,6 @@ def reserve_for_summary(
 def already_recorded(
     db: Session, *, organization_id: uuid.UUID, scope: str
 ) -> bool:
-    """Has this exact operation already been billed and committed?"""
     return (
         db.execute(
             select(UsageEvent.id)
@@ -253,6 +287,47 @@ def already_recorded(
     )
 
 
+def _settlement_price(
+    db: Session,
+    *,
+    event_type: str,
+    provider: str,
+    model: str,
+    occurred_at: datetime,
+    reserved: Optional[ResolvedPrice],
+) -> Optional[ResolvedPrice]:
+    try:
+        return pricing_service.resolve(
+            db,
+            event_type=event_type,
+            provider=provider,
+            model=model,
+            at=occurred_at,
+        )
+    except PriceUnavailableError:
+        if reserved is not None and reserved.provider == provider:
+            logger.warning(
+                "llm.settle_price_reused_from_reservation",
+                extra={
+                    "event_type": event_type,
+                    "provider": provider,
+                    "model": model,
+                    "price_book_version": reserved.price_book_version,
+                },
+            )
+            return reserved
+        logger.critical(
+            "llm.settle_price_unavailable",
+            extra={
+                "event_type": event_type,
+                "provider": provider,
+                "model": model,
+                "occurred_at": occurred_at.isoformat(),
+            },
+        )
+        return None
+
+
 def _record(
     db: Session,
     *,
@@ -260,15 +335,32 @@ def _record(
     event_type: str,
     suffix: str,
     quantity: int,
-    cost_per_1k: float,
+    price: Optional[ResolvedPrice],
     provider: str,
     model: str,
+    occurred_at: datetime,
     details: dict[str, Any],
 ) -> bool:
-    """One idempotent row inside a SAVEPOINT. False if already recorded."""
     from app.services import usage_service
 
     key = reservation.key(suffix)
+
+    if price is not None:
+        cost = price.cost_micros(quantity)
+        price_details = price.as_details()
+        price_book_id = price.price_book_id
+        unit_price_micros = price.unit_price_micros
+    else:
+        cost = None
+        price_details = {
+            "price_source": "unavailable",
+            "price_unavailable": True,
+            "price_unavailable_provider": provider,
+            "price_unavailable_model": model,
+        }
+        price_book_id = None
+        unit_price_micros = None
+
     savepoint = db.begin_nested()
     try:
         usage_service.record_usage(
@@ -276,13 +368,16 @@ def _record(
             organization_id=reservation.organization_id,
             event_type=event_type,
             quantity=Decimal(quantity),
-            cost_micros=_cost_micros(quantity, cost_per_1k),
+            cost_micros=cost,
+            price_book_id=price_book_id,
+            unit_price_micros=unit_price_micros,
             workspace_id=reservation.workspace_id,
             resource_type=reservation.resource_type,
             resource_id=reservation.resource_id,
             provider=provider,
+            occurred_at=occurred_at,
             idempotency_key=key,
-            details={"model": model, **details},
+            details={"model": model, **price_details, **details},
         )
         savepoint.commit()
         return True
@@ -304,24 +399,45 @@ def settle(
     token_usage: Any,
     estimated: bool = False,
 ) -> dict[str, Any]:
-    """Record the provider's counts. Flushes; the caller commits.
-
-    ARCH-12 Step 1: `estimated=True` marks a row whose counts came from a
-    local emission count rather than provider usage metadata, which is what a
-    stream abandoned before its final chunk produces. The row is written
-    either way — the provider billed for the tokens whether or not the client
-    stayed to receive them — and the flag is what makes ARCH-14's provider
-    reconciliation (A8) able to quantify drift instead of merely observing it.
-
-    A missing row cannot be reconciled. An estimate you have flagged can.
-    """
     if not settings.LLM_METERING_ENABLED or reservation.settled:
         return {}
 
-    provider = str(getattr(token_usage, "provider", "unknown"))
+    provider = str(getattr(token_usage, "provider", "unknown")).strip().lower()
     model = str(getattr(token_usage, "model", "unknown"))
     prompt_tokens = int(getattr(token_usage, "prompt_tokens", 0) or 0)
     completion_tokens = int(getattr(token_usage, "completion_tokens", 0) or 0)
+    occurred_at = datetime.now(timezone.utc)
+
+    input_price = _settlement_price(
+        db,
+        event_type=INPUT_EVENT,
+        provider=provider,
+        model=model,
+        occurred_at=occurred_at,
+        reserved=reservation.input_price,
+    )
+    output_price = _settlement_price(
+        db,
+        event_type=OUTPUT_EVENT,
+        provider=provider,
+        model=model,
+        occurred_at=occurred_at,
+        reserved=reservation.output_price,
+    )
+
+    failed_over = (
+        reservation.input_price is not None
+        and reservation.input_price.provider != provider
+    )
+    if failed_over:
+        logger.warning(
+            "llm.settled_on_fallback_provider",
+            extra={
+                "reserved_provider": reservation.input_price.provider,
+                "settled_provider": provider,
+                "scope": reservation.scope,
+            },
+        )
 
     drift = prompt_tokens - reservation.estimated_input_tokens
     recorded_input = _record(
@@ -330,13 +446,15 @@ def settle(
         event_type=INPUT_EVENT,
         suffix="input",
         quantity=prompt_tokens,
-        cost_per_1k=reservation.input_cost_per_1k,
+        price=input_price,
         provider=provider,
         model=model,
+        occurred_at=occurred_at,
         details={
             "estimated_tokens": reservation.estimated_input_tokens,
             "estimate_drift_tokens": drift,
             "estimated": estimated,
+            "failed_over": failed_over,
         },
     )
     recorded_output = _record(
@@ -345,13 +463,15 @@ def settle(
         event_type=OUTPUT_EVENT,
         suffix="output",
         quantity=completion_tokens,
-        cost_per_1k=reservation.output_cost_per_1k,
+        price=output_price,
         provider=provider,
         model=model,
+        occurred_at=occurred_at,
         details={
             "max_output_tokens": reservation.max_output_tokens,
             "hit_output_ceiling": completion_tokens >= reservation.max_output_tokens,
             "estimated": estimated,
+            "failed_over": failed_over,
         },
     )
     reservation.settled = True
@@ -365,6 +485,10 @@ def settle(
         "recorded_input": recorded_input,
         "recorded_output": recorded_output,
         "estimated": estimated,
+        "price_book_version": (
+            input_price.price_book_version if input_price else None
+        ),
+        "price_fallback": bool(input_price and input_price.fallback),
     }
     logger.info("llm.settled", extra={**reservation.as_details(), **summary})
     return summary

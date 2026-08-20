@@ -1,9 +1,5 @@
 """
 Database models centralized import and registry gateway for FlowPilot AI.
-
-Exposes declarative base structures to allow the Alembic migration suite 
-to dynamically compile schema revisions. All database models must be 
-imported here to register their metadata prior to running migrations.
 """
 
 from app.db.base import Base
@@ -17,9 +13,17 @@ from app.models.job import (
 )
 from app.models.automation import AutomationRule, AutomationLog
 from app.models.notification import Notification
-from app.models.assistant import Conversation, ConversationMessage
-from app.models.email_settings import EmailSettings
-from app.models.email_settings import EmailEncryption
+from app.models.notification_delivery import (
+    NotificationDelivery,
+    NotificationDeliveryStatus,
+)
+from app.models.assistant import (
+    Conversation,
+    ConversationMessage,
+    StreamState,
+    FinishReason,
+)
+from app.models.email_settings import EmailSettings, EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.organization_invitation import (
     OrganizationInvitation,
@@ -56,14 +60,15 @@ from app.models.audit_log import (
     AuditLog,
     AuditResourceType,
 )
-from app.models.outbox_event import OutboxEvent, OutboxEventStatus  # noqa: F401
-from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus  # noqa: F401
-from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus  # noqa: F401
+from app.models.outbox_event import OutboxEvent, OutboxEventStatus
+from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus
+from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus
 from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt, AttemptDisposition
 
-from app.models.usage_event import UsageEvent  # noqa: F401
-from app.models.spend_limit import SpendLimit, SpendLimitPeriod  # noqa: F401
-from app.models.document_chunk import DocumentChunk  # noqa: F401
+from app.models.usage_event import UsageEvent
+from app.models.spend_limit import SpendLimit, SpendLimitPeriod
+from app.models.document_chunk import DocumentChunk
+from app.models.price_book import PriceBook, PriceBookEntry
 
 __all__ = [
     "Base",
@@ -76,8 +81,12 @@ __all__ = [
     "AutomationRule",
     "AutomationLog",
     "Notification",
+    "NotificationDelivery",
+    "NotificationDeliveryStatus",
     "Conversation",
     "ConversationMessage",
+    "StreamState",
+    "FinishReason",
     "EmailSettings",
     "EmailEncryption",
     "Workspace",
@@ -120,4 +129,6 @@ __all__ = [
     "SpendLimit",
     "SpendLimitPeriod",
     "DocumentChunk",
+    "PriceBook",
+    "PriceBookEntry",
 ]

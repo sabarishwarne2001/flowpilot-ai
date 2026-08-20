@@ -2,6 +2,7 @@
 Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
 ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
 ARCH-12 Step 1 & 3: Streaming prompt preparation, system prompt isolation, and metered prompt execution.
+ARCH-14 Step 1 & 6: Platform-owned pricing and Vertex billing label guard.
 """
 
 from __future__ import annotations
@@ -285,10 +286,7 @@ class LLMService:
                 prompt_tokens=completion.usage.prompt_tokens,
                 completion_tokens=completion.usage.completion_tokens,
                 total_tokens=completion.usage.total_tokens,
-                estimated_cost=(
-                    (completion.usage.prompt_tokens / 1000) * ai_settings.input_cost_per_1k_tokens
-                    + (completion.usage.completion_tokens / 1000) * ai_settings.output_cost_per_1k_tokens
-                ),
+                estimated_cost=0.0,
             ),
         )
 
@@ -299,6 +297,14 @@ class LLMService:
         temperature: float,
         ai_settings: AISettings,
     ) -> tuple[str, Any]:
+        if settings.GEMINI_BILLING_LABELS_ENABLED and not settings.GEMINI_USE_VERTEX:
+            raise ValueError(
+                "GEMINI_BILLING_LABELS_ENABLED requires the Vertex backend. "
+                "google-generativeai cannot send labels, and google-genai refuses "
+                "them against the Gemini Developer API. Reconciliation for Gemini "
+                "is ALLOCATED until the Vertex migration lands; see ARCH-14 §14.6."
+            )
+
         logger.info("Sending request to Gemini.")
         from google.generativeai.types import GenerationConfig
 
@@ -337,10 +343,7 @@ class LLMService:
                 prompt_tokens=usage.prompt_token_count,
                 completion_tokens=usage.candidates_token_count,
                 total_tokens=usage.total_token_count,
-                estimated_cost=(
-                    (usage.prompt_token_count / 1000) * ai_settings.input_cost_per_1k_tokens
-                    + (usage.candidates_token_count / 1000) * ai_settings.output_cost_per_1k_tokens
-                ),
+                estimated_cost=0.0,
             )
 
         try:
@@ -374,7 +377,6 @@ class LLMService:
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
     ) -> tuple[str, TokenUsage | None]:
-        """Reserve, call, settle for enrichment tasks."""
         from app.core.request_context import stage
         from app.services import llm_metering
 
@@ -461,7 +463,6 @@ class LLMService:
     def enrichment_prompts(
         self, *, text: str, document_classification: str = "Other"
     ) -> dict[str, str]:
-        """Exposed so callers can price enrichment before execution."""
         return {
             "classify": self._build_classification_prompt(text),
             "entities": self._build_entity_prompt(
@@ -607,31 +608,14 @@ class LLMService:
 
         return response.strip(), token_usage
 
-    # ------------------------------------------------------------------
-    # ARCH-12 — the streaming path needs the prompt in pieces.
-    # ------------------------------------------------------------------
-
     def execute_prompt(
         self, *, prompt: str, temperature: float, ai_settings: AISettings
     ) -> tuple[str, TokenUsage]:
-        """Public wrapper over `_execute_query`.
-
-        `context_budget_service` needs to make one metered, non-streaming call
-        for the rolling digest. Reaching into `_execute_query` from another
-        module would make a private method load-bearing across a package
-        boundary; this names the contract instead.
-        """
         return self._execute_query(
             prompt=prompt, temperature=temperature, ai_settings=ai_settings
         )
 
     def system_prompt_for(self, *, query: str, ai_settings: AISettings) -> str:
-        """The fixed, never-trimmed part of the window.
-
-        ARCH-12 Step 3 allocates shares of the window *after* subtracting
-        this, so it has to be measurable on its own — which means the
-        template's static text with the three variable slots empty.
-        """
         intent = self._detect_prompt_intent(query)
         template = (
             RAG_SYNTHESIS_PROMPT_TEMPLATE
@@ -654,14 +638,6 @@ class LLMService:
         digest: str,
         ai_settings: AISettings,
     ) -> str:
-        """Assemble the prompt from an already-budgeted payload.
-
-        Note what is absent: there is no post-budget context truncation here.
-        The budget allocator has already sized every component.
-
-        `fenced.render_for_prompt()` is the single audited exit from the R33
-        boundary. Grep for that method name to enumerate every call site.
-        """
         intent = self._detect_prompt_intent(query)
         template = (
             RAG_SYNTHESIS_PROMPT_TEMPLATE

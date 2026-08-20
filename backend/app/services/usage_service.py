@@ -1,24 +1,11 @@
-"""ARCH-10 Step 2 — the metering write path.
-
-`record_usage()` is to `usage_events` what `outbox_service.emit()` is to
-`outbox_events`: it validates, it flushes, it never commits. The caller owns
-the transaction, which is what makes the guarantee meaningful — a document
-that was extracted and a usage row that says so either both exist or neither
-does. A metering write that commits independently would bill for work that
-rolled back, which is worse than not billing at all because it will be
-believed.
-
-The single rule for every future call site: **record usage in the same
-transaction as the work, at the moment it occurs.** Retrofitting is the
-failure mode this whole step exists to prevent.
-"""
+"""ARCH-10 Step 2 & ARCH-14 Step 1b — the metering write path."""
 
 from __future__ import annotations
 
 import logging
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from sqlalchemy import func, select
@@ -48,8 +35,6 @@ _SENSITIVE_KEY_FRAGMENTS: tuple[str, ...] = (
     "private_key",
 )
 
-#: Metric counter keys that contain 'token' but represent quantities/limits,
-#: not auth credentials or secrets.
 _EXEMPT_DETAIL_KEYS: frozenset[str] = frozenset(
     {
         "truncated_tokens",
@@ -71,7 +56,7 @@ class UsageError(Exception):
 
 
 class UnknownUsageTypeError(UsageError):
-    """The event type is not in the ARCH-10 §Step 2 vocabulary."""
+    """The event type is not in the ARCH-10 vocabulary."""
 
 
 class UsageQuantityError(UsageError):
@@ -86,18 +71,13 @@ class UsageTransactionBoundaryError(UsageError):
     """record_usage() was called outside an active transaction."""
 
 
-# ============================================================================
-# Validation helpers
-# ============================================================================
-
-
 def _assert_in_transaction(db: Session, *, required: bool) -> None:
     if not required:
         return
     if not db.in_transaction():
         try:
             db.begin()
-        except Exception:  # noqa: BLE001 — already inside one
+        except Exception:  # noqa: BLE001
             pass
     if not db.in_transaction():
         raise UsageTransactionBoundaryError(
@@ -169,11 +149,6 @@ def _attribution(
     return cols["actor_id"], cols["api_key_id"], resolved.audit_details()
 
 
-# ============================================================================
-# The write path
-# ============================================================================
-
-
 def record_usage(
     db: Session,
     *,
@@ -182,6 +157,8 @@ def record_usage(
     quantity: Any,
     workspace_id: Optional[uuid.UUID] = None,
     cost_micros: Optional[int] = None,
+    price_book_id: Optional[uuid.UUID] = None,
+    unit_price_micros: Optional[Any] = None,
     provider: Optional[str] = None,
     resource_type: Optional[str] = None,
     resource_id: Optional[uuid.UUID] = None,
@@ -193,13 +170,7 @@ def record_usage(
     allow_sampled: bool = False,
     require_active_transaction: bool = True,
 ) -> UsageEvent:
-    """Record one billable occurrence. Flushes; the caller commits.
-
-    `idempotency_key` is strongly recommended for anything a worker produces.
-    Derive it deterministically from the unit of work — `f"ocr:{job_id}:{page}"`
-    — so a lease expiry and re-run collides on the partial unique index
-    instead of billing twice.
-    """
+    """Record one billable occurrence. Flushes; the caller commits."""
     if organization_id is None:
         raise UsageError("usage_service: organization_id is required.")
 
@@ -233,6 +204,34 @@ def record_usage(
         if cost_micros < 0:
             raise UsageError("cost_micros must be >= 0.")
 
+    # ARCH-14 Step 1. The two price columns travel together
+    if (price_book_id is None) != (unit_price_micros is None):
+        raise UsageError(
+            "price_book_id and unit_price_micros must both be set or both be "
+            "None. Resolve the price through pricing_service.resolve(), which "
+            "returns them together."
+        )
+
+    resolved_unit_price: Optional[Decimal] = None
+    if unit_price_micros is not None:
+        resolved_unit_price = Decimal(str(unit_price_micros))
+        if resolved_unit_price < 0:
+            raise UsageError("unit_price_micros must be >= 0.")
+        if cost_micros is not None:
+            expected = int(
+                (qty * resolved_unit_price).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
+                )
+            )
+            if cost_micros != expected:
+                raise UsageError(
+                    f"cost_micros {cost_micros} does not follow from "
+                    f"quantity {qty} * unit_price_micros {resolved_unit_price} "
+                    f"(= {expected}). 14.8 reproduces invoices from exactly "
+                    "this arithmetic; a row that fails it is a row that cannot "
+                    "be defended."
+                )
+
     actor_id, api_key_id, principal_details = _attribution(principal)
     merged_details = {**principal_details, **(_sanitize_details(details) or {})}
 
@@ -243,6 +242,8 @@ def record_usage(
         unit=descriptor.unit.value,
         quantity=qty,
         cost_micros=cost_micros,
+        price_book_id=price_book_id,
+        unit_price_micros=resolved_unit_price,
         provider=provider or descriptor.default_provider,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -265,6 +266,7 @@ def record_usage(
             "event_type": descriptor.name,
             "quantity": str(qty),
             "cost_micros": cost_micros,
+            "price_book_id": str(price_book_id) if price_book_id else None,
             "organization_id": str(organization_id),
             "job_id": str(job_id) if job_id else None,
             "principal": merged_details.get("principal"),
@@ -279,21 +281,11 @@ def record_usage_many(
     *,
     require_active_transaction: bool = True,
 ) -> list[UsageEvent]:
-    """Record several occurrences in one transaction.
-
-    Deliberately loops over `record_usage` rather than bulk-inserting: the
-    validation is the value here, and a page count of 40 is not a bulk load.
-    """
     _assert_in_transaction(db, required=require_active_transaction)
     return [
         record_usage(db, require_active_transaction=False, **dict(spec))
         for spec in specs
     ]
-
-
-# ============================================================================
-# Read helpers — used by Step 3 and, later, ARCH-14
-# ============================================================================
 
 
 def usage_totals(
@@ -305,13 +297,6 @@ def usage_totals(
     event_types: Optional[Iterable[str]] = None,
     for_update: bool = False,
 ) -> dict[str, tuple[Decimal, int]]:
-    """Return {event_type: (total_quantity, total_cost_micros)} for a window.
-
-    `for_update` is unused on the aggregate itself — PostgreSQL will not lock
-    an aggregated result — and exists only to document intent at the call
-    site. Serialisation of concurrent spend checks is achieved by locking the
-    `spend_limits` row, not the ledger; see spend_control_service.
-    """
     stmt = (
         select(
             UsageEvent.event_type,
@@ -355,7 +340,6 @@ def total_cost_micros(
 
 
 def is_system_attributed(event: UsageEvent) -> bool:
-    """True when the row carries the ARCH-09 §B.10 SYSTEM shape."""
     return (
         event.actor_id is None
         and event.api_key_id is None

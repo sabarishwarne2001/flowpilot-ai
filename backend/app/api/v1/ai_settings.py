@@ -29,18 +29,18 @@ async def get_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> AISettingsResponse:
-    settings = crud.get_ai_settings(
+    settings_obj = crud.get_ai_settings(
         db,
         workspace_id=context.workspace_id,
     )
 
-    if settings is None:
+    if settings_obj is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="AI settings not configured.",
         )
 
-    return settings
+    return ai_settings_service.with_book_prices(db, settings_obj)
 
 
 @router.put(
@@ -53,7 +53,7 @@ async def upsert_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> AISettingsResponse:
-    settings = crud.upsert_ai_settings(
+    settings_obj = crud.upsert_ai_settings(
         db,
         workspace_id=context.workspace_id,
         updated_by_user_id=context.user_id,
@@ -66,7 +66,7 @@ async def upsert_ai_settings(
         context.user_id,
     )
 
-    return settings
+    return ai_settings_service.with_book_prices(db, settings_obj)
 
 
 @router.get(
