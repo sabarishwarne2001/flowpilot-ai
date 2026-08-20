@@ -69,6 +69,15 @@ from app.models.usage_event import UsageEvent
 from app.models.spend_limit import SpendLimit, SpendLimitPeriod
 from app.models.document_chunk import DocumentChunk
 from app.models.price_book import PriceBook, PriceBookEntry
+from app.models.usage_rollup import (
+    NIL_UUID,
+    TOTAL_EVENT_TYPE,
+    RollupGrain,
+    RollupGranularity,
+    RollupWindow,
+    RollupWindowStatus,
+    UsageRollup,
+)
 
 __all__ = [
     "Base",
@@ -131,4 +140,11 @@ __all__ = [
     "DocumentChunk",
     "PriceBook",
     "PriceBookEntry",
+    "UsageRollup",
+    "RollupWindow",
+    "RollupGrain",
+    "RollupGranularity",
+    "RollupWindowStatus",
+    "NIL_UUID",
+    "TOTAL_EVENT_TYPE",
 ]

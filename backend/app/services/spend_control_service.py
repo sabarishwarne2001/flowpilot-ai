@@ -1,4 +1,4 @@
-"""ARCH-10 Step 3 — per-tenant spend ceilings, enforced before the call."""
+"""ARCH-10 Step 3 & ARCH-14 Step 14.3 — per-tenant spend ceilings, enforced via bounded reads."""
 
 from __future__ import annotations
 
@@ -306,13 +306,14 @@ def ensure_within_limits(
     for limit in checks:
         since = period_start(limit.period)
 
+        # ARCH-14 Step 14.3 (finding B2). Bounded reads instead of unbounded scans
         if limit.limit_key == TOTAL_COST_KEY:
-            current_cost = usage_service.total_cost_micros(
+            current_cost = usage_service.total_cost_micros_bounded(
                 db, organization_id=organization_id, since=since
             )
             current_qty = Decimal(0)
         else:
-            totals = usage_service.usage_totals(
+            totals = usage_service.usage_totals_bounded(
                 db,
                 organization_id=organization_id,
                 since=since,
@@ -457,7 +458,6 @@ def set_limit(
             "A limit must set max_quantity, max_cost_micros, or both."
         )
 
-    # Deactivate existing limits in-database prior to inserting the new active limit
     existing = db.execute(
         select(SpendLimit.id)
         .where(

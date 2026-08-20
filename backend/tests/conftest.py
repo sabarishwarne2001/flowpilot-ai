@@ -7,9 +7,9 @@ than metadata.create_all, which means the migration chain is exercised on
 every CI run — the from-scratch build path that has otherwise never been
 tested.
 
-Each test runs against the shared test engine, with tenant/user/pricing tables
-truncated before and after each test under session_replication_role = 'replica'
-so that append-only audit and price triggers are bypassed during test cleanup.
+Each test runs against the shared test engine, with tenant/user/pricing/rollup
+tables truncated before and after each test under session_replication_role = 'replica'
+so that append-only audit, price, and rollup seal triggers are bypassed during test cleanup.
 """
 
 from __future__ import annotations
@@ -166,7 +166,7 @@ def _truncate_all_test_tables() -> None:
             conn.execute(text("SET session_replication_role = 'replica';"))
             conn.execute(
                 text(
-                    "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries CASCADE;"
+                    "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries, usage_rollups, rollup_windows CASCADE;"
                 )
             )
             conn.execute(text("SET session_replication_role = 'origin';"))

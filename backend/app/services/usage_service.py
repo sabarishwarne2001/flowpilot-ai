@@ -1,9 +1,10 @@
-"""ARCH-10 Step 2 & ARCH-14 Step 1b — the metering write path."""
+"""ARCH-10 Step 2, ARCH-14 Step 1b & ARCH-14 Step 14.3 — the metering write path and bounded spend reads."""
 
 from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable, Mapping, Optional, Sequence
@@ -11,6 +12,7 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.principal import Principal, PrincipalKind, get_current_principal
 from app.core.usage_events import (
     EmissionKind,
@@ -19,6 +21,7 @@ from app.core.usage_events import (
     resolve,
 )
 from app.models.usage_event import UsageEvent
+from app.models.usage_rollup import TOTAL_EVENT_TYPE, UsageRollup
 
 logger = logging.getLogger("app.services.usage")
 
@@ -170,7 +173,6 @@ def record_usage(
     allow_sampled: bool = False,
     require_active_transaction: bool = True,
 ) -> UsageEvent:
-    """Record one billable occurrence. Flushes; the caller commits."""
     if organization_id is None:
         raise UsageError("usage_service: organization_id is required.")
 
@@ -288,6 +290,11 @@ def record_usage_many(
     ]
 
 
+# ============================================================================
+# Read helpers — used by Step 3 and direct verification
+# ============================================================================
+
+
 def usage_totals(
     db: Session,
     *,
@@ -344,4 +351,222 @@ def is_system_attributed(event: UsageEvent) -> bool:
         event.actor_id is None
         and event.api_key_id is None
         and (event.details or {}).get("principal") == PrincipalKind.SYSTEM.value
+    )
+
+
+# ============================================================================
+# ARCH-14 Step 14.3 — bounded reads (finding B2)
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class ReadProfile:
+    """How many rows each half of a bounded read actually touched."""
+
+    rollup_rows: int
+    event_rows: int
+
+    @property
+    def total(self) -> int:
+        return self.rollup_rows + self.event_rows
+
+
+def _is_hour_aligned(moment: datetime) -> bool:
+    if moment.minute or moment.second or moment.microsecond:
+        logger.error(
+            "usage.bounded_read_unaligned_since",
+            extra={"since": moment.isoformat()},
+        )
+        return False
+    return True
+
+
+def _rollup_totals(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    since: datetime,
+    until: datetime,
+    event_types: Optional[Iterable[str]],
+) -> dict[str, tuple[Decimal, int]]:
+    stmt = (
+        select(
+            UsageRollup.event_type,
+            func.coalesce(func.sum(UsageRollup.quantity), 0),
+            func.coalesce(func.sum(UsageRollup.cost_micros), 0),
+        )
+        .where(
+            UsageRollup.organization_id == organization_id,
+            UsageRollup.grain == "ORG_TOTAL",
+            UsageRollup.granularity == "HOUR",
+            UsageRollup.bucket_start >= since,
+            UsageRollup.bucket_start <= until,
+        )
+        .group_by(UsageRollup.event_type)
+    )
+    if event_types is not None:
+        stmt = stmt.where(UsageRollup.event_type.in_(list(event_types)))
+    else:
+        stmt = stmt.where(UsageRollup.event_type != TOTAL_EVENT_TYPE)
+
+    return {
+        row[0]: (Decimal(row[1]), int(row[2])) for row in db.execute(stmt).all()
+    }
+
+
+def _tail_totals(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    since: datetime,
+    until: Optional[datetime],
+    event_types: Optional[Iterable[str]],
+) -> dict[str, tuple[Decimal, int]]:
+    stmt = (
+        select(
+            UsageEvent.event_type,
+            func.coalesce(func.sum(UsageEvent.quantity), 0),
+            func.coalesce(func.sum(UsageEvent.cost_micros), 0),
+        )
+        .where(
+            UsageEvent.organization_id == organization_id,
+            UsageEvent.aggregated_at.is_(None),
+            UsageEvent.occurred_at >= since,
+        )
+        .group_by(UsageEvent.event_type)
+    )
+    if until is not None:
+        stmt = stmt.where(UsageEvent.occurred_at < until)
+    if event_types is not None:
+        wanted = [t for t in event_types if t != TOTAL_EVENT_TYPE]
+        if not wanted:
+            return {}
+        stmt = stmt.where(UsageEvent.event_type.in_(wanted))
+
+    return {
+        row[0]: (Decimal(row[1]), int(row[2])) for row in db.execute(stmt).all()
+    }
+
+
+def usage_totals_bounded(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    since: datetime,
+    until: Optional[datetime] = None,
+    event_types: Optional[Iterable[str]] = None,
+    now: Optional[datetime] = None,
+) -> dict[str, tuple[Decimal, int]]:
+    """`usage_totals`, read from rollups plus the unfolded tail."""
+    if not getattr(settings, "SPEND_USE_ROLLUP_READS", True):
+        return usage_totals(
+            db,
+            organization_id=organization_id,
+            since=since,
+            until=until,
+            event_types=event_types,
+        )
+    if not _is_hour_aligned(since):
+        return usage_totals(
+            db,
+            organization_id=organization_id,
+            since=since,
+            until=until,
+            event_types=event_types,
+        )
+
+    horizon = until or (now or datetime.now(timezone.utc))
+    merged = _rollup_totals(
+        db,
+        organization_id=organization_id,
+        since=since,
+        until=horizon,
+        event_types=event_types,
+    )
+    for event_type, (qty, cost) in _tail_totals(
+        db,
+        organization_id=organization_id,
+        since=since,
+        until=until,
+        event_types=event_types,
+    ).items():
+        prior_qty, prior_cost = merged.get(event_type, (Decimal(0), 0))
+        merged[event_type] = (prior_qty + qty, prior_cost + cost)
+    return merged
+
+
+def total_cost_micros_bounded(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    since: datetime,
+    until: Optional[datetime] = None,
+    now: Optional[datetime] = None,
+) -> int:
+    """Total cost across every event type, in at most 744 + backlog rows."""
+    if not getattr(settings, "SPEND_USE_ROLLUP_READS", True) or not _is_hour_aligned(
+        since
+    ):
+        return total_cost_micros(
+            db, organization_id=organization_id, since=since, until=until
+        )
+
+    horizon = until or (now or datetime.now(timezone.utc))
+
+    rolled = db.execute(
+        select(func.coalesce(func.sum(UsageRollup.cost_micros), 0)).where(
+            UsageRollup.organization_id == organization_id,
+            UsageRollup.grain == "ORG_TOTAL",
+            UsageRollup.granularity == "HOUR",
+            UsageRollup.event_type == TOTAL_EVENT_TYPE,
+            UsageRollup.bucket_start >= since,
+            UsageRollup.bucket_start <= horizon,
+        )
+    ).scalar_one()
+
+    tail_stmt = select(func.coalesce(func.sum(UsageEvent.cost_micros), 0)).where(
+        UsageEvent.organization_id == organization_id,
+        UsageEvent.aggregated_at.is_(None),
+        UsageEvent.occurred_at >= since,
+    )
+    if until is not None:
+        tail_stmt = tail_stmt.where(UsageEvent.occurred_at < until)
+
+    return int(rolled) + int(db.execute(tail_stmt).scalar_one())
+
+
+def bounded_read_profile(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    since: datetime,
+    until: Optional[datetime] = None,
+    event_type: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> ReadProfile:
+    """Count the rows a bounded read touches. For Gate 14.3 and for ops."""
+    horizon = until or (now or datetime.now(timezone.utc))
+
+    rollup_stmt = select(func.count()).select_from(UsageRollup).where(
+        UsageRollup.organization_id == organization_id,
+        UsageRollup.grain == "ORG_TOTAL",
+        UsageRollup.granularity == "HOUR",
+        UsageRollup.bucket_start >= since,
+        UsageRollup.bucket_start <= horizon,
+    )
+    event_stmt = select(func.count()).select_from(UsageEvent).where(
+        UsageEvent.organization_id == organization_id,
+        UsageEvent.aggregated_at.is_(None),
+        UsageEvent.occurred_at >= since,
+    )
+    if event_type is not None:
+        rollup_stmt = rollup_stmt.where(UsageRollup.event_type == event_type)
+        if event_type != TOTAL_EVENT_TYPE:
+            event_stmt = event_stmt.where(UsageEvent.event_type == event_type)
+    if until is not None:
+        event_stmt = event_stmt.where(UsageEvent.occurred_at < until)
+
+    return ReadProfile(
+        rollup_rows=int(db.execute(rollup_stmt).scalar_one()),
+        event_rows=int(db.execute(event_stmt).scalar_one()),
     )

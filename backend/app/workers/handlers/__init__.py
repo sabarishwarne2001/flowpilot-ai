@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4 & ARCH-12 Step 7 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7 & ARCH-14 Step 2 — job handler registration."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ ARCH10_JOB_TYPES: frozenset[str] = frozenset(
 )
 ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
 ARCH12_JOB_TYPES: frozenset[str] = frozenset({"notification.deliver"})
+ARCH14_JOB_TYPES: frozenset[str] = frozenset({"usage.rollup", "usage.seal"})
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -46,12 +47,26 @@ def _notification_deliver(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_notification_deliver(payload)
 
 
+def _usage_rollup(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.rollup import handle_usage_rollup
+
+    return handle_usage_rollup(payload)
+
+
+def _usage_seal(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.rollup import handle_usage_seal
+
+    return handle_usage_seal(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
     "storage.sample": _storage_sample,
     "knowledge.reindex": _knowledge_reindex,
     "notification.deliver": _notification_deliver,
+    "usage.rollup": _usage_rollup,
+    "usage.seal": _usage_seal,
 }
 
 
@@ -81,5 +96,6 @@ __all__ = [
     "ARCH10_JOB_TYPES",
     "ARCH11_JOB_TYPES",
     "ARCH12_JOB_TYPES",
+    "ARCH14_JOB_TYPES",
     "register_all",
 ]

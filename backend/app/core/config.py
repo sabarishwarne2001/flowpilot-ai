@@ -299,9 +299,12 @@ class Settings(BaseSettings):
 
     # ---- ARCH-14: pricing -------------------------------------------------
     PRICE_BOOK_CACHE_TTL_SECONDS: float = 300.0
-
-    # ---- ARCH-14: rollups (Step 14.2) -------------------------------------
     ROLLUP_SEAL_GRACE_HOURS: int = 26
+
+    # ---- ARCH-14 Step 14.2 & 14.3: rollups and bounded spend reads --------
+    ROLLUP_BATCH_SIZE: int = 2_000
+    ROLLUP_MAX_BATCHES: int = 20
+    SPEND_USE_ROLLUP_READS: bool = True
 
     # ---- ARCH-14 Step 14.6: Gemini billing labels -------------------------
     GEMINI_BILLING_LABELS_ENABLED: bool = False
