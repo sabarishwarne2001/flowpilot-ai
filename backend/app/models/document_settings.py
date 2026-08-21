@@ -38,7 +38,6 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
-    #: ARCH-11 Step 3: Token-aware chunking configuration
     chunk_size_tokens: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -53,14 +52,12 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         server_default="10",
     )
 
-    #: ARCH-11.5 Step 4: Per-workspace intent configuration
     intent_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=True,
         comment="ARCH-11.5. {intent: [keyword, ...]}. NULL follows platform defaults.",
     )
 
-    #: DEPRECATED (ARCH-11 Step 3). Character-based. Dropped in Step 9 CONTRACT.
     chunk_size: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -119,6 +116,15 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         Boolean,
         nullable=False,
         default=False,
+    )
+
+    # ---- ARCH-13 Step 13.7 (F7) ---------------------------------------
+    verification_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    verification_agents: Mapped[Union[int, None]] = mapped_column(
+        Integer, nullable=True
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(

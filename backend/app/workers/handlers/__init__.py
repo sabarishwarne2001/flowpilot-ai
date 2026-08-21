@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-14 Step 2 & ARCH-14 Step 5 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5 — job handler registration."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
 ARCH12_JOB_TYPES: frozenset[str] = frozenset({"notification.deliver"})
 ARCH14_JOB_TYPES: frozenset[str] = frozenset(
     {"usage.rollup", "usage.seal", "usage.reconcile"}
+)
+ARCH13_JOB_TYPES: frozenset[str] = frozenset(
+    {"automation.execute", "document.verify"}
 )
 
 
@@ -67,6 +70,18 @@ def _usage_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_usage_reconcile(payload)
 
 
+def _automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.automation import handle_automation_execute
+
+    return handle_automation_execute(payload)
+
+
+def _document_verify(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.verification import handle_document_verify
+
+    return handle_document_verify(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -76,6 +91,8 @@ _HANDLERS = {
     "usage.rollup": _usage_rollup,
     "usage.seal": _usage_seal,
     "usage.reconcile": _usage_reconcile,
+    "automation.execute": _automation_execute,
+    "document.verify": _document_verify,
 }
 
 
@@ -104,6 +121,7 @@ __all__ = [
     "ARCH10_JOB_TYPES",
     "ARCH11_JOB_TYPES",
     "ARCH12_JOB_TYPES",
+    "ARCH13_JOB_TYPES",
     "ARCH14_JOB_TYPES",
     "register_all",
 ]

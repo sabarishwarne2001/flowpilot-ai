@@ -139,7 +139,7 @@ def _truncate_all_test_tables() -> None:
                     "usage_rollups, rollup_windows, quota_tiers, quota_tier_entries, provider_statements, "
                     "provider_statement_lines, reconciliation_runs, reconciliation_findings, automation_rules, "
                     "automation_logs, automation_executions, automation_node_runs, automation_nodes, "
-                    "automation_edges, work_items CASCADE;"
+                    "automation_edges, document_verifications, document_verification_fields, work_items CASCADE;"
                 )
             )
             conn.execute(text("SET session_replication_role = 'origin';"))
@@ -159,7 +159,8 @@ def db_session(test_database) -> Generator[Session, None, None]:
 @pytest.fixture()
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
-        yield db_session
+        with SessionLocal() as session:
+            yield session
 
     app.dependency_overrides[deps.get_db] = override_get_db
     with TestClient(app) as test_client:

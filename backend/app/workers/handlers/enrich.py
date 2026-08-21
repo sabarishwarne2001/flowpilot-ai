@@ -117,7 +117,6 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         )
         return {**stats, "chunks": 0, "skipped": "no extracted text"}
 
-    # Invalidate workspace vocabulary cache
     workspace_vocabulary_service.invalidate(target.workspace_id)
 
     # --- chunking + embedding ------------------------------------------
@@ -285,6 +284,50 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     return stats
 
 
+def _emit_enriched(target: _Target, stats: dict[str, Any]) -> None:
+    from app.db.session import SessionLocal
+    from app.services import job_service, outbox_service
+
+    with SessionLocal() as db:
+        try:
+            event = outbox_service.emit_internal(
+                db,
+                organization_id=target.organization_id,
+                workspace_id=target.workspace_id,
+                event_type="work_item.enriched",
+                resource_id=target.work_item_id,
+                payload={
+                    "work_item_id": str(target.work_item_id),
+                    "original_filename": target.original_filename,
+                    "classification": stats.get("classification"),
+                    "chunks": stats.get("chunks"),
+                },
+                caused_by=None,
+                idempotency_key=f"automation:enriched:{target.work_item_id}",
+            )
+            job_service.enqueue(
+                db,
+                job_type="automation.execute",
+                organization_id=target.organization_id,
+                payload={"outbox_event_id": str(event.id)},
+                idempotency_key=f"automation:execute:{event.id}",
+            )
+            db.commit()
+            logger.info(
+                "enrich.automation_triggered",
+                extra={
+                    "work_item_id": str(target.work_item_id),
+                    "outbox_event_id": str(event.id),
+                },
+            )
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception(
+                "enrich.automation_trigger_failed",
+                extra={"work_item_id": str(target.work_item_id)},
+            )
+
+
 def _run_side_effects(target: _Target) -> None:
     from app.db.session import SessionLocal
     from app.models.notification import (
@@ -292,19 +335,10 @@ def _run_side_effects(target: _Target) -> None:
         NotificationPriority,
         NotificationType,
     )
-    from app.services.automation_service import automation_service
     from app.services.notification_service import notification_service
 
     async def _go() -> None:
         with SessionLocal() as db:
-            try:
-                stats = await automation_service.execute_rules_for_work_item(
-                    db, work_item_id=target.work_item_id, event="WORK_ITEM_COMPLETED"
-                )
-                logger.info("enrich.automation_complete", extra={"stats": str(stats)})
-            except Exception:  # noqa: BLE001
-                logger.exception("enrich.automation_failed")
-
             try:
                 work_item = db.execute(
                     select(WorkItem).where(WorkItem.id == target.work_item_id)
@@ -411,6 +445,7 @@ def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
         )
         raise
 
+    _emit_enriched(target, stats)
     _run_side_effects(target)
     return {"outcome": Outcome.COMPLETED, **stats}
 

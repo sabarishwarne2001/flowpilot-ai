@@ -20,6 +20,14 @@ from app.models.automation_execution import (
     SUPPRESSED_STATUSES,
     TERMINAL_EXECUTION_STATUSES,
 )
+from app.models.verification import (
+    BLOCKING_STATUSES,
+    DisagreementKind,
+    DocumentVerification,
+    DocumentVerificationField,
+    RELEASING_STATUSES,
+    VerificationStatus,
+)
 from app.models.automation_graph import (
     AutomationEdge,
     AutomationNode,
@@ -210,4 +218,10 @@ __all__ = [
     "GRAPH_VERSION_FLAT",
     "NODE_TYPES",
     "OutboxVisibility",
+    "BLOCKING_STATUSES",
+    "DisagreementKind",
+    "DocumentVerification",
+    "DocumentVerificationField",
+    "RELEASING_STATUSES",
+    "VerificationStatus",
 ]

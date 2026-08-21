@@ -24,6 +24,7 @@ from app.api.v1 import (
     ownership_transfers,
     upload,
     usage,
+    verifications,
     work_items,
     workspaces,
 )
@@ -79,6 +80,7 @@ _SCOPED = (
     (document_settings.router, "/document-settings",  "Document Settings"),
     (upload.router,            "/upload",             "Upload"),
     (usage.workspace_router,   "/usage",              "Usage"),
+    (verifications.router,     "/verifications",      "Verifications"),
 )
 
 for _router, _suffix, _tag in _SCOPED:
