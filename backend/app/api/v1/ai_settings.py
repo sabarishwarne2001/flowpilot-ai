@@ -1,3 +1,5 @@
+"""ARCH-14 Step 8 CONTRACT: AI Settings endpoints without cost parameters."""
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +42,7 @@ async def get_ai_settings(
             detail="AI settings not configured.",
         )
 
-    return ai_settings_service.with_book_prices(db, settings_obj)
+    return settings_obj
 
 
 @router.put(
@@ -66,7 +68,7 @@ async def upsert_ai_settings(
         context.user_id,
     )
 
-    return ai_settings_service.with_book_prices(db, settings_obj)
+    return settings_obj
 
 
 @router.get(

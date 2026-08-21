@@ -1,6 +1,6 @@
 """
 AI Settings business orchestration service for FlowPilot AI.
-ARCH-14 Step 1: Serves platform-owned prices from the price book during the compatibility window.
+ARCH-14 Step 8 CONTRACT: Removed temporary display price decorator.
 """
 
 from __future__ import annotations
@@ -13,38 +13,13 @@ from sqlalchemy.orm import Session
 from app.core.ai_models import AI_MODELS
 from app.core.config import settings
 from app.schemas.ai_connection_test import AIConnectionTestResponse
-from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdate
+from app.schemas.ai_settings import AISettingsUpdate
 from app.schemas.available_providers import AvailableProvidersResponse
-from app.services import pricing_service
 
 logger = logging.getLogger("app.services.ai_settings_service")
 
 
 class AISettingsService:
-    """
-    Coordinates AI Settings validation, price book resolution, and provider diagnostics.
-    """
-
-    def with_book_prices(self, db: Session, settings_obj: Any) -> AISettingsResponse:
-        """Serve the cost fields from the price book, not from the row.
-
-        ARCH-14 Step 1 / finding B1. The stored columns are whatever a workspace
-        admin last wrote; they no longer price anything. Echoing them back would
-        show a customer a number that has nothing to do with their invoice.
-        """
-        response = AISettingsResponse.model_validate(settings_obj)
-        input_per_1k, output_per_1k = pricing_service.display_prices_per_1k(
-            db,
-            provider=getattr(settings_obj.provider, "value", str(settings_obj.provider)),
-            model=settings_obj.model,
-        )
-        return response.model_copy(
-            update={
-                "input_cost_per_1k_tokens": input_per_1k,
-                "output_cost_per_1k_tokens": output_per_1k,
-            }
-        )
-
     def get_available_providers(self) -> AvailableProvidersResponse:
         configured_providers: list[str] = []
         if settings.GROQ_API_KEY:

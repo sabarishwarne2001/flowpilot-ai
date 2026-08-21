@@ -26,20 +26,8 @@ TENANT_COST_FIELDS = frozenset(
     {"input_cost_per_1k_tokens", "output_cost_per_1k_tokens"}
 )
 
-TENANT_COST_ALLOWLIST: dict[str, str] = {
-    "app/models/ai_settings.py": "column declaration (CONTRACT: dropped in 14.8)",
-    "app/schemas/ai_settings.py": "response compatibility (CONTRACT: dropped in 14.8)",
-    "app/api/v1/ai_settings.py": "response compatibility router (CONTRACT: dropped in 14.8)",
-    "app/services/ai_settings_service.py": (
-        "serves the field from the price book for one release "
-        "(CONTRACT: dropped in 14.8)"
-    ),
-    "app/services/workspace_service.py": (
-        "writes 0.0 at workspace creation; never read back "
-        "(CONTRACT: dropped in 14.8)"
-    ),
-    "app/services/pricing_service.py": "owns pricing",
-}
+#: Empty as of ARCH-14 Step 8 CONTRACT.
+TENANT_COST_ALLOWLIST: dict[str, str] = {}
 
 USAGE_UPDATE_ALLOWLIST = frozenset(
     {
@@ -114,7 +102,7 @@ def check_no_tenant_cost_reads() -> Check:
     return Check(
         "no_tenant_cost_reads",
         PASS,
-        f"no references outside {len(TENANT_COST_ALLOWLIST)} allowlisted modules",
+        "no tenant cost references across the codebase",
     )
 
 
@@ -446,6 +434,10 @@ def check_db_triggers_installed(db) -> Check:
         "trg_rollup_windows_seal_immutable",
         "trg_quota_tiers_publish_immutable",
         "trg_quota_tier_entries_publish_immutable",
+        "trg_provider_statements_immutable",
+        "trg_provider_statement_lines_immutable",
+        "trg_reconciliation_runs_immutable",
+        "trg_reconciliation_findings_immutable",
     }
     present = {
         row[0]
@@ -564,6 +556,49 @@ def check_db_overage_rows_priced(db) -> Check:
     return Check("db_overage_rows_priced", PASS, "every overage line is priced")
 
 
+def check_db_invoices_reproduce(db) -> Check:
+    if not _table_exists(db, "usage_rollups"):
+        return Check("db_invoices_reproduce", PENDING, "Step 14.2 not shipped")
+
+    from app.services import invoice_preview_service
+
+    sample = invoice_preview_service.sample_organizations(db, limit=25)
+    if not sample:
+        return Check(
+            "db_invoices_reproduce", PASS, "no sealed billable history yet"
+        )
+
+    findings: list[str] = []
+    checked = 0
+    for organization_id in sample:
+        report = invoice_preview_service.reproduce_history(
+            db, organization_id=organization_id
+        )
+        checked += len(report.sealed_previews)
+        for preview in report.sealed_previews:
+            if preview.fully_reproducible:
+                continue
+            reasons = sorted({f.reason for f in preview.failures() if f.reason})
+            findings.append(
+                f"{organization_id} {preview.period_start.date()}: "
+                f"{preview.unreproducible_cost_micros}µ unreproducible "
+                f"({', '.join(reasons)})"
+            )
+
+    if findings:
+        return Check(
+            "db_invoices_reproduce",
+            FAIL,
+            "A sealed period cannot be rebuilt from the ledger and the price books.",
+            findings[:20],
+        )
+    return Check(
+        "db_invoices_reproduce",
+        PASS,
+        f"{checked} sealed periods reproduce across {len(sample)} organizations",
+    )
+
+
 def run(static_only: bool) -> list[Check]:
     checks = [
         check_no_tenant_cost_reads(),
@@ -590,6 +625,7 @@ def run(static_only: bool) -> list[Check]:
                 check_db_no_stranded_unaggregated(db),
                 check_db_sealed_rollups_untouched(db),
                 check_db_overage_rows_priced(db),
+                check_db_invoices_reproduce(db),
             ]
         )
     finally:

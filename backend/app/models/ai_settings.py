@@ -1,3 +1,8 @@
+"""
+Database representation of AI configuration owned by a single workspace.
+ARCH-14 Step 8 CONTRACT: Dropped customer-writable cost columns (Finding B1 resolution).
+"""
+
 from __future__ import annotations
 
 import enum
@@ -71,17 +76,9 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
         default=0.0,
     )
 
-    input_cost_per_1k_tokens: Mapped[float] = mapped_column(
-        Float,
-        nullable=False,
-        default=0.0,
-    )
-
-    output_cost_per_1k_tokens: Mapped[float] = mapped_column(
-        Float,
-        nullable=False,
-        default=0.0,
-    )
+    # ARCH-14 finding B1: input_cost_per_1k_tokens and output_cost_per_1k_tokens
+    # were dropped in arch14_step8_contract_ai_settings_costs. Prices are now
+    # platform-owned and resolved from pricing_service.
 
     system_prompt_version: Mapped[str] = mapped_column(
         String(50),
@@ -122,5 +119,4 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
     )
 
     workspace: Mapped["Workspace"] = relationship("Workspace")
-
     updated_by: Mapped[Union["User", None]] = relationship("User")

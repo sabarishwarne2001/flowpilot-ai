@@ -1,8 +1,6 @@
 """
 Business orchestration for Workspaces within FlowPilot AI.
-
-ARCH-07 Step 3: Converted AUDIT log call sites to audit_service.record().
-ARCH-08 Step 1: Removed company_logo_url write parameter.
+ARCH-14 Step 8 CONTRACT: Removed legacy cost parameters from workspace AI initialization.
 """
 
 from __future__ import annotations
@@ -182,8 +180,6 @@ def create_workspace_in_organization(
                 top_p=1.0,
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
-                input_cost_per_1k_tokens=0.0,
-                output_cost_per_1k_tokens=0.0,
                 system_prompt_version="v1",
                 prompt_version="v1",
                 enable_token_tracking=True,

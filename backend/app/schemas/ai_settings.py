@@ -1,3 +1,5 @@
+"""ARCH-14 Step 8 CONTRACT: AI Settings Pydantic schemas without tenant cost fields."""
+
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -7,19 +9,9 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 
 
-# ============================================================================
-# AI Provider
-# ============================================================================
-
-
 class AIProvider(str, Enum):
     GROQ = "GROQ"
     GEMINI = "GEMINI"
-
-
-# ============================================================================
-# Base Schema
-# ============================================================================
 
 
 class AISettingsBase(BaseModel):
@@ -30,26 +22,14 @@ class AISettingsBase(BaseModel):
     top_p: float
     frequency_penalty: float
     presence_penalty: float
-    input_cost_per_1k_tokens: float
-    output_cost_per_1k_tokens: float
     system_prompt_version: str
     prompt_version: str
     enable_token_tracking: bool
     enable_streaming: bool
 
 
-# ============================================================================
-# Update Schema
-# ============================================================================
-
-
 class AISettingsUpdate(AISettingsBase):
     pass
-
-
-# ============================================================================
-# Response Schema
-# ============================================================================
 
 
 class AISettingsResponse(AISettingsBase):
