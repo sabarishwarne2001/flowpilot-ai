@@ -84,6 +84,19 @@ from app.models.quota_tier import (
     QuotaTierEntry,
     QuotaTierKey,
 )
+from app.models.reconciliation import (
+    CATEGORY_ORDER,
+    DRIFT_ALERT_BPS,
+    Attribution,
+    FindingSeverity,
+    ProviderStatement,
+    ProviderStatementLine,
+    ReconciliationCategory,
+    ReconciliationFinding,
+    ReconciliationRun,
+    ReconciliationStatus,
+    StatementGrain,
+)
 
 __all__ = [
     "Base",
@@ -157,4 +170,15 @@ __all__ = [
     "QuotaTierEntry",
     "QuotaTierKey",
     "OveragePolicy",
+    "ProviderStatement",
+    "ProviderStatementLine",
+    "ReconciliationRun",
+    "ReconciliationFinding",
+    "ReconciliationCategory",
+    "ReconciliationStatus",
+    "StatementGrain",
+    "Attribution",
+    "FindingSeverity",
+    "CATEGORY_ORDER",
+    "DRIFT_ALERT_BPS",
 ]

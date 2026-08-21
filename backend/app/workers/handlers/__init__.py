@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7 & ARCH-14 Step 2 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-14 Step 2 & ARCH-14 Step 5 — job handler registration."""
 
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ ARCH10_JOB_TYPES: frozenset[str] = frozenset(
 )
 ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
 ARCH12_JOB_TYPES: frozenset[str] = frozenset({"notification.deliver"})
-ARCH14_JOB_TYPES: frozenset[str] = frozenset({"usage.rollup", "usage.seal"})
+ARCH14_JOB_TYPES: frozenset[str] = frozenset(
+    {"usage.rollup", "usage.seal", "usage.reconcile"}
+)
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -59,6 +61,12 @@ def _usage_seal(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_usage_seal(payload)
 
 
+def _usage_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.reconcile import handle_usage_reconcile
+
+    return handle_usage_reconcile(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -67,6 +75,7 @@ _HANDLERS = {
     "notification.deliver": _notification_deliver,
     "usage.rollup": _usage_rollup,
     "usage.seal": _usage_seal,
+    "usage.reconcile": _usage_reconcile,
 }
 
 
@@ -79,8 +88,7 @@ def register_all(*, replace: bool = False) -> list[str]:
         if existing is not None:
             if not replace:
                 raise job_service.JobServiceError(
-                    f"job_type {job_type!r} is already registered to "
-                    f"{existing!r}; refusing to shadow it."
+                    f"job_type {job_type!r} is already registered to {existing!r}."
                 )
             job_service.JOB_HANDLERS[job_type] = handler
         else:

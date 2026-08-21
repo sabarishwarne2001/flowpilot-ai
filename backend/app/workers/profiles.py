@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8, ARCH-11 Step 9 & ARCH-14 Step 2 — worker profiles."""
+"""ARCH-10 Step 8, ARCH-11 Step 9, ARCH-12 Step 7, ARCH-14 Step 2 & ARCH-14 Step 5 — worker profiles."""
 
 from __future__ import annotations
 
@@ -38,13 +38,11 @@ LIGHT = WorkerProfile(
             "notification.deliver",
             "usage.rollup",
             "usage.seal",
+            "usage.reconcile",
         }
     ),
     allow_heavy=frozenset(),
-    description=(
-        "Thin image. Sampling, housekeeping, notification delivery, and the "
-        "ARCH-14 usage rollup and seal passes."
-    ),
+    description="Thin image. Sampling, housekeeping, notification delivery, rollups, and reconciliation.",
 )
 
 OCR = WorkerProfile(

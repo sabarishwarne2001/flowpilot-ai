@@ -246,10 +246,13 @@ class Settings(BaseSettings):
     ROLLUP_BATCH_SIZE: int = 2_000
     ROLLUP_MAX_BATCHES: int = 20
     SPEND_USE_ROLLUP_READS: bool = True
-
-    # ---- ARCH-14 Step 4: quota tiers --------------------------------------
     QUOTA_TIER_CACHE_TTL_SECONDS: float = 300.0
     QUOTA_DEFAULT_TIER_KEY: Optional[str] = None
+
+    # ---- ARCH-14 Step 5: provider reconciliation --------------------------
+    RECONCILE_MIN_AGE_DAYS: int = 2
+    RECONCILE_BOUNDARY_HOURS: int = 6
+    RECONCILE_ALERT_BPS: int = 50
 
     # ---- ARCH-14 Step 14.6: Gemini billing labels -------------------------
     GEMINI_BILLING_LABELS_ENABLED: bool = False

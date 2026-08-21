@@ -2,14 +2,7 @@
 Test fixtures for the FlowPilot AI tenant isolation suite.
 
 Runs against a dedicated database, created and dropped per session, so a test
-run can never touch development data. The schema is built with Alembic rather
-than metadata.create_all, which means the migration chain is exercised on
-every CI run — the from-scratch build path that has otherwise never been
-tested.
-
-Each test runs against the shared test engine, with tenant/user/pricing/rollup
-tables truncated before and after each test under session_replication_role = 'replica'
-so that append-only audit, price, and rollup seal triggers are bypassed during test cleanup.
+run can never touch development data.
 """
 
 from __future__ import annotations
@@ -31,13 +24,6 @@ from app.api import deps
 from app.core import security
 from app.core.config import settings
 
-# ===========================================================================
-# Database URI Override
-#
-# Override the database configuration on the settings object before loading the
-# FastAPI application or running Alembic migrations. This ensures both
-# application dependencies and alembic/env.py connect to the test database.
-# ===========================================================================
 BASE_URL = str(settings.sqlalchemy_database_uri)
 TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "flowpilot_test")
 TEST_DB_URL = BASE_URL.rsplit("/", 1)[0] + f"/{TEST_DB_NAME}"
@@ -49,7 +35,6 @@ if hasattr(settings, "sqlalchemy_database_uri"):
     except Exception:
         pass
 
-# Now safe to import the application
 from app.db.session import SessionLocal, engine as global_engine
 from app.main import app
 from app.models.organization import (
@@ -68,13 +53,8 @@ from app.models.workspace import (
 )
 
 
-# ===========================================================================
-# Personas
-# ===========================================================================
-
 @dataclass(frozen=True)
 class Persona:
-    """A user plus the bearer token that authenticates them."""
     user: User
     token: str
 
@@ -85,7 +65,6 @@ class Persona:
 
 @dataclass(frozen=True)
 class Fixture:
-    """One target tenant plus every persona the matrix exercises."""
     organization: Organization
     workspace: Workspace
     foreign_workspace: Workspace
@@ -99,10 +78,6 @@ class Fixture:
     non_member: Persona
 
 
-# ===========================================================================
-# pytest Configuration & Safety Guards
-# ===========================================================================
-
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "no_db: test must run without any database dependency"
@@ -115,26 +90,18 @@ def _enforce_no_db(request: pytest.FixtureRequest) -> None:
         for name in ("db_session", "client", "test_database"):
             if name in request.fixturenames:
                 pytest.fail(
-                    f"Test is marked no_db but requested the {name!r} fixture. "
-                    "Either drop the mark or remove the database dependency."
+                    f"Test is marked no_db but requested the {name!r} fixture."
                 )
 
 
 @pytest.fixture(autouse=True)
 def disable_rate_limiting_in_tests(monkeypatch):
-    """Ensure rate limiters and login backoffs remain disabled across all automated test suites."""
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
 
 
 @pytest.fixture(scope="session")
 def test_database() -> Generator[None, None, None]:
-    """
-    Creates a dedicated test database, migrates it, and drops it afterwards.
-
-    AUTOCOMMIT is required: PostgreSQL refuses CREATE DATABASE inside a
-    transaction block. Lazy session-scoped schema construction (not autouse).
-    """
     admin_url = BASE_URL.rsplit("/", 1)[0] + "/postgres"
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
 
@@ -160,13 +127,15 @@ def test_database() -> Generator[None, None, None]:
 
 
 def _truncate_all_test_tables() -> None:
-    """Helper to wipe test tables cleanly under replica mode."""
     with global_engine.connect() as conn:
         with conn.begin():
             conn.execute(text("SET session_replication_role = 'replica';"))
             conn.execute(
                 text(
-                    "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries, usage_rollups, rollup_windows CASCADE;"
+                    "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, "
+                    "audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries, "
+                    "usage_rollups, rollup_windows, quota_tiers, quota_tier_entries, provider_statements, "
+                    "provider_statement_lines, reconciliation_runs, reconciliation_findings CASCADE;"
                 )
             )
             conn.execute(text("SET session_replication_role = 'origin';"))
@@ -174,9 +143,6 @@ def _truncate_all_test_tables() -> None:
 
 @pytest.fixture()
 def db_session(test_database) -> Generator[Session, None, None]:
-    """
-    A session connected to the test database, guaranteed clean before and after each test.
-    """
     _truncate_all_test_tables()
     session = SessionLocal()
     try:
@@ -188,10 +154,6 @@ def db_session(test_database) -> Generator[Session, None, None]:
 
 @pytest.fixture()
 def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """
-    A TestClient whose requests share the test session.
-    """
-
     def override_get_db() -> Generator[Session, None, None]:
         yield db_session
 
@@ -200,10 +162,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         yield test_client
     app.dependency_overrides.clear()
 
-
-# ===========================================================================
-# Helpers
-# ===========================================================================
 
 def _make_user(db: Session, email: str) -> Persona:
     user = User(
