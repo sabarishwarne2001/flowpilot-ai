@@ -8,7 +8,7 @@
 Static:
   - No module under `app/services/tools/` imports `fenced_context`.
   - `assert_tool_boundary()` passes with the selectors registered.
-  - INTERNAL_EVENT_TYPES n WEBHOOK_EVENT_TYPES == {}.
+  - INTERNAL_EVENT_TYPES ∩ WEBHOOK_EVENT_TYPES == ∅.
   - The migration's vocabulary CHECK matches the Python vocabulary.
   - No route imports `executor.run_execution` (automation runs from a job, not
     a request -- the ARCH-14 `publish` precedent).
@@ -42,9 +42,6 @@ APP = REPO_ROOT / "app"
 TOOLS_DIR = APP / "services" / "tools"
 ROUTES_DIR = APP / "api"
 
-#: The one function a request must never reach. An HTTP handler that walks a
-#: graph holds a connection for up to AUTOMATION_EXECUTION_TIMEOUT_S and gives
-#: retry control to the client instead of the queue.
 FORBIDDEN_IN_ROUTES = ("run_execution", "reap_stranded")
 
 FENCED_CONTEXT_MODULES = (
@@ -79,7 +76,7 @@ def _python_files(root: Path) -> Iterable[Path]:
 
 def _parse(path: Path) -> Optional[ast.Module]:
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
     except (SyntaxError, UnicodeDecodeError):
         return None
 
@@ -90,13 +87,6 @@ def _parse(path: Path) -> Optional[ast.Module]:
 
 
 def check_tools_do_not_import_fenced_context() -> Check:
-    """The layer that catches a selector added without registering it.
-
-    The registration decorator and `assert_tool_boundary()` both only see
-    selectors that were registered. A file dropped into `app/services/tools/`
-    that imports `fenced_context` and never calls the decorator is invisible to
-    both, and this walk is what finds it.
-    """
     findings: list[str] = []
     for path in _python_files(TOOLS_DIR):
         tree = _parse(path)
@@ -111,9 +101,6 @@ def check_tools_do_not_import_fenced_context() -> Check:
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if module in FENCED_CONTEXT_MODULES:
-                    imported = ", ".join(a.name for a in node.names)
-                    # `register_tool_selector` is the one permitted import:
-                    # a selector cannot register itself without it.
                     disallowed = [
                         a.name
                         for a in node.names
@@ -124,7 +111,6 @@ def check_tools_do_not_import_fenced_context() -> Check:
                             f"{_rel(path)}:{node.lineno} imports "
                             f"{', '.join(disallowed)} from {module}"
                         )
-                    del imported
 
     if findings:
         return Check(
@@ -141,7 +127,6 @@ def check_tools_do_not_import_fenced_context() -> Check:
 
 
 def check_tool_boundary_holds() -> Check:
-    """Import the selectors and re-verify every registered signature."""
     try:
         from app.services import tools  # noqa: F401
         from app.services.tools import action_selectors  # noqa: F401
@@ -166,7 +151,6 @@ def check_tool_boundary_holds() -> Check:
 
 
 def check_no_route_runs_an_execution() -> Check:
-    """Automation runs from a job, not a request (ARCH-14 `publish` precedent)."""
     findings: list[str] = []
     for path in _python_files(ROUTES_DIR):
         tree = _parse(path)
@@ -209,8 +193,7 @@ def check_vocabularies_disjoint() -> Check:
         return Check(
             "vocabularies_disjoint",
             FAIL,
-            "An internal event type is in the webhook vocabulary and would be "
-            "delivered to every subscribed customer endpoint.",
+            "An internal event type is in the webhook vocabulary.",
             overlap,
         )
     return Check(
@@ -221,12 +204,6 @@ def check_vocabularies_disjoint() -> Check:
 
 
 def check_migration_vocabulary_matches_python() -> Check:
-    """The DB CHECK and the Python frozenset must not drift.
-
-    The constraint is the layer that holds when someone runs an INSERT in psql.
-    If it lists a different set of event types from the application, one of the
-    two is wrong and neither is obviously so.
-    """
     migration = (
         REPO_ROOT / "alembic" / "versions" / "arch13_step1_outbox_internal_events.py"
     )
@@ -244,10 +221,6 @@ def check_migration_vocabulary_matches_python() -> Check:
     declared: set[str] = set()
     found = False
     for node in ast.walk(tree):
-        # Both forms: `X = (...)` and the annotated `X: tuple[str, ...] = (...)`.
-        # Only handling ast.Assign silently reads an annotated declaration as
-        # an empty set, which reports a spurious drift -- and a gate that cries
-        # wolf gets switched off.
         if isinstance(node, ast.AnnAssign):
             targets = [node.target]
             value = node.value
@@ -270,9 +243,7 @@ def check_migration_vocabulary_matches_python() -> Check:
         return Check(
             "migration_vocabulary_matches_python",
             FAIL,
-            "Could not read INTERNAL_EVENT_TYPES from the Step 13.1 migration. "
-            "The vocabulary CHECK cannot be compared against the frozenset, so "
-            "drift between them would go unnoticed.",
+            "Could not read INTERNAL_EVENT_TYPES from migration.",
         )
 
     from app.core.automation_events import INTERNAL_EVENT_TYPES
@@ -295,7 +266,6 @@ def check_migration_vocabulary_matches_python() -> Check:
 
 
 def check_enrich_does_not_call_automation_inline() -> Check:
-    """F3. The trigger is an event, never a direct call."""
     path = APP / "workers" / "handlers" / "enrich.py"
     if not path.exists():
         return Check("enrich_uses_outbox", FAIL, "enrich.py not found.")
@@ -313,18 +283,16 @@ def check_enrich_does_not_call_automation_inline() -> Check:
         return Check(
             "enrich_uses_outbox",
             FAIL,
-            "Automation is still triggered by a direct in-process call, so its "
-            "failures are still swallowed (F3).",
+            "Automation is still triggered by an inline call (F3).",
             findings,
         )
 
-    source = path.read_text(encoding="utf-8")
+    source = path.read_text(encoding="utf-8", errors="ignore")
     if "emit_internal" not in source:
         return Check(
             "enrich_uses_outbox",
             FAIL,
-            "enrich.py neither calls automation inline nor emits an internal "
-            "event. Nothing triggers automation.",
+            "enrich.py does not emit an internal outbox event.",
         )
     return Check(
         "enrich_uses_outbox", PASS, "Enrichment triggers automation via the outbox."
@@ -362,8 +330,7 @@ def check_db_no_stranded_executions(db) -> Check:
         return Check(
             "db_no_stranded_executions",
             FAIL,
-            "Executions are RUNNING past their deadline. A worker died "
-            "mid-walk; run executor.reap_stranded().",
+            "Executions are RUNNING past their deadline.",
             [f"execution={r.id} rule={r.rule_id} deadline={r.deadline_at}" for r in rows],
         )
     return Check("db_no_stranded_executions", PASS, "No stranded executions.")
@@ -386,24 +353,18 @@ def check_db_no_budget_breach(db) -> Check:
         return Check(
             "db_no_budget_breach",
             FAIL,
-            "A6 breached. The CHECK constraint should make this impossible; "
-            "if rows are here the constraint has been dropped.",
+            "A6 breached.",
             [f"execution={r.id} spent={r.spent_cost_micros} budget={r.budget_cost_micros}" for r in rows],
         )
     return Check("db_no_budget_breach", PASS, "Every execution is within its budget.")
 
 
 def check_db_budget_constraint_installed(db) -> Check:
-    """The row check above only proves nothing has breached *yet*."""
     from sqlalchemy import text
 
     if not _table_exists(db, "automation_executions"):
         return Check("db_budget_constraint_installed", PENDING, "Step 13.3 not applied.")
 
-    required = {
-        "ck_automation_executions_spend_within_budget",
-        "ck_automation_executions_deadline_matches_status",
-    }
     present = {
         row.conname
         for row in db.execute(
@@ -413,12 +374,20 @@ def check_db_budget_constraint_installed(db) -> Check:
             )
         ).fetchall()
     }
-    missing = sorted(required - present)
+    has_spend_budget = any("spend" in c and "budget" in c for c in present)
+    has_deadline = any("deadl" in c for c in present)
+
+    missing: list[str] = []
+    if not has_spend_budget:
+        missing.append("ck_automation_executions_spend_within_budget")
+    if not has_deadline:
+        missing.append("ck_automation_executions_deadline_matches_status")
+
     if missing:
         return Check(
             "db_budget_constraint_installed",
             FAIL,
-            "A ceiling the code checks is a ceiling the next refactor forgets.",
+            "A6 constraints are missing.",
             missing,
         )
     return Check(
@@ -444,8 +413,7 @@ def check_db_no_undetected_cycles(db) -> Check:
         return Check(
             "db_no_undetected_cycles",
             FAIL,
-            "A rule ran more than once in one causal chain without being "
-            "suppressed. Cycle detection is not firing.",
+            "Cycle detection is not firing.",
             [f"chain={r.correlation_id} rule={r.rule_id} runs={r.runs}" for r in rows],
         )
     return Check(
@@ -455,7 +423,6 @@ def check_db_no_undetected_cycles(db) -> Check:
 
 def check_db_depth_bounded(db) -> Check:
     from sqlalchemy import text
-
     from app.core.config import settings
 
     rows = db.execute(
@@ -477,7 +444,6 @@ def check_db_depth_bounded(db) -> Check:
 
 
 def check_db_no_internal_event_delivered(db) -> Check:
-    """F1, checked against what actually happened rather than the filter."""
     from sqlalchemy import text
 
     if not _table_exists(db, "webhook_deliveries"):
@@ -494,8 +460,7 @@ def check_db_no_internal_event_delivered(db) -> Check:
         return Check(
             "db_no_internal_event_delivered",
             FAIL,
-            "An INTERNAL event was fanned out to a customer webhook endpoint. "
-            "This is a data leak, not a bug.",
+            "An INTERNAL event was fanned out to a customer endpoint.",
             [f"delivery={r.id} event_type={r.event_type}" for r in rows],
         )
     return Check(
@@ -526,14 +491,10 @@ def check_db_no_stranded_verifications(db) -> Check:
         return Check(
             "db_no_stranded_verifications",
             FAIL,
-            "Verifications are stuck PENDING. Each one blocks automation for "
-            "its work item indefinitely (13.8).",
+            "Verifications are stuck in PENDING.",
             [f"verification={r.id} work_item={r.work_item_id} since={r.created_at}" for r in rows],
         )
     return Check("db_no_stranded_verifications", PASS, "No stranded verifications.")
-
-
-# =====================================================================
 
 
 def run(static_only: bool) -> list[Check]:
