@@ -1,4 +1,8 @@
-"""ARCH-09 §B.1 — transactional outbox model."""
+"""ARCH-09 §B.1 — transactional outbox model.
+
+ARCH-13 Step 13.1 adds `visibility` (F1): one table, two audiences.
+ARCH-13 Step 13.2 adds `depth` / `causation_id` / `correlation_id` (A7).
+"""
 
 from __future__ import annotations
 
@@ -34,6 +38,19 @@ class OutboxEventStatus(str, PyEnum):
     DEAD = "DEAD"
 
 
+class OutboxVisibility(str, PyEnum):
+    """ARCH-13 F1. Not a PG enum — a varchar with a CHECK.
+
+    A PG enum would need an ALTER TYPE to add a third audience later, which
+    cannot run inside a transaction on older servers. Two values with a CHECK
+    is the cheaper shape for something that is unlikely to grow but must not
+    be wrong.
+    """
+
+    PUBLIC = "PUBLIC"
+    INTERNAL = "INTERNAL"
+
+
 CLAIMABLE_STATUSES: tuple[OutboxEventStatus, ...] = (
     OutboxEventStatus.PENDING,
     OutboxEventStatus.FAILED,
@@ -43,6 +60,10 @@ TERMINAL_STATUSES: tuple[OutboxEventStatus, ...] = (
     OutboxEventStatus.PUBLISHED,
     OutboxEventStatus.DEAD,
 )
+
+#: ARCH-13 Step 13.2. The database ceiling, not the configured one. See
+#: `settings.AUTOMATION_MAX_DEPTH` for the value the application refuses at.
+HARD_DEPTH_CEILING: int = 16
 
 
 class OutboxEvent(Base, UUIDMixin, TimestampMixin):
@@ -59,6 +80,27 @@ class OutboxEvent(Base, UUIDMixin, TimestampMixin):
             name="ck_outbox_events_published_at_matches_status",
         ),
         CheckConstraint("jsonb_typeof(payload) = 'object'", name="ck_outbox_events_payload_is_object"),
+        # -- ARCH-13 Step 13.1 -------------------------------------------
+        CheckConstraint(
+            "visibility IN ('PUBLIC', 'INTERNAL')",
+            name="ck_outbox_events_visibility_known",
+        ),
+        # The vocabulary CHECK itself is written by the migration, which owns
+        # the event-type list. Declaring it here would duplicate that list in
+        # a second place and guarantee they drift.
+        # -- ARCH-13 Step 13.2 -------------------------------------------
+        CheckConstraint(
+            f"depth >= 0 AND depth <= {HARD_DEPTH_CEILING}",
+            name="ck_outbox_events_depth_bounded",
+        ),
+        CheckConstraint(
+            "causation_id IS NULL OR correlation_id IS NOT NULL",
+            name="ck_outbox_events_causation_implies_correlation",
+        ),
+        CheckConstraint(
+            "depth = 0 OR correlation_id IS NOT NULL",
+            name="ck_outbox_events_depth_implies_correlation",
+        ),
         UniqueConstraint("seq", name="uq_outbox_events_seq"),
         Index(
             "ix_outbox_events_claimable",
@@ -67,6 +109,24 @@ class OutboxEvent(Base, UUIDMixin, TimestampMixin):
             postgresql_where=text(
                 "status IN ('PENDING'::outbox_event_status, "
                 "'FAILED'::outbox_event_status)"
+            ),
+        ),
+        Index(
+            "ix_outbox_events_internal_claimable",
+            "available_at",
+            "seq",
+            postgresql_where=text(
+                "visibility = 'INTERNAL' AND status IN "
+                "('PENDING'::outbox_event_status, 'FAILED'::outbox_event_status)"
+            ),
+        ),
+        Index(
+            "ix_outbox_events_public_claimable",
+            "available_at",
+            "seq",
+            postgresql_where=text(
+                "visibility = 'PUBLIC' AND status IN "
+                "('PENDING'::outbox_event_status, 'FAILED'::outbox_event_status)"
             ),
         ),
         Index(
@@ -95,6 +155,17 @@ class OutboxEvent(Base, UUIDMixin, TimestampMixin):
             "ix_outbox_events_prunable",
             "published_at",
             postgresql_where=text("status = 'PUBLISHED'::outbox_event_status"),
+        ),
+        Index(
+            "ix_outbox_events_correlation",
+            "correlation_id",
+            "seq",
+            postgresql_where=text("correlation_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_outbox_events_causation",
+            "causation_id",
+            postgresql_where=text("causation_id IS NOT NULL"),
         ),
     )
 
@@ -127,6 +198,22 @@ class OutboxEvent(Base, UUIDMixin, TimestampMixin):
     )
     idempotency_key: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
+    )
+
+    # ---- ARCH-13 Step 13.1: audience -----------------------------------
+    visibility: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=OutboxVisibility.PUBLIC.value
+    )
+
+    # ---- ARCH-13 Step 13.2: causal chain -------------------------------
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    causation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("outbox_events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    correlation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
     )
 
     status: Mapped[OutboxEventStatus] = mapped_column(
@@ -165,9 +252,24 @@ class OutboxEvent(Base, UUIDMixin, TimestampMixin):
     def is_claimable(self) -> bool:
         return self.status in CLAIMABLE_STATUSES
 
+    @property
+    def is_internal(self) -> bool:
+        return self.visibility == OutboxVisibility.INTERNAL.value
+
+    @property
+    def chain_root_id(self) -> uuid.UUID:
+        """The correlation root. A root event is its own root.
+
+        Callers thread this into the events they emit; `emit(caused_by=...)`
+        does it for them. Exposed as a property so a caller reading a claimed
+        event does not have to remember the `or self.id` fallback.
+        """
+        return self.correlation_id or self.id
+
     def __repr__(self) -> str:
         return (
             f"<OutboxEvent seq={self.seq} {self.event_type} "
+            f"visibility={self.visibility} depth={self.depth} "
             f"status={self.status.value if self.status else None} "
             f"org={self.organization_id}>"
         )

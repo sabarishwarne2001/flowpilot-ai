@@ -11,7 +11,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Generator
+from typing import Any, Generator
 
 import pytest
 from alembic import command
@@ -37,6 +37,7 @@ if hasattr(settings, "sqlalchemy_database_uri"):
 
 from app.db.session import SessionLocal, engine as global_engine
 from app.main import app
+from app.models.automation import AutomationRule
 from app.models.organization import (
     MembershipStatus,
     Organization,
@@ -45,6 +46,7 @@ from app.models.organization import (
     OrganizationStatus,
 )
 from app.models.user import User
+from app.models.work_item import WorkItem
 from app.models.workspace import (
     Workspace,
     WorkspaceMember,
@@ -135,7 +137,9 @@ def _truncate_all_test_tables() -> None:
                     "TRUNCATE TABLE organizations, users, api_keys, webhook_endpoints, jobs, outbox_events, "
                     "audit_logs, conversation_messages, conversations, usage_events, price_books, price_book_entries, "
                     "usage_rollups, rollup_windows, quota_tiers, quota_tier_entries, provider_statements, "
-                    "provider_statement_lines, reconciliation_runs, reconciliation_findings CASCADE;"
+                    "provider_statement_lines, reconciliation_runs, reconciliation_findings, automation_rules, "
+                    "automation_logs, automation_executions, automation_node_runs, automation_nodes, "
+                    "automation_edges, work_items CASCADE;"
                 )
             )
             conn.execute(text("SET session_replication_role = 'origin';"))
@@ -276,3 +280,75 @@ def tenant(db_session: Session) -> Fixture:
         other_org_member=other_member,
         non_member=non_member,
     )
+
+
+@pytest.fixture()
+def rule_factory(db_session: Session, tenant: Fixture):
+    def _create(
+        *,
+        name: str = "Test Rule",
+        priority: int = 100,
+        event: str = "WORK_ITEM_COMPLETED",
+        conditions: list[dict[str, Any]] | None = None,
+        actions: list[dict[str, Any]] | None = None,
+        logic_operator: str = "AND",
+        is_active: bool = True,
+        created_by_user_id: uuid.UUID | None = None,
+        budget_cost_micros: int | None = None,
+        workspace_id: uuid.UUID | None = None,
+    ) -> AutomationRule:
+        ws_id = workspace_id or tenant.workspace.id
+        rule = AutomationRule(
+            name=name,
+            priority=priority,
+            event=event,
+            conditions=conditions if conditions is not None else [],
+            actions=actions if actions is not None else [],
+            logic_operator=logic_operator,
+            is_active=is_active,
+            workspace_id=ws_id,
+            created_by_user_id=created_by_user_id,
+        )
+        if hasattr(rule, "budget_cost_micros") and budget_cost_micros is not None:
+            rule.budget_cost_micros = budget_cost_micros
+        db_session.add(rule)
+        db_session.flush()
+        return rule
+
+    return _create
+
+
+@pytest.fixture()
+def work_item_factory(db_session: Session, tenant: Fixture):
+    def _create(
+        *,
+        classification: str | None = None,
+        summary: str | None = None,
+        original_filename: str = "test.pdf",
+        file_type: str = "application/pdf",
+        workspace_id: uuid.UUID | None = None,
+        created_by: User | None = None,
+        extracted_entities: dict[str, Any] | None = None,
+    ) -> WorkItem:
+        ws_id = workspace_id or tenant.workspace.id
+        user = created_by or tenant.owner.user
+        entities = dict(extracted_entities or {})
+        if classification:
+            entities["document_classification"] = classification
+        item = WorkItem(
+            workspace_id=ws_id,
+            created_by_user_id=user.id,
+            original_filename=original_filename,
+            stored_filename=f"test_{uuid.uuid4().hex}.pdf",
+            file_type=file_type,
+            file_size=1024,
+            status="PROCESSED",
+            summary=summary or "Test document summary",
+            extracted_entities=entities,
+            extraction_metadata={},
+        )
+        db_session.add(item)
+        db_session.flush()
+        return item
+
+    return _create

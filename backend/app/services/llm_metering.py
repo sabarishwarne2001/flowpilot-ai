@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -25,6 +25,7 @@ INPUT_EVENT = "llm.input_token"
 OUTPUT_EVENT = "llm.output_token"
 CONVERSATION_RESOURCE = "CONVERSATION"
 WORK_ITEM_RESOURCE = "WORK_ITEM"
+ORGANIZATION_RESOURCE = "ORGANIZATION"
 
 ENRICH_OPERATIONS = ("classify", "entities", "summary")
 
@@ -64,6 +65,7 @@ class LLMReservation:
     input_price: Optional[ResolvedPrice] = None
     output_price: Optional[ResolvedPrice] = None
     settled: bool = False
+    details_extra: dict[str, Any] = field(default_factory=dict)
 
     @property
     def input_cost_per_1k(self) -> float:
@@ -114,6 +116,7 @@ def _reserve(
     resource_id: uuid.UUID,
     prompt: str,
     ai_settings: Any,
+    details_extra: Optional[dict[str, Any]] = None,
 ) -> LLMReservation:
     if not settings.LLM_METERING_ENABLED:
         logger.warning("llm.metering_disabled", extra={"scope": scope})
@@ -125,6 +128,7 @@ def _reserve(
             resource_id=resource_id,
             estimated_input_tokens=0,
             max_output_tokens=0,
+            details_extra=dict(details_extra or {}),
         )
 
     estimated_input = estimate_prompt_tokens(prompt)
@@ -187,6 +191,7 @@ def _reserve(
         resource_id=resource_id,
         estimated_input_tokens=estimated_input,
         max_output_tokens=max_output,
+        details_extra=dict(details_extra or {}),
         input_price=input_price,
         output_price=output_price,
     )
@@ -261,6 +266,69 @@ def reserve_for_summary(
         resource_id=conversation_id,
         prompt=prompt,
         ai_settings=ai_settings,
+    )
+
+
+_CALLER_SCOPE_PREFIXES: tuple[str, ...] = ("llm:automation:",)
+_VERIFY_SCOPE_MARKER: str = ":verify:"
+
+
+def _assert_caller_scope(scope: str) -> None:
+    if scope.startswith(_CALLER_SCOPE_PREFIXES):
+        return
+    if scope.startswith("llm:") and _VERIFY_SCOPE_MARKER in scope:
+        return
+    raise LLMMeteringError(
+        f"scope {scope!r} is not a recognised caller-supplied scope. "
+        f"Expected one of {_CALLER_SCOPE_PREFIXES} or "
+        f"'llm:<work_item_id>{_VERIFY_SCOPE_MARKER}<n>'."
+    )
+
+
+def reserve_for_node(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    workspace_id: Optional[uuid.UUID],
+    work_item_id: Optional[uuid.UUID],
+    scope: str,
+    prompt: str,
+    ai_settings: Any,
+    details_extra: Optional[dict[str, Any]] = None,
+) -> LLMReservation:
+    _assert_caller_scope(scope)
+    return _reserve(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        scope=scope,
+        resource_type=WORK_ITEM_RESOURCE if work_item_id else ORGANIZATION_RESOURCE,
+        resource_id=work_item_id or organization_id,
+        prompt=prompt,
+        ai_settings=ai_settings,
+        details_extra=details_extra,
+    )
+
+
+def reserve_for_verification(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    workspace_id: Optional[uuid.UUID],
+    work_item_id: uuid.UUID,
+    agent_index: int,
+    prompt: str,
+    ai_settings: Any,
+) -> LLMReservation:
+    return reserve_for_node(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        work_item_id=work_item_id,
+        scope=f"llm:{work_item_id}:verify:{agent_index}",
+        prompt=prompt,
+        ai_settings=ai_settings,
+        details_extra={"operation": "verify", "agent_index": agent_index},
     )
 
 
@@ -370,7 +438,12 @@ def _record(
             provider=provider,
             occurred_at=occurred_at,
             idempotency_key=key,
-            details={"model": model, **price_details, **details},
+            details={
+                "model": model,
+                **price_details,
+                **reservation.details_extra,
+                **details,
+            },
         )
         savepoint.commit()
     except IntegrityError as exc:
@@ -383,7 +456,6 @@ def _record(
         )
         return False
 
-    # ARCH-14 Step 4 — Bill overage if applicable
     from app.services import quota_service
 
     quota_service.bill_overage_if_any(
@@ -486,9 +558,17 @@ def settle(
     )
     reservation.settled = True
 
+    input_cost = input_price.cost_micros(prompt_tokens) if input_price else 0
+    output_cost = (
+        output_price.cost_micros(completion_tokens) if output_price else 0
+    )
+
     summary = {
         "provider": provider,
         "model": model,
+        "input_cost_micros": int(input_cost),
+        "output_cost_micros": int(output_cost),
+        "total_cost_micros": int(input_cost) + int(output_cost),
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "estimate_drift_tokens": drift,
@@ -531,8 +611,11 @@ __all__ = [
     "estimate_enrichment_tokens",
     "estimate_prompt_tokens",
     "recorded_for_message",
+    "ORGANIZATION_RESOURCE",
     "reserve",
     "reserve_for_enrichment",
+    "reserve_for_node",
     "reserve_for_summary",
+    "reserve_for_verification",
     "settle",
 ]

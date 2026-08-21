@@ -260,6 +260,52 @@ class Settings(BaseSettings):
     GEMINI_VERTEX_PROJECT: Optional[str] = None
     GEMINI_VERTEX_LOCATION: str = "us-central1"
 
+    # ---- ARCH-13: automation engine ---------------------------------------
+    AUTOMATION_MAX_DEPTH: int = 5
+    AUTOMATION_MAX_NODES: int = 50
+    AUTOMATION_EXECUTION_TIMEOUT_S: int = 120
+    AUTOMATION_MAX_ACTIONS_PER_EXECUTION: int = 20
+    AUTOMATION_DEFAULT_BUDGET_MICROS: int = 50_000
+    AUTOMATION_ENGINE_ENABLED: bool = True
+
+    # ---- ARCH-13 Step 13.7/13.8: verification ------------------------------
+    AUTOMATION_VERIFICATION_AGENTS: int = 2
+    AUTOMATION_AUTO_APPROVE_THRESHOLD: float = 0.85
+
+    @field_validator("AUTOMATION_MAX_DEPTH")
+    @classmethod
+    def validate_automation_max_depth(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("AUTOMATION_MAX_DEPTH must be at least 1.")
+        if v > 16:
+            raise ValueError(
+                "AUTOMATION_MAX_DEPTH must not exceed 16, the ck_outbox_events"
+                "_depth_bounded database ceiling."
+            )
+        return v
+
+    @field_validator("AUTOMATION_AUTO_APPROVE_THRESHOLD")
+    @classmethod
+    def validate_auto_approve_threshold(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            raise ValueError(
+                "AUTOMATION_AUTO_APPROVE_THRESHOLD must be in (0.0, 1.0]."
+            )
+        return v
+
+    @field_validator("AUTOMATION_VERIFICATION_AGENTS")
+    @classmethod
+    def validate_verification_agents(cls, v: int) -> int:
+        if v < 2:
+            raise ValueError(
+                "AUTOMATION_VERIFICATION_AGENTS must be at least 2."
+            )
+        if v > 5:
+            raise ValueError(
+                "AUTOMATION_VERIFICATION_AGENTS above 5 multiplies enrichment spend by >5x."
+            )
+        return v
+
     @field_validator("RAG_TOP_K")
     @classmethod
     def validate_rag_top_k(cls, v: int) -> int:

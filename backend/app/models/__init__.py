@@ -12,6 +12,22 @@ from app.models.job import (
     TERMINAL_JOB_STATUSES,
 )
 from app.models.automation import AutomationRule, AutomationLog
+from app.models.automation_execution import (
+    AutomationExecution,
+    AutomationExecutionStatus,
+    AutomationNodeRun,
+    AutomationNodeRunStatus,
+    SUPPRESSED_STATUSES,
+    TERMINAL_EXECUTION_STATUSES,
+)
+from app.models.automation_graph import (
+    AutomationEdge,
+    AutomationNode,
+    BRANCH_LABELS,
+    GRAPH_VERSION_DAG,
+    GRAPH_VERSION_FLAT,
+    NODE_TYPES,
+)
 from app.models.notification import Notification
 from app.models.notification_delivery import (
     NotificationDelivery,
@@ -60,7 +76,7 @@ from app.models.audit_log import (
     AuditLog,
     AuditResourceType,
 )
-from app.models.outbox_event import OutboxEvent, OutboxEventStatus
+from app.models.outbox_event import OutboxEvent, OutboxEventStatus, OutboxVisibility
 from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus
 from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus
 from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt, AttemptDisposition
@@ -181,4 +197,17 @@ __all__ = [
     "FindingSeverity",
     "CATEGORY_ORDER",
     "DRIFT_ALERT_BPS",
+    "AutomationExecution",
+    "AutomationExecutionStatus",
+    "AutomationNodeRun",
+    "AutomationNodeRunStatus",
+    "SUPPRESSED_STATUSES",
+    "TERMINAL_EXECUTION_STATUSES",
+    "AutomationEdge",
+    "AutomationNode",
+    "BRANCH_LABELS",
+    "GRAPH_VERSION_DAG",
+    "GRAPH_VERSION_FLAT",
+    "NODE_TYPES",
+    "OutboxVisibility",
 ]

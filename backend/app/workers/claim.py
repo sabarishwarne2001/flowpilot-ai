@@ -19,6 +19,7 @@ from app.models.outbox_event import (
     CLAIMABLE_STATUSES,
     OutboxEvent,
     OutboxEventStatus,
+    OutboxVisibility,
 )
 from app.models.webhook_delivery import (
     CLAIMABLE_DELIVERY_STATUSES,
@@ -55,10 +56,29 @@ class QueueSpec:
     org_column: Optional[str] = "organization_id"
     type_column: Optional[str] = None
     retry_base_seconds: int = RETRY_BASE_SECONDS
+    #: ARCH-13 Step 13.1. A (column_name, value) equality predicate applied to
+    #: every candidate selection for this queue. `outbox_events` now holds two
+    #: audiences in one table and each has its own consumer; without this the
+    #: webhook dispatcher would claim INTERNAL rows and deliver them to
+    #: customer endpoints.
+    #:
+    #: A tuple rather than a SQLAlchemy expression because QueueSpec is
+    #: `frozen=True` and module-level: building an expression here would bind
+    #: it to a table object at import time, and a hashable tuple keeps the
+    #: dataclass usable as a dict key.
+    row_filter: Optional[tuple[str, str]] = None
 
     @property
     def table(self) -> Any:
         return self.model.__table__
+
+    @property
+    def row_predicate(self) -> Any:
+        """The row_filter as a SQL expression, or a no-op TRUE."""
+        if self.row_filter is None:
+            return sa_true()
+        column, value = self.row_filter
+        return self.table.c[column] == value
 
     @property
     def claimable_values(self) -> list[str]:
@@ -73,13 +93,38 @@ class QueueSpec:
         return getattr(self.failed_status, "value", self.failed_status)
 
 
-OUTBOX_QUEUE = QueueSpec(
-    name="outbox",
+# ARCH-13 Step 13.1 (F1). `outbox_events` holds two audiences in one table —
+# the transactional guarantee is the reason it is one table — and each audience
+# has exactly one consumer. Splitting the QueueSpec is what stops the webhook
+# dispatcher claiming an INTERNAL row and delivering `work_item.enriched` to
+# every customer endpoint subscribed to it.
+#
+# `OUTBOX_QUEUE` is retained as an alias for OUTBOX_PUBLIC_QUEUE so existing
+# call sites keep the behaviour they had before this migration: claiming
+# deliverable events. A caller that wants internal events has to name the
+# internal queue, which means the choice is visible at the call site rather
+# than defaulted.
+OUTBOX_PUBLIC_QUEUE = QueueSpec(
+    name="outbox_public",
     model=OutboxEvent,
     claimable_statuses=CLAIMABLE_STATUSES,
     claimed_status=OutboxEventStatus.CLAIMED,
     failed_status=OutboxEventStatus.FAILED,
+    row_filter=("visibility", OutboxVisibility.PUBLIC.value),
 )
+
+OUTBOX_INTERNAL_QUEUE = QueueSpec(
+    name="outbox_internal",
+    model=OutboxEvent,
+    claimable_statuses=CLAIMABLE_STATUSES,
+    claimed_status=OutboxEventStatus.CLAIMED,
+    failed_status=OutboxEventStatus.FAILED,
+    row_filter=("visibility", OutboxVisibility.INTERNAL.value),
+)
+
+#: Backwards-compatible alias. PUBLIC is what "the outbox queue" meant before
+#: ARCH-13, so an unqualified reference keeps meaning that.
+OUTBOX_QUEUE = OUTBOX_PUBLIC_QUEUE
 
 WEBHOOK_DELIVERY_QUEUE = QueueSpec(
     name="webhook_delivery",
@@ -101,7 +146,12 @@ JOBS_QUEUE = QueueSpec(
 
 QUEUE_SPECS: dict[str, QueueSpec] = {
     spec.name: spec
-    for spec in (OUTBOX_QUEUE, WEBHOOK_DELIVERY_QUEUE, JOBS_QUEUE)
+    for spec in (
+        OUTBOX_PUBLIC_QUEUE,
+        OUTBOX_INTERNAL_QUEUE,
+        WEBHOOK_DELIVERY_QUEUE,
+        JOBS_QUEUE,
+    )
 }
 
 
@@ -144,6 +194,7 @@ def _rank_eligible_ids(
         )
         .where(
             type_filter if type_filter is not None else sa_true(),
+            spec.row_predicate,
             table.c.status.in_(spec.claimable_values),
             table.c.available_at <= now,
         )
@@ -208,6 +259,7 @@ def claim_eligible_rows(
         .where(
             id_filter,
             type_filter,
+            spec.row_predicate,
             table.c.status.in_(spec.claimable_values),
             table.c.available_at <= now,
         )
@@ -258,6 +310,7 @@ def release_expired_leases(
     candidates = (
         select(table.c.id)
         .where(
+            spec.row_predicate,
             table.c.status == spec.claimed_value,
             table.c.claim_expires_at < func.now(),
         )
