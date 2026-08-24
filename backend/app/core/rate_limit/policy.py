@@ -1,4 +1,4 @@
-"""Rate limit policy models (ARCH-08 §B.5, §6.6, §11.3, ARCH-12 Step 2)."""
+"""Rate limit policy models (ARCH-08 §B.5, §6.6, §11.3, ARCH-12 Step 2, SEC-1 Tranche 3)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ class RateLimitScope(str, Enum):
     GLOBAL_IP = "global_ip"
     USER = "user"
     LOGIN_IP = "login_ip"
+    LOGIN_ACCOUNT = "login_account"
+    LOGIN_ACCOUNT_IP = "login_account_ip"
     CREDENTIAL = "credential"
     EXPORT = "export"
     API_KEY = "api_key"
@@ -78,15 +80,57 @@ POLICY_API_KEY_DEFAULT = RateLimitPolicy(
     failure_mode=FailureMode.FAIL_OPEN,
 )
 
-# ARCH-12 Step 2 (A2). Generation-specific limits.
-#
-# FAIL_OPEN, matching every other non-credential policy: a Redis outage must
-# not become a full outage, and the spend ceiling in PostgreSQL is still
-# enforcing the thing that actually costs money.
 POLICY_ASSISTANT_GENERATE = RateLimitPolicy(
     name="assistant_generate",
     scope=RateLimitScope.USER,
     limit=10,
     window_seconds=60,
     failure_mode=FailureMode.FAIL_OPEN,
+)
+
+
+# ===========================================================================
+# SEC-1 Tranche 3 — login scopes
+# ===========================================================================
+
+class LoginScopeBehaviour(str, Enum):
+    """What exceeding a login policy does."""
+    REFUSE = "REFUSE"
+    DELAY = "DELAY"
+
+
+@dataclass(frozen=True)
+class LoginGuardPolicy:
+    """A login-failure policy with an escalation behaviour attached."""
+    name: str
+    scope: RateLimitScope
+    threshold: int
+    window_seconds: int
+    behaviour: LoginScopeBehaviour
+    ladder_base: int = 1
+    ladder_ceiling: int = 900
+
+
+#: The existing ARCH-08 pair scope, named. Refusing is safe here: it blocks one
+#: address, and the legitimate user on another address is unaffected.
+POLICY_LOGIN_ACCOUNT_IP = LoginGuardPolicy(
+    name="login_account_ip",
+    scope=RateLimitScope.LOGIN_ACCOUNT_IP,
+    threshold=5,
+    window_seconds=3600,
+    behaviour=LoginScopeBehaviour.REFUSE,
+    ladder_base=1,
+    ladder_ceiling=900,
+)
+
+#: The distributed-stuffing scope. Delay only, and deliberately no refusal at
+#: any count — prevents account DoS attacks.
+POLICY_LOGIN_ACCOUNT = LoginGuardPolicy(
+    name="login_account",
+    scope=RateLimitScope.LOGIN_ACCOUNT,
+    threshold=10,
+    window_seconds=900,
+    behaviour=LoginScopeBehaviour.DELAY,
+    ladder_base=250,      # milliseconds
+    ladder_ceiling=2000,  # milliseconds
 )

@@ -58,6 +58,7 @@ from app.services import (
 )
 from app.services.auth_service import authenticate_user, register_new_user
 from app.services.login_backoff_service import (
+    apply_delay,
     check_login_backoff,
     clear_login_backoff,
     record_login_failure,
@@ -77,6 +78,20 @@ def _user_agent(request: Request) -> str | None:
     return agent[:512] if agent else None
 
 
+def _login_refused() -> HTTPException:
+    """The single failure answer for /login.
+
+    Bad password, unknown address, disabled account, backed-off pair — all of
+    them leave here. Any branch that answers differently is an enumeration
+    oracle, and `scripts/verify_sec1.py` fails the build if one appears.
+    """
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect email or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def _refresh_failure(detail: str) -> JSONResponse:
     response = JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": detail}
@@ -86,15 +101,6 @@ def _refresh_failure(detail: str) -> JSONResponse:
 
 
 def _issue(response: Response, *, user_id, issued) -> dict[str, Any]:
-    """Set the refresh cookie and mint the matching access token.
-
-    Deliberately the single place any access token is issued from a session —
-    login, refresh and password reset all route through here. SEC-1 makes that
-    matter: `authenticated_at` has to reach every minted token, and one choke
-    point means it cannot be forgotten on a path somebody adds later. A token
-    minted without it fails the F6 gate rather than passing it, so a mistake
-    here is a support ticket instead of a breach.
-    """
     set_refresh_cookie(response, token=issued.plaintext_token)
     return {
         "access_token": create_access_token(
@@ -209,35 +215,27 @@ async def login(
     email = form_data.username.strip().lower()
 
     backoff = check_login_backoff(ip, email)
+    apply_delay(backoff.delay_ms)
+
     if backoff.is_backed_off:
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={
-                "error": {
-                    "code": "RATE_LIMIT_EXCEEDED",
-                    "message": "Too many failed login attempts. Please retry shortly.",
-                }
-            },
-            headers={"Retry-After": str(backoff.retry_after_seconds)},
+        logger.info(
+            "AUTH_LOGIN_REFUSED | reason=pair_backoff | ip=%s | retry_after=%s",
+            ip,
+            backoff.retry_after_seconds,
         )
+        record_login_failure(ip, email)
+        raise _login_refused()
 
     user = authenticate_user(db, email=email, password=form_data.password)
-    if not user:
-        delay = record_login_failure(ip, email)
-        headers = {"WWW-Authenticate": "Bearer"}
-        if delay > 0:
-            headers["Retry-After"] = str(delay)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers=headers,
-        )
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User account is inactive",
+    if not user or not user.is_active:
+        record_login_failure(ip, email)
+        logger.info(
+            "AUTH_LOGIN_REFUSED | reason=%s | ip=%s",
+            "inactive_account" if user else "bad_credentials",
+            ip,
         )
+        raise _login_refused()
 
     clear_login_backoff(ip, email)
 

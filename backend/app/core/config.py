@@ -321,6 +321,9 @@ class Settings(BaseSettings):
             )
         return v
 
+    # ---- SEC-1 Tranche 3: login failure accounting ------------------------
+    LOGIN_BACKOFF_ENABLED: bool = True
+
     # ---- ARCH-15: Stripe transport ----------------------------------------
     STRIPE_SECRET_KEY: SecretStr | None = None
     STRIPE_PUBLISHABLE_KEY: str | None = None
