@@ -128,6 +128,16 @@ from app.models.billable_seat import (
     BILLABLE_SEATS_VIEW_SQL,
     BillableSeat,
 )
+from app.models.invoice import (
+    COLLECTIBLE_INVOICE_STATUSES,
+    INVOICE_LINE_KIND_ENUM_NAME,
+    INVOICE_STATUS_ENUM_NAME,
+    INVOICE_STATUS_VALUES,
+    Invoice,
+    InvoiceLineItem,
+    InvoiceLineKind,
+    InvoiceStatus,
+)
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -259,4 +269,12 @@ __all__ = [
     "ENTITLED_SUBSCRIPTION_STATUSES",
     "BillableSeat",
     "BILLABLE_SEATS_VIEW_SQL",
+    "Invoice",
+    "InvoiceLineItem",
+    "InvoiceLineKind",
+    "InvoiceStatus",
+    "INVOICE_STATUS_ENUM_NAME",
+    "INVOICE_STATUS_VALUES",
+    "INVOICE_LINE_KIND_ENUM_NAME",
+    "COLLECTIBLE_INVOICE_STATUSES",
 ]

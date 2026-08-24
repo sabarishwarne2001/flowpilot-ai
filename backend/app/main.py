@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import billing as billing_v1
 from app.api.v1 import billing_webhook as billing_webhook_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
@@ -82,9 +83,8 @@ logger.info(f"API endpoints registered under baseline prefix: {settings.API_V1_S
 
 app.include_router(webhooks_v1.router, prefix=settings.API_V1_STR)
 
-# ARCH-15 Step 15.1. Registered here rather than on `api_router` for the same
-# reason `webhooks_v1` is: it carries no tenant prefix and no auth
-# dependencies, and mounting it beside the tenant-scoped routers is how a
-# future `dependencies=[...]` on that router would silently start rejecting
-# Stripe.
+# ARCH-15 Step 15.1. Unauthenticated webhook endpoint
 app.include_router(billing_webhook_v1.router, prefix=settings.API_V1_STR)
+
+# ARCH-15 Steps 15.6/15.7. Authenticated tenant billing API
+app.include_router(billing_v1.router, prefix=settings.API_V1_STR)

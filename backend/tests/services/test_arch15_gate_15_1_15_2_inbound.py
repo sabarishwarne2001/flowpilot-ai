@@ -10,12 +10,6 @@ Asserts, in the plan's own words:
   `available_at` pushed out; the reaper releases an expired lease
 * an event type we do not handle lands IGNORED, not PROCESSED
 * test-mode events are refused in a live-mode deployment
-
-The out-of-order test is the one worth reading. It does not check that we
-sorted anything, because we do not sort anything. It runs the same two events
-in both orders against a gateway whose *current* state is fixed, and asserts
-the two final rows are identical — which is what "reconcile, do not apply"
-buys and what applying deltas would fail.
 """
 
 from __future__ import annotations
@@ -27,6 +21,7 @@ import random
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Generator, Optional
 
 import pytest
@@ -59,6 +54,7 @@ from app.services.billing import (
 from app.services.billing.stripe_gateway import (
     StripeCustomerSnapshot,
     StripeGateway,
+    StripeInvoiceSnapshot,
     StripeObjectNotFoundError,
     StripeSubscriptionSnapshot,
 )
@@ -73,21 +69,11 @@ TEST_SECRET = "whsec_gate15_primary"
 
 
 class FakeStripeGateway(StripeGateway):
-    """Real verification, fabricated fetches.
-
-    Subclasses rather than reimplements so the signature path under test is
-    the production one — a fake that also faked verification would assert
-    nothing about the thing this tranche exists to get right.
-
-    `current` is the authoritative state. Every `fetch_subscription` returns
-    it, which is exactly what Stripe's API does and exactly why event ordering
-    stops mattering.
-    """
-
     def __init__(self) -> None:
         super().__init__(api_key="sk_test_fake", api_version="2026-07-29.dahlia")
         self.current: dict[str, dict[str, Any]] = {}
         self.customers: dict[str, dict[str, Any]] = {}
+        self.invoices: dict[str, dict[str, Any]] = {}
         self.fetch_calls: list[str] = []
         self.seat_calls: list[tuple[str, int, str]] = []
         self.fail_next_fetch: Optional[Exception] = None
@@ -120,6 +106,27 @@ class FakeStripeGateway(StripeGateway):
             raw=raw,
         )
 
+    def fetch_invoice(self, invoice_id: str) -> StripeInvoiceSnapshot:
+        raw = self.invoices.get(invoice_id, {})
+        return StripeInvoiceSnapshot(
+            id=invoice_id,
+            customer_id=raw.get("customer", "cus_gate15"),
+            subscription_id=raw.get("subscription", "sub_gate15"),
+            status=raw.get("status", "paid"),
+            currency=raw.get("currency", "USD"),
+            total_cents=int(raw.get("total", 10000)),
+            subtotal_cents=int(raw.get("subtotal", 10000)),
+            tax_cents=int(raw.get("tax", 0)),
+            amount_paid_cents=int(raw.get("amount_paid", 10000)),
+            period_start=None,
+            period_end=None,
+            paid=bool(raw.get("paid", True)),
+            raw=raw,
+        )
+
+    def fetch_invoice_total_cents(self, invoice_id: str) -> int:
+        return self.fetch_invoice(invoice_id).total_cents
+
     def set_subscription_seats(
         self,
         *,
@@ -148,12 +155,6 @@ def make_subscription(
     cancel_at_period_end: bool = False,
     canceled_at: Optional[datetime] = None,
 ) -> dict[str, Any]:
-    """A subscription in the shape the pinned API version actually returns.
-
-    Note where the period lives. Since 2025-03-31.basil it is on the item, not
-    on the subscription, and a fixture that puts it at the top level would be
-    testing an API version we do not speak.
-    """
     start = period_start or datetime(2026, 8, 1, tzinfo=timezone.utc)
     end = period_end or datetime(2026, 9, 1, tzinfo=timezone.utc)
     return {
@@ -269,10 +270,6 @@ def billing_org(db):
         )
     )
 
-    # Immutable trigger & digest constraint compliance:
-    # 1. Create with published_at=None, content_digest=None, is_active=False
-    # 2. Add entries and flush
-    # 3. Set content_digest, published_at, is_active=True and flush
     book = PriceBook(
         version=(int(time.time() * 1000) + random.randint(1, 1000000)) % 10000000,
         effective_from=now,
@@ -286,10 +283,19 @@ def billing_org(db):
     db.add(
         PriceBookEntry(
             price_book_id=book.id,
+            event_type=settings.BILLING_SEAT_EVENT_TYPE,
+            provider="internal",
+            unit="seat",
+            unit_price_micros=Decimal("25000000"),
+        )
+    )
+    db.add(
+        PriceBookEntry(
+            price_book_id=book.id,
             event_type="llm.input_token",
             provider="groq",
             unit="token",
-            unit_price_micros=1,
+            unit_price_micros=Decimal("2"),
         )
     )
     db.flush()
@@ -313,7 +319,8 @@ def billing_org(db):
             quota_tier_id=tier.id,
             limit_key="llm.input_token",
             max_quantity=1_000_000,
-            overage_policy="REFUSE",
+            overage_policy="ALLOW_AND_BILL",
+            overage_price_tier_key="llm.input_token",
         )
     )
     db.flush()
@@ -341,13 +348,6 @@ def billing_org(db):
 
 
 def drain(db, gateway_fake: FakeStripeGateway) -> list[StripeInboundEvent]:
-    """Claim and reconcile everything pending, in one transaction.
-
-    The production path splits claim and reconcile across sessions so a lease
-    survives an HTTPS round trip. Here they share one, because the test's
-    session *is* the transaction being rolled back and a second session would
-    not see the fixture rows.
-    """
     claimed = inbound_service.claim_batch(db, worker_id="gate15", batch_size=50)
     processed: list[StripeInboundEvent] = []
 
@@ -419,8 +419,6 @@ class TestGate151SignatureAndReplay:
         )
 
         assert response.status_code == 400
-        # A row per unverified POST is a free disk-fill for anybody with the
-        # URL. The absence of a row is the assertion.
         assert db.execute(select(StripeInboundEvent)).first() is None
 
     def test_missing_signature_header_is_refused(self, client, db, gateway):
@@ -445,8 +443,6 @@ class TestGate151SignatureAndReplay:
 
         assert first.status_code == 200
         assert first.json()["duplicate"] is False
-        # Still 200. A non-2xx would make Stripe retry a delivery that
-        # already succeeded.
         assert second.status_code == 200
         assert second.json()["duplicate"] is True
 
@@ -519,7 +515,6 @@ class TestGate151SignatureAndReplay:
         assert db.execute(select(StripeInboundEvent)).first() is None
 
     def test_handler_does_no_reconcile_work(self, client, db, gateway, billing_org):
-        """The endpoint hands off. It does not fetch."""
         gateway.current["sub_gate15"] = make_subscription()
         body = event_body(
             "customer.subscription.updated",
@@ -551,10 +546,8 @@ class TestGate152Reconciliation:
     def test_out_of_order_delivery_converges_to_the_same_state(
         self, db, gateway, billing_org
     ):
-        """The F2 test. Assert equality of the final row, not of the path."""
         gateway.current["sub_gate15"] = make_subscription(seats=7, status="active")
 
-        # Order A: created, then updated.
         self._ingest(
             db,
             "customer.subscription.created",
@@ -577,7 +570,6 @@ class TestGate152Reconciliation:
             in_order.price_book_id,
         )
 
-        # Reset and replay in the opposite order.
         db.execute(text("DELETE FROM subscriptions"))
         db.execute(text("DELETE FROM stripe_inbound_events"))
         db.flush()
@@ -609,7 +601,6 @@ class TestGate152Reconciliation:
     def test_stale_fetch_landing_last_does_not_regress_state(
         self, db, gateway, billing_org
     ):
-        """The residual race `stripe_state_version` exists to close."""
         gateway.current["sub_gate15"] = make_subscription(seats=2)
         self._ingest(
             db,
@@ -621,8 +612,6 @@ class TestGate152Reconciliation:
         subscription = db.execute(select(Subscription)).scalar_one()
         newer_version = subscription.stripe_state_version
 
-        # A fetch that was issued earlier — hence a lower version — returning
-        # older state and landing now.
         from app.services.billing import subscription_service
 
         stale = StripeSubscriptionSnapshot(
@@ -655,7 +644,7 @@ class TestGate152Reconciliation:
     ):
         row_id = self._ingest(
             db,
-            "invoice.payment_succeeded",
+            "invoice.created",
             {"object": "invoice", "id": "in_1", "customer": "cus_gate15"},
         )
         drain(db, gateway)
@@ -664,7 +653,6 @@ class TestGate152Reconciliation:
         assert row.status is StripeInboundStatus.IGNORED
         assert row.status is not StripeInboundStatus.PROCESSED
         assert row.processed_at is not None
-        # Ignoring is a decision, and the decision carries its reason.
         assert row.result["ignored_reason"] == "not_yet_implemented"
 
     def test_completely_unknown_event_type_is_also_ignored(
@@ -717,8 +705,6 @@ class TestGate152Reconciliation:
         )
         assert [row.id for row in claimed] == [row_id]
 
-        # Simulate the worker dying mid-flight: the lease exists but nobody
-        # will ever report a result.
         db.execute(
             update(StripeInboundEvent)
             .where(StripeInboundEvent.id == row_id)
@@ -734,7 +720,6 @@ class TestGate152Reconciliation:
         assert row.status is StripeInboundStatus.FAILED
         assert row.claim_expires_at is None
 
-        # And it is claimable again once the backoff elapses.
         db.execute(
             update(StripeInboundEvent)
             .where(StripeInboundEvent.id == row_id)
@@ -784,18 +769,11 @@ class TestGate152Reconciliation:
         row = db.get(StripeInboundEvent, row_id)
         assert row.status is StripeInboundStatus.IGNORED
         assert row.result["ignored_reason"] == "subscription_missing_at_stripe"
-        # The row 15.6 reproduces invoices against is still there.
         assert db.execute(select(Subscription)).scalar_one().seats_purchased == 4
 
     def test_scheduled_cancellation_reconciles_without_constraint_violation(
         self, db, gateway, billing_org
     ):
-        """The CHECK the plan sketched would have dead-lettered this event.
-
-        Stripe stamps `canceled_at` when a `cancel_at_period_end` cancellation
-        is *requested*, while `status` stays `active` until the period
-        actually ends. A biconditional constraint refuses that entirely ordinary object.
-        """
         gateway.current["sub_gate15"] = make_subscription(
             status="active",
             cancel_at_period_end=True,

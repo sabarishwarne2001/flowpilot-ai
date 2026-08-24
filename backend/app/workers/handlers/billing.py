@@ -1,27 +1,10 @@
-"""ARCH-15 Step 15.2 / 15.4 — the `billing.*` job handlers. LIGHT profile.
-
-LIGHT because everything here is SQL plus one HTTPS call. Nothing in the
-billing path touches PaddleOCR, torch or sentence-transformers, and putting it
-on a heavy image would mean paying a two-gigabyte cold start to answer a
-webhook.
-
-Three job types:
-
-    billing.reconcile   drain the inbound queue (or one named row)
-    billing.seat_sync   assert Stripe's seat count against the view
-    billing.seat_drift  detect and report, without correcting
-
-The last two are deliberately separate. Detection is a gate and must be able
-to run without side effects; correction changes what a customer is charged.
-Fusing them would mean the only way to find out whether drift exists is to fix
-it, and then nobody ever learns how often it happens.
-"""
+"""ARCH-15 Step 15.2 / 15.4 / 15.6 / 15.8 — the `billing.*` job handlers. LIGHT profile."""
 
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from app.core.config import settings
@@ -41,6 +24,8 @@ logger = logging.getLogger("app.workers.handlers.billing")
 RECONCILE_JOB_TYPE = "billing.reconcile"
 SEAT_SYNC_JOB_TYPE = "billing.seat_sync"
 SEAT_DRIFT_JOB_TYPE = "billing.seat_drift"
+ASSEMBLE_INVOICE_JOB_TYPE = "billing.assemble_invoice"
+DUNNING_SWEEP_JOB_TYPE = "billing.dunning_sweep"
 
 
 def _int(payload: dict[str, Any], key: str, default: int) -> int:
@@ -67,15 +52,6 @@ def _uuid(payload: dict[str, Any], key: str) -> Optional[uuid.UUID]:
 
 
 def handle_billing_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
-    """Claim inbound events and reconcile each one.
-
-    Two shapes:
-
-    * `{}` — claim a batch and drain it. The scheduled shape.
-    * `{"inbound_event_id": "..."}` — reconcile one specific row, ignoring
-      the lease. The shape an operator uses to retry a dead letter after
-      fixing whatever caused it.
-    """
     specific = _uuid(payload, "inbound_event_id")
     if specific is not None:
         return _reconcile_one_by_id(specific)
@@ -95,10 +71,6 @@ def handle_billing_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
             claimed = inbound_service.claim_batch(
                 db, batch_size=batch_size, lease_seconds=lease_seconds
             )
-            # The claim is committed before any Stripe call. Holding a
-            # transaction open across an HTTPS round trip is how a slow
-            # provider turns into exhausted connections, and the lease is
-            # exactly the mechanism that makes releasing the transaction safe.
             snapshot = [
                 (row.id, row.attempts, row.max_attempts) for row in claimed
             ]
@@ -155,13 +127,6 @@ def _reconcile_one_by_id(event_id: uuid.UUID) -> dict[str, Any]:
 def _reconcile_claimed_row(
     event_id: uuid.UUID, *, attempts: int, max_attempts: int
 ) -> StripeInboundStatus:
-    """Reconcile one row and mark it, each in its own transaction.
-
-    The marking is a separate session from the work deliberately: if the
-    reconcile transaction rolls back, the mark must not roll back with it, or
-    a row that failed for a deterministic reason would be reclaimed and fail
-    identically until it burned its attempt ceiling with no record of why.
-    """
     with system_principal(
         job_name="jobs.billing.reconcile", job_id=event_id
     ):
@@ -206,9 +171,6 @@ def _reconcile_claimed_row(
             return status
 
         except (ReconcileRefused, stripe_gateway.StripePermanentError) as exc:
-            # Deterministic. Retrying eight times changes nothing except how
-            # long it takes somebody to notice, so it goes straight to the
-            # ceiling.
             with SessionLocal() as db:
                 with db.begin():
                     inbound_service.mark_failed(
@@ -266,13 +228,6 @@ def _short(detail: dict[str, Any]) -> str:
 
 
 def handle_billing_seat_sync(payload: dict[str, Any]) -> dict[str, Any]:
-    """Assert Stripe's seat count against the view.
-
-    `{"organization_id": "..."}` for one tenant; `{}` to sweep every drifting
-    one. The sweep is bounded by `limit` because a sweep that can issue an
-    unbounded number of Stripe writes is an incident waiting for its first bad
-    deploy.
-    """
     organization_id = _uuid(payload, "organization_id")
     reason = str(payload.get("reason") or "seat_sync")
     limit = _int(payload, "limit", 100)
@@ -309,13 +264,6 @@ def handle_billing_seat_sync(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def handle_billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
-    """Detect and report. Corrects nothing.
-
-    This is the gate, not the alert. Drift is a symptom whose cause is always
-    upstream — a failed modify, a membership change that did not emit, a lost
-    reconcile race — and a job that quietly corrects it removes the only
-    evidence that the cause exists.
-    """
     limit = _int(payload, "limit", 1000)
 
     with SessionLocal() as db:
@@ -332,6 +280,114 @@ def handle_billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if drifts:
         logger.error("billing.seat_drift_detected", extra=outcome)
+    return outcome
+
+
+# ============================================================================
+# billing.assemble_invoice
+# ============================================================================
+
+
+def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+    from app.services.billing import invoice_service
+
+    subscription_id = _uuid(payload, "subscription_id")
+    limit = _int(payload, "limit", 100)
+    finalize = bool(payload.get("finalize", True))
+
+    assembled: list[dict[str, Any]] = []
+    skipped = 0
+
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.assemble_invoice"):
+            if subscription_id is not None:
+                targets = [subscription_id]
+            else:
+                cutoff = datetime.now(timezone.utc)
+                targets = list(
+                    db.execute(
+                        select(Subscription.id)
+                        .where(
+                            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+                            Subscription.current_period_end <= cutoff,
+                        )
+                        .order_by(Subscription.current_period_end.asc())
+                        .limit(limit)
+                    )
+                    .scalars()
+                    .all()
+                )
+
+    for target in targets:
+        with SessionLocal() as db:
+            with system_principal(job_name="jobs.billing.assemble_invoice"):
+                try:
+                    with db.begin():
+                        subscription = db.get(Subscription, target)
+                        if subscription is None:
+                            skipped += 1
+                            continue
+                        result = invoice_service.assemble(
+                            db, subscription=subscription, finalize=finalize
+                        )
+                        assembled.append(
+                            {
+                                "number": result.invoice.number,
+                                "subscription_id": str(target),
+                                "total_micros": int(result.invoice.total_micros),
+                                "lines": len(result.lines),
+                                "notes": result.notes or None,
+                            }
+                        )
+                except invoice_service.InvoiceAssemblyError as exc:
+                    logger.error(
+                        "billing.assembly_refused",
+                        extra={"subscription_id": str(target), "error": str(exc)},
+                    )
+                    skipped += 1
+
+    outcome = {
+        "targets": len(targets),
+        "assembled": len(assembled),
+        "skipped": skipped,
+        "invoices": assembled[:50],
+    }
+    logger.info("billing.assemble_invoice_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
+# billing.dunning_sweep
+# ============================================================================
+
+
+def handle_billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.services.billing import dunning_service
+
+    limit = _int(payload, "limit", 200)
+    grace_days = _int(payload, "grace_days", 3)
+
+    advanced: list[dict[str, Any]] = []
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.dunning_sweep"):
+            with db.begin():
+                overdue = dunning_service.overdue_invoices(
+                    db, older_than=timedelta(days=grace_days), limit=limit
+                )
+                for invoice in overdue:
+                    advanced.append(
+                        dunning_service.on_payment_failed(db, invoice=invoice)
+                    )
+
+    outcome = {
+        "considered": len(advanced),
+        "applied": sum(1 for a in advanced if a.get("outcome") == "APPLIED"),
+        "detail": advanced[:50],
+    }
+    logger.info("billing.dunning_sweep_complete", extra=outcome)
     return outcome
 
 
@@ -372,11 +428,15 @@ def enqueue_seat_sync(
 
 
 __all__ = [
+    "ASSEMBLE_INVOICE_JOB_TYPE",
+    "DUNNING_SWEEP_JOB_TYPE",
     "RECONCILE_JOB_TYPE",
     "SEAT_DRIFT_JOB_TYPE",
     "SEAT_SYNC_JOB_TYPE",
     "enqueue_reconcile",
     "enqueue_seat_sync",
+    "handle_billing_assemble_invoice",
+    "handle_billing_dunning_sweep",
     "handle_billing_reconcile",
     "handle_billing_seat_drift",
     "handle_billing_seat_sync",

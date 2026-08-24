@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.4 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.4/15.6/15.8 — job handler registration."""
 
 from __future__ import annotations
 
@@ -21,7 +21,13 @@ ARCH13_JOB_TYPES: frozenset[str] = frozenset(
     {"automation.execute", "document.verify"}
 )
 ARCH15_JOB_TYPES: frozenset[str] = frozenset(
-    {"billing.reconcile", "billing.seat_sync", "billing.seat_drift"}
+    {
+        "billing.reconcile",
+        "billing.seat_sync",
+        "billing.seat_drift",
+        "billing.assemble_invoice",
+        "billing.dunning_sweep",
+    }
 )
 
 
@@ -103,6 +109,18 @@ def _billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_billing_seat_drift(payload)
 
 
+def _billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_assemble_invoice
+
+    return handle_billing_assemble_invoice(payload)
+
+
+def _billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_dunning_sweep
+
+    return handle_billing_dunning_sweep(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -117,6 +135,8 @@ _HANDLERS = {
     "billing.reconcile": _billing_reconcile,
     "billing.seat_sync": _billing_seat_sync,
     "billing.seat_drift": _billing_seat_drift,
+    "billing.assemble_invoice": _billing_assemble_invoice,
+    "billing.dunning_sweep": _billing_dunning_sweep,
 }
 
 

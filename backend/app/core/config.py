@@ -326,6 +326,78 @@ class Settings(BaseSettings):
     #: customer is looking at Stripe's number.
     BILLING_SEAT_PRORATION_BEHAVIOR: str = "create_prorations"
 
+    # ---- ARCH-15 Tranche 3: invoices --------------------------------------
+    BILLING_INVOICE_NUMBER_PREFIX: str = "FP"
+
+    #: The `price_book_entries.event_type` that prices a seat. A price book
+    #: entry rather than a hardcoded number so a price change is a publish,
+    #: not a deploy — and so the seat price on a past invoice is pinned by the
+    #: same mechanism as everything else on it.
+    BILLING_SEAT_EVENT_TYPE: str = "billing.seat"
+
+    #: Used only when the pinned book has no seat entry. Zero means the seat
+    #: line appears at zero and the Stripe comparison in Gate 15.6 fails —
+    #: which is the correct place for a missing price to surface. Omitting the
+    #: line instead would under-bill invisibly.
+    BILLING_SEAT_FALLBACK_PRICE_MICROS: int = 0
+
+    #: Gate 15.6's tolerance, applied *after* rounding our total to the cent
+    #: Stripe can actually charge. See invoice_service.compare_with_stripe.
+    BILLING_STRIPE_TOTAL_TOLERANCE_MICROS: int = 1
+
+    # ---- ARCH-15 Tranche 4: portal, checkout, dunning ---------------------
+    #: F6. How recently the caller must have authenticated to mint a portal
+    #: session. Five minutes: long enough to survive a page navigation, short
+    #: enough that a tab left open overnight cannot change a card.
+    BILLING_REAUTH_WINDOW_S: int = 300
+
+    #: Defaults to on, and refusing is the failure mode. Defaulting open and
+    #: intending to close it later is how this class of gap ships permanently.
+    BILLING_REAUTH_REQUIRED: bool = True
+
+    BILLING_PORTAL_RETURN_URL: str | None = None
+    BILLING_CHECKOUT_SUCCESS_URL: str | None = None
+    BILLING_CHECKOUT_CANCEL_URL: str | None = None
+    BILLING_SEAT_PRICE_ID: str | None = None
+
+    #: The furthest dunning will escalate in this deployment. `NOTIFY_3` is the
+    #: default because steps 4 and 5 touch the authorization path and deserve
+    #: to be switched on deliberately; a human marking the first few accounts
+    #: delinquent is entirely acceptable and is how most billing systems start.
+    BILLING_DUNNING_MAX_STEP: str = "NOTIFY_3"
+
+    @field_validator("BILLING_DUNNING_MAX_STEP")
+    @classmethod
+    def validate_dunning_max_step(cls, v: str) -> str:
+        allowed = {
+            "NOTIFY_1",
+            "NOTIFY_2",
+            "NOTIFY_3",
+            "RESTRICT_WRITES",
+            "SUSPEND_WRITES",
+        }
+        normalized = (v or "").strip().upper()
+        if normalized not in allowed:
+            raise ValueError(
+                f"BILLING_DUNNING_MAX_STEP must be one of {sorted(allowed)}."
+            )
+        return normalized
+
+    @field_validator("BILLING_REAUTH_WINDOW_S")
+    @classmethod
+    def validate_reauth_window(cls, v: int) -> int:
+        if v < 30:
+            raise ValueError(
+                "BILLING_REAUTH_WINDOW_S below 30s makes the portal "
+                "unusable — the redirect itself takes longer than that."
+            )
+        if v > 3600:
+            raise ValueError(
+                "BILLING_REAUTH_WINDOW_S above one hour defeats the purpose "
+                "of F6: a tab left open should not be able to change a card."
+            )
+        return v
+
     @field_validator("BILLING_SEAT_PRORATION_BEHAVIOR")
     @classmethod
     def validate_proration_behavior(cls, v: str) -> str:

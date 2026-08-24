@@ -85,13 +85,7 @@ class StripeObjectNotFoundError(StripePermanentError):
 
 @dataclass(frozen=True)
 class StripeEvent:
-    """A verified inbound event, reduced to what the ingestion path needs.
-
-    Deliberately *not* the SDK's `Event`. Nothing downstream should be able to
-    reach for `data.object` and start applying deltas, so the state is simply
-    not carried here — only the raw payload, for the audit copy, and the
-    identifiers a reconciler needs to know what to re-fetch.
-    """
+    """A verified inbound event, reduced to what the ingestion path needs."""
 
     id: str
     type: str
@@ -102,12 +96,6 @@ class StripeEvent:
 
     @property
     def data_object(self) -> dict[str, Any]:
-        """The event body's object.
-
-        Present because the *identifier* has to come from somewhere. Reading
-        anything but an id, a customer reference, or a subscription reference
-        out of this is the F2 mistake.
-        """
         data = self.payload.get("data")
         if isinstance(data, Mapping):
             obj = data.get("object")
@@ -118,11 +106,7 @@ class StripeEvent:
 
 @dataclass(frozen=True)
 class StripeSubscriptionSnapshot:
-    """Authoritative subscription state, as of one fetch.
-
-    `state_version` is stamped when the fetch is **issued**, not when it
-    returns — see `fetch_subscription`.
-    """
+    """Authoritative subscription state, as of one fetch."""
 
     id: str
     customer_id: str
@@ -138,6 +122,25 @@ class StripeSubscriptionSnapshot:
     metadata: dict[str, str] = field(default_factory=dict)
     price_ids: tuple[str, ...] = ()
     state_version: int = 0
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class StripeInvoiceSnapshot:
+    """Stripe's invoice, in Stripe's units (cents)."""
+
+    id: str
+    customer_id: str
+    subscription_id: Optional[str]
+    status: str
+    currency: Optional[str]
+    total_cents: int
+    subtotal_cents: int
+    tax_cents: int
+    amount_paid_cents: int
+    period_start: Optional[datetime]
+    period_end: Optional[datetime]
+    paid: bool
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -161,7 +164,6 @@ def _epoch_micros(moment: Optional[datetime] = None) -> int:
 
 
 def _as_datetime(value: Any) -> Optional[datetime]:
-    """Stripe timestamps are epoch seconds. Nulls stay null."""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -207,20 +209,6 @@ def _items(subscription: Mapping[str, Any]) -> list[dict[str, Any]]:
 def _period_from_subscription(
     subscription: Mapping[str, Any],
 ) -> tuple[Optional[datetime], Optional[datetime]]:
-    """Where the billing period actually lives.
-
-    Since API version 2025-03-31.basil, `current_period_start` and
-    `current_period_end` were **removed from the Subscription object** and live
-    on each subscription item. A reconciler that reads them off the top level
-    against a modern API version writes NULLs and trips
-    `ck_subscriptions_period_ordered`, and the row dead-letters.
-
-    So: prefer the items, take the widest window they describe (they are
-    identical for the single-item subscriptions this product issues, and the
-    widest is the defensible reading for a mixed-interval one), and fall back
-    to the legacy top-level fields for older versions and hand-written
-    fixtures.
-    """
     starts: list[datetime] = []
     ends: list[datetime] = []
 
@@ -246,11 +234,6 @@ def _period_from_subscription(
 
 
 def _seats_from_subscription(subscription: Mapping[str, Any]) -> int:
-    """Total licensed quantity across items.
-
-    Metered items carry no `quantity`; they contribute nothing to a seat count
-    and are skipped rather than counted as one.
-    """
     total = 0
     for item in _items(subscription):
         quantity = item.get("quantity")
@@ -318,12 +301,6 @@ def _parse_signature_header(header: str) -> tuple[Optional[int], list[str]]:
 def _verify_without_sdk(
     payload: bytes, header: str, secret: str, tolerance: int
 ) -> None:
-    """Stripe's documented scheme, implemented directly.
-
-    Raises `StripeSignatureError` on any failure. Never returns a boolean:
-    a verifier whose result can be assigned to a variable is a verifier whose
-    result can be ignored.
-    """
     timestamp, signatures = _parse_signature_header(header)
     if timestamp is None or not signatures:
         raise StripeSignatureError(
@@ -343,8 +320,6 @@ def _verify_without_sdk(
         secret.encode("utf-8"), signed_payload, hashlib.sha256
     ).hexdigest()
 
-    # `compare_digest` against every candidate rather than short-circuiting on
-    # the first match, so the work done is independent of which one matches.
     matched = False
     for candidate in signatures:
         if hmac.compare_digest(expected, candidate):
@@ -359,13 +334,6 @@ def _verify_without_sdk(
 
 
 class StripeGateway:
-    """Every outbound Stripe call and every inbound verification.
-
-    Instantiated lazily by `get_gateway()`; replaceable wholesale by
-    `set_gateway()` so the gate suites can exercise out-of-order delivery,
-    proration and drift without a network.
-    """
-
     def __init__(
         self,
         *,
@@ -388,8 +356,6 @@ class StripeGateway:
         )
         self._client: Any = None
 
-    # -- configuration --------------------------------------------------
-
     def _resolved_key(self) -> str:
         if self._api_key:
             return self._api_key
@@ -406,8 +372,8 @@ class StripeGateway:
     @staticmethod
     def _sdk() -> Any:
         try:
-            import stripe  # noqa: PLC0415 — deliberately local; see module docstring
-        except ImportError as exc:  # pragma: no cover - depends on image
+            import stripe
+        except ImportError as exc:
             raise StripeNotConfiguredError(
                 "The `stripe` package is not installed in this image. Add "
                 "`stripe==15.5.1` to requirements.txt, or run this process "
@@ -429,8 +395,6 @@ class StripeGateway:
     def api_version(self) -> str:
         return self._api_version
 
-    # -- inbound --------------------------------------------------------
-
     def verify_event(
         self,
         *,
@@ -439,12 +403,6 @@ class StripeGateway:
         secrets: Optional[Sequence[str]] = None,
         tolerance: Optional[int] = None,
     ) -> StripeEvent:
-        """Verify raw bytes and return the event, or raise.
-
-        Tries each configured secret in turn so a rotation window does not
-        drop deliveries. A failure here is a 400 and **no row**: persisting
-        every unverified POST is a free disk-fill for anyone who finds the URL.
-        """
         if not isinstance(payload, (bytes, bytearray)):
             raise StripeSignatureError(
                 "Verification requires the raw request bytes. A parsed and "
@@ -523,7 +481,7 @@ class StripeGateway:
             event = stripe.Webhook.construct_event(
                 payload, signature_header, secret, tolerance=tolerance
             )
-        except Exception as exc:  # noqa: BLE001 — SDK raises several shapes
+        except Exception as exc:
             if type(exc).__name__ == "SignatureVerificationError":
                 raise StripeSignatureError(str(exc)) from exc
             if isinstance(exc, ValueError):
@@ -531,21 +489,7 @@ class StripeGateway:
             raise
         return _as_mapping(event)
 
-    # -- outbound -------------------------------------------------------
-
     def fetch_subscription(self, subscription_id: str) -> StripeSubscriptionSnapshot:
-        """Re-fetch authoritative subscription state (F2).
-
-        `state_version` is stamped **before** the request goes out. This is the
-        subtle half of the guard and it is worth being explicit about:
-
-        two reconciles race, A issues its fetch at t=1 and B at t=2. B returns
-        first and writes version 2. A returns later carrying state that is at
-        best as fresh as t=1, and writes version 1 — which the
-        `WHERE stripe_state_version < :new` predicate rejects. Had the version
-        been stamped on *return*, A's staler state would have carried the
-        larger number and overwritten B's.
-        """
         issued_at = _epoch_micros()
         raw = self._retrieve_subscription(subscription_id)
         return self._snapshot_subscription(raw, state_version=issued_at)
@@ -558,7 +502,7 @@ class StripeGateway:
                 {"expand": ["items.data.price"]},
                 {"timeout": int(self._timeout_seconds * 1000)},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._classify(exc, context=f"subscription {subscription_id}") from exc
         return _as_mapping(obj)
 
@@ -603,7 +547,7 @@ class StripeGateway:
             obj = client.v1.customers.retrieve(
                 customer_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._classify(exc, context=f"customer {customer_id}") from exc
         raw = _as_mapping(obj)
         return StripeCustomerSnapshot(
@@ -624,13 +568,6 @@ class StripeGateway:
         currency: Optional[str] = None,
         metadata: Optional[Mapping[str, str]] = None,
     ) -> StripeCustomerSnapshot:
-        """Create the Stripe customer for an organization.
-
-        The idempotency key is derived from the organization id, not from a
-        random value, so a retry after a timeout returns the customer the
-        first attempt created instead of creating a second one that will
-        quietly be billed in parallel.
-        """
         params: dict[str, Any] = {
             "email": email,
             "metadata": {
@@ -655,7 +592,7 @@ class StripeGateway:
                     "timeout": int(self._timeout_seconds * 1000),
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._classify(
                 exc, context=f"customer.create org={organization_id}"
             ) from exc
@@ -679,7 +616,7 @@ class StripeGateway:
                 {"email": email},
                 {"timeout": int(self._timeout_seconds * 1000)},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._classify(
                 exc, context=f"customer.update {customer_id}"
             ) from exc
@@ -701,17 +638,6 @@ class StripeGateway:
         proration_behavior: Optional[str] = None,
         reason: str = "seat_sync",
     ) -> StripeSubscriptionSnapshot:
-        """Change the licensed quantity, letting Stripe do the proration.
-
-        **Proration is Stripe's arithmetic, not ours.** Computing a prorated
-        amount locally guarantees eventually disagreeing with the invoice
-        Stripe issues, and the customer is looking at Stripe's number, not
-        ours.
-
-        The idempotency key folds in the target seat count, so a retry of the
-        *same* change is free while a genuinely different change is a
-        different call.
-        """
         behavior = proration_behavior or settings.BILLING_SEAT_PRORATION_BEHAVIOR
         issued_at = _epoch_micros()
 
@@ -742,7 +668,7 @@ class StripeGateway:
                     "timeout": int(self._timeout_seconds * 1000),
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._classify(
                 exc, context=f"subscription.seats {subscription_id}"
             ) from exc
@@ -756,16 +682,131 @@ class StripeGateway:
                 return str(item["id"])
         return None
 
-    # -- error classification -------------------------------------------
+    # -- invoices (Tranche 3) -------------------------------------------
+
+    def fetch_invoice(self, invoice_id: str) -> StripeInvoiceSnapshot:
+        client = self._stripe_client()
+        try:
+            obj = client.v1.invoices.retrieve(
+                invoice_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(exc, context=f"invoice {invoice_id}") from exc
+        raw = _as_mapping(obj)
+        return StripeInvoiceSnapshot(
+            id=str(raw.get("id") or invoice_id),
+            customer_id=_customer_id(raw.get("customer")),
+            subscription_id=(
+                _customer_id(raw.get("subscription"))
+                if raw.get("subscription")
+                else None
+            ),
+            status=str(raw.get("status") or ""),
+            currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+            total_cents=int(raw.get("total") or 0),
+            subtotal_cents=int(raw.get("subtotal") or 0),
+            tax_cents=int(raw.get("tax") or 0),
+            amount_paid_cents=int(raw.get("amount_paid") or 0),
+            period_start=_as_datetime(raw.get("period_start")),
+            period_end=_as_datetime(raw.get("period_end")),
+            paid=bool(raw.get("paid", False)),
+            raw=raw,
+        )
+
+    def fetch_invoice_total_cents(self, invoice_id: str) -> int:
+        return self.fetch_invoice(invoice_id).total_cents
+
+    # -- sessions (Tranche 4) -------------------------------------------
+
+    def create_portal_session(
+        self, *, customer_id: str, return_url: Optional[str] = None
+    ) -> Any:
+        from app.services.billing.portal_service import EphemeralSession
+
+        params: dict[str, Any] = {"customer": customer_id}
+        if return_url:
+            params["return_url"] = return_url
+
+        client = self._stripe_client()
+        try:
+            obj = client.v1.billing_portal.sessions.create(
+                params, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(
+                exc, context=f"portal_session {customer_id}"
+            ) from exc
+
+        raw = _as_mapping(obj)
+        return EphemeralSession(
+            url=str(raw.get("url") or ""),
+            expires_at=None,
+            kind="portal",
+            stripe_session_id=(str(raw["id"]) if raw.get("id") else None),
+        )
+
+    def create_checkout_session(
+        self,
+        *,
+        customer_id: str,
+        price_id: str,
+        seats: int,
+        organization_id: uuid.UUID,
+        quota_tier_key: str,
+        success_url: Optional[str] = None,
+        cancel_url: Optional[str] = None,
+    ) -> Any:
+        from app.services.billing.portal_service import EphemeralSession
+
+        params: dict[str, Any] = {
+            "mode": "subscription",
+            "customer": customer_id,
+            "line_items": [{"price": price_id, "quantity": int(seats)}],
+            "subscription_data": {
+                "metadata": {
+                    "organization_id": str(organization_id),
+                    "quota_tier_key": quota_tier_key,
+                }
+            },
+            "metadata": {
+                "organization_id": str(organization_id),
+                "quota_tier_key": quota_tier_key,
+            },
+        }
+        if success_url:
+            params["success_url"] = success_url
+        if cancel_url:
+            params["cancel_url"] = cancel_url
+
+        client = self._stripe_client()
+        try:
+            obj = client.v1.checkout.sessions.create(
+                params,
+                {
+                    "idempotency_key": idempotency_key(
+                        "checkout.session",
+                        str(organization_id),
+                        quota_tier_key,
+                        str(int(seats)),
+                    ),
+                    "timeout": int(self._timeout_seconds * 1000),
+                },
+            )
+        except Exception as exc:
+            raise self._classify(
+                exc, context=f"checkout_session org={organization_id}"
+            ) from exc
+
+        raw = _as_mapping(obj)
+        return EphemeralSession(
+            url=str(raw.get("url") or ""),
+            expires_at=_as_datetime(raw.get("expires_at")),
+            kind="checkout",
+            stripe_session_id=(str(raw["id"]) if raw.get("id") else None),
+        )
 
     @staticmethod
     def _classify(exc: Exception, *, context: str) -> StripeGatewayError:
-        """Map an SDK exception onto retryable / not.
-
-        The distinction is the whole difference between an inbound row that
-        clears on the next pass and one that burns eight attempts before
-        dead-lettering with a message nobody can act on.
-        """
         name = type(exc).__name__
 
         transient = {
@@ -811,13 +852,6 @@ class StripeGateway:
 
 
 def idempotency_key(*parts: str) -> str:
-    """A deterministic key for a mutating call.
-
-    Deterministic and not random: the point of the key is that the *retry of a
-    specific intent* is free. A UUID per attempt would make every retry a new
-    intent, which is exactly the duplicate-charge failure the header exists to
-    prevent.
-    """
     joined = "|".join(str(part) for part in parts if part is not None)
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:48]
     return f"fp15_{digest}"
@@ -838,11 +872,6 @@ def get_gateway() -> StripeGateway:
 
 
 def set_gateway(gateway: Optional[StripeGateway]) -> Optional[StripeGateway]:
-    """Install a gateway (or `None` to reset). Returns the previous one.
-
-    The seam the gate suites use. It exists here rather than as a FastAPI
-    dependency because the reconciler runs in a worker with no request scope.
-    """
     global _gateway
     previous = _gateway
     _gateway = gateway
@@ -859,6 +888,7 @@ def configured_secrets() -> Iterable[str]:
 
 __all__ = [
     "StripeCustomerSnapshot",
+    "StripeInvoiceSnapshot",
     "StripeEvent",
     "StripeGateway",
     "StripeGatewayError",

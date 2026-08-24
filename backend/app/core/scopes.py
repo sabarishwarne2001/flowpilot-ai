@@ -26,6 +26,13 @@ class ApiKeyScope(str, Enum):
     WEBHOOKS_READ = "webhooks:read"
     WEBHOOKS_WRITE = "webhooks:write"
     WEBHOOKS_ADMIN = "webhooks:admin"
+    # --- ARCH-15 Step 15.7 ---------------------------------------------
+    # Read-only, and there is no `billing:write` counterpart. Changing a
+    # payment method or minting a portal session requires fresh interactive
+    # authentication (F6), which a long-lived programmatic key is the
+    # opposite of — the same reasoning that keeps `settings:write` in
+    # PERMANENTLY_EXCLUDED_SCOPES.
+    BILLING_READ = "billing:read"
 
 
 PERMANENTLY_EXCLUDED_SCOPES = frozenset({
@@ -33,6 +40,8 @@ PERMANENTLY_EXCLUDED_SCOPES = frozenset({
     "members:write",
     "api_keys:write",
     "settings:write",
+    # ARCH-15 F6. No API key may ever change billing state.
+    "billing:write",
 })
 
 SCOPES_BY_ROLE: dict[OrganizationRole, frozenset[ApiKeyScope]] = {
@@ -48,6 +57,8 @@ SCOPES_BY_ROLE: dict[OrganizationRole, frozenset[ApiKeyScope]] = {
     }),
     OrganizationRole.BILLING: frozenset({
         ApiKeyScope.ORGANIZATIONS_READ,
+        # The role finally gets the scope it was named for.
+        ApiKeyScope.BILLING_READ,
     }),
 }
 
@@ -82,6 +93,19 @@ ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
         ApiKeyScope.WEBHOOKS_READ,
     ("POST", "/organizations/{organization_id}/webhooks/deliveries/{delivery_id}/redeliver"):
         ApiKeyScope.WEBHOOKS_WRITE,
+    # --- ARCH-15 Step 15.7 ------------------------------------------------
+    # Reads only. The three mutating billing routes are deliberately absent
+    # from this map: an unmapped route is refused for API-key principals, so
+    # omission here is the enforcement, not an oversight.
+    ("GET", "/organizations/{organization_id}/invoices"): ApiKeyScope.BILLING_READ,
+    ("GET", "/organizations/{organization_id}/invoices/{invoice_id}"):
+        ApiKeyScope.BILLING_READ,
+    ("GET", "/organizations/{organization_id}/invoices/{invoice_id}/reproduction"):
+        ApiKeyScope.BILLING_READ,
+    ("GET", "/organizations/{organization_id}/billing/subscription"):
+        ApiKeyScope.BILLING_READ,
+    ("GET", "/organizations/{organization_id}/billing/access"):
+        ApiKeyScope.BILLING_READ,
 }
 
 

@@ -1,5 +1,5 @@
 """
-Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10, ARCH-12 Step 6).
+Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10, ARCH-12 Step 6, ARCH-15 Step 7).
 """
 
 from __future__ import annotations
@@ -39,6 +39,10 @@ class AuditResourceType(str, PyEnum):
     WEBHOOK_ENDPOINT = "WEBHOOK_ENDPOINT"
     SPEND_LIMIT = "SPEND_LIMIT"
     CONVERSATION = "CONVERSATION"
+    # ---- ARCH-15 Step 15.7a --------------------------------------------
+    BILLING_ACCOUNT = "BILLING_ACCOUNT"
+    SUBSCRIPTION = "SUBSCRIPTION"
+    INVOICE = "INVOICE"
 
 
 class AuditAction(str, PyEnum):
@@ -60,6 +64,11 @@ class AuditAction(str, PyEnum):
     WEBHOOK_ENDPOINT_AUTO_DISABLED = "WEBHOOK_ENDPOINT_AUTO_DISABLED"
     EXCEEDED = "EXCEEDED"
     GENERATED = "GENERATED"
+    # ---- ARCH-15 Step 15.7a --------------------------------------------
+    PORTAL_SESSION_MINTED = "PORTAL_SESSION_MINTED"
+    CHECKOUT_STARTED = "CHECKOUT_STARTED"
+    SEATS_CHANGED = "SEATS_CHANGED"
+    DUNNING_STEP_APPLIED = "DUNNING_STEP_APPLIED"
 
 
 _resource_type_pg = PgEnum(
