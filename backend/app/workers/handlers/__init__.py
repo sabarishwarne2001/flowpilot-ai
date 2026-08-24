@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5 — job handler registration."""
+"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.4 — job handler registration."""
 
 from __future__ import annotations
 
@@ -19,6 +19,9 @@ ARCH14_JOB_TYPES: frozenset[str] = frozenset(
 )
 ARCH13_JOB_TYPES: frozenset[str] = frozenset(
     {"automation.execute", "document.verify"}
+)
+ARCH15_JOB_TYPES: frozenset[str] = frozenset(
+    {"billing.reconcile", "billing.seat_sync", "billing.seat_drift"}
 )
 
 
@@ -82,6 +85,24 @@ def _document_verify(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_document_verify(payload)
 
 
+def _billing_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_reconcile
+
+    return handle_billing_reconcile(payload)
+
+
+def _billing_seat_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_seat_sync
+
+    return handle_billing_seat_sync(payload)
+
+
+def _billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_seat_drift
+
+    return handle_billing_seat_drift(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -93,6 +114,9 @@ _HANDLERS = {
     "usage.reconcile": _usage_reconcile,
     "automation.execute": _automation_execute,
     "document.verify": _document_verify,
+    "billing.reconcile": _billing_reconcile,
+    "billing.seat_sync": _billing_seat_sync,
+    "billing.seat_drift": _billing_seat_drift,
 }
 
 
@@ -123,5 +147,6 @@ __all__ = [
     "ARCH12_JOB_TYPES",
     "ARCH13_JOB_TYPES",
     "ARCH14_JOB_TYPES",
+    "ARCH15_JOB_TYPES",
     "register_all",
 ]

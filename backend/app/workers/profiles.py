@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8, ARCH-11 Step 9, ARCH-12 Step 7, ARCH-13 Step 13.5, ARCH-14 Step 2 & 5 — worker profiles."""
+"""ARCH-10 Step 8, ARCH-11 Step 9, ARCH-12 Step 7, ARCH-13 Step 13.5, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2 — worker profiles."""
 
 from __future__ import annotations
 
@@ -41,10 +41,20 @@ LIGHT = WorkerProfile(
             "usage.reconcile",
             "automation.execute",
             "document.verify",
+            # ARCH-15. Billing is SQL plus one HTTPS call and belongs
+            # nowhere near a two-gigabyte OCR image: a cold start measured in
+            # minutes is not a sensible way to answer a webhook.
+            "billing.reconcile",
+            "billing.seat_sync",
+            "billing.seat_drift",
         }
     ),
     allow_heavy=frozenset(),
-    description="Thin image. Sampling, housekeeping, notification delivery, rollups, reconciliation, automation execution, and document verification.",
+    description=(
+        "Thin image. Sampling, housekeeping, notification delivery, rollups, "
+        "reconciliation, automation execution, document verification, and "
+        "Stripe reconciliation."
+    ),
 )
 
 OCR = WorkerProfile(

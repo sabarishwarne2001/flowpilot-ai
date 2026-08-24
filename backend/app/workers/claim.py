@@ -21,6 +21,11 @@ from app.models.outbox_event import (
     OutboxEventStatus,
     OutboxVisibility,
 )
+from app.models.stripe_inbound_event import (
+    CLAIMABLE_STRIPE_INBOUND_STATUSES,
+    StripeInboundEvent,
+    StripeInboundStatus,
+)
 from app.models.webhook_delivery import (
     CLAIMABLE_DELIVERY_STATUSES,
     WebhookDelivery,
@@ -144,6 +149,29 @@ JOBS_QUEUE = QueueSpec(
     type_column="job_type",
 )
 
+# ARCH-15 Step 15.2. Inbound Stripe events are the same lease-and-retry
+# problem the outbox already solved, so they are a fourth QueueSpec rather
+# than a fourth implementation. What does *not* transfer is the schema: see
+# `app/models/stripe_inbound_event.py` for the axis-by-axis reason.
+#
+# `retry_base_seconds` is shorter than the outbox default. An inbound event
+# sitting unprocessed means billing state is currently wrong; an outbound one
+# means a customer's endpoint is down. They deserve different urgency.
+#
+# No `per_org_cap` is ever passed for this queue: `organization_id` is
+# nullable here and every unresolved event would rank inside a single NULL
+# partition, throttling precisely the rows that most need attention.
+STRIPE_INBOUND_QUEUE = QueueSpec(
+    name="stripe_inbound",
+    model=StripeInboundEvent,
+    claimable_statuses=CLAIMABLE_STRIPE_INBOUND_STATUSES,
+    claimed_status=StripeInboundStatus.CLAIMED,
+    failed_status=StripeInboundStatus.FAILED,
+    org_column="organization_id",
+    type_column="event_type",
+    retry_base_seconds=15,
+)
+
 QUEUE_SPECS: dict[str, QueueSpec] = {
     spec.name: spec
     for spec in (
@@ -151,6 +179,7 @@ QUEUE_SPECS: dict[str, QueueSpec] = {
         OUTBOX_INTERNAL_QUEUE,
         WEBHOOK_DELIVERY_QUEUE,
         JOBS_QUEUE,
+        STRIPE_INBOUND_QUEUE,
     )
 }
 
@@ -640,3 +669,24 @@ def reap_expired_webhook_leases(db: Session, *, limit: int = 500) -> int:
 
 def reap_expired_job_leases(db: Session, *, limit: int = 500) -> int:
     return release_expired_leases(db, JOBS_QUEUE, limit=limit)
+
+
+def claim_stripe_inbound_events(
+    db: Session,
+    *,
+    worker_id: Optional[str] = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+) -> list[StripeInboundEvent]:
+    """ARCH-15 Step 15.2. Named shim, matching the three that precede it."""
+    return claim_eligible_rows(
+        db,
+        STRIPE_INBOUND_QUEUE,
+        worker_id=worker_id,
+        batch_size=batch_size,
+        lease_seconds=lease_seconds,
+    )
+
+
+def reap_expired_stripe_inbound_leases(db: Session, *, limit: int = 500) -> int:
+    return release_expired_leases(db, STRIPE_INBOUND_QUEUE, limit=limit)

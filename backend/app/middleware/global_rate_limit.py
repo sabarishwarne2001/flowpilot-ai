@@ -11,7 +11,19 @@ from app.core.rate_limit.limiter import consume_rate_limit
 from app.core.rate_limit.policy import POLICY_GLOBAL_IP
 
 EXEMPT_PATHS: frozenset[str] = frozenset(
-    {"/health", "/api/v1/health", "/docs", "/openapi.json"}
+    {
+        "/health",
+        "/api/v1/health",
+        "/docs",
+        "/openapi.json",
+        # ARCH-15 Step 15.1. Stripe delivers from a small set of addresses and
+        # bursts hard after resolving an outage of its own. A per-IP limit
+        # would shed exactly that recovery burst — dropping billing events
+        # for a reason that looks like protection. The endpoint's own
+        # defences are the signature check and the body-size bound, both of
+        # which run before any work.
+        "/api/v1/billing/stripe/webhook",
+    }
 )
 
 

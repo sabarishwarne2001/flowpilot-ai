@@ -67,6 +67,20 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         # a customer's Zapier integration has no use for it and it names an
         # internal cost ceiling.
         "automation.budget_exhausted",
+        # ARCH-15 Step 15.4. Seat lifecycle. A membership entering or leaving
+        # `MembershipStatus.ACTIVE` changes what Stripe should be charging,
+        # and the transition is the only moment at which anybody knows it.
+        # INTERNAL because these name our seat accounting and our Stripe
+        # state; a customer endpoint has no use for either, and
+        # `billing.seat_removed` leaking would tell a subscriber's integration
+        # about staffing changes at a tenant it merely shares a webhook with.
+        "billing.seat_added",
+        "billing.seat_removed",
+        # Emitted by the drift detector when `seats_purchased` and the
+        # `billable_seats` view disagree. Deliberately a *request to
+        # re-assert*, not an instruction to overwrite: drift is a symptom,
+        # and a job that silently corrects it hides the cause.
+        "billing.seat_sync_needed",
     }
 )
 
@@ -76,7 +90,14 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
 #: `WEBHOOK_EVENT_TYPES`. Belt and braces: the disjointness assertion already
 #: catches that, but this catches the case where a *new* internal namespace is
 #: introduced and only added to one of the two sets.
-INTERNAL_ONLY_PREFIXES: Final[tuple[str, ...]] = ("automation.",)
+#:
+#: ARCH-15 reserves `billing.seat_` and not the whole `billing.` namespace.
+#: Tranche 3 and 4 will want genuinely publishable billing events —
+#: `billing.invoice_finalized` is a reasonable thing for a customer's
+#: accounting integration to subscribe to — and reserving the parent namespace
+#: now would make that a migration rather than a one-line addition. Seat
+#: accounting is the part that must never leave this process.
+INTERNAL_ONLY_PREFIXES: Final[tuple[str, ...]] = ("automation.", "billing.seat_")
 
 
 def _assert_vocabularies_disjoint() -> None:

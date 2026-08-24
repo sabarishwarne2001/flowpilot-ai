@@ -272,6 +272,94 @@ class Settings(BaseSettings):
     AUTOMATION_VERIFICATION_AGENTS: int = 2
     AUTOMATION_AUTO_APPROVE_THRESHOLD: float = 0.85
 
+    # ---- ARCH-15: Stripe transport ----------------------------------------
+    STRIPE_SECRET_KEY: SecretStr | None = None
+    STRIPE_PUBLISHABLE_KEY: str | None = None
+
+    #: Comma-separated, newest first — ARCH-08 §B.12's dual-secret overlap
+    #: pattern applied to the endpoint secret. Rotating a Stripe webhook
+    #: secret means both the old and the new one are live for a window; a
+    #: single-valued setting would drop every event delivered in it.
+    STRIPE_WEBHOOK_SECRETS: SecretStr | None = None
+    STRIPE_WEBHOOK_TOLERANCE_SECONDS: int = 300
+
+    #: Pinned explicitly. An account-level API version bump that changes a
+    #: payload shape mid-phase is a genuinely horrible afternoon, and the
+    #: default here is the version stripe-python 15.5.1 generates against.
+    #: Note that since 2025-03-31.basil, `current_period_start`/`_end` live on
+    #: subscription *items*, not on the subscription — see
+    #: `stripe_gateway._period_from_subscription`.
+    STRIPE_API_VERSION: str = "2026-07-29.dahlia"
+
+    #: Whether this deployment talks to live mode. Asserted against every
+    #: inbound `event.livemode` before the row is written.
+    STRIPE_LIVEMODE: bool = False
+
+    STRIPE_MAX_NETWORK_RETRIES: int = 2
+    STRIPE_TIMEOUT_SECONDS: float = 20.0
+
+    #: The endpoint refuses a body larger than this before verification. HMAC
+    #: over an unbounded body is a free CPU-burn for anyone who finds the URL.
+    STRIPE_MAX_WEBHOOK_BODY_BYTES: int = 512 * 1024
+
+    STRIPE_INBOUND_BATCH_SIZE: int = 25
+    STRIPE_INBOUND_LEASE_SECONDS: int = 60
+    STRIPE_INBOUND_MAX_ATTEMPTS: int = 8
+
+    # ---- ARCH-15: billing policy ------------------------------------------
+    BILLING_DEFAULT_CURRENCY: str = "USD"
+
+    #: The tier a subscription pins to when its Stripe metadata does not name
+    #: one. `None` means *refuse*: a subscription we cannot map to a tier is
+    #: billing state we must not guess at, and the inbound row goes FAILED
+    #: rather than silently entitling somebody to the wrong plan.
+    BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None
+
+    #: The Stripe price the seat line uses. Resolved by lookup key so a price
+    #: rotation in the Stripe dashboard does not require a redeploy.
+    BILLING_SEAT_PRICE_LOOKUP_KEY: str | None = None
+
+    BILLING_SEAT_SYNC_ENABLED: bool = True
+
+    #: Proration is Stripe's arithmetic, not ours. Computing prorated amounts
+    #: locally guarantees disagreeing with the invoice Stripe issues, and the
+    #: customer is looking at Stripe's number.
+    BILLING_SEAT_PRORATION_BEHAVIOR: str = "create_prorations"
+
+    @field_validator("BILLING_SEAT_PRORATION_BEHAVIOR")
+    @classmethod
+    def validate_proration_behavior(cls, v: str) -> str:
+        allowed = {"create_prorations", "none", "always_invoice"}
+        normalized = v.strip().lower()
+        if normalized not in allowed:
+            raise ValueError(
+                "BILLING_SEAT_PRORATION_BEHAVIOR must be one of "
+                f"{sorted(allowed)} — these are Stripe's own values."
+            )
+        return normalized
+
+    @field_validator("STRIPE_API_VERSION")
+    @classmethod
+    def validate_stripe_api_version(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError(
+                "STRIPE_API_VERSION must be pinned explicitly. Leaving it to "
+                "the account default means a dashboard-side version bump "
+                "changes payload shapes without a deploy."
+            )
+        return cleaned
+
+    @field_validator("BILLING_DEFAULT_CURRENCY")
+    @classmethod
+    def validate_billing_currency(cls, v: str) -> str:
+        cleaned = v.strip().upper()
+        if len(cleaned) != 3:
+            raise ValueError(
+                "BILLING_DEFAULT_CURRENCY must be a 3-letter ISO-4217 code."
+            )
+        return cleaned
+
     @field_validator("AUTOMATION_MAX_DEPTH")
     @classmethod
     def validate_automation_max_depth(cls, v: int) -> int:
@@ -403,6 +491,61 @@ class Settings(BaseSettings):
     @property
     def encryption_key_list(self) -> list[str]:
         return getattr(self, "_encryption_key_list", [])
+
+    @property
+    def stripe_webhook_secret_list(self) -> list[str]:
+        """Endpoint secrets, newest first.
+
+        Returned as a list because verification tries each in turn: during a
+        rotation window Stripe signs with the new secret while deliveries
+        already in flight were signed with the old one, and refusing either
+        loses billing events permanently.
+        """
+        raw = (
+            self.STRIPE_WEBHOOK_SECRETS.get_secret_value()
+            if self.STRIPE_WEBHOOK_SECRETS is not None
+            else None
+        )
+        if not raw:
+            return []
+        return [part.strip() for part in raw.split(",") if part.strip()]
+
+    @model_validator(mode="after")
+    def _assert_stripe_mode_matches_key(self) -> "Settings":
+        """A live-mode deployment holding a test key is a silent no-op.
+
+        The failure it prevents: `STRIPE_LIVEMODE=true` with `sk_test_…`
+        means every real customer event is refused as a mode mismatch while
+        the service looks perfectly healthy. Checked only outside dev and
+        test, where mixing is routine and harmless.
+        """
+        if self.ENVIRONMENT in _KEYLESS_ENVIRONMENTS:
+            return self
+
+        secret = (
+            self.STRIPE_SECRET_KEY.get_secret_value()
+            if self.STRIPE_SECRET_KEY is not None
+            else None
+        )
+        if not secret:
+            return self
+
+        looks_live = secret.startswith("sk_live_") or secret.startswith("rk_live_")
+        looks_test = secret.startswith("sk_test_") or secret.startswith("rk_test_")
+
+        if self.STRIPE_LIVEMODE and looks_test:
+            raise ValueError(
+                "STRIPE_LIVEMODE is true but STRIPE_SECRET_KEY is a test-mode "
+                "key. Every inbound live event would be refused as a mode "
+                "mismatch while the service reported healthy."
+            )
+        if not self.STRIPE_LIVEMODE and looks_live:
+            raise ValueError(
+                "STRIPE_SECRET_KEY is a live-mode key but STRIPE_LIVEMODE is "
+                "false. This configuration charges real cards from a "
+                "deployment that believes it is in test mode."
+            )
+        return self
 
     @property
     def cors_origins(self) -> list[str]:

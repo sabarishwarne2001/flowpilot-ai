@@ -1,4 +1,4 @@
-"""ARCH-09 Step 6b, 9, 10, ARCH-10 Step 8 — the worker entrypoint."""
+"""ARCH-09 Step 6b, 9, 10, ARCH-10 Step 8, ARCH-15 Step 15.2 — the worker entrypoint."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import time
 from types import FrameType
 from typing import Optional, Sequence
 
+from app.core.config import settings
 from app.workers.handlers import register_all
 from app.workers.profiles import (
     assert_imports_match_profile,
@@ -349,13 +350,83 @@ def run_jobs_loop(
     logger.info("worker.stopped", extra={"worker": worker, "loop": "jobs", "passes": passes})
 
 
+def run_stripe_inbound_loop(
+    *,
+    shutdown: GracefulShutdown,
+    batch_size: int,
+    lease_seconds: int,
+    idle_sleep_seconds: float,
+    reap_every_n_passes: int = 20,
+) -> None:
+    """ARCH-15 Step 15.2 — drain `stripe_inbound_events`.
+
+    A dedicated loop rather than a job type on the `jobs` queue, because the
+    inbound table *is* a queue with its own lease and its own retry curve, and
+    routing through `jobs` would mean two lease clocks over one unit of work.
+    The `billing.reconcile` job type still exists and does the same thing on a
+    schedule — this loop is what runs when latency matters, which for a
+    subscription state change is always.
+    """
+    from app.db.session import SessionLocal
+    from app.services.billing import inbound_service
+    from app.workers.claim import worker_identity
+    from app.workers.handlers.billing import _reconcile_claimed_row
+
+    worker = worker_identity()
+    logger.info("worker.start", extra={"worker": worker, "loop": "stripe_inbound"})
+    passes = 0
+
+    while not shutdown.requested:
+        passes += 1
+
+        if passes % reap_every_n_passes == 0:
+            with SessionLocal() as db:
+                reaped = inbound_service.reap_expired_leases(db)
+                db.commit()
+            if reaped:
+                logger.warning("stripe_inbound.reaped", extra={"count": reaped})
+
+        with SessionLocal() as db:
+            claimed = inbound_service.claim_batch(
+                db,
+                worker_id=worker,
+                batch_size=batch_size,
+                lease_seconds=lease_seconds,
+            )
+            # Snapshot and commit before any Stripe call. The lease is what
+            # makes releasing the transaction across an HTTPS round trip safe,
+            # and holding it open instead is how a slow provider exhausts the
+            # connection pool.
+            snapshot = [
+                (row.id, row.attempts, row.max_attempts) for row in claimed
+            ]
+            db.commit()
+
+        if not snapshot:
+            _idle_sleep(idle_sleep_seconds)
+            continue
+
+        if shutdown.requested:
+            logger.info("stripe_inbound.draining", extra={"remaining": len(snapshot)})
+
+        for event_id, attempts, max_attempts in snapshot:
+            _reconcile_claimed_row(
+                event_id, attempts=attempts, max_attempts=max_attempts
+            )
+
+    logger.info(
+        "worker.stopped",
+        extra={"worker": worker, "loop": "stripe_inbound", "passes": passes},
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="app.worker")
     parser.add_argument(
         "--loop",
-        choices=["relay", "delivery", "jobs"],
+        choices=["relay", "delivery", "jobs", "stripe"],
         required=True,
-        help="relay | delivery | jobs",
+        help="relay | delivery | jobs | stripe",
     )
     parser.add_argument("--profile", default=None, help="light | ocr | enrich | all")
     parser.add_argument("--batch-size", type=int, default=25)
@@ -384,7 +455,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     lease = args.lease_seconds
     if lease is None:
-        lease = 120 if args.loop == "delivery" else 60
+        if args.loop == "delivery":
+            lease = 120
+        elif args.loop == "stripe":
+            lease = int(getattr(settings, "STRIPE_INBOUND_LEASE_SECONDS", 60))
+        else:
+            lease = 60
 
     shutdown = GracefulShutdown().install()
     kwargs = dict(
@@ -397,6 +473,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         runner, extra = run_relay_loop, {"per_org_cap": args.per_org_cap}
     elif args.loop == "delivery":
         runner, extra = run_delivery_loop, {"per_org_cap": args.per_org_cap}
+    elif args.loop == "stripe":
+        # No per-org cap: `organization_id` is nullable on this table, so
+        # every not-yet-resolved event would rank inside one NULL partition
+        # and the cap would throttle precisely the rows that need attention.
+        runner, extra = run_stripe_inbound_loop, {}
     else:
         runner, extra = run_jobs_loop, {"job_types": claimable_job_types(profile)}
 

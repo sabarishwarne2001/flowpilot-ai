@@ -201,9 +201,80 @@ def _organization_tier_key(db: Session, organization_id: uuid.UUID) -> Optional[
     return row[0] if row else None
 
 
+def _pinned_tier_id(db: Session, organization_id: uuid.UUID) -> Optional[uuid.UUID]:
+    """ARCH-15 Step 15.3 — the tier version the live subscription pins.
+
+    This is the *id* of one specific published version, not a key. That
+    distinction is the whole of F3.
+    """
+    from app.models.billing_account import BillingAccount
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+
+    row = db.execute(
+        select(Subscription.quota_tier_id)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(
+            BillingAccount.organization_id == organization_id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+        )
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    ).first()
+    return row[0] if row else None
+
+
+def _tier_by_id(db: Session, tier_id: uuid.UUID) -> Optional[_TierSnapshot]:
+    """Load one tier version by id, active or superseded.
+
+    The `_tiers()` cache only holds versions that are currently active, which
+    is exactly the wrong set here: a subscription may legitimately be pinned
+    to a version that has since been superseded, and that is the case where
+    reading the pin matters most.
+
+    Published tiers are immutable (the ARCH-14 trigger enforces it), so this
+    result is cacheable indefinitely; it shares the tier TTL only so a
+    mistakenly-published draft does not linger past a restart.
+    """
+    for snapshot in _tiers(db):
+        if snapshot.id == tier_id:
+            return snapshot
+
+    tier = db.execute(
+        select(QuotaTier)
+        .options(selectinload(QuotaTier.entries))
+        .where(QuotaTier.id == tier_id)
+    ).scalar_one_or_none()
+    return _snapshot(tier) if tier is not None else None
+
+
 def resolve_tier(
     db: Session, *, organization_id: uuid.UUID, at: Optional[datetime] = None
 ) -> Optional[_TierSnapshot]:
+    # ARCH-15 Step 15.3 (F3). A tenant with a live subscription is entitled to
+    # the tier version its subscription *pins*, not to whichever version of
+    # that key happens to be in force right now.
+    #
+    # The difference is not academic. Publishing `business/v4` with a smaller
+    # allowance would otherwise silently re-entitle every customer on
+    # `business/v3` — mid-period, against an invoice already computed from v3's
+    # allowance — and the answer to "why was I refused on March 14?" would
+    # change in July. Gate 15.3 fails if this returns the active version.
+    #
+    # Returned without a `covers(at)` check on purpose: being pinned is
+    # precisely being exempt from the effective window.
+    pinned_id = _pinned_tier_id(db, organization_id)
+    if pinned_id is not None:
+        pinned = _tier_by_id(db, pinned_id)
+        if pinned is not None:
+            return pinned
+        logger.error(
+            "quota.pinned_tier_version_missing",
+            extra={
+                "organization_id": str(organization_id),
+                "quota_tier_id": str(pinned_id),
+            },
+        )
+
     key = _organization_tier_key(db, organization_id)
     if key is None:
         return None

@@ -50,6 +50,7 @@ from app.crud import user as user_crud
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.services import audit_service, verification_service
+from app.services.billing import seat_service as billing_seat_service
 from app.services.organization_member_service import (
     lock_organization_for_owner_change,
 )
@@ -489,7 +490,7 @@ def accept_invitation(
         role_preserved = False
 
         if membership is None:
-            organization_members_crud.create_organization_member(
+            membership = organization_members_crud.create_organization_member(
                 db,
                 organization_id=organization.id,
                 user_id=actor.id,
@@ -513,6 +514,18 @@ def accept_invitation(
             organization_members_crud.set_organization_member_status(
                 db, membership=membership, status=MembershipStatus.ACTIVE,
             )
+
+        # ARCH-15 Step 15.4 (F4). *This* is when an invitation becomes a
+        # seat — not when it was sent. A pending invitation is not billable
+        # and never was; acceptance is the transition, and the transition is
+        # where the event belongs.
+        billing_seat_service.record_seat_added(
+            db,
+            organization_id=organization.id,
+            membership_id=(membership.id if membership is not None else None),
+            user_id=actor.id,
+            cause="invitation_accepted",
+        )
 
         provisioned: list[GrantLine] = []
         skipped = 0

@@ -39,6 +39,7 @@ from app.models.organization import (
 )
 from app.models.user import User
 from app.services import audit_service, organization_notification_service
+from app.services.billing import seat_service as billing_seat_service
 
 logger = logging.getLogger("app.services.organization_member_service")
 
@@ -268,6 +269,18 @@ def deactivate_member(
                 "api_keys_revoked": len(revoked_keys),
             },
             **context,
+        )
+
+        # ARCH-15 Step 15.4 (F4). Emitted inside the same transaction as the
+        # status change, because the transition is the only moment at which
+        # anybody knows a seat was released. A no-op for tenants with no
+        # billing account.
+        billing_seat_service.record_seat_removed(
+            db,
+            organization_id=organization.id,
+            membership_id=target_membership.id,
+            user_id=target_membership.user_id,
+            cause="membership_deactivated",
         )
 
         commit_and_refresh(db, deactivated)

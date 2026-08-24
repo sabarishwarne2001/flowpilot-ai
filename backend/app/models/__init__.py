@@ -108,6 +108,26 @@ from app.models.quota_tier import (
     QuotaTierEntry,
     QuotaTierKey,
 )
+from app.models.stripe_inbound_event import (
+    CLAIMABLE_STRIPE_INBOUND_STATUSES,
+    STRIPE_INBOUND_STATUS_ENUM_NAME,
+    StripeInboundEvent,
+    StripeInboundStatus,
+    TERMINAL_STRIPE_INBOUND_STATUSES,
+)
+from app.models.billing_account import BillingAccount
+from app.models.subscription import (
+    ENTITLED_SUBSCRIPTION_STATUSES,
+    LIVE_SUBSCRIPTION_STATUSES,
+    SUBSCRIPTION_STATUS_ENUM_NAME,
+    SUBSCRIPTION_STATUS_VALUES,
+    Subscription,
+    SubscriptionStatus,
+)
+from app.models.billable_seat import (
+    BILLABLE_SEATS_VIEW_SQL,
+    BillableSeat,
+)
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -224,4 +244,19 @@ __all__ = [
     "DocumentVerificationField",
     "RELEASING_STATUSES",
     "VerificationStatus",
+    # ---- ARCH-15 -------------------------------------------------------
+    "StripeInboundEvent",
+    "StripeInboundStatus",
+    "STRIPE_INBOUND_STATUS_ENUM_NAME",
+    "CLAIMABLE_STRIPE_INBOUND_STATUSES",
+    "TERMINAL_STRIPE_INBOUND_STATUSES",
+    "BillingAccount",
+    "Subscription",
+    "SubscriptionStatus",
+    "SUBSCRIPTION_STATUS_ENUM_NAME",
+    "SUBSCRIPTION_STATUS_VALUES",
+    "LIVE_SUBSCRIPTION_STATUSES",
+    "ENTITLED_SUBSCRIPTION_STATUSES",
+    "BillableSeat",
+    "BILLABLE_SEATS_VIEW_SQL",
 ]
