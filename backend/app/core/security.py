@@ -1,26 +1,62 @@
 """
 Cryptographic primitives for FlowPilot AI.
 
-Password hashing (bcrypt) and access-token issuance and verification.
+Password hashing (Argon2id, with bcrypt still accepted) and access-token
+issuance and verification.
 
 Refresh tokens are deliberately absent from this module. They are opaque
 256-bit secrets stored hashed in the sessions table, not JWTs — see
 app/services/session_service.py. Nothing about a refresh token is signed, so
 nothing about it belongs here.
 
-ACCESS TOKEN CLAIMS (ARCH-03 §B.6)
+ACCESS TOKEN CLAIMS (ARCH-03 §B.6, extended by SEC-1)
+-----------------------------------------------------
+    sub        user id
+    jti        unique token id, so one issuance is distinguishable from
+               another in logs and in any future denylist
+    iat        issued-at, load-bearing: an access token is rejected when its
+               iat predates users.sessions_revoked_at, which is what makes
+               password reset and sign-out-everywhere take effect immediately
+               instead of at the end of the access TTL
+    auth_time  when the user last actually presented a credential (SEC-1)
+    exp        expiry
+    type       always "access"
+    sid        the session this token was minted from, absent only for tokens
+               issued before Step 7 wires login to session creation
+
+WHY `auth_time` IS NOT `iat`
+----------------------------
+They look interchangeable and are not, and the difference was a live hole.
+
+`iat` is when *this token* was minted. Rotation mints a new access token every
+few minutes from a refresh token that may be months old, so `iat` on an ancient
+session is always fresh. ARCH-15's F6 gate — "you must have authenticated
+within BILLING_REAUTH_WINDOW_S to mint a Customer Portal URL" — read `iat`, and
+therefore admitted any session that had simply stayed alive. The window was not
+short, it was unreachable, and no test caught it because the mechanism was
+correct and nothing in production ever presents a stale token.
+
+`auth_time` is when a human last proved they hold the credential. It is stamped
+at login, copied forward unchanged through every rotation in the family, and
+moved only by genuine re-authentication. It is the one fact about a session
+that rotation cannot launder.
+
+PASSWORD HASHING (SEC-1 Tranche 2)
 ----------------------------------
-    sub   user id
-    jti   unique token id, so one issuance is distinguishable from another in
-          logs and in any future denylist
-    iat   issued-at, load-bearing: an access token is rejected when its iat
-          predates users.sessions_revoked_at, which is what makes password
-          reset and sign-out-everywhere take effect immediately instead of at
-          the end of the access TTL
-    exp   expiry
-    type  always "access"
-    sid   the session this token was minted from, absent only for tokens
-          issued before Step 7 wires login to session creation
+`argon2` first, `bcrypt` retained, `deprecated="auto"`. Listing bcrypt second
+is not politeness toward old code: it is the only way an existing user can log
+in at all, and because the sole moment a password can be rehashed is during a
+successful login, **the bcrypt entry has no removal date**. A dormant account
+keeps its bcrypt hash until its owner returns, which may be never. Anybody
+planning a "drop bcrypt" milestone should read that sentence twice.
+
+Parameters come from Settings so they are tunable per environment, and default
+to the OWASP / RFC 9106 floor for memory-constrained backends: 19 MiB, t=2,
+p=1. They are a latency decision as much as a security one — `memory_cost`
+multiplies by concurrency, so 19 MiB at 20 concurrent logins is ~380 MB and
+fits a 1-2 GB container, while the same setting raised "for safety" to 64 MiB
+is 1.3 GB and an OOM kill under a credential-stuffing burst. A floor, not a
+dial to be maximised.
 
 WHY THE type CLAIM, HONESTLY
 ----------------------------
@@ -40,6 +76,7 @@ both shapes must be accepted.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -50,10 +87,30 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger("app.core.security")
+
+#: Argon2id first, bcrypt retained for verification and silent upgrade.
+#:
+#: `argon2__type="ID"` is explicit rather than left to the handler default.
+#: Argon2i and Argon2d exist, the passlib default has moved across versions,
+#: and "which variant is this deployment actually using" is not a question
+#: anybody should have to answer by reading a dependency's changelog.
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto",
+    argon2__type="ID",
+    argon2__memory_cost=settings.ARGON2_MEMORY_COST,
+    argon2__time_cost=settings.ARGON2_TIME_COST,
+    argon2__parallelism=settings.ARGON2_PARALLELISM,
+)
 
 #: The only token type this module issues or accepts.
 ACCESS_TOKEN_TYPE = "access"
+
+#: The claim carrying the authentication moment. Named for the OIDC claim of
+#: the same meaning, so that if this service ever fronts an OIDC provider the
+#: value maps across without a translation layer.
+AUTH_TIME_CLAIM = "auth_time"
 
 
 # ===========================================================================
@@ -62,16 +119,77 @@ ACCESS_TOKEN_TYPE = "access"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Verifies a plaintext password against its stored bcrypt hash.
+    Verifies a plaintext password against its stored hash.
+
+    Accepts both Argon2id and bcrypt hashes; passlib selects the handler from
+    the hash prefix. Callers that can persist an upgrade should prefer
+    verify_and_upgrade_password.
     """
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def verify_and_upgrade_password(
+    plain_password: str, hashed_password: str
+) -> tuple[bool, str | None]:
+    """
+    Verifies, and reports a replacement hash when the stored one is outdated.
+
+    Returns `(verified, new_hash_or_None)`. A non-None second element means the
+    stored hash is bcrypt, or Argon2id at superseded parameters, and the caller
+    should persist the replacement — see
+    auth_service._persist_password_upgrade for why that write must never be
+    allowed to fail the login.
+
+    This is `CryptContext.verify_and_update` rather than
+    verify-then-needs_update-then-hash because the plaintext is only in hand
+    for the duration of this call, and the three-step form invites somebody to
+    later move the rehash outside the block where it exists.
+    """
+    try:
+        verified, new_hash = pwd_context.verify_and_update(
+            plain_password, hashed_password
+        )
+    except ValueError:
+        # An unrecognised or corrupt stored hash. Treated as a failed
+        # verification rather than an exception, because the auth boundary
+        # answers 401 to everything, and a malformed hash must not become a
+        # 500 that tells the caller their account is interesting.
+        logger.error("password.unparseable_stored_hash")
+        return False, None
+
+    return bool(verified), new_hash
+
+
 def get_password_hash(password: str) -> str:
     """
-    Computes a salted bcrypt hash for storage in users.hashed_password.
+    Computes an Argon2id hash for storage in users.hashed_password.
+
+    New hashes are always Argon2id: `pwd_context.hash` uses the first scheme in
+    the list. bcrypt is reachable only by verifying a hash that already exists.
     """
     return pwd_context.hash(password)
+
+
+def hash_needs_upgrade(hashed_password: str) -> bool:
+    """
+    Whether a stored hash is bcrypt, or Argon2id at superseded parameters.
+
+    Exposed for the SEC-1 gate suite and for operational reporting: "how much
+    of the population is still on bcrypt" is worth being able to answer without
+    a `LIKE '$2b$%'` over the users table.
+    """
+    try:
+        return bool(pwd_context.needs_update(hashed_password))
+    except ValueError:
+        return False
+
+
+def hash_scheme(hashed_password: str) -> str | None:
+    """The scheme name of a stored hash, or None if unrecognised."""
+    try:
+        return pwd_context.identify(hashed_password)
+    except ValueError:
+        return None
 
 
 # ===========================================================================
@@ -95,6 +213,7 @@ class AccessTokenClaims:
     issued_at: datetime
     expires_at: datetime
     session_id: uuid.UUID | None
+    auth_time: datetime | None
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "AccessTokenClaims | None":
@@ -123,12 +242,21 @@ class AccessTokenClaims:
             except (ValueError, TypeError):
                 return None
 
+        raw_auth_time = payload.get(AUTH_TIME_CLAIM)
+        auth_time: datetime | None = None
+        if raw_auth_time is not None:
+            try:
+                auth_time = datetime.fromtimestamp(int(raw_auth_time), tz=UTC)
+            except (ValueError, TypeError, OverflowError, OSError):
+                return None
+
         return cls(
             subject=subject,
             jti=jti,
             issued_at=issued_at,
             expires_at=expires_at,
             session_id=session_id,
+            auth_time=auth_time,
         )
 
 
@@ -136,30 +264,11 @@ def create_access_token(
     subject: Union[str, Any],
     *,
     session_id: uuid.UUID | None = None,
+    authenticated_at: datetime | None = None,
     expires_delta: Union[timedelta, None] = None,
 ) -> str:
     """
     Issues a signed access token.
-
-    session_id is keyword-only and optional. Optional because login does not
-    create a session until Step 7, and a required parameter here would break
-    the running login endpoint the moment this module is deployed. Keyword-only
-    because the previous signature took a single positional argument, and a
-    second positional would let an existing call site pass an expires_delta
-    into the session slot with no error at all.
-
-    From Step 7 onward every token issued by login carries a sid. A token
-    without one is a legacy shape, and app/api/deps.py decides what to do about
-    that; this function's job is to record what was true at issuance, not to
-    enforce policy.
-
-    Args:
-        subject: The user id. Stringified into `sub`.
-        session_id: The refresh session this token was minted from.
-        expires_delta: Overrides ACCESS_TOKEN_EXPIRE_MINUTES.
-
-    Returns:
-        The encoded JWT.
     """
     issued_at = datetime.now(UTC)
     expire = issued_at + (
@@ -171,11 +280,6 @@ def create_access_token(
     to_encode: dict[str, Any] = {
         "sub": str(subject),
         "jti": str(uuid.uuid4()),
-        # Truncated to whole seconds explicitly. JWT numeric dates are integer
-        # seconds, and letting the encoder round means iat can land a fraction
-        # of a second later than the sessions_revoked_at written in the same
-        # request — which would let a token issued during a revocation survive
-        # it.
         "iat": int(issued_at.timestamp()),
         "exp": int(expire.timestamp()),
         "type": ACCESS_TOKEN_TYPE,
@@ -183,6 +287,14 @@ def create_access_token(
 
     if session_id is not None:
         to_encode["sid"] = str(session_id)
+
+    if authenticated_at is not None:
+        moment = (
+            authenticated_at
+            if authenticated_at.tzinfo
+            else authenticated_at.replace(tzinfo=UTC)
+        )
+        to_encode[AUTH_TIME_CLAIM] = int(moment.timestamp())
 
     return jwt.encode(
         to_encode,
@@ -194,20 +306,6 @@ def create_access_token(
 def decode_access_token(token: str) -> Union[dict[str, Any], None]:
     """
     Verifies an access token and returns its payload.
-
-    Returns None for every failure — bad signature, expired, missing required
-    claim, wrong type. The caller cannot distinguish them, which is
-    intentional: the auth boundary answers 401 to all of them, and a caller
-    that could tell "expired" from "forged" would eventually branch on it.
-
-    The algorithm is pinned to the configured one. Passing a list containing
-    only settings.JWT_ALGORITHM is what prevents the `alg: none` and
-    HS256/RS256 confusion attacks — jose will not honour an `alg` header whose
-    value is not in this list.
-
-    Required claims are enforced by the decoder rather than checked afterwards,
-    so a token missing `iat` fails verification instead of arriving at
-    from_payload as a None-shaped hole.
     """
     try:
         payload: dict[str, Any] = jwt.decode(
@@ -223,10 +321,6 @@ def decode_access_token(token: str) -> Union[dict[str, Any], None]:
     except (jwt.JWTError, ValueError):
         return None
 
-    # Checked after decoding rather than as a required claim, because "type is
-    # absent" and "type is wrong" must both fail and jose can only enforce
-    # presence. Tokens issued before this module was deployed have no type and
-    # are rejected here — those users log in again once (R6).
     if payload.get("type") != ACCESS_TOKEN_TYPE:
         return None
 
@@ -236,11 +330,6 @@ def decode_access_token(token: str) -> Union[dict[str, Any], None]:
 def decode_access_token_claims(token: str) -> AccessTokenClaims | None:
     """
     Verifies an access token and returns it as typed claims.
-
-    The form used from Step 7 onward, where deps needs `iat` for the
-    sessions_revoked_at comparison and `sid` for the session lookup. Reading
-    those out of a raw dict at the auth boundary would mean parsing timestamps
-    and UUIDs inline in the one function that must never raise unexpectedly.
     """
     payload = decode_access_token(token)
     if payload is None:

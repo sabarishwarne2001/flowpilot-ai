@@ -86,10 +86,21 @@ def _refresh_failure(detail: str) -> JSONResponse:
 
 
 def _issue(response: Response, *, user_id, issued) -> dict[str, Any]:
+    """Set the refresh cookie and mint the matching access token.
+
+    Deliberately the single place any access token is issued from a session —
+    login, refresh and password reset all route through here. SEC-1 makes that
+    matter: `authenticated_at` has to reach every minted token, and one choke
+    point means it cannot be forgotten on a path somebody adds later. A token
+    minted without it fails the F6 gate rather than passing it, so a mistake
+    here is a support ticket instead of a breach.
+    """
     set_refresh_cookie(response, token=issued.plaintext_token)
     return {
         "access_token": create_access_token(
-            subject=user_id, session_id=issued.session_id
+            subject=user_id,
+            session_id=issued.session_id,
+            authenticated_at=issued.session.authenticated_at,
         ),
         "token_type": "bearer",
     }
@@ -197,7 +208,6 @@ async def login(
     ip = _client_ip(request) or "unknown"
     email = form_data.username.strip().lower()
 
-    # 1. Check login backoff BEFORE bcrypt authentication
     backoff = check_login_backoff(ip, email)
     if backoff.is_backed_off:
         return JSONResponse(
@@ -211,7 +221,6 @@ async def login(
             headers={"Retry-After": str(backoff.retry_after_seconds)},
         )
 
-    # 2. Authenticate user
     user = authenticate_user(db, email=email, password=form_data.password)
     if not user:
         delay = record_login_failure(ip, email)
@@ -230,7 +239,6 @@ async def login(
             detail="User account is inactive",
         )
 
-    # 3. Successful login -> Clear backoff counters
     clear_login_backoff(ip, email)
 
     issued = session_service.create_session(

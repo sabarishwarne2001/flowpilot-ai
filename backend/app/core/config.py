@@ -272,98 +272,91 @@ class Settings(BaseSettings):
     AUTOMATION_VERIFICATION_AGENTS: int = 2
     AUTOMATION_AUTO_APPROVE_THRESHOLD: float = 0.85
 
+    # ---- SEC-1: password hashing ------------------------------------------
+    ARGON2_MEMORY_COST: int = 19456   # KiB -> 19 MiB
+    ARGON2_TIME_COST: int = 2
+    ARGON2_PARALLELISM: int = 1
+
+    #: Optional floor on how long a login attempt takes, in milliseconds.
+    AUTH_LOGIN_MIN_DURATION_MS: int = 0
+
+    @field_validator("ARGON2_MEMORY_COST")
+    @classmethod
+    def validate_argon2_memory(cls, v: int) -> int:
+        if v < 8192:
+            raise ValueError(
+                "ARGON2_MEMORY_COST below 8192 KiB (8 MiB) is beneath every "
+                "current recommendation and is not worth the migration."
+            )
+        if v > 131072:
+            raise ValueError(
+                "ARGON2_MEMORY_COST above 131072 KiB (128 MiB) will OOM a "
+                "1-2 GB API container under concurrent logins. If this "
+                "deployment genuinely has the memory, raise this ceiling "
+                "deliberately rather than passing through it by accident."
+            )
+        return v
+
+    @field_validator("ARGON2_TIME_COST")
+    @classmethod
+    def validate_argon2_time(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("ARGON2_TIME_COST must be at least 1.")
+        if v > 10:
+            raise ValueError(
+                "ARGON2_TIME_COST above 10 puts password verification into "
+                "the seconds range and will exhaust the request worker pool."
+            )
+        return v
+
+    @field_validator("ARGON2_PARALLELISM")
+    @classmethod
+    def validate_argon2_parallelism(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("ARGON2_PARALLELISM must be at least 1.")
+        if v > 4:
+            raise ValueError(
+                "ARGON2_PARALLELISM above 4 on a 1-2 vCPU container means "
+                "threads contending for cores that do not exist."
+            )
+        return v
+
     # ---- ARCH-15: Stripe transport ----------------------------------------
     STRIPE_SECRET_KEY: SecretStr | None = None
     STRIPE_PUBLISHABLE_KEY: str | None = None
 
-    #: Comma-separated, newest first — ARCH-08 §B.12's dual-secret overlap
-    #: pattern applied to the endpoint secret. Rotating a Stripe webhook
-    #: secret means both the old and the new one are live for a window; a
-    #: single-valued setting would drop every event delivered in it.
     STRIPE_WEBHOOK_SECRETS: SecretStr | None = None
     STRIPE_WEBHOOK_TOLERANCE_SECONDS: int = 300
-
-    #: Pinned explicitly. An account-level API version bump that changes a
-    #: payload shape mid-phase is a genuinely horrible afternoon, and the
-    #: default here is the version stripe-python 15.5.1 generates against.
-    #: Note that since 2025-03-31.basil, `current_period_start`/`_end` live on
-    #: subscription *items*, not on the subscription — see
-    #: `stripe_gateway._period_from_subscription`.
     STRIPE_API_VERSION: str = "2026-07-29.dahlia"
-
-    #: Whether this deployment talks to live mode. Asserted against every
-    #: inbound `event.livemode` before the row is written.
     STRIPE_LIVEMODE: bool = False
 
     STRIPE_MAX_NETWORK_RETRIES: int = 2
     STRIPE_TIMEOUT_SECONDS: float = 20.0
-
-    #: The endpoint refuses a body larger than this before verification. HMAC
-    #: over an unbounded body is a free CPU-burn for anyone who finds the URL.
     STRIPE_MAX_WEBHOOK_BODY_BYTES: int = 512 * 1024
-
     STRIPE_INBOUND_BATCH_SIZE: int = 25
     STRIPE_INBOUND_LEASE_SECONDS: int = 60
     STRIPE_INBOUND_MAX_ATTEMPTS: int = 8
 
     # ---- ARCH-15: billing policy ------------------------------------------
     BILLING_DEFAULT_CURRENCY: str = "USD"
-
-    #: The tier a subscription pins to when its Stripe metadata does not name
-    #: one. `None` means *refuse*: a subscription we cannot map to a tier is
-    #: billing state we must not guess at, and the inbound row goes FAILED
-    #: rather than silently entitling somebody to the wrong plan.
     BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None
-
-    #: The Stripe price the seat line uses. Resolved by lookup key so a price
-    #: rotation in the Stripe dashboard does not require a redeploy.
     BILLING_SEAT_PRICE_LOOKUP_KEY: str | None = None
-
     BILLING_SEAT_SYNC_ENABLED: bool = True
-
-    #: Proration is Stripe's arithmetic, not ours. Computing prorated amounts
-    #: locally guarantees disagreeing with the invoice Stripe issues, and the
-    #: customer is looking at Stripe's number.
     BILLING_SEAT_PRORATION_BEHAVIOR: str = "create_prorations"
 
     # ---- ARCH-15 Tranche 3: invoices --------------------------------------
     BILLING_INVOICE_NUMBER_PREFIX: str = "FP"
-
-    #: The `price_book_entries.event_type` that prices a seat. A price book
-    #: entry rather than a hardcoded number so a price change is a publish,
-    #: not a deploy — and so the seat price on a past invoice is pinned by the
-    #: same mechanism as everything else on it.
     BILLING_SEAT_EVENT_TYPE: str = "billing.seat"
-
-    #: Used only when the pinned book has no seat entry. Zero means the seat
-    #: line appears at zero and the Stripe comparison in Gate 15.6 fails —
-    #: which is the correct place for a missing price to surface. Omitting the
-    #: line instead would under-bill invisibly.
     BILLING_SEAT_FALLBACK_PRICE_MICROS: int = 0
-
-    #: Gate 15.6's tolerance, applied *after* rounding our total to the cent
-    #: Stripe can actually charge. See invoice_service.compare_with_stripe.
     BILLING_STRIPE_TOTAL_TOLERANCE_MICROS: int = 1
 
     # ---- ARCH-15 Tranche 4: portal, checkout, dunning ---------------------
-    #: F6. How recently the caller must have authenticated to mint a portal
-    #: session. Five minutes: long enough to survive a page navigation, short
-    #: enough that a tab left open overnight cannot change a card.
     BILLING_REAUTH_WINDOW_S: int = 300
-
-    #: Defaults to on, and refusing is the failure mode. Defaulting open and
-    #: intending to close it later is how this class of gap ships permanently.
     BILLING_REAUTH_REQUIRED: bool = True
-
     BILLING_PORTAL_RETURN_URL: str | None = None
     BILLING_CHECKOUT_SUCCESS_URL: str | None = None
     BILLING_CHECKOUT_CANCEL_URL: str | None = None
     BILLING_SEAT_PRICE_ID: str | None = None
-
-    #: The furthest dunning will escalate in this deployment. `NOTIFY_3` is the
-    #: default because steps 4 and 5 touch the authorization path and deserve
-    #: to be switched on deliberately; a human marking the first few accounts
-    #: delinquent is entirely acceptable and is how most billing systems start.
     BILLING_DUNNING_MAX_STEP: str = "NOTIFY_3"
 
     @field_validator("BILLING_DUNNING_MAX_STEP")
@@ -566,13 +559,6 @@ class Settings(BaseSettings):
 
     @property
     def stripe_webhook_secret_list(self) -> list[str]:
-        """Endpoint secrets, newest first.
-
-        Returned as a list because verification tries each in turn: during a
-        rotation window Stripe signs with the new secret while deliveries
-        already in flight were signed with the old one, and refusing either
-        loses billing events permanently.
-        """
         raw = (
             self.STRIPE_WEBHOOK_SECRETS.get_secret_value()
             if self.STRIPE_WEBHOOK_SECRETS is not None
@@ -584,13 +570,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _assert_stripe_mode_matches_key(self) -> "Settings":
-        """A live-mode deployment holding a test key is a silent no-op.
-
-        The failure it prevents: `STRIPE_LIVEMODE=true` with `sk_test_…`
-        means every real customer event is refused as a mode mismatch while
-        the service looks perfectly healthy. Checked only outside dev and
-        test, where mixing is routine and harmless.
-        """
         if self.ENVIRONMENT in _KEYLESS_ENVIRONMENTS:
             return self
 

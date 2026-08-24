@@ -119,6 +119,7 @@ def create_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
     family_id: uuid.UUID | None = None,
+    authenticated_at: datetime | None = None,
 ) -> IssuedSession:
     """
     Opens a new refresh session.
@@ -135,6 +136,9 @@ def create_session(
         ip_address: Request origin, recorded at issuance only.
         user_agent: Client string, rendered as a device label.
         family_id: Continues an existing chain. Omit to begin one.
+        authenticated_at: When the user last presented a credential (SEC-1).
+            Omit at login, where `now` is correct by definition. Rotation
+            passes the parent's value so it travels down the chain unchanged.
 
     Returns:
         The session and its plaintext refresh token.
@@ -149,6 +153,7 @@ def create_session(
         expires_at=now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         ip_address=ip_address,
         user_agent=user_agent,
+        authenticated_at=authenticated_at or now,
     )
     db.add(session)
     db.flush()
@@ -171,17 +176,6 @@ def get_session_by_token(
     *,
     refresh_token: str,
 ) -> UserSession | None:
-    """
-    Resolves a plaintext refresh token to its session row.
-
-    Hashing happens here, at the boundary, for the same reason it happens in
-    validate_invitation_token: below this line everything works in hashed
-    terms and no query can be written against a plaintext that is not stored.
-
-    Returns the row whatever its state — rotated, revoked, expired. Deciding
-    what that state means is rotate_session's job, and a lookup that hid
-    rotated rows would make reuse detection impossible.
-    """
     return db.execute(
         select(UserSession).where(
             UserSession.token_hash == hash_token(refresh_token)
@@ -194,13 +188,6 @@ def list_active_sessions(
     *,
     user: User,
 ) -> list[UserSession]:
-    """
-    Lists the user's live sessions, newest first — the device list.
-
-    Rotated rows are revoked with reason ROTATED, so this filter naturally
-    returns one row per device rather than every link in every chain. That is
-    what ix_sessions_user_revoked was built for.
-    """
     now = datetime.now(UTC)
     return list(
         db.scalars(
@@ -225,11 +212,6 @@ def revoke_session(
     session: UserSession,
     reason: SessionRevokedReason,
 ) -> UserSession:
-    """
-    Revokes one session. Idempotent: an already-revoked row keeps its original
-    reason and timestamp, because the first reason is the true one and
-    overwriting REUSE_DETECTED with LOGOUT would erase the incident.
-    """
     if session.revoked_at is not None:
         return session
 
@@ -253,21 +235,6 @@ def revoke_family(
     family_id: uuid.UUID,
     reason: SessionRevokedReason,
 ) -> int:
-    """
-    Revokes every unrevoked session in one rotation chain.
-
-    A single UPDATE rather than a loop over ORM objects. This runs on the
-    reuse-detection path, where an attacker and the legitimate user are racing
-    for the same chain; the fewer statements between detecting the problem and
-    closing it, the smaller the window in which the attacker can rotate again.
-
-    Returns:
-        The number of rows revoked.
-    """
-    # synchronize_session="fetch" so session objects already loaded in this
-    # transaction reflect the revocation. Rotation reads session.revoked_at
-    # immediately after this on the reuse path, and a stale instance there
-    # would let a revoked chain keep rotating.
     result = db.execute(
         update(UserSession)
         .where(
@@ -294,20 +261,6 @@ def revoke_all_user_sessions(
     user: User,
     reason: SessionRevokedReason,
 ) -> int:
-    """
-    Signs a user out everywhere, including outstanding access tokens.
-
-    Two things happen and both are required. Revoking the session rows stops
-    refresh. Stamping users.sessions_revoked_at stops the access tokens already
-    in flight, which are stateless and would otherwise stay valid until their
-    own expiry — up to the full access TTL after the user asked to be signed
-    out (§B.6).
-
-    Called on password change, password reset, and deactivation.
-
-    Returns:
-        The number of sessions revoked.
-    """
     now = datetime.now(UTC)
 
     result = db.execute(
@@ -320,9 +273,6 @@ def revoke_all_user_sessions(
         .execution_options(synchronize_session="fetch")
     )
 
-    # The cutoff is what deps compares each access token's iat against. Set
-    # after the UPDATE but with the same timestamp, so no token minted during
-    # this transaction can slip between the two operations.
     user.sessions_revoked_at = now
     db.add(user)
     db.flush()
@@ -342,22 +292,12 @@ def revoke_all_user_sessions(
 # ===========================================================================
 
 def _chain_tip(db: Session, session: UserSession) -> UserSession:
-    """
-    Walks replaced_by_id to the newest session in a chain.
-
-    Bounded by SESSION_CHAIN_WALK_LIMIT. An unbounded walk over a cyclic or
-    corrupt chain would hang the request thread, and the correct behaviour on
-    data that cannot be true is to stop and let the caller treat it as a
-    failure rather than to keep walking.
-    """
     current = session
     for _ in range(settings.SESSION_CHAIN_WALK_LIMIT):
         if current.replaced_by_id is None:
             return current
         successor = db.get(UserSession, current.replaced_by_id)
         if successor is None:
-            # The successor was swept. The chain ends here as far as this
-            # request is concerned.
             return current
         current = successor
     return current
@@ -370,27 +310,10 @@ def rotate_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> IssuedSession:
-    """
-    Exchanges a refresh token for a new one.
-
-    Participates in the caller's transaction and does not commit, so a
-    rotation and the access token minted alongside it either both happen or
-    neither does.
-
-    Raises:
-        InvalidRefreshTokenError: No session matches.
-        ExpiredRefreshTokenError: Past expiry.
-        RevokedRefreshTokenError: Revoked for a reason other than rotation.
-        SessionReuseDetectedError: Replay outside the grace window. The family
-            has already been revoked when this is raised.
-    """
     now = datetime.now(UTC)
     session = get_session_by_token(db, refresh_token=refresh_token)
 
     if session is None:
-        # No family to revoke and nothing to log beyond the attempt: an
-        # unmatched hash means either a forged token or one whose row has been
-        # swept, and neither identifies a user.
         logger.info("SESSION_REFRESH_REJECTED | reason=no_matching_session")
         raise InvalidRefreshTokenError("Invalid refresh token.")
 
@@ -398,9 +321,6 @@ def rotate_session(
         revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)
         raise ExpiredRefreshTokenError("This session has expired.")
 
-    # ----------------------------------------------------------------------
-    # Replay of a rotated token
-    # ----------------------------------------------------------------------
     if session.rotated_at is not None:
         return _handle_rotated_token_replay(
             db,
@@ -410,9 +330,6 @@ def rotate_session(
             user_agent=user_agent,
         )
 
-    # Revoked without having been rotated: logout, password change, admin
-    # action, or a family already killed by reuse detection. Nothing to
-    # salvage and nothing new to revoke.
     if session.revoked_at is not None:
         logger.info(
             "SESSION_REFRESH_REJECTED | session=%s | reason=%s",
@@ -438,17 +355,8 @@ def _rotate_live_session(
     ip_address: str | None,
     user_agent: str | None,
 ) -> IssuedSession:
-    """
-    The normal path: a healthy token is exchanged for its successor.
-
-    The successor inherits family_id and expires_at is recomputed from now, so
-    an actively used session slides forward rather than expiring on a fixed
-    schedule from the original login.
-    """
     user = db.get(User, session.user_id)
     if user is None or not user.is_active:
-        # The FK is ON DELETE CASCADE so a missing user means the row is
-        # mid-deletion; an inactive one must not be handed a fresh credential.
         revoke_session(
             db, session=session, reason=SessionRevokedReason.ACCOUNT_DISABLED
         )
@@ -460,14 +368,12 @@ def _rotate_live_session(
         ip_address=ip_address,
         user_agent=user_agent,
         family_id=session.family_id,
+        authenticated_at=session.authenticated_at,
     )
 
     session.rotated_at = now
     session.replaced_by_id = issued.session.id
     session.last_used_at = now
-    # Rotation revokes as well as rotates, so list_active_sessions can filter
-    # on revoked_at alone and return one row per device instead of every link
-    # in every chain.
     session.revoked_at = now
     session.revoked_reason = SessionRevokedReason.ROTATED
     db.add(session)
@@ -491,32 +397,6 @@ def _handle_rotated_token_replay(
     ip_address: str | None,
     user_agent: str | None,
 ) -> IssuedSession:
-    """
-    Decides whether a replayed token is a tab race or a theft.
-
-    CONCURRENT REFRESH, AND WHY A NEW TOKEN IS MINTED
-    -------------------------------------------------
-    The obvious handling of a tab race is to return the successor that the
-    first request already created. That is impossible here, and the reason is
-    the point of the whole design: the successor's plaintext was handed to the
-    first caller and never stored, so the server cannot produce it again. There
-    is nothing to return.
-
-    So the grace path rotates the tip of the chain and mints a fresh token.
-    Both tabs end up with working credentials, the loser's token is simply
-    orphaned, and the chain grows by one extra link per concurrent request.
-    That churn is the price of not storing plaintext, and it is a good trade:
-    a handful of extra rows against never being able to reissue a secret.
-
-    The tip is used rather than the presented row so that N tabs racing at once
-    converge on one chain instead of forking it into N branches, each of which
-    would then look like reuse to the others.
-
-    Outside the window the family dies. Both the legitimate holder and the
-    attacker hold tokens descended from one login, so there is no way to keep
-    one and drop the other; signing the device out is the only response that
-    does not leave the attacker inside.
-    """
     grace = timedelta(seconds=settings.SESSION_REUSE_GRACE_SECONDS)
     age = now - session.rotated_at
 
@@ -542,10 +422,6 @@ def _handle_rotated_token_replay(
 
     tip = _chain_tip(db, session)
 
-    # The tip is unusable if the family was revoked between the two requests,
-    # or if the chain is corrupt enough that the walk ended somewhere already
-    # rotated. Treat that as reuse rather than guessing: a grace path that
-    # hands out a token from a revoked family defeats revocation.
     if tip.revoked_at is not None and tip.revoked_reason is not SessionRevokedReason.ROTATED:
         raise RevokedRefreshTokenError("This session is no longer valid.")
     if tip.rotated_at is not None:
@@ -592,19 +468,6 @@ def sweep_expired_sessions(
     *,
     retain_days: int = 30,
 ) -> int:
-    """
-    Deletes sessions well past their expiry.
-
-    Retained for a while after expiring rather than deleted at expiry, because
-    a revoked row is the evidence of a reuse incident and an investigation
-    that starts a week later needs the chain intact.
-
-    replaced_by_id is ON DELETE SET NULL, so removing an old successor does not
-    cascade into the ancestor that points at it.
-
-    Returns:
-        The number of rows deleted.
-    """
     cutoff = datetime.now(UTC) - timedelta(days=retain_days)
 
     rows = list(

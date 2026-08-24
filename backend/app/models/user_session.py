@@ -36,7 +36,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -121,16 +121,10 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        # No index=True: ix_sessions_user_revoked leads with user_id and
-        # serves lookups on it, so a second single-column index would be
-        # maintained on every write and read by nothing.
     )
     family_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
-        # Indexed as ix_sessions_family_id in __table_args__ above. Declaring
-        # index=True here as well emits the same index name twice and the
-        # CREATE INDEX fails on the second.
         doc=(
             "Groups every session descended from one login. Set to a fresh "
             "UUID at login and copied unchanged through each rotation. "
@@ -155,13 +149,34 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
         doc="Refresh TTL is 14 days (§B.6), applied at issuance.",
     )
 
-    # Issuance time is created_at from TimestampMixin. The plan listed a
-    # separate issued_at; it would hold the same value as created_at on every
-    # row, and two columns that must always agree eventually will not.
     last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         doc="Advanced on each successful refresh. Powers the device list.",
+    )
+
+    # --- Authentication moment (SEC-1 Step 1) ------------------------------
+    authenticated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+        doc=(
+            "When the user last actually presented a credential. **Copied "
+            "forward by rotation, never recomputed.** "
+            "\n\n"
+            "This is deliberately not `created_at`. `created_at` is when this "
+            "particular link in the chain was minted, which rotation refreshes "
+            "every few minutes; `authenticated_at` is when a human last typed "
+            "a password, which rotation must not be able to launder. The "
+            "difference is the entire reason ARCH-15's F6 re-auth window was "
+            "unreachable before SEC-1 — a nine-month-old session presents a "
+            "`created_at` and an `iat` that are both minutes old. "
+            "\n\n"
+            "Moved only by a genuine credential re-presentation. If a future "
+            "step-up flow updates it, it updates it on the live session rather "
+            "than starting a new family, so the device list does not sprout a "
+            "phantom entry every time somebody confirms a password."
+        ),
     )
 
     # --- Rotation chain ----------------------------------------------------
@@ -189,8 +204,6 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        # Covered by ix_sessions_user_revoked. Alone it is a low-cardinality
-        # mostly-NULL column that no query filters on without a user_id.
     )
     revoked_reason: Mapped[SessionRevokedReason | None] = mapped_column(
         PgEnum(
@@ -202,9 +215,6 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
     )
 
     # --- Device provenance -------------------------------------------------
-    # Captured at issuance and not updated on refresh. A session that begins
-    # in one city and refreshes from another is a signal worth keeping, and
-    # overwriting these on every rotation would erase it.
     ip_address: Mapped[str | None] = mapped_column(
         String(45),
         nullable=True,
@@ -215,16 +225,10 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
         doc="Rendered as a device label in the session management screen.",
     )
 
-    # ------------------------------------------------------------------
-    # Unidirectional relationships (ARCH-02 discipline)
-    # ------------------------------------------------------------------
     user: Mapped["User"] = relationship(
         "User",
         foreign_keys=[user_id],
     )
-    # Self-referential and explicitly one-directional: remote_side names the
-    # far end of the join so SQLAlchemy resolves this as many-to-one rather
-    # than assuming a collection.
     replaced_by: Mapped["UserSession | None"] = relationship(
         "UserSession",
         remote_side="UserSession.id",

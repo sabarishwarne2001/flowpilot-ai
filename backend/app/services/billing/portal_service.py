@@ -44,14 +44,28 @@ class EphemeralSession:
         )
 
 
+# ============================================================================
+# F6 — the re-authentication window
+# ============================================================================
+
+
 def _issued_at_from_claims(token: str) -> Optional[datetime]:
+    """When the user last actually authenticated.
+
+    SEC-1 delivered `auth_time` and this now reads it. The `iat` fallback is
+    **deleted, not deprecated**, and that deletion is the substance of the fix.
+    """
     claims = decode_access_token_claims(token)
     if claims is None:
         return None
-    issued = claims.issued_at
-    if issued is None:
+    authenticated = claims.auth_time
+    if authenticated is None:
         return None
-    return issued if issued.tzinfo else issued.replace(tzinfo=timezone.utc)
+    return (
+        authenticated
+        if authenticated.tzinfo
+        else authenticated.replace(tzinfo=timezone.utc)
+    )
 
 
 def bearer_token(authorization_header: Optional[str]) -> Optional[str]:
@@ -69,6 +83,7 @@ def assert_recent_authentication(
     issued_at: Optional[datetime] = None,
     now: Optional[datetime] = None,
 ) -> datetime:
+    """Refuse unless authentication is inside `BILLING_REAUTH_WINDOW_S`."""
     if not settings.BILLING_REAUTH_REQUIRED:
         logger.warning(
             "billing.reauth_check_disabled",
@@ -113,6 +128,11 @@ def assert_recent_authentication(
     return resolved
 
 
+# ============================================================================
+# Sessions
+# ============================================================================
+
+
 def create_portal_session(
     db: Session,
     *,
@@ -121,6 +141,7 @@ def create_portal_session(
     authorization_header: Optional[str] = None,
     issued_at: Optional[datetime] = None,
 ) -> EphemeralSession:
+    """Mint a Customer Portal URL. Owner-only, re-auth gated, never stored."""
     assert_recent_authentication(
         authorization_header=authorization_header, issued_at=issued_at
     )
