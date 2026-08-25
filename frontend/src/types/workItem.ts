@@ -73,13 +73,17 @@ export interface WorkItemResponse {
   readonly created_at: string;
   readonly updated_at: string;
 }
+
 /**
  * Upload endpoint response.
+ *
+ * Reconciled with backend POST /workspaces/{id}/work-items (response_model=WorkItemResponse).
+ * The wire payload is a bare WorkItemResponse.
  */
-export interface UploadDocumentResponse {
-  readonly work_item: WorkItemResponse;
-  readonly message: string;
-}
+export type UploadDocumentResponse = WorkItemResponse & {
+  readonly work_item?: WorkItemResponse;
+  readonly message?: string;
+};
 
 /**
  * Query parameters used when requesting paginated
@@ -112,6 +116,7 @@ export interface WorkItemsListResponse {
 
   readonly totalPages: number;
 }
+
 /**
  * Internal upload request metadata.
  *

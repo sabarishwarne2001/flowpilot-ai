@@ -1,54 +1,4 @@
-"""ARCH-12 Step 1 — the streaming generator. The step everything rests on.
-
-READ `stream_session.py` FIRST. It explains why settlement runs on its own
-session, synchronously, in a `finally` that cannot raise. This module is the
-orchestration around that decision.
-
-SHAPE
-=====
-
-    reserve  ─┐
-              ├─ before the first byte: everything that can refuse, refuses
-    seal     ─┘
-              ▼
-    for chunk in provider_stream:      ← in a worker thread
-        redact → yield SSE
-              ▼
-    finally: settle + persist          ← own session, synchronous, no raise
-
-WHY THE PROVIDER LOOP RUNS IN A THREAD
-======================================
-
-Neither the Groq SDK nor `google-generativeai` exposes an async streaming
-iterator this codebase already depends on, and adding a second HTTP stack to
-get one is a bigger change than it looks (proxy config, SSRF policy, the
-circuit breaker in `llm_resilience`). Instead the blocking iterator is drained
-in a worker thread and deltas cross into the event loop through a bounded
-`asyncio.Queue`.
-
-The queue is **bounded** on purpose. An unbounded queue lets a fast provider
-outrun a slow client until the whole answer is resident in memory per stream,
-which at 2 concurrent streams per user across a tenant is the memory profile
-of an incident. A bounded queue applies backpressure into the thread, which is
-where it belongs.
-
-WHY `CancelledError` IS RE-RAISED
-=================================
-
-Starlette needs to see it to tear the connection down. Swallowing it leaves a
-half-closed response and a task that never completes. The `finally` runs
-first — that is the whole point of `finally` — so the billing row is written
-*and* the cancellation propagates.
-
-WHAT IS DELIBERATELY NOT HERE
-=============================
-
-No retry after the first delivered token. `llm_resilience.execute` assumes a
-call that returns whole or raises; retrying a half-delivered stream would
-duplicate output in the user's transcript. Failover before the first token is
-handled by the reservation/first-chunk window; after it, a provider error is
-a terminal `provider_error` finish and the partial answer is kept.
-"""
+"""ARCH-12 Step 1 — the streaming generator with A13 resumption."""
 
 from __future__ import annotations
 
@@ -56,8 +6,9 @@ import asyncio
 import json
 import logging
 import threading
+import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
 
 from sqlalchemy.orm import Session
@@ -65,6 +16,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.core.config import settings
 from app.core.exceptions import SpendLimitExceededError
+from app.core.redis_client import get_redis_client
 from app.core.request_context import context_fields, request_scope, stage
 from app.models.assistant import Conversation, FinishReason
 from app.schemas.assistant import TokenUsage
@@ -80,31 +32,123 @@ from app.services.retrieval_service import retrieval_service
 
 logger = logging.getLogger("app.services.assistant_stream")
 
-#: Deltas held in flight between the provider thread and the event loop.
 QUEUE_MAXSIZE = 64
-
-#: Sentinel pushed by the producer thread when the provider iterator ends.
 _DONE = object()
-
 RAG_PROMPT_VERSION = "1.0.0"
+REPLAY_TTL_SECONDS = 900
+REPLAY_MAX_FRAMES = 20_000
+REPLAY_IDLE_TIMEOUT_SECONDS = 60.0
+REPLAY_POLL_INTERVAL_SECONDS = 0.15
+
+_FRAMES_KEY = "stream:frames:{message_id}"
+_STATE_KEY = "stream:state:{message_id}"
+
+_STATE_OPEN = "OPEN"
+_STATE_CLOSED = "CLOSED"
 
 
-def sse(event: str, data: Any) -> bytes:
-    """One Server-Sent Event frame.
+def sse(event: str, data: Any, *, seq: Optional[int] = None) -> bytes:
+    payload = dict(data) if isinstance(data, dict) else {"value": data}
+    if seq is not None:
+        payload["seq"] = seq
 
-    `json.dumps` even for plain text: a token containing a newline would
-    otherwise terminate the frame early and the client would reassemble the
-    answer with silent corruption at exactly the places a model puts
-    paragraph breaks.
-    """
-    payload = json.dumps(data, ensure_ascii=False, default=str)
-    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+    body = json.dumps(payload, ensure_ascii=False, default=str)
+    prefix = f"id: {seq}\n" if seq is not None else ""
+    return f"{prefix}event: {event}\ndata: {body}\n\n".encode("utf-8")
+
+
+@dataclass
+class StreamFrameBuffer:
+    message_id: uuid.UUID
+    enabled: bool = True
+    frames_written: int = 0
+    _client: Any = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        try:
+            self._client = get_redis_client()
+        except Exception:  # noqa: BLE001
+            self._client = None
+
+        if self._client is None:
+            self.enabled = False
+            logger.debug(
+                "stream.replay_buffer_unavailable",
+                extra={"message_id": str(self.message_id)},
+            )
+
+    @property
+    def _frames_key(self) -> str:
+        return _FRAMES_KEY.format(message_id=self.message_id)
+
+    @property
+    def _state_key(self) -> str:
+        return _STATE_KEY.format(message_id=self.message_id)
+
+    def open(self) -> None:
+        if not self.enabled:
+            return
+        try:
+            pipe = self._client.pipeline()
+            pipe.delete(self._frames_key)
+            pipe.set(self._state_key, _STATE_OPEN, ex=REPLAY_TTL_SECONDS)
+            pipe.execute()
+        except Exception:  # noqa: BLE001
+            self._disable("open")
+
+    def append(self, *, seq: int, event: str, data: Any) -> None:
+        if not self.enabled:
+            return
+
+        if self.frames_written >= REPLAY_MAX_FRAMES:
+            logger.warning(
+                "stream.replay_buffer_overflow",
+                extra={
+                    "message_id": str(self.message_id),
+                    "frames": self.frames_written,
+                },
+            )
+            self._disable("overflow")
+            return
+
+        try:
+            record = json.dumps(
+                {"seq": seq, "event": event, "data": data},
+                ensure_ascii=False,
+                default=str,
+            )
+            pipe = self._client.pipeline()
+            pipe.rpush(self._frames_key, record)
+            pipe.expire(self._frames_key, REPLAY_TTL_SECONDS)
+            pipe.execute()
+            self.frames_written += 1
+        except Exception:  # noqa: BLE001
+            self._disable("append")
+
+    def close(self) -> None:
+        if not self.enabled:
+            return
+        try:
+            self._client.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
+        except Exception:  # noqa: BLE001
+            self._disable("close")
+
+    def _disable(self, phase: str) -> None:
+        if not self.enabled:
+            return
+        self.enabled = False
+        logger.warning(
+            "stream.replay_buffer_disabled",
+            extra={"message_id": str(self.message_id), "phase": phase},
+        )
+        try:
+            self._client.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @dataclass
 class StreamPlan:
-    """Everything resolved before the first byte is sent."""
-
     conversation: Conversation
     organization_id: uuid.UUID
     workspace_id: uuid.UUID
@@ -120,15 +164,11 @@ class StreamPlan:
     budget_warnings: list[str]
 
 
+class ReplayUnavailableError(RuntimeError):
+    """No buffered frames exist for this message."""
+
+
 class AssistantStreamService:
-    """Prepares, streams, and settles one conversation turn."""
-
-    # ------------------------------------------------------------------
-    # Preparation. Everything that can refuse must refuse here, before the
-    # response object is returned — once SSE has started, the status code
-    # is already 200 and a 402 can no longer be expressed.
-    # ------------------------------------------------------------------
-
     def prepare(
         self,
         db: Session,
@@ -201,7 +241,6 @@ class AssistantStreamService:
 
         message_id = uuid.uuid4()
 
-        # Reserve before anything is sent. A refusal here is a clean 402.
         reservation = llm_metering.reserve(
             db,
             organization_id=organization_id,
@@ -230,8 +269,6 @@ class AssistantStreamService:
                 user_agent=user_agent,
             )
 
-        # The user's message and the STREAMING placeholder are committed
-        # before the response starts. See `open_assistant_message`.
         crud.create_conversation_message(
             db,
             conversation_id=conversation.id,
@@ -258,10 +295,6 @@ class AssistantStreamService:
             budget_warnings=budgeted.warnings,
         )
 
-    # ------------------------------------------------------------------
-    # The generator.
-    # ------------------------------------------------------------------
-
     async def stream_answer(
         self, plan: StreamPlan, *, request_id: Optional[str] = None
     ) -> AsyncIterator[bytes]:
@@ -272,13 +305,24 @@ class AssistantStreamService:
         provider = plan.ai_settings.provider.value
         model = plan.ai_settings.model
 
+        buffer = StreamFrameBuffer(message_id=plan.message_id)
+        buffer.open()
+
+        seq_counter = {"value": 0}
+
+        def emit(event: str, data: Any) -> bytes:
+            seq_counter["value"] += 1
+            seq = seq_counter["value"]
+            buffer.append(seq=seq, event=event, data=data)
+            return sse(event, data, seq=seq)
+
         with request_scope(
             request_id=request_id or str(uuid.uuid4()),
             workspace_id=plan.workspace_id,
             organization_id=plan.organization_id,
         ):
             try:
-                yield sse(
+                yield emit(
                     "start",
                     {
                         "message_id": str(plan.message_id),
@@ -287,6 +331,7 @@ class AssistantStreamService:
                         "provider": provider,
                         "passages": plan.fenced.passages_included,
                         "warnings": plan.budget_warnings,
+                        "resumable": buffer.enabled,
                     },
                 )
 
@@ -297,13 +342,13 @@ class AssistantStreamService:
                     if chunk.text:
                         safe = redactor.feed(chunk.text)
                         if safe:
-                            yield sse("token", {"text": safe})
+                            yield emit("token", {"text": safe})
                     if chunk.finish_reason == "length":
                         finish = FinishReason.OUTPUT_CEILING.value
 
                 tail = redactor.flush()
                 if tail:
-                    yield sse("token", {"text": tail})
+                    yield emit("token", {"text": tail})
 
                 envelope = provenance_service.build_envelope(
                     message_id=plan.message_id,
@@ -322,8 +367,8 @@ class AssistantStreamService:
                     finish_reason=finish,
                     usage_estimated=usage is None,
                 )
-                yield sse("citations", envelope.model_dump(mode="json"))
-                yield sse(
+                yield emit("citations", envelope.model_dump(mode="json"))
+                yield emit(
                     "done",
                     {
                         "finish_reason": finish,
@@ -342,9 +387,9 @@ class AssistantStreamService:
                 finish = FinishReason.PROVIDER_ERROR.value
                 raise
             finally:
-                # Own session. Synchronous. Never raises. See stream_session.
                 emitted = redactor.emitted_text + redactor.flush()
                 truncated = finish != FinishReason.COMPLETED.value
+                buffer.close()
 
                 sources: list[dict[str, Any]] = []
                 if plan.results:
@@ -383,13 +428,128 @@ class AssistantStreamService:
                     extra={
                         **outcome.as_details(),
                         "saw_any_chunk": saw_any_chunk,
+                        "frames_emitted": seq_counter["value"],
+                        "replayable": buffer.enabled,
                         **context_fields(),
                     },
                 )
 
-    # ------------------------------------------------------------------
-    # Provider drain: blocking iterator -> bounded queue -> event loop.
-    # ------------------------------------------------------------------
+    async def replay(
+        self,
+        *,
+        message_id: uuid.UUID,
+        from_seq: int = 0,
+        request_id: Optional[str] = None,
+    ) -> AsyncIterator[bytes]:
+        client = None
+        try:
+            client = get_redis_client()
+        except Exception:  # noqa: BLE001
+            client = None
+
+        if client is None:
+            raise ReplayUnavailableError(
+                "Stream resumption is unavailable. Refetch the message instead."
+            )
+
+        frames_key = _FRAMES_KEY.format(message_id=message_id)
+        state_key = _STATE_KEY.format(message_id=message_id)
+
+        try:
+            state = client.get(state_key)
+            buffered = client.llen(frames_key)
+        except Exception as exc:  # noqa: BLE001
+            raise ReplayUnavailableError(
+                "Stream resumption is unavailable. Refetch the message instead."
+            ) from exc
+
+        if state is None and not buffered:
+            raise ReplayUnavailableError(
+                "No buffered frames for this message. It may have expired."
+            )
+
+        if isinstance(state, bytes):
+            state = state.decode("utf-8", "replace")
+
+        cursor = max(int(from_seq), 0)
+        idle_since = time.monotonic()
+
+        with request_scope(request_id=request_id or str(uuid.uuid4())):
+            logger.info(
+                "stream.replay_started",
+                extra={
+                    "message_id": str(message_id),
+                    "from_seq": cursor,
+                    "buffered_frames": buffered,
+                    "state": state,
+                },
+            )
+
+            while True:
+                try:
+                    records = client.lrange(frames_key, cursor, -1)
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "stream.replay_read_failed",
+                        extra={"message_id": str(message_id)},
+                    )
+                    return
+
+                if records:
+                    for raw in records:
+                        if isinstance(raw, bytes):
+                            raw = raw.decode("utf-8", "replace")
+                        try:
+                            record = json.loads(raw)
+                        except (ValueError, TypeError):
+                            continue
+
+                        seq = int(record.get("seq", 0))
+                        if seq <= cursor:
+                            continue
+
+                        cursor = seq
+                        yield sse(
+                            str(record.get("event", "token")),
+                            record.get("data", {}),
+                            seq=seq,
+                        )
+
+                    idle_since = time.monotonic()
+
+                try:
+                    state = client.get(state_key)
+                except Exception:  # noqa: BLE001
+                    state = None
+
+                if isinstance(state, bytes):
+                    state = state.decode("utf-8", "replace")
+
+                if state != _STATE_OPEN:
+                    logger.info(
+                        "stream.replay_completed",
+                        extra={"message_id": str(message_id), "last_seq": cursor},
+                    )
+                    return
+
+                if time.monotonic() - idle_since > REPLAY_IDLE_TIMEOUT_SECONDS:
+                    logger.warning(
+                        "stream.replay_idle_timeout",
+                        extra={"message_id": str(message_id), "last_seq": cursor},
+                    )
+                    yield sse(
+                        "error",
+                        {
+                            "code": "REPLAY_IDLE_TIMEOUT",
+                            "message": (
+                                "The generation stopped producing output. "
+                                "Refetch the message to see what was saved."
+                            ),
+                        },
+                    )
+                    return
+
+                await asyncio.sleep(REPLAY_POLL_INTERVAL_SECONDS)
 
     async def _drain(self, plan: StreamPlan) -> AsyncIterator[StreamChunk]:
         loop = asyncio.get_running_loop()
@@ -405,8 +565,6 @@ class AssistantStreamService:
                 ):
                     if stop.is_set():
                         break
-                    # Blocks the producer when the consumer falls behind,
-                    # which is the backpressure the bounded queue exists for.
                     asyncio.run_coroutine_threadsafe(queue.put(chunk), loop).result()
             except BaseException as exc:  # noqa: BLE001
                 try:
@@ -433,14 +591,7 @@ class AssistantStreamService:
                     raise item
                 yield item
         finally:
-            # Tell the producer to stop pushing. It is a daemon thread with a
-            # bounded queue, so it cannot outlive the process or grow without
-            # limit even if the provider is slow to notice.
             stop.set()
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _retrieve(
         self,
@@ -481,11 +632,6 @@ class AssistantStreamService:
     def _load_history(
         self, *, db: Session, conversation: Conversation
     ) -> list[dict[str, str]]:
-        """Load history without a message count cap.
-
-        The window is bounded in tokens by context_budget_service, after
-        retrieved context has already been allocated its share.
-        """
         messages = crud.get_conversation_messages(db, conversation_id=conversation.id)
         return [
             {"role": message.role, "content": message.content}
@@ -494,13 +640,6 @@ class AssistantStreamService:
         ]
 
     def _load_digest(self, db: Session, *, conversation: Conversation) -> str:
-        """Most recent rolling digest for this conversation, if any.
-
-        Stored on the assistant message's `token_usage` JSON under
-        `conversation_digest` rather than in a new column: the digest is
-        derived, regenerable, and adding a column for it would mean a
-        migration to store something that can always be recomputed.
-        """
         messages = crud.get_conversation_messages(db, conversation_id=conversation.id)
         for message in reversed(messages):
             payload = message.token_usage or {}
@@ -515,6 +654,11 @@ assistant_stream_service = AssistantStreamService()
 __all__ = [
     "AssistantStreamService",
     "QUEUE_MAXSIZE",
+    "REPLAY_IDLE_TIMEOUT_SECONDS",
+    "REPLAY_MAX_FRAMES",
+    "REPLAY_TTL_SECONDS",
+    "ReplayUnavailableError",
+    "StreamFrameBuffer",
     "StreamPlan",
     "assistant_stream_service",
     "sse",

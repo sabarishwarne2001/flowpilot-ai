@@ -27,5 +27,14 @@ export default defineConfig({
   build: {
     sourcemap: true,
     chunkSizeWarningLimit: 1000,
+
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          pdf: ["pdfjs-dist"],
+          markdown: ["marked", "dompurify", "highlight.js"],
+        },
+      },
+    },
   },
 });

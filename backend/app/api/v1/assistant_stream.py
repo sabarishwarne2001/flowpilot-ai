@@ -1,36 +1,4 @@
-"""ARCH-12 — the SSE generation endpoint.
-
-A SEPARATE ROUTER, MOUNTED AT THE SAME PREFIX
-=============================================
-
-`app/api/v1/assistant.py` is 377 lines of CRUD that has been stable since
-ARCH-11. Adding a streaming endpoint to it means every future streaming change
-touches the file the conversation list endpoints live in. FastAPI happily
-includes two routers under one prefix, so this ships as an additive module and
-the diff to the existing file is one line in `router.py`.
-
-WHY EVERYTHING THAT CAN REFUSE, REFUSES BEFORE `StreamingResponse`
-==================================================================
-
-Once a `StreamingResponse` is returned, the status line is already 200. A
-spend ceiling hit at that point cannot be expressed as 402 — the best
-available is an SSE `error` frame that a naive client renders as answer text.
-So `prepare()` runs synchronously inside the request, on the request's
-session, and every refusal path (404, 402, 429) resolves there.
-
-The rate limiter is a context manager held **for the life of the stream**,
-which is why it wraps the generator rather than sitting in `Depends`. A
-dependency releases at response time, which for streaming is before the first
-token — exactly the bug that A1 describes for sessions, applied to slots.
-
-HEADERS
-=======
-
-`X-Accel-Buffering: no` disables nginx proxy buffering. Without it nginx holds
-tokens until its buffer fills and the measured TTFT is whatever the buffer
-size divided by the token rate happens to be — which is how a system that
-streams correctly ships with a 4-second time-to-first-token.
-"""
+"""ARCH-12 — the SSE generation endpoint."""
 
 from __future__ import annotations
 
@@ -38,14 +6,18 @@ import logging
 import uuid
 from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.exceptions import RateLimitExceededError, SpendLimitExceededError
 from app.schemas.assistant import ChatQuery
-from app.services.assistant_stream import assistant_stream_service, sse
+from app.services.assistant_stream import (
+    ReplayUnavailableError,
+    assistant_stream_service,
+    sse,
+)
 from app.services.llm_metering import LLMMeteringError
 from app.services.stream_concurrency import generation_slot
 
@@ -64,7 +36,8 @@ SSE_HEADERS = {
     "/conversations/{conversation_id}/messages/stream",
     summary="Send Message (streaming)",
     response_description=(
-        "text/event-stream. Frames: start, token, citations, done, error."
+        "text/event-stream. Frames: start, token, citations, done, error. "
+        "Every frame carries a monotonic `seq` for A13 resumption."
     ),
     responses={
         402: {"description": "Workspace AI usage limit reached."},
@@ -136,7 +109,6 @@ async def stream_chat_query(
     request_id = getattr(request.state, "request_id", None)
 
     async def guarded() -> AsyncIterator[bytes]:
-        """Hold the concurrency slot for the whole stream, not the request."""
         try:
             with generation_slot(
                 user_id=context.user_id,
@@ -148,8 +120,6 @@ async def stream_chat_query(
                 ):
                     yield frame
         except RateLimitExceededError as exc:
-            # The limiter can only refuse before the first provider token, so
-            # nothing has been emitted yet and an error frame is honest.
             yield sse(
                 "error",
                 {
@@ -173,7 +143,91 @@ async def stream_chat_query(
             )
 
     return StreamingResponse(
-        guarded(), media_type="text/event-stream", headers=SSE_HEADERS
+        guarded(),
+        media_type="text/event-stream",
+        headers={
+            **SSE_HEADERS,
+            "X-Message-Id": str(plan.message_id),
+        },
+    )
+
+
+@router.get(
+    "/messages/{message_id}/stream",
+    summary="Resume Message Stream (A13)",
+    response_description=(
+        "text/event-stream. Replays buffered frames with seq > from_seq. "
+        "Never re-invokes the model."
+    ),
+    responses={
+        404: {"description": "Message not found, or no buffered frames remain."},
+    },
+)
+async def resume_message_stream(
+    message_id: uuid.UUID,
+    request: Request,
+    from_seq: int = Query(
+        0,
+        ge=0,
+        description=(
+            "Last sequence number the client durably handled. Frames with "
+            "seq <= from_seq are not re-sent. 0 replays the whole turn."
+        ),
+    ),
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
+) -> StreamingResponse:
+    from sqlalchemy import select
+
+    from app.models.assistant import Conversation, ConversationMessage
+
+    row = db.execute(
+        select(ConversationMessage.id)
+        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        .where(
+            ConversationMessage.id == message_id,
+            Conversation.workspace_id == context.workspace_id,
+            Conversation.user_id == context.user_id,
+        )
+    ).scalar_one_or_none()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found."
+        )
+
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        frames = assistant_stream_service.replay(
+            message_id=message_id, from_seq=from_seq, request_id=request_id
+        )
+        first = await frames.__anext__()
+    except ReplayUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"{exc} Do not re-send the query — the original generation was "
+                "already billed."
+            ),
+        ) from exc
+    except StopAsyncIteration:
+        async def empty() -> AsyncIterator[bytes]:
+            yield sse("done", {"finish_reason": "already_current", "resumed": True})
+
+        return StreamingResponse(
+            empty(), media_type="text/event-stream", headers=SSE_HEADERS
+        )
+
+    async def replayed() -> AsyncIterator[bytes]:
+        yield first
+        async for frame in frames:
+            yield frame
+
+    return StreamingResponse(
+        replayed(),
+        media_type="text/event-stream",
+        headers={**SSE_HEADERS, "X-Message-Id": str(message_id)},
     )
 
 
@@ -187,11 +241,6 @@ async def get_message_provenance(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> dict:
-    """Re-read the sealed record for a message the client already has.
-
-    Exists so a citation panel opened days later renders from the stored row
-    rather than from whatever the client kept in memory during the stream.
-    """
     from sqlalchemy import select
 
     from app.models.assistant import Conversation, ConversationMessage

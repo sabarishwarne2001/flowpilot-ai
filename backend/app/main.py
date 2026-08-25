@@ -27,6 +27,10 @@ setup_logging()
 logger = logging.getLogger("app.main")
 
 
+#: Response headers the browser is permitted to read cross-origin.
+CORS_EXPOSED_HEADERS = ["WWW-Authenticate", "Retry-After"]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting FlowPilot AI Backend Core...")
@@ -66,9 +70,10 @@ if settings.cors_origins:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["WWW-Authenticate", "Retry-After"],
+        expose_headers=CORS_EXPOSED_HEADERS,
     )
-    logger.info("CORS policies actively applied to HTTP pathways with exposed authentication/rate headers.")
+    logger.info("CORS policies actively applied to HTTP pathways.")
+    logger.info(f"CORS response headers exposed to script: {CORS_EXPOSED_HEADERS}")
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
