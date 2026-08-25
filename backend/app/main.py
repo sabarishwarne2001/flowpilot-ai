@@ -5,11 +5,13 @@ Main entrypoint for the FlowPilot AI Backend API.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1 import billing as billing_v1
 from app.api.v1 import billing_webhook as billing_webhook_v1
+from app.api.v1 import scim as scim_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -17,6 +19,7 @@ from app.core.exception_handlers import domain_exception_handler
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
+from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
 from app.workers.handlers import register_all
 
@@ -39,14 +42,9 @@ async def lifespan(app: FastAPI):
 
     try:
         register_all()
-        logger.info("ARCH-10 asynchronous job handlers registered.")
+        logger.info("ARCH-10 / ARCH-16 asynchronous job handlers registered.")
     except Exception:
         logger.exception("Failed to register background job handlers.")
-
-    try:
-        logger.info("BM25 index successfully built and initialized.")
-    except Exception:
-        logger.exception("Failed to initialize BM25 index.")
 
     yield
 
@@ -73,18 +71,39 @@ if settings.cors_origins:
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
-# Global Per-IP Rate Limit Middleware (ARCH-08 Step 6)
 app.add_middleware(GlobalRateLimitMiddleware)
-
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
+
+# --- ARCH-16 SCIM & Identity Exception Handlers ---
+async def scim_error_handler(request: Request, exc: ScimError):
+    return JSONResponse(
+        content=exc.to_body(),
+        status_code=exc.status_code,
+        media_type="application/scim+json",
+    )
+
+
+async def identity_error_handler(request: Request, exc: IdentityError):
+    return JSONResponse(
+        content={"detail": exc.message},
+        status_code=exc.status_code,
+    )
+
+
+app.add_exception_handler(ScimError, scim_error_handler)
+app.add_exception_handler(IdentityError, identity_error_handler)
+
+# Versioned API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
 logger.info(f"API endpoints registered under baseline prefix: {settings.API_V1_STR}")
 
+# Outbound / Webhook routes
 app.include_router(webhooks_v1.router, prefix=settings.API_V1_STR)
 
-# ARCH-15 Step 15.1. Unauthenticated webhook endpoint
+# ARCH-15 Billing routes
 app.include_router(billing_webhook_v1.router, prefix=settings.API_V1_STR)
-
-# ARCH-15 Steps 15.6/15.7. Authenticated tenant billing API
 app.include_router(billing_v1.router, prefix=settings.API_V1_STR)
+
+# ARCH-16 SCIM 2.0 root mount (standard RFC 7644 /scim/v2 outside versioned prefix)
+app.include_router(scim_v1.router)

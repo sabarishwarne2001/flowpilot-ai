@@ -1,4 +1,4 @@
-"""ARCH-13 Step 13.1 — the internal event vocabulary (F1).
+"""ARCH-13 Step 13.1 — the internal event vocabulary (F1), extended by ARCH-15 and ARCH-16.
 
 `outbox_events` is one table with two audiences. `WEBHOOK_EVENT_TYPES`
 (ARCH-09 §B.2) is what a customer's endpoint may receive. `INTERNAL_EVENT_TYPES`
@@ -47,6 +47,7 @@ VISIBILITIES: Final[FrozenSet[str]] = frozenset(
 #: `WEBHOOK_EVENT_TYPES` — the assertion below enforces that.
 INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
     {
+        # --- ARCH-13 Work Item & Automation Events ---
         # Emitted by `document.enrich` when enrichment commits. Replaces the
         # fire-and-forget in-process call in `enrich.py::_run_side_effects`
         # (F3). Carries work_item_id and the enrichment summary.
@@ -67,37 +68,41 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         # a customer's Zapier integration has no use for it and it names an
         # internal cost ceiling.
         "automation.budget_exhausted",
+
+        # --- ARCH-15 Billing Internal Events ---
         # ARCH-15 Step 15.4. Seat lifecycle. A membership entering or leaving
         # `MembershipStatus.ACTIVE` changes what Stripe should be charging,
         # and the transition is the only moment at which anybody knows it.
-        # INTERNAL because these name our seat accounting and our Stripe
-        # state; a customer endpoint has no use for either, and
-        # `billing.seat_removed` leaking would tell a subscriber's integration
-        # about staffing changes at a tenant it merely shares a webhook with.
         "billing.seat_added",
         "billing.seat_removed",
         # Emitted by the drift detector when `seats_purchased` and the
-        # `billable_seats` view disagree. Deliberately a *request to
-        # re-assert*, not an instruction to overwrite: drift is a symptom,
-        # and a job that silently corrects it hides the cause.
+        # `billable_seats` view disagree.
         "billing.seat_sync_needed",
+
+        # --- ARCH-16 Identity & Federation Internal Events ---
+        # Emitted on JIT / SCIM user provisioning, deprovisioning, and reactivation.
+        "identity.user_provisioned",
+        "identity.user_deprovisioned",
+        "identity.user_reactivated",
+        # Emitted when a domain DNS TXT challenge is verified or lapses.
+        "identity.domain_verified",
+        "identity.domain_lapsed",
+        # Emitted when an IdP JIT login attempts to exceed the organization's seat cap.
+        "identity.jit_cap_reached",
+        # Emitted when an enterprise IdP configuration is created or activated.
+        "identity.idp_config_changed",
     }
 )
 
 
 #: Namespaces reserved for internal events. An event type under one of these
 #: prefixes may never be made PUBLIC, even if someone adds it to
-#: `WEBHOOK_EVENT_TYPES`. Belt and braces: the disjointness assertion already
-#: catches that, but this catches the case where a *new* internal namespace is
-#: introduced and only added to one of the two sets.
-#:
-#: ARCH-15 reserves `billing.seat_` and not the whole `billing.` namespace.
-#: Tranche 3 and 4 will want genuinely publishable billing events —
-#: `billing.invoice_finalized` is a reasonable thing for a customer's
-#: accounting integration to subscribe to — and reserving the parent namespace
-#: now would make that a migration rather than a one-line addition. Seat
-#: accounting is the part that must never leave this process.
-INTERNAL_ONLY_PREFIXES: Final[tuple[str, ...]] = ("automation.", "billing.seat_")
+#: `WEBHOOK_EVENT_TYPES`.
+INTERNAL_ONLY_PREFIXES: Final[tuple[str, ...]] = (
+    "automation.",
+    "billing.seat_",
+    "identity.",
+)
 
 
 def _assert_vocabularies_disjoint() -> None:

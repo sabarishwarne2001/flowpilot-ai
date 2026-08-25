@@ -16,6 +16,7 @@ from app.api.v1 import (
     document_settings,
     email_change,
     email_settings,
+    identity_admin,
     me,
     notifications,
     organization_email_settings,
@@ -31,6 +32,7 @@ from app.api.v1 import (
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.organization_invitations import router as organization_invitation_router
+from app.api.v1.saml import oidc_router, saml_router, sso_router
 
 api_router = APIRouter()
 
@@ -55,13 +57,21 @@ api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
 api_router.include_router(usage.router)
 
+# --- ARCH-16 Enterprise Identity Administration ---
+api_router.include_router(identity_admin.router)
+
 
 # ============================================================================
-# Global
+# Global & Identity Federation
 # ============================================================================
 
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+
+# --- ARCH-16 SAML / OIDC / SSO Gateways ---
+api_router.include_router(saml_router)
+api_router.include_router(sso_router)
+api_router.include_router(oidc_router)
 
 
 # ============================================================================

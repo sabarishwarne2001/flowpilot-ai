@@ -1,4 +1,4 @@
-"""ARCH-10 Step 6/7, ARCH-11 Step 4, ARCH-12 Step 7, ARCH-13 Step 13.5/13.7, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.4/15.6/15.8 — job handler registration."""
+"""Job handler registration across ARCH-10 through ARCH-16."""
 
 from __future__ import annotations
 
@@ -29,96 +29,117 @@ ARCH15_JOB_TYPES: frozenset[str] = frozenset(
         "billing.dunning_sweep",
     }
 )
+ARCH16_JOB_TYPES: frozenset[str] = frozenset(
+    {
+        "identity.recheck_domains",
+        "identity.purge_assertion_payloads",
+        "identity.sweep_replay_guard",
+        "identity.sweep_auth_requests",
+    }
+)
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.ocr import handle_document_extract
-
     return handle_document_extract(payload)
 
 
 def _document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.enrich import handle_document_enrich
-
     return handle_document_enrich(payload)
 
 
 def _storage_sample(payload: dict[str, Any]) -> dict[str, Any]:
     from app.services.storage_sampler_service import handle_storage_sample
-
     return handle_storage_sample(payload)
 
 
 def _knowledge_reindex(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.knowledge_reindex import handle_knowledge_reindex
-
     return handle_knowledge_reindex(payload)
 
 
 def _notification_deliver(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.notify import handle_notification_deliver
-
     return handle_notification_deliver(payload)
 
 
 def _usage_rollup(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.rollup import handle_usage_rollup
-
     return handle_usage_rollup(payload)
 
 
 def _usage_seal(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.rollup import handle_usage_seal
-
     return handle_usage_seal(payload)
 
 
 def _usage_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.reconcile import handle_usage_reconcile
-
     return handle_usage_reconcile(payload)
 
 
 def _automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.automation import handle_automation_execute
-
     return handle_automation_execute(payload)
 
 
 def _document_verify(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.verification import handle_document_verify
-
     return handle_document_verify(payload)
 
 
 def _billing_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_reconcile
-
     return handle_billing_reconcile(payload)
 
 
 def _billing_seat_sync(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_seat_sync
-
     return handle_billing_seat_sync(payload)
 
 
 def _billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_seat_drift
-
     return handle_billing_seat_drift(payload)
 
 
 def _billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_assemble_invoice
-
     return handle_billing_assemble_invoice(payload)
 
 
 def _billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_dunning_sweep
-
     return handle_billing_dunning_sweep(payload)
+
+
+def _identity_recheck_domains(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_recheck_domains
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_recheck_domains(db, payload)
+
+
+def _identity_purge_assertions(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_purge_assertion_payloads
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_purge_assertion_payloads(db, payload)
+
+
+def _identity_sweep_replay_guard(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_sweep_replay_guard
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_sweep_replay_guard(db, payload)
+
+
+def _identity_sweep_auth_requests(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_sweep_auth_requests
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_sweep_auth_requests(db, payload)
 
 
 _HANDLERS = {
@@ -137,6 +158,10 @@ _HANDLERS = {
     "billing.seat_drift": _billing_seat_drift,
     "billing.assemble_invoice": _billing_assemble_invoice,
     "billing.dunning_sweep": _billing_dunning_sweep,
+    "identity.recheck_domains": _identity_recheck_domains,
+    "identity.purge_assertion_payloads": _identity_purge_assertions,
+    "identity.sweep_replay_guard": _identity_sweep_replay_guard,
+    "identity.sweep_auth_requests": _identity_sweep_auth_requests,
 }
 
 
@@ -168,5 +193,6 @@ __all__ = [
     "ARCH13_JOB_TYPES",
     "ARCH14_JOB_TYPES",
     "ARCH15_JOB_TYPES",
+    "ARCH16_JOB_TYPES",
     "register_all",
 ]

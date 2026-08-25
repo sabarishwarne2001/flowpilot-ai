@@ -57,7 +57,7 @@ from app.models.ai_settings import AISettings
 from app.models.document_settings import DocumentSettings
 from app.models.settings_migration_archive import SettingsMigrationArchive
 from app.models.auth_token import AuthToken, AuthTokenPurpose
-from app.models.user_session import UserSession, SessionRevokedReason
+from app.models.user_session import UserSession, SessionRevokedReason, AuthMethod
 from app.models.api_key import ApiKey
 
 from app.models.organization import (
@@ -150,6 +150,28 @@ from app.models.reconciliation import (
     ReconciliationRun,
     ReconciliationStatus,
     StatementGrain,
+)
+
+# ---- ARCH-16 Enterprise Identity -----------------------------------------
+from app.models.identity import (
+    AssertionOutcome,
+    DirectoryIdentity,
+    DomainStatus,
+    EnterpriseIdpConfig,
+    IdpProtocol,
+    IdpRoleMapping,
+    IdpSigningCertificate,
+    IpPinningMode,
+    JitProvisioningMode,
+    ProvisionedVia,
+    SamlAssertionReplayGuard,
+    ScimApiKey,
+    ScimGroup,
+    ScimGroupMember,
+    SsoAssertion,
+    SsoAuthRequest,
+    TenantSecurityPolicy,
+    VerifiedDomain,
 )
 
 __all__ = [
@@ -254,7 +276,6 @@ __all__ = [
     "DocumentVerificationField",
     "RELEASING_STATUSES",
     "VerificationStatus",
-    # ---- ARCH-15 -------------------------------------------------------
     "StripeInboundEvent",
     "StripeInboundStatus",
     "STRIPE_INBOUND_STATUS_ENUM_NAME",
@@ -277,4 +298,24 @@ __all__ = [
     "INVOICE_STATUS_VALUES",
     "INVOICE_LINE_KIND_ENUM_NAME",
     "COLLECTIBLE_INVOICE_STATUSES",
+    # ---- ARCH-16 -------------------------------------------------------
+    "VerifiedDomain",
+    "DomainStatus",
+    "EnterpriseIdpConfig",
+    "IdpProtocol",
+    "JitProvisioningMode",
+    "IdpSigningCertificate",
+    "IdpRoleMapping",
+    "DirectoryIdentity",
+    "ProvisionedVia",
+    "ScimGroup",
+    "ScimGroupMember",
+    "ScimApiKey",
+    "TenantSecurityPolicy",
+    "IpPinningMode",
+    "AuthMethod",
+    "SsoAuthRequest",
+    "SsoAssertion",
+    "AssertionOutcome",
+    "SamlAssertionReplayGuard",
 ]

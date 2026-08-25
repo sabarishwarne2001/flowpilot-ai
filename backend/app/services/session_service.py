@@ -1,38 +1,5 @@
 """
 Refresh session lifecycle for FlowPilot AI.
-
-One sessions row is one refresh token. The plaintext is a 256-bit secret that
-exists in the HttpOnly cookie and nowhere else; this module stores only its
-SHA-256 and therefore cannot reissue a token it has already handed out. That
-constraint shapes the whole design, and §"Concurrent refresh" below is where it
-bites hardest.
-
-Access tokens are not recorded. Per-request revocation is obtained by comparing
-the token's `iat` against users.sessions_revoked_at, which is already loaded on
-the User row — a session lookup on every request would cost a query for the
-same answer.
-
-ROTATION AND REUSE DETECTION (§B.7)
------------------------------------
-    login          → row A, family F, live
-    refresh with A → row B in family F; A is marked rotated and revoked
-                     (ROTATED), A.replaced_by_id = B
-    refresh with A → A is already rotated. Two possibilities, and the whole
-                     difficulty of this module is telling them apart:
-
-                       - a stolen token is being replayed
-                       - two browser tabs refreshed at the same moment
-
-Outside the grace window the presentation is treated as theft and the entire
-family is revoked, which signs the user out of that device chain. That is the
-correct response: the legitimate holder and the attacker both hold tokens
-descended from the same login, so there is no way to keep one without keeping
-the other.
-
-Inside the window it is treated as a tab race and served. Getting this wrong in
-the safe direction is not free — R2 names concurrent-refresh false positives as
-the main operational risk of the phase, because the symptom is a user being
-signed out at random with nothing in the logs that looks like an error.
 """
 
 from __future__ import annotations
@@ -74,12 +41,7 @@ class RevokedRefreshTokenError(SessionError):
 
 
 class SessionReuseDetectedError(SessionError):
-    """
-    An already-rotated token was presented outside the grace window.
-
-    Raised *after* the family has been revoked, not before. The revocation is
-    the response; the exception only reports it.
-    """
+    """An already-rotated token was presented outside the grace window."""
 
 
 # ===========================================================================
@@ -88,14 +50,6 @@ class SessionReuseDetectedError(SessionError):
 
 @dataclass(frozen=True)
 class IssuedSession:
-    """
-    A session row together with the plaintext refresh token addressing it.
-
-    The plaintext is returned rather than stored, exactly as with invitations.
-    This is the only moment the secret exists on the server; the caller must
-    put it in the cookie before it goes out of scope.
-    """
-
     session: UserSession
     plaintext_token: str
 
@@ -115,54 +69,57 @@ class IssuedSession:
 def create_session(
     db: Session,
     *,
-    user: User,
+    user: User | None = None,
+    user_id: uuid.UUID | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
     family_id: uuid.UUID | None = None,
     authenticated_at: datetime | None = None,
+    auth_method: str = "PASSWORD",
+    idp_config_id: uuid.UUID | None = None,
+    idp_session_index: str | None = None,
+    pinned_ip: str | None = None,
+    pinned_ip_prefix: int | None = None,
 ) -> IssuedSession:
     """
-    Opens a new refresh session.
-
-    Called at login with no family_id, which starts a new chain, and by
-    rotation with the parent's family_id, which continues one.
-
-    Participates in the caller's transaction. Does not commit: a session
-    created for a login that then fails its own checks must disappear with the
-    rest of that request.
-
-    Args:
-        user: The account the session belongs to.
-        ip_address: Request origin, recorded at issuance only.
-        user_agent: Client string, rendered as a device label.
-        family_id: Continues an existing chain. Omit to begin one.
-        authenticated_at: When the user last presented a credential (SEC-1).
-            Omit at login, where `now` is correct by definition. Rotation
-            passes the parent's value so it travels down the chain unchanged.
-
-    Returns:
-        The session and its plaintext refresh token.
+    Opens a new refresh session with full federation & IP pinning support.
     """
+    if user is None:
+        if user_id is None:
+            raise ValueError("Either user or user_id must be provided to create_session")
+        resolved_user_id = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(str(user_id))
+        user = db.get(User, resolved_user_id)
+        if user is None:
+            raise ValueError(f"User {user_id} does not exist")
+    else:
+        resolved_user_id = user.id
+
     plaintext = generate_secure_token()
     now = datetime.now(UTC)
 
     session = UserSession(
-        user_id=user.id,
+        user_id=resolved_user_id,
         family_id=family_id or uuid.uuid4(),
         token_hash=hash_token(plaintext),
         expires_at=now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         ip_address=ip_address,
         user_agent=user_agent,
         authenticated_at=authenticated_at or now,
+        auth_method=auth_method,
+        idp_config_id=idp_config_id,
+        idp_session_index=idp_session_index,
+        pinned_ip=pinned_ip,
+        pinned_ip_prefix=pinned_ip_prefix,
     )
     db.add(session)
     db.flush()
 
     logger.info(
-        "SESSION_CREATED | user=%s | session=%s | family=%s",
-        user.id,
+        "SESSION_CREATED | user=%s | session=%s | family=%s | auth_method=%s",
+        resolved_user_id,
         session.id,
         session.family_id,
+        auth_method,
     )
     return IssuedSession(session=session, plaintext_token=plaintext)
 
@@ -369,6 +326,11 @@ def _rotate_live_session(
         user_agent=user_agent,
         family_id=session.family_id,
         authenticated_at=session.authenticated_at,
+        auth_method=session.auth_method,
+        idp_config_id=session.idp_config_id,
+        idp_session_index=session.idp_session_index,
+        pinned_ip=session.pinned_ip,
+        pinned_ip_prefix=session.pinned_ip_prefix,
     )
 
     session.rotated_at = now
@@ -431,8 +393,7 @@ def _handle_rotated_token_replay(
             reason=SessionRevokedReason.REUSE_DETECTED,
         )
         logger.warning(
-            "SESSION_REUSE_DETECTED | user=%s | family=%s | chain walk did not "
-            "reach an unrotated tip",
+            "SESSION_REUSE_DETECTED | user=%s | family=%s | chain walk did not reach an unrotated tip",
             session.user_id,
             session.family_id,
         )
@@ -460,7 +421,7 @@ def _handle_rotated_token_replay(
 
 
 # ===========================================================================
-# Housekeeping (R8)
+# Housekeeping
 # ===========================================================================
 
 def sweep_expired_sessions(

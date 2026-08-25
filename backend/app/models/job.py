@@ -1,6 +1,6 @@
 """
 Database representation for Job entities in FlowPilot AI.
-Generic system job queue for offloading async tasks (ARCH-09 Step 10).
+Generic system job queue for offloading async tasks (ARCH-09 §Step 10, ARCH-16 §Step 7).
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -59,6 +60,10 @@ class Job(Base, UUIDMixin, TimestampMixin):
             name="succeeded_at_matches_status",
         ),
         CheckConstraint("jsonb_typeof(payload) = 'object'", name="payload_is_object"),
+        CheckConstraint(
+            "effects_suppressed = false OR suppressed_at IS NOT NULL",
+            name="ck_jobs_suppressed_has_timestamp",
+        ),
         UniqueConstraint("seq", name="uq_jobs_seq"),
         Index(
             "ix_jobs_claimable",
@@ -97,6 +102,11 @@ class Job(Base, UUIDMixin, TimestampMixin):
             unique=True,
             postgresql_where=text("idempotency_key IS NOT NULL"),
         ),
+        Index(
+            "ix_jobs_principal_live",
+            "created_by_user_id",
+            postgresql_where=text("status IN ('PENDING'::job_status, 'CLAIMED'::job_status)"),
+        ),
     )
 
     seq: Mapped[int] = mapped_column(
@@ -111,6 +121,9 @@ class Job(Base, UUIDMixin, TimestampMixin):
 
     organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True
+    )
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
@@ -132,6 +145,17 @@ class Job(Base, UUIDMixin, TimestampMixin):
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     succeeded_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # --- ARCH-16 Job Effect Suppression (B5 / A11) ------------------------
+    effects_suppressed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    suppressed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    suppressed_reason: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
     )
 
     @property
