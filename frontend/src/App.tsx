@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { LoadingScreen } from "@/components/common/LoadingScreen";
+import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
@@ -45,6 +46,7 @@ export default function App() {
         closeButton
         duration={4000}
       />
+      <StepUpReauthModal />
 
       <BrowserRouter>
         {/* One /auth/refresh before anything renders. The access token no

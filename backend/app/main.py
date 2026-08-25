@@ -66,8 +66,9 @@ if settings.cors_origins:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["WWW-Authenticate", "Retry-After"],
     )
-    logger.info("CORS policies actively applied to HTTP pathways.")
+    logger.info("CORS policies actively applied to HTTP pathways with exposed authentication/rate headers.")
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
