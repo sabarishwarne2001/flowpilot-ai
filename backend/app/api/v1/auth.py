@@ -35,6 +35,8 @@ from app.core.cookies import (
 from app.core.rate_limit.policy import POLICY_LOGIN_IP
 from app.core.redirects import sanitize_redirect_path
 from app.core.security import create_access_token
+from app.db.session import SessionLocal
+from app.models.user import User
 from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -79,12 +81,6 @@ def _user_agent(request: Request) -> str | None:
 
 
 def _login_refused() -> HTTPException:
-    """The single failure answer for /login.
-
-    Bad password, unknown address, disabled account, backed-off pair — all of
-    them leave here. Any branch that answers differently is an enumeration
-    oracle, and `scripts/verify_sec1.py` fails the build if one appears.
-    """
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Incorrect email or password",
@@ -133,8 +129,7 @@ async def register(
         db.commit()
         background_tasks.add_task(
             _send_verification_safely,
-            db=db,
-            user=outcome.user,
+            user_id=outcome.user.id,
             ip_address=_client_ip(request),
             user_agent=_user_agent(request),
             redirect=sanitize_redirect_path(user_in.redirect),
@@ -176,24 +171,30 @@ def _send_account_exists_safely(*, email: str) -> None:
 
 def _send_verification_safely(
     *,
-    db: Session,
-    user,
+    user_id: uuid.UUID,
     ip_address: str | None,
     user_agent: str | None,
     redirect: str | None = None,
 ) -> None:
+    db = SessionLocal()
     try:
-        verification_service.issue_and_send(
-            db,
-            user=user,
-            requested_ip=ip_address,
-            requested_user_agent=user_agent,
-            redirect=redirect,
-        )
+        user = db.get(User, user_id)
+        if user is not None:
+            verification_service.issue_and_send(
+                db,
+                user=user,
+                requested_ip=ip_address,
+                requested_user_agent=user_agent,
+                redirect=redirect,
+            )
+            db.commit()
     except Exception as exc:
+        db.rollback()
         logger.warning(
-            "VERIFY_EMAIL_BACKGROUND_FAILED | user=%s | %s", user.id, exc
+            "VERIFY_EMAIL_BACKGROUND_FAILED | user=%s | %s", user_id, exc
         )
+    finally:
+        db.close()
 
 
 # ===========================================================================
@@ -458,7 +459,6 @@ async def forgot_password(
 ) -> Any:
     background_tasks.add_task(
         _request_reset_safely,
-        db=db,
         email=payload.email,
         ip_address=_client_ip(request),
         user_agent=_user_agent(request),
@@ -475,11 +475,11 @@ async def forgot_password(
 
 def _request_reset_safely(
     *,
-    db: Session,
     email: str,
     ip_address: str | None,
     user_agent: str | None,
 ) -> None:
+    db = SessionLocal()
     try:
         password_service.request_password_reset(
             db,
@@ -487,8 +487,12 @@ def _request_reset_safely(
             requested_ip=ip_address,
             requested_user_agent=user_agent,
         )
+        db.commit()
     except Exception as exc:
+        db.rollback()
         logger.warning("PASSWORD_RESET_BACKGROUND_FAILED | %s", exc)
+    finally:
+        db.close()
 
 
 @router.post("/reset-password", response_model=PasswordActionResponse)
