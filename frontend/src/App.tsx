@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Route,
@@ -17,7 +17,19 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 
 import { Assistant } from "@/pages/Assistant/Assistant";
 import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
-import BillingHub from "@/pages/billing/BillingHub";
+
+const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
+const IdentityAdminHub = lazy(
+  () => import("@/pages/identity/IdentityAdminHub"),
+);
+const AuditExplorer = lazy(() => import("@/pages/admin/AuditExplorer"));
+const ExecutionTimeline = lazy(
+  () => import("@/pages/Automation/ExecutionTimeline"),
+);
+const VerificationReviewQueue = lazy(
+  () => import("@/pages/Verification/VerificationReviewQueue"),
+);
+
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
 import VerifyEmail from "@/pages/Auth/VerifyEmail";
@@ -93,6 +105,7 @@ export default function App() {
                 element={<InvitationAcceptPage />}
               />
 
+              {/* Public auth pages */}
               <Route
                 element={
                   <PublicRoute>
@@ -138,6 +151,14 @@ export default function App() {
                     path={ROUTE_PATTERNS.organizationBilling}
                     element={<BillingHub />}
                   />
+                  <Route
+                    path={ROUTE_PATTERNS.organizationIdentity}
+                    element={<IdentityAdminHub />}
+                  />
+                  <Route
+                    path={ROUTE_PATTERNS.organizationAudit}
+                    element={<AuditExplorer />}
+                  />
                 </Route>
 
                 {/* Legacy redirects */}
@@ -182,6 +203,14 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.workspaceAutomation}
                       element={<Automation />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceAutomationTimeline}
+                      element={<ExecutionTimeline />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceVerification}
+                      element={<VerificationReviewQueue />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.workspaceNotifications}

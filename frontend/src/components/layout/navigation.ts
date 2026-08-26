@@ -1,15 +1,21 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  LayoutDashboard,
   FileText,
+  LayoutDashboard,
   MessageSquare,
+  ClipboardCheck,
+  CreditCard,
   Settings,
+  ShieldCheck,
   Sliders,
 } from "lucide-react";
 
 import {
   assistantPath,
   automationPath,
+  organizationBillingPath,
+  organizationIdentityPath,
+  verificationPath,
   workItemsPath,
   workspaceDashboardPath,
   workspaceSettingsPath,
@@ -21,21 +27,6 @@ export interface NavigationItem {
   readonly icon: LucideIcon;
 }
 
-/**
- * Tenant-scoped navigation.
- *
- * Paths are built rather than declared because they embed the active
- * organization and workspace slugs, which are runtime values. That is the
- * whole reason a constant array cannot express them.
- *
- * Every path is produced by @/routes/tenantPaths, so the URL grammar lives in
- * one place. A sidebar that assembled its own paths would be a second place to
- * get the shape wrong, and a wrong path here is a dead link on the most-used
- * surface in the product.
- *
- * @param orgSlug - Active organization slug, from useResolvedTenant.
- * @param workspaceSlug - Active workspace slug, from useResolvedTenant.
- */
 export const buildNavigationItems = (
   orgSlug: string,
   workspaceSlug: string,
@@ -61,8 +52,39 @@ export const buildNavigationItems = (
     icon: Sliders,
   },
   {
+    name: "Review queue",
+    path: verificationPath(orgSlug, workspaceSlug),
+    icon: ClipboardCheck,
+  },
+  {
     name: "Settings",
     path: workspaceSettingsPath(orgSlug, workspaceSlug),
     icon: Settings,
   },
 ];
+
+export const buildOrganizationNavigationItems = (
+  orgSlug: string,
+  organizationRole: string,
+): readonly NavigationItem[] => {
+  const role = String(organizationRole).toUpperCase();
+  const items: NavigationItem[] = [];
+
+  if (role === "OWNER" || role === "BILLING") {
+    items.push({
+      name: "Billing",
+      path: organizationBillingPath(orgSlug),
+      icon: CreditCard,
+    });
+  }
+
+  if (role === "OWNER") {
+    items.push({
+      name: "Enterprise identity",
+      path: organizationIdentityPath(orgSlug),
+      icon: ShieldCheck,
+    });
+  }
+
+  return items;
+};
