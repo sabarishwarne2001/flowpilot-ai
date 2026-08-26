@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8 — the single claim primitive with profile routing."""
+"""ARCH-10 Step 8 — the single claim primitive with active execution runner."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import logging
 import os
 import random
 import socket
+import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,7 +34,11 @@ from app.models.webhook_delivery import (
     WebhookDeliveryStatus,
 )
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] - %(message)s",
+)
+logger = logging.getLogger("app.workers.claim")
 
 DEFAULT_LEASE_SECONDS: int = 120
 DEFAULT_BATCH_SIZE: int = 25
@@ -61,16 +67,6 @@ class QueueSpec:
     org_column: Optional[str] = "organization_id"
     type_column: Optional[str] = None
     retry_base_seconds: int = RETRY_BASE_SECONDS
-    #: ARCH-13 Step 13.1. A (column_name, value) equality predicate applied to
-    #: every candidate selection for this queue. `outbox_events` now holds two
-    #: audiences in one table and each has its own consumer; without this the
-    #: webhook dispatcher would claim INTERNAL rows and deliver them to
-    #: customer endpoints.
-    #:
-    #: A tuple rather than a SQLAlchemy expression because QueueSpec is
-    #: `frozen=True` and module-level: building an expression here would bind
-    #: it to a table object at import time, and a hashable tuple keeps the
-    #: dataclass usable as a dict key.
     row_filter: Optional[tuple[str, str]] = None
 
     @property
@@ -79,7 +75,6 @@ class QueueSpec:
 
     @property
     def row_predicate(self) -> Any:
-        """The row_filter as a SQL expression, or a no-op TRUE."""
         if self.row_filter is None:
             return sa_true()
         column, value = self.row_filter
@@ -98,17 +93,6 @@ class QueueSpec:
         return getattr(self.failed_status, "value", self.failed_status)
 
 
-# ARCH-13 Step 13.1 (F1). `outbox_events` holds two audiences in one table —
-# the transactional guarantee is the reason it is one table — and each audience
-# has exactly one consumer. Splitting the QueueSpec is what stops the webhook
-# dispatcher claiming an INTERNAL row and delivering `work_item.enriched` to
-# every customer endpoint subscribed to it.
-#
-# `OUTBOX_QUEUE` is retained as an alias for OUTBOX_PUBLIC_QUEUE so existing
-# call sites keep the behaviour they had before this migration: claiming
-# deliverable events. A caller that wants internal events has to name the
-# internal queue, which means the choice is visible at the call site rather
-# than defaulted.
 OUTBOX_PUBLIC_QUEUE = QueueSpec(
     name="outbox_public",
     model=OutboxEvent,
@@ -127,8 +111,6 @@ OUTBOX_INTERNAL_QUEUE = QueueSpec(
     row_filter=("visibility", OutboxVisibility.INTERNAL.value),
 )
 
-#: Backwards-compatible alias. PUBLIC is what "the outbox queue" meant before
-#: ARCH-13, so an unqualified reference keeps meaning that.
 OUTBOX_QUEUE = OUTBOX_PUBLIC_QUEUE
 
 WEBHOOK_DELIVERY_QUEUE = QueueSpec(
@@ -149,18 +131,6 @@ JOBS_QUEUE = QueueSpec(
     type_column="job_type",
 )
 
-# ARCH-15 Step 15.2. Inbound Stripe events are the same lease-and-retry
-# problem the outbox already solved, so they are a fourth QueueSpec rather
-# than a fourth implementation. What does *not* transfer is the schema: see
-# `app/models/stripe_inbound_event.py` for the axis-by-axis reason.
-#
-# `retry_base_seconds` is shorter than the outbox default. An inbound event
-# sitting unprocessed means billing state is currently wrong; an outbound one
-# means a customer's endpoint is down. They deserve different urgency.
-#
-# No `per_org_cap` is ever passed for this queue: `organization_id` is
-# nullable here and every unresolved event would rank inside a single NULL
-# partition, throttling precisely the rows that most need attention.
 STRIPE_INBOUND_QUEUE = QueueSpec(
     name="stripe_inbound",
     model=StripeInboundEvent,
@@ -317,17 +287,6 @@ def claim_eligible_rows(
         return []
 
     claimed = db.execute(select(model).where(model.id.in_(ids))).scalars().all()
-    logger.info(
-        "%s.claim" % spec.name,
-        extra={
-            "queue": spec.name,
-            "worker": worker,
-            "claimed": len(claimed),
-            "batch": batch_size,
-            "per_org_cap": per_org_cap,
-            "job_types": list(job_types) if job_types else None,
-        },
-    )
     return list(claimed)
 
 
@@ -371,11 +330,6 @@ def release_expired_leases(
     return len(rows)
 
 
-# ============================================================================
-# Outbox — result marking
-# ============================================================================
-
-
 def mark_published(db: Session, event_id: uuid.UUID) -> None:
     db.execute(
         update(OutboxEvent)
@@ -411,10 +365,6 @@ def mark_failed(
             )
             .execution_options(synchronize_session=False)
         )
-        logger.warning(
-            "outbox.dead_letter",
-            extra={"outbox_event_id": str(event_id), "attempts": attempts},
-        )
         return OutboxEventStatus.DEAD
 
     if retry_after is not None:
@@ -435,11 +385,6 @@ def mark_failed(
         .execution_options(synchronize_session=False)
     )
     return OutboxEventStatus.FAILED
-
-
-# ============================================================================
-# Webhook deliveries — result marking
-# ============================================================================
 
 
 def mark_delivered(
@@ -519,20 +464,7 @@ def mark_delivery_dead(
         )
         .execution_options(synchronize_session=False)
     )
-    logger.warning(
-        "webhook_delivery.dead_letter",
-        extra={
-            "webhook_delivery_id": str(delivery_id),
-            "reason": reason,
-            "status": response_status,
-        },
-    )
     return WebhookDeliveryStatus.DEAD
-
-
-# ============================================================================
-# Jobs — result marking
-# ============================================================================
 
 
 def mark_job_succeeded(
@@ -583,12 +515,6 @@ def mark_job_dead(db: Session, job_id: uuid.UUID, *, error: str) -> None:
         )
         .execution_options(synchronize_session=False)
     )
-    logger.warning("jobs.dead_letter", extra={"job_id": str(job_id)})
-
-
-# ============================================================================
-# Deprecated shims
-# ============================================================================
 
 
 def claim_batch(
@@ -678,7 +604,6 @@ def claim_stripe_inbound_events(
     batch_size: int = DEFAULT_BATCH_SIZE,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
 ) -> list[StripeInboundEvent]:
-    """ARCH-15 Step 15.2. Named shim, matching the three that precede it."""
     return claim_eligible_rows(
         db,
         STRIPE_INBOUND_QUEUE,
@@ -690,3 +615,105 @@ def claim_stripe_inbound_events(
 
 def reap_expired_stripe_inbound_leases(db: Session, *, limit: int = 500) -> int:
     return release_expired_leases(db, STRIPE_INBOUND_QUEUE, limit=limit)
+
+
+# ============================================================================
+# Continuous Worker Polling & Execution Runner
+# ============================================================================
+
+
+def run_worker_loop(poll_interval: float = 1.0) -> None:
+    """Continuously poll, claim, and execute asynchronous background jobs."""
+    from app.db.session import SessionLocal
+    from app.services import job_service
+    from app.workers.handlers import register_all
+
+    registered = register_all()
+    identity = worker_identity()
+
+    logger.info(
+        "================================================================="
+    )
+    logger.info(f"FlowPilot AI Background Worker Initialized [{identity}]")
+    logger.info(f"Registered {len(registered)} job handlers:")
+    for jt in registered:
+        logger.info(f"  -> {jt}")
+    logger.info(
+        "================================================================="
+    )
+
+    while True:
+        processed_count = 0
+        try:
+            with SessionLocal() as db:
+                # 1. Reap any expired job leases
+                reaped = reap_expired_job_leases(db)
+                if reaped > 0:
+                    logger.warning(f"Reaped {reaped} expired job lease(s).")
+                db.commit()
+
+                # 2. Claim pending jobs
+                claimed_jobs = claim_jobs(
+                    db,
+                    worker_id=identity,
+                    batch_size=10,
+                    lease_seconds=DEFAULT_LEASE_SECONDS,
+                )
+
+                if claimed_jobs:
+                    db.commit()
+                    processed_count += len(claimed_jobs)
+
+                    for job in claimed_jobs:
+                        handler = job_service.JOB_HANDLERS.get(job.job_type)
+                        if not handler:
+                            err = f"No registered handler for job_type '{job.job_type}'"
+                            logger.error(err)
+                            mark_job_failed(
+                                db, job.id, attempts=job.attempts, error=err
+                            )
+                            db.commit()
+                            continue
+
+                        start_t = time.perf_counter()
+                        logger.info(
+                            f"[CLAIMED] Job {job.id} | Type: '{job.job_type}' | Attempt: {job.attempts}"
+                        )
+
+                        try:
+                            payload = dict(job.payload or {})
+                            payload["job_id"] = str(job.id)
+                            result = handler(payload)
+                            mark_job_succeeded(db, job.id, result=result)
+                            db.commit()
+                            dur = round(time.perf_counter() - start_t, 3)
+                            logger.info(
+                                f"[SUCCESS] Job {job.id} '{job.job_type}' finished in {dur}s."
+                            )
+                        except Exception as exc:
+                            dur = round(time.perf_counter() - start_t, 3)
+                            logger.exception(
+                                f"[FAILED] Job {job.id} '{job.job_type}' failed after {dur}s: {exc}"
+                            )
+                            mark_job_failed(
+                                db,
+                                job.id,
+                                attempts=job.attempts,
+                                error=str(exc),
+                            )
+                            db.commit()
+
+        except Exception as exc:
+            logger.error(f"Unexpected worker loop exception: {exc}")
+
+        # Sleep briefly if no work was found
+        if processed_count == 0:
+            time.sleep(poll_interval)
+
+
+if __name__ == "__main__":
+    try:
+        run_worker_loop()
+    except KeyboardInterrupt:
+        logger.info("Worker stopped by user (KeyboardInterrupt).")
+        sys.exit(0)

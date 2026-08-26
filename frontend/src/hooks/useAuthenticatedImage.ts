@@ -4,46 +4,72 @@
  *
  * ARCH-07 Step 7.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import apiClient from "@/services/api/client";
 
 export function useAuthenticatedImage(url: string | null): string | null {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const activeBlobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!url) {
+      if (activeBlobUrlRef.current) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
+        activeBlobUrlRef.current = null;
+      }
       setObjectUrl(null);
       return;
     }
 
-    // Direct bypass for local blob or data URLs (instant preview during file selection)
     if (url.startsWith("blob:") || url.startsWith("data:")) {
       setObjectUrl(url);
       return;
     }
 
-    let cancelled = false;
-    let created: string | null = null;
-
-    // Normalize endpoint path to prevent double /api/v1 prefixing
+    let active = true;
     const normalizedUrl = url.replace(/^\/api\/v1/, "");
 
     apiClient
-      .get(normalizedUrl, { responseType: "blob" })
+      .get(normalizedUrl, {
+        responseType: "blob",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      })
       .then((response) => {
-        if (cancelled) return;
-        created = URL.createObjectURL(response.data);
-        setObjectUrl(created);
+        if (!active) return;
+        const data = response.data;
+        if (data && (data.size > 0 || (data.byteLength && data.byteLength > 0))) {
+          const blob = data instanceof Blob ? data : new Blob([data], { type: "image/png" });
+          const newBlobUrl = URL.createObjectURL(blob);
+          if (activeBlobUrlRef.current) {
+            URL.revokeObjectURL(activeBlobUrlRef.current);
+          }
+          activeBlobUrlRef.current = newBlobUrl;
+          setObjectUrl(newBlobUrl);
+        } else {
+          setObjectUrl(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setObjectUrl(null);
+        if (active) {
+          setObjectUrl(null);
+        }
       });
 
     return () => {
-      cancelled = true;
-      if (created) URL.revokeObjectURL(created);
+      active = false;
     };
   }, [url]);
+
+  useEffect(() => {
+    return () => {
+      if (activeBlobUrlRef.current) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
+      }
+    };
+  }, []);
 
   return objectUrl;
 }

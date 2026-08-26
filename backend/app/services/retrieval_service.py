@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import defaultdict
-from typing import Any
+from typing import Any, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -33,7 +33,7 @@ class RetrievalService:
         *,
         workspace_id: UUID,
         query: str,
-        work_item_ids: list[str],
+        work_item_ids: Optional[Sequence[str]] = None,
         top_k: int,
         similarity_threshold: float,
         db: Session | None = None,
@@ -45,12 +45,14 @@ class RetrievalService:
         with stage("retrieval.intent"):
             match = intent_service.detect(query, db=db, workspace_id=workspace_id)
 
+        filtered_ids = list(work_item_ids) if work_item_ids else None
+
         with stage("retrieval.hybrid_sql") as details:
             outcome = hybrid_search_service.search(
                 db,
                 workspace_id=workspace_id,
                 query=query,
-                work_item_ids=work_item_ids,
+                work_item_ids=filtered_ids,
                 top_k=max(top_k, settings.RERANK_MAX_CANDIDATES),
                 similarity_threshold=similarity_threshold,
             )
@@ -72,7 +74,7 @@ class RetrievalService:
 
         merged_results = document_filter_service.filter_documents(merged_results)
 
-        document_count = len({result["metadata"]["work_item_id"] for result in merged_results})
+        document_count = len({str(result.get("metadata", {}).get("work_item_id")) for result in merged_results})
         if document_count > 1 and self._should_balance_context(merged_results):
             merged_results = self._balance_documents(merged_results)
 
@@ -159,16 +161,18 @@ class RetrievalService:
 
         document_counts: dict[str, int] = {}
         for result in results:
-            work_item_id = result.get("metadata", {}).get("work_item_id")
-            if work_item_id is None:
+            raw_id = result.get("metadata", {}).get("work_item_id")
+            if not raw_id:
                 continue
-            document_counts[work_item_id] = document_counts.get(work_item_id, 0) + 1
+            wid = str(raw_id)
+            document_counts[wid] = document_counts.get(wid, 0) + 1
 
         max_count = max(document_counts.values(), default=1)
 
         for result in results:
-            work_item_id = result.get("metadata", {}).get("work_item_id")
-            count = document_counts.get(work_item_id, 1)
+            raw_id = result.get("metadata", {}).get("work_item_id")
+            wid = str(raw_id) if raw_id else ""
+            count = document_counts.get(wid, 1)
             prior = (count / max_count) * 0.15
 
             result["document_prior"] = prior
@@ -225,7 +229,7 @@ class RetrievalService:
         top_document_chunks = sum(
             1
             for result in results
-            if result.get("metadata", {}).get("work_item_id") == top_document
+            if str(result.get("metadata", {}).get("work_item_id")) == str(top_document)
         )
         return top_document_chunks < 3
 
@@ -236,7 +240,7 @@ class RetrievalService:
         grouped: dict[str, list[dict]] = defaultdict(list)
         for result in results:
             metadata = result.get("metadata", {})
-            work_item_id = metadata.get("work_item_id")
+            work_item_id = str(metadata.get("work_item_id") or "")
             grouped[work_item_id].append(result)
 
         for chunks in grouped.values():

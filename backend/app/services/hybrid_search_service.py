@@ -99,7 +99,6 @@ class HybridSearchService:
         work_item_ids: Optional[Sequence[str]],
         embedding: Sequence[float],
         limit: int,
-        max_distance: Optional[float],
     ):
         distance = DocumentChunk.embedding.cosine_distance(list(embedding))
         statement = self._scoped(
@@ -109,8 +108,6 @@ class HybridSearchService:
             work_item_ids=work_item_ids,
             entity=(DocumentChunk.id, distance.label("ord")),
         )
-        if max_distance is not None:
-            statement = statement.where(distance <= max_distance)
         return self._ranked_arm(
             statement,
             distance,
@@ -204,11 +201,6 @@ class HybridSearchService:
         ensure_iterative_scan(db)
 
         embedding = embedding_service.generate_embeddings([cleaned])[0]
-        max_distance = (
-            1.0 - float(similarity_threshold)
-            if similarity_threshold is not None
-            else None
-        )
 
         arms = [
             self._dense_arm(
@@ -218,14 +210,14 @@ class HybridSearchService:
                 work_item_ids=work_item_ids,
                 embedding=embedding,
                 limit=depth,
-                max_distance=max_distance,
             )
         ]
         arm_names = [ARM_DENSE]
 
         sanitised = _TSQUERY_SAFE.sub(" ", cleaned).strip()
         if sanitised:
-            tsquery = func.websearch_to_tsquery(
+            # Plain tsquery allows natural language terms to match without strict boolean AND
+            tsquery = func.plainto_tsquery(
                 literal(settings.LEXICAL_TSVECTOR_CONFIG), literal(sanitised)
             )
             arms.append(

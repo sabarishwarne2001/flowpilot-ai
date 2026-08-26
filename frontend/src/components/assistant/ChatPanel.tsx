@@ -223,12 +223,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   if (!conversationId) {
     return (
-      <div className="flex min-h-[500px] flex-col items-center justify-center p-8 text-center">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <MessageSquare className="h-7 w-7" />
+      <div className="flex min-h-[350px] sm:min-h-[450px] flex-col items-center justify-center p-6 text-center">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <MessageSquare className="h-6 w-6" />
         </div>
-        <h2 className="mb-2 text-lg font-bold">AI Assistant</h2>
-        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+        <h2 className="mb-1 text-base sm:text-lg font-bold">AI Assistant</h2>
+        <p className="max-w-md text-xs sm:text-sm leading-relaxed text-muted-foreground">
           {mode === "global"
             ? "Create or select a conversation to start chatting with your knowledge base."
             : "Create a conversation to ask questions about this document."}
@@ -238,12 +238,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   }
 
   return (
-    <div className={`relative flex h-[600px] w-full flex-col overflow-hidden rounded-xl border border-border/40 bg-card ${className}`}>
-      <div className="flex-1 space-y-4 overflow-y-auto bg-muted/10 p-4">
+    <div className={`relative flex h-full min-h-[450px] w-full flex-col overflow-hidden rounded-xl border border-border/40 bg-card ${className}`}>
+      <div className="flex-1 space-y-3.5 overflow-y-auto bg-muted/10 p-3 sm:p-4 min-h-0">
         {localMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
-            <MessageSquare className="mb-3 h-8 w-8 opacity-40" />
-            <p className="text-sm font-medium">
+            <MessageSquare className="mb-2 h-7 w-7 opacity-40" />
+            <p className="text-xs sm:text-sm font-medium">
               Start the conversation by asking a question about your documents.
             </p>
           </div>
@@ -255,12 +255,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
             if (isTypingPlaceholder) {
               return (
-                <div key={message.id} className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
-                    <MessageSquare className="h-5 w-5" />
+                <div key={message.id} className="flex items-start gap-2.5 sm:gap-3">
+                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                    <MessageSquare className="h-4 w-4" />
                   </div>
-                  <div className="rounded-2xl rounded-tl-none border border-border/40 bg-card p-4 shadow-sm">
-                    <div className="flex gap-2">
+                  <div className="rounded-2xl rounded-tl-none border border-border/40 bg-card p-3.5 shadow-sm">
+                    <div className="flex gap-1.5">
                       <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" />
                       <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:150ms]" />
                       <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:300ms]" />
@@ -282,8 +282,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={scrollAnchorRef} />
       </div>
 
-      <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-4">
-        <div className="flex items-end gap-3">
+      <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-2.5 sm:p-3.5">
+        <div className="flex items-end gap-2 sm:gap-3">
           <div className="flex-1">
             <input
               {...register("message")}
@@ -296,10 +296,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               }
               disabled={isSubmitting || isAssistantResponding}
               aria-invalid={errors.message ? "true" : "false"}
-              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 sm:py-3 text-xs sm:text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
             />
             {errors.message && (
-              <p role="alert" className="mt-2 text-xs font-medium text-destructive">
+              <p role="alert" className="mt-1 text-xs font-medium text-destructive">
                 {errors.message.message}
               </p>
             )}
@@ -308,13 +308,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <button
             type="submit"
             disabled={isSubmitting || isAssistantResponding}
-            className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Send message"
           >
             {isSubmitting ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Send className="h-5 w-5" />
+              <Send className="h-4 w-4" />
             )}
           </button>
         </div>

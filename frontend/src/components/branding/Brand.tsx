@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Zap } from "lucide-react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
@@ -71,6 +71,7 @@ export const Brand: React.FC<BrandProps> = ({
   className = "",
 }) => {
   const tenant = useOptionalTenant();
+  const [imgError, setImgError] = useState(false);
 
   const workspaceName = tenant?.workspace.workspace_name ?? "FlowPilot AI";
   const companyName =
@@ -113,14 +114,15 @@ export const Brand: React.FC<BrandProps> = ({
           justify-center
           overflow-hidden
           rounded-lg
-          ${authenticatedLogo ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
+          ${authenticatedLogo && !imgError ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
         `}
       >
-        {authenticatedLogo ? (
+        {authenticatedLogo && !imgError ? (
           <img
             src={authenticatedLogo}
             alt={companyName}
             className="h-full w-full object-cover"
+            onError={() => setImgError(true)}
           />
         ) : isAuthPage ? (
           <div className="flex h-full w-full items-center justify-center bg-primary">

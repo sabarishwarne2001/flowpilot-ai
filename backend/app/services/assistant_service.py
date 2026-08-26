@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from app.core.request_context import context_fields, request_scope, stage
 from app.models.ai_settings import AISettings
 from app.models.assistant import Conversation
 from app.models.work_item import WorkItem
+from app.models.workspace import Workspace
 from app.schemas.assistant import (
     ChatResponse,
     ConversationRole,
@@ -81,10 +82,6 @@ class AssistantService:
                     query=query_text,
                 )
 
-            # ARCH-12 Step 3: no message-count cap. The window is bounded in
-            # tokens by context_budget_service, after retrieved context has
-            # already been allocated its share. Capping the count here is the
-            # A3 bug — it bounded the wrong dimension.
             history = self._load_history_unbounded(
                 db=db,
                 conversation=conversation,
@@ -93,10 +90,10 @@ class AssistantService:
             assistant_message_id = uuid.uuid4()
 
             if not context.strip():
-                logger.info("Knowledge base is empty. Returning canned response.")
+                logger.info("Knowledge base returned no relevant context for query.")
                 response = (
-                    "Your knowledge base is currently empty.\n\n"
-                    "Please upload one or more documents before asking questions."
+                    "I couldn't find any relevant information in your uploaded documents for this question.\n\n"
+                    "Please try rephrasing or ask about specific details present in your files."
                 )
 
                 token_usage = TokenUsage(
@@ -113,7 +110,7 @@ class AssistantService:
                     workspace_id=conversation.workspace_id,
                 )
 
-                workspace = crud.get_workspace(db, workspace_id=conversation.workspace_id)
+                workspace = db.get(Workspace, conversation.workspace_id)
                 organization_id = workspace.organization_id if workspace else conversation.workspace_id
 
                 try:
@@ -142,8 +139,6 @@ class AssistantService:
                         ),
                     ) from exc
 
-            # Same filter, same rules, same module as the stream. A redaction
-            # that applies to one path and not the other is not a redaction.
             from app.services.output_filter import redact_text
 
             response = redact_text(response)
@@ -196,7 +191,7 @@ class AssistantService:
         db: Session,
         conversation: Conversation,
         user_id: uuid.UUID,
-    ) -> list[WorkItem]:
+    ) -> Optional[list[WorkItem]]:
         if conversation.work_item_id is not None:
             work_item = crud.get_work_item(
                 db,
@@ -207,30 +202,29 @@ class AssistantService:
                 raise ValueError("Associated document not found.")
             return [work_item]
 
-        return crud.list_work_items(
-            db,
-            workspace_id=conversation.workspace_id,
-            limit=1000,
-        )
+        return None
 
     def _retrieve_context(
         self,
         *,
         db: Session,
         conversation: Conversation,
-        work_items: list[WorkItem],
+        work_items: Optional[list[WorkItem]],
         query: str,
     ) -> tuple[str, list[SourceCitation]]:
-        if not work_items:
-            return "", []
+        filename_lookup: dict[uuid.UUID, str] = {}
+        work_item_ids_param: Optional[list[str]] = None
 
-        filename_lookup = {item.id: item.original_filename for item in work_items}
-        work_item_ids = [item.id for item in work_items]
+        if work_items is not None:
+            if not work_items:
+                return "", []
+            filename_lookup = {item.id: item.original_filename for item in work_items}
+            work_item_ids_param = [str(item.id) for item in work_items]
 
         results = retrieval_service.hybrid_search(
             workspace_id=conversation.workspace_id,
             query=query,
-            work_item_ids=[str(work_item_id) for work_item_id in work_item_ids],
+            work_item_ids=work_item_ids_param,
             top_k=settings.RAG_TOP_K,
             similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
             db=db,
@@ -254,10 +248,15 @@ class AssistantService:
 
             for result in ranked_results:
                 metadata = result.get("metadata", {})
-                work_item_id = uuid.UUID(metadata["work_item_id"])
+                raw_item_id = metadata.get("work_item_id")
+                if not raw_item_id:
+                    continue
+
+                work_item_id = uuid.UUID(str(raw_item_id))
+                filename = metadata.get("original_filename") or filename_lookup.get(work_item_id, "Document")
                 citation = self._build_citation(
                     work_item_id=work_item_id,
-                    filename=filename_lookup.get(work_item_id, "Unknown Source"),
+                    filename=filename,
                     metadata=metadata,
                     text=result["text"],
                     query=query,

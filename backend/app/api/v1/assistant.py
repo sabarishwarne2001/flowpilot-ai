@@ -107,6 +107,8 @@ async def create_chat_session(
         title=conversation_in.title or "New Conversation",
         work_item_id=conversation_in.work_item_id,
     )
+    db.commit()
+    db.refresh(conversation)
 
     logger.info(
         "Conversation %s created for user %s inside workspace %s.",
@@ -186,9 +188,11 @@ async def get_document_conversation(
             title=work_item.original_filename,
             work_item_id=work_item_id,
         )
+        db.commit()
+        db.refresh(conversation)
 
         logger.info(
-            "Created document conversation %s for WorkItem %s in workspace %s.",
+            "Created and committed document conversation %s for WorkItem %s in workspace %s.",
             conversation.id,
             work_item_id,
             context.workspace_id,
@@ -261,6 +265,7 @@ async def rename_conversation(
         conversation=conversation,
         title=conversation_in.title,
     )
+    db.commit()
 
     logger.info(
         "Conversation %s renamed by user %s inside workspace %s.",
@@ -290,6 +295,7 @@ async def delete_chat_session(
     )
 
     crud.delete_conversation(db, conversation=conversation)
+    db.commit()
 
     logger.info(
         "Conversation %s deleted by user %s inside workspace %s.",
@@ -329,6 +335,7 @@ async def post_chat_query(
             user_id=context.user_id,
             query_text=query_in.content,
         )
+        db.commit()
 
         logger.info(
             "Response generated for conversation %s in workspace %s.",

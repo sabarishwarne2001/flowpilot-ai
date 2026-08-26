@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
@@ -95,7 +95,6 @@ class WorkspaceMember(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
 
-    # Relationships
     user: Mapped["User"] = relationship(
         "User",
         back_populates="memberships",
@@ -152,7 +151,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
-    # --- Localization and branding -----------------------------------------
     timezone: Mapped[str] = mapped_column(
         String(100),
         default="UTC",
@@ -180,7 +178,6 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         doc="Durable link to adopted logo in uploaded_files (ARCH-07 Step 6).",
     )
 
-    # Relationships
     organization: Mapped["Organization"] = relationship(
         "Organization",
         back_populates="workspaces",
@@ -194,3 +191,10 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         "UploadedFile",
         foreign_keys=[logo_file_id],
     )
+
+    @property
+    def company_logo_url(self) -> Optional[str]:
+        """Dynamically derived authenticated streaming route."""
+        if self.logo_file_id is None:
+            return None
+        return f"/api/v1/workspaces/{self.id}/logo"

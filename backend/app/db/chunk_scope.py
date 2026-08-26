@@ -1,35 +1,4 @@
-"""ARCH-11 Step 2 — the one place a `document_chunks` query is built.
-
-This module exists because of a failure mode that does not announce itself. A
-`pgvector` similarity search that omits the workspace predicate returns the
-nearest neighbours **across all tenants**. It does not error. It does not look
-wrong. It quietly returns another company's document as a citation, ranked
-first, with a plausible page number attached.
-
-ARCH-02 solved this class of problem for relational reads by deleting the CRUD
-signatures that took `user_id`, so every call site failed to compile. The
-equivalent here is narrower: there is no compiler to lean on, so the discipline
-is a single helper plus a static scan (`tests/services/test_vector_scoping.py`)
-that fails the build when `document_chunks` or `DocumentChunk` is referenced
-outside the allow-list.
-
-There is a **second** failure, and it is the one nobody warns you about: *with*
-the predicate present, a filtered HNSW query silently returns too few rows.
-HNSW searches the index and applies `WHERE` afterwards, so a tenant holding a
-small share of the index gets a candidate set that is almost entirely other
-tenants' rows, which are filtered away. Measured on 100,020 vectors across 60
-workspaces: a 1.7% tenant asked for 10 and got 5; a 0.02% tenant got **0**, and
-was still at 0 with `ef_search` raised to 400.
-
-Both halves of the mitigation live here rather than at the call sites:
-partition pruning (from the `workspace_id` equality predicate, which is also
-the partition key) and `hnsw.iterative_scan`, asserted per transaction by
-`ensure_iterative_scan()`.
-
-`Step 8's gate must assert result count, not just result tenancy.` A test that
-checks "no foreign chunks came back" passes perfectly when zero chunks came
-back, and zero is exactly what the under-return produces.
-"""
+"""ARCH-11 Step 2 — the one place a `document_chunks` query is built."""
 
 from __future__ import annotations
 
@@ -71,15 +40,7 @@ def _require_uuid(value: Any, field: str) -> uuid.UUID:
 
 
 def ensure_iterative_scan(db: Session) -> None:
-    """Apply `hnsw.iterative_scan` for this transaction.
 
-    The connect hook in `app/db/session.py` sets it per connection, which
-    covers the application. This exists for the two cases the hook does not:
-    a session built on a connection created before the hook was added, and the
-    test suite's `db_session`, which binds to a connection opened by the test
-    fixture. Cheap enough to call on every retrieval; a `SET LOCAL` is not a
-    round trip worth optimising away when the alternative is under-returning.
-    """
     if not settings.APPLY_HNSW_SESSION_DEFAULTS:
         return
     try:
@@ -114,20 +75,6 @@ def scoped_chunk_query(
     work_item_ids: Optional[Sequence[uuid.UUID | str]] = None,
     entity: Any = DocumentChunk,
 ) -> Select:
-    """Return a `Select` over `document_chunks` that is already tenant-scoped.
-
-    `db` is taken but not used to execute anything. It is in the signature on
-    purpose: it makes the helper the natural thing to reach for at a call site
-    that already has a session, and it gives `ensure_iterative_scan` somewhere
-    to live when a caller wants the statement and the GUC together.
-
-    `organization_id`, when supplied, is a second predicate over the
-    denormalised column. It is redundant with `workspace_id` — a workspace
-    belongs to exactly one organization — and it is worth adding on any path
-    reached from an organization-scoped route, because a redundant predicate
-    that can only ever be true is free, and it turns a hypothetical
-    workspace-to-org mismatch from a leak into an empty result.
-    """
     workspace = _require_uuid(workspace_id, "workspace_id")
 
     columns = entity if isinstance(entity, (tuple, list)) else (entity,)
@@ -162,12 +109,7 @@ def nearest_chunks(
     work_item_ids: Optional[Sequence[uuid.UUID | str]] = None,
     max_distance: Optional[float] = None,
 ) -> list[tuple[DocumentChunk, float]]:
-    """Dense retrieval, scoped, ordered by cosine distance ascending.
-
-    Returns `(chunk, distance)` rather than a bare list so the caller can turn
-    distance into whatever similarity convention it already uses without
-    guessing which operator produced it.
-    """
+    
     if top_k <= 0:
         raise VectorScopeError("top_k must be > 0")
 
@@ -205,13 +147,7 @@ def count_chunks(
 def delete_chunks_for_work_item(
     db: Session, *, workspace_id: uuid.UUID | str, work_item_id: uuid.UUID | str
 ) -> int:
-    """Explicit deletion for re-indexing. Ordinary deletion is the cascade.
 
-    This is not the path that removes a deleted document's chunks — that is the
-    foreign key, and it is the point of the migration. This exists for Step 4's
-    reindex, where a document is re-chunked in place and its previous chunks
-    must go without the document going with them.
-    """
     from sqlalchemy import delete
 
     workspace = _require_uuid(workspace_id, "workspace_id")

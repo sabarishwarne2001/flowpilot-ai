@@ -15,6 +15,13 @@ const ws = (workspaceId: string): string => {
   return encodeURIComponent(workspaceId);
 };
 
+const org = (organizationId: string): string => {
+  if (!organizationId) {
+    throw new Error("An organizationId is required to build this URL.");
+  }
+  return encodeURIComponent(organizationId);
+};
+
 const scoped = (workspaceId: string): string => `/workspaces/${ws(workspaceId)}`;
 
 /* ==========================================================================
@@ -54,10 +61,10 @@ export const WORKSPACE_ENDPOINTS = {
 } as const;
 
 export const INVITATION_ENDPOINTS = {
-  list: (workspaceId: string): string => `${scoped(workspaceId)}/invitations`,
-  create: (workspaceId: string): string => `${scoped(workspaceId)}/invitations`,
-  revoke: (workspaceId: string, invitationId: string): string => `${scoped(workspaceId)}/invitations/${seg(invitationId)}/revoke`,
-  resend: (workspaceId: string, invitationId: string): string => `${scoped(workspaceId)}/invitations/${seg(invitationId)}/resend`,
+  list: (organizationId: string): string => `/organizations/${org(organizationId)}/invitations`,
+  create: (organizationId: string): string => `/organizations/${org(organizationId)}/invitations`,
+  revoke: (organizationId: string, invitationId: string): string => `/organizations/${org(organizationId)}/invitations/${seg(invitationId)}/revoke`,
+  resend: (organizationId: string, invitationId: string): string => `/organizations/${org(organizationId)}/invitations/${seg(invitationId)}/resend`,
   preview: "/invitations/preview",
   accept: "/invitations/accept",
   reject: "/invitations/reject",
@@ -72,10 +79,6 @@ export const SETTINGS_ENDPOINTS = {
   emailSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings/test`,
   documentSettings: (workspaceId: string): string => `${scoped(workspaceId)}/document-settings/`,
 } as const;
-
-/* ==========================================================================
-   Re-scoped in ARCH-02
-   ========================================================================== */
 
 export const WORK_ITEM_ENDPOINTS = {
   list: (workspaceId: string): string => `${scoped(workspaceId)}/work-items`,

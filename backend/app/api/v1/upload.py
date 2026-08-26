@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -84,17 +83,6 @@ def _current_logo_row(db: Session, *, workspace_id: uuid.UUID) -> Optional[Uploa
         .order_by(UploadedFile.created_at.desc())
         .first()
     )
-
-
-def _stream_and_close(handle):
-    try:
-        while True:
-            chunk = handle.read(64 * 1024)
-            if not chunk:
-                break
-            yield chunk
-    finally:
-        handle.close()
 
 
 @router.post("/logo", response_model=LogoUploadResponse)
@@ -207,7 +195,6 @@ def get_workspace_logo(
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": "inline",
         "Cache-Control": f"private, max-age={LOGO_CACHE_SECONDS}",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
     }
     if etag:
         security_headers["ETag"] = etag
@@ -217,8 +204,7 @@ def get_workspace_logo(
 
     driver = get_storage_driver()
     try:
-        handle = driver.stream(record.file_path)
-        size = driver.size(record.file_path)
+        data = driver.get(record.file_path)
     except ObjectNotFoundError:
         logger.error(
             "ARCH07_MISSING_OBJECT | uploaded_files.id=%s workspace=%s key=%s",
@@ -226,9 +212,9 @@ def get_workspace_logo(
         )
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Logo not found.") from None
 
-    security_headers["Content-Length"] = str(size)
-    return StreamingResponse(
-        _stream_and_close(handle),
+    security_headers["Content-Length"] = str(len(data))
+    return Response(
+        content=data,
         media_type=record.mime_type,
         headers=security_headers,
     )

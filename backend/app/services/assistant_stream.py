@@ -601,23 +601,19 @@ class AssistantStreamService:
         workspace_id: uuid.UUID,
         query: str,
     ) -> list[dict[str, Any]]:
+        work_item_ids_param: Optional[list[str]] = None
         if conversation.work_item_id is not None:
             work_item = crud.get_work_item(
                 db, workspace_id=workspace_id, work_item_id=conversation.work_item_id
             )
             if work_item is None:
                 raise ValueError("Associated document not found.")
-            work_items = [work_item]
-        else:
-            work_items = crud.list_work_items(db, workspace_id=workspace_id, limit=1000)
-
-        if not work_items:
-            return []
+            work_item_ids_param = [str(work_item.id)]
 
         results = retrieval_service.hybrid_search(
             workspace_id=workspace_id,
             query=query,
-            work_item_ids=[str(item.id) for item in work_items],
+            work_item_ids=work_item_ids_param,
             top_k=settings.RAG_TOP_K,
             similarity_threshold=settings.RAG_SIMILARITY_THRESHOLD,
             db=db,

@@ -121,7 +121,6 @@ export const Assistant: React.FC = () => {
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null);
   const [conversationToDelete, setConversationToDelete] = useState<ConversationSummary | null>(null);
 
-  // Clear previous workspace selections strictly on switch
   useEffect(() => {
     setSelectedConversationId(null);
     setEditingConversationId(null);
@@ -258,16 +257,16 @@ export const Assistant: React.FC = () => {
 
   if (isLoading && conversations.length === 0) {
     return (
-      <div className="space-y-6">
-        <header className="space-y-2">
-          <h1 className="text-2xl font-bold">AI Assistant</h1>
-          <div className="h-4 w-80 animate-pulse rounded bg-muted" />
+      <div className="space-y-4">
+        <header className="space-y-1">
+          <h1 className="text-xl font-bold">AI Assistant</h1>
+          <div className="h-4 w-72 animate-pulse rounded bg-muted" />
         </header>
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <section className="flex flex-col lg:grid lg:grid-cols-12 gap-4 h-[calc(100vh-13rem)] min-h-[500px]">
           <div className="lg:col-span-4">
             <SkeletonSidebar />
           </div>
-          <div className="h-[600px] rounded-xl border border-border/40 bg-card" />
+          <div className="flex-1 lg:col-span-8 rounded-xl border border-border/40 bg-card" />
         </section>
       </div>
     );
@@ -290,7 +289,7 @@ export const Assistant: React.FC = () => {
               });
             }
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/95"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <RefreshCw className="h-4 w-4" />
           Retry
@@ -300,42 +299,43 @@ export const Assistant: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight">AI Assistant</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="flex flex-col space-y-3 h-full">
+      <header className="shrink-0 space-y-0.5">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">AI Assistant</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Chat with your business knowledge base, compare documents, and inspect grounded RAG citations.
         </p>
       </header>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <aside className="flex h-[600px] flex-col rounded-xl border border-border/40 bg-card p-4 lg:col-span-4" aria-label="Conversation history">
-          <div className="mb-4 flex items-center justify-between border-b border-border/20 pb-3">
+      {/* Main Container: Stacks vertically on mobile with tight height, Side-by-side on desktop */}
+      <section className="flex flex-col lg:grid lg:grid-cols-12 gap-3 sm:gap-4 flex-1 min-h-0 lg:h-[calc(100vh-13rem)]">
+        {/* Conversations Drawer/Sidebar (Auto-height max-h on mobile, full-height on desktop) */}
+        <aside className="flex flex-col shrink-0 rounded-xl border border-border/40 bg-card p-3 lg:col-span-4 max-h-40 sm:max-h-48 lg:max-h-none lg:h-full" aria-label="Conversation history">
+          <div className="mb-2 flex items-center justify-between border-b border-border/20 pb-2">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conversations</p>
-              <p className="mt-1 text-xs text-muted-foreground">{conversations.length} total</p>
+              <p className="text-[11px] text-muted-foreground">{conversations.length} total</p>
             </div>
             <button
               type="button"
               onClick={handleCreateConversation}
               disabled={isCreatingConversation}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg border border-border bg-background transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Create conversation"
             >
               {isCreatingConversation ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
               )}
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
             {conversations.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
-                <MessageSquare className="mb-3 h-8 w-8 opacity-40" />
-                <p className="text-sm font-medium">No conversations yet.</p>
-                <p className="mt-1 text-xs">Create your first conversation to begin chatting.</p>
+              <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground py-3">
+                <MessageSquare className="mb-1.5 h-6 w-6 opacity-40" />
+                <p className="text-xs font-medium">No conversations yet.</p>
               </div>
             ) : (
               conversations.map((conversation) => {
@@ -345,7 +345,7 @@ export const Assistant: React.FC = () => {
                 return (
                   <div
                     key={conversation.id}
-                    className={`group rounded-lg border p-2.5 transition-colors ${
+                    className={`group rounded-lg border p-2 transition-colors ${
                       isSelected ? "border-primary/20 bg-primary/5" : "border-transparent hover:bg-muted/40"
                     }`}
                   >
@@ -368,11 +368,11 @@ export const Assistant: React.FC = () => {
                             setSelectedConversationId(conversation.id);
                           }
                         }}
-                        className="flex cursor-pointer items-center justify-between gap-3"
+                        className="flex cursor-pointer items-center justify-between gap-2"
                       >
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <MessageSquare className={`h-4 w-4 flex-shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className={`truncate text-sm ${isSelected ? "font-semibold text-foreground" : "text-muted-foreground"}`} title={conversation.title}>
+                        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                          <MessageSquare className={`h-3.5 w-3.5 flex-shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                          <span className={`truncate text-xs sm:text-sm ${isSelected ? "font-semibold text-foreground" : "text-muted-foreground"}`} title={conversation.title}>
                             {conversation.title}
                           </span>
                         </div>
@@ -383,12 +383,12 @@ export const Assistant: React.FC = () => {
                               event.stopPropagation();
                               setOpenConversationMenu((previous) => previous === conversation.id ? null : conversation.id);
                             }}
-                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground opacity-0 group-hover:opacity-100"
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground opacity-70 group-hover:opacity-100"
                           >
-                            <MoreVertical className="h-4 w-4" />
+                            <MoreVertical className="h-3.5 w-3.5" />
                           </button>
                           {openConversationMenu === conversation.id && (
-                            <div className="absolute right-0 top-8 z-50 w-40 rounded-lg border border-border bg-card shadow-lg">
+                            <div className="absolute right-0 top-6 z-50 w-36 rounded-lg border border-border bg-card shadow-lg p-1">
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -396,9 +396,9 @@ export const Assistant: React.FC = () => {
                                   setEditingConversationId(conversation.id);
                                   setOpenConversationMenu(null);
                                 }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs rounded hover:bg-muted"
                               >
-                                <Edit2 className="h-4 w-4" />
+                                <Edit2 className="h-3.5 w-3.5" />
                                 Rename
                               </button>
                               <button
@@ -408,9 +408,9 @@ export const Assistant: React.FC = () => {
                                   setConversationToDelete(conversation);
                                   setOpenConversationMenu(null);
                                 }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs rounded text-destructive hover:bg-destructive/10"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                                 Delete
                               </button>
                             </div>
@@ -425,8 +425,9 @@ export const Assistant: React.FC = () => {
           </div>
         </aside>
 
-        <div className="flex lg:col-span-8">
-          <div className="relative w-full">
+        {/* Chat Area: Fills remaining height on mobile, full-height column on desktop */}
+        <div className="flex flex-1 min-h-[480px] lg:min-h-0 lg:h-full lg:col-span-8">
+          <div className="relative w-full h-full">
             {isLoading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/70 backdrop-blur-sm">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -435,7 +436,7 @@ export const Assistant: React.FC = () => {
             <ChatPanel
               mode="global"
               {...(selectedConversationId ? { conversationId: selectedConversationId } : {})}
-              className="w-full shadow-sm"
+              className="w-full h-full shadow-sm"
             />
           </div>
         </div>

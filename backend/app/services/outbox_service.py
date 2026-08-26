@@ -36,7 +36,6 @@ _FORBIDDEN_PAYLOAD_KEY_SUBSTRINGS: tuple[str, ...] = (
     "password",
     "passwd",
     "secret",
-    "token",
     "api_key",
     "apikey",
     "authorization",
@@ -47,6 +46,17 @@ _FORBIDDEN_PAYLOAD_KEY_SUBSTRINGS: tuple[str, ...] = (
     "otp",
     "signature",
 )
+
+_EXACT_FORBIDDEN_KEYS: frozenset[str] = frozenset({
+    "token",
+    "auth_token",
+    "access_token",
+    "refresh_token",
+    "bearer_token",
+    "jwt",
+    "session_token",
+    "token_hash",
+})
 
 _MAX_PAYLOAD_DEPTH: int = 8
 
@@ -152,12 +162,15 @@ def _scan_payload_keys(node: Any, *, depth: int, path: str) -> None:
                 raise PayloadRejectedError(
                     f"Non-string payload key at '{path}': {key!r}."
                 )
-            lowered = key.lower()
+            lowered = key.lower().strip()
+            if lowered in _EXACT_FORBIDDEN_KEYS:
+                raise PayloadRejectedError(
+                    f"Payload key '{path}{key}' matches forbidden credential key '{lowered}'."
+                )
             for needle in _FORBIDDEN_PAYLOAD_KEY_SUBSTRINGS:
                 if needle in lowered:
                     raise PayloadRejectedError(
-                        f"Payload key '{path}{key}' matches the forbidden "
-                        f"pattern '{needle}'."
+                        f"Payload key '{path}{key}' matches the forbidden pattern '{needle}'."
                     )
             _scan_payload_keys(value, depth=depth + 1, path=f"{path}{key}.")
     elif isinstance(node, (list, tuple)):
