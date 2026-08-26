@@ -1,10 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
+import { Zap } from "lucide-react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
-
-/**
- * Brand mark for FlowPilot AI.
- */
+import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 
 export type BrandVariant =
   | "sidebar"
@@ -24,35 +22,27 @@ const BRAND_VARIANTS = {
     compact: false,
     subtitle: true,
   },
-
   "sidebar-compact": {
     logo: "h-8 w-8",
     compact: true,
     subtitle: false,
   },
-
   header: {
     logo: "h-9 w-9",
     compact: false,
     subtitle: false,
   },
-
   login: {
-    logo: "h-14 w-14",
+    logo: "h-12 w-12",
     compact: false,
     subtitle: true,
   },
-
   loading: {
     logo: "h-8 w-8",
     compact: false,
     subtitle: true,
   },
 } as const;
-
-const API_ORIGIN = (
-  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
-).replace("/api/v1", "");
 
 function BrandSkeleton({ variant }: { variant: BrandVariant }) {
   const config = BRAND_VARIANTS[variant];
@@ -82,16 +72,12 @@ export const Brand: React.FC<BrandProps> = ({
 }) => {
   const tenant = useOptionalTenant();
 
-  const [logoError, setLogoError] = useState(false);
-
   const workspaceName = tenant?.workspace.workspace_name ?? "FlowPilot AI";
-
   const companyName =
     tenant?.organization.organization_name ?? "AI Document Intelligence";
 
   const logoPath = tenant?.workspace.company_logo_url ?? null;
-
-  const logo = logoPath ? `${API_ORIGIN}${logoPath}` : null;
+  const authenticatedLogo = useAuthenticatedImage(logoPath);
 
   const initials = (workspaceName || companyName || "FP")
     .trim()
@@ -101,10 +87,9 @@ export const Brand: React.FC<BrandProps> = ({
     .join("");
 
   const config = BRAND_VARIANTS[variant];
-
   const compact = config.compact;
-
   const showSubtitle = config.subtitle;
+  const isAuthPage = variant === "login" || !tenant;
 
   return (
     <div
@@ -128,18 +113,23 @@ export const Brand: React.FC<BrandProps> = ({
           justify-center
           overflow-hidden
           rounded-lg
-          bg-primary
+          ${authenticatedLogo ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
         `}
       >
-        {logo && !logoError ? (
+        {authenticatedLogo ? (
           <img
-            src={logo}
+            src={authenticatedLogo}
             alt={companyName}
             className="h-full w-full object-cover"
-            onError={() => setLogoError(true)}
           />
+        ) : isAuthPage ? (
+          <div className="flex h-full w-full items-center justify-center bg-primary">
+            <Zap className="h-6 w-6 text-primary-foreground fill-primary-foreground" />
+          </div>
         ) : (
-          <span className="font-black text-primary-foreground">{initials}</span>
+          <span className="font-black text-xs sm:text-sm text-primary-foreground">
+            {initials}
+          </span>
         )}
       </div>
 

@@ -1,5 +1,4 @@
 import React from "react";
-
 import { ChevronLeft, LogOut } from "lucide-react";
 
 import { useAuthStore } from "@/store/useAuthStore";
@@ -8,33 +7,18 @@ import { Brand } from "@/components/branding/Brand";
 import SidebarNavigation from "./SidebarNavigation";
 import OrgWorkspaceSwitcher from "./OrgWorkspaceSwitcher";
 
-
 interface DesktopSidebarProps {
-  /**
-   * Parent-controlled logout callback.
-   */
   readonly onLogout: () => void;
-
-  readonly className?: string | undefined;
+  readonly className?: string;
 }
 
-/**
- * Reusable application navigation sidebar.
- */
 const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
   onLogout,
   className = "",
 }) => {
   const { user } = useAuthStore();
-
   const { isSidebarCollapsed, toggleSidebarCollapse } = useUIStore();
-
   const isDesktopCollapsed = isSidebarCollapsed;
-
-  /**
-   * Placeholder for future async logout flow.
-   */
-  const isLoggingOut = false;
 
   return (
     <aside
@@ -55,18 +39,12 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
         ${className}
       `}
     >
-      {/* ======================================================
-          Top Section
-      ====================================================== */}
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* ======================================================
-            Brand Header
-        ====================================================== */}
+        {/* Brand Header */}
         {!isDesktopCollapsed ? (
           <div className="flex h-[72px] items-center justify-between border-b border-border/40 px-4">
             <Brand variant="sidebar" className="min-w-0 flex-1" />
 
-            {/* Desktop Collapse */}
             <button
               type="button"
               onClick={toggleSidebarCollapse}
@@ -80,7 +58,6 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
           <div className="flex h-[88px] flex-col items-center justify-center gap-3 border-b border-border/40 pt-3">
             <Brand variant="sidebar-compact" />
 
-            {/* Desktop Expand */}
             <button
               type="button"
               onClick={toggleSidebarCollapse}
@@ -92,9 +69,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
           </div>
         )}
 
-        {/* Tenant switcher. Renders nothing when the actor has a single
-            workspace — a dropdown offering one option is noise in the most
-            valuable space in the sidebar. */}
+        {/* Tenant Switcher */}
         <div className="border-b border-border/40">
           <OrgWorkspaceSwitcher collapsed={isDesktopCollapsed} />
         </div>
@@ -105,9 +80,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
         </div>
       </div>
 
-      {/* ======================================================
-          Bottom Profile Section
-      ====================================================== */}
+      {/* Bottom Profile Section */}
       <div className="border-t border-border/40 bg-muted/20 px-4 py-5 dark:bg-muted/5">
         <div
           className={`
@@ -142,14 +115,12 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
             </span>
           </div>
 
-          {/* Logout Button */}
           <button
             type="button"
             onClick={onLogout}
-            disabled={isLoggingOut}
             title="Sign Out"
             aria-label="Sign Out"
-            className={`
+            className="
               flex
               h-10
               w-10
@@ -164,9 +135,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
               focus:outline-none
               focus:ring-2
               focus:ring-destructive/20
-              disabled:pointer-events-none
-              disabled:opacity-50
-            `}
+            "
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
           </button>
@@ -176,14 +145,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
   );
 };
 
-/**
- * Memoized Sidebar component.
- *
- * Prevents unnecessary re-renders when parent layouts update while
- * the Sidebar props and Zustand state remain unchanged.
- */
 export const DesktopSidebar = React.memo(DesktopSidebarComponent);
-
 DesktopSidebar.displayName = "DesktopSidebar";
 
 export default DesktopSidebar;

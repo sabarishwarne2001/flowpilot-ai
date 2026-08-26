@@ -23,16 +23,20 @@ class AISettingsService:
     def get_available_providers(self) -> AvailableProvidersResponse:
         configured_providers: list[str] = []
         if settings.GROQ_API_KEY:
-            configured_providers.append("groq")
+            configured_providers.append("GROQ")
         if settings.GEMINI_API_KEY:
-            configured_providers.append("gemini")
+            configured_providers.append("GEMINI")
 
         all_providers = [
-            provider.value if hasattr(provider, "value") else str(provider)
+            (provider.value if hasattr(provider, "value") else str(provider)).upper()
             for provider in AI_MODELS.keys()
         ]
 
+        # Use configured providers if keys are present; otherwise fallback to all supported
+        active_providers = configured_providers if configured_providers else all_providers
+
         return AvailableProvidersResponse(
+            providers=active_providers,
             configured_providers=configured_providers,
             all_providers=all_providers,
         )

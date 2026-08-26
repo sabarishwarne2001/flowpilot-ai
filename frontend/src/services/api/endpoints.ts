@@ -43,6 +43,7 @@ export const ORGANIZATION_ENDPOINTS = {
 export const WORKSPACE_ENDPOINTS = {
   detail: (workspaceId: string): string => scoped(workspaceId),
   logo: (workspaceId: string): string => `${scoped(workspaceId)}/logo`,
+  uploadLogo: (workspaceId: string): string => `${scoped(workspaceId)}/upload/logo`,
   slugAvailable: (workspaceId: string): string => `${scoped(workspaceId)}/slug-available`,
   archive: (workspaceId: string): string => `${scoped(workspaceId)}/archive`,
   restore: (workspaceId: string): string => `${scoped(workspaceId)}/restore`,

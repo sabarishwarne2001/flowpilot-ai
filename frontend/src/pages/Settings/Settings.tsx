@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Building2, Mail, Cpu, FileText } from "lucide-react";
 
 import Workspace from "./Workspace";
 import EmailSettings from "./EmailSettings";
@@ -22,101 +22,73 @@ export const PermissionDenied: React.FC = () => {
   );
 };
 
-/**
- * Workspace settings shell.
- *
- * ARCH-01 removed the membership query that previously gated this page. It
- * called GET /workspace/members/me — deleted in the backend transformation —
- * and every settings tab waited behind a LoadingScreen for a request that
- * always 404s.
- *
- * The role now comes from TenantContext, already resolved by TenantGuard
- * before this component mounts. There is no request and therefore no loading
- * state.
- *
- * The role read here is the EFFECTIVE role, so an organization admin holding
- * no stored workspace grant reaches settings. The previous check compared
- * against a stored membership, which is null for those users — the most
- * privileged accounts were the ones it locked out.
- */
-const Settings: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<
-    "workspace" | "email" | "ai" | "document"
-  >("workspace");
+type SettingsSection = "workspace" | "email" | "ai" | "document";
 
+interface TabConfig {
+  id: SettingsSection;
+  label: string;
+  icon: React.ElementType;
+}
+
+const SETTINGS_TABS: readonly TabConfig[] = [
+  { id: "workspace", label: "Workspace", icon: Building2 },
+  { id: "email", label: "Email", icon: Mail },
+  { id: "ai", label: "AI Settings", icon: Cpu },
+  { id: "document", label: "Document Settings", icon: FileText },
+];
+
+const Settings: React.FC = () => {
+  const [activeSection, setActiveSection] = useState<SettingsSection>("workspace");
   const { workspaceRole } = useResolvedTenant();
 
-  // Intercept and prevent VIEWER role manual URL accesses
   if (!isAtLeast(workspaceRole, "CONTRIBUTOR")) {
     return <PermissionDenied />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-
-        <p className="mt-2 text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Manage your workspace configuration.
         </p>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left Sidebar */}
-        <aside className="col-span-3 rounded-xl border border-border bg-card p-4">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6">
+        {/* Navigation Tabs: Horizontal scrolling on mobile/tablet, Vertical sidebar on desktop */}
+        <aside className="lg:col-span-3 rounded-xl border border-border bg-card p-2 sm:p-3 lg:p-4 h-fit">
+          <h2 className="hidden lg:block mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Configuration
           </h2>
 
-          <nav className="space-y-2">
-            <button
-              onClick={() => setActiveSection("workspace")}
-              className={`w-full rounded-lg px-4 py-2 text-left transition-colors ${
-                activeSection === "workspace"
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              Workspace
-            </button>
+          <nav className="flex flex-row lg:flex-col gap-1.5 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+            {SETTINGS_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeSection === tab.id;
 
-            <button
-              onClick={() => setActiveSection("email")}
-              className={`w-full rounded-lg px-4 py-2 text-left transition-colors ${
-                activeSection === "email"
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              Email
-            </button>
-
-            <button
-              onClick={() => setActiveSection("ai")}
-              className={`w-full rounded-lg px-4 py-2 text-left transition-colors ${
-                activeSection === "ai"
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              AI Settings
-            </button>
-
-            <button
-              onClick={() => setActiveSection("document")}
-              className={`w-full rounded-lg px-4 py-2 text-left transition-colors ${
-                activeSection === "document"
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              Document Settings
-            </button>
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSection(tab.id)}
+                  className={`
+                    flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors
+                    ${
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    }
+                  `}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </nav>
         </aside>
 
-        {/* Right Content */}
-        <section className="col-span-9">
+        {/* Content Panel */}
+        <section className="lg:col-span-9 min-w-0">
           {activeSection === "workspace" && <Workspace />}
           {activeSection === "email" && <EmailSettings />}
           {activeSection === "ai" && <AISettings />}

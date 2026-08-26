@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ApiError } from "@/services/api/client";
 import { uploadLogo } from "@/services/api/upload";
+import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
 import {
@@ -40,10 +41,6 @@ import { ROUTES } from "@/constants/routes";
 
 import type { WorkspaceMember, WorkspaceRole } from "@/types/tenancy";
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1"
-).replace("/api/v1", "");
-
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -60,6 +57,8 @@ export const Workspace: React.FC = () => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const authenticatedLogoSrc = useAuthenticatedImage(logoPreview);
 
   const canEditWorkspace = canManageWorkspaceSettings(workspaceRole);
   const canEditOrganization = canManageOrganizationSettings(organizationRole);
@@ -309,7 +308,7 @@ export const Workspace: React.FC = () => {
     try {
       const preview = URL.createObjectURL(file);
       setLogoPreview(preview);
-      const response = await uploadLogo(file);
+      const response = await uploadLogo(workspaceId, file);
       setLogoPreview(response.logo_url);
       await invalidateTenant();
       toast.success("Logo uploaded successfully.");
@@ -421,9 +420,9 @@ export const Workspace: React.FC = () => {
               Company Logo
             </label>
             <div className="flex items-center gap-4">
-              {logoPreview ? (
+              {authenticatedLogoSrc ? (
                 <img
-                  src={logoPreview.startsWith("blob:") ? logoPreview : `${API_BASE_URL}${logoPreview}`}
+                  src={authenticatedLogoSrc}
                   alt="Company logo preview"
                   className="h-20 w-20 rounded-lg border border-border object-cover"
                 />

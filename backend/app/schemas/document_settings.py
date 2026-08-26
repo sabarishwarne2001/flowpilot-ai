@@ -24,9 +24,9 @@ class DocumentSettingsBase(BaseModel):
         description="Overlap percentage between consecutive chunks.",
     )
 
-    intent_config: Optional[dict[str, list[str]]] = Field(
-        default=None,
-        description="Per-workspace intent keywords. NULL follows platform defaults.",
+    intent_config: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Per-workspace intent keywords. Empty dict follows platform defaults.",
     )
 
     chunk_size: int = Field(
@@ -73,9 +73,9 @@ class DocumentSettingsBase(BaseModel):
 
     @field_validator("intent_config")
     @classmethod
-    def _validate_intents(cls, value: Optional[dict[str, list[str]]]) -> Optional[dict[str, list[str]]]:
+    def _validate_intents(cls, value: Optional[dict[str, list[str]]]) -> dict[str, list[str]]:
         if value is None:
-            return value
+            return {}
         if len(value) > 20:
             raise ValueError("at most 20 intents")
         for intent, keywords in value.items():
@@ -112,7 +112,7 @@ class DocumentSettingsUpdate(BaseModel):
     @classmethod
     def _validate_intents(cls, value: Optional[dict[str, list[str]]]) -> Optional[dict[str, list[str]]]:
         if value is None:
-            return value
+            return None
         if len(value) > 20:
             raise ValueError("at most 20 intents")
         for intent, keywords in value.items():

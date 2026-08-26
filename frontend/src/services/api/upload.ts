@@ -5,14 +5,14 @@ export interface UploadLogoResponse {
 }
 
 export async function uploadLogo(
+  workspaceId: string,
   file: File,
 ): Promise<UploadLogoResponse> {
   const formData = new FormData();
-
   formData.append("file", file);
 
   const { data } = await apiClient.post<UploadLogoResponse>(
-    "/upload/logo",
+    `/workspaces/${encodeURIComponent(workspaceId)}/upload/logo`,
     formData,
     {
       headers: {
@@ -25,11 +25,9 @@ export async function uploadLogo(
 }
 
 export async function deleteLogo(
-  logoUrl: string
-) {
-  await apiClient.delete("/upload/logo", {
-    data: {
-      logo_url: logoUrl,
-    },
-  });
+  workspaceId: string,
+): Promise<void> {
+  await apiClient.delete(
+    `/workspaces/${encodeURIComponent(workspaceId)}/upload/logo`,
+  );
 }

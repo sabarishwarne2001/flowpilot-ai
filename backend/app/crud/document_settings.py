@@ -15,10 +15,14 @@ def document_settings_exists(db: Session, *, workspace_id: uuid.UUID) -> bool:
 def create_document_settings(
     db: Session, *, workspace_id: uuid.UUID, updated_by_user_id: uuid.UUID, settings_in: DocumentSettingsCreate
 ) -> DocumentSettings:
+    data = settings_in.model_dump()
+    if data.get("intent_config") is None:
+        data["intent_config"] = {}
+
     db_obj = DocumentSettings(
         workspace_id=workspace_id,
         updated_by_user_id=updated_by_user_id,
-        **settings_in.model_dump()
+        **data
     )
     db.add(db_obj)
     db.commit()
@@ -29,6 +33,9 @@ def update_document_settings(
     db: Session, *, db_obj: DocumentSettings, updated_by_user_id: uuid.UUID, settings_in: DocumentSettingsUpdate
 ) -> DocumentSettings:
     update_data = settings_in.model_dump(exclude_unset=True)
+    if "intent_config" in update_data and update_data["intent_config"] is None:
+        update_data["intent_config"] = {}
+
     for field, value in update_data.items():
         setattr(db_obj, field, value)
     db_obj.updated_by_user_id = updated_by_user_id

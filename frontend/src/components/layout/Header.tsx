@@ -4,35 +4,20 @@ import { useUIStore } from "@/store/useUIStore";
 import { NotificationTray } from "@/components/notification/NotificationTray";
 
 interface HeaderProps {
-  /**
-   * Optional custom styling overrides to merge with the parent container.
-   */
   readonly className?: string;
 }
 
-/**
- * Reusable Dashboard Top Header Toolbar Component for FlowPilot AI.
- *
- * Houses responsive menu drawers, global workspace tags, visual theme toggles,
- * and binds click events to toggle the absolute floating Notification Center popover.
- *
- * Performance-optimized via React.memo to isolate rendering loops.
- */
 export const Header: React.FC<HeaderProps> = React.memo(
   ({ className = "" }) => {
-    // Local state to toggle the visible status of the absolute notification tray
-    const [isNotificationsOpen, setIsNotificationsOpen] =
-      useState<boolean>(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
 
-    // Extract reactive states directly from our centralized UI Zustand store
     const {
-        toggleMobileSidebar,
-        theme,
-        toggleTheme,
-        notificationBadgeCount,
+      toggleMobileSidebar,
+      theme,
+      toggleTheme,
+      notificationBadgeCount,
     } = useUIStore();
 
-    // Memoized toggler handlers to prevent unnecessary component allocations
     const handleToggleNotifications = useCallback((): void => {
       setIsNotificationsOpen((prev) => !prev);
     }, []);
@@ -41,20 +26,19 @@ export const Header: React.FC<HeaderProps> = React.memo(
       setIsNotificationsOpen(false);
     }, []);
 
-    // SaaS Standard: Cap badge metrics to prevent layout leaks under heavy volume alerts
     const displayBadgeCount = React.useMemo(
       () =>
         notificationBadgeCount > 99 ? "99+" : notificationBadgeCount.toString(),
-      [notificationBadgeCount]
+      [notificationBadgeCount],
     );
 
     return (
       <header
-        className={`h-16 shrink-0 border-b border-border/40 flex items-center justify-between px-6 bg-card select-none z-10 transition-colors duration-200 relative ${className}`}
+        className={`h-16 shrink-0 border-b border-border/40 flex items-center justify-between px-3 sm:px-6 bg-card select-none z-10 transition-colors duration-200 relative ${className}`}
         aria-label="Dashboard Header"
       >
-        {/* Left */}
-        <div className="flex items-center gap-4">
+        {/* Left Toggle — ONLY visible on mobile/tablet (< 1024px), hidden on desktop */}
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={toggleMobileSidebar}
@@ -63,30 +47,24 @@ export const Header: React.FC<HeaderProps> = React.memo(
           >
             <Menu className="h-5 w-5" />
           </button>
-
-          <span className="text-sm font-bold text-muted-foreground md:hidden">
-            Workspace Overview
-          </span>
         </div>
 
-        {/* --- Part 2: Global Configuration Actions & Alert Badges --- */}
-        <div className="flex items-center space-x-3">
-          {/* Visual Light / Dark Theme Mode Trigger Button */}
+        {/* Right Configuration Actions */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <button
             type="button"
             onClick={toggleTheme}
-            className="p-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-            aria-label="Toggle Dark Mode Theme"
+            className="p-2 sm:p-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+            aria-label="Toggle Theme"
             title={`Switch to ${theme === "light" ? "Dark" : "Light"} mode`}
           >
             {theme === "light" ? (
-              <Moon className="h-4.5 w-4.5 flex-shrink-0" />
+              <Moon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             ) : (
-              <Sun className="h-4.5 w-4.5 flex-shrink-0" />
+              <Sun className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             )}
           </button>
 
-          {/* Global Notifications Bell Trigger & Absolute Popover Drawer */}
           <div className="relative">
             <button
               type="button"
@@ -96,7 +74,7 @@ export const Header: React.FC<HeaderProps> = React.memo(
                   handleCloseNotifications();
                 }
               }}
-              className={`p-2.5 rounded-lg border text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all relative group
+              className={`p-2 sm:p-2.5 rounded-lg border text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all relative group
               ${
                 isNotificationsOpen
                   ? "bg-muted/50 border-primary/40 text-primary"
@@ -107,12 +85,11 @@ export const Header: React.FC<HeaderProps> = React.memo(
               aria-haspopup="dialog"
               title="Open Notifications Panel"
             >
-              <Bell className="h-4.5 w-4.5 flex-shrink-0" />
+              <Bell className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
 
-              {/* Pulsing notifications badge indicator */}
               {notificationBadgeCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black flex items-center justify-center animate-pulse shadow-sm"
+                  className="absolute -top-1 -right-1 h-4.5 w-4.5 sm:h-5 sm:w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black flex items-center justify-center animate-pulse shadow-sm"
                   aria-label={`${notificationBadgeCount} unread alerts`}
                 >
                   {displayBadgeCount}
@@ -120,7 +97,6 @@ export const Header: React.FC<HeaderProps> = React.memo(
               )}
             </button>
 
-            {/* Mount floating popover dropdown aligned relatively to bell boundaries */}
             <NotificationTray
               isOpen={isNotificationsOpen}
               onClose={handleCloseNotifications}
@@ -129,10 +105,9 @@ export const Header: React.FC<HeaderProps> = React.memo(
         </div>
       </header>
     );
-  }
+  },
 );
 
-// Define explicit displayName metadata for React DevTools memory tracking
 Header.displayName = "Header";
 
 export default Header;

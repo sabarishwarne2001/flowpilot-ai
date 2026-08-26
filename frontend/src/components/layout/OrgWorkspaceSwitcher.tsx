@@ -6,35 +6,7 @@ import { ROUTES } from "@/constants/routes";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { createWorkspacePath, rebaseTenantPath } from "@/routes/tenantPaths";
 import { canCreateWorkspace } from "@/permissions/organizationPermissions";
-
-/**
- * Organization and workspace switcher for FlowPilot AI.
- *
- * This component could not exist before ARCH-01. A second active membership
- * raised MultipleResultsFound on the backend and returned HTTP 500 on every
- * subsequent request, so there was never more than one tenant to switch
- * between.
- *
- * SWITCHING IS NAVIGATION, NOT STATE
- *
- * Selecting a workspace navigates to its URL. TenantGuard then reconciles the
- * new path against the bootstrap context and writes the selection to the
- * store. Mutating the store directly and letting the URL follow would give two
- * sources of truth for "which tenant am I in", and the address bar would lag
- * behind the content — the exact class of drift ARCH-01 removed by putting the
- * tenant in the path.
- *
- * rebaseTenantPath carries the current sub-page across, so switching from
- * /acme/eng/work-items lands on /beta/main/work-items rather than dumping the
- * user back on a dashboard. Note this is rebaseTenantPath, NOT toTenantPath:
- * the current path already carries a tenant prefix to strip, which is the
- * distinction those two functions exist to keep apart.
- *
- * Every workspace shown comes from /me/context, which the server has already
- * filtered by access — organization OWNER and ADMIN see every workspace
- * through their derived grant, everyone else sees only explicit ones. Nothing
- * is filtered client-side.
- */
+import { WorkspaceLogo } from "@/components/workspace/WorkspaceLogo";
 
 interface OrgWorkspaceSwitcherProps {
   readonly collapsed?: boolean;
@@ -51,9 +23,6 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click and on Escape. A dropdown that traps focus or
-  // survives a click elsewhere is a persistent annoyance in a component this
-  // frequently used.
   useEffect(() => {
     if (!open) {
       return;
@@ -80,25 +49,15 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
     };
   }, [open]);
 
-  // Close when the route changes, so the panel does not linger over the page
-  // the user just navigated to.
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
 
   const totalWorkspaces = useMemo(
     () => organizations.reduce((sum, org) => sum + org.workspaces.length, 0),
-    [organizations]
+    [organizations],
   );
 
-  // Rendered when there is somewhere to switch to, OR when the actor can
-  // create a workspace.
-  //
-  // The second condition matters: without it the switcher needs two workspaces
-  // to appear, and the only place that creates a second one is inside the
-  // switcher — so a single-workspace tenant could never grow. Hiding the sole
-  // path to a feature behind that feature already existing is a dead end, and
-  // it is the reason multi-workspace was unreachable through the UI.
   const canCreate = canCreateWorkspace(organizationRole);
 
   if (totalWorkspaces <= 1 && organizations.length <= 1 && !canCreate) {
@@ -127,7 +86,11 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
         aria-label="Switch workspace"
         className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
       >
-        <Building2 className="h-4 w-4" />
+        <WorkspaceLogo
+          workspace={workspace}
+          className="h-6 w-6 rounded object-cover"
+          fallbackClassName="flex h-6 w-6 items-center justify-center rounded bg-primary/10 text-[10px] font-bold text-primary"
+        />
       </button>
     );
   }
@@ -141,14 +104,21 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/50"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold text-foreground">
-            {workspace.workspace_name}
-          </span>
-          <span className="block truncate text-[11px] text-muted-foreground">
-            {organization.organization_name}
-          </span>
-        </span>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <WorkspaceLogo
+            workspace={workspace}
+            className="h-7 w-7 shrink-0 rounded object-cover border border-border"
+            fallbackClassName="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary"
+          />
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-foreground">
+              {workspace.workspace_name}
+            </span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              {organization.organization_name}
+            </span>
+          </div>
+        </div>
 
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
       </button>

@@ -4,69 +4,51 @@ import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
 import { ROUTES } from "@/constants/routes";
+import DesktopSidebar from "@/components/layout/DesktopSidebar";
 import Sidebar from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { VerificationBanner } from "@/components/common/VerificationBanner";
 
 /**
  * Shell template wrapper encapsulating all gated workspace screens.
- *
- * Composes our decoupled, memory-optimized Sidebar navigation panel and
- * top-level Header toolbar, managing responsive viewports and session terminations.
+ * Strict viewport isolation: Desktop sidebar on lg+, Mobile overlay on <lg.
  */
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
 
-  // Extract state getters from Zustand stores
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const isSidebarCollapsed = useUIStore(
-    (state) => state.isSidebarCollapsed
-  );
+  const isSidebarCollapsed = useUIStore((state) => state.isSidebarCollapsed);
 
-  /**
-   * Action handler to safely clear session stores and return to Login endpoint.
-   *
-   * Memoized with useCallback to maintain Sidebar's React.memo rendering optimizations.
-   */
   const handleLogout = useCallback(async (): Promise<void> => {
-    // Revoke the refresh session server-side FIRST, then clear locally.
-    // Clearing first would drop the in-memory token, but the refresh cookie
-    // is what actually keeps the session alive — a purely local sign-out
-    // would leave a fourteen-day credential live in the browser, and the next
-    // page load would silently restore the session the user just ended.
     await authApi.logoutRequest();
-
-    // Clear local Zustand state persistent session records
     clearAuth();
-
-    // Shift client viewport replacing historical entries stack to block back-actions
     navigate(ROUTES.LOGIN, { replace: true });
   }, [clearAuth, navigate]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-200">
-      {/* --- Part 1: Collapsible Sidebar Drawer Panel --- */}
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground transition-colors duration-200">
+      {/* 1. Desktop Sidebar (Visible ONLY on lg+ screens >= 1024px) */}
       <div
         className={`
+          hidden
           h-screen
           shrink-0
-          ${isSidebarCollapsed ? "lg:w-20" : "lg:w-64"}
+          lg:block
+          ${isSidebarCollapsed ? "w-20" : "w-64"}
         `}
       >
-        <Sidebar onLogout={handleLogout} />
+        <DesktopSidebar onLogout={handleLogout} />
       </div>
 
-      {/* --- Part 2: Main Workspace Canvas Area (Toolbar + Outlet Subview) --- */}
-      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
-        {/* Consolidated top layout header bar */}
-        <Header />
+      {/* 2. Mobile Drawer (Slide-out overlay, rendered at root viewport level on < 1024px) */}
+      <Sidebar onLogout={handleLogout} />
 
-        {/* Surfaces the unverified state where the user already is. Without
-            it every tenant request 403s and the shell looks broken (§B.4). */}
+      {/* 3. Main Content Viewport */}
+      <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
+        <Header />
         <VerificationBanner />
 
-        {/* Core dynamic Main viewpoint scrolling container */}
-        <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-6">
+        <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">
           <Outlet />
         </main>
       </div>

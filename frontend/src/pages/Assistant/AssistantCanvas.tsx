@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PanelRightClose, PanelRightOpen, Send, Square } from "lucide-react";
+import { FileText, MessageSquare, PanelRightClose, PanelRightOpen, Send, Square } from "lucide-react";
 
 import ContextPressureBar from "@/components/assistant/ContextPressureBar";
 import MessageStream from "@/components/chat/MessageStream";
@@ -57,6 +57,7 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
   const [activeChunkId, setActiveChunkId] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(true);
   const [viewerDocId, setViewerDocId] = useState<string | null>(workItemId);
+  const [mobileTab, setMobileTab] = useState<"chat" | "document">("chat");
 
   const contentRef = useRef("");
   const frameRef = useRef<number | null>(null);
@@ -165,6 +166,7 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
         setViewerDocId(best.work_item_id);
         setActiveChunkId(best.chunk_id);
         setViewerOpen(true);
+        setMobileTab("document");
       }
     },
     [turn.citations],
@@ -175,6 +177,7 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
     setActiveChunkId(source.chunk_id);
     setViewerOpen(true);
     setDrawerOpen(false);
+    setMobileTab("document");
   }, []);
 
   if (!workspace) {
@@ -189,130 +192,169 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
     : undefined;
 
   return (
-    <div className="flex h-full min-h-0">
-      <section
-        className="flex min-w-0 flex-1 flex-col"
-        aria-label="Conversation"
-      >
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-          {!turn.start && !turn.content && (
-            <UploadDropzone
-              workspaceId={workspaceId}
-              {...(documentSettings?.max_upload_size
-                ? { maxSizeMb: documentSettings.max_upload_size }
-                : {})}
-              {...(allowedTypes ? { allowedTypes } : {})}
-              onUploaded={(id) => {
-                setViewerDocId(id);
-                setViewerOpen(true);
-              }}
-            />
-          )}
-
-          {turn.start && (
-            <ContextPressureBar
-              passagesIncluded={
-                turn.citations?.passages_included ?? turn.start.passages
-              }
-              passagesDroppedBudget={
-                turn.citations?.passages_dropped_budget ?? 0
-              }
-              passagesDroppedInjection={
-                turn.citations?.passages_dropped_injection ?? 0
-              }
-              warnings={turn.start.warnings}
-            />
-          )}
-
-          <MessageStream
-            content={turn.content}
-            start={turn.start}
-            citations={turn.citations}
-            done={turn.done}
-            error={turn.error}
-            connection={turn.connection}
-            onCitationClick={handleCitationClick}
-            activeClaimId={activeClaimId}
-          />
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Mobile Toggle Tabs (when document is loaded on mobile) */}
+      {viewerDocId && (
+        <div className="flex lg:hidden border-b border-border bg-card p-1">
+          <button
+            type="button"
+            onClick={() => setMobileTab("chat")}
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 ${
+              mobileTab === "chat" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("document")}
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 ${
+              mobileTab === "document" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Document
+          </button>
         </div>
-
-        <div className="border-t border-border p-3">
-          <div className="flex items-end gap-2">
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-              rows={2}
-              placeholder="Ask about your documents…"
-              disabled={streaming}
-              className="min-h-[2.75rem] flex-1 resize-y rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-            />
-
-            {streaming ? (
-              <button
-                type="button"
-                onClick={stop}
-                aria-label="Stop generating"
-                className="rounded-md border border-border p-2.5 hover:bg-muted"
-              >
-                <Square className="h-4 w-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={prompt.trim().length === 0}
-                aria-label="Send"
-                className="rounded-md bg-primary p-2.5 text-primary-foreground hover:opacity-90 disabled:opacity-40"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setViewerOpen((open) => !open)}
-              aria-label={viewerOpen ? "Hide document" : "Show document"}
-              className="rounded-md border border-border p-2.5 hover:bg-muted"
-            >
-              {viewerOpen ? (
-                <PanelRightClose className="h-4 w-4" />
-              ) : (
-                <PanelRightOpen className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {viewerOpen && viewerDocId && (
-        <aside
-          className="hidden w-1/2 min-w-0 border-l border-border lg:block"
-          aria-label="Source document"
-        >
-          <PdfViewer
-            workspaceId={workspaceId}
-            workItemId={viewerDocId}
-            sources={sourcesForViewer}
-            activeChunkId={activeChunkId}
-            onBoxClick={(source) => setActiveChunkId(source.chunk_id)}
-            className="h-full"
-          />
-        </aside>
       )}
 
-      <ProvenanceDrawer
-        open={drawerOpen}
-        envelope={turn.citations}
-        activeClaimId={activeClaimId}
-        onClose={() => setDrawerOpen(false)}
-        onOpenSource={handleOpenSource}
-      />
+      <div className="flex flex-1 min-h-0">
+        {/* Conversation Pane */}
+        <section
+          className={`flex min-w-0 flex-1 flex-col ${
+            mobileTab === "document" && viewerDocId ? "hidden lg:flex" : "flex"
+          }`}
+          aria-label="Conversation"
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
+            {!turn.start && !turn.content && (
+              <UploadDropzone
+                workspaceId={workspaceId}
+                {...(documentSettings?.max_upload_size
+                  ? { maxSizeMb: documentSettings.max_upload_size }
+                  : {})}
+                {...(allowedTypes ? { allowedTypes } : {})}
+                onUploaded={(id) => {
+                  setViewerDocId(id);
+                  setViewerOpen(true);
+                  setMobileTab("document");
+                }}
+              />
+            )}
+
+            {turn.start && (
+              <ContextPressureBar
+                passagesIncluded={
+                  turn.citations?.passages_included ?? turn.start.passages
+                }
+                passagesDroppedBudget={
+                  turn.citations?.passages_dropped_budget ?? 0
+                }
+                passagesDroppedInjection={
+                  turn.citations?.passages_dropped_injection ?? 0
+                }
+                warnings={turn.start.warnings}
+              />
+            )}
+
+            <MessageStream
+              content={turn.content}
+              start={turn.start}
+              citations={turn.citations}
+              done={turn.done}
+              error={turn.error}
+              connection={turn.connection}
+              onCitationClick={handleCitationClick}
+              activeClaimId={activeClaimId}
+            />
+          </div>
+
+          <div className="border-t border-border p-2 sm:p-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void send();
+                  }
+                }}
+                rows={2}
+                placeholder="Ask about your documents…"
+                disabled={streaming}
+                className="min-h-[2.5rem] sm:min-h-[2.75rem] flex-1 resize-y rounded-md border border-border bg-background px-3 py-2 text-xs sm:text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              />
+
+              {streaming ? (
+                <button
+                  type="button"
+                  onClick={stop}
+                  aria-label="Stop generating"
+                  className="rounded-md border border-border p-2 sm:p-2.5 hover:bg-muted"
+                >
+                  <Square className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void send()}
+                  disabled={prompt.trim().length === 0}
+                  aria-label="Send"
+                  className="rounded-md bg-primary p-2 sm:p-2.5 text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              )}
+
+              {viewerDocId && (
+                <button
+                  type="button"
+                  onClick={() => setViewerOpen((open) => !open)}
+                  aria-label={viewerOpen ? "Hide document" : "Show document"}
+                  className="hidden lg:block rounded-md border border-border p-2 sm:p-2.5 hover:bg-muted"
+                >
+                  {viewerOpen ? (
+                    <PanelRightClose className="h-4 w-4" />
+                  ) : (
+                    <PanelRightOpen className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Document Pane (Full screen on mobile when document tab active, Split on desktop) */}
+        {viewerDocId && (
+          <aside
+            className={`
+              min-w-0 border-l border-border
+              ${mobileTab === "document" ? "flex flex-1" : "hidden"}
+              ${viewerOpen ? "lg:flex lg:w-1/2" : "lg:hidden"}
+            `}
+            aria-label="Source document"
+          >
+            <PdfViewer
+              workspaceId={workspaceId}
+              workItemId={viewerDocId}
+              sources={sourcesForViewer}
+              activeChunkId={activeChunkId}
+              onBoxClick={(source) => setActiveChunkId(source.chunk_id)}
+              className="h-full w-full"
+            />
+          </aside>
+        )}
+
+        <ProvenanceDrawer
+          open={drawerOpen}
+          envelope={turn.citations}
+          activeClaimId={activeClaimId}
+          onClose={() => setDrawerOpen(false)}
+          onOpenSource={handleOpenSource}
+        />
+      </div>
     </div>
   );
 };
