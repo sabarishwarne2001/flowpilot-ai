@@ -44,15 +44,12 @@ export type AutomationOperator =
 /**
  * Supported automation actions.
  */
-export type AutomationActionType =
-  | "SEND_EMAIL";
+export type AutomationActionType = "SEND_EMAIL";
 
 /**
  * Execution status of an automation log.
  */
-export type AutomationExecutionStatus =
-  | "SUCCESS"
-  | "FAILED";
+export type AutomationExecutionStatus = "SUCCESS" | "FAILED";
 
 /**
  * Logical operators supporting multiple conditions.
@@ -86,10 +83,13 @@ export interface AutomationAction {
 
 /**
  * Persisted automation rule returned by the backend.
+ * Reconciled with AutomationRuleResponse (workspace_id, created_by_user_id).
  */
 export interface AutomationRule {
   readonly id: string;
-  readonly user_id: string;
+  readonly workspace_id?: string;
+  readonly created_by_user_id?: string | null;
+  readonly user_id?: string;
 
   readonly name: string;
   readonly priority: number;
@@ -150,23 +150,14 @@ export interface AutomationRuleUpdateRequest {
  */
 export interface AutomationLog {
   readonly id: string;
-
   readonly rule_id: string;
-
   readonly work_item_id: string;
-
   readonly rule_name: string;
-
   readonly document_name: string;
-
   readonly action_type: string;
-
   readonly status: "SUCCESS" | "FAILED";
-
   readonly log_message: string | null;
-
   readonly created_at: string;
-
   readonly updated_at: string;
 }
 

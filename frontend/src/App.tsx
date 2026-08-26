@@ -17,6 +17,7 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 
 import { Assistant } from "@/pages/Assistant/Assistant";
 import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
+import BillingHub from "@/pages/billing/BillingHub";
 import { Login } from "@/pages/Auth/Login";
 import { Register } from "@/pages/Auth/Register";
 import VerifyEmail from "@/pages/Auth/VerifyEmail";
@@ -39,6 +40,7 @@ import LegacyRouteRedirect from "@/routes/LegacyRouteRedirect";
 import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 import { SessionBootstrap } from "@/routes/SessionBootstrap";
+import OrganizationGuard from "@/routes/OrganizationGuard";
 import TenantGuard from "@/routes/TenantGuard";
 
 import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
@@ -76,7 +78,7 @@ export default function App() {
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
 
-              {/* Public email verification & recovery */}
+              {/* Public routes */}
               <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
               <Route
                 path={ROUTES.FORGOT_PASSWORD}
@@ -91,7 +93,6 @@ export default function App() {
                 element={<InvitationAcceptPage />}
               />
 
-              {/* Public auth pages */}
               <Route
                 element={
                   <PublicRoute>
@@ -127,6 +128,17 @@ export default function App() {
                   path={ROUTE_PATTERNS.organizationNewWorkspace}
                   element={<CreateWorkspacePage />}
                 />
+
+                {/* Organization-scoped routes */}
+                <Route
+                  path={ROUTE_PATTERNS.organizationShell}
+                  element={<OrganizationGuard />}
+                >
+                  <Route
+                    path={ROUTE_PATTERNS.organizationBilling}
+                    element={<BillingHub />}
+                  />
+                </Route>
 
                 {/* Legacy redirects */}
                 <Route path="/" element={<LegacyRouteRedirect />} />
@@ -183,7 +195,7 @@ export default function App() {
                 </Route>
               </Route>
 
-              {/* 404 fallback */}
+              {/* 404 */}
               <Route
                 path={ROUTES.NOT_FOUND}
                 element={<NotFound />}

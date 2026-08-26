@@ -1,11 +1,5 @@
 /**
- * Query key factories. Every tenant-scoped key begins ["ws", workspaceId].
- *
- * Centralized so that omitting the workspace from a key is not something you
- * can do by forgetting — there is no builder that produces a scoped key
- * without one. That prefix also makes invalidation and eviction naturally
- * workspace-bounded: React Query matches keys by prefix, so
- * ["ws", id] reaches everything in one workspace and nothing in another.
+ * Query key factories for FlowPilot AI.
  */
 
 import type { QueryClient } from "@tanstack/react-query";
@@ -60,9 +54,77 @@ export const settingsKeys = {
   document: (workspaceId: string) => [...settingsKeys.all(workspaceId), "document"] as const,
 };
 
-/**
- * Invalidates every cached query for one workspace.
- */
+export const organizationScope = (organizationId: string) =>
+  ["org", organizationId] as const;
+
+export const billingKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "billing"] as const,
+  subscription: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "subscription"] as const,
+  access: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "access"] as const,
+  invoices: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "invoices"] as const,
+  invoice: (organizationId: string, invoiceId: string) =>
+    [...billingKeys.all(organizationId), "invoice", invoiceId] as const,
+  invoiceReproduction: (organizationId: string, invoiceId: string) =>
+    [...billingKeys.all(organizationId), "invoice", invoiceId, "reproduction"] as const,
+};
+
+export const usageKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "usage"] as const,
+  summary: (organizationId: string, period: string) =>
+    [...usageKeys.all(organizationId), "summary", period] as const,
+  series: (organizationId: string, from: string, granularity: string) =>
+    [...usageKeys.all(organizationId), "series", from, granularity] as const,
+  limits: (organizationId: string) =>
+    [...usageKeys.all(organizationId), "limits"] as const,
+};
+
+export const identityKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "identity"] as const,
+  domains: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "domains"] as const,
+  idpConfigs: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "idp-configs"] as const,
+  scimKeys: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "scim-keys"] as const,
+  securityPolicy: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "security-policy"] as const,
+  directory: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "directory"] as const,
+};
+
+export const auditKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "audit"] as const,
+  list: (organizationId: string, filters: Record<string, unknown>) =>
+    [...auditKeys.all(organizationId), "list", filters] as const,
+  detail: (organizationId: string, auditLogId: string) =>
+    [...auditKeys.all(organizationId), "detail", auditLogId] as const,
+};
+
+export const verificationKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "verifications"] as const,
+  list: (workspaceId: string, status: string | undefined) =>
+    [...verificationKeys.all(workspaceId), "list", status ?? "ALL"] as const,
+  detail: (workspaceId: string, verificationId: string) =>
+    [...verificationKeys.all(workspaceId), "detail", verificationId] as const,
+};
+
+export const invalidateOrganization = async (
+  queryClient: QueryClient,
+  organizationId: string,
+): Promise<void> => {
+  await queryClient.invalidateQueries({
+    queryKey: organizationScope(organizationId),
+  });
+};
+
 export const invalidateWorkspace = async (
   queryClient: QueryClient,
   workspaceId: string,
@@ -70,10 +132,6 @@ export const invalidateWorkspace = async (
   await queryClient.invalidateQueries({ queryKey: workspaceScope(workspaceId) });
 };
 
-/**
- * placeholderData that survives a filter change but not a workspace change.
- * Uses 'any' to bypass TanStack Query's strict generic parameter validation.
- */
 export const keepPreviousWithinWorkspace =
   <TData,>(workspaceId: string) =>
   (
