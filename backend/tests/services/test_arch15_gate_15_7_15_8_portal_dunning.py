@@ -92,12 +92,15 @@ class TestGate157ReauthWindow:
             portal_service.assert_recent_authentication(issued_at=issued)
 
     def test_a_real_access_token_carries_a_usable_issue_time(self, db, billing_org):
-        token = create_access_token(subject=billing_org["owner"].id)
+        now = datetime.now(timezone.utc)
+        token = create_access_token(
+            subject=billing_org["owner"].id,
+            authenticated_at=now,
+        )
         resolved = portal_service.assert_recent_authentication(
             authorization_header=f"Bearer {token}"
         )
-        assert resolved is not None
-        assert (datetime.now(timezone.utc) - resolved) < timedelta(seconds=60)
+        assert abs((resolved - now).total_seconds()) < 2
 
     def test_window_bounds_are_validated(self):
         from pydantic import ValidationError

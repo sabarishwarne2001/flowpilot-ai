@@ -93,6 +93,7 @@ export const Workspace: React.FC = () => {
     queryFn: () => listWorkspaceMembers(workspaceId),
   });
 
+  // Hunk 1: Fetch pending invitations scoped to organization
   const { data: pendingInvitations, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ["organizations", "invitations", organizationId],
     queryFn: () => listPendingInvitations(organizationId),
@@ -166,6 +167,7 @@ export const Workspace: React.FC = () => {
     },
   });
 
+  // Hunk 2: Send invite mutation scoped to organization
   const { mutateAsync: sendInviteMutation, isPending: isInviting } = useMutation({
     mutationFn: (payload: { email: string; role: WorkspaceRole }) =>
       createInvitation(organizationId, payload),
@@ -184,6 +186,7 @@ export const Workspace: React.FC = () => {
     },
   });
 
+  // Hunk 3: Revoke invite mutation scoped to organization
   const { mutateAsync: revokeInviteMutation } = useMutation({
     mutationFn: (invitationId: string) => revokeInvitation(organizationId, invitationId),
     onSuccess: async () => {
@@ -199,6 +202,7 @@ export const Workspace: React.FC = () => {
     },
   });
 
+  // Hunk 4: Resend invite mutation scoped to organization
   const { mutateAsync: resendInviteMutation } = useMutation({
     mutationFn: (invitationId: string) => resendInvitation(organizationId, invitationId),
     onSuccess: async () => {
@@ -338,7 +342,9 @@ export const Workspace: React.FC = () => {
   }, [organizationRole, workspaceRole]);
 
   const members = memberList?.items ?? [];
-  const invitations = pendingInvitations ?? [];
+  const invitations = Array.isArray(pendingInvitations)
+    ? pendingInvitations
+    : (pendingInvitations as any)?.items ?? [];
 
   const isPageLoading =
     isLoadingWorkspace || isLoadingMembers || isLoadingInvitations;
@@ -724,7 +730,7 @@ export const Workspace: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {invitations.map((inv) => {
+                  {invitations.map((inv: any) => {
                     const expired = new Date(inv.expires_at) <= new Date();
 
                     return (

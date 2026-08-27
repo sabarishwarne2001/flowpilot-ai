@@ -288,13 +288,18 @@ def create_access_token(
     if session_id is not None:
         to_encode["sid"] = str(session_id)
 
-    if authenticated_at is not None:
-        moment = (
-            authenticated_at
-            if authenticated_at.tzinfo
-            else authenticated_at.replace(tzinfo=UTC)
-        )
-        to_encode[AUTH_TIME_CLAIM] = int(moment.timestamp())
+    # Default to "authenticated right now" when the caller doesn't specify one.
+    # This is correct for every direct mint that isn't a rotation -- and
+    # rotation always passes the original authenticated_at forward explicitly
+    # (session_service._rotate_live_session), so this default never overwrites
+    # a genuine earlier authentication. It only closes the gap where a token
+    # could silently carry no auth_time at all, which is what made the F6
+    # reauth check unexpectedly hostile to anything minted outside the normal
+    # login/refresh call sites.
+    moment = authenticated_at if authenticated_at is not None else issued_at
+    to_encode[AUTH_TIME_CLAIM] = int(
+        (moment if moment.tzinfo else moment.replace(tzinfo=UTC)).timestamp()
+    )
 
     return jwt.encode(
         to_encode,
