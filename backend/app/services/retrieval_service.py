@@ -45,7 +45,20 @@ class RetrievalService:
         with stage("retrieval.intent"):
             match = intent_service.detect(query, db=db, workspace_id=workspace_id)
 
-        filtered_ids = list(work_item_ids) if work_item_ids else None
+        # `is not None`, not truthiness. An empty sequence is a caller saying
+        # "restrict to these zero documents", which must retrieve nothing --
+        # collapsing it to None here would silently widen the search to the
+        # whole workspace instead. This matches lexical_search_service and
+        # hybrid_search_service, which use the same test; this call site was
+        # the one that still relied on truthiness.
+        filtered_ids = list(work_item_ids) if work_item_ids is not None else None
+
+        if filtered_ids == []:
+            # Nothing in scope. Short-circuit rather than issuing a query whose
+            # WHERE clause is a tautologically empty IN (), which some backends
+            # accept and some reject, and which no reader can distinguish from
+            # a legitimately empty result.
+            return []
 
         with stage("retrieval.hybrid_sql") as details:
             outcome = hybrid_search_service.search(

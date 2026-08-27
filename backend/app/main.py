@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from app.api.v1 import billing as billing_v1
 from app.api.v1 import billing_webhook as billing_webhook_v1
@@ -18,6 +19,7 @@ from app.core.config import settings
 from app.core.exception_handlers import domain_exception_handler
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
+from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
@@ -29,6 +31,68 @@ logger = logging.getLogger("app.main")
 
 #: Response headers the browser is permitted to read cross-origin.
 CORS_EXPOSED_HEADERS = ["WWW-Authenticate", "Retry-After"]
+
+_AUTH_DEPENDENCY_NAMES = frozenset(
+    {
+        "get_current_user",
+        "get_current_active_user",
+        "get_verified_user",
+        "get_verified_active_user",
+        "get_api_key_principal",
+        "require_api_key",
+        "require_authenticated_user",
+        "get_workspace_user",
+        "get_organization_user",
+        "require_superadmin",
+    }
+)
+
+
+def _dependency_tree_has_auth(dependant) -> bool:
+    """Recursively traverse the dependency tree to check for authentication dependencies."""
+    if dependant is None:
+        return False
+
+    call = getattr(dependant, "call", None)
+    name = getattr(call, "__name__", "")
+    if name in _AUTH_DEPENDENCY_NAMES:
+        return True
+
+    return any(
+        _dependency_tree_has_auth(child)
+        for child in getattr(dependant, "dependencies", ())
+    )
+
+
+def _route_requires_auth(route: APIRoute) -> bool:
+    return _dependency_tree_has_auth(route.dependant)
+
+
+def assert_public_route_registry(app: FastAPI) -> None:
+    """Ensure every unauthenticated route is registered in PUBLIC_ROUTES."""
+    undocumented: set[str] = set()
+
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+
+        if _route_requires_auth(route):
+            continue
+
+        methods = route.methods or {"GET"}
+        # Filter out auto-generated HEAD/OPTIONS
+        effective_methods = {m for m in methods if m not in {"HEAD", "OPTIONS"}}
+        for method in (effective_methods or methods):
+            if not is_public(route.path, method):
+                undocumented.add(f"{method} {route.path}")
+
+    if undocumented:
+        raise RuntimeError(
+            "Unauthenticated routes are missing from PUBLIC_ROUTES: "
+            + ", ".join(sorted(undocumented))
+            + ". Register each route with its credential and rate-limit policy "
+            "or add an authentication dependency."
+        )
 
 
 @asynccontextmanager
@@ -49,6 +113,10 @@ async def lifespan(app: FastAPI):
         logger.info("ARCH-10 / ARCH-16 asynchronous job handlers registered.")
     except Exception:
         logger.exception("Failed to register background job handlers.")
+
+    # Guard: verify the public route registry against all mounted routes
+    assert_public_route_registry(app)
+    logger.info("Public route registry asserted successfully against all endpoints.")
 
     yield
 

@@ -111,6 +111,11 @@ def deprovision_member(
     result = DeprovisionResult(user_id=user_id, organization_id=organization_id)
     now = utcnow()
 
+    from app.services.organization_member_service import (
+        lock_organization_for_owner_change,
+    )
+    lock_organization_for_owner_change(db, organization_id=organization_id)
+
     assert_not_last_owner(db, organization_id=organization_id, user_id=user_id)
 
     # 1. Membership

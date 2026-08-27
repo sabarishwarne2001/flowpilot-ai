@@ -8,7 +8,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+
+from app.models.spend_limit import SpendLimitPeriod
 
 
 class UsagePeriod(str, Enum):
@@ -130,8 +132,42 @@ class UsageLimitsResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
+class SpendLimitUpdate(BaseModel):
+    limit_key: str = Field(min_length=1, max_length=100)
+    period: SpendLimitPeriod
+    max_quantity: Decimal | None = None
+    max_cost_micros: int | None = Field(default=None, ge=0)
+    hard_stop: bool = True
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_ceiling(self):
+        if self.max_quantity is None and self.max_cost_micros is None:
+            raise ValueError(
+                "At least one of max_quantity or max_cost_micros is required."
+            )
+        return self
+
+
+class SpendLimitResponse(BaseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    limit_key: str
+    period: SpendLimitPeriod
+    max_quantity: Decimal | None
+    max_cost_micros: int | None
+    hard_stop: bool
+    is_active: bool
+    note: str | None
+
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
+
 __all__ = [
     "MAX_SERIES_BUCKETS",
+    "SpendLimitPeriod",
+    "SpendLimitResponse",
+    "SpendLimitUpdate",
     "UsageBucket",
     "UsageGranularity",
     "UsageLimit",

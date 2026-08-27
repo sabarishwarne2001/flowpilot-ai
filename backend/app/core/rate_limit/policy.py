@@ -88,6 +88,38 @@ POLICY_ASSISTANT_GENERATE = RateLimitPolicy(
     failure_mode=FailureMode.FAIL_OPEN,
 )
 
+POLICY_WEBHOOK_INBOUND = RateLimitPolicy(
+    name="webhook_inbound",
+    scope=RateLimitScope.GLOBAL_IP,
+    limit=1200,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_OPEN,
+)
+
+POLICY_PUBLIC_READ = RateLimitPolicy(
+    name="public_read",
+    scope=RateLimitScope.GLOBAL_IP,
+    limit=300,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_OPEN,
+)
+
+POLICY_SSO_ACS = RateLimitPolicy(
+    name="sso_acs",
+    scope=RateLimitScope.GLOBAL_IP,
+    limit=120,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_OPEN,
+)
+
+POLICY_SCIM = RateLimitPolicy(
+    name="scim",
+    scope=RateLimitScope.API_KEY,
+    limit=600,
+    window_seconds=60,
+    failure_mode=FailureMode.FAIL_CLOSED,
+)
+
 
 # ===========================================================================
 # SEC-1 Tranche 3 — login scopes
@@ -134,3 +166,37 @@ POLICY_LOGIN_ACCOUNT = LoginGuardPolicy(
     ladder_base=250,      # milliseconds
     ladder_ceiling=2000,  # milliseconds
 )
+
+
+# ===========================================================================
+# Policy Registry & Resolver
+# ===========================================================================
+
+POLICIES: dict[str, RateLimitPolicy] = {
+    policy.name: policy
+    for policy in (
+        POLICY_GLOBAL_IP,
+        POLICY_USER_DEFAULT,
+        POLICY_LOGIN_IP,
+        POLICY_CREDENTIAL_OPS,
+        POLICY_AUDIT_EXPORT,
+        POLICY_API_KEY_DEFAULT,
+        POLICY_ASSISTANT_GENERATE,
+        POLICY_WEBHOOK_INBOUND,
+        POLICY_PUBLIC_READ,
+        POLICY_SSO_ACS,
+        POLICY_SCIM,
+    )
+}
+
+# Alias for backwards compatibility
+POLICY_REGISTRY = POLICIES
+
+
+def resolve_policy(name: str) -> RateLimitPolicy:
+    """Resolve a policy by name or fail closed."""
+    normalized = name.removeprefix("POLICY_").lower()
+    try:
+        return POLICIES[normalized]
+    except KeyError as exc:
+        raise KeyError(f"Unknown rate-limit policy: {name!r}") from exc

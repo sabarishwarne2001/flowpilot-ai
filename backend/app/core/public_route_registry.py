@@ -21,6 +21,80 @@ class PublicRoute:
 
 
 PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
+    # Health
+    PublicRoute(
+        path="/api/v1/health",
+        methods=("GET",),
+        phase="CORE",
+        credential="none",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    # Invitations
+    PublicRoute(
+        path="/api/v1/invitations/preview",
+        methods=("GET",),
+        phase="ARCH-04",
+        credential="invitation token",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    # Auth endpoints
+    PublicRoute(
+        path="/api/v1/auth/login",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="email and password",
+        rate_limit_policy="POLICY_LOGIN_IP",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/register",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="none",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/forgot-password",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="none",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/reset-password",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="password-reset token",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/verify-email",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="email-verification token",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/refresh",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="httpOnly refresh cookie",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/logout",
+        methods=("POST",),
+        phase="ARCH-03",
+        credential="authenticated session or refresh cookie",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/auth/email-change/confirm",
+        methods=("POST",),
+        phase="ARCH-06",
+        credential="email-change token",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    # Billing webhooks (Stripe)
     PublicRoute(
         path="/api/v1/billing/webhooks/stripe",
         methods=("POST",),
@@ -28,6 +102,14 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="Stripe-Signature HMAC over the raw body",
         rate_limit_policy="POLICY_WEBHOOK_INBOUND",
     ),
+    PublicRoute(
+        path="/api/v1/billing/stripe/webhook",
+        methods=("POST",),
+        phase="ARCH-15",
+        credential="Stripe-Signature HMAC over the raw body",
+        rate_limit_policy="POLICY_WEBHOOK_INBOUND",
+    ),
+    # SAML / SSO
     PublicRoute(
         path="/api/v1/saml/metadata",
         methods=("GET",),
@@ -39,8 +121,7 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         path="/api/v1/saml/acs",
         methods=("POST",),
         phase="ARCH-16",
-        credential="XML signature over the assertion, verified against a live "
-                   "idp_signing_certificates row",
+        credential="XML signature over the assertion, verified against a live idp_signing_certificates row",
         rate_limit_policy="POLICY_SSO_ACS",
     ),
     PublicRoute(
@@ -54,8 +135,7 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         path="/api/v1/sso/discover",
         methods=("GET",),
         phase="ARCH-16",
-        credential="none — keyed on DOMAIN, never on email, so it cannot "
-                   "enumerate accounts",
+        credential="none — keyed on DOMAIN, never on email, so it cannot enumerate accounts",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     PublicRoute(
@@ -72,6 +152,7 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="authorization code + PKCE verifier + server-side nonce",
         rate_limit_policy="POLICY_SSO_ACS",
     ),
+    # SCIM
     PublicRoute(
         path="/scim/v2",
         methods=("*",),

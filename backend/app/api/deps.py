@@ -43,12 +43,14 @@ from app.models.organization import (
     OrganizationRole,
 )
 from app.models.user import User
+from app.models.user_session import UserSession
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.services import api_key_service
 from app.services import organization_service
 from app.services import workspace_member_service
 from app.services import workspace_service
 from app.services.denial_aggregation_service import record_threshold_denial
+from app.services.identity import session_policy_service
 
 logger = logging.getLogger("app.api.deps")
 
@@ -117,6 +119,8 @@ async def get_current_user(
     if request is not None:
         request.state.user_id = user.id
         request.state.principal = principal
+        if claims.session_id is not None:
+            request.state.session_id = claims.session_id
 
     return user
 
@@ -212,6 +216,55 @@ class TenantContext:
         return self.effective_workspace_role
 
 
+def _assert_sso_compliance(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    membership: OrganizationMember,
+    session_id: Optional[uuid.UUID],
+) -> None:
+    """Enforce tenant SSO requirement for password-authenticated sessions (ARCH-16)."""
+    policy = session_policy_service.get_or_create_policy(
+        db, organization_id=organization_id
+    )
+
+    role_str = (
+        membership.role.value
+        if hasattr(membership.role, "value")
+        else str(membership.role)
+    )
+
+    if not session_policy_service.sso_required_for(policy, org_role=role_str):
+        return
+
+    if session_id is None:
+        raise OrganizationPermissionDeniedError(
+            "This organization requires SSO authentication."
+        )
+
+    user_session = (
+        db.query(UserSession)
+        .filter(UserSession.id == session_id, UserSession.revoked_at.is_(None))
+        .one_or_none()
+    )
+
+    if user_session is None:
+        raise OrganizationPermissionDeniedError(
+            "This organization requires SSO authentication."
+        )
+
+    auth_method = (
+        user_session.auth_method.value
+        if hasattr(user_session.auth_method, "value")
+        else str(user_session.auth_method)
+    )
+
+    if auth_method == "PASSWORD":
+        raise OrganizationPermissionDeniedError(
+            "This organization requires SSO authentication."
+        )
+
+
 async def get_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
@@ -229,6 +282,47 @@ async def get_organization_context(
     )
     if membership is None:
         raise OrganizationAccessDeniedError("Organization not found.")
+
+    organization_service.assert_organization_operational(organization)
+
+    return OrganizationContext(
+        user=current_user,
+        organization=organization,
+        membership=membership,
+    )
+
+
+async def get_sso_compliant_organization_context(
+    request: Request,
+    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+    token: str = Depends(oauth2_scheme),
+) -> OrganizationContext:
+    """Organization dependency that enforces tenant SSO requirements on interactive sessions."""
+    organization = organization_service.get_organization_or_raise(
+        db, organization_id=organization_id
+    )
+
+    membership = crud.get_organization_member(
+        db,
+        organization_id=organization.id,
+        user_id=current_user.id,
+        statuses=ACTIVE_ONLY,
+    )
+    if membership is None:
+        raise OrganizationAccessDeniedError("Organization not found.")
+
+    principal = getattr(request.state, "principal", None) or get_current_principal()
+    if not (principal and (principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY)):
+        claims = security.decode_access_token_claims(token)
+        session_id = claims.session_id if claims else None
+        _assert_sso_compliance(
+            db,
+            organization_id=organization.id,
+            membership=membership,
+            session_id=session_id,
+        )
 
     organization_service.assert_organization_operational(organization)
 
@@ -297,6 +391,7 @@ async def get_workspace_context(
 
 
 OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
+SSOCompliantOrgContext = Annotated[OrganizationContext, Depends(get_sso_compliant_organization_context)]
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
 
 

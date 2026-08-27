@@ -12,7 +12,7 @@ x-app-env: &app-env
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
   POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
   REDIS_URL: redis://redis:6379/0
-  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set. Generate one with: openssl rand -hex 32}
+  JWT_SECRET_KEY: "${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set. Generate one with openssl rand -hex 32}"
   ENVIRONMENT: ${ENVIRONMENT:-development}
   STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
   S3_BUCKET: ${S3_BUCKET:-flowpilot-dev}
@@ -224,7 +224,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Worker 6: Dedicated Enrichment Worker (Embeddings, ChromaDB, BM25, LLM)
+  # Worker 6: Dedicated Enrichment Worker (Embeddings, pgvector, LLM)
   # ---------------------------------------------------------------------------
   worker-enrich:
     build:

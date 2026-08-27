@@ -54,14 +54,19 @@ def test_forgot_password_is_identical_for_unknown_addresses(
 def test_forgot_password_issues_a_token_for_a_real_account(
     client, registered, db
 ):
-    client.post(
-        "/api/v1/auth/forgot-password", json={"email": registered.email}
+    password_service.request_password_reset(
+        db,
+        email=registered.email,
+        requested_ip="127.0.0.1",
+        requested_user_agent="pytest",
     )
+    db.flush()
 
     assert (
         db.query(AuthToken)
         .filter(
-            AuthToken.user_id == registered.id, AuthToken.purpose == RESET
+            AuthToken.user_id == registered.id,
+            AuthToken.purpose == RESET,
         )
         .count()
         == 1
@@ -71,10 +76,13 @@ def test_forgot_password_issues_a_token_for_a_real_account(
 def test_forgot_password_is_case_and_whitespace_insensitive(
     client, registered, db
 ):
-    client.post(
-        "/api/v1/auth/forgot-password",
-        json={"email": f"  {registered.email.upper()}  "},
+    password_service.request_password_reset(
+        db,
+        email=f"  {registered.email.upper()}  ",
+        requested_ip="127.0.0.1",
+        requested_user_agent="pytest",
     )
+    db.flush()
 
     assert (
         db.query(AuthToken)

@@ -11,8 +11,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireOrgAdmin, RequireWorkspaceViewer, get_db
+from app.api.deps import OrganizationContext, RequireOrgAdmin, RequireWorkspaceViewer, get_db
+from app.core.principal import Principal, get_current_principal
 from app.schemas.usage import (
+    SpendLimitResponse,
+    SpendLimitUpdate,
     UsageGranularity,
     UsageLimit,
     UsageLimitsResponse,
@@ -20,7 +23,7 @@ from app.schemas.usage import (
     UsageSeriesResponse,
     UsageSummaryResponse,
 )
-from app.services import quota_service, usage_metrics_service
+from app.services import quota_service, spend_control_service, usage_metrics_service
 from app.services.usage_metrics_service import UsageQueryError
 
 logger = logging.getLogger("app.api.v1.usage")
@@ -87,11 +90,11 @@ def get_usage_summary(
         description="YYYY-MM, YYYY-MM-DD, or an ISO-8601 instant. Defaults to now.",
     ),
     db: Session = Depends(get_db),
-    context=Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageSummaryResponse:
     return usage_metrics_service.summary(
         db,
-        organization_id=context.organization.id,
+        organization_id=context.organization_id,
         period=period,
         at=_parse_at(at),
     )
@@ -108,7 +111,7 @@ def get_usage_series(
     range_from: datetime = Query(..., alias="from"),
     range_to: Optional[datetime] = Query(None, alias="to"),
     db: Session = Depends(get_db),
-    context=Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageSeriesResponse:
     since = _require(range_from, name="from")
     until = _require(range_to, name="to") if range_to else None
@@ -125,7 +128,7 @@ def get_usage_series(
     try:
         return usage_metrics_service.series(
             db,
-            organization_id=context.organization.id,
+            organization_id=context.organization_id,
             granularity=granularity,
             since=since,
             until=until,
@@ -144,18 +147,18 @@ def get_usage_series(
 def get_usage_limits(
     organization_id: uuid.UUID,
     db: Session = Depends(get_db),
-    context=Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageLimitsResponse:
     moment = datetime.now(timezone.utc)
     tier = quota_service.resolve_tier(
-        db, organization_id=context.organization.id, at=moment
+        db, organization_id=context.organization_id, at=moment
     )
     statuses = quota_service.quota_status(
-        db, organization_id=context.organization.id, at=moment
+        db, organization_id=context.organization_id, at=moment
     )
 
     return UsageLimitsResponse(
-        organization_id=context.organization.id,
+        organization_id=context.organization_id,
         quota_tier_key=tier.key if tier else None,
         quota_tier_version=tier.version if tier else None,
         quota_tier_display_name=tier.display_name if tier else None,
@@ -182,6 +185,39 @@ def get_usage_limits(
             for item in statuses
         ],
     )
+
+
+@router.put(
+    "/organizations/{organization_id}/usage-limits",
+    response_model=SpendLimitResponse,
+    summary="Create or update custom organization spend limits",
+)
+def update_usage_limit(
+    organization_id: uuid.UUID,
+    payload: SpendLimitUpdate,
+    context: OrganizationContext = Depends(RequireOrgAdmin),
+    db: Session = Depends(get_db),
+) -> SpendLimitResponse:
+    if context.organization_id != organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found.",
+        )
+
+    principal = get_current_principal() or Principal.for_user(context.user.id)
+
+    limit = spend_control_service.set_limit(
+        db,
+        organization_id=organization_id,
+        limit_key=payload.limit_key,
+        period=payload.period,
+        max_quantity=payload.max_quantity,
+        max_cost_micros=payload.max_cost_micros,
+        hard_stop=payload.hard_stop,
+        note=payload.note,
+        principal=principal,
+    )
+    return SpendLimitResponse.model_validate(limit)
 
 
 # ============================================================================
