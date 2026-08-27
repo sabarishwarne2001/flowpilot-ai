@@ -7,12 +7,14 @@ import {
   CreditCard,
   Settings,
   ShieldCheck,
+  ScrollText,
   Sliders,
 } from "lucide-react";
 
 import {
   assistantPath,
   automationPath,
+  organizationAuditPath,
   organizationBillingPath,
   organizationIdentityPath,
   verificationPath,
@@ -63,6 +65,13 @@ export const buildNavigationItems = (
   },
 ];
 
+/**
+ * Organization-scoped navigation (Billing, Enterprise identity, Audit log).
+ *
+ * Role-gated here rather than in the consuming component, so a MEMBER with no
+ * organization-level standing gets an empty array and the caller never has to
+ * duplicate the role logic to decide whether to render a divider.
+ */
 export const buildOrganizationNavigationItems = (
   orgSlug: string,
   organizationRole: string,
@@ -83,6 +92,11 @@ export const buildOrganizationNavigationItems = (
       name: "Enterprise identity",
       path: organizationIdentityPath(orgSlug),
       icon: ShieldCheck,
+    });
+    items.push({
+      name: "Audit log",
+      path: organizationAuditPath(orgSlug),
+      icon: ScrollText,
     });
   }
 

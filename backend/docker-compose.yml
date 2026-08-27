@@ -12,7 +12,7 @@ x-app-env: &app-env
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
   POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
   REDIS_URL: redis://redis:6379/0
-  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-e839e248b9409893d5f84893708e983cf4b1b88e17409c914e963df9bc0297da}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set. Generate one with: openssl rand -hex 32}
   ENVIRONMENT: ${ENVIRONMENT:-development}
   STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
   S3_BUCKET: ${S3_BUCKET:-flowpilot-dev}
@@ -181,7 +181,23 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Worker 4: Dedicated OCR Worker (PaddleOCR Heavy Image)
+  # Worker 4: Dedicated Stripe Inbound Events Worker
+  # ---------------------------------------------------------------------------
+  worker-stripe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: flowpilot-worker-stripe
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker", "--loop", "stripe"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Worker 5: Dedicated OCR Worker (PaddleOCR Heavy Image)
   # ---------------------------------------------------------------------------
   worker-ocr:
     build:
@@ -208,7 +224,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Worker 5: Dedicated Enrichment Worker (Embeddings, ChromaDB, BM25, LLM)
+  # Worker 6: Dedicated Enrichment Worker (Embeddings, ChromaDB, BM25, LLM)
   # ---------------------------------------------------------------------------
   worker-enrich:
     build:

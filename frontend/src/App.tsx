@@ -14,6 +14,7 @@ import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { OrganizationLayout } from "@/layouts/OrganizationLayout";
 
 import { Assistant } from "@/pages/Assistant/Assistant";
 import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
@@ -147,18 +148,20 @@ export default function App() {
                   path={ROUTE_PATTERNS.organizationShell}
                   element={<OrganizationGuard />}
                 >
-                  <Route
-                    path={ROUTE_PATTERNS.organizationBilling}
-                    element={<BillingHub />}
-                  />
-                  <Route
-                    path={ROUTE_PATTERNS.organizationIdentity}
-                    element={<IdentityAdminHub />}
-                  />
-                  <Route
-                    path={ROUTE_PATTERNS.organizationAudit}
-                    element={<AuditExplorer />}
-                  />
+                  <Route element={<OrganizationLayout />}>
+                    <Route
+                      path={ROUTE_PATTERNS.organizationBilling}
+                      element={<BillingHub />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationIdentity}
+                      element={<IdentityAdminHub />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationAudit}
+                      element={<AuditExplorer />}
+                    />
+                  </Route>
                 </Route>
 
                 {/* Legacy redirects */}

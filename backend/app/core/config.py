@@ -39,6 +39,44 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
 
+    @field_validator("JWT_SECRET_KEY")
+    @classmethod
+    def validate_jwt_secret(cls, v: SecretStr) -> SecretStr:
+        """Reject compromised, absent, or trivially weak signing keys.
+
+        LEAKED_JWT_SECRET_KEYS existed before this validator did, but nothing
+        in the application consulted it. Meanwhile docker-compose.yml's
+        x-app-env anchor supplies one of those exact keys as its default, so
+        `docker compose up` with no JWT_SECRET_KEY exported boots on the
+        documented-compromised key. This closes that.
+        """
+        secret = v.get_secret_value() if v is not None else ""
+
+        if not secret:
+            raise ValueError(
+                "JWT_SECRET_KEY is required and has no default. Generate one "
+                "per environment with: openssl rand -hex 32"
+            )
+
+        if secret in LEAKED_JWT_SECRET_KEYS:
+            raise ValueError(
+                "JWT_SECRET_KEY is a known-compromised key published in this "
+                "repository's history. It is permanently rejected. Generate "
+                "a fresh one with: openssl rand -hex 32\n"
+                "If you reached this via `docker compose up`, export "
+                "JWT_SECRET_KEY before starting -- compose falls back to "
+                "the leaked value."
+            )
+
+        if len(secret) < 32:
+            raise ValueError(
+                f"JWT_SECRET_KEY is {len(secret)} characters. A minimum of "
+                "32 is required; 64 hex characters (openssl rand -hex 32) "
+                "is the documented choice."
+            )
+
+        return v
+
     API_KEY_PEPPER: SecretStr = SecretStr("flowpilot_default_api_key_pepper_secret_2026")
     REDIS_IDENTITY_PEPPER: SecretStr = SecretStr("flowpilot_default_redis_identity_pepper_2026")
 
@@ -165,7 +203,6 @@ class Settings(BaseSettings):
             "embedding.token": self.SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS,
         }
 
-    STORAGE_BACKEND: str = "local"
     S3_BUCKET: Optional[str] = None
     S3_REGION: Optional[str] = "auto"
     S3_ENDPOINT_URL: Optional[str] = None

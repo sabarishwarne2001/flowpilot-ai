@@ -1,4 +1,4 @@
-"""ARCH-10 Step 8, ARCH-11 Step 9, ARCH-12 Step 7, ARCH-13 Step 13.5, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.6/15.8 — worker profiles."""
+"""ARCH-10 Step 8, ARCH-11 Step 9, ARCH-12 Step 7, ARCH-13 Step 13.5, ARCH-14 Step 2 & 5, ARCH-15 Step 15.2/15.6/15.8, ARCH-16 — worker profiles."""
 
 from __future__ import annotations
 
@@ -46,13 +46,24 @@ LIGHT = WorkerProfile(
             "billing.seat_drift",
             "billing.assemble_invoice",
             "billing.dunning_sweep",
+            # ARCH-16 identity hygiene. These are DNS lookups, row deletions,
+            # and replay-guard pruning -- no heavy imports, so they belong on
+            # the thin image alongside the other housekeeping types. They
+            # were registered as handlers in handlers/__init__.py without
+            # being added here, which made them unclaimable by any
+            # production worker: the jobs enqueued fine and never ran, and
+            # SAML replay-guard pruning silently stopped.
+            "identity.recheck_domains",
+            "identity.purge_assertion_payloads",
+            "identity.sweep_replay_guard",
+            "identity.sweep_auth_requests",
         }
     ),
     allow_heavy=frozenset(),
     description=(
         "Thin image. Sampling, housekeeping, notification delivery, rollups, "
-        "reconciliation, automation execution, document verification, and "
-        "Stripe reconciliation."
+        "reconciliation, automation execution, document verification, Stripe "
+        "reconciliation, and ARCH-16 identity hygiene."
     ),
 )
 
@@ -124,6 +135,22 @@ def assert_imports_match_profile(profile: WorkerProfile) -> None:
             f"profile {profile.name!r} claims job types that need "
             f"{', '.join(missing)}, which are not installed in this image."
         )
+
+    # A handler with no profile is a job that enqueues successfully and never
+    # runs -- indistinguishable from a slow queue until someone notices a
+    # stall days later. Worth one registry check at every worker's startup to
+    # make that failure mode impossible instead of merely testable.
+    from app.services.job_service import JOB_HANDLERS
+
+    if JOB_HANDLERS:
+        uncovered = uncovered_job_types(JOB_HANDLERS.keys())
+        if uncovered:
+            raise ProfileError(
+                "these job types have registered handlers but no worker "
+                f"profile claims them: {sorted(uncovered)}. Jobs of these "
+                "types would sit QUEUED forever. Add them to LIGHT, OCR, or "
+                "ENRICH in app/workers/profiles.py."
+            )
 
     logger.info(
         "worker.profile",

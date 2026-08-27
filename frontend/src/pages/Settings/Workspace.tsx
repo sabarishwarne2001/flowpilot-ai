@@ -94,8 +94,9 @@ export const Workspace: React.FC = () => {
   });
 
   const { data: pendingInvitations, isLoading: isLoadingInvitations } = useQuery({
-    queryKey: ["workspaces", "invitations", workspaceId],
-    queryFn: () => listPendingInvitations(workspaceId),
+    queryKey: ["organizations", "invitations", organizationId],
+    queryFn: () => listPendingInvitations(organizationId),
+    enabled: Boolean(organizationId),
   });
 
   useEffect(() => {
@@ -167,10 +168,10 @@ export const Workspace: React.FC = () => {
 
   const { mutateAsync: sendInviteMutation, isPending: isInviting } = useMutation({
     mutationFn: (payload: { email: string; role: WorkspaceRole }) =>
-      createInvitation(workspaceId, payload),
+      createInvitation(organizationId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["workspaces", "invitations", workspaceId],
+        queryKey: ["organizations", "invitations", organizationId],
       });
       setInviteEmail("");
       setInviteRole("VIEWER");
@@ -184,10 +185,10 @@ export const Workspace: React.FC = () => {
   });
 
   const { mutateAsync: revokeInviteMutation } = useMutation({
-    mutationFn: (invitationId: string) => revokeInvitation(workspaceId, invitationId),
+    mutationFn: (invitationId: string) => revokeInvitation(organizationId, invitationId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["workspaces", "invitations", workspaceId],
+        queryKey: ["organizations", "invitations", organizationId],
       });
       toast.success("Invitation revoked successfully.");
     },
@@ -199,10 +200,10 @@ export const Workspace: React.FC = () => {
   });
 
   const { mutateAsync: resendInviteMutation } = useMutation({
-    mutationFn: (invitationId: string) => resendInvitation(workspaceId, invitationId),
+    mutationFn: (invitationId: string) => resendInvitation(organizationId, invitationId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["workspaces", "invitations", workspaceId],
+        queryKey: ["organizations", "invitations", organizationId],
       });
       toast.success("Invitation resent successfully.");
     },
