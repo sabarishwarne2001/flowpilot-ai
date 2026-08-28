@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
+from app.core.config import settings
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -24,7 +26,12 @@ from app.schemas.invoice import (
     SeatSyncRequest,
     SubscriptionStateResponse,
 )
-from app.services import audit_service
+from app.schemas.usage import (
+    PlanEntitlement,
+    PlanListResponse,
+    PlanOption,
+)
+from app.services import audit_service, quota_service
 from app.services.billing import (
     account_service,
     dunning_service,
@@ -65,6 +72,64 @@ def _invoice_or_404(
 # ============================================================================
 # Reads
 # ============================================================================
+
+
+@router.get(
+    "/organizations/{organization_id}/billing/plans",
+    response_model=PlanListResponse,
+    summary="Plans this organization could subscribe to",
+)
+def list_plans(
+    organization_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgBillingReader),
+) -> PlanListResponse:
+    """Read-only projection of published quota tiers."""
+    moment = datetime.now(timezone.utc)
+
+    current = quota_service.resolve_tier(
+        db, organization_id=context.organization_id, at=moment
+    )
+    current_key = current.key if current else None
+
+    tiers = quota_service.list_published_tiers(db, at=moment)
+
+    plans: list[PlanOption] = []
+    for tier in tiers:
+        entitlements = [
+            PlanEntitlement(
+                event_type=entry.limit_key,
+                limit_quantity=int(entry.max_quantity) if entry.max_quantity is not None else None,
+                limit_cost_micros=entry.max_cost_micros,
+                overage_policy=entry.overage_policy,
+                period=entry.period.value if hasattr(entry.period, "value") else str(entry.period),
+            )
+            for entry in tier.entries
+        ]
+
+        price_id = getattr(settings, "BILLING_SEAT_PRICE_ID", None)
+
+        plans.append(
+            PlanOption(
+                key=tier.key,
+                display_name=tier.display_name,
+                version=tier.version,
+                is_current=(tier.key == current_key),
+                price_id=price_id,
+                unit_amount=None,
+                currency=None,
+                interval=None,
+                entitlements=entitlements,
+                notes=None,
+            )
+        )
+
+    return PlanListResponse(
+        organization_id=context.organization_id,
+        current_tier_key=current_key,
+        as_of=moment,
+        plans=plans,
+    )
 
 
 @router.get(

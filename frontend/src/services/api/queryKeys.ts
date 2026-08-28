@@ -60,6 +60,8 @@ export const organizationScope = (organizationId: string) =>
 export const billingKeys = {
   all: (organizationId: string) =>
     [...organizationScope(organizationId), "billing"] as const,
+  plans: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "plans"] as const,
   subscription: (organizationId: string) =>
     [...billingKeys.all(organizationId), "subscription"] as const,
   access: (organizationId: string) =>

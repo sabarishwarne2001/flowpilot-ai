@@ -1,4 +1,4 @@
-"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
+﻿"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
 
 from __future__ import annotations
 
@@ -163,8 +163,54 @@ class SpendLimitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
+# =============================================================================
+# Plan list endpoint schemas (Deliverable A)
+# =============================================================================
+
+
+class PlanEntitlement(BaseModel):
+    """One metered limit inside a plan, as the server computed it."""
+
+    event_type: str
+    limit_quantity: Optional[int] = None
+    limit_cost_micros: Optional[int] = None
+    overage_policy: str
+    period: str
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class PlanOption(BaseModel):
+    """A tier a customer could subscribe to."""
+
+    key: str
+    display_name: str
+    version: int
+    is_current: bool
+    price_id: Optional[str] = None
+    unit_amount: Optional[int] = None
+    currency: Optional[str] = None
+    interval: Optional[str] = None
+    entitlements: list[PlanEntitlement] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class PlanListResponse(BaseModel):
+    organization_id: uuid.UUID
+    current_tier_key: Optional[str] = None
+    as_of: datetime
+    plans: list[PlanOption]
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
 __all__ = [
     "MAX_SERIES_BUCKETS",
+    "PlanEntitlement",
+    "PlanListResponse",
+    "PlanOption",
     "SpendLimitPeriod",
     "SpendLimitResponse",
     "SpendLimitUpdate",

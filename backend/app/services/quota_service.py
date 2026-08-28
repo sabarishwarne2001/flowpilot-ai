@@ -202,11 +202,7 @@ def _organization_tier_key(db: Session, organization_id: uuid.UUID) -> Optional[
 
 
 def _pinned_tier_id(db: Session, organization_id: uuid.UUID) -> Optional[uuid.UUID]:
-    """ARCH-15 Step 15.3 — the tier version the live subscription pins.
-
-    This is the *id* of one specific published version, not a key. That
-    distinction is the whole of F3.
-    """
+    """ARCH-15 Step 15.3 — the tier version the live subscription pins."""
     from app.models.billing_account import BillingAccount
     from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
 
@@ -224,17 +220,7 @@ def _pinned_tier_id(db: Session, organization_id: uuid.UUID) -> Optional[uuid.UU
 
 
 def _tier_by_id(db: Session, tier_id: uuid.UUID) -> Optional[_TierSnapshot]:
-    """Load one tier version by id, active or superseded.
-
-    The `_tiers()` cache only holds versions that are currently active, which
-    is exactly the wrong set here: a subscription may legitimately be pinned
-    to a version that has since been superseded, and that is the case where
-    reading the pin matters most.
-
-    Published tiers are immutable (the ARCH-14 trigger enforces it), so this
-    result is cacheable indefinitely; it shares the tier TTL only so a
-    mistakenly-published draft does not linger past a restart.
-    """
+    """Load one tier version by id, active or superseded."""
     for snapshot in _tiers(db):
         if snapshot.id == tier_id:
             return snapshot
@@ -250,18 +236,6 @@ def _tier_by_id(db: Session, tier_id: uuid.UUID) -> Optional[_TierSnapshot]:
 def resolve_tier(
     db: Session, *, organization_id: uuid.UUID, at: Optional[datetime] = None
 ) -> Optional[_TierSnapshot]:
-    # ARCH-15 Step 15.3 (F3). A tenant with a live subscription is entitled to
-    # the tier version its subscription *pins*, not to whichever version of
-    # that key happens to be in force right now.
-    #
-    # The difference is not academic. Publishing `business/v4` with a smaller
-    # allowance would otherwise silently re-entitle every customer on
-    # `business/v3` — mid-period, against an invoice already computed from v3's
-    # allowance — and the answer to "why was I refused on March 14?" would
-    # change in July. Gate 15.3 fails if this returns the active version.
-    #
-    # Returned without a `covers(at)` check on purpose: being pinned is
-    # precisely being exempt from the effective window.
     pinned_id = _pinned_tier_id(db, organization_id)
     if pinned_id is not None:
         pinned = _tier_by_id(db, pinned_id)
@@ -834,6 +808,29 @@ def assign_tier(
     return tier
 
 
+def list_published_tiers(
+    db: Session,
+    *,
+    at: Optional[datetime] = None,
+) -> list[_TierSnapshot]:
+    """Every tier a customer could currently be sold, newest version per key."""
+    moment = _as_utc(at or datetime.now(timezone.utc))
+
+    live: dict[str, _TierSnapshot] = {}
+    for tier in _tiers(db):
+        if tier.effective_from and _as_utc(tier.effective_from) > moment:
+            continue
+        if tier.effective_to and _as_utc(tier.effective_to) <= moment:
+            continue
+
+        existing = live.get(tier.key)
+        if existing is None or tier.version > existing.version:
+            live[tier.key] = tier
+
+    rank = {"free": 0, "developer": 1, "business": 2, "enterprise": 3}
+    return sorted(live.values(), key=lambda t: (rank.get(t.key, 99), t.key))
+
+
 __all__ = [
     "OverageOutcome",
     "OveragePolicy",
@@ -845,6 +842,7 @@ __all__ = [
     "assign_tier",
     "bill_overage_if_any",
     "clear_cache",
+    "list_published_tiers",
     "publish_tier",
     "quota_status",
     "resolve_tier",

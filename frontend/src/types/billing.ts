@@ -213,6 +213,36 @@ export interface EphemeralSessionResponse {
   readonly expires_at?: string | null;
 }
 
+// --- Plan List DTOs ---
+
+export interface PlanEntitlement {
+  readonly event_type: string;
+  readonly limit_quantity: number | null;
+  readonly limit_cost_micros: number | null;
+  readonly overage_policy: string;
+  readonly period: string;
+}
+
+export interface PlanOption {
+  readonly key: string;
+  readonly display_name: string;
+  readonly version: number;
+  readonly is_current: boolean;
+  readonly price_id: string | null;
+  readonly unit_amount: number | null;
+  readonly currency: string | null;
+  readonly interval: string | null;
+  readonly entitlements: readonly PlanEntitlement[];
+  readonly notes: string | null;
+}
+
+export interface PlanListResponse {
+  readonly organization_id: string;
+  readonly current_tier_key: string | null;
+  readonly as_of: string;
+  readonly plans: readonly PlanOption[];
+}
+
 export const microsToUnits = (micros: number): number => micros / 1_000_000;
 
 export const formatMicros = (

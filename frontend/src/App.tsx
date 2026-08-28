@@ -20,6 +20,7 @@ import { Assistant } from "@/pages/Assistant/Assistant";
 import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
 
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
+const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
   () => import("@/pages/identity/IdentityAdminHub"),
 );
@@ -152,6 +153,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationBilling}
                       element={<BillingHub />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationBillingReturn}
+                      element={<CheckoutReturn />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.organizationIdentity}

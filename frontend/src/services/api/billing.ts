@@ -6,6 +6,7 @@ import type {
   InvoiceDetailResponse,
   InvoiceListResponse,
   InvoiceReproductionResponse,
+  PlanListResponse,
   PortalSessionRequest,
   SeatSyncRequest,
   SubscriptionStateResponse,
@@ -37,6 +38,8 @@ const ws = (workspaceId: string): string => {
 };
 
 export const BILLING_ENDPOINTS = {
+  plans: (organizationId: string) =>
+    `/organizations/${org(organizationId)}/billing/plans`,
   subscription: (organizationId: string) =>
     `/organizations/${org(organizationId)}/billing/subscription`,
   access: (organizationId: string) =>
@@ -67,6 +70,15 @@ export const BILLING_ENDPOINTS = {
   workspaceUsageSeries: (workspaceId: string) =>
     `/workspaces/${ws(workspaceId)}/usage/series`,
 } as const;
+
+export const getPlans = async (
+  organizationId: string,
+): Promise<PlanListResponse> => {
+  const response = await apiClient.get<PlanListResponse>(
+    BILLING_ENDPOINTS.plans(organizationId),
+  );
+  return response.data;
+};
 
 export const getSubscriptionState = async (
   organizationId: string,
@@ -218,6 +230,7 @@ export const syncSeats = async (
 };
 
 export const billingApi = {
+  getPlans,
   getSubscriptionState,
   getBillingAccess,
   getUsageSummary,

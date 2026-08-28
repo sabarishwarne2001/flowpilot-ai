@@ -4,6 +4,7 @@ import { ExternalLink, Loader2 } from "lucide-react";
 
 import DunningBanner from "@/components/billing/DunningBanner";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
+import PlanSelector from "@/pages/billing/PlanSelector";
 import SeatManager from "@/pages/billing/SeatManager";
 import UsageDashboard from "@/pages/billing/UsageDashboard";
 import {
@@ -85,6 +86,17 @@ export const BillingHub: React.FC = () => {
           </div>
         ) : (
           <>
+            {/* Primary view when there is no subscription */}
+            {!state?.subscription && (
+              <PlanSelector
+                organizationId={organizationId}
+                organizationSlug={organization.organization_slug}
+                canManageBilling={canManageBilling}
+                hasSubscription={false}
+                currentSeats={state?.seats_purchased ?? 1}
+              />
+            )}
+
             <UsageDashboard organizationId={organizationId} />
 
             <SeatManager
@@ -93,6 +105,17 @@ export const BillingHub: React.FC = () => {
             />
 
             <InvoiceBrowser organizationId={organizationId} />
+
+            {/* Secondary view to allow upgrading / changing plan */}
+            {state?.subscription && (
+              <PlanSelector
+                organizationId={organizationId}
+                organizationSlug={organization.organization_slug}
+                canManageBilling={canManageBilling}
+                hasSubscription
+                currentSeats={state.seats_purchased}
+              />
+            )}
           </>
         )}
 
