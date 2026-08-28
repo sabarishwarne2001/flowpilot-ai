@@ -102,6 +102,19 @@ def reconcile_subscription(db: Session, event: StripeEvent) -> ReconcileOutcome:
     if account is None:
         account = _adopt_customer_from_metadata(db, snapshot.customer_id)
 
+    # Fallback to subscription metadata if customer carried no organization_id
+    if account is None and snapshot.metadata and snapshot.metadata.get("organization_id"):
+        try:
+            org_id = uuid.UUID(str(snapshot.metadata["organization_id"]))
+            account = account_service.adopt_customer(
+                db,
+                organization_id=org_id,
+                stripe_customer_id=snapshot.customer_id,
+                currency=snapshot.currency,
+            )
+        except (ValueError, TypeError):
+            pass
+
     if account is None:
         raise ReconcileRefused(
             f"Stripe customer {snapshot.customer_id} maps to no organization. "
@@ -166,10 +179,8 @@ def reconcile_customer(db: Session, event: StripeEvent) -> ReconcileOutcome:
         account = _adopt_customer_from_metadata(db, customer_id, snapshot=snapshot)
 
     if account is None:
-        raise ReconcileRefused(
-            f"Stripe customer {customer_id} carries no "
-            "`metadata.organization_id` and matches no billing account. It "
-            "belongs to no tenant we can name."
+        return ReconcileOutcome.ignored(
+            "customer_unmapped_to_org", stripe_customer_id=customer_id
         )
 
     return ReconcileOutcome.processed(
@@ -230,10 +241,25 @@ def reconcile_invoice(db: Session, event: StripeEvent) -> ReconcileOutcome:
     )
     if account is None:
         account = _adopt_customer_from_metadata(db, snapshot.customer_id)
+
+    # Fallback to subscription metadata if customer had no metadata
+    if account is None and snapshot.subscription_id:
+        try:
+            sub_snapshot = stripe_gateway.get_gateway().fetch_subscription(snapshot.subscription_id)
+            if sub_snapshot.metadata and sub_snapshot.metadata.get("organization_id"):
+                org_id = uuid.UUID(str(sub_snapshot.metadata["organization_id"]))
+                account = account_service.adopt_customer(
+                    db,
+                    organization_id=org_id,
+                    stripe_customer_id=snapshot.customer_id,
+                    currency=snapshot.currency,
+                )
+        except Exception:
+            pass
+
     if account is None:
-        raise ReconcileRefused(
-            f"Stripe invoice {stripe_invoice_id} belongs to customer "
-            f"{snapshot.customer_id}, which maps to no organization."
+        return ReconcileOutcome.ignored(
+            "invoice_unmapped_to_org", stripe_invoice_id=stripe_invoice_id
         )
 
     invoice = invoice_service.get_by_stripe_id(

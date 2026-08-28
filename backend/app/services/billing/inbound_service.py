@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import func, select, update
@@ -58,6 +59,17 @@ class LivemodeMismatchError(InboundEventError):
     """A test-mode event arrived at a live-mode deployment, or the reverse."""
 
 
+def _sanitize_for_json(val: Any) -> Any:
+    """Recursively convert Decimals and non-JSON native types."""
+    if isinstance(val, Decimal):
+        return float(val) if val % 1 else int(val)
+    if isinstance(val, dict):
+        return {str(k): _sanitize_for_json(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple, set)):
+        return [_sanitize_for_json(x) for x in val]
+    return val
+
+
 def _truncate(value: str, limit: int = 4000) -> str:
     if len(value) <= limit:
         return value
@@ -71,14 +83,7 @@ def _backoff(attempts: int) -> timedelta:
 
 
 def assert_livemode(event: StripeEvent) -> None:
-    """Refuse an event from the wrong Stripe mode.
-
-    A test-mode event written into a live database will happily overwrite a
-    real subscription with a fixture, and the customer's next invoice is the
-    first anyone hears about it. Both directions are refused: a live event
-    landing in a test deployment means production traffic is pointed at a
-    staging endpoint, which is equally worth stopping.
-    """
+    """Refuse an event from the wrong Stripe mode."""
     expected = bool(settings.STRIPE_LIVEMODE)
     if bool(event.livemode) is not expected:
         raise LivemodeMismatchError(
@@ -89,13 +94,7 @@ def assert_livemode(event: StripeEvent) -> None:
 
 
 def resolve_organization_id(db: Session, event: StripeEvent) -> Optional[uuid.UUID]:
-    """Best-effort tenancy, discovered from the payload.
-
-    The endpoint has no bearer token and no tenant in its path — the tenant is
-    a property of the event body, not of the request. A miss is normal and not
-    an error: the very first `customer.created` for a tenant arrives before
-    there is a row to join to, and the reconciler backfills it.
-    """
+    """Best-effort tenancy, discovered from the payload."""
     from app.models.billing_account import BillingAccount
 
     obj = event.data_object
@@ -108,6 +107,17 @@ def resolve_organization_id(db: Session, event: StripeEvent) -> Optional[uuid.UU
         customer_id = str(raw_customer)
     elif str(obj.get("object") or "") == "customer" and obj.get("id"):
         customer_id = str(obj["id"])
+
+    # Fallback to metadata on subscription or checkout objects
+    raw_org = (obj.get("metadata") or {}).get("organization_id")
+    if not raw_org and obj.get("subscription_data"):
+        raw_org = (obj.get("subscription_data", {}).get("metadata") or {}).get("organization_id")
+
+    if raw_org:
+        try:
+            return uuid.UUID(str(raw_org))
+        except (TypeError, ValueError):
+            pass
 
     if not customer_id:
         return None
@@ -126,17 +136,7 @@ def record_event(
     signature_header: str,
     organization_id: Optional[uuid.UUID] = None,
 ) -> tuple[Optional[uuid.UUID], bool]:
-    """Persist a verified event exactly once.
-
-    Returns `(row_id, created)`. `created is False` means this is a replay:
-    Stripe re-delivered an event whose `event.id` we already hold, the UNIQUE
-    index refused the second insert, and the correct response is still 200 —
-    a non-2xx would make Stripe retry a delivery that already succeeded.
-
-    A10 lives in the index, not in a `SELECT ... IF NOT EXISTS` above it. Two
-    concurrent deliveries of the same event will both pass a read-then-write
-    check and both insert; only a UNIQUE constraint actually holds.
-    """
+    """Persist a verified event exactly once."""
     assert_livemode(event)
 
     values: dict[str, Any] = {
@@ -145,7 +145,7 @@ def record_event(
         "api_version": event.api_version,
         "stripe_created_at": event.created,
         "livemode": bool(event.livemode),
-        "payload": event.payload,
+        "payload": _sanitize_for_json(dict(event.payload or {})),
         "signature_header": signature_header,
         "organization_id": organization_id,
         "status": StripeInboundStatus.PENDING.value,
@@ -169,7 +169,7 @@ def record_event(
         extra={
             "stripe_event_id": event.id,
             "event_type": event.type,
-            "created": created,
+            "is_created": created,
             "organization_id": str(organization_id) if organization_id else None,
         },
     )
@@ -188,12 +188,6 @@ def claim_batch(
     batch_size: Optional[int] = None,
     lease_seconds: Optional[int] = None,
 ) -> list[StripeInboundEvent]:
-    """Lease a batch. No new lease machinery — the fourth `QueueSpec`.
-
-    `per_org_cap` is deliberately not offered: `organization_id` is nullable on
-    this table, so every unresolved event would land in one NULL partition and
-    the cap would throttle the exact rows that most need processing.
-    """
     return claim_eligible_rows(
         db,
         STRIPE_INBOUND_QUEUE,
@@ -204,7 +198,6 @@ def claim_batch(
 
 
 def reap_expired_leases(db: Session, *, limit: int = 500) -> int:
-    """Release leases held by workers that never reported a result."""
     return release_expired_leases(db, STRIPE_INBOUND_QUEUE, limit=limit)
 
 
@@ -245,12 +238,6 @@ def mark_processed(
 def mark_ignored(
     db: Session, event_id: uuid.UUID, *, reason: str, detail: Optional[str] = None
 ) -> None:
-    """Terminal, and deliberately not PROCESSED.
-
-    `reason` is a machine-readable token so an operator can ask "how many
-    events did we ignore because they belong to Tranche 3?" and get an answer
-    rather than a guess.
-    """
     _terminal(
         db,
         event_id,
@@ -267,12 +254,6 @@ def mark_failed(
     max_attempts: int,
     error: str,
 ) -> StripeInboundStatus:
-    """Push the row out for another attempt, or dead-letter it.
-
-    A dead inbound event is not a customer's endpoint being down. It is
-    billing state we failed to apply, and it needs a human and a runbook —
-    which is why it has its own index and its own alert.
-    """
     if attempts >= max_attempts:
         _terminal(
             db, event_id, status=StripeInboundStatus.DEAD, error=error,
@@ -306,7 +287,6 @@ def mark_failed(
 def attach_organization(
     db: Session, event_id: uuid.UUID, *, organization_id: uuid.UUID
 ) -> None:
-    """Backfill tenancy once the reconciler has discovered it."""
     db.execute(
         update(StripeInboundEvent)
         .where(

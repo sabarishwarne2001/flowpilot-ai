@@ -1,4 +1,4 @@
-"""ARCH-15 Step 15.1 — `POST /api/v1/billing/stripe/webhook`.
+"""ARCH-15 Step 15.1 — Stripe webhook receiver.
 
 UNAUTHENTICATED BY DESIGN, AND WHY THAT IS NOT A HOLE
 =====================================================
@@ -6,8 +6,8 @@ UNAUTHENTICATED BY DESIGN, AND WHY THAT IS NOT A HOLE
 There is no bearer token because Stripe does not have one. There is no tenant
 in the path because the tenant is a property of the event body, not of the
 request. What replaces both is the signature: a body that does not verify
-against a configured endpoint secret is refused with 400 and **persisted
-nowhere**, because a row per unverified POST is a free disk-fill for anybody
+against a configured endpoint secret is refused with 400 and persisted
+nowhere, because a row per unverified POST is a free disk-fill for anybody
 who finds the URL.
 
 This route is therefore exempt from:
@@ -57,6 +57,13 @@ WEBHOOK_PATH = "/billing/stripe/webhook"
 
 
 @router.post(
+    "/billing/webhooks/stripe",
+    response_model=StripeWebhookAck,
+    status_code=status.HTTP_200_OK,
+    summary="Stripe webhook receiver",
+    include_in_schema=False,
+)
+@router.post(
     WEBHOOK_PATH,
     response_model=StripeWebhookAck,
     status_code=status.HTTP_200_OK,
@@ -92,11 +99,12 @@ async def receive_stripe_webhook(
 
     try:
         event = stripe_gateway.get_gateway().verify_event(
-            payload=raw_body, signature_header=stripe_signature
+            payload=raw_body,
+            signature_header=stripe_signature,
         )
     except StripeSignatureError as exc:
         # 400 and no row. The detail is deliberately generic: telling an
-        # unauthenticated caller *why* verification failed is telling them how
+        # unauthenticated caller why verification failed is telling them how
         # to get closer.
         logger.warning(
             "stripe_webhook.signature_rejected",
@@ -129,7 +137,10 @@ async def receive_stripe_webhook(
         # 400 rather than 200: this is a misconfiguration on one side or the
         # other, and acknowledging would make it invisible. Stripe will retry,
         # which is the correct outcome once the endpoint secret is fixed.
-        logger.error("stripe_webhook.livemode_mismatch", extra={"error": str(exc)})
+        logger.error(
+            "stripe_webhook.livemode_mismatch",
+            extra={"error": str(exc)},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Event mode does not match this deployment.",
@@ -141,7 +152,10 @@ async def receive_stripe_webhook(
         # whole tranche exists to make impossible.
         logger.exception(
             "stripe_webhook.persist_failed",
-            extra={"stripe_event_id": event.id, "event_type": event.type},
+            extra={
+                "stripe_event_id": event.id,
+                "event_type": event.type,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

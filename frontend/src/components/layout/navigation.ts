@@ -1,14 +1,15 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  ClipboardCheck,
+  CreditCard,
   FileText,
   LayoutDashboard,
   MessageSquare,
-  ClipboardCheck,
-  CreditCard,
+  ScrollText,
   Settings,
   ShieldCheck,
-  ScrollText,
   Sliders,
+  Users,
 } from "lucide-react";
 
 import {
@@ -17,6 +18,7 @@ import {
   organizationAuditPath,
   organizationBillingPath,
   organizationIdentityPath,
+  organizationMembersPath,
   verificationPath,
   workItemsPath,
   workspaceDashboardPath,
@@ -66,7 +68,7 @@ export const buildNavigationItems = (
 ];
 
 /**
- * Organization-scoped navigation (Billing, Enterprise identity, Audit log).
+ * Organization-scoped navigation (Members, Billing, Enterprise identity, Audit log).
  *
  * Role-gated here rather than in the consuming component, so a MEMBER with no
  * organization-level standing gets an empty array and the caller never has to
@@ -78,6 +80,14 @@ export const buildOrganizationNavigationItems = (
 ): readonly NavigationItem[] => {
   const role = String(organizationRole).toUpperCase();
   const items: NavigationItem[] = [];
+
+  if (role === "OWNER" || role === "ADMIN") {
+    items.push({
+      name: "Members",
+      path: organizationMembersPath(orgSlug),
+      icon: Users,
+    });
+  }
 
   if (role === "OWNER" || role === "BILLING") {
     items.push({

@@ -11,7 +11,6 @@ interface PlanSelectorProps {
   readonly organizationId: string;
   readonly organizationSlug: string;
   readonly canManageBilling: boolean;
-  /** True when the org already has a subscription; changes copy and framing. */
   readonly hasSubscription: boolean;
   readonly currentSeats: number;
 }
@@ -67,7 +66,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
   if (isLoading) {
     return (
-      <section className="rounded-lg border border-border p-4">
+      <section className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading plans…
@@ -78,7 +77,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
   if (isError) {
     return (
-      <section className="rounded-lg border border-border p-4">
+      <section className="rounded-lg border border-border bg-card p-4">
         <p role="alert" className="text-sm text-destructive">
           Plans couldn&apos;t be loaded.
         </p>
@@ -95,11 +94,11 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
   if (plans.length === 0) {
     return (
-      <section className="rounded-lg border border-border p-4">
+      <section className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">No plans are available yet</p>
+            <p className="text-sm font-medium text-foreground">No plans are available yet</p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Nothing is published for this organization to subscribe to. If you
               expected plans here, contact support.
@@ -111,9 +110,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   }
 
   return (
-    <section className="rounded-lg border border-border">
+    <section className="rounded-lg border border-border bg-card">
       <header className="border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">
+        <h2 className="text-sm font-semibold text-foreground">
           {hasSubscription ? "Change plan" : "Choose a plan"}
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -130,7 +129,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <li key={plan.key}>
               <label
                 className={`flex cursor-pointer items-start gap-3 p-4 transition-colors ${
-                  isSelected ? "bg-muted/50" : "hover:bg-muted/30"
+                  isSelected ? "bg-muted/40" : "hover:bg-muted/20"
                 }`}
               >
                 <input
@@ -148,7 +147,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="text-sm font-medium">
+                    <span className="text-sm font-semibold text-foreground">
                       {plan.display_name}
                     </span>
                     {plan.is_current && (
@@ -159,7 +158,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     )}
                   </div>
 
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">
                     {formatPrice(plan)}
                   </p>
 
@@ -170,15 +169,15 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   )}
 
                   {plan.entitlements.length > 0 && (
-                    <ul className="mt-2 space-y-0.5">
-                      {plan.entitlements.slice(0, 4).map((e) => (
+                    <ul className="mt-2 space-y-1">
+                      {plan.entitlements.slice(0, 5).map((e) => (
                         <li
                           key={e.event_type}
                           className="text-xs text-muted-foreground"
                         >
-                          {e.event_type}:{" "}
+                          <span className="font-mono text-[11px] text-foreground/80">{e.event_type}</span>:{" "}
                           {e.limit_quantity === null
-                            ? "unlimited"
+                            ? "Unlimited"
                             : `${e.limit_quantity.toLocaleString()} per ${e.period.toLowerCase()}`}
                         </li>
                       ))}
@@ -192,10 +191,10 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
       </ul>
 
       {selected && !selected.is_current && (
-        <div className="space-y-3 border-t border-border p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="seat-count" className="text-sm">
-              Seats
+        <div className="space-y-3 border-t border-border bg-muted/10 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="seat-count" className="text-sm font-medium text-foreground">
+              Seats:
             </label>
             <input
               id="seat-count"
@@ -208,31 +207,30 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                 setSeats(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), 10000));
                 setConfirming(false);
               }}
-              className="w-24 rounded-md border border-border px-2 py-1 text-sm"
+              className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="text-xs text-muted-foreground">
-              You&apos;ll see the total on the next screen, before you pay.
+              You&apos;ll see the total on Stripe, before you pay.
             </span>
           </div>
 
           {checkout.isError && (
             <p role="alert" className="text-sm text-destructive">
-              Checkout couldn&apos;t be started. Your card was not charged.
-              Please try again, or contact support if this continues.
+              Checkout couldn&apos;t be started. Please check server logs and try again.
             </p>
           )}
 
           {confirming ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm">
-                Continue to payment for {selected.display_name}, {seats}{" "}
-                {seats === 1 ? "seat" : "seats"}?
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-sm text-foreground">
+                Continue to payment for <strong>{selected.display_name}</strong> ({seats}{" "}
+                {seats === 1 ? "seat" : "seats"})?
               </span>
               <button
                 type="button"
                 onClick={() => checkout.mutate(selected)}
                 disabled={checkout.isPending}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
               >
                 {checkout.isPending && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -243,7 +241,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={checkout.isPending}
-                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
               >
                 Back
               </button>
@@ -252,7 +250,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               {hasSubscription ? "Change to this plan" : "Subscribe"}
             </button>

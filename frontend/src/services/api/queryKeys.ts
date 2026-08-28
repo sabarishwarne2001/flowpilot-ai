@@ -57,6 +57,12 @@ export const settingsKeys = {
 export const organizationScope = (organizationId: string) =>
   ["org", organizationId] as const;
 
+export const organizationKeys = {
+  all: (organizationId: string) => organizationScope(organizationId),
+  members: (organizationId: string, includeInactive: boolean) =>
+    [...organizationScope(organizationId), "members", { includeInactive }] as const,
+};
+
 export const billingKeys = {
   all: (organizationId: string) =>
     [...organizationScope(organizationId), "billing"] as const,

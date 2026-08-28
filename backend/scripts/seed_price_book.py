@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""ARCH-14 Step 1 — publish a price book.
-
-    python -m scripts.seed_price_book --version 1 --effective-from 2026-08-01T00:00:00Z
-    python -m scripts.seed_price_book --version 2 --from-json prices/v2.json --dry-run
-"""
+"""ARCH-14 Step 1 — publish a price book."""
 
 from __future__ import annotations
 
@@ -98,6 +94,39 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "model": None,
         "unit_price_micros": "0",
         "notes": "Non-billable document counter.",
+    },
+    # --- Overage pricing entries required by Quota Tiers ---
+    {
+        "event_type": "storage.gb_month.overage",
+        "provider": "internal",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "50000.000000000",
+        "notes": "$0.05 per overage GB-month.",
+    },
+    {
+        "event_type": "ocr.page.overage",
+        "provider": "paddleocr",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "10000.000000000",
+        "notes": "$0.01 per overage OCR page.",
+    },
+    {
+        "event_type": "llm.input_token.overage",
+        "provider": "groq",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "1.000000000",
+        "notes": "Overage rate for Groq input tokens.",
+    },
+    {
+        "event_type": "llm.output_token.overage",
+        "provider": "groq",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "2.000000000",
+        "notes": "Overage rate for Groq output tokens.",
     },
 ]
 

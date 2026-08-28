@@ -19,6 +19,9 @@ import { OrganizationLayout } from "@/layouts/OrganizationLayout";
 import { Assistant } from "@/pages/Assistant/Assistant";
 import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
 
+const OrganizationMembers = lazy(
+  () => import("@/pages/organization/OrganizationMembers"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -150,6 +153,10 @@ export default function App() {
                   element={<OrganizationGuard />}
                 >
                   <Route element={<OrganizationLayout />}>
+                    <Route
+                      path={ROUTE_PATTERNS.organizationMembers}
+                      element={<OrganizationMembers />}
+                    />
                     <Route
                       path={ROUTE_PATTERNS.organizationBilling}
                       element={<BillingHub />}
