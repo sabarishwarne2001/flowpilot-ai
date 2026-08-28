@@ -24,10 +24,6 @@ const org = (organizationId: string): string => {
 
 const scoped = (workspaceId: string): string => `/workspaces/${ws(workspaceId)}`;
 
-/* ==========================================================================
-   Unscoped — identity and tenancy
-   ========================================================================== */
-
 export const ME_ENDPOINTS = {
   context: "/me/context",
   organizations: "/me/organizations",
@@ -45,6 +41,19 @@ export const ORGANIZATION_ENDPOINTS = {
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
   member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
+} as const;
+
+export const API_KEY_ENDPOINTS = {
+  list: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/api-keys`,
+  create: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/api-keys`,
+  detail: (organizationId: string, keyId: string): string =>
+    `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
+  rotate: (organizationId: string, keyId: string): string =>
+    `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}/rotate`,
+  revoke: (organizationId: string, keyId: string): string =>
+    `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
 } as const;
 
 export const WORKSPACE_ENDPOINTS = {

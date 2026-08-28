@@ -41,6 +41,7 @@ export const ROUTE_PATTERNS = {
   organizationShell: `/organizations/${P_ORG}`,
   organizationSettings: "settings",
   organizationMembers: "members",
+  organizationApiKeys: "api-keys",
   organizationBilling: "billing",
   organizationBillingReturn: "billing/return",
   organizationIdentity: "identity",
@@ -69,6 +70,9 @@ export const organizationSettingsPath = (orgSlug: string): string =>
 
 export const organizationMembersPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/members`;
+
+export const organizationApiKeysPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/api-keys`;
 
 export const organizationBillingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/billing`;
@@ -327,7 +331,7 @@ export const assertTenantPathIntegrity = (): void => {
   }
   // eslint-disable-next-line no-console
   console.error(
-    `[routes] TENANT PATH SELF-CHECK FAILED â€” ${failures.length} case(s):\n  - ` +
+    `[routes] TENANT PATH SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),
   );
 };

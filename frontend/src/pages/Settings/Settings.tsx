@@ -1,10 +1,18 @@
 import React, { useState } from "react";
-import { ShieldAlert, Building2, Mail, Cpu, FileText } from "lucide-react";
+import {
+  Building2,
+  Cpu,
+  FileText,
+  Mail,
+  MonitorSmartphone,
+  ShieldAlert,
+} from "lucide-react";
 
 import Workspace from "./Workspace";
 import EmailSettings from "./EmailSettings";
 import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
+import SessionManagement from "./SessionManagement";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 
@@ -22,7 +30,12 @@ export const PermissionDenied: React.FC = () => {
   );
 };
 
-type SettingsSection = "workspace" | "email" | "ai" | "document";
+type SettingsSection =
+  | "workspace"
+  | "email"
+  | "ai"
+  | "document"
+  | "sessions";
 
 interface TabConfig {
   id: SettingsSection;
@@ -35,6 +48,7 @@ const SETTINGS_TABS: readonly TabConfig[] = [
   { id: "email", label: "Email", icon: Mail },
   { id: "ai", label: "AI Settings", icon: Cpu },
   { id: "document", label: "Document Settings", icon: FileText },
+  { id: "sessions", label: "Active sessions", icon: MonitorSmartphone },
 ];
 
 const Settings: React.FC = () => {
@@ -50,12 +64,11 @@ const Settings: React.FC = () => {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your workspace configuration.
+          Manage your workspace and account configuration.
         </p>
       </div>
 
       <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6">
-        {/* Navigation Tabs: Horizontal scrolling on mobile/tablet, Vertical sidebar on desktop */}
         <aside className="lg:col-span-3 rounded-xl border border-border bg-card p-2 sm:p-3 lg:p-4 h-fit">
           <h2 className="hidden lg:block mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Configuration
@@ -87,12 +100,12 @@ const Settings: React.FC = () => {
           </nav>
         </aside>
 
-        {/* Content Panel */}
         <section className="lg:col-span-9 min-w-0">
           {activeSection === "workspace" && <Workspace />}
           {activeSection === "email" && <EmailSettings />}
           {activeSection === "ai" && <AISettings />}
           {activeSection === "document" && <DocumentSettings />}
+          {activeSection === "sessions" && <SessionManagement />}
         </section>
       </div>
     </div>

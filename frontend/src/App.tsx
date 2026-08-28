@@ -22,6 +22,9 @@ import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
 const OrganizationMembers = lazy(
   () => import("@/pages/organization/OrganizationMembers"),
 );
+const OrganizationApiKeys = lazy(
+  () => import("@/pages/organization/OrganizationApiKeys"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -156,6 +159,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationMembers}
                       element={<OrganizationMembers />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationApiKeys}
+                      element={<OrganizationApiKeys />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.organizationBilling}

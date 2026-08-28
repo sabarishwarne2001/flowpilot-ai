@@ -63,6 +63,18 @@ export const organizationKeys = {
     [...organizationScope(organizationId), "members", { includeInactive }] as const,
 };
 
+export const sessionKeys = {
+  all: ["sessions"] as const,
+  list: () => [...sessionKeys.all, "list"] as const,
+};
+
+export const apiKeyKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "api-keys"] as const,
+  list: (organizationId: string) =>
+    [...apiKeyKeys.all(organizationId), "list"] as const,
+};
+
 export const billingKeys = {
   all: (organizationId: string) =>
     [...organizationScope(organizationId), "billing"] as const,

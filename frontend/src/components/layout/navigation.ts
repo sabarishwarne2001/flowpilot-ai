@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   CreditCard,
   FileText,
+  KeyRound,
   LayoutDashboard,
   MessageSquare,
   ScrollText,
@@ -15,6 +16,7 @@ import {
 import {
   assistantPath,
   automationPath,
+  organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
   organizationIdentityPath,
@@ -68,7 +70,7 @@ export const buildNavigationItems = (
 ];
 
 /**
- * Organization-scoped navigation (Members, Billing, Enterprise identity, Audit log).
+ * Organization-scoped navigation (Members, Billing, API keys, Enterprise identity, Audit log).
  *
  * Role-gated here rather than in the consuming component, so a MEMBER with no
  * organization-level standing gets an empty array and the caller never has to
@@ -98,6 +100,11 @@ export const buildOrganizationNavigationItems = (
   }
 
   if (role === "OWNER") {
+    items.push({
+      name: "API keys",
+      path: organizationApiKeysPath(orgSlug),
+      icon: KeyRound,
+    });
     items.push({
       name: "Enterprise identity",
       path: organizationIdentityPath(orgSlug),
