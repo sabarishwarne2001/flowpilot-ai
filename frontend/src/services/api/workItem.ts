@@ -1,7 +1,8 @@
 import type { AxiosProgressEvent, AxiosResponse } from "axios";
 import apiClient from "@/services/api/client";
-import { WORK_ITEM_ENDPOINTS } from "@/services/api/endpoints";
+import { KNOWLEDGE_ENDPOINTS, WORK_ITEM_ENDPOINTS } from "@/services/api/endpoints";
 import type {
+  ReindexResult,
   UploadDocumentResponse,
   WorkItemQueryFilters,
   WorkItemsListResponse,
@@ -82,12 +83,15 @@ export const deleteWorkItem = async (
   });
 };
 
-export const resetKnowledgeBase = async (
+export const reindexKnowledgeBase = async (
   workspaceId: string,
-): Promise<void> => {
-  await apiClient.delete(WORK_ITEM_ENDPOINTS.knowledgeBase(workspaceId), {
-    headers: JSON_HEADERS,
-  });
+): Promise<ReindexResult> => {
+  const response = await apiClient.post<ReindexResult>(
+    KNOWLEDGE_ENDPOINTS.reindex(workspaceId),
+    {},
+    { headers: JSON_HEADERS },
+  );
+  return response.data;
 };
 
 export const workItemApi = {
@@ -96,7 +100,7 @@ export const workItemApi = {
   getWorkItemDetails,
   reprocessWorkItem,
   deleteWorkItem,
-  resetKnowledgeBase,
+  reindexKnowledgeBase,
 };
 
 export default workItemApi;

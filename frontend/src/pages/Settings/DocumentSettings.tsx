@@ -1,30 +1,26 @@
 import React, { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import {
   getDocumentSettings,
   updateDocumentSettings,
 } from "@/services/api/document-settings";
-
 import { ApiError } from "@/services/api/client";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-
 import InfoTooltip from "@/components/common/InfoTooltip";
 import { DOCUMENT_FIELD_HELP } from "@/constants/documentFieldHelp";
-
 import {
   documentSettingsSchema,
   type DocumentSettingsFormData,
 } from "@/schemas/documentSettings";
 import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
+import KnowledgeBaseReindex from "@/components/settings/KnowledgeBaseReindex";
 
 export const DocumentSettings: React.FC = () => {
   const queryClient = useQueryClient();
-
-  // Effective role from TenantContext.
   const { workspace, workspaceRole } = useResolvedTenant();
 
   const {
@@ -142,7 +138,7 @@ export const DocumentSettings: React.FC = () => {
         <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">
           <h3 className="text-sm font-semibold text-blue-300">Ingestion & Processing Parameters</h3>
           <p className="mt-2 text-sm text-slate-300">
-            These parameters control how uploaded files are processed, vectorized, and parsed. Default options are highly optimized for baseline system flows.
+            These parameters control how uploaded files are processed, vectorized, and parsed.
           </p>
         </div>
 
@@ -303,6 +299,12 @@ export const DocumentSettings: React.FC = () => {
 
         {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-destructive">Validation is active.</p>}
       </div>
+
+      {/* Reindex Knowledge Base Section */}
+      <KnowledgeBaseReindex
+        workspaceId={workspace.id}
+        canManage={canManageSettings}
+      />
     </div>
   );
 };

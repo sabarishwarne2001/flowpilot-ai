@@ -43,6 +43,8 @@ export const ROUTE_PATTERNS = {
   organizationMembers: "members",
   organizationApiKeys: "api-keys",
   organizationWebhooks: "webhooks",
+  organizationEmail: "email-settings",
+  organizationNotifications: "notifications",
   organizationBilling: "billing",
   organizationBillingReturn: "billing/return",
   organizationIdentity: "identity",
@@ -77,6 +79,12 @@ export const organizationApiKeysPath = (orgSlug: string): string =>
 
 export const organizationWebhooksPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/webhooks`;
+
+export const organizationEmailPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/email-settings`;
+
+export const organizationNotificationsPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/notifications`;
 
 export const organizationBillingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/billing`;
@@ -329,8 +337,6 @@ export const runTenantPathSelfCheck = (): string[] => {
 export const assertTenantPathIntegrity = (): void => {
   const failures = runTenantPathSelfCheck();
   if (failures.length === 0) {
-    // eslint-disable-next-line no-console
-    console.info("[routes] tenant path self-check passed");
     return;
   }
   // eslint-disable-next-line no-console

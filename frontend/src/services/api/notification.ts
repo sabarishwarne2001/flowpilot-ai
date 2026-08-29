@@ -1,14 +1,18 @@
 import apiClient from "@/services/api/client";
-import { NOTIFICATION_ENDPOINTS } from "@/services/api/endpoints";
+import {
+  NOTIFICATION_ENDPOINTS,
+  ORG_NOTIFICATION_ENDPOINTS,
+} from "@/services/api/endpoints";
 import type {
   Notification,
+  NotificationPage,
   NotificationUpdateRequest,
   MarkAllReadResponse,
 } from "@/types/notification";
 
 export const getNotifications = async (
   workspaceId: string,
-  isRead?: boolean,
+  isRead?: boolean | undefined,
 ): Promise<readonly Notification[]> => {
   const queryParams = new URLSearchParams();
 
@@ -21,7 +25,7 @@ export const getNotifications = async (
     {
       params: queryParams,
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     },
   );
@@ -42,7 +46,7 @@ export const updateNotificationRead = async (
     payload,
     {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     },
   );
@@ -57,7 +61,7 @@ export const markAllNotificationsRead = async (
     null,
     {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     },
   );
@@ -72,10 +76,31 @@ export const deleteNotification = async (
     NOTIFICATION_ENDPOINTS.detail(workspaceId, notificationId),
     {
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     },
   );
+};
+
+export const getOrganizationNotifications = async (
+  organizationId: string,
+  params: {
+    isRead?: boolean | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  } = {},
+): Promise<NotificationPage> => {
+  const response = await apiClient.get<NotificationPage>(
+    ORG_NOTIFICATION_ENDPOINTS.list(organizationId),
+    {
+      params: {
+        ...(params.isRead !== undefined ? { is_read: params.isRead } : {}),
+        limit: params.limit ?? 25,
+        offset: params.offset ?? 0,
+      },
+    },
+  );
+  return response.data;
 };
 
 export const notificationApi = {
@@ -83,6 +108,7 @@ export const notificationApi = {
   updateNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
+  getOrganizationNotifications,
 };
 
 export default notificationApi;

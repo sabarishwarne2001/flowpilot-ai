@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 
 import DunningBanner from "@/components/billing/DunningBanner";
+import ConsumptionDashboard from "@/pages/billing/ConsumptionDashboard";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
 import PlanSelector from "@/pages/billing/PlanSelector";
 import SeatManager from "@/pages/billing/SeatManager";
@@ -50,7 +51,7 @@ export const BillingHub: React.FC = () => {
       <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">Billing</h1>
+            <h1 className="text-xl font-semibold text-foreground">Billing</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {organization.organization_name}
             </p>
@@ -61,7 +62,7 @@ export const BillingHub: React.FC = () => {
               type="button"
               onClick={() => portal.mutate()}
               disabled={portal.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60 text-foreground"
             >
               {portal.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -99,6 +100,11 @@ export const BillingHub: React.FC = () => {
             )}
 
             <UsageDashboard organizationId={organizationId} />
+
+            <ConsumptionDashboard
+              organizationId={organizationId}
+              canManageBilling={canManageBilling}
+            />
 
             <SpendLimitForm
               organizationId={organizationId}

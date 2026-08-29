@@ -1,10 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Bell,
   ClipboardCheck,
   CreditCard,
   FileText,
   KeyRound,
   LayoutDashboard,
+  Mail,
   MessageSquare,
   ScrollText,
   Settings,
@@ -20,8 +22,10 @@ import {
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
+  organizationEmailPath,
   organizationIdentityPath,
   organizationMembersPath,
+  organizationNotificationsPath,
   organizationWebhooksPath,
   verificationPath,
   workItemsPath,
@@ -72,7 +76,7 @@ export const buildNavigationItems = (
 ];
 
 /**
- * Organization-scoped navigation (Members, Billing, API keys, Webhooks, Enterprise identity, Audit log).
+ * Organization-scoped navigation (Members, Email, Notifications, Billing, API keys, Webhooks, Identity, Audit).
  */
 export const buildOrganizationNavigationItems = (
   orgSlug: string,
@@ -81,11 +85,23 @@ export const buildOrganizationNavigationItems = (
   const role = String(organizationRole).toUpperCase();
   const items: NavigationItem[] = [];
 
+  // Available to all organization members
+  items.push({
+    name: "Notifications",
+    path: organizationNotificationsPath(orgSlug),
+    icon: Bell,
+  });
+
   if (role === "OWNER" || role === "ADMIN") {
     items.push({
       name: "Members",
       path: organizationMembersPath(orgSlug),
       icon: Users,
+    });
+    items.push({
+      name: "Email delivery",
+      path: organizationEmailPath(orgSlug),
+      icon: Mail,
     });
   }
 

@@ -7,9 +7,7 @@ const seg = (value: string): string => encodeURIComponent(value);
 const ws = (workspaceId: string): string => {
   if (!workspaceId) {
     throw new Error(
-      "A workspaceId is required to build this URL. The caller rendered " +
-        "before the tenant context resolved — gate the query with " +
-        "`enabled: Boolean(workspaceId)`.",
+      "A workspaceId is required to build this URL. Gate the query with `enabled: Boolean(workspaceId)`.",
     );
   }
   return encodeURIComponent(workspaceId);
@@ -43,6 +41,23 @@ export const ORGANIZATION_ENDPOINTS = {
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
   member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
+} as const;
+
+export const ORG_EMAIL_ENDPOINTS = {
+  settings: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/email-settings`,
+  test: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/email-settings/test`,
+} as const;
+
+export const ORG_NOTIFICATION_ENDPOINTS = {
+  list: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/notifications`,
+} as const;
+
+export const KNOWLEDGE_ENDPOINTS = {
+  reindex: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/work-items/knowledge-base/reindex`,
 } as const;
 
 export const PROFILE_ENDPOINTS = {
@@ -142,8 +157,6 @@ export const WORK_ITEM_ENDPOINTS = {
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}/reprocess`,
   remove: (workspaceId: string, workItemId: string): string =>
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}`,
-  knowledgeBase: (workspaceId: string): string =>
-    `${scoped(workspaceId)}/work-items/knowledge-base`,
 } as const;
 
 export const ASSISTANT_ENDPOINTS = {
@@ -159,7 +172,6 @@ export const ASSISTANT_ENDPOINTS = {
 
 export const DASHBOARD_ENDPOINTS = {
   overview: (workspaceId: string): string => `${scoped(workspaceId)}/dashboard/overview`,
-  health: (workspaceId: string): string => `${scoped(workspaceId)}/dashboard/health`,
 } as const;
 
 export const AUTOMATION_ENDPOINTS = {

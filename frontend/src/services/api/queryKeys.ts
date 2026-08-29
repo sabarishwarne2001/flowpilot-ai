@@ -16,6 +16,10 @@ export const workItemKeys = {
     [...workItemKeys.all(workspaceId), "detail", workItemId] as const,
 };
 
+export const knowledgeKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "knowledge"] as const,
+};
+
 export const dashboardKeys = {
   all: (workspaceId: string) => [...workspaceScope(workspaceId), "dashboard"] as const,
   overview: (workspaceId: string) => [...dashboardKeys.all(workspaceId), "overview"] as const,
@@ -72,6 +76,20 @@ export const organizationKeys = {
   all: (organizationId: string) => organizationScope(organizationId),
   members: (organizationId: string, includeInactive: boolean) =>
     [...organizationScope(organizationId), "members", { includeInactive }] as const,
+};
+
+export const orgEmailKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "email-settings"] as const,
+  settings: (organizationId: string) =>
+    [...orgEmailKeys.all(organizationId), "settings"] as const,
+};
+
+export const orgNotificationKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "notifications"] as const,
+  list: (organizationId: string, isRead?: boolean) =>
+    [...orgNotificationKeys.all(organizationId), { isRead }] as const,
 };
 
 export const sessionKeys = {

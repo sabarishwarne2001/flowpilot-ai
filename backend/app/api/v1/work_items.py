@@ -19,6 +19,8 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -32,6 +34,7 @@ from app.core.storage import (
     assert_key_belongs_to,
     get_storage_driver,
 )
+from app.models.work_item import WorkItem
 from app.models.workspace import WorkspaceRole
 from app.schemas.job import JobResponse
 from app.schemas.work_item import (
@@ -56,6 +59,14 @@ INLINE_RENDERABLE_MIMES: frozenset[str] = frozenset(
         "image/gif",
     }
 )
+
+
+class ReindexResponse(BaseModel):
+    queued: int
+    total_documents: int
+    detail: str
+
+    model_config = ConfigDict(protected_namespaces=())
 
 
 @router.post("", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
@@ -413,6 +424,56 @@ async def reprocess_work_item(
         "job_id": str(job.id),
         "status": "QUEUED",
     }
+
+
+@router.post(
+    "/knowledge-base/reindex",
+    response_model=ReindexResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Re-embed this workspace's documents",
+)
+def reindex_knowledge_base(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
+) -> ReindexResponse:
+    work_item_ids = db.execute(
+        select(WorkItem.id).where(
+            WorkItem.workspace_id == context.workspace_id,
+            WorkItem.status == WorkItemStatus.COMPLETED,
+        )
+    ).scalars().all()
+
+    queued = 0
+    for work_item_id in work_item_ids:
+        job_service.enqueue(
+            db,
+            job_type="knowledge.reindex",
+            organization_id=context.organization_id,
+            payload={
+                "work_item_id": str(work_item_id),
+                "workspace_id": str(context.workspace_id),
+            },
+            idempotency_key=f"knowledge.reindex:{work_item_id}",
+        )
+        queued += 1
+
+    db.commit()
+
+    logger.info(
+        "AUDIT | KNOWLEDGE_REINDEX_REQUESTED | workspace=%s | user=%s | documents=%d",
+        context.workspace_id,
+        context.user_id,
+        queued,
+    )
+
+    return ReindexResponse(
+        queued=queued,
+        total_documents=len(work_item_ids),
+        detail=(
+            f"Queued {queued} document(s) for re-embedding. "
+            "This runs in the background and may take several minutes."
+        ),
+    )
 
 
 @router.delete(
