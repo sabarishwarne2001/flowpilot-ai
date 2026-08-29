@@ -6,6 +6,7 @@ import {
   Mail,
   MonitorSmartphone,
   ShieldAlert,
+  UserRound,
 } from "lucide-react";
 
 import Workspace from "./Workspace";
@@ -13,6 +14,7 @@ import EmailSettings from "./EmailSettings";
 import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
 import SessionManagement from "./SessionManagement";
+import ProfileSettings from "./ProfileSettings";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 
@@ -31,6 +33,7 @@ export const PermissionDenied: React.FC = () => {
 };
 
 type SettingsSection =
+  | "profile"
   | "workspace"
   | "email"
   | "ai"
@@ -43,7 +46,10 @@ interface TabConfig {
   icon: React.ElementType;
 }
 
+const ACCOUNT_SECTIONS = new Set<SettingsSection>(["profile", "sessions"]);
+
 const SETTINGS_TABS: readonly TabConfig[] = [
+  { id: "profile", label: "Profile", icon: UserRound },
   { id: "workspace", label: "Workspace", icon: Building2 },
   { id: "email", label: "Email", icon: Mail },
   { id: "ai", label: "AI Settings", icon: Cpu },
@@ -52,19 +58,21 @@ const SETTINGS_TABS: readonly TabConfig[] = [
 ];
 
 const Settings: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("workspace");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const { workspaceRole } = useResolvedTenant();
 
-  if (!isAtLeast(workspaceRole, "CONTRIBUTOR")) {
-    return <PermissionDenied />;
-  }
+  const canSeeWorkspaceSettings = isAtLeast(workspaceRole, "CONTRIBUTOR");
+
+  const visibleTabs = SETTINGS_TABS.filter(
+    (tab) => ACCOUNT_SECTIONS.has(tab.id) || canSeeWorkspaceSettings,
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your workspace and account configuration.
+          Manage your account and workspace configuration.
         </p>
       </div>
 
@@ -75,7 +83,7 @@ const Settings: React.FC = () => {
           </h2>
 
           <nav className="flex flex-row lg:flex-col gap-1.5 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
-            {SETTINGS_TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeSection === tab.id;
 
@@ -101,10 +109,11 @@ const Settings: React.FC = () => {
         </aside>
 
         <section className="lg:col-span-9 min-w-0">
-          {activeSection === "workspace" && <Workspace />}
-          {activeSection === "email" && <EmailSettings />}
-          {activeSection === "ai" && <AISettings />}
-          {activeSection === "document" && <DocumentSettings />}
+          {activeSection === "profile" && <ProfileSettings />}
+          {activeSection === "workspace" && (canSeeWorkspaceSettings ? <Workspace /> : <PermissionDenied />)}
+          {activeSection === "email" && (canSeeWorkspaceSettings ? <EmailSettings /> : <PermissionDenied />)}
+          {activeSection === "ai" && (canSeeWorkspaceSettings ? <AISettings /> : <PermissionDenied />)}
+          {activeSection === "document" && (canSeeWorkspaceSettings ? <DocumentSettings /> : <PermissionDenied />)}
           {activeSection === "sessions" && <SessionManagement />}
         </section>
       </div>

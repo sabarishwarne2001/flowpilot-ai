@@ -45,6 +45,21 @@ export const ORGANIZATION_ENDPOINTS = {
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
 } as const;
 
+export const PROFILE_ENDPOINTS = {
+  profile: "/me/profile",
+  avatar: "/me/avatar",
+  userAvatar: (userId: string): string => `/users/${seg(userId)}/avatar`,
+} as const;
+
+export const EMAIL_CHANGE_ENDPOINTS = {
+  request: "/me/email-change/request",
+  confirm: "/auth/email-change/confirm",
+} as const;
+
+export const ME_INVITATION_ENDPOINTS = {
+  mine: "/me/invitations",
+} as const;
+
 export const OWNERSHIP_ENDPOINTS = {
   transfers: (organizationId: string): string =>
     `/organizations/${org(organizationId)}/ownership-transfers`,

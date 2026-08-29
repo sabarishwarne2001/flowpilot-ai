@@ -47,6 +47,7 @@ import VerifyEmail from "@/pages/Auth/VerifyEmail";
 import ForgotPassword from "@/pages/Auth/ForgotPassword";
 import ResetPassword from "@/pages/Auth/ResetPassword";
 import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
+import ConfirmEmailChange from "@/pages/Auth/ConfirmEmailChange";
 import { Automation } from "@/pages/Automation/Automation";
 import { Dashboard } from "@/pages/Dashboard/Dashboard";
 import { NotFound } from "@/pages/NotFound";
@@ -114,6 +115,10 @@ export default function App() {
               <Route
                 path={ROUTES.INVITATION_ACCEPT}
                 element={<InvitationAcceptPage />}
+              />
+              <Route
+                path="/confirm-email-change"
+                element={<ConfirmEmailChange />}
               />
 
               {/* Public auth pages */}

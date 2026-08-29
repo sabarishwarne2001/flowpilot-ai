@@ -9,11 +9,8 @@ import Sidebar from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { VerificationBanner } from "@/components/common/VerificationBanner";
 import IncomingOwnershipBanner from "@/components/organization/IncomingOwnershipBanner";
+import PendingInvitationsBanner from "@/components/invitations/PendingInvitationsBanner";
 
-/**
- * Shell template wrapper encapsulating all gated workspace screens.
- * Strict viewport isolation: Desktop sidebar on lg+, Mobile overlay on <lg.
- */
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
 
@@ -28,7 +25,6 @@ export const DashboardLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground transition-colors duration-200">
-      {/* 1. Desktop Sidebar (Visible ONLY on lg+ screens >= 1024px) */}
       <div
         className={`
           hidden
@@ -41,13 +37,12 @@ export const DashboardLayout: React.FC = () => {
         <DesktopSidebar onLogout={handleLogout} />
       </div>
 
-      {/* 2. Mobile Drawer (Slide-out overlay, rendered at root viewport level on < 1024px) */}
       <Sidebar onLogout={handleLogout} />
 
-      {/* 3. Main Content Viewport */}
       <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <Header />
         <IncomingOwnershipBanner />
+        <PendingInvitationsBanner />
         <VerificationBanner />
 
         <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">

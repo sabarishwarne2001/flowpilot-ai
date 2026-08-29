@@ -54,6 +54,17 @@ export const settingsKeys = {
   document: (workspaceId: string) => [...settingsKeys.all(workspaceId), "document"] as const,
 };
 
+export const profileKeys = {
+  all: ["profile"] as const,
+  me: () => [...profileKeys.all, "me"] as const,
+  avatar: (userId: string) => [...profileKeys.all, "avatar", userId] as const,
+};
+
+export const meInvitationKeys = {
+  all: ["me-invitations"] as const,
+  list: () => [...meInvitationKeys.all, "list"] as const,
+};
+
 export const organizationScope = (organizationId: string) =>
   ["org", organizationId] as const;
 

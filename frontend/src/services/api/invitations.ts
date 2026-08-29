@@ -1,21 +1,12 @@
 /**
  * Organization invitation API service for FlowPilot AI.
- *
- * ARCH-04 moved invitation management from the workspace to the organization.
- * Membership is granted at the organization and projected down into
- * workspaces, so the workspace was never the right scope to invite into.
- *
- *   /organizations/{organization_id}/invitations...  management, org-scoped
- *   /invitations/preview, /accept, /reject           token-addressed
- *
- * These functions take an organizationId. They previously took a workspaceId
- * and passed it into an organization-scoped URL builder, which produced a
- * well-formed request against a nonexistent organization and a 404 that read
- * as a permissions failure rather than a wrong-identifier bug.
  */
 
 import apiClient from "@/services/api/client";
-import { INVITATION_ENDPOINTS } from "@/services/api/endpoints";
+import {
+  INVITATION_ENDPOINTS,
+  ME_INVITATION_ENDPOINTS,
+} from "@/services/api/endpoints";
 
 import type {
   InvitationTokenRequest,
@@ -24,6 +15,7 @@ import type {
   WorkspaceInvitationCreateRequest,
   WorkspaceInvitationPreview,
 } from "@/types/tenancy";
+import type { MyPendingInvitationsResponse } from "@/types/invitation";
 
 /* ==========================================================================
  * Organization-scoped management
@@ -93,8 +85,7 @@ export const previewInvitation = async (
 
 /**
  * Requires an authenticated session. The token identifies the invitation;
- * the session identifies the actor. A forwarded link cannot be accepted on
- * someone else's behalf.
+ * the session identifies the actor.
  */
 export const acceptInvitation = async (
   token: string,
@@ -107,7 +98,6 @@ export const acceptInvitation = async (
   return response.data;
 };
 
-/** Requires an authenticated session, for the same reason as acceptInvitation. */
 export const rejectInvitation = async (
   token: string,
 ): Promise<WorkspaceInvitation> => {
@@ -118,3 +108,28 @@ export const rejectInvitation = async (
   );
   return response.data;
 };
+
+/* ==========================================================================
+ * User-scoped pending invitations list
+ * ========================================================================== */
+
+export const listMyInvitations = async (): Promise<MyPendingInvitationsResponse> => {
+  const response = await apiClient.get<MyPendingInvitationsResponse>(
+    ME_INVITATION_ENDPOINTS.mine,
+    { headers: { Accept: "application/json" } },
+  );
+  return response.data;
+};
+
+export const invitationsApi = {
+  createInvitation,
+  listPendingInvitations,
+  revokeInvitation,
+  resendInvitation,
+  previewInvitation,
+  acceptInvitation,
+  rejectInvitation,
+  listMyInvitations,
+} as const;
+
+export default invitationsApi;
