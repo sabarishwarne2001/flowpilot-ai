@@ -8,6 +8,7 @@ import DesktopSidebar from "@/components/layout/DesktopSidebar";
 import Sidebar from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { VerificationBanner } from "@/components/common/VerificationBanner";
+import IncomingOwnershipBanner from "@/components/organization/IncomingOwnershipBanner";
 
 /**
  * Shell template wrapper encapsulating all gated workspace screens.
@@ -46,6 +47,7 @@ export const DashboardLayout: React.FC = () => {
       {/* 3. Main Content Viewport */}
       <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <Header />
+        <IncomingOwnershipBanner />
         <VerificationBanner />
 
         <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">

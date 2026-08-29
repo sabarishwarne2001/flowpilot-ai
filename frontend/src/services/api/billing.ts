@@ -16,6 +16,7 @@ import type {
   UsageSeriesResponse,
   UsageSummaryResponse,
 } from "@/types/billing";
+import type { SpendLimit, SpendLimitUpdateRequest } from "@/types/usage";
 
 const seg = (value: string): string => encodeURIComponent(value);
 
@@ -64,6 +65,8 @@ export const BILLING_ENDPOINTS = {
     `/organizations/${org(organizationId)}/usage/series`,
   usageLimits: (organizationId: string) =>
     `/organizations/${org(organizationId)}/usage/limits`,
+  spendLimits: (organizationId: string) =>
+    `/organizations/${org(organizationId)}/usage-limits`,
 
   workspaceUsageSummary: (workspaceId: string) =>
     `/workspaces/${ws(workspaceId)}/usage/summary`,
@@ -135,6 +138,17 @@ export const getUsageLimits = async (
 ): Promise<UsageLimitsResponse> => {
   const response = await apiClient.get<UsageLimitsResponse>(
     BILLING_ENDPOINTS.usageLimits(organizationId),
+  );
+  return response.data;
+};
+
+export const setSpendLimit = async (
+  organizationId: string,
+  data: SpendLimitUpdateRequest,
+): Promise<SpendLimit> => {
+  const response = await apiClient.put<SpendLimit>(
+    BILLING_ENDPOINTS.spendLimits(organizationId),
+    data,
   );
   return response.data;
 };
@@ -236,6 +250,7 @@ export const billingApi = {
   getUsageSummary,
   getUsageSeries,
   getUsageLimits,
+  setSpendLimit,
   getWorkspaceUsageSummary,
   getWorkspaceUsageSeries,
   getInvoices,

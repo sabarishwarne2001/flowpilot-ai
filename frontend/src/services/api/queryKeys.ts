@@ -75,6 +75,21 @@ export const apiKeyKeys = {
     [...apiKeyKeys.all(organizationId), "list"] as const,
 };
 
+export const webhookKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "webhooks"] as const,
+  endpoints: (organizationId: string) =>
+    [...webhookKeys.all(organizationId), "endpoints"] as const,
+  deliveries: (organizationId: string, endpointId: string, status?: string) =>
+    [...webhookKeys.all(organizationId), "deliveries", endpointId, { status }] as const,
+  attempts: (organizationId: string, deliveryId: string) =>
+    [...webhookKeys.all(organizationId), "attempts", deliveryId] as const,
+};
+
+export const ownershipKeys = {
+  mine: ["ownership-transfers", "mine"] as const,
+};
+
 export const billingKeys = {
   all: (organizationId: string) =>
     [...organizationScope(organizationId), "billing"] as const,

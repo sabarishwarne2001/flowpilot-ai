@@ -42,6 +42,7 @@ export const ROUTE_PATTERNS = {
   organizationSettings: "settings",
   organizationMembers: "members",
   organizationApiKeys: "api-keys",
+  organizationWebhooks: "webhooks",
   organizationBilling: "billing",
   organizationBillingReturn: "billing/return",
   organizationIdentity: "identity",
@@ -73,6 +74,9 @@ export const organizationMembersPath = (orgSlug: string): string =>
 
 export const organizationApiKeysPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/api-keys`;
+
+export const organizationWebhooksPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/webhooks`;
 
 export const organizationBillingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/billing`;

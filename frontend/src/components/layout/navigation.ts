@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Sliders,
   Users,
+  Webhook,
 } from "lucide-react";
 
 import {
@@ -21,6 +22,7 @@ import {
   organizationBillingPath,
   organizationIdentityPath,
   organizationMembersPath,
+  organizationWebhooksPath,
   verificationPath,
   workItemsPath,
   workspaceDashboardPath,
@@ -70,11 +72,7 @@ export const buildNavigationItems = (
 ];
 
 /**
- * Organization-scoped navigation (Members, Billing, API keys, Enterprise identity, Audit log).
- *
- * Role-gated here rather than in the consuming component, so a MEMBER with no
- * organization-level standing gets an empty array and the caller never has to
- * duplicate the role logic to decide whether to render a divider.
+ * Organization-scoped navigation (Members, Billing, API keys, Webhooks, Enterprise identity, Audit log).
  */
 export const buildOrganizationNavigationItems = (
   orgSlug: string,
@@ -104,6 +102,11 @@ export const buildOrganizationNavigationItems = (
       name: "API keys",
       path: organizationApiKeysPath(orgSlug),
       icon: KeyRound,
+    });
+    items.push({
+      name: "Webhooks",
+      path: organizationWebhooksPath(orgSlug),
+      icon: Webhook,
     });
     items.push({
       name: "Enterprise identity",

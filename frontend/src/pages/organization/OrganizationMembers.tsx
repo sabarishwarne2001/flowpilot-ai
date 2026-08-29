@@ -17,6 +17,7 @@ import {
   canModifyMemberRole,
 } from "@/permissions/organizationPermissions";
 import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
+import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
 
 const ALL_ROLES: readonly OrganizationRole[] = [
   "OWNER",
@@ -109,8 +110,11 @@ export const OrganizationMembers: React.FC = () => {
     if (!canModifyMember(actorRole, member.role)) {
       return [];
     }
+    // Ownership changes occur exclusively through the two-party OwnershipTransferPanel
     const candidates =
-      actorRole === "OWNER" ? ALL_ROLES : [...ADMIN_ASSIGNABLE_ROLES];
+      actorRole === "OWNER"
+        ? ALL_ROLES.filter((r) => r !== "OWNER")
+        : [...ADMIN_ASSIGNABLE_ROLES];
     return candidates.filter(
       (role) =>
         role === member.role ||
@@ -309,6 +313,13 @@ export const OrganizationMembers: React.FC = () => {
             })}
           </ul>
         )}
+
+        {/* Ownership Transfer Panel */}
+        <OwnershipTransferPanel
+          organizationId={organizationId}
+          members={members}
+          isOwner={actorRole === "OWNER"}
+        />
 
         {!canManage && (
           <p className="border-t border-border pt-4 text-xs text-muted-foreground">

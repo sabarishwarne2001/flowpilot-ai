@@ -23,6 +23,8 @@ const org = (organizationId: string): string => {
 };
 
 const scoped = (workspaceId: string): string => `/workspaces/${ws(workspaceId)}`;
+const webhookBase = (organizationId: string): string =>
+  `/organizations/${org(organizationId)}/webhooks`;
 
 export const ME_ENDPOINTS = {
   context: "/me/context",
@@ -43,6 +45,18 @@ export const ORGANIZATION_ENDPOINTS = {
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
 } as const;
 
+export const OWNERSHIP_ENDPOINTS = {
+  transfers: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/ownership-transfers`,
+  accept: (organizationId: string, transferId: string): string =>
+    `/organizations/${org(organizationId)}/ownership-transfers/${seg(transferId)}/accept`,
+  decline: (organizationId: string, transferId: string): string =>
+    `/organizations/${org(organizationId)}/ownership-transfers/${seg(transferId)}/decline`,
+  cancel: (organizationId: string, transferId: string): string =>
+    `/organizations/${org(organizationId)}/ownership-transfers/${seg(transferId)}/cancel`,
+  mine: "/me/ownership-transfers",
+} as const;
+
 export const API_KEY_ENDPOINTS = {
   list: (organizationId: string): string =>
     `/organizations/${seg(organizationId)}/api-keys`,
@@ -54,6 +68,21 @@ export const API_KEY_ENDPOINTS = {
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}/rotate`,
   revoke: (organizationId: string, keyId: string): string =>
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
+} as const;
+
+export const WEBHOOK_ENDPOINTS = {
+  endpoints: (organizationId: string): string =>
+    `${webhookBase(organizationId)}/endpoints`,
+  endpoint: (organizationId: string, endpointId: string): string =>
+    `${webhookBase(organizationId)}/endpoints/${seg(endpointId)}`,
+  rotateSecret: (organizationId: string, endpointId: string): string =>
+    `${webhookBase(organizationId)}/endpoints/${seg(endpointId)}/rotate-secret`,
+  deliveries: (organizationId: string, endpointId: string): string =>
+    `${webhookBase(organizationId)}/endpoints/${seg(endpointId)}/deliveries`,
+  attempts: (organizationId: string, deliveryId: string): string =>
+    `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/attempts`,
+  redeliver: (organizationId: string, deliveryId: string): string =>
+    `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/redeliver`,
 } as const;
 
 export const WORKSPACE_ENDPOINTS = {

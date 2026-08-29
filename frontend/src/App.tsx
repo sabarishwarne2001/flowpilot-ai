@@ -25,6 +25,9 @@ const OrganizationMembers = lazy(
 const OrganizationApiKeys = lazy(
   () => import("@/pages/organization/OrganizationApiKeys"),
 );
+const OrganizationWebhooks = lazy(
+  () => import("@/pages/organization/OrganizationWebhooks"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -163,6 +166,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationApiKeys}
                       element={<OrganizationApiKeys />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationWebhooks}
+                      element={<OrganizationWebhooks />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.organizationBilling}

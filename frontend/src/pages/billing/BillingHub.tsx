@@ -6,6 +6,7 @@ import DunningBanner from "@/components/billing/DunningBanner";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
 import PlanSelector from "@/pages/billing/PlanSelector";
 import SeatManager from "@/pages/billing/SeatManager";
+import SpendLimitForm from "@/pages/billing/SpendLimitForm";
 import UsageDashboard from "@/pages/billing/UsageDashboard";
 import {
   createPortalSession,
@@ -98,6 +99,11 @@ export const BillingHub: React.FC = () => {
             )}
 
             <UsageDashboard organizationId={organizationId} />
+
+            <SpendLimitForm
+              organizationId={organizationId}
+              canManageBilling={canManageBilling}
+            />
 
             <SeatManager
               organizationId={organizationId}
