@@ -9,6 +9,7 @@ import {
   Mail,
   MessageSquare,
   ScrollText,
+  Gauge,
   Settings,
   ShieldCheck,
   Sliders,
@@ -26,6 +27,7 @@ import {
   organizationIdentityPath,
   organizationMembersPath,
   organizationNotificationsPath,
+  organizationSLOsPath,
   organizationWebhooksPath,
   verificationPath,
   workItemsPath,
@@ -75,9 +77,6 @@ export const buildNavigationItems = (
   },
 ];
 
-/**
- * Organization-scoped navigation (Members, Email, Notifications, Billing, API keys, Webhooks, Identity, Audit).
- */
 export const buildOrganizationNavigationItems = (
   orgSlug: string,
   organizationRole: string,
@@ -85,7 +84,6 @@ export const buildOrganizationNavigationItems = (
   const role = String(organizationRole).toUpperCase();
   const items: NavigationItem[] = [];
 
-  // Available to all organization members
   items.push({
     name: "Notifications",
     path: organizationNotificationsPath(orgSlug),
@@ -102,6 +100,14 @@ export const buildOrganizationNavigationItems = (
       name: "Email delivery",
       path: organizationEmailPath(orgSlug),
       icon: Mail,
+    });
+  }
+
+  if (role === "OWNER" || role === "ADMIN") {
+    items.push({
+      name: "Service levels",
+      path: organizationSLOsPath(orgSlug),
+      icon: Gauge,
     });
   }
 

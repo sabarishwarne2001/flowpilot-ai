@@ -1,4 +1,4 @@
-"""ARCH-09 Step 6b, 9, 10, ARCH-10 Step 8, ARCH-15 Step 15.2 — the worker entrypoint."""
+"""ARCH-09 Step 6b, 9, 10, ARCH-10 Step 8, ARCH-15 Step 15.2, ARCH-17 — the worker entrypoint."""
 
 from __future__ import annotations
 
@@ -259,8 +259,10 @@ def run_jobs_loop(
     job_types: Optional[Sequence[str]] = None,
 ) -> None:
     from app.core.principal import system_principal
+    from app.core import slo_recorder
+    from app.core.request_context import job_scope
     from app.db.session import SessionLocal
-    from app.services.job_service import JOB_HANDLERS
+    from app.services.job_service import JOB_HANDLERS, trace_context_from
     from app.workers.claim import (
         claim_jobs,
         mark_job_dead,
@@ -283,6 +285,7 @@ def run_jobs_loop(
         if passes % reap_every_n_passes == 0:
             with SessionLocal() as db:
                 reaped = reap_expired_job_leases(db)
+                slo_recorder.flush(db)
                 db.commit()
             if reaped:
                 logger.warning("jobs.reaped", extra={"count": reaped})
@@ -309,7 +312,11 @@ def run_jobs_loop(
             logger.info("jobs.draining", extra={"remaining": len(snapshot)})
 
         for job_id, job_type, payload, attempts, max_attempts, org_id in snapshot:
-            with system_principal(job_name=f"jobs.{job_type}", job_id=job_id):
+            with job_scope(
+                job_id=job_id,
+                job_type=job_type,
+                context=trace_context_from(payload),
+            ), system_principal(job_name=f"jobs.{job_type}", job_id=job_id):
                 handler = JOB_HANDLERS.get(job_type)
                 if handler is None:
                     with SessionLocal() as db:
@@ -358,15 +365,6 @@ def run_stripe_inbound_loop(
     idle_sleep_seconds: float,
     reap_every_n_passes: int = 20,
 ) -> None:
-    """ARCH-15 Step 15.2 — drain `stripe_inbound_events`.
-
-    A dedicated loop rather than a job type on the `jobs` queue, because the
-    inbound table *is* a queue with its own lease and its own retry curve, and
-    routing through `jobs` would mean two lease clocks over one unit of work.
-    The `billing.reconcile` job type still exists and does the same thing on a
-    schedule — this loop is what runs when latency matters, which for a
-    subscription state change is always.
-    """
     from app.db.session import SessionLocal
     from app.services.billing import inbound_service
     from app.workers.claim import worker_identity
@@ -393,10 +391,6 @@ def run_stripe_inbound_loop(
                 batch_size=batch_size,
                 lease_seconds=lease_seconds,
             )
-            # Snapshot and commit before any Stripe call. The lease is what
-            # makes releasing the transaction across an HTTPS round trip safe,
-            # and holding it open instead is how a slow provider exhausts the
-            # connection pool.
             snapshot = [
                 (row.id, row.attempts, row.max_attempts) for row in claimed
             ]
@@ -474,9 +468,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.loop == "delivery":
         runner, extra = run_delivery_loop, {"per_org_cap": args.per_org_cap}
     elif args.loop == "stripe":
-        # No per-org cap: `organization_id` is nullable on this table, so
-        # every not-yet-resolved event would rank inside one NULL partition
-        # and the cap would throttle precisely the rows that need attention.
         runner, extra = run_stripe_inbound_loop, {}
     else:
         runner, extra = run_jobs_loop, {"job_types": claimable_job_types(profile)}

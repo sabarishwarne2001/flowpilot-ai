@@ -23,6 +23,7 @@ from app.api.v1 import (
     organization_notifications,
     organizations,
     ownership_transfers,
+    slos,
     upload,
     usage,
     verifications,
@@ -38,11 +39,7 @@ api_router = APIRouter()
 
 WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 
-
-# ============================================================================
 # Tenancy — routers declare their own full paths
-# ============================================================================
-
 api_router.include_router(organizations.router)
 api_router.include_router(organization_email_settings.router)
 api_router.include_router(organization_notifications.router)
@@ -56,28 +53,21 @@ api_router.include_router(organization_invitation_router)
 api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
 api_router.include_router(usage.router)
+api_router.include_router(slos.router)  # ARCH-17
 
-# --- ARCH-16 Enterprise Identity Administration ---
+# ARCH-16 Enterprise Identity Administration
 api_router.include_router(identity_admin.router)
 
-
-# ============================================================================
 # Global & Identity Federation
-# ============================================================================
-
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 
-# --- ARCH-16 SAML / OIDC / SSO Gateways ---
+# ARCH-16 SAML / OIDC / SSO Gateways
 api_router.include_router(saml_router)
 api_router.include_router(sso_router)
 api_router.include_router(oidc_router)
 
-
-# ============================================================================
 # Workspace-scoped
-# ============================================================================
-
 _SCOPED = (
     (work_items.router,        "/work-items",         "Work Items"),
     (dashboard.router,         "/dashboard",          "Dashboard"),

@@ -92,6 +92,13 @@ export const orgNotificationKeys = {
     [...orgNotificationKeys.all(organizationId), { isRead }] as const,
 };
 
+export const sloKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "slos"] as const,
+  summary: (organizationId: string, period: string) =>
+    [...sloKeys.all(organizationId), "summary", period] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

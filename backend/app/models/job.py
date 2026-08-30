@@ -64,6 +64,10 @@ class Job(Base, UUIDMixin, TimestampMixin):
             "effects_suppressed = false OR suppressed_at IS NOT NULL",
             name="ck_jobs_suppressed_has_timestamp",
         ),
+        CheckConstraint(
+            "trace_id IS NULL OR trace_id ~ '^[0-9a-f]{32}$'",
+            name="ck_jobs_trace_id_is_w3c_hex",
+        ),
         UniqueConstraint("seq", name="uq_jobs_seq"),
         Index(
             "ix_jobs_claimable",
@@ -101,6 +105,16 @@ class Job(Base, UUIDMixin, TimestampMixin):
             "idempotency_key",
             unique=True,
             postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+        Index(
+            "ix_jobs_trace_id",
+            "trace_id",
+            postgresql_where=text("trace_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_jobs_correlation_id",
+            "correlation_id",
+            postgresql_where=text("correlation_id IS NOT NULL"),
         ),
         Index(
             "ix_jobs_principal_live",
@@ -147,7 +161,15 @@ class Job(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    # --- ARCH-16 Job Effect Suppression (B5 / A11) ------------------------
+    trace_id: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+    correlation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
     effects_suppressed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )

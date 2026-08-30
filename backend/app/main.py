@@ -21,6 +21,7 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
+from app.middleware.request_trace import REQUEST_ID_HEADER, RequestTraceMiddleware
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
 from app.workers.handlers import register_all
@@ -28,9 +29,11 @@ from app.workers.handlers import register_all
 setup_logging()
 logger = logging.getLogger("app.main")
 
-
-#: Response headers the browser is permitted to read cross-origin.
-CORS_EXPOSED_HEADERS = ["WWW-Authenticate", "Retry-After"]
+CORS_EXPOSED_HEADERS = [
+    "WWW-Authenticate",
+    "Retry-After",
+    REQUEST_ID_HEADER,
+]
 
 _AUTH_DEPENDENCY_NAMES = frozenset(
     {
@@ -49,7 +52,6 @@ _AUTH_DEPENDENCY_NAMES = frozenset(
 
 
 def _dependency_tree_has_auth(dependant) -> bool:
-    """Recursively traverse the dependency tree to check for authentication dependencies."""
     if dependant is None:
         return False
 
@@ -69,7 +71,6 @@ def _route_requires_auth(route: APIRoute) -> bool:
 
 
 def assert_public_route_registry(app: FastAPI) -> None:
-    """Ensure every unauthenticated route is registered in PUBLIC_ROUTES."""
     undocumented: set[str] = set()
 
     for route in app.routes:
@@ -80,7 +81,6 @@ def assert_public_route_registry(app: FastAPI) -> None:
             continue
 
         methods = route.methods or {"GET"}
-        # Filter out auto-generated HEAD/OPTIONS
         effective_methods = {m for m in methods if m not in {"HEAD", "OPTIONS"}}
         for method in (effective_methods or methods):
             if not is_public(route.path, method):
@@ -114,11 +114,25 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to register background job handlers.")
 
-    # Guard: verify the public route registry against all mounted routes
     assert_public_route_registry(app)
     logger.info("Public route registry asserted successfully against all endpoints.")
 
+    from app.core import slo_recorder
+    slo_recorder.install()
+    logger.info("SLO stage recorder installed.")
+
     yield
+
+    try:
+        from app.db.session import SessionLocal
+
+        with SessionLocal() as db:
+            written = slo_recorder.flush(db)
+            db.commit()
+        if written:
+            logger.info("SLO observations flushed on shutdown: %d series.", written)
+    except Exception:  # noqa: BLE001
+        logger.exception("SLO shutdown flush failed; observations discarded.")
 
     logger.info("Stopping FlowPilot AI Backend Core...")
 
@@ -146,10 +160,10 @@ else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
 app.add_middleware(GlobalRateLimitMiddleware)
+app.add_middleware(RequestTraceMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
 
-# --- ARCH-16 SCIM & Identity Exception Handlers ---
 async def scim_error_handler(request: Request, exc: ScimError):
     return JSONResponse(
         content=exc.to_body(),
@@ -179,5 +193,5 @@ app.include_router(webhooks_v1.router, prefix=settings.API_V1_STR)
 app.include_router(billing_webhook_v1.router, prefix=settings.API_V1_STR)
 app.include_router(billing_v1.router, prefix=settings.API_V1_STR)
 
-# ARCH-16 SCIM 2.0 root mount (standard RFC 7644 /scim/v2 outside versioned prefix)
+# ARCH-16 SCIM 2.0 root mount
 app.include_router(scim_v1.router)

@@ -1,4 +1,6 @@
-"""ARCH-09 Step 10b — job enqueue, handler registry, and mark functions."""
+"""ARCH-09 Step 10b — job enqueue, handler registry, and mark functions.
+ARCH-17 — trace and correlation propagation across the queue boundary.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +11,12 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.request_context import carrier
 from app.models.job import Job, JobStatus
 
 logger = logging.getLogger(__name__)
+
+TRACE_PAYLOAD_KEY = "_trace"
 
 
 class JobServiceError(Exception):
@@ -44,6 +49,15 @@ def register_handler(
     JOB_HANDLERS[job_type] = handler
 
 
+def _coerce_correlation_id(value: Optional[str]) -> Optional[uuid.UUID]:
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 def enqueue(
     db: Session,
     *,
@@ -54,6 +68,9 @@ def enqueue(
     available_at: Optional[datetime] = None,
     idempotency_key: Optional[str] = None,
     require_active_transaction: bool = True,
+    trace_id: Optional[str] = None,
+    correlation_id: Optional[Any] = None,
+    propagate_trace: bool = True,
 ) -> Job:
     if job_type not in JOB_HANDLERS:
         raise UnknownJobTypeError(
@@ -69,13 +86,27 @@ def enqueue(
             "enqueue() was called outside an active transaction."
         )
 
+    context = carrier() if propagate_trace else {}
+    resolved_trace = trace_id or context.get("trace_id")
+    resolved_correlation = _coerce_correlation_id(
+        correlation_id or context.get("correlation_id")
+    )
+
+    job_payload = dict(payload or {})
+    if propagate_trace and any(context.values()):
+        job_payload[TRACE_PAYLOAD_KEY] = {
+            key: value for key, value in context.items() if value is not None
+        }
+
     job = Job(
         job_type=job_type,
-        payload=payload or {},
+        payload=job_payload,
         organization_id=organization_id,
         max_attempts=max_attempts,
         idempotency_key=idempotency_key,
         status=JobStatus.PENDING,
+        trace_id=resolved_trace,
+        correlation_id=resolved_correlation,
     )
     if available_at is not None:
         job.available_at = available_at
@@ -89,6 +120,15 @@ def enqueue(
             "seq": job.seq,
             "job_type": job_type,
             "organization_id": str(organization_id) if organization_id else None,
+            "trace_id": resolved_trace,
+            "correlation_id": str(resolved_correlation) if resolved_correlation else None,
         },
     )
     return job
+
+
+def trace_context_from(job_payload: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not isinstance(job_payload, dict):
+        return {}
+    context = job_payload.get(TRACE_PAYLOAD_KEY)
+    return dict(context) if isinstance(context, dict) else {}

@@ -188,3 +188,11 @@ export const NOTIFICATION_ENDPOINTS = {
   markAllRead: (workspaceId: string): string =>
     `${scoped(workspaceId)}/notifications/mark-all-read`,
 } as const;
+
+/** ARCH-17 — per-tenant SLO targets and compliance. */
+export const SLO_ENDPOINTS = {
+  list: (organizationId: string): string =>
+    `/organizations/${seg(organizationId)}/slos`,
+  detail: (organizationId: string, sloKey: string): string =>
+    `/organizations/${seg(organizationId)}/slos/${seg(sloKey)}`,
+} as const;

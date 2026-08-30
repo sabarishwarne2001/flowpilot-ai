@@ -34,6 +34,9 @@ const OrganizationEmailSettings = lazy(
 const OrganizationNotifications = lazy(
   () => import("@/pages/organization/OrganizationNotifications"),
 );
+const OrganizationSLOs = lazy(
+  () => import("@/pages/organization/OrganizationSLOs"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -107,7 +110,6 @@ export default function App() {
         <SessionBootstrap>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
-
               {/* Public routes */}
               <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
               <Route
@@ -206,6 +208,10 @@ export default function App() {
                       path={ROUTE_PATTERNS.organizationAudit}
                       element={<AuditExplorer />}
                     />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationSLOs}
+                      element={<OrganizationSLOs />}
+                    />
                   </Route>
                 </Route>
 
@@ -277,7 +283,6 @@ export default function App() {
                 path={ROUTES.NOT_FOUND}
                 element={<NotFound />}
               />
-
             </Routes>
           </Suspense>
         </SessionBootstrap>

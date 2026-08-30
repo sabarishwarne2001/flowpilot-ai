@@ -49,6 +49,7 @@ export const ROUTE_PATTERNS = {
   organizationBillingReturn: "billing/return",
   organizationIdentity: "identity",
   organizationAudit: "audit",
+  organizationSLOs: "service-levels",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   workspaceShell: `/${P_ORG}/${P_WS}`,
@@ -85,6 +86,9 @@ export const organizationEmailPath = (orgSlug: string): string =>
 
 export const organizationNotificationsPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/notifications`;
+
+export const organizationSLOsPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/service-levels`;
 
 export const organizationBillingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/billing`;
