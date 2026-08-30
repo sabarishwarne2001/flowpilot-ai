@@ -302,6 +302,18 @@ def cancel_email_change(db: Session, *, user: User) -> int:
     return cancelled
 
 
+def get_pending_email_change(
+    db: Session, *, user: User
+) -> EmailChangeRequest | None:
+    """The user's live email-change request, or None."""
+    stmt = select(EmailChangeRequest).where(
+        EmailChangeRequest.user_id == user.id,
+        EmailChangeRequest.status == EmailChangeStatus.PENDING,
+        EmailChangeRequest.expires_at > datetime.now(UTC),
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
 def _dispatch(background_tasks, fn, **kwargs) -> None:
     if background_tasks is not None:
         background_tasks.add_task(fn, **kwargs)

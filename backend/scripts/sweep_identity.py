@@ -45,10 +45,10 @@ import argparse
 import logging
 import sys
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import settings
+from app.db.session import SessionLocal, make_engine
 from app.models.auth_token import AuthToken
 from app.models.user_session import UserSession
 from app.services import auth_token_service, session_service
@@ -88,7 +88,7 @@ def main() -> int:
         logger.error("--retain-days must be at least 1.")
         return 2
 
-    engine = create_engine(settings.sqlalchemy_database_uri)
+    engine = make_engine(role="sweeper")
     session_factory = sessionmaker(bind=engine)
 
     with session_factory() as db:

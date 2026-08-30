@@ -1,2 +1,9 @@
-# ARCH-07 §B.7 — FlowPilot AI maintenance sweepers
-17 3 * * *  flowpilot  cd /srv/flowpilot/backend && /srv/flowpilot/venv/bin/python scripts/sweep_arch07.py --all --apply --json >> /var/log/flowpilot/sweep_arch07.log 2>&1
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+17 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep arch07 --all --apply --json
+23 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep identity --retain-days 30
+31 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep invitations --send-delay-ms 250
+41 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep arch09 --all --apply
+7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

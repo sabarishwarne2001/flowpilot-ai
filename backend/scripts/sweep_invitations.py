@@ -36,11 +36,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import sqlalchemy as sa
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import settings
 from app.core.links import build_organization_invitations_link
+from app.db.session import SessionLocal, make_engine
 from app.models.organization_invitation import (
     InvitationStatus,
     OrganizationInvitation,
@@ -93,7 +93,7 @@ def main() -> int:
         logger.error("--send-delay-ms cannot be negative.")
         return 2
 
-    engine = create_engine(settings.sqlalchemy_database_uri)
+    engine = make_engine(role="sweeper")
     session_factory = sessionmaker(bind=engine)
     exit_code = 0
 

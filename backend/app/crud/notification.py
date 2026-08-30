@@ -124,6 +124,23 @@ def list_organization_scoped_for_user(
     return rows, total, unread
 
 
+def get_organization_scoped_for_user(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    user_id: uuid.UUID,
+    notification_id: uuid.UUID,
+) -> Notification | None:
+    """One organization-scoped notification belonging to this caller."""
+    statement = select(Notification).where(
+        Notification.id == notification_id,
+        Notification.organization_id == organization_id,
+        Notification.user_id == user_id,
+        Notification.workspace_id.is_(None),
+    )
+    return db.execute(statement).scalar_one_or_none()
+
+
 def update_notification_read_status(
     db: Session,
     *,

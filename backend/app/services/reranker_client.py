@@ -111,11 +111,15 @@ class RerankerClient:
         except InternalServiceError as exc:
             logger.warning("reranker.unavailable", extra={"error": str(exc)})
             return _degrade(results, reason="unavailable")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "reranker.unexpected_error", extra={"error_type": type(exc).__name__}
+            )
+            return _degrade(results, reason="unexpected_error")
 
-        scores = {
-            entry["id"]: float(entry["score"])
-            for entry in (response.payload or {}).get("scores", [])
-        }
+        scores = _extract_scores(response.payload)
+        if scores is None:
+            return _degrade(results, reason="malformed_response")
         if not scores:
             return _degrade(results, reason="empty_response")
 
@@ -155,6 +159,34 @@ class RerankerClient:
         }
 
 
+def _extract_scores(payload: Any) -> Optional[dict[str, float]]:
+    """Pull {id: score} out of a reranker response, or return None."""
+    if not isinstance(payload, dict):
+        return None
+
+    raw = payload.get("scores")
+    if not isinstance(raw, list):
+        return None
+
+    scores: dict[str, float] = {}
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        identifier = entry.get("id")
+        value = entry.get("score")
+        if identifier is None or value is None:
+            continue
+        try:
+            scores[str(identifier)] = float(value)
+        except (TypeError, ValueError):
+            continue
+
+    if raw and not scores:
+        return None
+
+    return scores
+
+
 def _passage_text(result: dict[str, Any]) -> str:
     from app.services.context_assembly_service import neutralise_document_label
 
@@ -175,9 +207,21 @@ def _degrade(results: list[dict[str, Any]], *, reason: str) -> list[dict[str, An
 
 reranker_client = RerankerClient()
 
+DEGRADE_REASONS: frozenset[str] = frozenset(
+    {
+        "breaker_open",
+        "timeout",
+        "unavailable",
+        "unexpected_error",
+        "malformed_response",
+        "empty_response",
+    }
+)
+
 
 __all__ = [
     "BREAKER_NAME",
+    "DEGRADE_REASONS",
     "RerankerClient",
     "STATUS_DEGRADED",
     "STATUS_DISABLED",

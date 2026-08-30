@@ -187,6 +187,34 @@ def get_usage_limits(
     )
 
 
+@router.get(
+    "/organizations/{organization_id}/usage-limits",
+    response_model=list[SpendLimitResponse],
+    summary="List custom organization spend limits",
+)
+def list_usage_limits(
+    organization_id: uuid.UUID,
+    include_inactive: bool = Query(
+        False,
+        description="Include superseded rows.",
+    ),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
+    db: Session = Depends(get_db),
+) -> list[SpendLimitResponse]:
+    if context.organization_id != organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found.",
+        )
+
+    limits = spend_control_service.list_limits(
+        db,
+        organization_id=organization_id,
+        include_inactive=include_inactive,
+    )
+    return [SpendLimitResponse.model_validate(limit) for limit in limits]
+
+
 @router.put(
     "/organizations/{organization_id}/usage-limits",
     response_model=SpendLimitResponse,
@@ -217,6 +245,8 @@ def update_usage_limit(
         note=payload.note,
         principal=principal,
     )
+    db.commit()
+    db.refresh(limit)
     return SpendLimitResponse.model_validate(limit)
 
 

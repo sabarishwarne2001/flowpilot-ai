@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+CONFIG_FILE="${FLOWPILOT_SWEEPER_ENV:-/etc/flowpilot/sweepers.env}"
+[[ -r "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
+DEADLINE_SECONDS="${SWEEPER_DEADLINE_SECONDS:-93600}"
+SWEEPERS=(arch07 identity invitations arch09)
+
+NOW="$(date -u +%s)"
+STALE=()
+
+for name in "${SWEEPERS[@]}"; do
+    metric_file="${TEXTFILE_DIR}/flowpilot_sweeper_${name}.prom"
+
+    if [[ ! -f "${metric_file}" ]]; then
+        STALE+=("${name}=never-ran")
+        continue
+    fi
+
+    last_success="$(
+        grep '^flowpilot_sweeper_last_success_timestamp_seconds' "${metric_file}" \
+            | awk '{print $NF}' | tail -n1
+    )"
+
+    if [[ -z "${last_success}" ]]; then
+        STALE+=("${name}=no-successful-run-recorded")
+        continue
+    fi
+
+    age=$(( NOW - ${last_success%.*} ))
+    if (( age > DEADLINE_SECONDS )); then
+        STALE+=("${name}=stale-${age}s")
+    fi
+done
+
+if [[ -d "${TEXTFILE_DIR}" ]]; then
+    TMP="$(mktemp "${TEXTFILE_DIR}/flowpilot_sweeper_watchdog.XXXXXX")"
+    {
+        echo "# HELP flowpilot_sweeper_watchdog_stale_count Sweepers past their success deadline."
+        echo "# TYPE flowpilot_sweeper_watchdog_stale_count gauge"
+        echo "flowpilot_sweeper_watchdog_stale_count ${#STALE[@]}"
+        echo "# HELP flowpilot_sweeper_watchdog_last_check_timestamp_seconds Unix time of the last watchdog pass."
+        echo "# TYPE flowpilot_sweeper_watchdog_last_check_timestamp_seconds gauge"
+        echo "flowpilot_sweeper_watchdog_last_check_timestamp_seconds ${NOW}"
+    } > "${TMP}"
+    chmod 644 "${TMP}"
+    mv "${TMP}" "${TEXTFILE_DIR}/flowpilot_sweeper_watchdog.prom"
+fi
+
+if (( ${#STALE[@]} == 0 )); then
+    exit 0
+fi
+
+MESSAGE="FlowPilot sweepers past deadline (${DEADLINE_SECONDS}s): ${STALE[*]}"
+echo "${MESSAGE}" >&2
+
+if [[ -n "${ALERT_WEBHOOK:-}" ]]; then
+    curl -fsS -m 10 -X POST -H 'Content-Type: application/json' \
+        -d "{\"severity\":\"page\",\"summary\":\"$(printf '%s' "${MESSAGE}" | sed 's/"/\\"/g')\"}" \
+        -o /dev/null "${ALERT_WEBHOOK}" || true
+fi
+
+exit 1

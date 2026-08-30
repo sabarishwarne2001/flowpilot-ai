@@ -1,16 +1,12 @@
 """
 Email change endpoints for FlowPilot AI.
-
-ARCH-06 Step 9. Exposes the Step 6 service.
-
-    POST   /me/email-change/request     authenticated, re-proves the password
-    DELETE /me/email-change/request     authenticated, withdraws
-    POST   /auth/email-change/confirm   UNAUTHENTICATED, proved by the token
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
@@ -32,6 +28,13 @@ class EmailChangeRequestPayload(BaseModel):
 class EmailChangeRequestResponse(BaseModel):
     new_email: str
     expires_at: str
+
+
+class PendingEmailChangeResponse(BaseModel):
+    id: uuid.UUID
+    new_email: str
+    requested_at: datetime
+    expires_at: datetime
 
 
 class EmailChangeConfirmPayload(BaseModel):
@@ -80,6 +83,31 @@ async def request_email_change(
     return EmailChangeRequestResponse(
         new_email=request.new_email,
         expires_at=request.expires_at.isoformat(),
+    )
+
+
+@router.get(
+    "/me/email-change/request",
+    response_model=PendingEmailChangeResponse,
+    summary="Get the caller's pending email address change",
+)
+async def get_pending_email_change(
+    db: deps.DbSession,
+    current_user: deps.CurrentUser,
+) -> Any:
+    request = ecs.get_pending_email_change(db, user=current_user)
+
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You have no email change request in progress.",
+        )
+
+    return PendingEmailChangeResponse(
+        id=request.id,
+        new_email=request.new_email,
+        requested_at=request.created_at,
+        expires_at=request.expires_at,
     )
 
 

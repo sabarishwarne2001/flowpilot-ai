@@ -153,6 +153,15 @@ class NotificationUpdate(BaseModel):
         return value
 
 
+class OrganizationNotificationUpdate(BaseModel):
+    """The only field a user may change on their own notification."""
+
+    is_read: bool = Field(
+        ...,
+        description="True marks the notification read; False returns it to unread.",
+    )
+
+
 # ============================================================================
 # Response Schemas
 # ============================================================================

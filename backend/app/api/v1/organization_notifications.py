@@ -1,7 +1,5 @@
 """
 Organization-scoped notification feed (ARCH-07 Step 10, §B.11 Option A).
-
-    GET /organizations/{organization_id}/notifications
 """
 
 from __future__ import annotations
@@ -9,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import RequireOrgMember, get_db
@@ -19,6 +17,7 @@ from app.schemas.notification import (
     ORG_NOTIFICATIONS_MAX_PAGE_SIZE,
     NotificationPage,
     NotificationRead,
+    OrganizationNotificationUpdate,
 )
 
 router = APIRouter(tags=["Notifications"])
@@ -42,11 +41,6 @@ def list_organization_notifications(
     ),
     offset: int = Query(0, ge=0),
 ) -> NotificationPage:
-    """Return the caller's own organization-scoped notifications.
-
-    R9 / E19: Self-filtered to context.user.id. Org members read their own rows;
-    admins receive no elevated cross-user view here.
-    """
     rows, total, unread = notification_crud.list_organization_scoped_for_user(
         db,
         organization_id=context.organization.id,
@@ -62,3 +56,38 @@ def list_organization_notifications(
         limit=limit,
         offset=offset,
     )
+
+
+@router.patch(
+    "/organizations/{organization_id}/notifications/{notification_id}",
+    response_model=NotificationRead,
+    summary="Mark an organization-scoped notification read or unread",
+)
+def update_organization_notification(
+    organization_id: uuid.UUID,
+    notification_id: uuid.UUID,
+    payload: OrganizationNotificationUpdate,
+    db: Session = Depends(get_db),
+    context=Depends(RequireOrgMember),
+) -> NotificationRead:
+    notification = notification_crud.get_organization_scoped_for_user(
+        db,
+        organization_id=context.organization.id,
+        user_id=context.user.id,
+        notification_id=notification_id,
+    )
+
+    if notification is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found.",
+        )
+
+    if notification.is_read != payload.is_read:
+        notification = notification_crud.update_notification_read_status(
+            db,
+            notification=notification,
+            is_read=payload.is_read,
+        )
+
+    return NotificationRead.model_validate(notification)

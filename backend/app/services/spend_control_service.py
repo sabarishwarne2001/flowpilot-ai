@@ -570,3 +570,24 @@ def set_limit(
         },
     )
     return limit
+
+
+def list_limits(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    include_inactive: bool = False,
+) -> list[SpendLimit]:
+    """Every explicit spend limit an organization has set."""
+    stmt = select(SpendLimit).where(SpendLimit.organization_id == organization_id)
+
+    if not include_inactive:
+        stmt = stmt.where(SpendLimit.is_active.is_(True))
+
+    stmt = stmt.order_by(
+        SpendLimit.limit_key.asc(),
+        SpendLimit.period.asc(),
+        SpendLimit.created_at.desc(),
+    )
+
+    return list(db.execute(stmt).scalars().all())

@@ -1,5 +1,5 @@
 # =============================================================================
-# FlowPilot AI — Separated Process Fleet (ARCH-10 Step 8)
+# FlowPilot AI — Separated Process Fleet (ARCH-10 Step 8, ARCH-0G §4.4)
 # =============================================================================
 
 name: flowpilot
@@ -20,11 +20,11 @@ x-app-env: &app-env
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
   UPLOAD_DIR: uploads
+  RERANKER_ENABLED: ${RERANKER_ENABLED:-true}
+  RERANKER_URL: ${RERANKER_URL:-http://reranker:8081}
+  RERANKER_INTERNAL_TOKEN: "${RERANKER_INTERNAL_TOKEN:?RERANKER_INTERNAL_TOKEN must be set. Generate one with openssl rand -hex 32}"
 
 services:
-  # ---------------------------------------------------------------------------
-  # Infrastructure: PostgreSQL Database
-  # ---------------------------------------------------------------------------
   db:
     image: pgvector/pgvector:pg16
     container_name: flowpilot-db
@@ -43,9 +43,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Infrastructure: Redis Cache & Identity Token Store
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: flowpilot-redis
@@ -61,9 +58,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Infrastructure: MinIO S3-Compatible Object Storage
-  # ---------------------------------------------------------------------------
   minio:
     image: minio/minio:latest
     container_name: flowpilot-minio
@@ -83,7 +77,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Pre-creates the bucket and configures the incomplete multipart abort rule
   minio-init:
     image: minio/mc:latest
     container_name: flowpilot-minio-init
@@ -97,32 +90,30 @@ services:
       mc ilm rule add --expire-delete-marker --noncurrent-expire-days 1 local/${S3_BUCKET:-flowpilot-dev} || true
       "
 
-  # ---------------------------------------------------------------------------
-  # Database Migration Runner (Runs to completion before app boot)
-  # ---------------------------------------------------------------------------
   migrate:
     build:
       context: .
       dockerfile: Dockerfile
       target: web
     container_name: flowpilot-migrate
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: migrate
     depends_on:
       db:
         condition: service_healthy
     command: ["alembic", "upgrade", "head"]
     restart: "no"
 
-  # ---------------------------------------------------------------------------
-  # Web Tier: FastAPI REST API
-  # ---------------------------------------------------------------------------
   web:
     build:
       context: .
       dockerfile: Dockerfile
       target: web
     container_name: flowpilot-web
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: web
     ports:
       - "8000:8000"
     depends_on:
@@ -132,80 +123,75 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 1: Transactional Outbox Relay
-  # ---------------------------------------------------------------------------
   worker-relay:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
     container_name: flowpilot-worker-relay
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-relay
     depends_on:
       migrate:
         condition: service_completed_successfully
     command: ["python", "-m", "app.worker", "--loop", "relay", "--per-org-cap", "5"]
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 2: SSRF-Safe Webhook Delivery Worker
-  # ---------------------------------------------------------------------------
   worker-delivery:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
     container_name: flowpilot-worker-delivery
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-delivery
     depends_on:
       migrate:
         condition: service_completed_successfully
     command: ["python", "-m", "app.worker", "--loop", "delivery", "--per-org-cap", "5"]
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 3: Light Profile Worker (Storage Sampler & Housekeeping)
-  # ---------------------------------------------------------------------------
   worker-light:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
     container_name: flowpilot-worker-light
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-light
     depends_on:
       migrate:
         condition: service_completed_successfully
     command: ["python", "-m", "app.worker", "--loop", "jobs", "--profile", "light"]
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 4: Dedicated Stripe Inbound Events Worker
-  # ---------------------------------------------------------------------------
   worker-stripe:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
     container_name: flowpilot-worker-stripe
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-stripe
     depends_on:
       migrate:
         condition: service_completed_successfully
     command: ["python", "-m", "app.worker", "--loop", "stripe"]
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 5: Dedicated OCR Worker (PaddleOCR Heavy Image)
-  # ---------------------------------------------------------------------------
   worker-ocr:
     build:
       context: .
       dockerfile: Dockerfile
       target: ocr
     container_name: flowpilot-worker-ocr
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-ocr
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -223,16 +209,15 @@ services:
           memory: 4G
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # Worker 6: Dedicated Enrichment Worker (Embeddings, pgvector, LLM)
-  # ---------------------------------------------------------------------------
   worker-enrich:
     build:
       context: .
       dockerfile: Dockerfile
       target: enrich
     container_name: flowpilot-worker-enrich
-    environment: *app-env
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-enrich
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -250,7 +235,38 @@ services:
           memory: 4G
     restart: unless-stopped
 
+  reranker:
+    build:
+      context: .
+      dockerfile: app/reranker/Dockerfile
+      args:
+        RERANKER_MODEL: ${RERANKER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+    container_name: flowpilot-reranker
+    environment:
+      RERANKER_MODEL: ${RERANKER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+      RERANKER_INTERNAL_TOKEN: "${RERANKER_INTERNAL_TOKEN:?RERANKER_INTERNAL_TOKEN must be set. Generate one with openssl rand -hex 32}"
+      RERANKER_MAX_PAIRS: ${RERANKER_MAX_PAIRS:-100}
+      RERANKER_MAX_TEXT_CHARS: ${RERANKER_MAX_TEXT_CHARS:-4000}
+      RERANKER_MAX_QUERY_CHARS: ${RERANKER_MAX_QUERY_CHARS:-1000}
+      RERANKER_PRELOAD: "1"
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - reranker_models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8081/ready', timeout=2).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+  reranker_models:

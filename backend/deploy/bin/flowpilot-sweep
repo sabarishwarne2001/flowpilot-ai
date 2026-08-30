@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+CONFIG_FILE="${FLOWPILOT_SWEEPER_ENV:-/etc/flowpilot/sweepers.env}"
+[[ -r "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+
+FLOWPILOT_ROOT="${FLOWPILOT_ROOT:-/srv/flowpilot}"
+FLOWPILOT_VENV="${FLOWPILOT_VENV:-${FLOWPILOT_ROOT}/venv}"
+FLOWPILOT_LOG_DIR="${FLOWPILOT_LOG_DIR:-/var/log/flowpilot}"
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
+LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
+
+if [[ $# -lt 1 ]]; then
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09> [args...]" >&2
+    exit 64
+fi
+
+NAME="$1"; shift
+
+case "${NAME}" in
+    arch07)      SCRIPT="scripts/sweep_arch07.py"      ; HEARTBEAT="${HEARTBEAT_UUID_ARCH07:-}"      ;;
+    identity)    SCRIPT="scripts/sweep_identity.py"    ; HEARTBEAT="${HEARTBEAT_UUID_IDENTITY:-}"    ;;
+    invitations) SCRIPT="scripts/sweep_invitations.py" ; HEARTBEAT="${HEARTBEAT_UUID_INVITATIONS:-}" ;;
+    arch09)      SCRIPT="scripts/sweep_arch09.py"      ; HEARTBEAT="${HEARTBEAT_UUID_ARCH09:-}"      ;;
+    *)
+        echo "unknown sweeper: ${NAME}" >&2
+        exit 64
+        ;;
+esac
+
+mkdir -p "${FLOWPILOT_LOG_DIR}" "${LOCK_DIR}"
+LOG_FILE="${FLOWPILOT_LOG_DIR}/sweep_${NAME}.log"
+LOCK_FILE="${LOCK_DIR}/sweep_${NAME}.lock"
+
+STARTED_AT="$(date -u +%s)"
+
+{
+    echo "=== $(date -u +%FT%TZ) | sweep ${NAME} | args: $* ==="
+} >> "${LOG_FILE}"
+
+MODULE="${SCRIPT%.py}"
+MODULE="${MODULE//\//.}"
+
+cd "${FLOWPILOT_ROOT}/backend" || {
+    echo "SWEEP_FAILED | ${NAME} | cannot cd to ${FLOWPILOT_ROOT}/backend" >> "${LOG_FILE}"
+    exit 1
+}
+
+flock -w 0 "${LOCK_FILE}" \
+    env SERVICE_ROLE=sweeper \
+    "${FLOWPILOT_VENV}/bin/python" -m "${MODULE}" "$@" \
+    >> "${LOG_FILE}" 2>&1
+STATUS=$?
+
+FINISHED_AT="$(date -u +%s)"
+DURATION=$(( FINISHED_AT - STARTED_AT ))
+
+OUTCOME="fail"
+case "${STATUS}" in
+    0)
+        OUTCOME="ok"
+        ;;
+    3)
+        if [[ "${NAME}" == "invitations" ]]; then
+            OUTCOME="ok"
+            echo "SWEEP_SKIPPED | ${NAME} | advisory lock held elsewhere" >> "${LOG_FILE}"
+        fi
+        ;;
+    2)
+        echo "SWEEP_BAD_ARGS | ${NAME} | argparse rejected: $*" >> "${LOG_FILE}"
+        ;;
+esac
+
+if [[ -d "${TEXTFILE_DIR}" ]]; then
+    TMP="$(mktemp "${TEXTFILE_DIR}/flowpilot_sweeper_${NAME}.XXXXXX")"
+    {
+        echo "# HELP flowpilot_sweeper_last_run_timestamp_seconds Unix time of the last completed run."
+        echo "# TYPE flowpilot_sweeper_last_run_timestamp_seconds gauge"
+        echo "flowpilot_sweeper_last_run_timestamp_seconds{sweeper=\"${NAME}\"} ${FINISHED_AT}"
+        echo "# HELP flowpilot_sweeper_last_exit_code Exit status of the last run."
+        echo "# TYPE flowpilot_sweeper_last_exit_code gauge"
+        echo "flowpilot_sweeper_last_exit_code{sweeper=\"${NAME}\"} ${STATUS}"
+        echo "# HELP flowpilot_sweeper_last_duration_seconds Wall-clock duration of the last run."
+        echo "# TYPE flowpilot_sweeper_last_duration_seconds gauge"
+        echo "flowpilot_sweeper_last_duration_seconds{sweeper=\"${NAME}\"} ${DURATION}"
+        if [[ "${OUTCOME}" == "ok" ]]; then
+            echo "# HELP flowpilot_sweeper_last_success_timestamp_seconds Unix time of the last successful run."
+            echo "# TYPE flowpilot_sweeper_last_success_timestamp_seconds gauge"
+            echo "flowpilot_sweeper_last_success_timestamp_seconds{sweeper=\"${NAME}\"} ${FINISHED_AT}"
+        elif [[ -f "${TEXTFILE_DIR}/flowpilot_sweeper_${NAME}.prom" ]]; then
+            grep '^flowpilot_sweeper_last_success_timestamp_seconds' \
+                "${TEXTFILE_DIR}/flowpilot_sweeper_${NAME}.prom" 2>/dev/null || true
+        fi
+    } > "${TMP}"
+    chmod 644 "${TMP}"
+    mv "${TMP}" "${TEXTFILE_DIR}/flowpilot_sweeper_${NAME}.prom"
+fi
+
+if [[ -n "${HEARTBEAT_BASE:-}" && -n "${HEARTBEAT}" ]]; then
+    if [[ "${OUTCOME}" == "ok" ]]; then
+        URL="${HEARTBEAT_BASE}/${HEARTBEAT}"
+    else
+        URL="${HEARTBEAT_BASE}/${HEARTBEAT}/fail"
+    fi
+    curl -fsS -m 10 --retry 3 --retry-delay 2 -o /dev/null "${URL}" \
+        || echo "HEARTBEAT_PING_FAILED | ${NAME} | ${URL}" >> "${LOG_FILE}"
+fi
+
+echo "SWEEP_WRAPPER_DONE | ${NAME} | status=${STATUS} outcome=${OUTCOME} duration=${DURATION}s" \
+    >> "${LOG_FILE}"
+
+exit "${STATUS}"
