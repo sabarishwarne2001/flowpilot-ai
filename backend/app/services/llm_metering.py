@@ -411,6 +411,12 @@ def _record(
         price_details = price.as_details()
         price_book_id = price.price_book_id
         unit_price_micros = price.unit_price_micros
+        # ARCH-18. Denormalised from the same ResolvedPrice that produced the
+        # revenue figure, so both sides of the margin come from one book
+        # version at one instant. None when the entry carries no cost basis —
+        # honest unknown, never a zero.
+        cost_basis_micros = price.cost_basis_for(quantity)
+        cost_basis_source = price.cost_basis_source
     else:
         cost = None
         price_details = {
@@ -421,6 +427,8 @@ def _record(
         }
         price_book_id = None
         unit_price_micros = None
+        cost_basis_micros = None
+        cost_basis_source = None
 
     savepoint = db.begin_nested()
     try:
@@ -432,6 +440,8 @@ def _record(
             cost_micros=cost,
             price_book_id=price_book_id,
             unit_price_micros=unit_price_micros,
+            cost_basis_micros=cost_basis_micros,
+            cost_basis_source=cost_basis_source,
             workspace_id=reservation.workspace_id,
             resource_type=reservation.resource_type,
             resource_id=reservation.resource_id,

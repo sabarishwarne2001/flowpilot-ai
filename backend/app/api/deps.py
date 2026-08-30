@@ -516,4 +516,72 @@ RequireOrgAdmin = RequireOrgRole(
 
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
 
+
+# ---------------------------------------------------------------------------
+# ARCH-18 — the platform superadmin gate
+#
+# `require_superadmin` has been listed in app/main.py's _AUTH_DEPENDENCY_NAMES
+# since ARCH-08, but was never implemented — the name was reserved and the
+# function never written, so every route that "requires superadmin" until now
+# has been a route that does not exist. ARCH-18 is the first phase with a
+# platform-scoped surface, so this is where it lands.
+#
+# The distinction that matters: every other guard in this file answers "what
+# may this user do INSIDE an organization". This one answers "is this user
+# operating the platform", and it deliberately takes no organization context —
+# the COGS endpoints read across every tenant at once, which is precisely why
+# no tenant role can be permitted to reach them.
+#
+# 404, not 403, and that is a decision rather than a slip. A 403 tells an
+# organization admin poking at /admin/cogs that a cross-tenant margin surface
+# exists and that they are simply on the wrong side of it. A 404 tells them
+# nothing. It matches the concealment already used by
+# OrganizationAccessDeniedError("Organization not found.") for non-members,
+# so the codebase is at least consistent about it. The denial is logged at
+# WARNING with the user id, because the operator debugging their own missing
+# access needs the signal that a 404 withholds.
+# ---------------------------------------------------------------------------
+
+
+async def require_superadmin(
+    request: Request,
+    current_user: User = Depends(get_verified_user),
+) -> User:
+    if not bool(getattr(current_user, "is_superuser", False)):
+        logger.warning(
+            "PLATFORM_ACCESS_DENIED | user=%s | path=%s | reason=not_superuser",
+            current_user.id,
+            request.url.path if request is not None else "?",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",
+        )
+
+    principal = getattr(request.state, "principal", None) or get_current_principal()
+    if principal is not None and (
+        principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY
+    ):
+        # An API key is issued against an organization membership (ARCH-08).
+        # Letting one authenticate a platform-wide read would mean a tenant's
+        # key inherits its issuer's superadmin status — a privilege escalation
+        # across the exact boundary this dependency exists to hold. Scopes do
+        # not help: ROUTE_SCOPE_MAP has no platform scope to check against.
+        logger.warning(
+            "PLATFORM_ACCESS_DENIED | user=%s | path=%s | reason=api_key_principal",
+            current_user.id,
+            request.url.path if request is not None else "?",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",
+        )
+
+    return current_user
+
+
+#: Annotated alias, matching the RequireOrgAdmin / RequireWorkspaceAdmin style.
+RequireSuperAdmin = require_superadmin
+SuperAdminUser = Annotated[User, Depends(require_superadmin)]
+
 OrgAdminCtx = Annotated[OrganizationContext, Depends(RequireOrgAdmin)]

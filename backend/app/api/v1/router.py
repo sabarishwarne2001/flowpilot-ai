@@ -30,6 +30,7 @@ from app.api.v1 import (
     work_items,
     workspaces,
 )
+from app.api.v1.admin import cogs as admin_cogs
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.organization_invitations import router as organization_invitation_router
@@ -54,6 +55,12 @@ api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
 api_router.include_router(usage.router)
 api_router.include_router(slos.router)  # ARCH-17
+
+# ARCH-18 Platform COGS & unit economics.
+# Cross-tenant, superadmin-only. The gate lives on the router itself
+# (dependencies=[Depends(require_superadmin)]) rather than on each endpoint, so
+# a route added later cannot ship unguarded.
+api_router.include_router(admin_cogs.router)
 
 # ARCH-16 Enterprise Identity Administration
 api_router.include_router(identity_admin.router)

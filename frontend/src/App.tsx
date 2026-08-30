@@ -43,6 +43,9 @@ const IdentityAdminHub = lazy(
   () => import("@/pages/identity/IdentityAdminHub"),
 );
 const AuditExplorer = lazy(() => import("@/pages/admin/AuditExplorer"));
+// ARCH-18. Lazy, like every other admin surface: the margins hub pulls in
+// four queries and a table the overwhelming majority of sessions never open.
+const AdminMarginsHub = lazy(() => import("@/pages/admin/AdminMarginsHub"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
@@ -74,6 +77,7 @@ import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 import { SessionBootstrap } from "@/routes/SessionBootstrap";
 import OrganizationGuard from "@/routes/OrganizationGuard";
+import SuperAdminGuard from "@/routes/SuperAdminGuard";
 import TenantGuard from "@/routes/TenantGuard";
 
 import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
@@ -213,6 +217,25 @@ export default function App() {
                       element={<OrganizationSLOs />}
                     />
                   </Route>
+                </Route>
+
+                {/* ARCH-18 platform administration.
+
+                    A sibling of the organization shell, never a child of it.
+                    Nesting a cross-tenant page inside OrganizationGuard would
+                    make platform-wide totals appear to belong to whichever
+                    organization happened to be selected — the precise
+                    misreading the COGS dashboard must not invite. It also has
+                    no OrganizationLayout, so no tenant switcher is rendered
+                    beside numbers that do not respond to it. */}
+                <Route
+                  path={ROUTE_PATTERNS.platformShell}
+                  element={<SuperAdminGuard />}
+                >
+                  <Route
+                    path={ROUTE_PATTERNS.platformMargins}
+                    element={<AdminMarginsHub />}
+                  />
                 </Route>
 
                 {/* Legacy redirects */}

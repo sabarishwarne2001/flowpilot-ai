@@ -291,6 +291,20 @@ class Settings(BaseSettings):
     RECONCILE_BOUNDARY_HOURS: int = 6
     RECONCILE_ALERT_BPS: int = 50
 
+    # ---- ARCH-18: COGS, unit economics & supplier reconciliation ----------
+    # Variance beyond this fraction of modelled cost needs a human. Defaults
+    # to RECONCILE_ALERT_BPS when unset so a platform tuned once for ARCH-14
+    # does not need tuning twice for the same question.
+    COGS_VARIANCE_ALERT_BPS: Optional[int] = None
+    # A period is not reconciled until it has been closed this long. Suppliers
+    # issue corrections; a variance against a period still being written to is
+    # noise that pages someone at 3am.
+    COGS_INVOICE_MIN_AGE_DAYS: Optional[int] = None
+    # Default reporting window for the margins dashboard, in days.
+    COGS_DEFAULT_WINDOW_DAYS: int = 30
+    # Hard ceiling on rows a tenant-economics query will return.
+    COGS_TENANT_RANKING_MAX: int = 500
+
     # ---- ARCH-14 Step 14.6: Gemini billing labels -------------------------
     GEMINI_BILLING_LABELS_ENABLED: bool = False
     GEMINI_USE_VERTEX: bool = False

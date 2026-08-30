@@ -196,3 +196,24 @@ export const SLO_ENDPOINTS = {
   detail: (organizationId: string, sloKey: string): string =>
     `/organizations/${seg(organizationId)}/slos/${seg(sloKey)}`,
 } as const;
+
+/**
+ * ARCH-18 — platform COGS and unit economics.
+ *
+ * Note the absence of an organization id anywhere in these paths. These are
+ * cross-tenant reads gated by `require_superadmin`; a path that scoped to one
+ * organization would belong under ORGANIZATION_ENDPOINTS behind an org role.
+ */
+export const COGS_ENDPOINTS = {
+  marginSummary: (): string => `/admin/cogs/margins/summary`,
+  tenantEconomics: (): string => `/admin/cogs/margins/tenants`,
+  providerCosts: (): string => `/admin/cogs/margins/providers`,
+  rateCard: (): string => `/admin/cogs/rate-card`,
+  supplierInvoices: (): string => `/admin/cogs/supplier-invoices`,
+  reconcileInvoice: (supplierInvoiceId: string): string =>
+    `/admin/cogs/supplier-invoices/${seg(supplierInvoiceId)}/reconcile`,
+  invoiceReconciliations: (supplierInvoiceId: string): string =>
+    `/admin/cogs/supplier-invoices/${seg(supplierInvoiceId)}/reconciliations`,
+  acceptVariance: (reconciliationId: string): string =>
+    `/admin/cogs/reconciliations/${seg(reconciliationId)}/accept`,
+} as const;

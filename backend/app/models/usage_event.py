@@ -22,6 +22,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.models.supplier_cogs import COST_BASIS_SOURCE_VALUES
+
+_COST_BASIS_SOURCE_IN = ", ".join(f"'{v}'" for v in COST_BASIS_SOURCE_VALUES)
 
 
 class UsageEvent(Base, UUIDMixin, TimestampMixin):
@@ -90,6 +93,36 @@ class UsageEvent(Base, UUIDMixin, TimestampMixin):
             "occurred_at",
             postgresql_where=text("price_book_id IS NULL"),
         ),
+        # ---- ARCH-18: the cost basis --------------------------------------
+        CheckConstraint(
+            "(cost_basis_micros IS NULL) = (cost_basis_source IS NULL)",
+            name="cost_basis_pair_complete",
+        ),
+        CheckConstraint(
+            "cost_basis_micros IS NULL OR cost_basis_micros >= 0",
+            name="cost_basis_non_negative",
+        ),
+        CheckConstraint(
+            "cost_basis_source IS NULL OR cost_basis_source IN "
+            f"({_COST_BASIS_SOURCE_IN})",
+            name="cost_basis_source_known",
+        ),
+        CheckConstraint(
+            "cost_basis_micros IS NULL OR "
+            "(cost_basis_micros = 0) = (cost_basis_source = 'ZERO_BYOK')",
+            name="zero_cost_is_declared",
+        ),
+        Index(
+            "ix_usage_events_provider_cost_basis",
+            "provider",
+            "occurred_at",
+            postgresql_where=text("provider IS NOT NULL"),
+        ),
+        Index(
+            "ix_usage_events_unknown_cost_basis",
+            "occurred_at",
+            postgresql_where=text("cost_basis_micros IS NULL"),
+        ),
     )
 
     seq: Mapped[int] = mapped_column(
@@ -121,6 +154,22 @@ class UsageEvent(Base, UUIDMixin, TimestampMixin):
     )
     unit_price_micros: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(20, 9), nullable=True
+    )
+
+    # ---- ARCH-18 ----------------------------------------------------------
+    # Denormalised at settle time for exactly the reason unit_price_micros is:
+    # a price book published next quarter must not restate what last quarter
+    # cost. usage_events_immutable() (V3) enumerates both of these columns, so
+    # a later UPDATE is refused at the database rather than merely discouraged.
+    #
+    # NULL means unknown and must render as unknown. It is never coerced to 0
+    # anywhere in the read path — a silent zero reads as 100% gross margin,
+    # which is the single most misleading number this phase could produce.
+    cost_basis_micros: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+    cost_basis_source: Mapped[Optional[str]] = mapped_column(
+        String(24), nullable=True
     )
 
     resource_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

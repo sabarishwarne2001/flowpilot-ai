@@ -162,6 +162,8 @@ def record_usage(
     cost_micros: Optional[int] = None,
     price_book_id: Optional[uuid.UUID] = None,
     unit_price_micros: Optional[Any] = None,
+    cost_basis_micros: Optional[int] = None,
+    cost_basis_source: Optional[str] = None,
     provider: Optional[str] = None,
     resource_type: Optional[str] = None,
     resource_id: Optional[uuid.UUID] = None,
@@ -234,6 +236,32 @@ def record_usage(
                     "be defended."
                 )
 
+    # ---- ARCH-18: the cost basis --------------------------------------
+    # Validated in Python for a readable error, then written and enforced by
+    # four CHECK constraints. Passing neither is legal and common: it records
+    # an honest unknown, which is the correct state for any unit whose
+    # supplier rate nobody has entered yet.
+    if cost_basis_micros is not None or cost_basis_source is not None:
+        from app.services.cost_basis_service import (
+            InvalidCostBasisError,
+            validate_cost_basis,
+        )
+
+        try:
+            checked_basis, checked_source = validate_cost_basis(
+                cost_basis_micros, cost_basis_source
+            )
+        except InvalidCostBasisError as exc:
+            raise UsageError(str(exc)) from exc
+
+        resolved_cost_basis = (
+            int(checked_basis) if checked_basis is not None else None
+        )
+        resolved_cost_source = checked_source
+    else:
+        resolved_cost_basis = None
+        resolved_cost_source = None
+
     actor_id, api_key_id, principal_details = _attribution(principal)
     merged_details = {**principal_details, **(_sanitize_details(details) or {})}
 
@@ -246,6 +274,8 @@ def record_usage(
         cost_micros=cost_micros,
         price_book_id=price_book_id,
         unit_price_micros=resolved_unit_price,
+        cost_basis_micros=resolved_cost_basis,
+        cost_basis_source=resolved_cost_source,
         provider=provider or descriptor.default_provider,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -268,6 +298,8 @@ def record_usage(
             "event_type": descriptor.name,
             "quantity": str(qty),
             "cost_micros": cost_micros,
+            "cost_basis_micros": resolved_cost_basis,
+            "cost_basis_source": resolved_cost_source,
             "price_book_id": str(price_book_id) if price_book_id else None,
             "organization_id": str(organization_id),
             "job_id": str(job_id) if job_id else None,

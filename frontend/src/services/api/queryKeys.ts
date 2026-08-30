@@ -187,6 +187,36 @@ export const verificationKeys = {
     [...verificationKeys.all(workspaceId), "detail", verificationId] as const,
 };
 
+/**
+ * ARCH-18 — platform COGS.
+ *
+ * Rooted at ["platform","cogs"], deliberately NOT under organizationScope.
+ * These queries are cross-tenant, so filing them under an organization would
+ * mean `invalidateOrganization` wiped a cache that has nothing to do with
+ * that organization — and, worse, that switching organizations appeared to
+ * change platform-wide numbers.
+ */
+export const cogsKeys = {
+  all: () => ["platform", "cogs"] as const,
+  marginSummary: (window: string) =>
+    [...cogsKeys.all(), "margins", "summary", window] as const,
+  tenantEconomics: (window: string, order: string) =>
+    [...cogsKeys.all(), "margins", "tenants", window, order] as const,
+  providerCosts: (window: string) =>
+    [...cogsKeys.all(), "margins", "providers", window] as const,
+  rateCard: () => [...cogsKeys.all(), "rate-card"] as const,
+  supplierInvoices: (provider?: string) =>
+    [...cogsKeys.all(), "supplier-invoices", provider ?? "ALL"] as const,
+  reconciliations: (supplierInvoiceId: string) =>
+    [...cogsKeys.all(), "reconciliations", supplierInvoiceId] as const,
+};
+
+export const invalidateCogs = async (
+  queryClient: QueryClient,
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: cogsKeys.all() });
+};
+
 export const invalidateOrganization = async (
   queryClient: QueryClient,
   organizationId: string,

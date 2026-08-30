@@ -15,6 +15,11 @@ export interface TenantRouteParams {
 
 export const RESERVED_ROUTE_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "account",
+  // ARCH-18. Without this, parseTenantPath reads /admin/margins as
+  // orgSlug="admin", workspaceSlug="margins" and TenantGuard redirects the
+  // platform dashboard to the workspace picker. Reserving the segment is not
+  // optional — it is what makes the route reachable at all.
+  "admin",
   "assistant",
   "auth",
   "automation",
@@ -51,6 +56,11 @@ export const ROUTE_PATTERNS = {
   organizationAudit: "audit",
   organizationSLOs: "service-levels",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
+
+  // ARCH-18 platform administration. No tenant parameter, by design: these
+  // pages read across every organization.
+  platformShell: "/admin",
+  platformMargins: "margins",
 
   workspaceShell: `/${P_ORG}/${P_WS}`,
   workspaceDashboard: "",
@@ -101,6 +111,10 @@ export const organizationIdentityPath = (orgSlug: string): string =>
 
 export const organizationAuditPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/audit`;
+
+export const platformPath = (): string => "/admin";
+
+export const platformMarginsPath = (): string => "/admin/margins";
 
 export const createWorkspacePath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/workspaces/new`;
@@ -288,6 +302,14 @@ export const runTenantPathSelfCheck = (): string[] => {
   expect(
     "the invitation route is NOT parsed as a tenant path",
     parseTenantPath("/invitations/accept") === null,
+  );
+  expect(
+    "the platform admin route is NOT parsed as a tenant path",
+    parseTenantPath("/admin/margins") === null,
+  );
+  expect(
+    "the platform margins path is stable",
+    platformMarginsPath() === "/admin/margins",
   );
   expect(
     "single-segment and root paths carry no tenant",

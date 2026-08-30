@@ -31,6 +31,13 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 
 DEFAULT_CURRENCY: str = "USD"
 
+# ARCH-18. Imported rather than restated so the CHECK below and the service
+# layer cannot disagree about what a legal source is. supplier_cogs imports
+# nothing from this module, so there is no cycle.
+from app.models.supplier_cogs import COST_BASIS_SOURCE_VALUES  # noqa: E402
+
+_COST_BASIS_SOURCE_IN = ", ".join(f"'{v}'" for v in COST_BASIS_SOURCE_VALUES)
+
 
 class PriceBook(Base, UUIDMixin, TimestampMixin):
     """One published, immutable version of the platform price list."""
@@ -117,6 +124,25 @@ class PriceBookEntry(Base, UUIDMixin, TimestampMixin):
         CheckConstraint("length(event_type) > 0", name="event_type_not_blank"),
         CheckConstraint("length(provider) > 0", name="provider_not_blank"),
         CheckConstraint("length(unit) > 0", name="unit_not_blank"),
+        # ---- ARCH-18: the supplier rate card ------------------------------
+        CheckConstraint(
+            "(cost_basis_micros IS NULL) = (cost_basis_source IS NULL)",
+            name="cost_basis_pair_complete",
+        ),
+        CheckConstraint(
+            "cost_basis_micros IS NULL OR cost_basis_micros >= 0",
+            name="cost_basis_non_negative",
+        ),
+        CheckConstraint(
+            "cost_basis_source IS NULL OR cost_basis_source IN "
+            f"({_COST_BASIS_SOURCE_IN})",
+            name="cost_basis_source_known",
+        ),
+        CheckConstraint(
+            "cost_basis_micros IS NULL OR "
+            "(cost_basis_micros = 0) = (cost_basis_source = 'ZERO_BYOK')",
+            name="zero_cost_is_declared",
+        ),
         Index(
             "ix_price_book_entries_lookup",
             "price_book_id",
@@ -139,6 +165,21 @@ class PriceBookEntry(Base, UUIDMixin, TimestampMixin):
 
     unit_price_micros: Mapped[Decimal] = mapped_column(
         Numeric(20, 9), nullable=False
+    )
+
+    # ---- ARCH-18 ----------------------------------------------------------
+    # What the supplier charges us for this unit, against what we charge for
+    # it above. Same precision so the two are directly comparable.
+    #
+    # NULL is the honest answer for every entry published before ARCH-18, and
+    # it stays NULL forever: price_book_entries_publish_immutable() refuses
+    # every UPDATE once the parent book is published. Cost basis arrives by
+    # publishing version N+1, not by backfill.
+    cost_basis_micros: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 9), nullable=True
+    )
+    cost_basis_source: Mapped[Optional[str]] = mapped_column(
+        String(24), nullable=True
     )
 
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

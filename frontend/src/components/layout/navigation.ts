@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Sliders,
+  Scale,
   Users,
   Webhook,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import {
   organizationNotificationsPath,
   organizationSLOsPath,
   organizationWebhooksPath,
+  platformMarginsPath,
   verificationPath,
   workItemsPath,
   workspaceDashboardPath,
@@ -143,4 +145,34 @@ export const buildOrganizationNavigationItems = (
   }
 
   return items;
+};
+
+/**
+ * ARCH-18 — platform administration.
+ *
+ * Separate from buildOrganizationNavigationItems on purpose. The organization
+ * builder takes an organization role and produces links scoped to one tenant;
+ * this one takes nothing, because a platform page has no tenant. Folding the
+ * superuser check into the organization builder would put a cross-tenant link
+ * inside an organization's own navigation, which invites reading platform
+ * totals as that organization's numbers.
+ *
+ * Returning an empty array for a non-superuser hides the link. It does not
+ * protect the page — SuperAdminGuard redirects, and require_superadmin on the
+ * backend refuses. Three layers, only the last of which is a security control.
+ */
+export const buildPlatformNavigationItems = (
+  isSuperAdmin: boolean,
+): readonly NavigationItem[] => {
+  if (!isSuperAdmin) {
+    return [];
+  }
+
+  return [
+    {
+      name: "Unit economics",
+      path: platformMarginsPath(),
+      icon: Scale,
+    },
+  ];
 };

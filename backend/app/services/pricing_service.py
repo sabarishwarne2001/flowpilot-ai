@@ -51,8 +51,28 @@ class ResolvedPrice:
     currency: str
     fallback: bool
 
+    # ---- ARCH-18 -------------------------------------------------------
+    # The cost side of the same entry, carried on the same object so a
+    # caller cannot resolve price at one instant and cost at another.
+    # Defaulted to None so every existing construction site keeps working;
+    # None means unknown and must never be read as zero.
+    cost_basis_micros: Optional[Decimal] = None
+    cost_basis_source: Optional[str] = None
+
     def cost_micros(self, quantity: Any) -> int:
         return cost_micros(quantity, self.unit_price_micros)
+
+    def cost_basis_for(self, quantity: Any) -> Optional[int]:
+        """Supplier cost for a quantity, or None when unknown.
+
+        Deliberately not named cost_micros_*: `cost_micros` on this class is
+        already the revenue figure, and two methods a character apart that
+        mean revenue and COGS is a bug waiting for a tired afternoon.
+        """
+        if self.cost_basis_micros is None:
+            return None
+        product = Decimal(str(quantity)) * self.cost_basis_micros
+        return int(product.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     def as_details(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -64,6 +84,13 @@ class ResolvedPrice:
         if self.fallback:
             payload["price_fallback"] = True
             payload["price_fallback_from"] = self.requested_model or "unknown"
+        if self.cost_basis_source is not None:
+            payload["cost_basis_source"] = self.cost_basis_source
+            payload["cost_basis_unit_micros"] = format(
+                self.cost_basis_micros or Decimal(0), "f"
+            )
+        else:
+            payload["cost_basis_unknown"] = True
         return payload
 
     def __repr__(self) -> str:  # pragma: no cover
@@ -85,6 +112,14 @@ class PriceSpec:
     tier_key: Optional[str] = None
     notes: Optional[str] = None
 
+    # ---- ARCH-18 -------------------------------------------------------
+    # Optional, and it must stay optional: making a cost basis mandatory
+    # would mean no price book can be published until every supplier rate is
+    # known, which turns a reporting gap into an inability to change prices.
+    # An entry published without one honestly reports "unknown" forever.
+    cost_basis_micros: Optional[Decimal] = None
+    cost_basis_source: Optional[str] = None
+
 
 def cost_micros(quantity: Any, unit_price_micros: Any) -> int:
     product = Decimal(str(quantity)) * Decimal(str(unit_price_micros))
@@ -100,6 +135,8 @@ class _EntrySnapshot:
     unit: str
     unit_price_micros: Decimal
     model: Optional[str]
+    cost_basis_micros: Optional[Decimal] = None
+    cost_basis_source: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -136,10 +173,15 @@ def _snapshot(book: PriceBook) -> _BookSnapshot:
             entry.model or _ANY,
             entry.tier_key or _ANY,
         )
+        raw_cost = getattr(entry, "cost_basis_micros", None)
         entries[key] = _EntrySnapshot(
             unit=entry.unit,
             unit_price_micros=Decimal(str(entry.unit_price_micros)),
             model=entry.model,
+            cost_basis_micros=(
+                Decimal(str(raw_cost)) if raw_cost is not None else None
+            ),
+            cost_basis_source=getattr(entry, "cost_basis_source", None),
         )
     return _BookSnapshot(
         id=book.id,
@@ -276,6 +318,8 @@ def resolve(
         unit_price_micros=entry.unit_price_micros,
         currency=book.currency,
         fallback=fallback,
+        cost_basis_micros=entry.cost_basis_micros,
+        cost_basis_source=entry.cost_basis_source,
     )
 
 
@@ -309,6 +353,26 @@ def content_digest(
     effective_from: datetime,
     entries: Sequence[PriceSpec],
 ) -> str:
+    """SHA-256 over the canonical price content.
+
+    ARCH-18 deliberately does NOT fold `cost_basis_micros` into this digest,
+    and the reason is not that cost is unimportant.
+
+    The digest is what `verify_digest` checks and what ARCH-14's verification
+    gate compares against a recorded value to prove a published book has not
+    been mutated. Adding a field to the canonical form changes the hash of
+    every book ever published, so every existing book would fail verification
+    on the first run after this deploy — an alert storm that says "your price
+    books were tampered with" when nothing was touched. There is no migration
+    that fixes it, because the whole point of the digest is that it cannot be
+    recomputed and re-stored without destroying its own guarantee.
+
+    What the digest attests to is what the customer was charged. That is the
+    thing a customer disputes and the thing a court would ask about. Cost
+    basis is internal, is protected by the same publish-immutability trigger
+    as every other column on the entry, and is reconciled monthly against
+    supplier invoices — which is a stronger check than a hash anyway.
+    """
     canonical = {
         "version": version,
         "currency": currency,
@@ -375,6 +439,24 @@ def _validate(entries: Sequence[PriceSpec]) -> list[PriceSpec]:
             )
         seen.add(key)
 
+        # ARCH-18. Imported here rather than at module scope: cost_basis_service
+        # imports pricing_service, and a top-level import either way round is a
+        # cycle. The validator is pure, so the deferred import costs nothing
+        # after the first call.
+        from app.services.cost_basis_service import (
+            InvalidCostBasisError,
+            validate_cost_basis,
+        )
+
+        try:
+            cost_basis, cost_source = validate_cost_basis(
+                spec.cost_basis_micros, spec.cost_basis_source
+            )
+        except InvalidCostBasisError as exc:
+            raise PriceBookValidationError(
+                f"Entry {key!r}: {exc}"
+            ) from exc
+
         resolved.append(
             PriceSpec(
                 event_type=spec.event_type,
@@ -384,6 +466,12 @@ def _validate(entries: Sequence[PriceSpec]) -> list[PriceSpec]:
                 model=spec.model,
                 tier_key=spec.tier_key,
                 notes=spec.notes,
+                cost_basis_micros=(
+                    cost_basis.quantize(_MICROS_QUANTUM)
+                    if cost_basis is not None
+                    else None
+                ),
+                cost_basis_source=cost_source,
             )
         )
 
@@ -433,6 +521,8 @@ def publish(
                 tier_key=spec.tier_key,
                 unit=spec.unit or "",
                 unit_price_micros=spec.unit_price_micros,
+                cost_basis_micros=spec.cost_basis_micros,
+                cost_basis_source=spec.cost_basis_source,
                 notes=spec.notes,
             )
         )
@@ -483,6 +573,9 @@ def publish(
             "price_book_id": str(book.id),
             "version": version,
             "entries": len(validated),
+            "entries_with_cost_basis": sum(
+                1 for s in validated if s.cost_basis_micros is not None
+            ),
             "effective_from": effective_from.isoformat(),
             "content_digest": book.content_digest,
         },
@@ -500,6 +593,12 @@ def specs_from_book(book: PriceBook) -> list[PriceSpec]:
             model=e.model,
             tier_key=e.tier_key,
             notes=e.notes,
+            cost_basis_micros=(
+                Decimal(str(e.cost_basis_micros))
+                if getattr(e, "cost_basis_micros", None) is not None
+                else None
+            ),
+            cost_basis_source=getattr(e, "cost_basis_source", None),
         )
         for e in book.entries
     ]
