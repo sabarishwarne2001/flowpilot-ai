@@ -1,16 +1,30 @@
-"""ARCH-16 Step 16.8 — session security policy and IP pinning."""
+"""ARCH-16 Step 16.8 — session security policy and IP pinning.
+ARCH-19 §3.4 — enforcement, and one shared X-Forwarded-For parser.
+"""
 
 from __future__ import annotations
 
 import ipaddress
 import logging
 
+from app.core.client_ip import resolve as resolve_trusted_ip
 from app.models.identity import IpPinningMode, TenantSecurityPolicy
 from app.services.identity._integration import (
     IdentityPrincipal, commit_and_refresh, get_settings, write_audit,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class SessionPinViolation(Exception):
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+PIN_VIOLATION_REASONS: frozenset[str] = frozenset(
+    {"IP_OUTSIDE_PIN", "CLIENT_IP_UNVERIFIABLE"}
+)
 
 
 def get_or_create_policy(db, *, organization_id) -> TenantSecurityPolicy:
@@ -35,16 +49,12 @@ def resolve_client_ip(*, socket_ip: str | None,
     except (TypeError, ValueError):
         hops = 0
 
-    if hops <= 0 or not forwarded_for:
-        return socket_ip
-
-    chain = [p.strip() for p in forwarded_for.split(",") if p.strip()]
-    if len(chain) < hops:
-        logger.warning(
-            "ARCH-16: X-Forwarded-For has %d entries but TRUSTED_PROXY_HOPS=%d; "
-            "refusing to derive a client IP", len(chain), hops)
-        return None
-    return chain[-hops]
+    return resolve_trusted_ip(
+        socket_ip=socket_ip,
+        forwarded_for=forwarded_for,
+        hops=hops,
+        strict=True,
+    )
 
 
 def pin_for(policy: TenantSecurityPolicy, client_ip: str | None
@@ -76,6 +86,31 @@ def ip_matches_pin(*, client_ip: str | None, pinned_ip: str | None,
     except ValueError:
         return False
     return addr in network
+
+
+def enforce_session_pin(
+    *,
+    pinned_ip: str | None,
+    pinned_prefix: int | None,
+    client_ip: str | None,
+) -> None:
+    if pinned_ip is None or pinned_prefix is None:
+        return
+
+    if client_ip is None:
+        raise SessionPinViolation(
+            "This session is pinned to a network, and the client address "
+            "could not be established from the ingress chain.",
+            reason="CLIENT_IP_UNVERIFIABLE",
+        )
+
+    if not ip_matches_pin(
+        client_ip=client_ip, pinned_ip=pinned_ip, pinned_prefix=pinned_prefix
+    ):
+        raise SessionPinViolation(
+            "This session is pinned to a different network.",
+            reason="IP_OUTSIDE_PIN",
+        )
 
 
 def ip_allowed(policy: TenantSecurityPolicy, client_ip: str | None) -> bool:

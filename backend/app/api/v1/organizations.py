@@ -194,7 +194,7 @@ async def archive_organization(
     summary="List Accessible Workspaces",
 )
 async def list_organization_workspaces(
-    db: deps.DbSession,
+    db: deps.ReadDbSession,
     context: deps.OrgContext,
 ) -> Any:
     """
@@ -252,7 +252,7 @@ async def create_workspace(
     summary="List Organization Members",
 )
 async def list_organization_members(
-    db: deps.DbSession,
+    db: deps.ReadDbSession,
     context: deps.OrgContext,
     include_inactive: bool = Query(
         False,

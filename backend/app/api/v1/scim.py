@@ -36,7 +36,13 @@ def scim_key(request: Request, authorization: str | None = Header(None),
     if not authorization or not authorization.lower().startswith("bearer "):
         raise ScimNotFound("Invalid credentials.")
     token = authorization.split(" ", 1)[1].strip()
-    client_ip = request.client.host if request.client else None
+    # ARCH-19 §3.4 — this read request.client.host directly and
+    # never parsed X-Forwarded-For, so behind ingress every SCIM
+    # auth event recorded the load balancer's address rather than
+    # the IdP's, defeating source-IP audit and any allowlist.
+    from app.core.client_ip import client_ip as resolve_client_ip
+
+    client_ip = resolve_client_ip(request)
     return scim_service.authenticate(db, bearer=token, source_ip=client_ip)
 
 

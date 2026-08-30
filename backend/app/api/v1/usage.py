@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import OrganizationContext, RequireOrgAdmin, RequireWorkspaceViewer, get_db
+from app.api.deps import OrganizationContext, RequireOrgAdmin, RequireWorkspaceViewer, get_db, get_read_db
 from app.core.principal import Principal, get_current_principal
 from app.schemas.usage import (
     SpendLimitResponse,
@@ -89,7 +89,7 @@ def get_usage_summary(
         None,
         description="YYYY-MM, YYYY-MM-DD, or an ISO-8601 instant. Defaults to now.",
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageSummaryResponse:
     return usage_metrics_service.summary(
@@ -110,7 +110,7 @@ def get_usage_series(
     granularity: UsageGranularity = Query(UsageGranularity.DAY),
     range_from: datetime = Query(..., alias="from"),
     range_to: Optional[datetime] = Query(None, alias="to"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageSeriesResponse:
     since = _require(range_from, name="from")
@@ -146,7 +146,7 @@ def get_usage_series(
 )
 def get_usage_limits(
     organization_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> UsageLimitsResponse:
     moment = datetime.now(timezone.utc)
@@ -199,7 +199,7 @@ def list_usage_limits(
         description="Include superseded rows.",
     ),
     context: OrganizationContext = Depends(RequireOrgAdmin),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> list[SpendLimitResponse]:
     if context.organization_id != organization_id:
         raise HTTPException(
@@ -263,7 +263,7 @@ def update_usage_limit(
 def get_workspace_usage_summary(
     period: UsagePeriod = Query(UsagePeriod.MONTH),
     at: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context=Depends(RequireWorkspaceViewer),
 ) -> UsageSummaryResponse:
     return usage_metrics_service.summary(
@@ -284,7 +284,7 @@ def get_workspace_usage_series(
     granularity: UsageGranularity = Query(UsageGranularity.DAY),
     range_from: datetime = Query(..., alias="from"),
     range_to: Optional[datetime] = Query(None, alias="to"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context=Depends(RequireWorkspaceViewer),
 ) -> UsageSeriesResponse:
     try:

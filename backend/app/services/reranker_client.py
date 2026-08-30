@@ -1,8 +1,11 @@
-"""ARCH-11 Step 7 — the web tier's reranker client."""
+"""ARCH-11 Step 7 — the web tier's reranker client.
+ARCH-19 §3.3 — degradation vocabulary, counters, and the disabled path.
+"""
 
 from __future__ import annotations
 
 import logging
+import threading
 import uuid
 from typing import Any, Optional, Sequence
 
@@ -21,6 +24,87 @@ STATUS_OK = "reranked"
 STATUS_SKIPPED = "skipped"
 STATUS_DISABLED = "disabled"
 STATUS_DEGRADED = "degraded"
+
+REASON_BREAKER_OPEN = "breaker_open"
+REASON_TIMEOUT = "timeout"
+REASON_UNAVAILABLE = "unavailable"
+REASON_UNEXPECTED = "unexpected_error"
+REASON_MALFORMED = "malformed_response"
+REASON_EMPTY = "empty_response"
+REASON_DISABLED = "disabled"
+
+DEGRADE_REASONS: frozenset[str] = frozenset(
+    {
+        REASON_BREAKER_OPEN,
+        REASON_TIMEOUT,
+        REASON_UNAVAILABLE,
+        REASON_UNEXPECTED,
+        REASON_MALFORMED,
+        REASON_EMPTY,
+        REASON_DISABLED,
+    }
+)
+
+DEGRADED_REASON_LABELS: dict[str, str] = {
+    REASON_DISABLED: "RERANKER_DISABLED",
+    REASON_TIMEOUT: "TIMEOUT",
+    REASON_BREAKER_OPEN: "CIRCUIT_OPEN",
+    REASON_UNAVAILABLE: "UNAVAILABLE",
+    REASON_MALFORMED: "MALFORMED_RESPONSE",
+    REASON_EMPTY: "EMPTY_RESPONSE",
+    REASON_UNEXPECTED: "UNEXPECTED_ERROR",
+}
+
+DEGRADED_REASON_LABEL_VALUES: frozenset[str] = frozenset(
+    DEGRADED_REASON_LABELS.values()
+)
+
+
+def degraded_label(reason: str) -> str:
+    return DEGRADED_REASON_LABELS.get(reason, "UNKNOWN")
+
+
+_metrics_lock = threading.Lock()
+_degradation_counts: dict[str, int] = {}
+_rerank_calls: dict[str, int] = {"total": 0, "reranked": 0, "degraded": 0}
+
+
+def _count_degradation(reason: str) -> None:
+    label = degraded_label(reason)
+    with _metrics_lock:
+        _degradation_counts[label] = _degradation_counts.get(label, 0) + 1
+        _rerank_calls["degraded"] += 1
+
+
+def _count_success() -> None:
+    with _metrics_lock:
+        _rerank_calls["reranked"] += 1
+
+
+def _count_call() -> None:
+    with _metrics_lock:
+        _rerank_calls["total"] += 1
+
+
+def degradation_metrics() -> dict[str, Any]:
+    with _metrics_lock:
+        by_reason = dict(_degradation_counts)
+        calls = dict(_rerank_calls)
+
+    total = calls["total"] or 0
+    return {
+        "calls_total": total,
+        "reranked": calls["reranked"],
+        "degraded": calls["degraded"],
+        "degraded_ratio": (calls["degraded"] / total) if total else 0.0,
+        "by_reason": by_reason,
+    }
+
+
+def reset_degradation_metrics() -> None:
+    with _metrics_lock:
+        _degradation_counts.clear()
+        _rerank_calls.update({"total": 0, "reranked": 0, "degraded": 0})
 
 
 class RerankerClient:
@@ -60,9 +144,20 @@ class RerankerClient:
         if not results:
             return results
 
+        _count_call()
+
         if not settings.RERANKER_ENABLED:
             for result in results:
                 result["rerank_status"] = STATUS_DISABLED
+                result["rerank_degraded_reason"] = REASON_DISABLED
+            _count_degradation(REASON_DISABLED)
+            logger.info(
+                "reranker.degraded",
+                extra={
+                    "degraded_reason": degraded_label(REASON_DISABLED),
+                    "candidates": len(results),
+                },
+            )
             return results
 
         if len(results) < settings.RERANK_MIN_RESULTS:
@@ -100,28 +195,45 @@ class RerankerClient:
         except BreakerOpen as exc:
             logger.warning(
                 "reranker.short_circuited",
-                extra={"retry_after": round(exc.retry_after, 1)},
+                extra={
+                    "retry_after": round(exc.retry_after, 1),
+                    "degraded_reason": degraded_label(REASON_BREAKER_OPEN),
+                },
             )
-            return _degrade(results, reason="breaker_open")
+            return _degrade(results, reason=REASON_BREAKER_OPEN)
         except InternalServiceTimeout:
             logger.warning(
-                "reranker.timeout", extra={"budget_s": settings.RERANKER_TIMEOUT}
+                "reranker.timeout",
+                extra={
+                    "budget_s": settings.RERANKER_TIMEOUT,
+                    "degraded_reason": degraded_label(REASON_TIMEOUT),
+                },
             )
-            return _degrade(results, reason="timeout")
+            return _degrade(results, reason=REASON_TIMEOUT)
         except InternalServiceError as exc:
-            logger.warning("reranker.unavailable", extra={"error": str(exc)})
-            return _degrade(results, reason="unavailable")
+            logger.warning(
+                "reranker.unavailable",
+                extra={
+                    "error": str(exc),
+                    "degraded_reason": degraded_label(REASON_UNAVAILABLE),
+                },
+            )
+            return _degrade(results, reason=REASON_UNAVAILABLE)
         except Exception as exc:  # noqa: BLE001
             logger.exception(
-                "reranker.unexpected_error", extra={"error_type": type(exc).__name__}
+                "reranker.unexpected_error",
+                extra={
+                    "error_type": type(exc).__name__,
+                    "degraded_reason": degraded_label(REASON_UNEXPECTED),
+                },
             )
-            return _degrade(results, reason="unexpected_error")
+            return _degrade(results, reason=REASON_UNEXPECTED)
 
         scores = _extract_scores(response.payload)
         if scores is None:
-            return _degrade(results, reason="malformed_response")
+            return _degrade(results, reason=REASON_MALFORMED)
         if not scores:
-            return _degrade(results, reason="empty_response")
+            return _degrade(results, reason=REASON_EMPTY)
 
         for index, result in enumerate(candidates):
             key = str(result.get("id") or index)
@@ -139,6 +251,8 @@ class RerankerClient:
         )
         final = candidates[: settings.RERANK_FINAL_RESULTS]
 
+        _count_success()
+
         logger.info(
             "reranker.complete",
             extra={
@@ -151,16 +265,15 @@ class RerankerClient:
         return final
 
     def health(self) -> dict[str, Any]:
-        """For /health reporting."""
         return {
             "enabled": settings.RERANKER_ENABLED,
             "url": settings.RERANKER_URL,
             **self.breaker.snapshot().as_dict(),
+            "degradation": degradation_metrics(),
         }
 
 
 def _extract_scores(payload: Any) -> Optional[dict[str, float]]:
-    """Pull {id: score} out of a reranker response, or return None."""
     if not isinstance(payload, dict):
         return None
 
@@ -198,34 +311,45 @@ def _passage_text(result: dict[str, Any]) -> str:
 
 
 def _degrade(results: list[dict[str, Any]], *, reason: str) -> list[dict[str, Any]]:
-    """Serve the RRF ordering upon failure."""
     for result in results:
         result["rerank_status"] = STATUS_DEGRADED
         result["rerank_degraded_reason"] = reason
+
+    _count_degradation(reason)
+
+    logger.warning(
+        "reranker.degraded",
+        extra={
+            "degraded_reason": degraded_label(reason),
+            "candidates": len(results),
+            "returned": min(len(results), settings.RERANK_FINAL_RESULTS),
+        },
+    )
     return results[: settings.RERANK_FINAL_RESULTS]
 
 
 reranker_client = RerankerClient()
 
-DEGRADE_REASONS: frozenset[str] = frozenset(
-    {
-        "breaker_open",
-        "timeout",
-        "unavailable",
-        "unexpected_error",
-        "malformed_response",
-        "empty_response",
-    }
-)
-
 
 __all__ = [
     "BREAKER_NAME",
+    "DEGRADED_REASON_LABELS",
+    "DEGRADED_REASON_LABEL_VALUES",
     "DEGRADE_REASONS",
+    "REASON_BREAKER_OPEN",
+    "REASON_DISABLED",
+    "REASON_EMPTY",
+    "REASON_MALFORMED",
+    "REASON_TIMEOUT",
+    "REASON_UNAVAILABLE",
+    "REASON_UNEXPECTED",
     "RerankerClient",
     "STATUS_DEGRADED",
     "STATUS_DISABLED",
     "STATUS_OK",
     "STATUS_SKIPPED",
+    "degradation_metrics",
+    "degraded_label",
     "reranker_client",
+    "reset_degradation_metrics",
 ]

@@ -40,6 +40,19 @@ class RevokedRefreshTokenError(SessionError):
     """The session matched but was revoked for a reason other than rotation."""
 
 
+class SessionPinViolationError(SessionError):
+    """ARCH-19 §3.4 — a pinned session was presented from another network.
+
+    Subclasses SessionError so the auth router's existing
+    `except session_service.SessionError` arm turns it into a 401 with a
+    cleared refresh cookie. No route change is needed for the failure path.
+    """
+
+    def __init__(self, message: str, *, reason: str = "IP_OUTSIDE_PIN") -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class SessionReuseDetectedError(SessionError):
     """An already-rotated token was presented outside the grace window."""
 
@@ -260,12 +273,56 @@ def _chain_tip(db: Session, session: UserSession) -> UserSession:
     return current
 
 
+def _enforce_ip_pin(session: UserSession, *, trusted_ip: str | None) -> None:
+    """ARCH-19 §3.4 — the missing half of ARCH-16's IP pinning.
+
+    pin_for() has written user_sessions.pinned_ip since ARCH-16 and
+    _rotate_live_session has carried it faithfully across every rotation, but
+    ip_matches_pin() had no call sites anywhere in app/. The pin was recorded,
+    audited, surfaced in the admin UI, and checked nowhere. This is where it
+    is checked.
+
+    An unpinned session is untouched, so a misconfigured TRUSTED_PROXY_HOPS
+    cannot lock out a tenant who never enabled pinning. A pinned session with
+    an unverifiable client address fails closed, because "we cannot tell" is
+    not an acceptable answer about a session the tenant asked us to be strict
+    about.
+
+    Deliberately does NOT revoke the family. A pin violation is suggestive of
+    theft but is also exactly what a legitimate user on a changed network
+    looks like; refusing the rotation costs them a re-login, whereas revoking
+    the family on every network change would make pinning unusable.
+    """
+    if session.pinned_ip is None or session.pinned_ip_prefix is None:
+        return
+
+    from app.services.identity import session_policy_service
+
+    try:
+        session_policy_service.enforce_session_pin(
+            pinned_ip=session.pinned_ip,
+            pinned_prefix=session.pinned_ip_prefix,
+            client_ip=trusted_ip,
+        )
+    except session_policy_service.SessionPinViolation as exc:
+        logger.warning(
+            "SESSION_PIN_VIOLATION | session=%s | user=%s | reason=%s",
+            session.id,
+            session.user_id,
+            exc.reason,
+        )
+        raise SessionPinViolationError(
+            "This session is bound to a different network.", reason=exc.reason
+        ) from exc
+
+
 def rotate_session(
     db: Session,
     *,
     refresh_token: str,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    trusted_ip: str | None = None,
 ) -> IssuedSession:
     now = datetime.now(UTC)
     session = get_session_by_token(db, refresh_token=refresh_token)
@@ -285,6 +342,7 @@ def rotate_session(
             now=now,
             ip_address=ip_address,
             user_agent=user_agent,
+            trusted_ip=trusted_ip,
         )
 
     if session.revoked_at is not None:
@@ -294,6 +352,8 @@ def rotate_session(
             session.revoked_reason.value if session.revoked_reason else "unknown",
         )
         raise RevokedRefreshTokenError("This session is no longer valid.")
+
+    _enforce_ip_pin(session, trusted_ip=trusted_ip)
 
     return _rotate_live_session(
         db,
@@ -358,6 +418,7 @@ def _handle_rotated_token_replay(
     now: datetime,
     ip_address: str | None,
     user_agent: str | None,
+    trusted_ip: str | None = None,
 ) -> IssuedSession:
     grace = timedelta(seconds=settings.SESSION_REUSE_GRACE_SECONDS)
     age = now - session.rotated_at
@@ -411,6 +472,11 @@ def _handle_rotated_token_replay(
         settings.SESSION_REUSE_GRACE_SECONDS,
         tip.id,
     )
+    # The grace window is reachable with a token that was valid
+    # seconds ago on the same family, which is exactly what a
+    # freshly stolen token looks like. Pin it too.
+    _enforce_ip_pin(tip, trusted_ip=trusted_ip)
+
     return _rotate_live_session(
         db,
         session=tip,

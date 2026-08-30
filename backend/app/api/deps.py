@@ -35,7 +35,7 @@ from app.core.principal import (
 from app.core.scopes import ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
-from app.db.session import SessionLocal
+from app.db.session import ReadSessionLocal, SessionLocal
 from app.models.audit_log import AuditResourceType
 from app.models.organization import (
     Organization,
@@ -61,6 +61,31 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# ARCH-19 §3.2 — the read path
+#
+# get_read_db() is opt-in per route and deliberately not the default. The
+# invariant: anything transactional, anything taking a lease with
+# SELECT ... FOR UPDATE, any usage rollup writer, and any write-after-read
+# flow stays on get_db().
+#
+# Note that the authorization dependencies (RequireOrgAdmin and friends) take
+# their own Depends(get_db), so a remapped route opens two sessions — the
+# membership check on the primary, the payload on the replica. That is
+# deliberate. A revoked membership must never be authorized from a lagging
+# standby, and the cost is one short-lived connection on a pool sized for
+# exactly that.
+# ---------------------------------------------------------------------------
+
+
+def get_read_db() -> Generator[Session, None, None]:
+    db = ReadSessionLocal()
     try:
         yield db
     finally:
@@ -163,6 +188,7 @@ async def get_verified_user(
 
 
 DbSession = Annotated[Session, Depends(get_db)]
+ReadDbSession = Annotated[Session, Depends(get_read_db)]
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
 VerifiedUser = Annotated[User, Depends(get_verified_user)]
 

@@ -143,6 +143,27 @@ class Settings(BaseSettings):
     REDIS_MAX_CONNECTIONS: int = 50
 
     TRUSTED_PROXY_HOPS: int = 0
+
+    # ARCH-19 §3.2 — read/write splitting.
+    #
+    # Unset means "no standby": sqlalchemy_replica_uri falls back to the
+    # writer, the reader engine is built against it, and every remapped route
+    # behaves as it did before. That fallback is the point — a single-node
+    # deployment and CI must not need a second URL to boot.
+    DATABASE_REPLICA_URL: Optional[SecretStr] = None
+
+    # Applies SET default_transaction_read_only on every reader connection.
+    # With no standby configured this is what gives development and CI the
+    # same failure mode production would have, so a route that drifts into
+    # writing on the read path fails in the test suite rather than against a
+    # hot standby at 3am.
+    DATABASE_REPLICA_ENFORCE_READ_ONLY: bool = True
+
+    # ARCH-08 A.3.4 — read by session_policy_service.update_policy to gate
+    # enabling IP pinning. It was read through getattr() with a False default
+    # and never declared, so the gate could not be opened at all. Set to true
+    # only once the production ingress hop count has actually been verified.
+    TRUSTED_PROXY_HOPS_CONFIRMED: bool = False
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
     RATE_LIMIT_USER_PER_MINUTE: int = 300
     RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
@@ -676,6 +697,19 @@ class Settings(BaseSettings):
             f"{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/"
             f"{self.POSTGRES_DB}"
         )
+
+    @property
+    def sqlalchemy_replica_uri(self) -> str:
+        """The reader URI, falling back to the writer when no standby is set."""
+        if self.DATABASE_REPLICA_URL is None:
+            return self.sqlalchemy_database_uri
+        raw = self.DATABASE_REPLICA_URL.get_secret_value().strip()
+        return raw or self.sqlalchemy_database_uri
+
+    @property
+    def replica_configured(self) -> bool:
+        """True only when a distinct standby URI is in effect."""
+        return self.sqlalchemy_replica_uri != self.sqlalchemy_database_uri
 
     model_config = SettingsConfigDict(
         env_file=".env",

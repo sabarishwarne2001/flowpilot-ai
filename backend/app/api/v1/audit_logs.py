@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireOrgAdmin, get_db
+from app.api.deps import RequireOrgAdmin, get_db, get_read_db
 from app.core.pagination import (
     CursorFilterMismatchError,
     InvalidCursorError,
@@ -175,7 +175,7 @@ def export_audit_logs(
 )
 def list_audit_logs(
     organization_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context=Depends(RequireOrgAdmin),
     filters: AuditLogFilters = Depends(_filters),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -242,7 +242,7 @@ def list_audit_logs(
 def get_audit_log(
     organization_id: uuid.UUID,
     audit_log_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context=Depends(RequireOrgAdmin),
 ) -> AuditLogRead:
     entry = audit_log_crud.get_for_organization(

@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireOrgMember, get_db
+from app.api.deps import RequireOrgMember, get_db, get_read_db
 from app.crud import notification as notification_crud
 from app.schemas.notification import (
     ORG_NOTIFICATIONS_DEFAULT_PAGE_SIZE,
@@ -30,7 +30,7 @@ router = APIRouter(tags=["Notifications"])
 )
 def list_organization_notifications(
     organization_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
     context=Depends(RequireOrgMember),
     is_read: Optional[bool] = Query(
         None, description="Filter by read state. Omit for all."

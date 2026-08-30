@@ -35,7 +35,11 @@ if hasattr(settings, "sqlalchemy_database_uri"):
     except Exception:
         pass
 
-from app.db.session import SessionLocal, engine as global_engine
+from app.db.session import (
+    ReadSessionLocal,
+    SessionLocal,
+    engine as global_engine,
+)
 from app.main import app
 from app.models.automation import AutomationRule
 from app.models.organization import (
@@ -162,7 +166,18 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         with SessionLocal() as session:
             yield session
 
+    def override_get_read_db() -> Generator[Session, None, None]:
+        # ARCH-19 §3.2 — the read path gets its own override, pointed at the
+        # reader factory rather than at SessionLocal. Without an override,
+        # remapped routes would open sessions outside this fixture's truncate
+        # discipline. Pointed at SessionLocal instead, the read-only guard
+        # would never fire in CI and the guard's whole purpose would be lost.
+        with ReadSessionLocal() as session:
+            yield session
+
+
     app.dependency_overrides[deps.get_db] = override_get_db
+    app.dependency_overrides[deps.get_read_db] = override_get_read_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

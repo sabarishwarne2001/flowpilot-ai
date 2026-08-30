@@ -6,6 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from app.core.client_ip import client_ip as _resolve_client_ip
 from app.core.config import settings
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -390,7 +391,10 @@ def create_portal_session(
         details={
             "stripe_session_id": session.stripe_session_id,
             "url_persisted": False,
-            "ip_address": (request.client.host if request.client else None),
+            # ARCH-19 §3.4 — third instance of the same bypass.
+            # A portal session minted behind ingress recorded the
+            # load balancer as the actor's address.
+            "ip_address": _resolve_client_ip(request),
         },
     )
     db.commit()

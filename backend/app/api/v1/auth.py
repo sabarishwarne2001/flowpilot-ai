@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.api.rate_limit_deps import RateLimiter
-from app.core.client_ip import client_ip
+from app.core.client_ip import client_ip, trusted_client_ip
 from app.core.config import settings
 from app.core.cookies import (
     REFRESH_COOKIE_NAME,
@@ -275,6 +275,11 @@ async def refresh(
             refresh_token=refresh_cookie,
             ip_address=_client_ip(request),
             user_agent=_user_agent(request),
+            # ARCH-19 §3.4 — the strict resolution, which is None
+            # when the ingress chain cannot be trusted. A pinned
+            # session then fails closed; an unpinned one is
+            # unaffected.
+            trusted_ip=trusted_client_ip(request),
         )
     except session_service.SessionReuseDetectedError:
         db.commit()

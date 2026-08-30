@@ -68,7 +68,7 @@ def _get_user_notification(
     summary="List Notifications",
 )
 async def list_notifications(
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(deps.get_read_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     is_read: bool | None = Query(default=None, description="Filter by read status."),
     skip: int = Query(default=0, ge=0),

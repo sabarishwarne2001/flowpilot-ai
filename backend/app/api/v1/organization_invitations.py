@@ -156,7 +156,7 @@ async def revoke_invitation(
     summary="List Organization Invitations",
 )
 async def list_invitations(
-    db: deps.DbSession,
+    db: deps.ReadDbSession,
     context=Depends(deps.RequireOrgAdmin),
 ) -> Any:
     invitations = organization_invitation_service.list_invitations(
@@ -272,7 +272,7 @@ async def reject_invitation(
     summary="List My Pending Invitations",
 )
 async def list_my_invitations(
-    db: deps.DbSession,
+    db: deps.ReadDbSession,
     current_user: deps.CurrentUser,
 ) -> Any:
     invitations = organization_invitation_service.list_invitations_for_user(

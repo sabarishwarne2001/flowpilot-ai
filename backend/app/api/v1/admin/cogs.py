@@ -28,7 +28,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_superadmin
+from app.api.deps import get_db, get_read_db, require_superadmin
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.cogs import (
@@ -164,7 +164,7 @@ def _invoice_dto(db: Session, invoice) -> SupplierInvoiceResponse:
 def get_margin_summary(
     period_start: Optional[datetime] = Query(default=None),
     period_end: Optional[datetime] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> PlatformMarginSummaryResponse:
     start, end = _resolve_window(period_start, period_end)
 
@@ -191,7 +191,7 @@ def get_tenant_economics(
     period_end: Optional[datetime] = Query(default=None),
     order: MarginOrder = Query(default="MARGIN_ASC"),
     limit: int = Query(default=50, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> TenantEconomicsResponse:
     start, end = _resolve_window(period_start, period_end)
 
@@ -231,7 +231,7 @@ def get_tenant_economics(
 def get_provider_costs(
     period_start: Optional[datetime] = Query(default=None),
     period_end: Optional[datetime] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> ProviderCostResponse:
     start, end = _resolve_window(period_start, period_end)
 
@@ -262,7 +262,7 @@ def get_provider_costs(
 )
 def get_rate_card(
     at: Optional[datetime] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> RateCardResponse:
     moment = at or datetime.now(timezone.utc)
     if moment.tzinfo is None:
@@ -329,7 +329,7 @@ def get_rate_card(
 def list_supplier_invoices(
     provider: Optional[str] = Query(default=None, max_length=32),
     limit: int = Query(default=100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> SupplierInvoiceListResponse:
     invoices = recon.list_invoices(db, provider=provider, limit=limit)
     return SupplierInvoiceListResponse(
@@ -429,7 +429,7 @@ def reconcile_supplier_invoice(
 def list_invoice_reconciliations(
     supplier_invoice_id: uuid.UUID,
     limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> list[SupplierReconciliationResponse]:
     rows = recon.list_reconciliations(
         db, supplier_invoice_id=supplier_invoice_id, limit=limit
