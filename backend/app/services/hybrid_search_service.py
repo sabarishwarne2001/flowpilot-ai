@@ -1,4 +1,4 @@
-"""ARCH-11 Step 6 — hybrid retrieval fused in PostgreSQL, one round trip."""
+"""ARCH-11 Step 6, ARCH-21 §3.3 — hybrid retrieval fused in PostgreSQL, one round trip."""
 
 from __future__ import annotations
 
@@ -61,8 +61,6 @@ class HybridSearchOutcome:
 
 
 class HybridSearchService:
-    """Dense + lexical + fuzzy, fused by RRF inside PostgreSQL."""
-
     def _scoped(
         self,
         db: Session,
@@ -183,6 +181,7 @@ class HybridSearchService:
         similarity_threshold: Optional[float] = None,
         organization_id: Optional[uuid.UUID] = None,
         candidates: Optional[int] = None,
+        ef_search: Optional[int] = None,
     ) -> HybridSearchOutcome:
         from app.services.chunk_retrieval_service import _as_result, filenames_for
         from app.services.embedding_service import embedding_service
@@ -198,7 +197,7 @@ class HybridSearchService:
             )
 
         depth = int(candidates or settings.HYBRID_CANDIDATES)
-        ensure_iterative_scan(db)
+        ensure_iterative_scan(db, ef_search=ef_search)
 
         embedding = embedding_service.generate_embeddings([cleaned])[0]
 
@@ -216,7 +215,6 @@ class HybridSearchService:
 
         sanitised = _TSQUERY_SAFE.sub(" ", cleaned).strip()
         if sanitised:
-            # Plain tsquery allows natural language terms to match without strict boolean AND
             tsquery = func.plainto_tsquery(
                 literal(settings.LEXICAL_TSVECTOR_CONFIG), literal(sanitised)
             )

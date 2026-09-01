@@ -114,6 +114,23 @@ export const complianceKeys = {
     [...complianceKeys.all(organizationId), "exports"] as const,
 };
 
+export const developerKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "developer"] as const,
+  overview: (organizationId: string, windowDays: number) =>
+    [...developerKeys.all(organizationId), "overview", windowDays] as const,
+  tiers: (organizationId: string) =>
+    [...developerKeys.all(organizationId), "tiers"] as const,
+  metrics: (organizationId: string, keyId: string, windowDays: number) =>
+    [...developerKeys.all(organizationId), "metrics", keyId, windowDays] as const,
+  explorer: (organizationId: string, workspaceId?: string) =>
+    [
+      ...developerKeys.all(organizationId),
+      "explorer",
+      workspaceId ?? "none",
+    ] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

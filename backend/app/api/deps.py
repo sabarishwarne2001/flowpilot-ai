@@ -1,9 +1,4 @@
-"""
-Dependencies Module for FlowPilot AI.
-
-Hosts database session factories, authentication guards, and the tenant context
-resolution chain.
-"""
+"""Dependencies Module for FlowPilot AI."""
 
 import logging
 import re
@@ -65,23 +60,6 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-# ---------------------------------------------------------------------------
-# ARCH-19 §3.2 — the read path
-#
-# get_read_db() is opt-in per route and deliberately not the default. The
-# invariant: anything transactional, anything taking a lease with
-# SELECT ... FOR UPDATE, any usage rollup writer, and any write-after-read
-# flow stays on get_db().
-#
-# Note that the authorization dependencies (RequireOrgAdmin and friends) take
-# their own Depends(get_db), so a remapped route opens two sessions — the
-# membership check on the primary, the payload on the replica. That is
-# deliberate. A revoked membership must never be authorized from a lagging
-# standby, and the cost is one short-lived connection on a pool sized for
-# exactly that.
-# ---------------------------------------------------------------------------
 
 
 def get_read_db() -> Generator[Session, None, None]:
@@ -249,7 +227,6 @@ def _assert_sso_compliance(
     membership: OrganizationMember,
     session_id: Optional[uuid.UUID],
 ) -> None:
-    """Enforce tenant SSO requirement for password-authenticated sessions (ARCH-16)."""
     policy = session_policy_service.get_or_create_policy(
         db, organization_id=organization_id
     )
@@ -325,7 +302,6 @@ async def get_sso_compliant_organization_context(
     current_user: User = Depends(get_verified_user),
     token: str = Depends(oauth2_scheme),
 ) -> OrganizationContext:
-    """Organization dependency that enforces tenant SSO requirements on interactive sessions."""
     organization = organization_service.get_organization_or_raise(
         db, organization_id=organization_id
     )
@@ -422,8 +398,6 @@ WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
 
 
 class RequireScope:
-    """Runtime scope enforcement for API keys with deny-by-default (ARCH-08.1 F1)."""
-
     def __init__(self, required_scope: Optional[ApiKeyScope] = None) -> None:
         self.required_scope = required_scope
 
@@ -535,38 +509,10 @@ RequireWorkspaceMember = RequireWorkspaceRole(WorkspaceRole.VIEWER)
 RequireOrgMember = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER]
 )
-
 RequireOrgAdmin = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN]
 )
-
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
-
-
-# ---------------------------------------------------------------------------
-# ARCH-18 — the platform superadmin gate
-#
-# `require_superadmin` has been listed in app/main.py's _AUTH_DEPENDENCY_NAMES
-# since ARCH-08, but was never implemented — the name was reserved and the
-# function never written, so every route that "requires superadmin" until now
-# has been a route that does not exist. ARCH-18 is the first phase with a
-# platform-scoped surface, so this is where it lands.
-#
-# The distinction that matters: every other guard in this file answers "what
-# may this user do INSIDE an organization". This one answers "is this user
-# operating the platform", and it deliberately takes no organization context —
-# the COGS endpoints read across every tenant at once, which is precisely why
-# no tenant role can be permitted to reach them.
-#
-# 404, not 403, and that is a decision rather than a slip. A 403 tells an
-# organization admin poking at /admin/cogs that a cross-tenant margin surface
-# exists and that they are simply on the wrong side of it. A 404 tells them
-# nothing. It matches the concealment already used by
-# OrganizationAccessDeniedError("Organization not found.") for non-members,
-# so the codebase is at least consistent about it. The denial is logged at
-# WARNING with the user id, because the operator debugging their own missing
-# access needs the signal that a 404 withholds.
-# ---------------------------------------------------------------------------
 
 
 async def require_superadmin(
@@ -588,11 +534,6 @@ async def require_superadmin(
     if principal is not None and (
         principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY
     ):
-        # An API key is issued against an organization membership (ARCH-08).
-        # Letting one authenticate a platform-wide read would mean a tenant's
-        # key inherits its issuer's superadmin status — a privilege escalation
-        # across the exact boundary this dependency exists to hold. Scopes do
-        # not help: ROUTE_SCOPE_MAP has no platform scope to check against.
         logger.warning(
             "PLATFORM_ACCESS_DENIED | user=%s | path=%s | reason=api_key_principal",
             current_user.id,
@@ -606,8 +547,140 @@ async def require_superadmin(
     return current_user
 
 
-#: Annotated alias, matching the RequireOrgAdmin / RequireWorkspaceAdmin style.
 RequireSuperAdmin = require_superadmin
 SuperAdminUser = Annotated[User, Depends(require_superadmin)]
 
+
+# ---------------------------------------------------------------------------
+# ARCH-21 §3.1 — Public API Gateway Principal
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PublicApiPrincipal:
+    api_key: Any
+    membership: OrganizationMember
+    organization: Organization
+    tier: Any
+    ef_search: int
+
+    @property
+    def api_key_id(self) -> uuid.UUID:
+        return self.api_key.id
+
+    @property
+    def organization_id(self) -> uuid.UUID:
+        return self.organization.id
+
+    @property
+    def user_id(self) -> Optional[uuid.UUID]:
+        return self.membership.user_id
+
+
+def _gateway_unauthorized(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def require_api_key(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+) -> PublicApiPrincipal:
+    from app.core.api_tiers import ef_search_for, parse_tier
+    from app.core.rate_limit.backend import RateLimitDecision
+    from app.core.rate_limit.limiter import consume_rate_limit
+    from app.core.rate_limit.policy import (
+        FailureMode,
+        RateLimitPolicy,
+        RateLimitScope,
+    )
+
+    if not token or not token.startswith(("fp_live_", "fp_test_")):
+        raise _gateway_unauthorized(
+            "A FlowPilot API key is required for the public API."
+        )
+
+    result = api_key_service.authenticate_api_key_token(db, token=token)
+    if result is None:
+        raise _gateway_unauthorized("Could not validate credentials")
+
+    key, membership = result
+
+    if not key.is_public_api_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This API key is not enabled for the public API. Enable it "
+                "in the developer portal."
+            ),
+        )
+
+    organization = crud.get_organization_by_id(
+        db, organization_id=key.organization_id
+    )
+    if organization is None:
+        raise _gateway_unauthorized("Could not validate credentials")
+
+    principal = Principal.for_api_key(
+        api_key_id=key.id, issuer_user_id=membership.user_id
+    )
+    set_current_principal(principal)
+
+    request.state.user_id = membership.user_id
+    request.state.api_key_id = key.id
+    request.state.api_key_obj = key
+    request.state.api_key_membership = membership
+    request.state.principal = principal
+
+    tier = parse_tier(key.tier_key)
+
+    policy = RateLimitPolicy(
+        name=f"public_api_{tier.value.lower()}",
+        scope=RateLimitScope.API_KEY,
+        limit=int(key.rate_limit_per_minute),
+        window_seconds=60,
+        failure_mode=FailureMode.FAIL_CLOSED,
+    )
+
+    decision: RateLimitDecision = consume_rate_limit(request, policy)
+
+    request.state.public_rate_limit = {
+        "limit": policy.limit,
+        "remaining": max(int(decision.remaining), 0),
+        "reset_seconds": int(decision.reset_seconds),
+        "tier": tier.value,
+        "api_key_id": str(key.id),
+        "organization_id": str(key.organization_id),
+        "allowed": bool(decision.allowed),
+    }
+
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Rate limit exceeded for tier {tier.value} "
+                f"({policy.limit} requests/minute)."
+            ),
+            headers={
+                "Retry-After": str(int(decision.reset_seconds)),
+                "X-RateLimit-Limit": str(policy.limit),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(int(decision.reset_seconds)),
+            },
+        )
+
+    return PublicApiPrincipal(
+        api_key=key,
+        membership=membership,
+        organization=organization,
+        tier=tier,
+        ef_search=ef_search_for(tier),
+    )
+
+
+PublicApiCtx = Annotated[PublicApiPrincipal, Depends(require_api_key)]
 OrgAdminCtx = Annotated[OrganizationContext, Depends(RequireOrgAdmin)]

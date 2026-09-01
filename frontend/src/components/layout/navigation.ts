@@ -10,6 +10,7 @@ import {
   MessageSquare,
   ScrollText,
   Gauge,
+  TerminalSquare,
   Shield,
   Settings,
   ShieldCheck,
@@ -26,6 +27,7 @@ import {
   organizationAuditPath,
   organizationBillingPath,
   organizationCompliancePath,
+  organizationDeveloperPath,
   organizationEmailPath,
   organizationIdentityPath,
   organizationMembersPath,
@@ -121,6 +123,18 @@ export const buildOrganizationNavigationItems = (
       name: "Data governance & compliance",
       path: organizationCompliancePath(orgSlug),
       icon: Shield,
+    });
+    // ARCH-21. ADMIN, not OWNER-only, unlike "API keys" below. The two are
+    // different surfaces: that one mints credentials for the internal
+    // console, this one manages a commercial gateway's tiers and reads its
+    // consumption charts — work an administrator does. Every write behind it
+    // is still RequireOrgAdmin plus an explicit human-session check, and the
+    // plan ceiling is enforced in the service, so hiding the link is not
+    // what protects anything.
+    items.push({
+      name: "Developer platform",
+      path: organizationDeveloperPath(orgSlug),
+      icon: TerminalSquare,
     });
   }
 

@@ -21,6 +21,10 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
+from app.middleware.public_rate_limit import (
+    RATE_LIMIT_HEADERS,
+    PublicApiRateLimitMiddleware,
+)
 from app.middleware.request_trace import REQUEST_ID_HEADER, RequestTraceMiddleware
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
@@ -33,6 +37,11 @@ CORS_EXPOSED_HEADERS = [
     "WWW-Authenticate",
     "Retry-After",
     REQUEST_ID_HEADER,
+    "X-FlowPilot-API-Version",
+    "Deprecation",
+    "Sunset",
+    "Link",
+    *RATE_LIMIT_HEADERS,
 ]
 
 _AUTH_DEPENDENCY_NAMES = frozenset(
@@ -160,6 +169,7 @@ else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
 app.add_middleware(GlobalRateLimitMiddleware)
+app.add_middleware(PublicApiRateLimitMiddleware)
 app.add_middleware(RequestTraceMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 

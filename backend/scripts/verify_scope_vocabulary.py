@@ -97,12 +97,12 @@ def s3_every_scope_grantable(session_factory) -> str:
             except IntegrityError as exc:
                 db.rollback()
                 name = next(
-                    (t for t in str(exc).split('"') if t.startswith("ck_")), "?"
+                    (t for t in str(exc).split('"') if t.startswith("ck_")), str(exc)
                 )
                 ungrantable.append(f"{scope.value} (violated {name})")
-            except Exception:
+            except Exception as exc:
                 db.rollback()
-                raise
+                ungrantable.append(f"{scope.value} ({type(exc).__name__}: {exc})")
 
     assert not ungrantable, (
         "these scopes exist in ApiKeyScope but CANNOT be stored on an "
@@ -135,7 +135,7 @@ def _insert_probe(db, scopes: list[str]) -> None:
     if not org_id:
         org_id = uuid.uuid4()
         db.execute(
-            text("INSERT INTO organizations (id, slug, name, status) VALUES (:i, :s, 'Probe Org', 'ACTIVE') ON CONFLICT (id) DO NOTHING"),
+            text("INSERT INTO organizations (id, slug, name, status, data_residency_region) VALUES (:i, :s, 'Probe Org', 'ACTIVE', 'GLOBAL') ON CONFLICT (id) DO NOTHING"),
             {"i": str(org_id), "s": f"probe-org-{org_id.hex[:8]}"},
         )
         db.flush()
@@ -144,7 +144,7 @@ def _insert_probe(db, scopes: list[str]) -> None:
     if not user_id:
         user_id = uuid.uuid4()
         db.execute(
-            text("INSERT INTO users (id, email, is_active) VALUES (:i, :e, true) ON CONFLICT (id) DO NOTHING"),
+            text("INSERT INTO users (id, email, hashed_password, is_active) VALUES (:i, :e, '$argon2id$v=19$m=65536,t=3,p=4$dummyhashforprobe', true) ON CONFLICT (id) DO NOTHING"),
             {"i": str(user_id), "e": f"probe-{user_id.hex[:8]}@example.com"},
         )
         db.flush()
@@ -154,19 +154,22 @@ def _insert_probe(db, scopes: list[str]) -> None:
         for r in db.execute(text("SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'api_keys'")).fetchall()
     }
 
+    random_hex_64 = uuid.uuid4().hex + uuid.uuid4().hex
     data: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "organization_id": str(org_id),
-        "name": "probe-key",
+        "name": f"probe-key-{uuid.uuid4().hex[:8]}",
         "scopes": scopes,
+        "secret_hash": random_hex_64,
+        "tier_key": "FREE",
+        "rate_limit_per_minute": 60,
+        "monthly_request_quota": 10000,
+        "is_public_api_enabled": False,
     }
+
     for col_variant in ("prefix", "key_prefix"):
         if col_variant in cols_info:
             data[col_variant] = "fp_live_probe"
-
-    for col_variant in ("hashed_secret", "hashed_token", "token_hash", "secret_hash"):
-        if col_variant in cols_info:
-            data[col_variant] = "probe_hash_placeholder"
 
     for col_variant in ("created_by_user_id", "created_by_id", "user_id"):
         if col_variant in cols_info:

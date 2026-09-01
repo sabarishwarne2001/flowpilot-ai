@@ -43,6 +43,12 @@ const OrganizationSLOs = lazy(
 const OrganizationCompliance = lazy(
   () => import("@/pages/organization/OrganizationCompliance"),
 );
+// ARCH-21. Lazy like every other organization surface: the portal pulls
+// three queries, a chart, a code-snippet explorer and an issuance modal that
+// the overwhelming majority of sessions never open.
+const OrganizationDeveloperPortal = lazy(
+  () => import("@/pages/organization/OrganizationDeveloperPortal"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -225,6 +231,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationCompliance}
                       element={<OrganizationCompliance />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationDeveloper}
+                      element={<OrganizationDeveloperPortal />}
                     />
                   </Route>
                 </Route>

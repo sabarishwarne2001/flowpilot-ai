@@ -222,6 +222,45 @@ export const COMPLIANCE_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-21 — the tenant developer platform.
+ *
+ * Organization-scoped, like COMPLIANCE_ENDPOINTS: these manage one tenant's
+ * own API keys and are read by that tenant's owner or admin.
+ */
+export const DEVELOPER_ENDPOINTS = {
+  overview: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/developer`,
+  tiers: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/developer/tiers`,
+  keys: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/developer/keys`,
+  keyTier: (organizationId: string, keyId: string): string =>
+    `/organizations/${org(organizationId)}/developer/keys/${seg(keyId)}/tier`,
+  keyMetrics: (organizationId: string, keyId: string): string =>
+    `/organizations/${org(organizationId)}/developer/keys/${seg(keyId)}/metrics`,
+  explorer: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/developer/explorer`,
+} as const;
+
+/**
+ * ARCH-21 — the public gateway.
+ *
+ * Listed for documentation and for the API explorer's copy targets. The
+ * frontend never calls these: they authenticate with an API key, not the
+ * session cookie apiClient carries, and sending a session to them would fail
+ * with 401 by design. Nothing in src/ imports these into a request.
+ */
+export const PUBLIC_API_ENDPOINTS = {
+  version: "/public",
+  documents: "/public/documents",
+  document: (workItemId: string): string => `/public/documents/${seg(workItemId)}`,
+  query: "/public/query",
+  workflows: "/public/workflows",
+  triggerWorkflow: (ruleId: string): string =>
+    `/public/workflows/${seg(ruleId)}/trigger`,
+} as const;
+
+/**
  * ARCH-18 — platform COGS and unit economics.
  *
  * Note the absence of an organization id anywhere in these paths. These are

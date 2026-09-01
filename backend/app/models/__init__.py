@@ -1,6 +1,4 @@
-"""
-Database models centralized import and registry gateway for FlowPilot AI.
-"""
+"""Database models centralized import and registry gateway for FlowPilot AI."""
 
 from app.db.base import Base
 from app.models.user import User
@@ -59,6 +57,13 @@ from app.models.settings_migration_archive import SettingsMigrationArchive
 from app.models.auth_token import AuthToken, AuthTokenPurpose
 from app.models.user_session import UserSession, SessionRevokedReason, AuthMethod
 from app.models.api_key import ApiKey
+from app.models.public_api import (
+    ApiKeyUsageDaily,
+    LATENCY_BOUNDS_MS,
+    LATENCY_BUCKET_COUNT,
+    bucket_index_for,
+    empty_buckets,
+)
 
 from app.models.organization import (
     Organization,
@@ -152,8 +157,6 @@ from app.models.supplier_cogs import (
     SupplierInvoice,
     SupplierReconciliation,
 )
-
-# ---- ARCH-15 ---------------------------------------------------------------
 from app.models.dunning_action import (
     DUNNING_OUTCOME_ENUM_NAME,
     DUNNING_STEP_ENUM_NAME,
@@ -162,8 +165,6 @@ from app.models.dunning_action import (
     DunningOutcome,
     DunningStep,
 )
-
-# ---- ARCH-17 ---------------------------------------------------------------
 from app.models.slo import (
     DEFAULT_LATENCY_BOUNDS_MS,
     SLO_METHOD_ENUM_NAME,
@@ -176,8 +177,6 @@ from app.models.slo import (
     SLOUnit,
     SLOWindow,
 )
-
-# ---- ARCH-20 ---------------------------------------------------------------
 from app.models.compliance import (
     AUDIT_RETENTION_FLOOR_DAYS,
     COMPLIANCE_EXPORT_STATUS_VALUES,
@@ -200,7 +199,6 @@ from app.models.compliance import (
     RetentionPolicy,
     erased_email_for,
 )
-
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -214,8 +212,6 @@ from app.models.reconciliation import (
     ReconciliationStatus,
     StatementGrain,
 )
-
-# ---- ARCH-16 Enterprise Identity -----------------------------------------
 from app.models.identity import (
     AssertionOutcome,
     DirectoryIdentity,
@@ -428,4 +424,9 @@ __all__ = [
     "MINIMUM_RETENTION_DAYS",
     "ERASED_EMAIL_DOMAIN",
     "erased_email_for",
+    "ApiKeyUsageDaily",
+    "LATENCY_BOUNDS_MS",
+    "LATENCY_BUCKET_COUNT",
+    "bucket_index_for",
+    "empty_buckets",
 ]

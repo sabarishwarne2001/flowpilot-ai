@@ -1,9 +1,14 @@
 import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
 
-import { buildNavigationItems, buildOrganizationNavigationItems } from "./navigation";
+import {
+  buildNavigationItems,
+  buildOrganizationNavigationItems,
+  buildPlatformNavigationItems,
+} from "./navigation";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
+import { useIsSuperAdmin } from "@/routes/SuperAdminGuard";
 import { workspaceDashboardPath, workspaceSettingsPath } from "@/routes/tenantPaths";
 
 interface SidebarNavigationProps {
@@ -64,6 +69,23 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   const organizationItems = useMemo(
     () => buildOrganizationNavigationItems(orgSlug, String(organizationRole ?? "")),
     [orgSlug, organizationRole],
+  );
+
+  // ARCH-21 (finding N-2). buildPlatformNavigationItems shipped in ARCH-18
+  // with zero call sites anywhere in src/ — the orphaned-export defect this
+  // codebase keeps re-shipping, and the reason /admin/margins has been
+  // reachable only by typing the URL. This is the call site.
+  //
+  // It renders in its own group, below the organization group, because a
+  // cross-tenant link inside an organization's own navigation invites reading
+  // platform-wide totals as that organization's numbers. The builder returns
+  // an empty array for a non-superuser, which hides the link; SuperAdminGuard
+  // redirects and require_superadmin refuses. Only the last of those three is
+  // a security control.
+  const isSuperAdmin = useIsSuperAdmin();
+  const platformItems = useMemo(
+    () => buildPlatformNavigationItems(isSuperAdmin),
+    [isSuperAdmin],
   );
 
   // Viewers cannot inspect settings tabs.
@@ -170,6 +192,17 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
             </p>
           )}
           {organizationItems.map((item) => renderItem(item, false))}
+        </div>
+      )}
+
+      {platformItems.length > 0 && (
+        <div className="mt-6 space-y-2 border-t border-border pt-6">
+          {!collapsed && (
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Platform
+            </p>
+          )}
+          {platformItems.map((item) => renderItem(item, false))}
         </div>
       )}
     </nav>

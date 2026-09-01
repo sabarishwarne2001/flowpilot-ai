@@ -1,4 +1,4 @@
-"""ARCH-10 Step 2, ARCH-11 Step 4 & ARCH-14 Step 4 — the billable-usage vocabulary with derived overage types."""
+"""ARCH-10 Step 2, ARCH-11 Step 4, ARCH-14 Step 4 & ARCH-21 — usage vocabulary."""
 
 from __future__ import annotations
 
@@ -80,6 +80,15 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One document completing the extraction pipeline.",
     ),
+    # --- ARCH-21 §3.2: api.request is non-billable ---
+    UsageEventType(
+        name="api.request",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=False,
+        default_provider="internal",
+        description="One authenticated request served by the public API gateway.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"
@@ -95,10 +104,7 @@ def _overage_variants(
             emission=base.emission,
             billable=True,
             default_provider=base.default_provider,
-            description=(
-                f"Units of '{base.name}' consumed above a quota ceiling whose "
-                "overage policy is ALLOW_AND_BILL."
-            ),
+            description=f"Units of '{base.name}' consumed above quota.",
         )
         for base in base_types
         if base.billable
@@ -125,14 +131,12 @@ def billable_usage_types() -> list[str]:
 def resolve(event_type: str) -> UsageEventType:
     for prefix in FORBIDDEN_USAGE_PREFIXES:
         if event_type.startswith(prefix):
-            raise ValueError(
-                f"'{event_type}' is in the permanently excluded '{prefix}*' namespace."
-            )
+            raise ValueError(f"'{event_type}' is in the excluded '{prefix}*' namespace.")
     try:
         return USAGE_EVENT_TYPES[event_type]
     except KeyError as exc:
         raise ValueError(
-            f"'{event_type}' is not a known usage event type. Known types: "
+            f"'{event_type}' is not a known usage event type. Known: "
             f"{', '.join(sorted_usage_types())}."
         ) from exc
 
@@ -153,9 +157,7 @@ def overage_type_for(event_type: str) -> str:
         raise ValueError(f"'{event_type}' is already an overage type.")
     candidate = f"{event_type}{OVERAGE_SUFFIX}"
     if candidate not in USAGE_EVENT_TYPES:
-        raise ValueError(
-            f"'{event_type}' has no overage counterpart; it is either unknown or not billable."
-        )
+        raise ValueError(f"'{event_type}' has no overage counterpart.")
     return candidate
 
 

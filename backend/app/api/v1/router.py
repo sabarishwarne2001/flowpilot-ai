@@ -1,6 +1,4 @@
-"""
-Centralized API v1 routing gateway for FlowPilot AI.
-"""
+"""Centralized API v1 routing gateway for FlowPilot AI."""
 
 from fastapi import APIRouter
 
@@ -14,6 +12,7 @@ from app.api.v1 import (
     avatar,
     compliance,
     dashboard,
+    developer,
     document_settings,
     email_change,
     email_settings,
@@ -32,6 +31,7 @@ from app.api.v1 import (
     workspaces,
 )
 from app.api.v1.admin import cogs as admin_cogs
+from app.api.v1.public import router as public_gateway_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.organization_invitations import router as organization_invitation_router
@@ -55,29 +55,17 @@ api_router.include_router(organization_invitation_router)
 api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
 api_router.include_router(usage.router)
-api_router.include_router(slos.router)  # ARCH-17
-
-# ARCH-20 Data governance, residency & compliance.
-# Organization-scoped and role-gated per route: reads are RequireOrgAdmin, the
-# two irreversible writes (repinning residency, erasing a subject) and the
-# retention policy are RequireOrgOwner. Mounted alongside the other tenancy
-# routers because every path here begins /organizations/{organization_id}.
+api_router.include_router(slos.router)
 api_router.include_router(compliance.router)
+api_router.include_router(developer.router)  # ARCH-21 Tenant Developer Portal
+api_router.include_router(public_gateway_router)  # ARCH-21 Public Developer Gateway
 
-# ARCH-18 Platform COGS & unit economics.
-# Cross-tenant, superadmin-only. The gate lives on the router itself
-# (dependencies=[Depends(require_superadmin)]) rather than on each endpoint, so
-# a route added later cannot ship unguarded.
 api_router.include_router(admin_cogs.router)
-
-# ARCH-16 Enterprise Identity Administration
 api_router.include_router(identity_admin.router)
 
 # Global & Identity Federation
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-
-# ARCH-16 SAML / OIDC / SSO Gateways
 api_router.include_router(saml_router)
 api_router.include_router(sso_router)
 api_router.include_router(oidc_router)
