@@ -37,6 +37,12 @@ const OrganizationNotifications = lazy(
 const OrganizationSLOs = lazy(
   () => import("@/pages/organization/OrganizationSLOs"),
 );
+// ARCH-20. Lazy like every other organization settings surface: the
+// compliance console pulls three queries and a modal that most sessions never
+// open.
+const OrganizationCompliance = lazy(
+  () => import("@/pages/organization/OrganizationCompliance"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -215,6 +221,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationSLOs}
                       element={<OrganizationSLOs />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationCompliance}
+                      element={<OrganizationCompliance />}
                     />
                   </Route>
                 </Route>

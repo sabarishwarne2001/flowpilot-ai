@@ -153,6 +153,54 @@ from app.models.supplier_cogs import (
     SupplierReconciliation,
 )
 
+# ---- ARCH-15 ---------------------------------------------------------------
+from app.models.dunning_action import (
+    DUNNING_OUTCOME_ENUM_NAME,
+    DUNNING_STEP_ENUM_NAME,
+    DUNNING_STEP_ORDER,
+    DunningAction,
+    DunningOutcome,
+    DunningStep,
+)
+
+# ---- ARCH-17 ---------------------------------------------------------------
+from app.models.slo import (
+    DEFAULT_LATENCY_BOUNDS_MS,
+    SLO_METHOD_ENUM_NAME,
+    SLO_UNIT_ENUM_NAME,
+    SLO_WINDOW_ENUM_NAME,
+    SLODefinition,
+    SLOMeasurement,
+    SLOMethod,
+    SLOObservation,
+    SLOUnit,
+    SLOWindow,
+)
+
+# ---- ARCH-20 ---------------------------------------------------------------
+from app.models.compliance import (
+    AUDIT_RETENTION_FLOOR_DAYS,
+    COMPLIANCE_EXPORT_STATUS_VALUES,
+    DATA_RESIDENCY_REGION_VALUES,
+    ERASED_EMAIL_DOMAIN,
+    EXPORT_COMPLETE,
+    EXPORT_EXPIRED,
+    EXPORT_FAILED,
+    EXPORT_PENDING,
+    EXPORT_RUNNING,
+    MINIMUM_RETENTION_DAYS,
+    PINNED_REGIONS,
+    REGION_APAC,
+    REGION_EU,
+    REGION_GLOBAL,
+    REGION_US,
+    TERMINAL_EXPORT_STATUSES,
+    ComplianceExport,
+    ErasedSubject,
+    RetentionPolicy,
+    erased_email_for,
+)
+
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -325,7 +373,6 @@ __all__ = [
     "INVOICE_STATUS_VALUES",
     "INVOICE_LINE_KIND_ENUM_NAME",
     "COLLECTIBLE_INVOICE_STATUSES",
-    # ---- ARCH-16 -------------------------------------------------------
     "VerifiedDomain",
     "DomainStatus",
     "EnterpriseIdpConfig",
@@ -345,4 +392,40 @@ __all__ = [
     "SsoAssertion",
     "AssertionOutcome",
     "SamlAssertionReplayGuard",
+    "DunningAction",
+    "DunningStep",
+    "DunningOutcome",
+    "DUNNING_STEP_ORDER",
+    "DUNNING_STEP_ENUM_NAME",
+    "DUNNING_OUTCOME_ENUM_NAME",
+    "SLODefinition",
+    "SLOObservation",
+    "SLOMeasurement",
+    "SLOUnit",
+    "SLOWindow",
+    "SLOMethod",
+    "SLO_UNIT_ENUM_NAME",
+    "SLO_WINDOW_ENUM_NAME",
+    "SLO_METHOD_ENUM_NAME",
+    "DEFAULT_LATENCY_BOUNDS_MS",
+    "ErasedSubject",
+    "ComplianceExport",
+    "RetentionPolicy",
+    "DATA_RESIDENCY_REGION_VALUES",
+    "COMPLIANCE_EXPORT_STATUS_VALUES",
+    "PINNED_REGIONS",
+    "TERMINAL_EXPORT_STATUSES",
+    "REGION_US",
+    "REGION_EU",
+    "REGION_APAC",
+    "REGION_GLOBAL",
+    "EXPORT_PENDING",
+    "EXPORT_RUNNING",
+    "EXPORT_COMPLETE",
+    "EXPORT_FAILED",
+    "EXPORT_EXPIRED",
+    "AUDIT_RETENTION_FLOOR_DAYS",
+    "MINIMUM_RETENTION_DAYS",
+    "ERASED_EMAIL_DOMAIN",
+    "erased_email_for",
 ]

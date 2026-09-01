@@ -1,6 +1,7 @@
 """
 Database representation of the Organization tenant root for FlowPilot AI.
 ARCH-14 Step 4: Quota tier version foreign key pointer.
+ARCH-20: Data residency region.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -58,6 +60,10 @@ class Organization(Base, UUIDMixin, TimestampMixin):
             "seat_limit IS NULL OR seat_limit >= 1",
             name="seat_limit_positive",
         ),
+        CheckConstraint(
+            "data_residency_region IN ('US', 'EU', 'APAC', 'GLOBAL')",
+            name="ck_organizations_data_residency_region_vocabulary",
+        ),
     )
 
     slug: Mapped[str] = mapped_column(
@@ -65,21 +71,14 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         unique=True,
         index=True,
-        doc=(
-            "Globally unique, URL-safe public identifier. Constrained to the "
-            "DNS label grammar so that subdomain-based tenant addressing "
-            "remains available without a second migration."
-        ),
     )
     name: Mapped[str] = mapped_column(
         String(150),
         nullable=False,
-        doc="Human-readable organization name shown throughout the product.",
     )
     legal_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
-        doc="Registered legal entity name, used on invoices and contracts.",
     )
     status: Mapped[OrganizationStatus] = mapped_column(
         PgEnum(
@@ -94,19 +93,23 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     seat_limit: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
-        doc="Maximum active OrganizationMember rows this tenant may hold.",
     )
 
-    # ARCH-14 Step 4 — quota tier pointer
+    data_residency_region: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        server_default=text("'GLOBAL'"),
+        default="GLOBAL",
+        index=True,
+    )
+
     quota_tier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("quota_tiers.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
-        doc="Points at one version of a quota tier.",
     )
 
-    # Relationships
     quota_tier: Mapped["QuotaTier | None"] = relationship("QuotaTier")
     members: Mapped[list["OrganizationMember"]] = relationship(
         "OrganizationMember",
@@ -165,13 +168,11 @@ class OrganizationMember(Base, UUIDMixin, TimestampMixin):
     deactivated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        doc="Timestamp at which this membership entered DEACTIVATED.",
     )
     deactivated_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        doc="Actor who deactivated this membership.",
     )
 
     organization: Mapped["Organization"] = relationship(

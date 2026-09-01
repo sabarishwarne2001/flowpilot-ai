@@ -1,5 +1,5 @@
 """
-Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08 §B.1, §B.7, §B.9, §B.10, ARCH-12 Step 6, ARCH-15 Step 7).
+Queryable audit trail (ARCH-07 §B.1, §B.2, §B.4, ARCH-08, ARCH-12, ARCH-15, ARCH-20).
 """
 
 from __future__ import annotations
@@ -39,10 +39,14 @@ class AuditResourceType(str, PyEnum):
     WEBHOOK_ENDPOINT = "WEBHOOK_ENDPOINT"
     SPEND_LIMIT = "SPEND_LIMIT"
     CONVERSATION = "CONVERSATION"
-    # ---- ARCH-15 Step 15.7a --------------------------------------------
     BILLING_ACCOUNT = "BILLING_ACCOUNT"
     SUBSCRIPTION = "SUBSCRIPTION"
     INVOICE = "INVOICE"
+    # ---- ARCH-20 -------------------------------------------------------
+    COMPLIANCE_EXPORT = "COMPLIANCE_EXPORT"
+    ERASED_SUBJECT = "ERASED_SUBJECT"
+    RETENTION_POLICY = "RETENTION_POLICY"
+    DATA_RESIDENCY = "DATA_RESIDENCY"
 
 
 class AuditAction(str, PyEnum):
@@ -64,11 +68,17 @@ class AuditAction(str, PyEnum):
     WEBHOOK_ENDPOINT_AUTO_DISABLED = "WEBHOOK_ENDPOINT_AUTO_DISABLED"
     EXCEEDED = "EXCEEDED"
     GENERATED = "GENERATED"
-    # ---- ARCH-15 Step 15.7a --------------------------------------------
     PORTAL_SESSION_MINTED = "PORTAL_SESSION_MINTED"
     CHECKOUT_STARTED = "CHECKOUT_STARTED"
     SEATS_CHANGED = "SEATS_CHANGED"
     DUNNING_STEP_APPLIED = "DUNNING_STEP_APPLIED"
+    # ---- ARCH-20 -------------------------------------------------------
+    ERASED = "ERASED"
+    RESIDENCY_CHANGED = "RESIDENCY_CHANGED"
+    RETENTION_CHANGED = "RETENTION_CHANGED"
+    EXPORT_REQUESTED = "EXPORT_REQUESTED"
+    EXPORT_COMPLETED = "EXPORT_COMPLETED"
+    PURGED = "PURGED"
 
 
 _resource_type_pg = PgEnum(
@@ -94,8 +104,6 @@ _outcome_pg = PgEnum(
 
 
 class AuditLog(Base, UUIDMixin, TimestampMixin):
-    """One immutable record of one tenant-scoped state change."""
-
     __tablename__ = "audit_logs"
 
     __table_args__ = (

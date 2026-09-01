@@ -55,6 +55,10 @@ export const ROUTE_PATTERNS = {
   organizationIdentity: "identity",
   organizationAudit: "audit",
   organizationSLOs: "service-levels",
+  // ARCH-20. No new RESERVED_ROUTE_SEGMENTS entry is needed: "organizations"
+  // is already reserved, so /organizations/:orgSlug/compliance is unreachable
+  // by parseTenantPath and lands on the organization shell as intended.
+  organizationCompliance: "compliance",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
@@ -111,6 +115,9 @@ export const organizationIdentityPath = (orgSlug: string): string =>
 
 export const organizationAuditPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/audit`;
+
+export const organizationCompliancePath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/compliance`;
 
 export const platformPath = (): string => "/admin";
 
@@ -310,6 +317,11 @@ export const runTenantPathSelfCheck = (): string[] => {
   expect(
     "the platform margins path is stable",
     platformMarginsPath() === "/admin/margins",
+  );
+  expect(
+    "the compliance console is an organization route, not a tenant route",
+    organizationCompliancePath("acme") === "/organizations/acme/compliance" &&
+      parseTenantPath("/organizations/acme/compliance") === null,
   );
   expect(
     "single-segment and root paths carry no tenant",

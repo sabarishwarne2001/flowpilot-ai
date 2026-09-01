@@ -198,6 +198,30 @@ export const SLO_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-20 — data governance, residency and compliance.
+ *
+ * Organization-scoped, unlike COGS_ENDPOINTS below: compliance is one
+ * tenant's own data and is read by that tenant's owner or admin, not across
+ * tenants by a superadmin.
+ */
+export const COMPLIANCE_ENDPOINTS = {
+  overview: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance`,
+  residency: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/residency`,
+  retention: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/retention`,
+  erasures: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/erasures`,
+  erasurePreview: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/erasures/preview`,
+  exports: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/exports`,
+  exportDownload: (organizationId: string, exportId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/exports/${seg(exportId)}/download`,
+} as const;
+
+/**
  * ARCH-18 — platform COGS and unit economics.
  *
  * Note the absence of an organization id anywhere in these paths. These are

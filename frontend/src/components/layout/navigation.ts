@@ -10,6 +10,7 @@ import {
   MessageSquare,
   ScrollText,
   Gauge,
+  Shield,
   Settings,
   ShieldCheck,
   Sliders,
@@ -24,6 +25,7 @@ import {
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
+  organizationCompliancePath,
   organizationEmailPath,
   organizationIdentityPath,
   organizationMembersPath,
@@ -110,6 +112,15 @@ export const buildOrganizationNavigationItems = (
       name: "Service levels",
       path: organizationSLOsPath(orgSlug),
       icon: Gauge,
+    });
+    // ARCH-20. ADMIN sees the console because residency, retention and the
+    // erasure register are all things an administrator has to be able to
+    // read during an audit. The irreversible writes inside it are OWNER-only,
+    // enforced by RequireOrgOwner on the route, not by hiding the link.
+    items.push({
+      name: "Data governance & compliance",
+      path: organizationCompliancePath(orgSlug),
+      icon: Shield,
     });
   }
 

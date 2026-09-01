@@ -99,6 +99,21 @@ export const sloKeys = {
     [...sloKeys.all(organizationId), "summary", period] as const,
 };
 
+export const complianceKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "compliance"] as const,
+  overview: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "overview"] as const,
+  residency: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "residency"] as const,
+  retention: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "retention"] as const,
+  erasures: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "erasures"] as const,
+  exports: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "exports"] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

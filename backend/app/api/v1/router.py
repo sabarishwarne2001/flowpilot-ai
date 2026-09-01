@@ -12,6 +12,7 @@ from app.api.v1 import (
     audit_logs,
     automation,
     avatar,
+    compliance,
     dashboard,
     document_settings,
     email_change,
@@ -55,6 +56,13 @@ api_router.include_router(ownership_transfers.router)
 api_router.include_router(upload.logo_router)
 api_router.include_router(usage.router)
 api_router.include_router(slos.router)  # ARCH-17
+
+# ARCH-20 Data governance, residency & compliance.
+# Organization-scoped and role-gated per route: reads are RequireOrgAdmin, the
+# two irreversible writes (repinning residency, erasing a subject) and the
+# retention policy are RequireOrgOwner. Mounted alongside the other tenancy
+# routers because every path here begins /organizations/{organization_id}.
+api_router.include_router(compliance.router)
 
 # ARCH-18 Platform COGS & unit economics.
 # Cross-tenant, superadmin-only. The gate lives on the router itself

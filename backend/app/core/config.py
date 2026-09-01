@@ -233,6 +233,20 @@ class Settings(BaseSettings):
     S3_MULTIPART_THRESHOLD: int = 16 * 1024 * 1024
     S3_MULTIPART_CHUNKSIZE: int = 16 * 1024 * 1024
     S3_MAX_CONCURRENCY: int = 4
+    # ARCH-20 — data residency.
+    #
+    # Region -> bucket. Empty by default, which leaves every tenant on GLOBAL
+    # and the single S3_BUCKET, exactly as before this phase. A tenant pinned
+    # to a region with no entry here is REFUSED at write time rather than
+    # falling back to S3_BUCKET: a silent fallback would place EU-resident
+    # personal data in the default bucket and make the policy decorative.
+    #
+    #   S3_REGIONAL_BUCKETS='{"EU":"flowpilot-eu","US":"flowpilot-us"}'
+    S3_REGIONAL_BUCKETS: dict[str, str] = {}
+
+    #: How long a generated DPA archive stays downloadable.
+    COMPLIANCE_EXPORT_TTL_HOURS: int = 72
+
     STORAGE_SAMPLE_INTERVAL_MINUTES: int = 60
 
     MAX_DOCUMENT_PAGES: int = 500
