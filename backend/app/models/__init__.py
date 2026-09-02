@@ -199,6 +199,10 @@ from app.models.compliance import (
     RetentionPolicy,
     erased_email_for,
 )
+from app.models.byok import (
+    TenantModelRoute,
+    TenantProviderCredential,
+)
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -425,6 +429,8 @@ __all__ = [
     "ERASED_EMAIL_DOMAIN",
     "erased_email_for",
     "ApiKeyUsageDaily",
+    "TenantProviderCredential",
+    "TenantModelRoute",
     "LATENCY_BOUNDS_MS",
     "LATENCY_BUCKET_COUNT",
     "bucket_index_for",

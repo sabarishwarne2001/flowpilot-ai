@@ -49,6 +49,11 @@ const OrganizationCompliance = lazy(
 const OrganizationDeveloperPortal = lazy(
   () => import("@/pages/organization/OrganizationDeveloperPortal"),
 );
+// ARCH-22. Lazy like every other organization surface, so the BYOK console's
+// provider cards and routing table stay out of the entry chunk.
+const OrganizationBYOK = lazy(
+  () => import("@/pages/organization/OrganizationBYOK"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -235,6 +240,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationDeveloper}
                       element={<OrganizationDeveloperPortal />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationBYOK}
+                      element={<OrganizationBYOK />}
                     />
                   </Route>
                 </Route>

@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.supplier_cogs import SOURCE_ZERO_BYOK
 from app.models.usage_event import UsageEvent
 from app.services import pricing_service
 from app.services import spend_control_service as spend
@@ -67,6 +68,17 @@ class LLMReservation:
     settled: bool = False
     details_extra: dict[str, Any] = field(default_factory=dict)
 
+    # ARCH-22 B3. The receipt naming the key that ACTUALLY served the call,
+    # attached by the caller after ProviderClientFactory.build() returns and
+    # before settle(). None means the platform account paid, which is the
+    # correct assumption when nobody has said otherwise.
+    #
+    # This is deliberately not a bool. A reservation records intent; a receipt
+    # records what happened. `llm_resilience.execute` can fail over between
+    # them, and stamping ZERO_BYOK on intent would mark real supplier spend as
+    # free — the ARCH-18 zero-cost hazard, inverted. See `_byok_applies`.
+    credential_use: Optional[Any] = None
+
     @property
     def input_cost_per_1k(self) -> float:
         if self.input_price is None:
@@ -87,7 +99,7 @@ class LLMReservation:
         return f"{self.scope}:{suffix}"
 
     def as_details(self) -> dict[str, Any]:
-        return {
+        details = {
             "scope": self.scope,
             "resource_type": self.resource_type,
             "resource_id": str(self.resource_id),
@@ -97,6 +109,18 @@ class LLMReservation:
                 self.input_price.price_book_version if self.input_price else None
             ),
         }
+        if self.credential_use is not None:
+            details.update(self.credential_use.as_details())
+        return details
+
+    def attach_credential_use(self, credential_use: Any) -> None:
+        """Record which key served this call. Called once, after execution.
+
+        Kept as a method rather than a bare assignment so the verification
+        gate has a name to grep for and so the one-way nature is documented at
+        the point of use.
+        """
+        self.credential_use = credential_use
 
 
 def _is_collision(exc: IntegrityError) -> bool:
@@ -389,6 +413,59 @@ def _settlement_price(
         return None
 
 
+def _byok_applies(
+    reservation: LLMReservation, *, settled_provider: str
+) -> tuple[bool, Optional[str]]:
+    """Decide whether this event may be stamped ZERO_BYOK. ARCH-22 B3.
+
+    Three conditions, all required:
+
+      1. A receipt exists. No receipt means the platform account paid.
+      2. The receipt says a TENANT key served the call and did not fall back.
+      3. The provider that actually ANSWERED is the provider the receipt names.
+
+    Condition 3 is the one that matters and the one a naive implementation
+    omits. `llm_resilience.execute` can fail over from the reserved provider
+    to `LLM_FALLBACK_PROVIDER` mid-call. `settle` reads the provider back off
+    `token_usage`, so by the time we get here `settled_provider` is ground
+    truth. If it disagrees with the receipt, the tokens were bought on the
+    platform's supplier contract and stamping them zero would report real COGS
+    as free — a 100% margin on spend we actually made. ARCH-18 forbids the
+    unknown-reads-as-zero direction of this error; this is the same error
+    pointing the other way.
+
+    Returns (apply_zero_cogs, mismatch_reason).
+    """
+    use = reservation.credential_use
+    if use is None:
+        return False, None
+
+    if not getattr(use, "is_zero_cogs", False):
+        return False, getattr(use, "reason", None)
+
+    receipt_provider = str(getattr(use, "provider", "")).strip().lower()
+    actual_provider = str(settled_provider or "").strip().lower()
+
+    if receipt_provider != actual_provider:
+        logger.critical(
+            "llm.byok_failover_cost_reattributed",
+            extra={
+                "scope": reservation.scope,
+                "organization_id": str(reservation.organization_id),
+                "receipt_provider": receipt_provider,
+                "settled_provider": actual_provider,
+                "key_fingerprint": getattr(use, "key_fingerprint", None),
+            },
+        )
+        return False, (
+            f"byok_receipt_provider_mismatch: reserved on {receipt_provider}, "
+            f"settled on {actual_provider}; cost re-attributed to the price "
+            "book because the platform's supplier account served this call"
+        )
+
+    return True, None
+
+
 def _record(
     db: Session,
     *,
@@ -430,6 +507,25 @@ def _record(
         cost_basis_micros = None
         cost_basis_source = None
 
+    # ARCH-22 §3.3. The tenant's own provider account was billed for these
+    # tokens, so FlowPilot's supplier cost for them is genuinely zero. Revenue
+    # is deliberately NOT touched: we still charge for the platform service,
+    # and `cost_micros` / `unit_price_micros` stay exactly as the price book
+    # resolved them. Only the COST half becomes zero.
+    #
+    # ZERO_BYOK is already in HARD_COST_BASIS_SOURCES (models/supplier_cogs),
+    # so ARCH-18 margin reporting counts this at a truthful 100% rather than
+    # excluding it — this is the one case where a 100% margin is a fact and
+    # not the silent-zero defect the invariant guards against.
+    byok_zero, mismatch_reason = _byok_applies(reservation, settled_provider=provider)
+    byok_details: dict[str, Any] = {}
+    if byok_zero:
+        cost_basis_micros = Decimal(0)
+        cost_basis_source = SOURCE_ZERO_BYOK
+        byok_details["cost_basis_zeroed_by"] = "byok_tenant_key"
+    elif mismatch_reason:
+        byok_details["byok_not_applied_reason"] = mismatch_reason
+
     savepoint = db.begin_nested()
     try:
         usage_service.record_usage(
@@ -451,6 +547,7 @@ def _record(
             details={
                 "model": model,
                 **price_details,
+                **byok_details,
                 **reservation.details_extra,
                 **details,
             },

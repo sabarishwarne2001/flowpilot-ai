@@ -243,6 +243,36 @@ export const DEVELOPER_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-22 — enterprise BYOK and per-tenant model routing.
+ *
+ * Organization-scoped like COMPLIANCE_ENDPOINTS and DEVELOPER_ENDPOINTS.
+ * `credential` takes a provider in the path rather than a credential id: the
+ * console works in terms of "my OpenAI key", and there is at most one active
+ * credential per provider per tenant, so an id would be an indirection with
+ * no extra expressive power.
+ */
+export const BYOK_ENDPOINTS = {
+  overview: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/byok`,
+  providers: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/byok/providers`,
+  credentials: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/byok/credentials`,
+  credential: (organizationId: string, provider: string): string =>
+    `/organizations/${org(organizationId)}/byok/credentials/${seg(provider)}`,
+  validate: (organizationId: string, provider: string): string =>
+    `/organizations/${org(organizationId)}/byok/credentials/${seg(provider)}/validate`,
+  fallback: (organizationId: string, provider: string): string =>
+    `/organizations/${org(organizationId)}/byok/credentials/${seg(provider)}/fallback`,
+  routes: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/byok/routes`,
+  route: (organizationId: string, taskType: string): string =>
+    `/organizations/${org(organizationId)}/byok/routes/${seg(taskType)}`,
+  savings: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/byok/savings`,
+} as const;
+
+/**
  * ARCH-21 — the public gateway.
  *
  * Listed for documentation and for the API explorer's copy targets. The

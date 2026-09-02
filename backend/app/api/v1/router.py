@@ -10,6 +10,7 @@ from app.api.v1 import (
     audit_logs,
     automation,
     avatar,
+    byok,
     compliance,
     dashboard,
     developer,
@@ -59,6 +60,7 @@ api_router.include_router(slos.router)
 api_router.include_router(compliance.router)
 api_router.include_router(developer.router)  # ARCH-21 Tenant Developer Portal
 api_router.include_router(public_gateway_router)  # ARCH-21 Public Developer Gateway
+api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routing
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

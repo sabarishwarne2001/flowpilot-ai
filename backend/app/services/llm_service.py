@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core import byok_providers
 from app.core.config import settings
 from app.models.ai_settings import AISettings
 from app.prompts.intents import PromptIntent
@@ -221,6 +222,58 @@ Assistant:
 GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE = RAG_SYNTHESIS_PROMPT_TEMPLATE
 
 
+class _RoutedProvider:
+    """Minimal stand-in exposing the `.value` shape `AIProvider` has.
+
+    `_validate_provider` and three `stage()` calls read `provider.value`. A
+    real `AIProvider` member cannot represent OPENAI or ANTHROPIC, and
+    expanding that enum is a two-step PostgreSQL migration for a value the
+    executor cannot use anyway. This carries the routed name through the same
+    attribute path without touching the enum.
+    """
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: str) -> None:
+        self.value = str(value).strip().upper()
+
+
+class _RoutedAISettings:
+    """An AISettings proxy with the provider and model a routing rule chose.
+
+    A proxy rather than a mutation: `ai_settings` is a live ORM instance owned
+    by the workspace, and writing a tenant's routing choice onto it would be
+    flushed to the database by the next commit. Every other attribute — the
+    sampling parameters, the output ceiling — is read straight off the base.
+    """
+
+    __slots__ = ("_base", "provider", "model")
+
+    def __init__(self, base: Any, provider: str, model: str) -> None:
+        object.__setattr__(self, "_base", base)
+        object.__setattr__(self, "provider", _RoutedProvider(provider))
+        object.__setattr__(self, "model", model)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(object.__getattribute__(self, "_base"), item)
+
+    @classmethod
+    def wrap(cls, *, base: Any, decision: Any) -> Any:
+        """Return the base unchanged when the rule asks for nothing new."""
+        provider = str(decision.provider or "").strip().upper()
+        model = str(decision.model_name or "").strip()
+        base_provider = str(
+            getattr(getattr(base, "provider", None), "value", "")
+        ).strip().upper()
+        base_model = str(getattr(base, "model", "") or "").strip()
+
+        if not provider or not model:
+            return base
+        if provider == base_provider and model == base_model:
+            return base
+        return cls(base, provider, model)
+
+
 class LLMService:
     """
     Provider-agnostic gateway for all Large Language Model operations.
@@ -260,15 +313,116 @@ class LLMService:
             )
         return provider
 
+    # -- ARCH-22: BYOK routing ------------------------------------------------
+
+    def resolve_routing(
+        self,
+        *,
+        db: Session | None,
+        organization_id: uuid.UUID | None,
+        task_type: str,
+        ai_settings: AISettings,
+    ) -> tuple[AISettings, Any | None, Any | None]:
+        """Resolve (effective settings, per-call client, cost receipt).
+
+        Called BEFORE `llm_metering.reserve`, not after, and that ordering is
+        load-bearing. A routing rule can change the provider and model, which
+        changes the price book entry, which changes the spend-limit check the
+        reservation performs. Reserving against the workspace default and then
+        calling a different model would check a ceiling nobody is going to be
+        billed against.
+
+        Returns the original settings untouched when the tenant has no rule
+        for this task, so the pre-ARCH-22 path is byte-for-byte unchanged for
+        every tenant that never opens the BYOK console.
+        """
+        if db is None or organization_id is None:
+            return ai_settings, None, None
+
+        from app.services.byok import model_routing_service
+        from app.services.byok.provider_clients import (
+            ProviderClientFactory,
+            ProviderUnavailableError,
+        )
+
+        try:
+            decision = model_routing_service.resolve(
+                db,
+                organization_id=organization_id,
+                task_type=task_type,
+                ai_settings=ai_settings,
+            )
+        except model_routing_service.RoutingError as exc:
+            logger.warning(
+                "byok.routing_unresolved",
+                extra={"task_type": task_type, "error": str(exc)},
+            )
+            return ai_settings, None, None
+
+        if decision.origin != "route_rule":
+            return ai_settings, None, None
+
+        effective = _RoutedAISettings.wrap(base=ai_settings, decision=decision)
+
+        # A rule pointing at a provider this build cannot execute leaves the
+        # workspace default in force rather than failing the request.
+        try:
+            self._validate_provider(ai_settings=effective)
+        except ValueError:
+            logger.warning(
+                "byok.route_provider_unsupported_by_executor",
+                extra={
+                    "task_type": task_type,
+                    "route_provider": decision.provider,
+                },
+            )
+            return ai_settings, None, None
+
+        if not decision.use_tenant_key:
+            return effective, None, None
+
+        try:
+            client, credential_use = ProviderClientFactory.build(
+                db,
+                organization_id=organization_id,
+                provider=decision.provider,
+                prefer_tenant_key=True,
+            )
+        except ProviderUnavailableError as exc:
+            logger.warning(
+                "byok.client_unavailable_using_platform",
+                extra={
+                    "task_type": task_type,
+                    "provider": decision.provider,
+                    "error": str(exc),
+                },
+            )
+            return effective, None, None
+
+        return effective, client, credential_use
+
     def _query_groq(
         self,
         *,
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
+        client: Any | None = None,
     ) -> tuple[str, TokenUsage]:
+        """Run a Groq completion, optionally on a caller-supplied client.
+
+        ARCH-22 B1. `client` is the per-call, per-tenant instance built by
+        ProviderClientFactory. When it is None we fall through to
+        `self.groq_client`, the process-wide platform client — unchanged
+        behaviour for every non-BYOK call.
+
+        The tenant client is NEVER assigned to `self._groq_client`. Caching it
+        would make one tenant's key the default for every subsequent request
+        this worker handles, which is the defect the factory exists to remove.
+        """
         logger.info("Sending request to Groq.")
-        completion = self.groq_client.chat.completions.create(
+        groq = client if client is not None else self.groq_client
+        completion = groq.chat.completions.create(
             model=ai_settings.model,
             temperature=temperature,
             top_p=ai_settings.top_p,
@@ -324,14 +478,26 @@ class LLMService:
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
+        byok_client: Any | None = None,
     ) -> tuple[str, TokenUsage]:
-        """Run the provider call under classification, backoff and a breaker."""
+        """Run the provider call under classification, backoff and a breaker.
+
+        ARCH-22. `byok_client` is used ONLY for the provider it was built for.
+        If `llm_resilience.execute` fails over to a different provider, the
+        tenant client is not carried across — a Groq client cannot serve
+        Gemini, and more importantly the failover target is the platform's own
+        account. `llm_metering._byok_applies` detects that divergence at
+        settle time and re-attributes the cost rather than stamping ZERO_BYOK.
+        """
         configured = self._validate_provider(ai_settings=ai_settings)
 
         def call(provider: str) -> tuple[str, TokenUsage]:
             if provider == "groq":
                 return self._query_groq(
-                    prompt=prompt, temperature=temperature, ai_settings=ai_settings
+                    prompt=prompt,
+                    temperature=temperature,
+                    ai_settings=ai_settings,
+                    client=byok_client if provider == configured else None,
                 )
             text, raw = self._query_gemini(
                 prompt=prompt, temperature=temperature, ai_settings=ai_settings
@@ -386,6 +552,22 @@ class LLMService:
             and work_item_id is not None
         )
 
+        # ARCH-22. Routing is resolved before the reservation so the price
+        # book entry and the spend-limit check both see the model that will
+        # actually be called. SUMMARY and EXTRACTION are distinct tasks in the
+        # BYOK vocabulary; the enrichment operation name selects between them.
+        task_type = (
+            byok_providers.TASK_SUMMARY
+            if operation == "summary"
+            else byok_providers.TASK_EXTRACTION
+        )
+        effective_settings, byok_client, credential_use = self.resolve_routing(
+            db=db if metered else None,
+            organization_id=organization_id if metered else None,
+            task_type=task_type,
+            ai_settings=ai_settings,
+        )
+
         reservation = None
         if metered:
             reservation = llm_metering.reserve_for_enrichment(
@@ -395,15 +577,22 @@ class LLMService:
                 work_item_id=work_item_id,
                 operation=operation,
                 prompt=prompt,
-                ai_settings=ai_settings,
+                ai_settings=effective_settings,
             )
 
-        with stage("llm", provider=ai_settings.provider.value, operation=operation):
+        with stage(
+            "llm", provider=effective_settings.provider.value, operation=operation
+        ):
             response, token_usage = self._execute_query(
-                prompt=prompt, temperature=temperature, ai_settings=ai_settings
+                prompt=prompt,
+                temperature=temperature,
+                ai_settings=effective_settings,
+                byok_client=byok_client,
             )
 
         if reservation is not None and db is not None:
+            if credential_use is not None:
+                reservation.attach_credential_use(credential_use)
             llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
 
         return response, token_usage
@@ -584,8 +773,22 @@ class LLMService:
             query=query, context=context, history=history, ai_settings=ai_settings
         )
 
+        metered = (
+            db is not None
+            and organization_id is not None
+            and conversation_id is not None
+            and message_id is not None
+        )
+
+        effective_settings, byok_client, credential_use = self.resolve_routing(
+            db=db if metered else None,
+            organization_id=organization_id if metered else None,
+            task_type=byok_providers.TASK_ASSISTANT,
+            ai_settings=ai_settings,
+        )
+
         reservation = None
-        if db is not None and organization_id is not None and conversation_id is not None and message_id is not None:
+        if metered:
             reservation = llm_metering.reserve(
                 db,
                 organization_id=organization_id,
@@ -593,17 +796,20 @@ class LLMService:
                 conversation_id=conversation_id,
                 message_id=message_id,
                 prompt=prompt,
-                ai_settings=ai_settings,
+                ai_settings=effective_settings,
             )
 
-        with stage("llm", provider=ai_settings.provider.value):
+        with stage("llm", provider=effective_settings.provider.value):
             response, token_usage = self._execute_query(
                 prompt=prompt,
-                temperature=ai_settings.temperature,
-                ai_settings=ai_settings,
+                temperature=effective_settings.temperature,
+                ai_settings=effective_settings,
+                byok_client=byok_client,
             )
 
         if db is not None and reservation is not None:
+            if credential_use is not None:
+                reservation.attach_credential_use(credential_use)
             llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
 
         return response.strip(), token_usage

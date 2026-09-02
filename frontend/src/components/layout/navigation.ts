@@ -5,6 +5,7 @@ import {
   CreditCard,
   FileText,
   KeyRound,
+  KeySquare,
   LayoutDashboard,
   Mail,
   MessageSquare,
@@ -26,6 +27,7 @@ import {
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
+  organizationBYOKPath,
   organizationCompliancePath,
   organizationDeveloperPath,
   organizationEmailPath,
@@ -135,6 +137,15 @@ export const buildOrganizationNavigationItems = (
       name: "Developer platform",
       path: organizationDeveloperPath(orgSlug),
       icon: TerminalSquare,
+    });
+    // ARCH-22. ADMIN sees the console; every write behind it is OWNER-gated
+    // by RequireOrgOwner on the route. An administrator has to be able to
+    // read which provider account the tenant's traffic is running on during
+    // an audit, and hiding the link is not what protects the credentials.
+    items.push({
+      name: "Enterprise BYOK & models",
+      path: organizationBYOKPath(orgSlug),
+      icon: KeySquare,
     });
   }
 

@@ -131,6 +131,21 @@ export const developerKeys = {
     ] as const,
 };
 
+export const byokKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "byok"] as const,
+  overview: (organizationId: string, windowDays: number) =>
+    [...byokKeys.all(organizationId), "overview", windowDays] as const,
+  providers: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "providers"] as const,
+  credentials: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "credentials"] as const,
+  routes: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "routes"] as const,
+  savings: (organizationId: string, windowDays: number) =>
+    [...byokKeys.all(organizationId), "savings", windowDays] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

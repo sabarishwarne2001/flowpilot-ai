@@ -63,6 +63,10 @@ export const ROUTE_PATTERNS = {
   // "organizations" is already reserved, so parseTenantPath cannot read
   // /organizations/:orgSlug/developer as a workspace route.
   organizationDeveloper: "developer",
+  // ARCH-22. Same reasoning as compliance and developer: "organizations" is
+  // already reserved, so /organizations/:orgSlug/byok cannot be misread by
+  // parseTenantPath as orgSlug="organizations", workspaceSlug=":orgSlug".
+  organizationBYOK: "byok",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
@@ -125,6 +129,9 @@ export const organizationCompliancePath = (orgSlug: string): string =>
 
 export const organizationDeveloperPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/developer`;
+
+export const organizationBYOKPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/byok`;
 
 export const platformPath = (): string => "/admin";
 
@@ -334,6 +341,11 @@ export const runTenantPathSelfCheck = (): string[] => {
     "the developer portal is an organization route, not a tenant route",
     organizationDeveloperPath("acme") === "/organizations/acme/developer" &&
       parseTenantPath("/organizations/acme/developer") === null,
+  );
+  expect(
+    "the BYOK console is an organization route, not a tenant route",
+    organizationBYOKPath("acme") === "/organizations/acme/byok" &&
+      parseTenantPath("/organizations/acme/byok") === null,
   );
   expect(
     "single-segment and root paths carry no tenant",

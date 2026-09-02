@@ -47,6 +47,10 @@ class AuditResourceType(str, PyEnum):
     ERASED_SUBJECT = "ERASED_SUBJECT"
     RETENTION_POLICY = "RETENTION_POLICY"
     DATA_RESIDENCY = "DATA_RESIDENCY"
+    # ARCH-22 — BYOK. Added to the PostgreSQL type by
+    # arch22_step1_byok_vocabulary; this enum must stay in step with it.
+    PROVIDER_CREDENTIAL = "PROVIDER_CREDENTIAL"
+    MODEL_ROUTE = "MODEL_ROUTE"
 
 
 class AuditAction(str, PyEnum):
@@ -79,6 +83,9 @@ class AuditAction(str, PyEnum):
     EXPORT_REQUESTED = "EXPORT_REQUESTED"
     EXPORT_COMPLETED = "EXPORT_COMPLETED"
     PURGED = "PURGED"
+    # ARCH-22 — BYOK.
+    CREDENTIAL_VALIDATED = "CREDENTIAL_VALIDATED"
+    FALLBACK_POLICY_CHANGED = "FALLBACK_POLICY_CHANGED"
 
 
 _resource_type_pg = PgEnum(

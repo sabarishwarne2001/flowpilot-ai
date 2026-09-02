@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -65,7 +65,7 @@ from app.models.public_api import (
     LATENCY_BOUNDS_MS,
     LATENCY_BUCKET_COUNT,
 )
-from app.services import audit_service
+from app.services import audit_service, public_api_service
 
 logger = logging.getLogger("app.services.developer_portal")
 
@@ -357,15 +357,17 @@ def key_metrics(
 
     p50, p95 = _percentiles(merged, served, total_errors)
 
-    month_start = end.replace(day=1)
-    month_requests = int(
-        db.execute(
-            select(func.coalesce(func.sum(ApiKeyUsageDaily.request_count), 0)).where(
-                ApiKeyUsageDaily.api_key_id == api_key_id,
-                ApiKeyUsageDaily.usage_date >= month_start,
-            )
-        ).scalar_one()
-        or 0
+    # ARCH-22 N2. This block previously re-implemented, inline, the query
+    # already published as public_api_service.monthly_request_count. The
+    # duplicate meant that function was defined in app/, exported in __all__,
+    # and reachable only from tests/ — the orphaned-guard pattern this
+    # codebase keeps re-shipping. Two copies of a billing-adjacent aggregate
+    # is also one copy too many: they would have drifted the first time the
+    # month boundary rule changed.
+    month_requests = public_api_service.monthly_request_count(
+        db,
+        api_key_id=api_key_id,
+        at=datetime.combine(end, time.min, tzinfo=UTC),
     )
 
     return {
