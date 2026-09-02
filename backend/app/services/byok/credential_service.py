@@ -1,4 +1,4 @@
-"""ARCH-22 §4.3 — tenant provider credential persistence and validation.
+"""ARCH-22 §4.3 / ARCH-23 §5 — tenant provider credential persistence and validation.
 
 THE TENANT ISOLATION RULE
 =========================
@@ -22,6 +22,35 @@ codebase. This module calls `encrypt_password` / `decrypt_password` and does
 not import `cryptography`. The function names still say "password" because
 they were written for SMTP in ARCH-07; renaming them would touch the email
 service and the rotation service for no behavioural gain.
+
+Only `api_key` is encrypted. ARCH-23's `resource_endpoint` and
+`deployment_name` are not secrets — both appear in the Azure portal URL — and
+running them through the envelope would dilute invariant I2, which is only
+useful while it names a narrow set of fields.
+
+WHAT ARCH-23 CHANGED IN THE PROBES
+==================================
+
+Probes took a plaintext string. Azure cannot be validated from one: it needs
+the resource host and the deployment name too, which is why
+`_probe_azure_openai` used to raise on principle rather than return a false
+ACTIVE. Probes now take a `ProviderCredentialConfig`, the same carrier the
+execution adapters take, so validation and execution authenticate through
+identical inputs. A probe that passes and an execution that fails would
+otherwise be possible, and would be very hard to diagnose.
+
+Two probes changed substantively:
+
+  GEMINI  Was a raw httpx GET against the models endpoint, written that way
+          specifically to avoid `genai.configure()`'s process-global state.
+          Now uses the `google-genai` client object, which has no global
+          state — so validation and execution finally share a code path.
+
+  AZURE   New. Goes through `SSRFSafeHTTPClient` (ARCH-23 finding B2). This
+          is the ONLY probe whose URL is derived from tenant input, and it is
+          the reason that client exists: the four suffix checks upstream all
+          constrain the NAME, and only DNS resolution constrains the ADDRESS.
+          A tenant who controls a DNS record controls the mapping between them.
 """
 
 from __future__ import annotations
@@ -32,14 +61,22 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.byok_providers import (
+    PROVIDER_ANTHROPIC,
+    PROVIDER_AZURE_OPENAI,
+    PROVIDER_GEMINI,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+    PROVIDER_OPENAI,
     ProviderSpec,
+    endpoint_suffix_for,
     normalize_provider,
+    requires_endpoint,
     spec_for,
 )
 from app.core.encryption import (
@@ -65,6 +102,12 @@ VALIDATION_TIMEOUT_SECONDS: float = 8.0
 #: Truncated to the column width, and scrubbed of anything key-shaped first.
 MAX_VALIDATION_ERROR_LENGTH: int = 512
 
+#: Azure pins its REST contract to a dated API version. Must match
+#: `provider_clients.AZURE_API_VERSION`; gate 23-G9 asserts they agree, because
+#: probing one version and executing against another is how a credential
+#: validates green and fails in production.
+AZURE_API_VERSION: str = "2024-10-21"
+
 
 class CredentialError(RuntimeError):
     """A credential could not be stored, read or validated."""
@@ -81,6 +124,15 @@ class CredentialDecryptionError(CredentialError):
     cannot read is not the same as a credential the tenant declined to
     provide, and treating it as one would route a tenant's traffic through our
     account because of our own key-management error.
+    """
+
+
+class CredentialShapeError(CredentialError):
+    """ARCH-23. The credential is missing a field this provider requires.
+
+    Distinct from `CredentialError` because the remedy is specific and the
+    console can act on it: an Azure row without an endpoint needs two fields
+    re-entered, not a new key.
     """
 
 
@@ -172,6 +224,47 @@ def assert_storable(provider: str, plaintext: str) -> ProviderSpec:
     return spec
 
 
+def assert_endpoint_storable(
+    provider: str,
+    *,
+    resource_endpoint: Optional[str],
+    deployment_name: Optional[str],
+) -> None:
+    """ARCH-23. Validate the Azure-shaped fields at the service boundary.
+
+    The Pydantic schema checks these too, and so does a database CHECK. This
+    layer exists because the service is callable from places the schema is
+    not: an admin script, a data migration, a future SCIM-style provisioning
+    path. Each of those would otherwise write a row the executor refuses.
+    """
+    key = normalize_provider(provider)
+
+    if not requires_endpoint(key):
+        if resource_endpoint or deployment_name:
+            raise CredentialShapeError(
+                f"{spec_for(key).label} authenticates with an API key alone. "
+                "A resource endpoint and deployment name apply to Azure "
+                "OpenAI only."
+            )
+        return
+
+    if not resource_endpoint or not deployment_name:
+        raise CredentialShapeError(
+            f"{spec_for(key).label} needs both a resource endpoint and a "
+            "deployment name alongside the API key. Without them the "
+            "credential cannot be validated or used."
+        )
+
+    suffix = endpoint_suffix_for(key)
+    host = resource_endpoint.strip().lower()
+    if suffix and not host.endswith(suffix):
+        raise CredentialShapeError(
+            f"The resource endpoint must be a {suffix} host. FlowPilot's "
+            "server connects to this address, so it is restricted to the "
+            "provider's own domain."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
@@ -258,6 +351,8 @@ def upsert_credential(
     plaintext_key: str,
     allow_platform_fallback: Optional[bool] = None,
     actor_id: Optional[uuid.UUID] = None,
+    resource_endpoint: Optional[str] = None,
+    deployment_name: Optional[str] = None,
 ) -> TenantProviderCredential:
     """Store or rotate a tenant's key for one provider.
 
@@ -268,9 +363,27 @@ def upsert_credential(
 
     The fallback policy is only touched when explicitly supplied, so a key
     rotation cannot quietly re-open a fallback the tenant had closed.
+
+    ARCH-23: the Azure fields follow the same rule for the opposite reason.
+    They ARE overwritten on every upsert, because unlike the fallback policy
+    they are part of the credential's identity — rotating a key while pointing
+    at a stale endpoint would produce a credential that validates against one
+    resource and executes against another.
     """
     spec = assert_storable(provider, plaintext_key)
+    assert_endpoint_storable(
+        spec.key,
+        resource_endpoint=resource_endpoint,
+        deployment_name=deployment_name,
+    )
     candidate = plaintext_key.strip()
+
+    normalised_endpoint = (
+        resource_endpoint.strip().lower() if resource_endpoint else None
+    )
+    normalised_deployment = (
+        deployment_name.strip() if deployment_name else None
+    )
 
     try:
         ciphertext = encrypt_password(candidate)
@@ -295,6 +408,8 @@ def upsert_credential(
             key_version=1,
             key_fingerprint=fingerprint(candidate),
             key_last_four=last_four(candidate),
+            resource_endpoint=normalised_endpoint,
+            deployment_name=normalised_deployment,
             is_active=True,
             allow_platform_fallback=bool(allow_platform_fallback),
             created_by_user_id=actor_id,
@@ -308,6 +423,7 @@ def upsert_credential(
                 "provider": spec.key,
                 "key_fingerprint": credential.key_fingerprint,
                 "routable": spec.is_routable,
+                "has_endpoint": normalised_endpoint is not None,
             },
         )
         return credential
@@ -316,6 +432,8 @@ def upsert_credential(
     existing.key_version = int(existing.key_version) + 1
     existing.key_fingerprint = fingerprint(candidate)
     existing.key_last_four = last_four(candidate)
+    existing.resource_endpoint = normalised_endpoint
+    existing.deployment_name = normalised_deployment
     existing.last_validated_at = None
     existing.last_validation_latency_ms = None
     existing.validation_error = None
@@ -419,61 +537,64 @@ def record_validation(
 
 
 # ---------------------------------------------------------------------------
-# Live validation
+# Live validation — ARCH-23: probes take a config, not a string
 # ---------------------------------------------------------------------------
+#
+# Every probe makes the cheapest authenticated call the provider offers,
+# usually a models list. That proves the key authenticates without consuming
+# tokens or creating a usage event the tenant would be billed for. Validation
+# must not show up on anyone's invoice.
 
 
-def _probe_groq(plaintext: str) -> None:
-    """Cheapest authenticated call Groq offers: list models.
-
-    A models list proves the key authenticates without consuming tokens or
-    creating a usage event the tenant would be billed for. Validation must not
-    show up on anyone's invoice.
-    """
+def _probe_groq(config: "ProviderCredentialConfig") -> None:
+    """Groq: list models via the SDK. The client holds no process state."""
     from groq import Groq
 
-    client = Groq(api_key=plaintext, timeout=VALIDATION_TIMEOUT_SECONDS)
+    client = Groq(api_key=config.api_key, timeout=VALIDATION_TIMEOUT_SECONDS)
     client.models.list()
 
 
-def _probe_gemini(plaintext: str) -> None:
-    """Validate a Gemini key over plain HTTP rather than the SDK.
+def _probe_gemini(config: "ProviderCredentialConfig") -> None:
+    """Gemini via the modern client-object SDK. ARCH-23.
 
-    `google.generativeai` validates by calling `genai.configure()`, which sets
-    the key as PROCESS-GLOBAL state. Doing that during validation would leak
-    the tenant's key to every concurrent request on this worker — the exact
-    defect that makes Gemini unroutable in the first place. A direct GET
-    against the models endpoint carries the key in a header and touches no
-    global state.
+    ARCH-22 validated Gemini with a raw httpx GET specifically to avoid
+    `genai.configure()`, which set the API key as process-global state — the
+    exact defect that made Gemini unroutable. `google.genai.Client(api_key=...)`
+    binds the key to an instance, so validation and execution can finally share
+    a code path. A probe that authenticates differently from the executor is a
+    probe that can pass while production fails.
     """
-    import httpx
+    from google import genai
+    from google.genai import types as genai_types
 
-    response = httpx.get(
-        "https://generativelanguage.googleapis.com/v1beta/models",
-        headers={"x-goog-api-key": plaintext},
-        timeout=VALIDATION_TIMEOUT_SECONDS,
+    client = genai.Client(
+        api_key=config.api_key,
+        http_options=genai_types.HttpOptions(
+            timeout=int(VALIDATION_TIMEOUT_SECONDS * 1000)
+        ),
     )
-    response.raise_for_status()
+    # `list()` is lazy; consuming one page is what forces the auth round trip.
+    next(iter(client.models.list()), None)
 
 
-def _probe_openai(plaintext: str) -> None:
+def _probe_openai(config: "ProviderCredentialConfig") -> None:
     import httpx
 
     response = httpx.get(
         "https://api.openai.com/v1/models",
-        headers={"Authorization": f"Bearer {plaintext}"},
+        headers={"Authorization": f"Bearer {config.api_key}"},
         timeout=VALIDATION_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
 
-def _probe_anthropic(plaintext: str) -> None:
+def _probe_anthropic(config: "ProviderCredentialConfig") -> None:
     import httpx
 
     response = httpx.get(
         "https://api.anthropic.com/v1/models",
         headers={
-            "x-api-key": plaintext,
+            "x-api-key": config.api_key,
             "anthropic-version": "2023-06-01",
         },
         timeout=VALIDATION_TIMEOUT_SECONDS,
@@ -481,40 +602,95 @@ def _probe_anthropic(plaintext: str) -> None:
     response.raise_for_status()
 
 
-def _probe_mistral(plaintext: str) -> None:
+def _probe_mistral(config: "ProviderCredentialConfig") -> None:
     import httpx
 
     response = httpx.get(
         "https://api.mistral.ai/v1/models",
-        headers={"Authorization": f"Bearer {plaintext}"},
+        headers={"Authorization": f"Bearer {config.api_key}"},
         timeout=VALIDATION_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
 
-def _probe_azure_openai(plaintext: str) -> None:
-    """Azure cannot be validated from a key alone.
+def _probe_azure_openai(config: "ProviderCredentialConfig") -> None:
+    """Azure OpenAI, through the SSRF-safe client. ARCH-23 finding B2.
 
-    An Azure OpenAI credential is (key, resource host, deployment name). This
-    schema carries only the key, so there is no endpoint to probe. Raising is
-    the honest answer; returning success would put an ACTIVE badge on a
-    credential nothing has ever verified.
+    This is the only probe whose URL is built from tenant input, and that
+    makes it the only one that must not use httpx.
+
+    The suffix is checked in four places before this point — Pydantic, a
+    database CHECK, the adapter, and again here. All four constrain the NAME.
+    `SSRFSafeHTTPClient` is the only layer that constrains the ADDRESS: it
+    resolves the hostname and refuses private, loopback, link-local and
+    metadata ranges. A tenant who registers `evil.openai.azure.com`... cannot,
+    because they do not own that zone — but a tenant who compromises a DNS
+    resolver, or a provider suffix that ever supports customer-controlled
+    subdomains, would turn a name check into no check at all.
+
+    The deployment probe is a GET against the deployment's own metadata rather
+    than a completion: it proves the key, the resource AND the deployment name
+    are all correct, without generating a token the tenant pays for.
     """
-    raise CredentialError(
-        "Azure OpenAI cannot be validated from an API key alone: it also "
-        "needs the resource endpoint and deployment name, which this "
-        "credential does not carry. The key is stored encrypted and can be "
-        "used once an Azure adapter lands."
+    from app.core.ssrf_client import SSRFSafeHTTPClient
+
+    if not config.resource_endpoint or not config.deployment_name:
+        raise CredentialShapeError(
+            "Azure OpenAI needs both a resource endpoint and a deployment "
+            "name. This credential carries only the API key."
+        )
+
+    host = config.resource_endpoint.strip().lower()
+    if not host.endswith(".openai.azure.com"):
+        raise CredentialShapeError(
+            f"Refusing to probe {host!r}: the resource endpoint must be a "
+            "*.openai.azure.com host."
+        )
+
+    url = (
+        f"https://{host}/openai/deployments/{config.deployment_name}"
+        f"?api-version={AZURE_API_VERSION}"
     )
 
+    client = SSRFSafeHTTPClient(total_timeout=VALIDATION_TIMEOUT_SECONDS)
+    response = client.request(
+        "GET",
+        url,
+        headers={
+            "api-key": config.api_key,
+            "Accept": "application/json",
+        },
+    )
 
-_PROBES = {
-    "GROQ": _probe_groq,
-    "GEMINI": _probe_gemini,
-    "OPENAI": _probe_openai,
-    "ANTHROPIC": _probe_anthropic,
-    "MISTRAL": _probe_mistral,
-    "AZURE_OPENAI": _probe_azure_openai,
+    status = int(getattr(response, "status_code", 0) or 0)
+    if status == 401 or status == 403:
+        raise CredentialError(
+            "Azure rejected the API key for this resource "
+            f"(HTTP {status}). Check that the key belongs to {host}."
+        )
+    if status == 404:
+        raise CredentialError(
+            f"Azure has no deployment named '{config.deployment_name}' on "
+            f"{host} (HTTP 404). The deployment name is your own label from "
+            "Azure AI Studio, not the model id."
+        )
+    if status >= 400:
+        raise CredentialError(
+            f"Azure returned HTTP {status} while validating this credential."
+        )
+
+
+#: ARCH-23. Every registered provider has a probe, and every probe takes a
+#: `ProviderCredentialConfig`. Gate 23-G6 asserts this mapping covers exactly
+#: `BYOK_PROVIDER_VALUES` — a provider without a probe would be storable and
+#: permanently UNVALIDATED, which reads to a tenant as "we lost your key".
+_PROBES: dict[str, Callable[["ProviderCredentialConfig"], None]] = {
+    PROVIDER_GROQ: _probe_groq,
+    PROVIDER_GEMINI: _probe_gemini,
+    PROVIDER_OPENAI: _probe_openai,
+    PROVIDER_ANTHROPIC: _probe_anthropic,
+    PROVIDER_MISTRAL: _probe_mistral,
+    PROVIDER_AZURE_OPENAI: _probe_azure_openai,
 }
 
 
@@ -527,6 +703,13 @@ def validate_credential(
     an exception, and the caller persists it either way. Only a decryption
     failure propagates, because that is our fault rather than the tenant's.
     """
+    # Imported here rather than at module scope: provider_clients imports this
+    # module for CredentialError, so a top-level import would be circular.
+    from app.services.byok.provider_clients import (
+        ProviderCredentialConfig,
+        config_from_credential,
+    )
+
     plaintext = decrypt_for_use(credential)
     provider = normalize_provider(credential.provider)
     probe = _PROBES.get(provider)
@@ -541,7 +724,10 @@ def validate_credential(
         )
 
     try:
-        probe(plaintext)
+        config: ProviderCredentialConfig = config_from_credential(
+            credential, plaintext
+        )
+        probe(config)
     except Exception as exc:  # noqa: BLE001 — every provider raises its own
         elapsed = int((time.monotonic() - started) * 1000)
         message = _scrub(f"{type(exc).__name__}: {exc}", plaintext)
@@ -645,12 +831,15 @@ def rotate_encryption(
 
 
 __all__ = [
+    "AZURE_API_VERSION",
     "MAX_VALIDATION_ERROR_LENGTH",
     "VALIDATION_TIMEOUT_SECONDS",
     "CredentialDecryptionError",
     "CredentialError",
     "CredentialNotFoundError",
+    "CredentialShapeError",
     "ValidationOutcome",
+    "assert_endpoint_storable",
     "assert_storable",
     "deactivate",
     "decrypt_for_use",
