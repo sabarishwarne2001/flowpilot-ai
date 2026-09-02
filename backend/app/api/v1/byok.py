@@ -30,6 +30,7 @@ from app.api.deps import (
     RequireOrgOwner,
     get_db,
 )
+from app.core.client_ip import client_ip
 from app.core.byok_providers import (
     BYOK_PROVIDER_VALUES,
     BYOK_TASK_TYPE_VALUES,
@@ -40,9 +41,7 @@ from app.core.byok_providers import (
     is_routable,
     normalize_task_type,
     providers_for_task,
-    requires_endpoint,
     spec_for,
-    supports_task,
     unroutable_reason,
 )
 from app.models.audit_log import AuditAction, AuditResourceType
@@ -99,8 +98,24 @@ def _assert_scope(
 
 
 def _client_context(request: Request) -> dict[str, Optional[str]]:
+    """Audit attribution for one request.
+
+    ARCH-23 remediation B-1. This read `request.client.host` directly, which
+    behind the ingress is the LOAD BALANCER, not the user. Every audit row the
+    BYOK endpoints write — credential creation, rotation, deactivation,
+    fallback-policy change — recorded that address instead of the caller's.
+
+    Those are the most security-sensitive audit rows in the platform, and the
+    failure was silent: the field was populated, plausible, and identical for
+    every tenant on the cluster.
+
+    `app.core.client_ip.client_ip` is the single X-Forwarded-For parser
+    established by ARCH-19 and enforced by its gate check G3. It applies
+    TRUSTED_PROXY_HOPS and returns None rather than an untrusted address when
+    the chain cannot be validated — a null IP is honest, a wrong one is not.
+    """
     return {
-        "ip_address": request.client.host if request.client else None,
+        "ip_address": client_ip(request),
         "user_agent": request.headers.get("user-agent"),
     }
 

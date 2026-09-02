@@ -84,7 +84,22 @@ EXPECTED_TASKS = (
     "EMBEDDING",
 )
 
-EXPECTED_ROUTABLE = {"GROQ"}
+#: ARCH-23 remediation N-2. This was the literal `{"GROQ"}`, correct at ARCH-22
+#: when five providers were stored-but-unroutable and deliberately superseded
+#: when ARCH-23 shipped adapters for all six.
+#:
+#: A frozen literal here made G3 assert a fact about the world at one moment
+#: rather than the invariant it exists to protect. The invariant never changed:
+#: the registry's `is_routable` flags and `ProviderClientFactory._ADAPTERS`
+#: must agree in both directions. Only the expected VALUE changed.
+#:
+#: Derived from the registry at run time so this file never needs editing again
+#: when a seventh provider lands — G4 is what proves the derivation honest, by
+#: cross-checking it against the adapter table in a different module.
+def _expected_routable() -> set[str]:
+    from app.core.byok_providers import ROUTABLE_PROVIDERS
+
+    return set(ROUTABLE_PROVIDERS)
 
 
 def record(check: str, status: str, detail: str = "") -> None:
@@ -344,28 +359,49 @@ def g3_routable_set_is_honest() -> None:
         if key and flag:
             routable.add(str(key))
 
-    if routable != EXPECTED_ROUTABLE:
+    expected = _expected_routable()
+    if routable != expected:
         record(
             "G3 routable provider set is honest",
             FAIL,
-            f"routable={sorted(routable)}, expected {sorted(EXPECTED_ROUTABLE)}",
+            f"AST-parsed is_routable flags {sorted(routable)} disagree with "
+            f"ROUTABLE_PROVIDERS {sorted(expected)} resolved at import. The "
+            f"registry is internally inconsistent.",
         )
         return
 
-    if "GEMINI" not in source or "genai.configure" not in source:
+    # ARCH-22 asserted that GEMINI's unroutable_reason named the
+    # `genai.configure` process-global hazard, because at that point the
+    # honesty of the grey badge was the whole control. ARCH-23 migrated to
+    # `google-genai`, removed the hazard, and made GEMINI routable — so the
+    # assertion is inverted rather than deleted: no provider may still be
+    # carrying an unroutable_reason it no longer has.
+    unroutable_with_reason = {
+        key
+        for key, spec in _registry_specs().items()
+        if spec.is_routable and spec.unroutable_reason is not None
+    }
+    if unroutable_with_reason:
         record(
             "G3 routable provider set is honest",
             FAIL,
-            "GEMINI's unroutable reason no longer names the process-global "
-            "genai.configure hazard",
+            f"routable providers still carrying an unroutable_reason: "
+            f"{sorted(unroutable_with_reason)}. A live provider explaining why "
+            f"it cannot be used is a stale string the console will render.",
         )
         return
 
     record(
         "G3 routable provider set is honest",
         PASS,
-        f"routable={sorted(routable)}, 5 stored-only",
+        f"routable={sorted(routable)}, all with a live adapter",
     )
+
+
+def _registry_specs() -> dict:
+    from app.core.byok_providers import PROVIDER_REGISTRY
+
+    return PROVIDER_REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -379,32 +415,62 @@ def g4_adapters_match_routable() -> None:
     Without this, flipping `is_routable=True` on OPENAI would produce a 500 at
     the first request instead of a failing gate.
     """
+    # ARCH-23 remediation N-2. This reader accepted `ast.Constant` keys only —
+    # the ARCH-22 table was `{"GROQ": _build_groq}`. ARCH-23 rewrote it to
+    # `{PROVIDER_GROQ: _build_groq, ...}`, keying on the registry constants so
+    # a typo is a NameError at import rather than a silently absent adapter.
+    # That is the better idiom, and it made this reader return an empty set —
+    # which G4 then reported as "no adapters exist", a false alarm that would
+    # have trained someone to ignore the check.
+    #
+    # `_resolve_key` now handles both, so either idiom reads correctly.
+    clients_module = tree(CLIENTS)
+
+    # The PROVIDER_* constants are DEFINED in byok_providers.py and merely
+    # IMPORTED into provider_clients.py, so `_string_bindings(clients_module)`
+    # alone resolves nothing. Both modules are consulted, registry first,
+    # which is also the right precedence: the registry is the definition and a
+    # local rebinding would be the anomaly worth surfacing.
+    name_bindings = {
+        **_string_bindings(tree(REGISTRY)),
+        **_string_bindings(clients_module),
+    }
+
+    def _resolve_key(node: ast.expr):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return name_bindings.get(node.id)
+        return None
+
     adapters: set[str] = set()
-    for node in ast.walk(tree(CLIENTS)):
+    for node in ast.walk(clients_module):
         if isinstance(node, ast.Assign) and node.targets:
             first = node.targets[0]
             if isinstance(first, ast.Name) and first.id == "_ADAPTERS":
                 if isinstance(node.value, ast.Dict):
                     adapters = {
-                        key.value
+                        resolved
                         for key in node.value.keys
-                        if isinstance(key, ast.Constant)
-                        and isinstance(key.value, str)
+                        if (resolved := _resolve_key(key)) is not None
                     }
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             if node.target.id == "_ADAPTERS" and isinstance(node.value, ast.Dict):
                 adapters = {
-                    key.value
+                    resolved
                     for key in node.value.keys
-                    if isinstance(key, ast.Constant)
-                    and isinstance(key.value, str)
+                    if (resolved := _resolve_key(key)) is not None
                 }
 
-    if adapters != EXPECTED_ROUTABLE:
+    expected = _expected_routable()
+    if adapters != expected:
         record(
             "G4 adapters match the routable set",
             FAIL,
-            f"_ADAPTERS={sorted(adapters)}, routable={sorted(EXPECTED_ROUTABLE)}",
+            f"_ADAPTERS={sorted(adapters)}, routable={sorted(expected)}. A "
+            f"routable provider without an adapter is a 500 at the first "
+            f"request; an adapter for an unroutable provider is a lie waiting "
+            f"to be flipped on.",
         )
         return
     record("G4 adapters match the routable set", PASS, f"{sorted(adapters)}")

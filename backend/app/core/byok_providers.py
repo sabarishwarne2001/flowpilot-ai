@@ -133,24 +133,70 @@ _NO_ADAPTER_REASON = (
     "call it yet."
 )
 
-# Task-type constants are defined below the registry but referenced inside it,
-# so they are declared here first. Kept as plain strings in the tuples rather
-# than forward references, because a typo in a forward reference is a NameError
-# at import and a typo in a string is a silently unroutable task.
-_T_ASSISTANT = "ASSISTANT"
-_T_EXTRACTION = "EXTRACTION"
-_T_SUMMARY = "SUMMARY"
-_T_VERIFICATION = "VERIFICATION"
-_T_EMBEDDING = "EMBEDDING"
+# ---------------------------------------------------------------------------
+# Task types
+# ---------------------------------------------------------------------------
+#
+# Declared ABOVE the provider registry because `ProviderSpec.supported_tasks`
+# references them, and assigned string LITERALS rather than aliases.
+#
+# ARCH-23 remediation B-2. An earlier revision declared `_T_ASSISTANT =
+# "ASSISTANT"` here and `TASK_ASSISTANT: str = _T_ASSISTANT` below, purely to
+# solve the ordering problem. That indirection broke `verify_arch22.py` G2:
+# its AST reader resolves tuple members that are references to module-level
+# string CONSTANTS, and `TASK_ASSISTANT` had become a reference to another
+# Name. The gate read the task vocabulary as empty and concluded the registry
+# and the migration disagreed.
+#
+# Nothing was functionally wrong, which is exactly why every ARCH-23 check
+# passed. But a static gate that can no longer read the vocabulary it exists
+# to compare has stopped working, and the next drift would go undetected.
+# Moving the declarations up costs nothing; the alias layer bought nothing but
+# ordering convenience.
 
-_GENERATIVE_TASKS: tuple[str, ...] = (
-    _T_ASSISTANT,
-    _T_EXTRACTION,
-    _T_SUMMARY,
-    _T_VERIFICATION,
+TASK_ASSISTANT: str = "ASSISTANT"
+TASK_EXTRACTION: str = "EXTRACTION"
+TASK_SUMMARY: str = "SUMMARY"
+TASK_VERIFICATION: str = "VERIFICATION"
+TASK_EMBEDDING: str = "EMBEDDING"
+
+BYOK_TASK_TYPE_VALUES: tuple[str, ...] = (
+    TASK_ASSISTANT,
+    TASK_EXTRACTION,
+    TASK_SUMMARY,
+    TASK_VERIFICATION,
+    TASK_EMBEDDING,
 )
 
-_GENERATIVE_AND_EMBEDDING: tuple[str, ...] = _GENERATIVE_TASKS + (_T_EMBEDDING,)
+TASK_TYPE_SQL_IN: str = ", ".join(f"'{value}'" for value in BYOK_TASK_TYPE_VALUES)
+
+TASK_LABELS: dict[str, str] = {
+    TASK_ASSISTANT: "Chat & assistant",
+    TASK_EXTRACTION: "Document extraction",
+    TASK_SUMMARY: "Summarization",
+    TASK_VERIFICATION: "Verification",
+    TASK_EMBEDDING: "Embeddings",
+}
+
+#: The metering scope prefix each task type is reserved under, so a routing
+#: decision can be traced back to the usage events it produced.
+TASK_SCOPE_PREFIXES: dict[str, str] = {
+    TASK_ASSISTANT: "llm",
+    TASK_EXTRACTION: "enrich",
+    TASK_SUMMARY: "summary",
+    TASK_VERIFICATION: "verify",
+    TASK_EMBEDDING: "embed",
+}
+
+#: Convenience groupings for `ProviderSpec.supported_tasks`.
+_GENERATIVE_TASKS: tuple[str, ...] = (
+    TASK_ASSISTANT,
+    TASK_EXTRACTION,
+    TASK_SUMMARY,
+    TASK_VERIFICATION,
+)
+
+_GENERATIVE_AND_EMBEDDING: tuple[str, ...] = _GENERATIVE_TASKS + (TASK_EMBEDDING,)
 
 
 PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
@@ -267,43 +313,6 @@ ENDPOINT_PROVIDERS: frozenset[str] = frozenset(
 PROVIDER_SQL_IN: str = ", ".join(f"'{value}'" for value in BYOK_PROVIDER_VALUES)
 
 
-# ---------------------------------------------------------------------------
-# Task types
-# ---------------------------------------------------------------------------
-
-TASK_ASSISTANT: str = _T_ASSISTANT
-TASK_EXTRACTION: str = _T_EXTRACTION
-TASK_SUMMARY: str = _T_SUMMARY
-TASK_VERIFICATION: str = _T_VERIFICATION
-TASK_EMBEDDING: str = _T_EMBEDDING
-
-BYOK_TASK_TYPE_VALUES: tuple[str, ...] = (
-    TASK_ASSISTANT,
-    TASK_EXTRACTION,
-    TASK_SUMMARY,
-    TASK_VERIFICATION,
-    TASK_EMBEDDING,
-)
-
-TASK_TYPE_SQL_IN: str = ", ".join(f"'{value}'" for value in BYOK_TASK_TYPE_VALUES)
-
-TASK_LABELS: dict[str, str] = {
-    TASK_ASSISTANT: "Chat & assistant",
-    TASK_EXTRACTION: "Document extraction",
-    TASK_SUMMARY: "Summarization",
-    TASK_VERIFICATION: "Verification",
-    TASK_EMBEDDING: "Embeddings",
-}
-
-#: The metering scope prefix each task type is reserved under, so a routing
-#: decision can be traced back to the usage events it produced.
-TASK_SCOPE_PREFIXES: dict[str, str] = {
-    TASK_ASSISTANT: "llm",
-    TASK_EXTRACTION: "enrich",
-    TASK_SUMMARY: "summary",
-    TASK_VERIFICATION: "verify",
-    TASK_EMBEDDING: "embed",
-}
 
 
 # ---------------------------------------------------------------------------
