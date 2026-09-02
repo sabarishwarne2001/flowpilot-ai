@@ -1,11 +1,5 @@
 /**
- * ARCH-22 — enterprise BYOK and per-tenant model routing.
- *
- * These mirror app/schemas/byok.py. Two absences are deliberate and must stay
- * absences: there is no `apiKey` on any response type and no `encryptedApiKey`
- * anywhere. A tenant sends a key once, over a PUT, and the console works with
- * `keyFingerprint` and `keyLastFour` from then on. Adding a key field here
- * would compile fine and quietly invite a component to render it.
+ * BYOK (Bring Your Own Key) types — ARCH-22, extended by ARCH-23.
  */
 
 export type BYOKProvider =
@@ -23,12 +17,6 @@ export type BYOKTaskType =
   | "VERIFICATION"
   | "EMBEDDING";
 
-/**
- * UNROUTABLE is not a failure state. It means the credential is valid and
- * stored but the execution layer will not use it, so the tenant's traffic is
- * still running on FlowPilot's provider account. Rendering it as ACTIVE would
- * make the console assert a compliance property that is not true.
- */
 export type CredentialStatus =
   | "ACTIVE"
   | "INVALID"
@@ -44,9 +32,24 @@ export interface ProviderCatalogEntry {
   readonly key_prefix: string | null;
   readonly platform_key_available: boolean;
   readonly suggested_models: readonly string[];
+  readonly requires_endpoint: boolean;
+  readonly endpoint_suffix: string | null;
+  readonly supported_tasks: readonly BYOKTaskType[];
 }
 
-export interface ProviderCredential {
+export interface ProviderCredentialUpsert {
+  readonly provider: BYOKProvider;
+  readonly api_key: string;
+  readonly allow_platform_fallback?: boolean;
+  readonly resource_endpoint?: string | undefined;
+  readonly deployment_name?: string | undefined;
+}
+
+export interface FallbackPolicyUpdate {
+  readonly allow_platform_fallback: boolean;
+}
+
+export interface ProviderCredentialResponse {
   readonly id: string;
   readonly provider: BYOKProvider;
   readonly status: CredentialStatus;
@@ -56,6 +59,10 @@ export interface ProviderCredential {
   readonly key_fingerprint: string;
   readonly key_last_four: string;
   readonly allow_platform_fallback: boolean;
+  readonly resource_endpoint: string | null;
+  readonly deployment_name: string | null;
+  readonly is_shape_complete: boolean;
+  readonly fallback_is_possible: boolean;
   readonly last_validated_at: string | null;
   readonly last_validation_latency_ms: number | null;
   readonly validation_error: string | null;
@@ -64,26 +71,31 @@ export interface ProviderCredential {
   readonly updated_at: string;
 }
 
-export interface CredentialValidation {
+export interface CredentialValidationResponse {
   readonly provider: BYOKProvider;
   readonly ok: boolean;
   readonly latency_ms: number;
   readonly error: string | null;
   readonly checked_at: string;
-  readonly credential: ProviderCredential;
+  readonly credential: ProviderCredentialResponse;
 }
 
-export interface ModelRoute {
+export interface ModelRouteUpsert {
+  readonly task_type: BYOKTaskType;
+  readonly provider: BYOKProvider;
+  readonly model_name: string;
+  readonly use_tenant_key: boolean;
+  readonly is_enabled: boolean;
+}
+
+export interface ModelRouteResponse {
   readonly id: string;
   readonly task_type: BYOKTaskType;
   readonly task_label: string;
   readonly provider: BYOKProvider;
   readonly model_name: string;
-  /** What the tenant saved. */
   readonly use_tenant_key: boolean;
   readonly is_enabled: boolean;
-  /** What the next request will actually do. Diverges when a credential was
-   *  retired or failed validation after the rule was written. */
   readonly effective_tenant_key: boolean;
   readonly downgrade_reason: string | null;
   readonly created_at: string;
@@ -93,9 +105,10 @@ export interface ModelRoute {
 export interface TaskCatalogEntry {
   readonly task_type: BYOKTaskType;
   readonly label: string;
+  readonly eligible_providers: readonly BYOKProvider[];
 }
 
-export interface BYOKSavings {
+export interface BYOKSavingsResponse {
   readonly window_days: number;
   readonly byok_events: number;
   readonly platform_events: number;
@@ -104,40 +117,52 @@ export interface BYOKSavings {
   readonly byok_share_percent: number;
 }
 
-export interface BYOKOverview {
+export interface BYOKOverviewResponse {
   readonly organization_id: string;
   readonly providers: readonly ProviderCatalogEntry[];
   readonly tasks: readonly TaskCatalogEntry[];
-  readonly credentials: readonly ProviderCredential[];
-  readonly routes: readonly ModelRoute[];
-  readonly savings: BYOKSavings;
+  readonly credentials: readonly ProviderCredentialResponse[];
+  readonly routes: readonly ModelRouteResponse[];
+  readonly savings: BYOKSavingsResponse;
   readonly routable_provider_count: number;
   readonly active_credential_count: number;
 }
 
-export interface CredentialUpsertRequest {
-  readonly provider: BYOKProvider;
-  readonly api_key: string;
-  readonly allow_platform_fallback?: boolean;
-}
+/* ============================================================================
+ * Backward-Compatible Aliases for Existing Callers
+ * ========================================================================== */
 
-export interface FallbackPolicyRequest {
-  readonly allow_platform_fallback: boolean;
-}
+export type BYOKOverview = BYOKOverviewResponse;
+export type BYOKSavings = BYOKSavingsResponse;
+export type ProviderCredential = ProviderCredentialResponse;
+export type CredentialValidation = CredentialValidationResponse;
+export type ModelRoute = ModelRouteResponse;
+export type CredentialUpsertRequest = ProviderCredentialUpsert;
+export type FallbackPolicyRequest = FallbackPolicyUpdate;
+export type ModelRouteUpsertRequest = ModelRouteUpsert;
 
-export interface ModelRouteUpsertRequest {
-  readonly task_type: BYOKTaskType;
-  readonly provider: BYOKProvider;
-  readonly model_name: string;
-  readonly use_tenant_key: boolean;
-  readonly is_enabled?: boolean;
-}
+/* ============================================================================
+ * Presentation Helpers & Constants
+ * ========================================================================== */
 
-// ---------------------------------------------------------------------------
-// Presentation helpers
-// ---------------------------------------------------------------------------
+export const PROVIDER_LABELS: Readonly<Record<BYOKProvider, string>> = {
+  GROQ: "Groq",
+  GEMINI: "Google Gemini",
+  OPENAI: "OpenAI",
+  ANTHROPIC: "Anthropic",
+  AZURE_OPENAI: "Azure OpenAI",
+  MISTRAL: "Mistral",
+};
 
-export const STATUS_LABELS: Record<CredentialStatus, string> = {
+export const TASK_LABELS: Readonly<Record<BYOKTaskType, string>> = {
+  ASSISTANT: "Chat & assistant",
+  EXTRACTION: "Document extraction",
+  SUMMARY: "Summarization",
+  VERIFICATION: "Verification",
+  EMBEDDING: "Embeddings",
+};
+
+export const STATUS_LABELS: Readonly<Record<CredentialStatus, string>> = {
   ACTIVE: "Active",
   INVALID: "Invalid",
   UNVALIDATED: "Not yet tested",
@@ -145,12 +170,7 @@ export const STATUS_LABELS: Record<CredentialStatus, string> = {
   UNROUTABLE: "Stored, not routed",
 };
 
-/**
- * Tailwind classes per badge. UNROUTABLE is amber rather than green or red: it
- * is neither a working BYOK route nor a broken key, and colouring it green is
- * exactly the misreading the status exists to prevent.
- */
-export const STATUS_CLASSES: Record<CredentialStatus, string> = {
+export const STATUS_CLASSES: Readonly<Record<CredentialStatus, string>> = {
   ACTIVE: "bg-emerald-100 text-emerald-800 border-emerald-200",
   INVALID: "bg-red-100 text-red-800 border-red-200",
   UNVALIDATED: "bg-slate-100 text-slate-700 border-slate-200",
@@ -166,7 +186,6 @@ export const TASK_ORDER: readonly BYOKTaskType[] = [
   "EMBEDDING",
 ];
 
-/** Human text for the machine-readable downgrade reasons the API returns. */
 export const DOWNGRADE_EXPLANATIONS: Record<string, string> = {
   no_tenant_credential_configured:
     "No key is stored for this provider, so this task runs on the FlowPilot account.",
@@ -193,19 +212,19 @@ export const explainDowngrade = (reason: string | null): string | null => {
 };
 
 export const credentialFor = (
-  credentials: readonly ProviderCredential[],
+  credentials: readonly ProviderCredentialResponse[],
   provider: BYOKProvider,
-): ProviderCredential | undefined =>
+): ProviderCredentialResponse | undefined =>
   credentials.find((credential) => credential.provider === provider);
 
 export const routeFor = (
-  routes: readonly ModelRoute[],
+  routes: readonly ModelRouteResponse[],
   taskType: BYOKTaskType,
-): ModelRoute | undefined =>
+): ModelRouteResponse | undefined =>
   routes.find((route) => route.task_type === taskType);
 
 export const formatLatency = (ms: number | null): string =>
-  ms === null ? "—" : `${ms} ms`;
+  ms === null || ms === undefined ? "—" : `${ms} ms`;
 
 export const formatMicros = (micros: number): string =>
   `$${(micros / 1_000_000).toLocaleString(undefined, {

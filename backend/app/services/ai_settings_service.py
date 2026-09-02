@@ -81,11 +81,19 @@ class AISettingsService:
                     message="GEMINI_API_KEY is not configured.",
                 )
             try:
-                import google.generativeai as genai
+                # ARCH-23. Was `genai.configure(...)`, which wrote the
+                # API key into module-global state — a connection test
+                # run by one admin would then have set the key for every
+                # concurrent request on this worker. The client object
+                # binds the key to an instance and leaves no residue.
+                from google import genai
 
-                genai.configure(api_key=settings.GEMINI_API_KEY.get_secret_value())
-                g_model = genai.GenerativeModel(model)
-                g_model.generate_content("ping")
+                probe_client = genai.Client(
+                    api_key=settings.GEMINI_API_KEY.get_secret_value()
+                )
+                probe_client.models.generate_content(
+                    model=model, contents="ping"
+                )
                 return AIConnectionTestResponse(
                     success=True,
                     message="Gemini connection test successful.",

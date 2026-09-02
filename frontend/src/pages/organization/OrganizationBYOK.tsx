@@ -6,7 +6,6 @@ import {
   KeySquare,
   Loader2,
   Pencil,
-  ShieldAlert,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -31,12 +30,14 @@ import {
   STATUS_CLASSES,
   STATUS_LABELS,
   TASK_ORDER,
-  type BYOKOverview,
+  type BYOKOverviewResponse,
   type BYOKProvider,
   type BYOKTaskType,
-  type ModelRoute,
+  type ModelRouteResponse,
   type ProviderCatalogEntry,
-  type ProviderCredential,
+  type ProviderCredentialResponse,
+  type ProviderCredentialUpsert,
+  type TaskCatalogEntry,
 } from "@/types/byok";
 
 const CARD =
@@ -70,10 +71,10 @@ const errorMessage = (error: unknown): string => {
 };
 
 // ---------------------------------------------------------------------------
-// Savings
+// Savings Card
 // ---------------------------------------------------------------------------
 
-const SavingsCard: React.FC<{ overview: BYOKOverview }> = ({ overview }) => {
+const SavingsCard: React.FC<{ overview: BYOKOverviewResponse }> = ({ overview }) => {
   const { savings } = overview;
   return (
     <section className={CARD}>
@@ -113,65 +114,102 @@ const SavingsCard: React.FC<{ overview: BYOKOverview }> = ({ overview }) => {
           </dd>
         </div>
       </dl>
-
-      <p className={`${HINT} mt-4`}>
-        We do not estimate what you saved: your provider contract rates are
-        yours, and we would be inventing the number. This shows the share of
-        traffic that never touched FlowPilot&apos;s provider account.
-      </p>
     </section>
   );
 };
 
 // ---------------------------------------------------------------------------
-// Key entry
+// Key Editor
 // ---------------------------------------------------------------------------
 
 const KeyEditor: React.FC<{
   entry: ProviderCatalogEntry;
-  existing: ProviderCredential | undefined;
+  existing: ProviderCredentialResponse | undefined;
   busy: boolean;
-  onSave: (apiKey: string) => void;
+  onSave: (payload: ProviderCredentialUpsert) => void;
   onCancel: () => void;
 }> = ({ entry, existing, busy, onSave, onCancel }) => {
-  const [value, setValue] = useState("");
-  const trimmed = value.trim();
+  const [apiKey, setApiKey] = useState("");
+  const [endpoint, setEndpoint] = useState(existing?.resource_endpoint ?? "");
+  const [deployment, setDeployment] = useState(existing?.deployment_name ?? "");
+
+  const trimmedKey = apiKey.trim();
+  const valid =
+    trimmedKey.length > 0 &&
+    (!entry.requires_endpoint || (endpoint.trim().length > 0 && deployment.trim().length > 0));
+
+  const handleSave = () => {
+    const payload: ProviderCredentialUpsert = {
+      provider: entry.provider,
+      api_key: trimmedKey,
+      ...(entry.requires_endpoint && endpoint.trim() ? { resource_endpoint: endpoint.trim() } : {}),
+      ...(entry.requires_endpoint && deployment.trim() ? { deployment_name: deployment.trim() } : {}),
+    };
+    onSave(payload);
+  };
 
   return (
-    <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
-      <label className={LABEL} htmlFor={`key-${entry.provider}`}>
-        {existing ? `Replace ${entry.label} key` : `${entry.label} API key`}
-      </label>
-      <input
-        id={`key-${entry.provider}`}
-        type="password"
-        autoComplete="off"
-        spellCheck={false}
-        className={INPUT}
-        placeholder={entry.key_prefix ? `${entry.key_prefix}…` : "API key"}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
-      <p className={`${HINT} mt-2`}>
-        Stored encrypted. It is never shown again — after saving you will see
-        only a fingerprint and the last four characters.
-      </p>
-      {existing ? (
-        <p className={`${HINT} mt-1`}>
-          Replacing the key resets its tested status. Your fallback setting is
-          left as it is.
-        </p>
-      ) : null}
+    <div className="mt-4 space-y-3 rounded-md border border-border bg-muted/40 p-3">
+      <div>
+        <label className={LABEL} htmlFor={`key-${entry.provider}`}>
+          {existing ? `Replace ${entry.label} key` : `${entry.label} API key`}
+        </label>
+        <input
+          id={`key-${entry.provider}`}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          className={INPUT}
+          placeholder={entry.key_prefix ? `${entry.key_prefix}…` : "API key"}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+      </div>
+
+      {entry.requires_endpoint && (
+        <>
+          <div>
+            <label className={LABEL} htmlFor={`endpoint-${entry.provider}`}>
+              Resource Endpoint Host
+            </label>
+            <input
+              id={`endpoint-${entry.provider}`}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              className={INPUT}
+              placeholder={`my-resource${entry.endpoint_suffix ?? ".openai.azure.com"}`}
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className={LABEL} htmlFor={`deployment-${entry.provider}`}>
+              Deployment Name
+            </label>
+            <input
+              id={`deployment-${entry.provider}`}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              className={INPUT}
+              placeholder="e.g. gpt-4o"
+              value={deployment}
+              onChange={(e) => setDeployment(e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
       <div className="mt-3 flex gap-2">
         <button
           type="button"
           className={PRIMARY}
-          disabled={busy || trimmed.length === 0}
-          onClick={() => onSave(trimmed)}
+          disabled={busy || !valid}
+          onClick={handleSave}
         >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : null}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
           {existing ? "Rotate key" : "Save key"}
         </button>
         <button type="button" className={SECONDARY} onClick={onCancel}>
@@ -183,12 +221,12 @@ const KeyEditor: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Provider card
+// Provider Card
 // ---------------------------------------------------------------------------
 
 const ProviderCard: React.FC<{
   entry: ProviderCatalogEntry;
-  credential: ProviderCredential | undefined;
+  credential: ProviderCredentialResponse | undefined;
   canWrite: boolean;
   organizationId: string;
 }> = ({ entry, credential, canWrite, organizationId }) => {
@@ -204,11 +242,8 @@ const ProviderCard: React.FC<{
   };
 
   const save = useMutation({
-    mutationFn: (apiKey: string) =>
-      upsertCredential(organizationId, {
-        provider: entry.provider,
-        api_key: apiKey,
-      }),
+    mutationFn: (payload: ProviderCredentialUpsert) =>
+      upsertCredential(organizationId, payload),
     onSuccess: () => {
       setEditing(false);
       setFailure(null);
@@ -235,7 +270,7 @@ const ProviderCard: React.FC<{
   const remove = useMutation({
     mutationFn: () => deleteCredential(organizationId, entry.provider),
     onSuccess: () => {
-      setNotice("Key retired. Traffic returns to the FlowPilot account.");
+      setNotice("Key retired.");
       setFailure(null);
       invalidate();
     },
@@ -255,8 +290,7 @@ const ProviderCard: React.FC<{
   });
 
   const status = credential?.status ?? "UNCONFIGURED";
-  const busy =
-    save.isPending || test.isPending || remove.isPending || fallback.isPending;
+  const busy = save.isPending || test.isPending || remove.isPending || fallback.isPending;
 
   return (
     <article className={CARD}>
@@ -265,9 +299,7 @@ const ProviderCard: React.FC<{
           <h3 className="text-sm font-semibold">{entry.label}</h3>
           {credential ? (
             <p className={`${HINT} mt-0.5`}>
-              ••••{credential.key_last_four} · fingerprint{" "}
-              <code>{credential.key_fingerprint}</code> · v
-              {credential.key_version}
+              ••••{credential.key_last_four} · fingerprint <code>{credential.key_fingerprint}</code>
             </p>
           ) : (
             <p className={`${HINT} mt-0.5`}>No key stored.</p>
@@ -280,24 +312,14 @@ const ProviderCard: React.FC<{
         </span>
       </header>
 
-      {!entry.is_routable && entry.unroutable_reason ? (
-        <div className="mt-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-          <ShieldAlert
-            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
-            aria-hidden
-          />
-          <div>
-            <p className="text-xs font-medium text-amber-900">
-              Stored, but not used to serve requests
-            </p>
-            <p className="mt-1 text-xs text-amber-900/80">
-              {entry.unroutable_reason}
-            </p>
-          </div>
+      {credential?.resource_endpoint && (
+        <div className="mt-2 text-xs text-muted-foreground">
+          <p><strong>Host:</strong> {credential.resource_endpoint}</p>
+          <p><strong>Deployment:</strong> {credential.deployment_name}</p>
         </div>
-      ) : null}
+      )}
 
-      {credential ? (
+      {credential && (
         <dl className="mt-3 space-y-1 text-xs text-muted-foreground">
           <div className="flex justify-between gap-4">
             <dt>Last tested</dt>
@@ -307,71 +329,56 @@ const ProviderCard: React.FC<{
             <dt>Latency</dt>
             <dd>{formatLatency(credential.last_validation_latency_ms)}</dd>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt>Last used</dt>
-            <dd>{formatDate(credential.last_used_at)}</dd>
-          </div>
         </dl>
-      ) : null}
+      )}
 
-      {credential?.validation_error ? (
+      {credential?.validation_error && (
         <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
           {credential.validation_error}
         </p>
-      ) : null}
+      )}
 
-      {credential ? (
+      {credential && (
         <div className="mt-4 rounded-md border border-border p-3">
           <label className="flex items-start gap-2">
             <input
               type="checkbox"
               className="mt-0.5"
-              disabled={!canWrite || busy}
-              checked={credential.allow_platform_fallback}
-              onChange={(event) => fallback.mutate(event.target.checked)}
+              disabled={!canWrite || busy || !credential.fallback_is_possible}
+              checked={credential.allow_platform_fallback && credential.fallback_is_possible}
+              onChange={(e) => fallback.mutate(e.target.checked)}
             />
             <span>
-              <span className={LABEL}>
-                Allow fallback to FlowPilot&apos;s account
-              </span>
+              <span className={LABEL}>Allow fallback to FlowPilot account</span>
               <span className={`${HINT} mt-1 block`}>
-                If your key fails or is rate-limited, run the request on
-                FlowPilot&apos;s provider account instead. Your prompts and
-                documents would then pass through our provider contract rather
-                than yours. Off by default, and we will never do it without
-                this box ticked.
+                {credential.fallback_is_possible
+                  ? "If your key fails or is rate-limited, execute request on FlowPilot's provider account."
+                  : "FlowPilot holds no platform key for this provider, so fallback is unavailable."}
               </span>
-              {credential.allow_platform_fallback &&
-              !entry.platform_key_available ? (
-                <span className="mt-2 block text-xs text-amber-800">
-                  FlowPilot holds no key for {entry.label}, so this setting
-                  cannot currently take effect.
-                </span>
-              ) : null}
             </span>
           </label>
         </div>
-      ) : null}
+      )}
 
-      {notice ? (
+      {notice && (
         <p className="mt-3 flex items-start gap-2 text-xs text-emerald-800">
           <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           {notice}
         </p>
-      ) : null}
-      {failure ? (
+      )}
+      {failure && (
         <p className="mt-3 flex items-start gap-2 text-xs text-red-700">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           {failure}
         </p>
-      ) : null}
+      )}
 
       {editing ? (
         <KeyEditor
           entry={entry}
           existing={credential}
           busy={save.isPending}
-          onSave={(apiKey) => save.mutate(apiKey)}
+          onSave={(payload) => save.mutate(payload)}
           onCancel={() => setEditing(false)}
         />
       ) : (
@@ -389,7 +396,7 @@ const ProviderCard: React.FC<{
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             {credential ? "Rotate" : "Add key"}
           </button>
-          {credential ? (
+          {credential && (
             <>
               <button
                 type="button"
@@ -401,9 +408,7 @@ const ProviderCard: React.FC<{
                   test.mutate();
                 }}
               >
-                {test.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                ) : null}
+                {test.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
                 Test connection
               </button>
               <button
@@ -416,42 +421,40 @@ const ProviderCard: React.FC<{
                 Retire
               </button>
             </>
-          ) : null}
+          )}
         </div>
       )}
-
-      {!canWrite ? (
-        <p className={`${HINT} mt-3`}>
-          Only an organization owner can change provider credentials.
-        </p>
-      ) : null}
     </article>
   );
 };
 
 // ---------------------------------------------------------------------------
-// Routing
+// Routing Row
 // ---------------------------------------------------------------------------
 
 const RouteRow: React.FC<{
   taskType: BYOKTaskType;
   taskLabel: string;
-  route: ModelRoute | undefined;
+  route: ModelRouteResponse | undefined;
   providers: readonly ProviderCatalogEntry[];
   canWrite: boolean;
   organizationId: string;
 }> = ({ taskType, taskLabel, route, providers, canWrite, organizationId }) => {
   const queryClient = useQueryClient();
+
+  const eligibleProviders = useMemo(
+    () => providers.filter((p: ProviderCatalogEntry) => p.supported_tasks.includes(taskType)),
+    [providers, taskType],
+  );
+
   const [provider, setProvider] = useState<BYOKProvider>(
-    route?.provider ?? "GROQ",
+    route?.provider ?? eligibleProviders[0]?.provider ?? "GROQ",
   );
   const [model, setModel] = useState(route?.model_name ?? "");
-  const [useTenantKey, setUseTenantKey] = useState(
-    route?.use_tenant_key ?? false,
-  );
+  const [useTenantKey, setUseTenantKey] = useState(route?.use_tenant_key ?? true);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const selected = providers.find((entry) => entry.provider === provider);
+  const selected = providers.find((entry: ProviderCatalogEntry) => entry.provider === provider);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({
@@ -466,6 +469,7 @@ const RouteRow: React.FC<{
         provider,
         model_name: model.trim(),
         use_tenant_key: useTenantKey,
+        is_enabled: true,
       }),
     onSuccess: () => {
       setFailure(null);
@@ -479,7 +483,7 @@ const RouteRow: React.FC<{
     onSuccess: () => {
       setFailure(null);
       setModel("");
-      setUseTenantKey(false);
+      setUseTenantKey(true);
       invalidate();
     },
     onError: (error) => setFailure(errorMessage(error)),
@@ -493,38 +497,29 @@ const RouteRow: React.FC<{
     <tr className="border-t border-border align-top">
       <td className="py-3 pr-3">
         <span className={LABEL}>{taskLabel}</span>
-        {route ? (
+        {route && (
           <span
             className={`mt-1 block text-xs ${
-              route.effective_tenant_key
-                ? "text-emerald-700"
-                : "text-muted-foreground"
+              route.effective_tenant_key ? "text-emerald-700" : "text-muted-foreground"
             }`}
           >
-            {route.effective_tenant_key
-              ? "Running on your key"
-              : "Running on FlowPilot's account"}
+            {route.effective_tenant_key ? "Running on your key" : "Running on FlowPilot account"}
           </span>
-        ) : null}
+        )}
       </td>
       <td className="py-3 pr-3">
         <select
           className={INPUT}
           disabled={!canWrite}
           value={provider}
-          onChange={(event) => {
-            const next = event.target.value as BYOKProvider;
+          onChange={(e) => {
+            const next = e.target.value as BYOKProvider;
             setProvider(next);
-            const entry = providers.find((item) => item.provider === next);
-            if (entry && !entry.is_routable) {
-              setUseTenantKey(false);
-            }
           }}
         >
-          {providers.map((entry) => (
+          {eligibleProviders.map((entry: ProviderCatalogEntry) => (
             <option key={entry.provider} value={entry.provider}>
               {entry.label}
-              {entry.is_routable ? "" : " (platform key only)"}
             </option>
           ))}
         </select>
@@ -534,12 +529,12 @@ const RouteRow: React.FC<{
           className={INPUT}
           disabled={!canWrite}
           list={`models-${taskType}`}
-          placeholder="Model name"
+          placeholder="Model / deployment name"
           value={model}
-          onChange={(event) => setModel(event.target.value)}
+          onChange={(e) => setModel(e.target.value)}
         />
         <datalist id={`models-${taskType}`}>
-          {(selected?.suggested_models ?? []).map((name) => (
+          {(selected?.suggested_models ?? []).map((name: string) => (
             <option key={name} value={name} />
           ))}
         </datalist>
@@ -548,17 +543,12 @@ const RouteRow: React.FC<{
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            disabled={!canWrite || !selected?.is_routable}
+            disabled={!canWrite}
             checked={useTenantKey}
-            onChange={(event) => setUseTenantKey(event.target.checked)}
+            onChange={(e) => setUseTenantKey(e.target.checked)}
           />
           <span>My key</span>
         </label>
-        {selected && !selected.is_routable ? (
-          <span className={`${HINT} mt-1 block`}>
-            Not available for {selected.label}.
-          </span>
-        ) : null}
       </td>
       <td className="py-3">
         <div className="flex gap-2">
@@ -568,12 +558,10 @@ const RouteRow: React.FC<{
             disabled={!canWrite || save.isPending || model.trim().length === 0}
             onClick={() => save.mutate()}
           >
-            {save.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : null}
+            {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             Save
           </button>
-          {route ? (
+          {route && (
             <button
               type="button"
               className={DANGER}
@@ -582,27 +570,29 @@ const RouteRow: React.FC<{
             >
               Clear
             </button>
-          ) : null}
+          )}
         </div>
-        {claimsButDoesNot && downgrade ? (
+        {claimsButDoesNot && downgrade && (
           <p className="mt-2 text-xs text-amber-800">{downgrade}</p>
-        ) : null}
-        {failure ? (
-          <p className="mt-2 text-xs text-red-700">{failure}</p>
-        ) : null}
+        )}
+        {failure && <p className="mt-2 text-xs text-red-700">{failure}</p>}
       </td>
     </tr>
   );
 };
 
+// ---------------------------------------------------------------------------
+// Routing Table
+// ---------------------------------------------------------------------------
+
 const RoutingTable: React.FC<{
-  overview: BYOKOverview;
+  overview: BYOKOverviewResponse;
   canWrite: boolean;
   organizationId: string;
 }> = ({ overview, canWrite, organizationId }) => {
   const labels = useMemo(() => {
     const map = new Map<BYOKTaskType, string>();
-    overview.tasks.forEach((task) => map.set(task.task_type, task.label));
+    overview.tasks.forEach((task: TaskCatalogEntry) => map.set(task.task_type, task.label));
     return map;
   }, [overview.tasks]);
 
@@ -610,8 +600,7 @@ const RoutingTable: React.FC<{
     <section className={CARD}>
       <h2 className="text-base font-semibold">Model routing</h2>
       <p className={`${HINT} mt-1`}>
-        Point each pipeline stage at a provider and model. Leave a row empty to
-        use the workspace AI settings default.
+        Point each pipeline stage at a provider and model.
       </p>
 
       <div className="mt-4 overflow-x-auto">
@@ -620,13 +609,13 @@ const RoutingTable: React.FC<{
             <tr className="text-xs uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 pr-3 font-medium">Task</th>
               <th className="pb-2 pr-3 font-medium">Provider</th>
-              <th className="pb-2 pr-3 font-medium">Model</th>
+              <th className="pb-2 pr-3 font-medium">Model / Deployment</th>
               <th className="pb-2 pr-3 font-medium">Key</th>
               <th className="pb-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {TASK_ORDER.map((taskType) => (
+            {TASK_ORDER.map((taskType: BYOKTaskType) => (
               <RouteRow
                 key={taskType}
                 taskType={taskType}
@@ -645,15 +634,11 @@ const RoutingTable: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Page
+// Main OrganizationBYOK Page
 // ---------------------------------------------------------------------------
 
 const OrganizationBYOK: React.FC = () => {
   const { organizationId, organizationRole } = useResolvedOrganization();
-
-  // Reads are ADMIN; every write is OWNER, enforced server-side by
-  // RequireOrgOwner. Disabling the controls is a courtesy so an admin is not
-  // invited to fill in a form that will 403, not the protection itself.
   const canWrite = String(organizationRole).toUpperCase() === "OWNER";
 
   const overview = useQuery({
@@ -673,16 +658,12 @@ const OrganizationBYOK: React.FC = () => {
   if (overview.isError || !overview.data) {
     return (
       <div className="p-6">
-        <p className="text-sm text-red-700">
-          {errorMessage(overview.error)}
-        </p>
+        <p className="text-sm text-red-700">{errorMessage(overview.error)}</p>
       </div>
     );
   }
 
   const data = overview.data;
-  const unroutableCount =
-    data.providers.length - data.routable_provider_count;
 
   return (
     <div className="space-y-6 p-6">
@@ -692,34 +673,16 @@ const OrganizationBYOK: React.FC = () => {
           <h1 className="text-xl font-semibold">Enterprise BYOK &amp; models</h1>
         </div>
         <p className={`${HINT} mt-1 max-w-3xl`}>
-          Bring your own provider keys so AI requests are billed to your
-          account and your data flows through your provider contract rather
-          than FlowPilot&apos;s. Keys are encrypted at rest and are never
-          displayed again after saving.
+          Bring your own provider API keys across Groq, Gemini, OpenAI, Anthropic, Azure OpenAI, and Mistral.
         </p>
       </header>
 
       <SavingsCard overview={data} />
 
-      {unroutableCount > 0 ? (
-        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-          <ShieldAlert
-            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
-            aria-hidden
-          />
-          <p className="text-xs text-amber-900">
-            {data.routable_provider_count} of {data.providers.length} providers
-            can currently serve traffic on your own key. The rest can be stored
-            and tested, but their requests still run on FlowPilot&apos;s
-            provider account — each card says which, and why.
-          </p>
-        </div>
-      ) : null}
-
       <section>
         <h2 className="text-base font-semibold">Provider keys</h2>
         <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {data.providers.map((entry) => (
+          {data.providers.map((entry: ProviderCatalogEntry) => (
             <ProviderCard
               key={entry.provider}
               entry={entry}

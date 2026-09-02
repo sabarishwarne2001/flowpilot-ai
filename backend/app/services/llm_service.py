@@ -222,6 +222,20 @@ Assistant:
 GEMINI_RAG_SYNTHESIS_PROMPT_TEMPLATE = RAG_SYNTHESIS_PROMPT_TEMPLATE
 
 
+from app.core.byok_providers import (
+    BYOK_TASK_TYPE_VALUES,
+    PROVIDER_ANTHROPIC,
+    PROVIDER_AZURE_OPENAI,
+    PROVIDER_GEMINI,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+    PROVIDER_OPENAI,
+    ROUTABLE_PROVIDERS,
+    normalize_provider,
+    supports_task,
+)
+
+
 class _RoutedProvider:
     """Minimal stand-in exposing the `.value` shape `AIProvider` has.
 
@@ -281,7 +295,7 @@ class LLMService:
 
     def __init__(self) -> None:
         self._groq_client: Any | None = None
-        self._gemini_model: Any | None = None
+        self._gemini_client: Any | None = None
 
     @property
     def groq_client(self) -> Any:
@@ -295,23 +309,65 @@ class LLMService:
         return self._groq_client
 
     @property
-    def gemini_model(self) -> Any:
+    def gemini_client(self) -> Any:
+        """The platform's own Gemini client. ARCH-23.
+
+        This replaced a property that called `genai.configure()`, which
+        wrote the API key into MODULE-GLOBAL state inside
+        `google.generativeai`. On a worker serving several tenants, the
+        last caller to configure won — so a tenant key set there was
+        readable by every other tenant's request. That is the single
+        reason Gemini was unroutable from ARCH-22 until now.
+
+        `google.genai.Client(api_key=...)` binds the key to an instance.
+        The platform client is still cached, which is correct: it holds
+        the PLATFORM key, and there is only one of those. Tenant clients
+        are never cached anywhere — see ProviderClientFactory.
+        """
         if settings.GEMINI_API_KEY is None:
             raise ValueError("GEMINI_API_KEY is not configured.")
-        import google.generativeai as genai
+        if self._gemini_client is None:
+            from google import genai
 
-        logger.info("Initializing Gemini client.")
-        genai.configure(api_key=settings.GEMINI_API_KEY.get_secret_value())
-        return genai
+            logger.info("Initializing platform Gemini client.")
+            self._gemini_client = genai.Client(
+                api_key=settings.GEMINI_API_KEY.get_secret_value()
+            )
+        return self._gemini_client
 
     def _validate_provider(self, *, ai_settings: AISettings) -> str:
-        provider = ai_settings.provider.value.strip().lower()
-        supported = {"groq", "gemini"}
-        if provider not in supported:
+        """The provider name, normalised, or a ValueError.
+
+        ARCH-23: every registered provider is accepted, not the two the
+        `ai_provider` PostgreSQL enum happens to hold. The set is read
+        from `ROUTABLE_PROVIDERS` rather than written out here, so a
+        provider becomes executable by flipping one registry flag and
+        adding an adapter — the two things gate 23-G3 checks agree.
+
+        A hardcoded `{"groq", "gemini"}` was the last place the
+        execution layer disagreed with the BYOK console. A tenant could
+        store an OpenAI key, see it validated, save a routing rule, and
+        have this method reject the call.
+
+        Returned lower-case because every downstream comparison in this
+        module and in `llm_resilience` is lower-case, and changing that
+        would touch the breaker names and the attempt trail.
+        """
+        raw = ai_settings.provider.value
+        try:
+            provider = normalize_provider(raw)
+        except Exception as exc:  # noqa: BLE001 — UnknownProviderError
             raise ValueError(
-                f"Unsupported LLM provider '{provider}'. Supported providers: {sorted(supported)}."
+                f"Unsupported LLM provider '{raw}'. Known providers: "
+                f"{', '.join(sorted(ROUTABLE_PROVIDERS))}."
+            ) from exc
+
+        if provider not in ROUTABLE_PROVIDERS:
+            raise ValueError(
+                f"'{provider}' is a known provider but is not routable, "
+                "so no execution adapter can serve this call."
             )
-        return provider
+        return provider.lower()
 
     # -- ARCH-22: BYOK routing ------------------------------------------------
 
@@ -444,12 +500,126 @@ class LLMService:
             ),
         )
 
+    def _query_openai_compatible(
+        self,
+        *,
+        prompt: str,
+        temperature: float,
+        ai_settings: AISettings,
+        client: Any,
+        provider_label: str,
+    ) -> tuple[str, TokenUsage]:
+        """One completion path for every provider speaking the OpenAI shape.
+
+        ARCH-23. Groq, OpenAI, Azure OpenAI and Mistral all expose
+        `chat.completions.create` with the same request and response
+        shape. Four near-identical methods would drift, and a drifted
+        token count is a billing defect rather than a cosmetic one.
+
+        `client` is REQUIRED here, unlike `_query_groq`, whose optional
+        parameter exists for backward compatibility with the platform
+        path. A default would let a caller silently reach the singleton.
+        """
+        completion = client.chat.completions.create(
+            model=ai_settings.model,
+            temperature=temperature,
+            top_p=ai_settings.top_p,
+            frequency_penalty=ai_settings.frequency_penalty,
+            presence_penalty=ai_settings.presence_penalty,
+            max_tokens=ai_settings.max_output_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        usage = completion.usage
+        return (
+            str(completion.choices[0].message.content).strip(),
+            TokenUsage(
+                provider=provider_label,
+                model=ai_settings.model,
+                prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+                completion_tokens=int(
+                    getattr(usage, "completion_tokens", 0) or 0
+                ),
+                total_tokens=int(getattr(usage, "total_tokens", 0) or 0),
+                estimated_cost=0.0,
+            ),
+        )
+
+    def _query_anthropic(
+        self,
+        *,
+        prompt: str,
+        temperature: float,
+        ai_settings: AISettings,
+        client: Any,
+    ) -> tuple[str, TokenUsage]:
+        """Anthropic's messages API. Its own request and usage shape."""
+        message = client.messages.create(
+            model=ai_settings.model,
+            max_tokens=ai_settings.max_output_tokens,
+            temperature=temperature,
+            top_p=ai_settings.top_p,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        parts = [
+            getattr(block, "text", "")
+            for block in (getattr(message, "content", None) or [])
+        ]
+        usage = getattr(message, "usage", None)
+        prompt_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        return (
+            "".join(parts).strip(),
+            TokenUsage(
+                provider="anthropic",
+                model=ai_settings.model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+                estimated_cost=0.0,
+            ),
+        )
+
+    def _query_mistral(
+        self,
+        *,
+        prompt: str,
+        temperature: float,
+        ai_settings: AISettings,
+        client: Any,
+    ) -> tuple[str, TokenUsage]:
+        """Mistral's SDK uses `chat.complete`, not `chat.completions`."""
+        completion = client.chat.complete(
+            model=ai_settings.model,
+            temperature=temperature,
+            top_p=ai_settings.top_p,
+            max_tokens=ai_settings.max_output_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        usage = getattr(completion, "usage", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        return (
+            str(completion.choices[0].message.content).strip(),
+            TokenUsage(
+                provider="mistral",
+                model=ai_settings.model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=int(
+                    getattr(usage, "total_tokens", prompt_tokens + completion_tokens)
+                    or 0
+                ),
+                estimated_cost=0.0,
+            ),
+        )
+
     def _query_gemini(
         self,
         *,
         prompt: str,
         temperature: float,
         ai_settings: AISettings,
+        client: Any | None = None,
     ) -> tuple[str, Any]:
         if settings.GEMINI_BILLING_LABELS_ENABLED and not settings.GEMINI_USE_VERTEX:
             raise ValueError(
@@ -460,17 +630,47 @@ class LLMService:
             )
 
         logger.info("Sending request to Gemini.")
-        from google.generativeai.types import GenerationConfig
+        from google.genai import types as genai_types
 
-        model = self.gemini_model.GenerativeModel(ai_settings.model)
-        response = model.generate_content(
-            prompt,
-            generation_config=GenerationConfig(
+        # ARCH-23: the tenant client when the factory supplied one, the
+        # platform client otherwise. The tenant client is never assigned
+        # to `self._gemini_client` — caching it would make one tenant's
+        # key the default for every later request on this worker, which
+        # is the process-global defect in a slower disguise.
+        gemini = client if client is not None else self.gemini_client
+        response = gemini.models.generate_content(
+            model=ai_settings.model,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
                 temperature=temperature,
                 max_output_tokens=ai_settings.max_output_tokens,
+                top_p=ai_settings.top_p,
             ),
         )
         return str(response.text).strip(), response
+
+    def _platform_client_for(self, provider: str) -> Any:
+        """The platform's own client for a provider.
+
+        Groq and Gemini keep their cached properties, because FlowPilot
+        holds a key for each and there is exactly one of each. The other
+        four have `platform_setting=None` in the registry — FlowPilot
+        holds no key at all — so reaching this branch for them means a
+        BYOK call lost its tenant client somewhere upstream, and the
+        honest answer is to say so rather than to raise an
+        AttributeError three frames deeper.
+        """
+        key = (provider or "").strip().lower()
+        if key == "groq":
+            return self.groq_client
+        if key == "gemini":
+            return self.gemini_client
+        raise ValueError(
+            f"FlowPilot holds no platform key for '{key}', so this call "
+            "cannot be served without a tenant credential. Either the "
+            "routing rule requested a platform key for a provider that "
+            "has none, or the tenant credential failed to resolve."
+        )
 
     def _execute_query(
         self,
@@ -492,24 +692,52 @@ class LLMService:
         configured = self._validate_provider(ai_settings=ai_settings)
 
         def call(provider: str) -> tuple[str, TokenUsage]:
-            if provider == "groq":
-                return self._query_groq(
+            # The tenant client serves ONLY the provider it was built
+            # for. If llm_resilience fails over, the failover target is
+            # the platform's account and `byok_client` must not travel
+            # with it — `llm_metering._byok_applies` detects the
+            # divergence at settle time and re-attributes rather than
+            # stamping ZERO_BYOK on real supplier spend.
+            client = byok_client if provider == configured else None
+
+            if provider in _COMPLETION_DISPATCH:
+                resolved = client or self._platform_client_for(provider)
+                return _COMPLETION_DISPATCH[provider](
+                    self,
                     prompt=prompt,
                     temperature=temperature,
                     ai_settings=ai_settings,
-                    client=byok_client if provider == configured else None,
+                    client=resolved,
                 )
-            text, raw = self._query_gemini(
-                prompt=prompt, temperature=temperature, ai_settings=ai_settings
-            )
-            usage = raw.usage_metadata
-            return text, TokenUsage(
-                provider="gemini",
-                model=ai_settings.model,
-                prompt_tokens=usage.prompt_token_count,
-                completion_tokens=usage.candidates_token_count,
-                total_tokens=usage.total_token_count,
-                estimated_cost=0.0,
+
+            if provider == "gemini":
+                text, raw = self._query_gemini(
+                    prompt=prompt,
+                    temperature=temperature,
+                    ai_settings=ai_settings,
+                    client=client,
+                )
+                usage = raw.usage_metadata
+                return text, TokenUsage(
+                    provider="gemini",
+                    model=ai_settings.model,
+                    prompt_tokens=int(
+                        getattr(usage, "prompt_token_count", 0) or 0
+                    ),
+                    completion_tokens=int(
+                        getattr(usage, "candidates_token_count", 0) or 0
+                    ),
+                    total_tokens=int(
+                        getattr(usage, "total_token_count", 0) or 0
+                    ),
+                    estimated_cost=0.0,
+                )
+
+            raise ValueError(
+                f"No completion path for provider '{provider}'. This is "
+                "an internal inconsistency: _validate_provider accepted "
+                "it, so the registry and the dispatch table disagree. "
+                "Gate 23-G3 asserts they cannot."
             )
 
         try:
@@ -868,11 +1096,62 @@ class LLMService:
             intent_instructions=PromptBuilder.get_intent_instructions(intent),
         )
 
+    def supported_task_types(self) -> tuple[str, ...]:
+        """Every task type the execution layer can actually serve.
+
+        ARCH-23. ARCH-22 declared five task types in the BYOK vocabulary
+        and wired three: a tenant could save a routing policy for
+        VERIFICATION or EMBEDDING and it did nothing — silently, with no
+        error, which is the worst shape for a policy control.
+
+        Read from the vocabulary rather than listed here, so the two
+        cannot drift. Gate 23-G14 asserts every entry has at least one
+        eligible provider.
+        """
+        return tuple(BYOK_TASK_TYPE_VALUES)
+
+    def assert_task_routable(self, *, provider: str, task_type: str) -> None:
+        """Refuse a provider/task pairing the provider cannot serve.
+
+        Groq and Anthropic expose no embeddings API. Without this check
+        an EMBEDDING route naming either would fail inside a document
+        pipeline hours after the rule was saved, far from the setting
+        that caused it.
+        """
+        if not supports_task(provider, task_type):
+            raise ValueError(
+                f"{normalize_provider(provider)} does not serve "
+                f"{task_type} requests."
+            )
+
     def health_check(self) -> bool:
         try:
             return True
         except Exception:
             return False
+
+
+#: ARCH-23. Provider -> completion method, for the five providers that
+#: take a client and return (text, TokenUsage) directly. Gemini is
+#: absent because it returns a raw response whose usage lives on
+#: `usage_metadata` with different field names; folding it in would
+#: mean a wrapper that exists only to hide one shape difference.
+#:
+#: Keyed lower-case to match `_validate_provider`'s return value and
+#: `llm_resilience`'s provider strings.
+_COMPLETION_DISPATCH: dict[str, Any] = {
+    "groq": lambda self, **kw: LLMService._query_openai_compatible(
+        self, provider_label="groq", **kw
+    ),
+    "openai": lambda self, **kw: LLMService._query_openai_compatible(
+        self, provider_label="openai", **kw
+    ),
+    "azure_openai": lambda self, **kw: LLMService._query_openai_compatible(
+        self, provider_label="azure_openai", **kw
+    ),
+    "mistral": lambda self, **kw: LLMService._query_mistral(self, **kw),
+    "anthropic": lambda self, **kw: LLMService._query_anthropic(self, **kw),
+}
 
 
 llm_service = LLMService()
