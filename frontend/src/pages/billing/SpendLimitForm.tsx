@@ -28,8 +28,8 @@ const MICROS_PER_UNIT = 1_000_000;
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  if (typeof detail === "string") {return detail;}
+  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
   return fallback;
 }
 
@@ -64,7 +64,7 @@ export const SpendLimitForm: React.FC<Props> = ({
 
   const costMicros = useMemo(() => {
     const parsed = Number.parseFloat(maxCost);
-    if (Number.isNaN(parsed) || parsed < 0) return null;
+    if (Number.isNaN(parsed) || parsed < 0) {return null;}
     return Math.round(parsed * MICROS_PER_UNIT);
   }, [maxCost]);
 
@@ -101,7 +101,7 @@ export const SpendLimitForm: React.FC<Props> = ({
       ),
   });
 
-  if (!canManageBilling) return null;
+  if (!canManageBilling) {return null;}
 
   return (
     <section className="rounded-lg border border-border bg-card">

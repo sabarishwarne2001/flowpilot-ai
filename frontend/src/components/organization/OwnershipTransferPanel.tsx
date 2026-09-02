@@ -98,7 +98,7 @@ export const OwnershipTransferPanel: React.FC<Props> = ({
       setError(detailOf(err, "That proposal couldn't be withdrawn.")),
   });
 
-  if (!isOwner) return null;
+  if (!isOwner) {return null;}
 
   return (
     <section className="rounded-lg border border-border bg-card">

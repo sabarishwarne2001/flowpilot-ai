@@ -1212,7 +1212,7 @@ export const Automation: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                if (!log.log_message) return;
+                                if (!log.log_message) {return;}
                                 navigator.clipboard.writeText(log.log_message);
                                 toast.success("Error copied.");
                               }}
@@ -1258,7 +1258,7 @@ export const Automation: React.FC = () => {
         loading={isDeletingRule}
         onCancel={() => setRuleToDelete(null)}
         onConfirm={() => {
-          if (!ruleToDelete) return;
+          if (!ruleToDelete) {return;}
 
           triggerDelete(ruleToDelete.id);
 

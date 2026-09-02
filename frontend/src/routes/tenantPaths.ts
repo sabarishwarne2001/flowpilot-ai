@@ -401,7 +401,7 @@ export const assertTenantPathIntegrity = (): void => {
   if (failures.length === 0) {
     return;
   }
-  // eslint-disable-next-line no-console
+   
   console.error(
     `[routes] TENANT PATH SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),

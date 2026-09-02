@@ -16,10 +16,10 @@ const buildQueryParams = (filters: WorkItemQueryFilters): URLSearchParams => {
     page: String(filters.page),
     pageSize: String(filters.pageSize),
   });
-  if (filters.search?.trim()) params.set("search", filters.search.trim());
-  if (filters.status) params.set("status", filters.status);
-  if (filters.sortBy) params.set("sortBy", filters.sortBy);
-  if (filters.sortOrder) params.set("sortOrder", filters.sortOrder);
+  if (filters.search?.trim()) {params.set("search", filters.search.trim());}
+  if (filters.status) {params.set("status", filters.status);}
+  if (filters.sortBy) {params.set("sortBy", filters.sortBy);}
+  if (filters.sortOrder) {params.set("sortOrder", filters.sortOrder);}
   return params;
 };
 

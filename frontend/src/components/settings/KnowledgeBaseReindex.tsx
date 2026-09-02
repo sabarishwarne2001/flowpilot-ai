@@ -31,7 +31,7 @@ export const KnowledgeBaseReindex: React.FC<Props> = ({
     },
   });
 
-  if (!canManage) return null;
+  if (!canManage) {return null;}
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">

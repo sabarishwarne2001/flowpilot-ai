@@ -55,7 +55,7 @@ export const getConversationHistory = async (
   const { limit = DEFAULT_HISTORY_PAGE_SIZE, cursor } = query;
   const queryParams = new URLSearchParams();
   queryParams.append("limit", limit.toString());
-  if (cursor) queryParams.append("cursor", cursor);
+  if (cursor) {queryParams.append("cursor", cursor);}
 
   const response = await apiClient.get<ConversationHistoryResponse>(
     ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
@@ -71,7 +71,7 @@ export const sendChatMessage = async (
   options?: { stream?: boolean; signal?: AbortSignal },
 ): Promise<ChatResponse> => {
   const trimmedContent = content.trim();
-  if (!trimmedContent) throw new Error("Message content cannot be empty.");
+  if (!trimmedContent) {throw new Error("Message content cannot be empty.");}
 
   const payload: ChatQueryRequest = { content: trimmedContent };
   const response = await apiClient.post<ChatResponse>(

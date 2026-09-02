@@ -43,6 +43,18 @@ REPLAY_POLL_INTERVAL_SECONDS = 0.15
 _FRAMES_KEY = "stream:frames:{message_id}"
 _STATE_KEY = "stream:state:{message_id}"
 
+#: ARCH-0V Tranche 6. The last sequence number this turn emitted,
+#: written at close. Without it, `replay` cannot distinguish "you are
+#: current" from "I lost the frames you are missing" — both present as
+#: an empty read against a CLOSED state, and the second one was being
+#: reported to the client as `already_current`.
+#:
+#: A value of _LASTSEQ_UNKNOWN means the buffer was disabled mid-turn
+#: (overflow, or a Redis write failure) and no completeness claim can
+#: be made about it.
+_LASTSEQ_KEY = "stream:lastseq:{message_id}"
+_LASTSEQ_UNKNOWN = -1
+
 _STATE_OPEN = "OPEN"
 _STATE_CLOSED = "CLOSED"
 
@@ -85,12 +97,22 @@ class StreamFrameBuffer:
     def _state_key(self) -> str:
         return _STATE_KEY.format(message_id=self.message_id)
 
+    @property
+    def _lastseq_key(self) -> str:
+        return _LASTSEQ_KEY.format(message_id=self.message_id)
+
     def open(self) -> None:
         if not self.enabled:
             return
         try:
             pipe = self._client.pipeline()
             pipe.delete(self._frames_key)
+            # UNKNOWN until close(). A turn that dies mid-flight leaves
+            # this sentinel behind, and a resume against it correctly
+            # refuses rather than claiming the client is current.
+            pipe.set(
+                self._lastseq_key, _LASTSEQ_UNKNOWN, ex=REPLAY_TTL_SECONDS
+            )
             pipe.set(self._state_key, _STATE_OPEN, ex=REPLAY_TTL_SECONDS)
             pipe.execute()
         except Exception:  # noqa: BLE001
@@ -125,11 +147,20 @@ class StreamFrameBuffer:
         except Exception:  # noqa: BLE001
             self._disable("append")
 
-    def close(self) -> None:
+    def close(self, *, last_seq: int) -> None:
+        """Seal the buffer, recording how many frames the turn emitted.
+
+        `last_seq` is what makes a later resume provable. It is written
+        in the same pipeline as the state flip so a reader never sees
+        CLOSED without a companion sequence number.
+        """
         if not self.enabled:
             return
         try:
-            self._client.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
+            pipe = self._client.pipeline()
+            pipe.set(self._lastseq_key, int(last_seq), ex=REPLAY_TTL_SECONDS)
+            pipe.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
+            pipe.execute()
         except Exception:  # noqa: BLE001
             self._disable("close")
 
@@ -142,6 +173,14 @@ class StreamFrameBuffer:
             extra={"message_id": str(self.message_id), "phase": phase},
         )
         try:
+            # ARCH-0V Tranche 6 — a disabled buffer can prove nothing
+            # about completeness, so the sequence marker is forced back
+            # to UNKNOWN even if a close() had already written a real
+            # one. Refusing a resume is correct here; claiming currency
+            # would be a silent truncation in the client.
+            self._client.set(
+                self._lastseq_key, _LASTSEQ_UNKNOWN, ex=REPLAY_TTL_SECONDS
+            )
             self._client.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
         except Exception:  # noqa: BLE001
             pass
@@ -166,6 +205,33 @@ class StreamPlan:
 
 class ReplayUnavailableError(RuntimeError):
     """No buffered frames exist for this message."""
+
+
+class ReplayIncompleteError(ReplayUnavailableError):
+    """Frames exist, but not the ones this client is missing.
+
+    ARCH-0V Tranche 6. Distinct from its parent because the caller
+    must not treat it as "nothing to send". Deriving from
+    ReplayUnavailableError keeps every existing `except` clause
+    correct; the API layer catches this one first to return a
+    different status and an explicit `resume_unavailable` code.
+
+    Raised when the buffer is CLOSED and either the final sequence
+    number is unknown, or fewer frames survive than the client is
+    missing. Both happen in production: the frames list has its TTL
+    refreshed on every append while the state key does not, Redis
+    evicts the large list before the small string under memory
+    pressure, and ARCH-19 Sentinel failover replicates the two keys
+    asynchronously.
+    """
+
+
+#: ARCH-0V: exported so the API layer can distinguish 'nothing to send'
+#: from 'I cannot prove there is nothing to send'.
+REPLAY_ERRORS = (
+    "ReplayIncompleteError",
+    "ReplayUnavailableError",
+)
 
 
 class AssistantStreamService:
@@ -389,7 +455,7 @@ class AssistantStreamService:
             finally:
                 emitted = redactor.emitted_text + redactor.flush()
                 truncated = finish != FinishReason.COMPLETED.value
-                buffer.close()
+                buffer.close(last_seq=seq_counter["value"])
 
                 sources: list[dict[str, Any]] = []
                 if plan.results:
@@ -454,10 +520,12 @@ class AssistantStreamService:
 
         frames_key = _FRAMES_KEY.format(message_id=message_id)
         state_key = _STATE_KEY.format(message_id=message_id)
+        lastseq_key = _LASTSEQ_KEY.format(message_id=message_id)
 
         try:
             state = client.get(state_key)
             buffered = client.llen(frames_key)
+            raw_last_seq = client.get(lastseq_key)
         except Exception as exc:  # noqa: BLE001
             raise ReplayUnavailableError(
                 "Stream resumption is unavailable. Refetch the message instead."
@@ -471,7 +539,46 @@ class AssistantStreamService:
         if isinstance(state, bytes):
             state = state.decode("utf-8", "replace")
 
-        cursor = max(int(from_seq), 0)
+        # ARCH-0V Tranche 6: prove completeness before replaying.
+        #
+        # Through ARCH-22 this method returned an empty generator
+        # whenever the state was CLOSED and no frames came back, and
+        # the API turned that into `finish_reason: already_current`.
+        # That is a lie in three reachable situations: the buffer was
+        # disabled mid-turn, Redis evicted the frames list before the
+        # state key, or a Sentinel failover replicated them out of
+        # step. In each, the client is told it holds the whole turn
+        # while holding a truncated one — and truncated model output
+        # that looks complete is worse than a visible failure.
+        last_seq = _LASTSEQ_UNKNOWN
+        if raw_last_seq is not None:
+            if isinstance(raw_last_seq, bytes):
+                raw_last_seq = raw_last_seq.decode("utf-8", "replace")
+            try:
+                last_seq = int(raw_last_seq)
+            except (TypeError, ValueError):
+                last_seq = _LASTSEQ_UNKNOWN
+
+        cursor_start = max(int(from_seq), 0)
+
+        if state != _STATE_OPEN:
+            if last_seq == _LASTSEQ_UNKNOWN:
+                raise ReplayIncompleteError(
+                    "This turn's frame buffer was sealed without a "
+                    "sequence marker, so there is no way to prove you "
+                    "have the whole response. Refetch the message."
+                )
+            if cursor_start < last_seq and buffered < (
+                last_seq - cursor_start
+            ):
+                raise ReplayIncompleteError(
+                    f"Frames {cursor_start + 1}..{last_seq} were "
+                    f"requested but only {buffered} remain buffered. "
+                    "The replay window has partially expired. Refetch "
+                    "the message."
+                )
+
+        cursor = cursor_start
         idle_since = time.monotonic()
 
         with request_scope(request_id=request_id or str(uuid.uuid4())):

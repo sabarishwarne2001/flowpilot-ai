@@ -1,0 +1,81 @@
+# ARCH-0V Tranche 2 — encoding normalisation.
+#
+# WHY THIS FILE EXISTS
+#
+# At ARCH-22 completion, `backend/requirements.txt` and
+# `backend/requirements-dev.txt` were UTF-16LE with a byte-order mark, and
+# `backend/app/schemas/usage.py` carried a UTF-8 BOM. All three are the
+# signature of PowerShell redirection (`pip freeze > requirements.txt` writes
+# UTF-16LE on Windows) landing in the repository without normalisation.
+#
+# The consequences were not cosmetic:
+#
+#   * Every SCA scanner — Dependabot, pip-audit, and whatever an enterprise
+#     buyer's security review runs — opens requirements.txt as UTF-8 and sees
+#     either nothing or garbage. A platform with 177 pinned dependencies
+#     reporting zero declared dependencies is a procurement finding.
+#   * `ast.parse(open(path, encoding="utf-8"))` raises SyntaxError on a BOM'd
+#     source file, which is why every static gate in the repository has been
+#     paying an `encoding="utf-8-sig"` tax since ARCH-19.
+#
+# Fixing the three files once is not enough. The authoring path that produced
+# them is still there. This file is the mechanism; `verify_arch0v.py` checks
+# G3 and G4 are the enforcement.
+
+# Default: Git decides what is text, and normalises it to LF in the index.
+* text=auto eol=lf
+
+# Explicit text declarations for the file types that matter most here, so a
+# `core.autocrlf=true` Windows checkout cannot reintroduce CRLF into the index.
+*.py      text eol=lf
+*.pyi     text eol=lf
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.js      text eol=lf
+*.jsx     text eol=lf
+*.mjs     text eol=lf
+*.cjs     text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.toml    text eol=lf
+*.cfg     text eol=lf
+*.ini     text eol=lf
+*.sql     text eol=lf
+*.css     text eol=lf
+*.html    text eol=lf
+*.sh      text eol=lf
+*.txt     text eol=lf
+*.env.example text eol=lf
+Dockerfile* text eol=lf
+Makefile  text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Cron files are read by cron, which is unforgiving about line endings.
+deploy/cron.d/* text eol=lf
+
+# Binary: never touched, never normalised, never diffed as text.
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.ico     binary
+*.pdf     binary
+*.zip     binary
+*.gz      binary
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.eot     binary
+*.onnx    binary
+*.bin     binary
+*.pt      binary
+*.safetensors binary
+
+# Lockfiles are generated; collapse them in reviews so a 40,000-line diff does
+# not bury the two lines that matter.
+package-lock.json linguist-generated=true -diff
+yarn.lock         linguist-generated=true -diff

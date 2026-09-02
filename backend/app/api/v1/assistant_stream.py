@@ -14,6 +14,7 @@ from app.api import deps
 from app.core.exceptions import RateLimitExceededError, SpendLimitExceededError
 from app.schemas.assistant import ChatQuery
 from app.services.assistant_stream import (
+    ReplayIncompleteError,
     ReplayUnavailableError,
     assistant_stream_service,
     sse,
@@ -161,6 +162,14 @@ async def stream_chat_query(
     ),
     responses={
         404: {"description": "Message not found, or no buffered frames remain."},
+        409: {
+            "description": (
+                "`resume_unavailable` — the replay window has partially "
+                "expired and completeness cannot be proven. Refetch the "
+                "message; do not re-send the query, it was already "
+                "billed."
+            )
+        },
     },
 )
 async def resume_message_stream(
@@ -203,6 +212,21 @@ async def resume_message_stream(
             message_id=message_id, from_seq=from_seq, request_id=request_id
         )
         first = await frames.__anext__()
+    except ReplayIncompleteError as exc:
+        # ARCH-0V Tranche 6. Distinct from the 404 below: the message
+        # exists and frames may exist, but not the ones this client is
+        # missing. 409 rather than 404 so the resumable client in FE-1
+        # can tell 'gone' from 'incomplete' and refetch instead of
+        # rendering a truncated answer as a finished one.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "resume_unavailable",
+                "message": str(exc),
+                "action": "refetch_message",
+                "billed": True,
+            },
+        ) from exc
     except ReplayUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

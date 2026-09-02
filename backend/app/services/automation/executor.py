@@ -54,6 +54,7 @@ from app.services.automation.contracts import (
     ActionNodeConfig,
     ActionSpec,
     FactSet,
+    TenantScope,
     ToolContractViolation,
 )
 
@@ -168,6 +169,34 @@ def _evaluate_condition_node(state: _WalkState, config: dict[str, Any]) -> bool:
     return bool(_evaluate_rule_conditions(_Adapter(), state.work_item))
 
 
+def _tenant_scope_for(state: "_WalkState") -> TenantScope:
+    """The tenant this execution is acting for, cross-checked.
+
+    ARCH-0V Tranche 7. The assertion is the point: a rule belonging to
+    workspace A must never select an action against a work item in
+    workspace B. Nothing structurally prevented that before — the
+    executor received both objects and never compared them — and an
+    automation that mutates the wrong tenant's records is a
+    cross-tenant write with an audit trail that blames the wrong rule.
+    """
+    scope = TenantScope(
+        workspace_id=state.rule.workspace_id,
+        rule_id=state.rule.id,
+        execution_id=state.execution.id,
+    )
+
+    # The live call site for TenantScope.assert_owns. Shipping that
+    # method with the comparison inlined here instead would leave it
+    # exported and uncalled, which is the orphaned-guard defect
+    # (invariant I4) this repository has now found five times.
+    if state.work_item is not None:
+        scope.assert_owns(
+            workspace_id=getattr(state.work_item, "workspace_id", None)
+        )
+
+    return scope
+
+
 def _run_action_node(
     state: _WalkState,
     *,
@@ -194,7 +223,17 @@ def _run_action_node(
     from app.services.fenced_context import TOOL_SELECTORS
 
     selector = TOOL_SELECTORS[selector_name]
-    spec = selector(node_config=node_config, facts=state.facts)
+    # ARCH-0V Tranche 7. Selectors previously received a node config and
+    # a fact set and had no way to state which tenant they were acting
+    # for. The R33 boundary proved a document could not choose *what*
+    # happened; it could not prove anything about *whose* data it
+    # happened to. TenantScope closes that, and asserts the rule and
+    # the work item agree before any action is selected.
+    spec = selector(
+        node_config=node_config,
+        facts=state.facts,
+        tenant=_tenant_scope_for(state),
+    )
 
     outcome = perform(spec, node_config)
     state.actions_executed += 1

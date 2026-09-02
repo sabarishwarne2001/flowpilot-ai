@@ -21,8 +21,8 @@ import {
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  if (typeof detail === "string") {return detail;}
+  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
   return fallback;
 }
 
@@ -63,7 +63,7 @@ export const ProfileSettings: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!profile || dirty) return;
+    if (!profile || dirty) {return;}
     setDisplayName(profile.display_name ?? "");
     setTimezone(profile.timezone);
     setLocale(profile.locale);
@@ -120,7 +120,7 @@ export const ProfileSettings: React.FC = () => {
   });
 
   const pickFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file) {return;}
     setAvatarError(null);
 
     if (file.size > AVATAR_MAX_BYTES) {

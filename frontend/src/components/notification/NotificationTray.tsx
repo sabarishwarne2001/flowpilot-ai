@@ -280,7 +280,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
         cancelText="Cancel"
         onCancel={() => setNotificationToDelete(null)}
         onConfirm={() => {
-          if (!notificationToDelete) return;
+          if (!notificationToDelete) {return;}
           triggerDeleteSingle(notificationToDelete.id);
           setNotificationToDelete(null);
         }}

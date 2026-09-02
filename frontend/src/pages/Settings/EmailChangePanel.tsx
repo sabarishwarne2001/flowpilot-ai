@@ -14,8 +14,8 @@ interface Props {
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  if (typeof detail === "string") {return detail;}
+  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
   return fallback;
 }
 

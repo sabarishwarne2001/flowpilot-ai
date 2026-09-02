@@ -2,3 +2,15 @@
 # History
 # ==========================
 .history/
+
+# ARCH-0V finding B-1 — database dumps and generated SQL must never be tracked.
+# backup_pre_alignment.sql was a readable pg_dump in a public repository
+# containing four bcrypt password hashes and three real email addresses.
+# Gate 0V-G6 enforces this; these patterns stop it happening by accident.
+*.dump
+*.backup
+*.bak
+backup_*.sql
+expand.sql
+contract.sql
+flowpilot-*.sql

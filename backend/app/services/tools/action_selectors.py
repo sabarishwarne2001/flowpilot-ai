@@ -1,4 +1,4 @@
-"""ARCH-13 Step 13.6 — the first real occupants of the R33 boundary."""
+"""ARCH-13 Step 13.6: the first real occupants of the R33 boundary."""
 
 from __future__ import annotations
 
@@ -9,15 +9,19 @@ from app.services.automation.contracts import (
     ActionNodeConfig,
     ActionSpec,
     FactSet,
+    TenantScope,
+    register_tool_selector,
 )
-from app.services.fenced_context import register_tool_selector
 
 logger = logging.getLogger("app.services.tools.action_selectors")
 
 
 @register_tool_selector("automation.action_selector")
 def select_action(
-    *, node_config: ActionNodeConfig, facts: FactSet
+    *,
+    node_config: ActionNodeConfig,
+    facts: FactSet,
+    tenant: TenantScope,
 ) -> ActionSpec:
     """Choose which action runs, and with what values."""
     spec = ActionSpec(
@@ -28,19 +32,33 @@ def select_action(
         rationale=tuple(facts.keys()),
     )
     spec.assert_no_document_derived_values(config=node_config, facts=facts)
+
+    logger.debug(
+        "tools.action_selected",
+        extra={
+            "selector": "automation.action_selector",
+            "action_type": node_config.action_type,
+            "workspace_id": str(tenant.workspace_id),
+            "rule_id": str(tenant.rule_id),
+            "execution_id": str(tenant.execution_id),
+        },
+    )
     return spec
 
 
 @register_tool_selector("automation.mutation_selector")
 def select_mutation(
-    *, node_config: ActionNodeConfig, facts: FactSet
+    *,
+    node_config: ActionNodeConfig,
+    facts: FactSet,
+    tenant: TenantScope,
 ) -> ActionSpec:
     """Choose a work-item field mutation."""
     if node_config.target_field is None:
         raise ValueError(
             "A mutation action needs an author-supplied target_field. "
-            "Deriving the field name from extraction would let a document "
-            "choose which column it writes to."
+            "Deriving the field name from extraction would let a "
+            "document choose which column it writes to."
         )
 
     spec = ActionSpec(
@@ -50,6 +68,17 @@ def select_mutation(
         rationale=tuple(facts.keys()),
     )
     spec.assert_no_document_derived_values(config=node_config, facts=facts)
+
+    logger.debug(
+        "tools.mutation_selected",
+        extra={
+            "selector": "automation.mutation_selector",
+            "target_field": node_config.target_field,
+            "workspace_id": str(tenant.workspace_id),
+            "rule_id": str(tenant.rule_id),
+            "execution_id": str(tenant.execution_id),
+        },
+    )
     return spec
 
 
@@ -63,4 +92,8 @@ def resolve_selector(action_type: str) -> Optional[str]:
     return None
 
 
-__all__ = ["resolve_selector", "select_action", "select_mutation"]
+__all__ = [
+    "resolve_selector",
+    "select_action",
+    "select_mutation",
+]

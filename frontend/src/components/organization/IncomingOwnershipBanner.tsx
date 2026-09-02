@@ -60,7 +60,7 @@ export const IncomingOwnershipBanner: React.FC = () => {
     (t) => t.status === "PENDING" && t.responded_at === null,
   );
 
-  if (pending.length === 0) return null;
+  if (pending.length === 0) {return null;}
 
   return (
     <div className="border-b border-border bg-primary/10">

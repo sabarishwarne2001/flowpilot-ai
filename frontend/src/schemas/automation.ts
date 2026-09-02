@@ -105,7 +105,7 @@ export const createRuleFormSchema = (
           const seen = new Set<string>();
           for (const c of conds) {
             const key = `${c.field.trim()}|${c.operator}|${c.value.trim()}`;
-            if (seen.has(key)) return false;
+            if (seen.has(key)) {return false;}
             seen.add(key);
           }
           return true;
@@ -135,7 +135,7 @@ export const createRuleFormSchema = (
           for (const a of acts) {
             const recipient = a.config?.recipient?.trim().toLowerCase() ?? "";
             const key = `${a.action_type}|${recipient}`;
-            if (seen.has(key)) return false;
+            if (seen.has(key)) {return false;}
             seen.add(key);
           }
           return true;

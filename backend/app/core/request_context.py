@@ -1,7 +1,7 @@
-"""
-ARCH-11.5 Step 6 — request identity, context propagation and stage timing.
-ARCH-17 — trace/correlation propagation across the queue boundary, and the sink
-that turns stage durations into something a p95 can be computed from.
+"""ARCH-11.5 Step 6: request identity, context propagation and stage timing.
+
+ARCH-17: trace/correlation propagation across the queue boundary, and the
+sink that turns stage durations into something a p95 can be computed from.
 """
 
 from __future__ import annotations
@@ -31,7 +31,10 @@ _correlation_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
 _parent_span_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "parent_span_id", default=None
 )
-_trace: contextvars.ContextVar[Optional["StageTrace"]] = contextvars.ContextVar(
+_span_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "span_id", default=None
+)
+_trace: contextvars.ContextVar[Optional[StageTrace]] = contextvars.ContextVar(
     "stage_trace", default=None
 )
 
@@ -92,19 +95,20 @@ def traceparent() -> Optional[str]:
     trace_id = get_trace_id()
     if not trace_id:
         return None
-    return (
-        f"{_TRACEPARENT_VERSION}-{trace_id}-"
-        f"{_parent_span_id.get() or new_span_id()}-{_TRACEPARENT_FLAGS}"
-    )
+    span = _span_id.get() or _parent_span_id.get()
+    if not span:
+        span = new_span_id()
+        _span_id.set(span)
+    return f"{_TRACEPARENT_VERSION}-{trace_id}-{span}-{_TRACEPARENT_FLAGS}"
 
 
 def parse_traceparent(value: Optional[str]) -> tuple[Optional[str], Optional[str]]:
     if not value:
         return None, None
     parts = value.strip().split("-")
-    if len(parts) < 4:
+    if len(parts) != 4:
         return None, None
-    _, trace_id, span_id = parts[0], parts[1], parts[2]
+    _, trace_id, span_id, _ = parts[0], parts[1], parts[2], parts[3]
     if len(trace_id) != 32 or len(span_id) != 16:
         return None, None
     if trace_id == "0" * 32 or span_id == "0" * 16:
@@ -136,14 +140,21 @@ TRACE_CARRIER_KEYS: tuple[str, ...] = (
 )
 
 
-def carrier() -> dict[str, Optional[str]]:
-    return {
-        "trace_id": get_trace_id(),
+def carrier() -> dict[str, Any]:
+    """Export the current request context for propagation across job boundaries."""
+    ctx_trace_id = get_trace_id()
+    if ctx_trace_id is None and _correlation_id.get() is None:
+        return {}
+
+    payload = {
+        "trace_id": ctx_trace_id,
         "correlation_id": _correlation_id.get(),
-        "organization_id": _organization_id.get(),
-        "workspace_id": _workspace_id.get(),
+        "organization_id": str(_organization_id.get()) if _organization_id.get() else None,
+        "workspace_id": str(_workspace_id.get()) if _workspace_id.get() else None,
         "parent_span_id": _parent_span_id.get(),
+        "traceparent": traceparent(),
     }
+    return payload
 
 
 @dataclass
@@ -183,7 +194,7 @@ class StageTrace:
                     "name": record.name,
                     "ms": round(record.elapsed_ms, 1),
                     "over_budget": record.over_budget,
-                    **({"error": record.error} if record.error else {}),
+                    "error": record.error if record.error else "",
                 }
                 for record in self.records
             ],
@@ -193,8 +204,7 @@ class StageTrace:
         }
 
 
-StageSink = Callable[["StageRecord"], None]
-
+StageSink = Callable[[StageRecord], None]
 _stage_sink: Optional[StageSink] = None
 
 
@@ -203,7 +213,7 @@ def set_stage_sink(sink: Optional[StageSink]) -> None:
     _stage_sink = sink
 
 
-def _emit_to_sink(record: "StageRecord") -> None:
+def _emit_to_sink(record: StageRecord) -> None:
     sink = _stage_sink
     if sink is None:
         return
@@ -223,6 +233,7 @@ def request_scope(
     parent_span_id: Optional[str] = None,
 ) -> Iterator[StageTrace]:
     identifier = request_id or new_request_id()
+    span = new_span_id()
     trace = StageTrace(request_id=identifier)
 
     tokens = (
@@ -232,11 +243,13 @@ def request_scope(
         _trace.set(trace),
         _correlation_id.set(str(correlation_id) if correlation_id else identifier),
         _parent_span_id.set(parent_span_id),
+        _span_id.set(span),
     )
     try:
         yield trace
     finally:
         logger.info("request.trace", extra={**context_fields(), **trace.as_details()})
+        _span_id.reset(tokens[6])
         _parent_span_id.reset(tokens[5])
         _correlation_id.reset(tokens[4])
         _trace.reset(tokens[3])
@@ -255,7 +268,6 @@ def job_scope(
     payload = dict(context or {})
     inherited = payload.get("trace_id")
     identifier = str(inherited) if inherited else new_request_id()
-
     with request_scope(
         request_id=identifier,
         organization_id=payload.get("organization_id"),
@@ -302,9 +314,7 @@ def stage(name: str, **details: Any) -> Iterator[dict[str, Any]]:
         trace = _trace.get()
         if trace is not None:
             trace.records.append(record)
-
         _emit_to_sink(record)
-
         log = logger.warning if (over or error) else logger.info
         log(
             f"stage.{name}",
@@ -314,7 +324,7 @@ def stage(name: str, **details: Any) -> Iterator[dict[str, Any]]:
                 "elapsed_ms": round(elapsed_ms, 1),
                 "budget_ms": budget,
                 "over_budget": over,
-                **({"error": error} if error else {}),
+                "error": error if error else "",
                 **payload,
             },
         )

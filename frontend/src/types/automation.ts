@@ -88,8 +88,14 @@ export interface AutomationAction {
 export interface AutomationRule {
   readonly id: string;
   readonly workspace_id?: string;
+  /* ARCH-0V: `user_id` removed. It was declared here and had no
+     backend source — AutomationRuleResponse carries
+     `created_by_user_id` (app/schemas/automation.py) and the model
+     column is `created_by_user_id` (app/models/automation.py). An
+     optional field that never arrives type-checks perfectly and
+     reads `undefined` forever. Gate 0V-G7 now enforces that every
+     field declared here exists on the response_model. */
   readonly created_by_user_id?: string | null;
-  readonly user_id?: string;
 
   readonly name: string;
   readonly priority: number;

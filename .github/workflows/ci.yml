@@ -1,0 +1,302 @@
+# ARCH-0V Tranche 1 — the verification substrate.
+#
+# WHAT THIS FIXES
+#
+# At ARCH-22 completion the repository contained 56 `scripts/verify_*.py`
+# gates and 116 test files, and none of them ran unless a human typed the
+# command. Twenty-two phases of architectural invariants — cost-basis
+# truthfulness, tenant isolation, orphaned-guard detection, migration head
+# discipline — were enforced by memory rather than by mechanism.
+#
+# ARCH-02 Step 10 described the tenant isolation suite as "a permanent CI
+# gate". It was not a gate. This file is what makes that sentence true.
+#
+# JOB LAYOUT
+#
+#   encoding      — cheapest checks first; fails in ~15s if a BOM lands
+#   backend-gates — run_all_gates.py: all 56 static gates, phase-ordered
+#   backend-tests — pytest against real Postgres + Redis
+#   migrations    — upgrade head, zero autogenerate drift, exactly one head
+#   frontend      — tsc, lint, build
+#
+# `encoding` gates the rest deliberately: if the manifests are unreadable
+# there is no point spending six minutes installing from them.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Encoding — 15 seconds, no dependencies, gates everything downstream.
+  # ---------------------------------------------------------------------
+  encoding:
+    name: Encoding & line endings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: No BOMs, no UTF-16, no CRLF in tracked text files
+        working-directory: backend
+        run: python scripts/normalize_encodings.py --check
+
+  # ---------------------------------------------------------------------
+  # Static verification gates — the 56 scripts, in phase order.
+  # ---------------------------------------------------------------------
+  backend-gates:
+    name: Verification gates (static)
+    runs-on: ubuntu-latest
+    needs: encoding
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run every verification gate
+        working-directory: backend
+        env:
+          # Gates are static: they read source, not data. These exist only so
+          # `app.core.config.Settings` validates at import.
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot
+          SERVICE_ROLE: web
+        run: python scripts/run_all_gates.py --static-only
+
+      - name: Upload gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-report
+          path: backend/.gate-report.json
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------
+  # Test suites — real Postgres, real Redis.
+  # ---------------------------------------------------------------------
+  backend-tests:
+    name: pytest
+    runs-on: ubuntu-latest
+    needs: encoding
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U flowpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Migrate the test database
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          SERVICE_ROLE: web
+        run: alembic upgrade head
+
+      - name: pytest
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          SERVICE_ROLE: web
+          # Non-zero so the ARCH-0V timing-floor tests exercise the real path.
+          AUTH_LOGIN_MIN_DURATION_MS: "250"
+        run: pytest -q --maxfail=5
+
+  # ---------------------------------------------------------------------
+  # Migrations — head discipline, per invariant I10.
+  # ---------------------------------------------------------------------
+  migrations:
+    name: Migration head & drift
+    runs-on: ubuntu-latest
+    needs: encoding
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_migrate
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U flowpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Exactly one head
+        working-directory: backend
+        env: &migrate_env
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_migrate
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          SERVICE_ROLE: web
+        run: |
+          heads=$(alembic heads | grep -c '(head)' || true)
+          alembic heads
+          if [ "$heads" -ne 1 ]; then
+            echo "::error::Expected exactly one Alembic head, found $heads."
+            exit 1
+          fi
+
+      - name: Upgrade to head
+        working-directory: backend
+        env: *migrate_env
+        run: alembic upgrade head
+
+      - name: Zero autogenerate drift
+        working-directory: backend
+        env: *migrate_env
+        run: |
+          alembic revision --autogenerate -m "ci-drift-probe" --rev-id ci_drift_probe
+          probe="alembic/versions/ci_drift_probe.py"
+          if grep -qE "^\s+op\.(create|drop|add|alter|rename)_" "$probe"; then
+            echo "::error::Model/migration drift detected. Offending operations:"
+            grep -nE "^\s+op\.(create|drop|add|alter|rename)_" "$probe"
+            rm -f "$probe"
+            exit 1
+          fi
+          rm -f "$probe"
+          echo "No drift."
+
+  # ---------------------------------------------------------------------
+  # Frontend — typecheck, lint (functional from ARCH-0V Tranche 3), build.
+  # ---------------------------------------------------------------------
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    needs: encoding
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # ---------------------------------------------------------------------
+  # Aggregate status. Branch protection points at this one job, so adding a
+  # job above does not require editing the protection rule.
+  # ---------------------------------------------------------------------
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [encoding, backend-gates, backend-tests, migrations, frontend]
+    steps:
+      - name: Fail if any upstream job failed
+        run: |
+          if echo '${{ join(needs.*.result, ",") }}' | grep -qE 'failure|cancelled'; then
+            echo "::error::One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs green."

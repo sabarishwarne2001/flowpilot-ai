@@ -15,15 +15,11 @@ const resolveWorkItemId = (response: unknown): string | null => {
     return record.id;
   }
 
-  const wrapped = record.work_item;
-  if (
-    typeof wrapped === "object" &&
-    wrapped !== null &&
-    typeof (wrapped as Record<string, unknown>).id === "string"
-  ) {
-    return (wrapped as Record<string, unknown>).id as string;
-  }
-
+  /* ARCH-0V: the `work_item` wrapper branch was removed. The upload
+     route is `@router.post("", response_model=WorkItemResponse)` in
+     app/api/v1/work_items.py and has always returned the flat object.
+     The branch below it was defending against a shape the server has
+     never sent, which is how a phantom field survives four phases. */
   return null;
 };
 

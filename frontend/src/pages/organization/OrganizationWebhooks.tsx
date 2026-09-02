@@ -39,8 +39,8 @@ function detailOf(error: unknown, fallback: string): string {
 
 function statusTone(status: string): string {
   const s = status.toUpperCase();
-  if (s === "DELIVERED") return "text-primary font-semibold";
-  if (s === "FAILED" || s === "DEAD") return "text-destructive font-semibold";
+  if (s === "DELIVERED") {return "text-primary font-semibold";}
+  if (s === "FAILED" || s === "DEAD") {return "text-destructive font-semibold";}
   return "text-muted-foreground font-semibold";
 }
 
@@ -351,7 +351,7 @@ export const OrganizationWebhooks: React.FC = () => {
       [...endpoints].sort((a, b) => {
         const aBroken = a.auto_disabled || a.status !== "ACTIVE";
         const bBroken = b.auto_disabled || b.status !== "ACTIVE";
-        if (aBroken !== bBroken) return aBroken ? -1 : 1;
+        if (aBroken !== bBroken) {return aBroken ? -1 : 1;}
         return a.url.localeCompare(b.url);
       }),
     [endpoints],
@@ -360,13 +360,13 @@ export const OrganizationWebhooks: React.FC = () => {
   const toggleEvent = (eventType: string) =>
     setEvents((current) => {
       const next = new Set(current);
-      if (next.has(eventType)) next.delete(eventType);
-      else next.add(eventType);
+      if (next.has(eventType)) {next.delete(eventType);}
+      else {next.add(eventType);}
       return next;
     });
 
   const copySecret = async () => {
-    if (!revealed) return;
+    if (!revealed) {return;}
     try {
       await navigator.clipboard.writeText(revealed.secret);
       setCopied(true);

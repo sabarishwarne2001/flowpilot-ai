@@ -38,7 +38,7 @@ export function useAuthenticatedImage(url: string | null): string | null {
         },
       })
       .then((response) => {
-        if (!active) return;
+        if (!active) {return;}
         const data = response.data;
         if (data && (data.size > 0 || (data.byteLength && data.byteLength > 0))) {
           const blob = data instanceof Blob ? data : new Blob([data], { type: "image/png" });

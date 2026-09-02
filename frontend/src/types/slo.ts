@@ -57,16 +57,16 @@ export const formatSLOValue = (
   value: string | null,
   unit: SLOUnit,
 ): string => {
-  if (value === null) return "—";
+  if (value === null) {return "—";}
   const numeric = Number(value);
-  if (Number.isNaN(numeric)) return "—";
-  if (unit === "RATIO") return `${(numeric * 100).toFixed(2)}%`;
-  if (numeric >= 1000) return `${(numeric / 1000).toFixed(2)}s`;
+  if (Number.isNaN(numeric)) {return "—";}
+  if (unit === "RATIO") {return `${(numeric * 100).toFixed(2)}%`;}
+  if (numeric >= 1000) {return `${(numeric / 1000).toFixed(2)}s`;}
   return `${Math.round(numeric)}ms`;
 };
 
 export const sloGaugeFraction = (entry: SLOComplianceEntry): number | null => {
-  if (entry.observed_value === null) return null;
+  if (entry.observed_value === null) {return null;}
   const observed = Number(entry.observed_value);
   const target = Number(entry.target.target_value);
   if (!Number.isFinite(observed) || !Number.isFinite(target) || target === 0) {

@@ -12,10 +12,10 @@ import { useAuthStore } from "@/store/useAuthStore";
 import type { SessionResponse } from "@/types/auth";
 
 function currentSessionId(token: string | null): string | null {
-  if (!token) return null;
+  if (!token) {return null;}
   try {
     const payload = token.split(".")[1];
-    if (!payload) return null;
+    if (!payload) {return null;}
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
     const decoded = JSON.parse(
       atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")),
@@ -27,7 +27,7 @@ function currentSessionId(token: string | null): string | null {
 }
 
 function describeDevice(userAgent: string | null): { label: string; mobile: boolean } {
-  if (!userAgent) return { label: "Unknown device", mobile: false };
+  if (!userAgent) {return { label: "Unknown device", mobile: false };}
 
   const ua = userAgent.toLowerCase();
   const mobile = /iphone|ipad|android|mobile/.test(ua);
@@ -56,20 +56,20 @@ function describeDevice(userAgent: string | null): { label: string; mobile: bool
               ? "Linux"
               : null;
 
-  if (browser && platform) return { label: `${browser} on ${platform}`, mobile };
-  if (platform) return { label: platform, mobile };
-  if (browser) return { label: browser, mobile };
+  if (browser && platform) {return { label: `${browser} on ${platform}`, mobile };}
+  if (platform) {return { label: platform, mobile };}
+  if (browser) {return { label: browser, mobile };}
   return { label: "Unknown device", mobile };
 }
 
 function formatWhen(value: string | null): string {
-  if (!value) return "never";
+  if (!value) {return "never";}
   const then = new Date(value).getTime();
   const minutes = Math.round((Date.now() - then) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) {return "just now";}
+  if (minutes < 60) {return `${minutes}m ago`;}
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) {return `${hours}h ago`;}
   return new Date(value).toLocaleDateString();
 }
 
@@ -120,8 +120,8 @@ export const SessionManagement: React.FC = () => {
 
   const ordered = useMemo(() => {
     return [...sessions].sort((a, b) => {
-      if (a.id === activeSessionId) return -1;
-      if (b.id === activeSessionId) return 1;
+      if (a.id === activeSessionId) {return -1;}
+      if (b.id === activeSessionId) {return 1;}
       const at = new Date(a.last_used_at ?? a.created_at).getTime();
       const bt = new Date(b.last_used_at ?? b.created_at).getTime();
       return bt - at;

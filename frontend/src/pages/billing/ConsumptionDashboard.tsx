@@ -65,7 +65,7 @@ export const ConsumptionDashboard: React.FC<Props> = ({
     grandTotal > 0 ? Math.round(((grandTotal - estimated) / grandTotal) * 100) : 100;
   const peak = byEventType[0]?.[1].cost ?? 1;
 
-  if (!canManageBilling) return null;
+  if (!canManageBilling) {return null;}
 
   if (isLoading) {
     return (

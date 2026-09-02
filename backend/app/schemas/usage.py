@@ -1,4 +1,4 @@
-﻿"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
+"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
 
 from __future__ import annotations
 

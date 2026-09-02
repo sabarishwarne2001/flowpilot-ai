@@ -280,7 +280,7 @@ export const Workspace: React.FC = () => {
   });
 
   const handleReset = () => {
-    if (!workspaceDetail) return;
+    if (!workspaceDetail) {return;}
 
     reset({
       workspace_name: workspaceDetail.workspace_name,
@@ -298,7 +298,7 @@ export const Workspace: React.FC = () => {
 
   const handleLogoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {return;}
 
     const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
@@ -330,7 +330,7 @@ export const Workspace: React.FC = () => {
 
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) {return;}
     await sendInviteMutation({ email: inviteEmail.trim(), role: inviteRole });
   };
 

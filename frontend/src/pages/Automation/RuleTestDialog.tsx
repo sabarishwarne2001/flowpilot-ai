@@ -78,7 +78,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
     reset: resetMutation,
   } = useMutation({
     mutationFn: async () => {
-      if (!rule) throw new Error("No automation rule selected.");
+      if (!rule) {throw new Error("No automation rule selected.");}
       return automationApi.testAutomationRule(workspaceId!, rule.id, selectedWorkItemId);
     },
     onError: (err: unknown) => {

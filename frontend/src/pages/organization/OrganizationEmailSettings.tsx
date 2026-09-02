@@ -19,8 +19,8 @@ import type { OrganizationRole } from "@/types/tenancy";
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  if (typeof detail === "string") {return detail;}
+  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
   return fallback;
 }
 
@@ -57,7 +57,7 @@ export const OrganizationEmailSettings: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!settings || dirty) return;
+    if (!settings || dirty) {return;}
     setHost(settings.smtp_host ?? "");
     setPort(settings.smtp_port ? String(settings.smtp_port) : "");
     setUsername(settings.smtp_username ?? "");

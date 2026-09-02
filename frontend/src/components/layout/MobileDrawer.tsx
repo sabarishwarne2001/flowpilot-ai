@@ -25,9 +25,9 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
   // Handle Escape key
   useEffect(() => {
-    if (!open) return;
+    if (!open) {return;}
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {onClose();}
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);

@@ -194,12 +194,12 @@ export const assertPermissionParity = (): void => {
   const failures = runPermissionSelfCheck();
 
   if (failures.length === 0) {
-    // eslint-disable-next-line no-console
+     
     console.info("[permissions] parity self-check passed");
     return;
   }
 
-  // eslint-disable-next-line no-console
+   
   console.error(
     `[permissions] PARITY SELF-CHECK FAILED — ${failures.length} rule(s) ` +
       "disagree with the backend contract:\n  - " +

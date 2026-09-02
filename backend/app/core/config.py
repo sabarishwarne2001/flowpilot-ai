@@ -363,8 +363,28 @@ class Settings(BaseSettings):
     ARGON2_TIME_COST: int = 2
     ARGON2_PARALLELISM: int = 1
 
-    #: Optional floor on how long a login attempt takes, in milliseconds.
-    AUTH_LOGIN_MIN_DURATION_MS: int = 0
+    #: Floor on how long a login attempt takes, in milliseconds.
+    #:
+    #: ARCH-0V Tranche 5. This was 0 through ARCH-22, which meant the
+    #: floor existed in code and did nothing. The population is mixed:
+    #: SEC-1 introduced Argon2id but `pwd_context` still verifies bcrypt
+    #: for dormant accounts, and the two families have very different
+    #: verification costs. A nonexistent user takes the `_DUMMY_HASH`
+    #: path (Argon2id); an existing bcrypt user takes a measurably
+    #: different one. That difference is a user-enumeration oracle.
+    #:
+    #: 250 ms is set from measurement, not from a guess — run
+    #: `scripts/calibrate_auth_timing.py` on target hardware and raise
+    #: this above the reported p99 if it comes back higher. A floor
+    #: below the real p99 leaks exactly the distinction it exists to
+    #: hide, which is worse than no floor because it looks handled.
+    #:
+    #: Gate 0V-G8 refuses a value below AUTH_LOGIN_MIN_DURATION_FLOOR_MS.
+    AUTH_LOGIN_MIN_DURATION_MS: int = 250
+
+    #: The lowest value 0V-G8 will accept. Not independently tunable:
+    #: lowering this is how the floor quietly becomes decorative again.
+    AUTH_LOGIN_MIN_DURATION_FLOOR_MS: int = 200
 
     @field_validator("ARGON2_MEMORY_COST")
     @classmethod

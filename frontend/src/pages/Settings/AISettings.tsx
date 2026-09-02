@@ -111,7 +111,7 @@ export const AISettings: React.FC = () => {
 
   // Automatically switch model to a valid one if provider changes
   useEffect(() => {
-    if (!selectedProvider || !supportedModels) return;
+    if (!selectedProvider || !supportedModels) {return;}
 
     const availableModels =
       supportedModels[selectedProvider as keyof typeof supportedModels] ?? [];

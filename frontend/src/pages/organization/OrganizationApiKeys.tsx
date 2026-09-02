@@ -143,13 +143,13 @@ export const OrganizationApiKeys: React.FC = () => {
   const toggleScope = (scope: ApiKeyScope) =>
     setScopes((current) => {
       const next = new Set(current);
-      if (next.has(scope)) next.delete(scope);
-      else next.add(scope);
+      if (next.has(scope)) {next.delete(scope);}
+      else {next.add(scope);}
       return next;
     });
 
   const copyToken = async () => {
-    if (!revealed) return;
+    if (!revealed) {return;}
     try {
       await navigator.clipboard.writeText(revealed.token);
       setCopied(true);

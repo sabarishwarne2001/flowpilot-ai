@@ -227,12 +227,12 @@ export const assertTenantReconciliationIntegrity = (): void => {
   const failures = runTenantReconciliationSelfCheck();
 
   if (failures.length === 0) {
-    // eslint-disable-next-line no-console
+     
     console.info("[routes] tenant reconciliation self-check passed");
     return;
   }
 
-  // eslint-disable-next-line no-console
+   
   console.error(
     `[routes] TENANT RECONCILIATION SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),

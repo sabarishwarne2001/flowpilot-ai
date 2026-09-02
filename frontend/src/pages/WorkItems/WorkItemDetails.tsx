@@ -86,7 +86,7 @@ export const WorkItemDetails: React.FC = () => {
     },
     refetchInterval: (query) => {
       const item = query.state.data;
-      if (!item) return false;
+      if (!item) {return false;}
       return item.status === "QUEUED" || item.status === "PROCESSING" ? 2000 : false;
     },
   });
@@ -107,12 +107,12 @@ export const WorkItemDetails: React.FC = () => {
   });
 
   const handleRetry = useCallback((): void => {
-    if (!id) return;
+    if (!id) {return;}
     reprocessDocument(id);
   }, [id, reprocessDocument]);
 
   useEffect(() => {
-    if (!id || !workspaceId) return;
+    if (!id || !workspaceId) {return;}
 
     const createConversation = async () => {
       try {
@@ -129,7 +129,7 @@ export const WorkItemDetails: React.FC = () => {
 
   // Construct back navigation path dynamically
   const getBackPath = () => {
-    if (tenantState.status !== "ready") return "#";
+    if (tenantState.status !== "ready") {return "#";}
     return `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items`;
   };
 

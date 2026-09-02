@@ -13,7 +13,7 @@ export const PendingInvitationsBanner: React.FC = () => {
   });
 
   const invitations = data?.items ?? [];
-  if (invitations.length === 0) return null;
+  if (invitations.length === 0) {return null;}
 
   return (
     <div className="border-b border-border bg-muted/40">

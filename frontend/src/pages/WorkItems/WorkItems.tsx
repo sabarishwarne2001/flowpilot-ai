@@ -99,7 +99,7 @@ export const WorkItems: React.FC = () => {
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
       const currentList = query.state.data;
-      if (!currentList || !Array.isArray(currentList.items)) return false;
+      if (!currentList || !Array.isArray(currentList.items)) {return false;}
       const hasRunningJobs = currentList.items.some(
         (item) => item.status === "QUEUED" || item.status === "PROCESSING"
       );
@@ -130,7 +130,7 @@ export const WorkItems: React.FC = () => {
   };
 
   const confirmReprocess = (): void => {
-    if (!selectedReprocessWorkItemId) return;
+    if (!selectedReprocessWorkItemId) {return;}
     reprocessMutation.mutate(selectedReprocessWorkItemId);
   };
 
@@ -157,7 +157,7 @@ export const WorkItems: React.FC = () => {
   };
 
   const confirmDelete = (): void => {
-    if (!selectedWorkItemId) return;
+    if (!selectedWorkItemId) {return;}
     deleteMutation.mutate(selectedWorkItemId);
   };
 
@@ -212,7 +212,7 @@ export const WorkItems: React.FC = () => {
 
   // Construct workspace-scoped details URLs dynamically using the active slugs
   const getDetailsPath = (itemId: string) => {
-    if (tenantState.status !== "ready") return "#";
+    if (tenantState.status !== "ready") {return "#";}
     return `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items/${itemId}`;
   };
 

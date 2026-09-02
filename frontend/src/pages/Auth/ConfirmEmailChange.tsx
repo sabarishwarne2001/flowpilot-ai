@@ -13,7 +13,7 @@ export const ConfirmEmailChange: React.FC = () => {
   const fired = useRef(false);
 
   useEffect(() => {
-    if (fired.current) return;
+    if (fired.current) {return;}
     fired.current = true;
 
     const token = new URLSearchParams(

@@ -479,12 +479,12 @@ export const assertTenantResolutionIntegrity = (): void => {
   const failures = runTenantResolutionSelfCheck();
 
   if (failures.length === 0) {
-    // eslint-disable-next-line no-console
+     
     console.info("[tenant] resolution self-check passed");
     return;
   }
 
-  // eslint-disable-next-line no-console
+   
   console.error(
     `[tenant] RESOLUTION SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),

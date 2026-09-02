@@ -49,7 +49,7 @@ export const Dashboard: React.FC = () => {
     placeholderData: keepPreviousWithinWorkspace(workspaceId!),
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!data) return false;
+      if (!data) {return false;}
       if (data.processing_status.total > 0) {
         return 2_000;
       }

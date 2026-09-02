@@ -401,7 +401,7 @@ export const AdminMarginsHub: React.FC = () => {
   const handleAccept = useCallback(
     (reconciliationId: string) => {
       setError(null);
-      // eslint-disable-next-line no-alert
+       
       const note = globalThis.prompt(
         "Why is this variance acceptable? A note is required — an accepted variance with no stated reason is indistinguishable from a mistake.",
       );

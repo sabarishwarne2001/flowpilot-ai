@@ -39,7 +39,7 @@ export const deriveSlug = (value: string): string => {
 
   const ascii = value
     .normalize("NFKD")
-    // eslint-disable-next-line no-misleading-character-class
+     
     .replace(/[\u0300-\u036f]/g, "");
 
   const hyphenated = ascii

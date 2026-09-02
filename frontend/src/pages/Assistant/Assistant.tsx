@@ -451,7 +451,7 @@ export const Assistant: React.FC = () => {
         loading={false}
         onCancel={() => setConversationToDelete(null)}
         onConfirm={() => {
-          if (!conversationToDelete) return;
+          if (!conversationToDelete) {return;}
           handleDeleteConversation(conversationToDelete.id);
           setConversationToDelete(null);
         }}

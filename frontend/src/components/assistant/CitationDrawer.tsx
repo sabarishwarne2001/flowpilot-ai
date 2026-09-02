@@ -1,39 +1,27 @@
-import React, { useEffect, useRef, useCallback } from "react";
-
-import { X, FileText, Bookmark, Percent, FileCheck } from "lucide-react";
-
-import type { SourceCitation } from "@/types/assistant";
+import React, { useEffect, useRef, useCallback } from 'react';
+import { X, FileText, Bookmark, Percent, FileCheck } from 'lucide-react';
+import type { SourceCitation } from '@/types/assistant';
 
 interface CitationDrawerProps {
-  /**
-   * Controls whether the drawer is visible.
-   */
+  /** Controls whether the drawer is visible. */
   readonly isOpen: boolean;
-
-  /**
-   * Invoked when the drawer should close.
-   */
+  /** Invoked when the drawer should close. */
   readonly onClose: () => void;
-
-  /**
-   * Citation currently being displayed.
-   */
+  /** Citation currently being displayed. */
   readonly citation: SourceCitation | null;
-
   readonly className?: string;
 }
 
-/* ============================================================================
-   Constants
-============================================================================ */
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
 
-const DRAWER_TITLE_ID = "citation-drawer-title";
+const DRAWER_TITLE_ID = 'citation-drawer-title';
+const DRAWER_DESCRIPTION_ID = 'citation-drawer-description';
 
-const DRAWER_DESCRIPTION_ID = "citation-drawer-description";
-
-/* ============================================================================
-   Helper Functions
-============================================================================ */
+// -----------------------------------------------------------------------------
+// Helper Functions
+// -----------------------------------------------------------------------------
 
 /**
  * Formats similarity score as a percentage.
@@ -41,92 +29,71 @@ const DRAWER_DESCRIPTION_ID = "citation-drawer-description";
 const formatSimilarityScore = (score: number): string =>
   `${(score * 100).toFixed(1)}%`;
 
-/* ============================================================================
-   Component
-============================================================================ */
+// -----------------------------------------------------------------------------
+// Component
+// -----------------------------------------------------------------------------
 
 export const CitationDrawer: React.FC<CitationDrawerProps> = ({
   isOpen,
   onClose,
   citation,
-  className = "",
+  className = '',
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-
   const previousFocusedElement = useRef<HTMLElement | null>(null);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Save previously focused element
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Save previously focused element
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-
-    previousFocusedElement.current =
-      document.activeElement as HTMLElement | null;
+    previousFocusedElement.current = document.activeElement as HTMLElement | null;
   }, [isOpen]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Focus close button after opening
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Focus close button after opening
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-
     closeButtonRef.current?.focus();
   }, [isOpen]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Restore previous focus after closing
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Restore previous focus after closing
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (isOpen) {
       return;
     }
-
     previousFocusedElement.current?.focus();
   }, [isOpen]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Prevent background scrolling
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Prevent background scrolling
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
     const previousOverflow = document.body.style.overflow;
-
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Escape key support
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Escape key support
+  // ---------------------------------------------------------------------------
   const handleEscapeKey = useCallback(
     (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         onClose();
       }
     },
@@ -138,25 +105,20 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
       return;
     }
 
-    window.addEventListener("keydown", handleEscapeKey);
-
+    window.addEventListener('keydown', handleEscapeKey);
     return () => {
-      window.removeEventListener("keydown", handleEscapeKey);
+      window.removeEventListener('keydown', handleEscapeKey);
     };
   }, [isOpen, handleEscapeKey]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Nothing selected
-   * --------------------------------------------------------------------------
-   */
-
+  // ---------------------------------------------------------------------------
+  // Nothing selected
+  // ---------------------------------------------------------------------------
   if (!isOpen || !citation) {
     return null;
   }
 
   const similarityScore = formatSimilarityScore(citation.similarity_score);
-
   const documentName =
     citation.document_display_name ?? citation.original_filename;
 
@@ -168,53 +130,29 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
       aria-labelledby={DRAWER_TITLE_ID}
       aria-describedby={DRAWER_DESCRIPTION_ID}
     >
-      {/* ======================================================
-          Overlay
-      ====================================================== */}
-
+      {/* Overlay */}
       <button
         type="button"
         onClick={onClose}
         aria-label="Close citation drawer"
         className="
-          fixed
-          inset-0
-          cursor-default
-          bg-black/40
-          backdrop-blur-sm
-          animate-in
-          fade-in
+          fixed inset-0 cursor-default bg-black/40 backdrop-blur-sm
+          animate-in fade-in
         "
       />
 
-      {/* ======================================================
-          Drawer
-      ====================================================== */}
-
+      {/* Drawer */}
       <aside
         className="
-          relative
-          flex
-          h-screen
-          w-full
-          max-w-md
-          flex-col
-          border-l
-          border-border/80
-          bg-card
-          shadow-2xl
-          animate-in
-          slide-in-from-right
+          relative flex h-screen w-full max-w-md flex-col
+          border-l border-border/80 bg-card shadow-2xl
+          animate-in slide-in-from-right
         "
       >
-        {/* ======================================================
-            Header
-        ====================================================== */}
-
+        {/* Header */}
         <header className="flex h-16 items-center justify-between border-b border-border/40 bg-muted/5 px-6">
           <div className="flex items-center gap-2.5">
             <FileCheck className="h-5 w-5 text-primary" />
-
             <div>
               <h2
                 id={DRAWER_TITLE_ID}
@@ -222,7 +160,6 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
               >
                 Cited Source
               </h2>
-
               <p
                 id={DRAWER_DESCRIPTION_ID}
                 className="text-xs text-muted-foreground"
@@ -237,15 +174,9 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             type="button"
             onClick={onClose}
             className="
-              rounded-lg
-              p-2
-              text-muted-foreground
-              transition-colors
-              hover:bg-muted/50
-              hover:text-foreground
-              focus:outline-none
-              focus:ring-2
-              focus:ring-primary/20
+              rounded-lg p-2 text-muted-foreground transition-colors
+              hover:bg-muted/50 hover:text-foreground
+              focus:outline-none focus:ring-2 focus:ring-primary/20
             "
             aria-label="Close citation drawer"
           >
@@ -253,15 +184,9 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
           </button>
         </header>
 
-        {/* ======================================================
-            Scrollable Content
-        ====================================================== */}
-
+        {/* Scrollable Content */}
         <main className="flex flex-1 flex-col overflow-y-auto p-6">
-          {/* ======================================================
-              Source Document
-          ====================================================== */}
-
+          {/* Source Document */}
           <section className="space-y-2">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
               Source Document
@@ -281,7 +206,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                 </p>
 
                 <p className="mt-1 text-[10px] font-bold text-muted-foreground">
-                  {citation.page_number != null
+                  {citation.page_number !== null
                     ? `Page ${citation.page_number} • Chunk ${citation.chunk_index}`
                     : `Chunk ${citation.chunk_index}`}
                 </p>
@@ -289,15 +214,11 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             </div>
           </section>
 
-          {/* ======================================================
-              Metrics
-          ====================================================== */}
-
+          {/* Metrics */}
           <section className="mt-6 grid grid-cols-2 gap-4">
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-4">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Percent className="h-4 w-4" />
-
                 <span className="text-[10px] font-bold uppercase tracking-wider">
                   Relevance
                 </span>
@@ -311,49 +232,35 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-4">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Bookmark className="h-4 w-4" />
-
                 <span className="text-[10px] font-bold uppercase tracking-wider">
                   Location
                 </span>
               </div>
 
               <p className="text-xl font-black tracking-tight">
-                {citation.page_number != null
+                {citation.page_number !== null
                   ? `Page ${citation.page_number}`
-                  : "Text Segment"}
+                  : 'Text Segment'}
               </p>
             </div>
           </section>
-          {/* ======================================================
-              Citation Snippet
-          ====================================================== */}
 
+          {/* Citation Snippet */}
           <section className="mt-6 flex min-h-0 flex-1 flex-col space-y-2">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
               Referenced Text
             </h3>
 
-            <div
-              className="
-                flex-1
-                overflow-y-auto
-                rounded-xl
-                border
-                border-border/40
-                bg-muted/5
-                p-4
-              "
-            >
+            <div className="
+              flex-1 overflow-y-auto rounded-xl border border-border/40 bg-muted/5 p-4
+            ">
               <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/90">
                 {citation.snippet}
               </p>
             </div>
           </section>
 
-          {/* ======================================================
-              Metadata
-          ====================================================== */}
-
+          {/* Metadata */}
           <section className="mt-6 space-y-2">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
               Metadata
@@ -365,7 +272,6 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                   <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Citation ID
                   </dt>
-
                   <dd className="break-all text-right font-mono text-xs">
                     {citation.citation_id}
                   </dd>
@@ -375,7 +281,6 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                   <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Work Item
                   </dt>
-
                   <dd className="break-all text-right font-mono text-xs">
                     {citation.work_item_id}
                   </dd>
@@ -385,7 +290,6 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                   <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Chunk Index
                   </dt>
-
                   <dd className="text-sm font-semibold">
                     {citation.chunk_index}
                   </dd>
@@ -394,10 +298,8 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             </div>
           </section>
         </main>
-        {/* ======================================================
-            Footer
-        ====================================================== */}
 
+        {/* Footer */}
         <footer className="border-t border-border/40 bg-muted/5 p-4">
           <p className="text-center text-[11px] font-medium text-muted-foreground">
             Source citation generated from the document retrieval pipeline.
@@ -409,4 +311,5 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
     </div>
   );
 };
+
 export default CitationDrawer;
