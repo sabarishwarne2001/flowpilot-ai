@@ -2,11 +2,25 @@ import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Info, Loader2, Users } from "lucide-react";
 
-import { getSubscriptionState } from "@/services/api/billing";
+import {
+  fetchSeatPriceBook,
+  getSubscriptionState,
+} from "@/services/api/billing";
 import { listIdpConfigs } from "@/services/api/identity";
 import { billingKeys, identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { IdpConfigRead, JitProvisioningMode } from "@/types/identity";
+
+/**
+ * Render a backend-supplied micros figure. Formatting only — no arithmetic on
+ * money happens in this file, which is what `24-G6` asserts and what keeps the
+ * disclosed figure and the issued invoice the same number.
+ */
+const formatMicros = (micros: number, currency: string): string =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency || "USD",
+  }).format(micros / 1_000_000);
 
 const MODE_COPY: Record<
   JitProvisioningMode,
@@ -48,6 +62,17 @@ export const JitPolicyPanel: React.FC = () => {
     queryFn: () => getSubscriptionState(organizationId),
     enabled: Boolean(organizationId),
     staleTime: 30_000,
+  });
+
+  // ARCH-24 Tranche 4. The panel discloses what one more seat costs BEFORE a
+  // JIT provision allocates one. Every figure rendered below arrives from this
+  // query; none of it is computed here. A frontend that recomputes a price
+  // drifts from the invoice, and the drift gets found by a customer.
+  const seatPriceQuery = useQuery({
+    queryKey: billingKeys.seatPriceBook(organizationId, 1),
+    queryFn: () => fetchSeatPriceBook(organizationId, 1),
+    enabled: Boolean(organizationId),
+    staleTime: 60_000,
   });
 
   const configs = configsQuery.data ?? [];
@@ -225,6 +250,77 @@ export const JitPolicyPanel: React.FC = () => {
             uncapped policy this gap can widen without any action here.
           </p>
         )}
+
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            <h4 className="text-xs font-medium">Cost of the next seat</h4>
+          </div>
+
+          {seatPriceQuery.isLoading && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Asking billing for the current seat price…
+            </p>
+          )}
+
+          {seatPriceQuery.isError && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              The seat price could not be loaded. It is unknown rather than
+              free.
+            </p>
+          )}
+
+          {seatPriceQuery.data && (
+            <dl className="mt-1.5 grid grid-cols-2 gap-4">
+              <div>
+                <dt className="text-xs text-muted-foreground">Seat price</dt>
+                <dd className="mt-0.5 text-sm font-semibold tabular-nums">
+                  {seatPriceQuery.data.unit_price_micros === null ? (
+                    <span className="font-normal text-amber-700">
+                      Not priced
+                    </span>
+                  ) : (
+                    formatMicros(
+                      seatPriceQuery.data.unit_price_micros,
+                      seatPriceQuery.data.currency,
+                    )
+                  )}
+                </dd>
+                {seatPriceQuery.data.price_source === "UNPRICED" && (
+                  <p className="mt-0.5 text-[11px] text-amber-700">
+                    The active price book has no seat entry. This is a
+                    configuration gap, not a free seat.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  Prorated now
+                </dt>
+                <dd className="mt-0.5 text-sm font-semibold tabular-nums">
+                  {seatPriceQuery.data.proration_micros === null ? (
+                    <span className="font-normal text-muted-foreground">
+                      Unknown
+                    </span>
+                  ) : (
+                    formatMicros(
+                      seatPriceQuery.data.proration_micros,
+                      seatPriceQuery.data.currency,
+                    )
+                  )}
+                </dd>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {seatPriceQuery.data.proration_source === "STRIPE_PREVIEW"
+                    ? "Quoted by Stripe for the current period."
+                    : (seatPriceQuery.data.proration_unavailable_reason ??
+                      "Unavailable. It will be whatever Stripe invoices.")}
+                </p>
+              </div>
+            </dl>
+          )}
+        </div>
 
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
           Default role for new members:{" "}

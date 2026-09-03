@@ -280,3 +280,41 @@ export const limitUtilisation = (limit: UsageLimit): number | null => {
   }
   return null;
 };
+
+/**
+ * ARCH-24 Tranche 4 — the seat figures the JIT policy panel may render.
+ *
+ * Both money fields are nullable and each is nullable for a different reason:
+ *
+ *   unit_price_micros === null   the pinned price book has no seat entry.
+ *                                A configuration fault, not a free seat.
+ *   proration_micros  === null   Stripe could not be reached. The real figure
+ *                                is whatever Stripe eventually invoices.
+ *
+ * Do NOT do arithmetic on these. Rendering `unit_price_micros * seats` as a
+ * total would reintroduce, in TypeScript, precisely the local-proration drift
+ * ARCH-15 removed from the backend — and the drift gets discovered by a
+ * customer reading their invoice, not by us.
+ */
+export type SeatPriceSource = "PRICE_BOOK" | "UNPRICED";
+export type SeatProrationSource = "STRIPE_PREVIEW" | "UNAVAILABLE";
+
+export interface SeatPriceBookResponse {
+  readonly organization_id: string;
+  readonly seats_current: number;
+  readonly seats_after: number;
+
+  readonly unit_price_micros: number | null;
+  readonly unit: string | null;
+  readonly currency: string;
+  readonly price_book_id: string | null;
+  readonly price_book_version: number | null;
+  readonly price_source: SeatPriceSource;
+
+  readonly proration_micros: number | null;
+  readonly proration_source: SeatProrationSource;
+  readonly proration_unavailable_reason: string | null;
+
+  readonly period_start: string | null;
+  readonly period_end: string | null;
+}

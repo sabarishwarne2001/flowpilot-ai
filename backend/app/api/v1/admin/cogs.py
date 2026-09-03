@@ -26,13 +26,24 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy import true as sa_true
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_read_db, require_superadmin
 from app.core.config import settings
 from app.models.user import User
+from app.models.reconciliation import ReconciliationRun
+from app.models.supplier_cogs import (
+    METHOD_ARCH14_SELL_SIDE,
+    METHOD_ARCH18_SUPPLIER_COST,
+    SupplierInvoice,
+    SupplierReconciliation,
+)
+from app.services.reconciliation import statement_intake
 from app.schemas.cogs import (
     AcceptVarianceRequest,
+    ConsolidatedReconciliationResponse,
     MarginFiguresResponse,
     MarginOrder,
     PlatformMarginSummaryResponse,
@@ -127,6 +138,10 @@ def _reconciliation_dto(row) -> SupplierReconciliationResponse:
         status=row.status,
         modelled_event_count=int(row.modelled_event_count),
         unknown_cost_event_count=int(row.unknown_cost_event_count),
+        cost_basis_method=row.cost_basis_method,
+        # Read from the model property rather than recomputed here, so there is
+        # one definition of "authoritative" in the codebase.
+        is_authoritative_cost=bool(row.is_authoritative_cost),
         note=row.note,
         reconciled_at=row.reconciled_at,
         reconciled_by_user_id=row.reconciled_by_user_id,
@@ -148,6 +163,14 @@ def _invoice_dto(db: Session, invoice) -> SupplierInvoiceResponse:
         ingested_by_user_id=invoice.ingested_by_user_id,
         notes=invoice.notes,
         latest_reconciliation=_reconciliation_dto(latest) if latest else None,
+        origin=str(
+            (invoice.details or {}).get("origin", statement_intake.ORIGIN_OPERATOR_UPLOAD)
+        ),
+        superseded_invoice_id=(
+            uuid.UUID(str((invoice.details or {})["supersedes_invoice_id"]))
+            if (invoice.details or {}).get("supersedes_invoice_id")
+            else None
+        ),
     )
 
 
@@ -464,6 +487,67 @@ def accept_variance(
     db.commit()
     db.refresh(row)
     return _reconciliation_dto(row)
+
+
+@router.get(
+    "/reconciliations/consolidated",
+    response_model=ConsolidatedReconciliationResponse,
+    summary="The single authoritative cost-variance view (ARCH-24)",
+)
+def consolidated_reconciliations(
+    provider: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_read_db),
+    current_user: User = Depends(require_superadmin),
+) -> ConsolidatedReconciliationResponse:
+    """Supplier cost variance, from the one engine that computes it.
+
+    ARCH-24 Tranche 3. Superadmin-gated: this is platform margin data and is
+    not customer-facing under any circumstances.
+
+    The ARCH-14 runs are reported here as a *count only*, deliberately. Their
+    drift figures are denominated in customer price and would be read as cost
+    variance by anyone who saw them next to these rows. If you need them, they
+    are on the reconciliation-runs endpoint, labelled.
+    """
+    rows = (
+        db.execute(
+            select(SupplierReconciliation)
+            .join(
+                SupplierInvoice,
+                SupplierInvoice.id == SupplierReconciliation.supplier_invoice_id,
+            )
+            .where(
+                SupplierInvoice.provider == provider.strip().lower()
+                if provider
+                else sa_true()
+            )
+            .order_by(SupplierReconciliation.reconciled_at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    sell_side = int(
+        db.execute(
+            select(func.count(ReconciliationRun.id)).where(
+                ReconciliationRun.cost_basis_method == METHOD_ARCH14_SELL_SIDE,
+                (
+                    ReconciliationRun.provider == provider.strip().lower()
+                    if provider
+                    else sa_true()
+                ),
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    return ConsolidatedReconciliationResponse(
+        entries=[_reconciliation_dto(row) for row in rows],
+        authoritative_method=METHOD_ARCH18_SUPPLIER_COST,
+        sell_side_run_count=sell_side,
+    )
 
 
 __all__ = ["router"]

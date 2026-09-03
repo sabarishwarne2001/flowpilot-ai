@@ -144,7 +144,11 @@ from app.models.invoice import (
     InvoiceStatus,
 )
 from app.models.supplier_cogs import (
+    COST_BASIS_METHOD_VALUES,
     COST_BASIS_SOURCE_VALUES,
+    METHOD_ARCH14_SELL_SIDE,
+    METHOD_ARCH18_PRE_CONSOLIDATION,
+    METHOD_ARCH18_SUPPLIER_COST,
     HARD_COST_BASIS_SOURCES,
     RECONCILIATION_STATUS_VALUES,
     SOURCE_ESTIMATED,
@@ -156,6 +160,16 @@ from app.models.supplier_cogs import (
     STATUS_MATCHED,
     SupplierInvoice,
     SupplierReconciliation,
+)
+from app.models.revenue_recognition import (
+    RECOGNITION_METHOD_VALUES,
+    RECOGNITION_REASON_VALUES,
+    SCHEDULE_STATUS_VALUES,
+    RecognitionMethod,
+    RecognitionReason,
+    RecognizedRevenueEntry,
+    RevenueSchedule,
+    RevenueScheduleStatus,
 )
 from app.models.dunning_action import (
     DUNNING_OUTCOME_ENUM_NAME,
@@ -328,6 +342,18 @@ __all__ = [
     "STATUS_MATCHED",
     "SupplierInvoice",
     "SupplierReconciliation",
+    "COST_BASIS_METHOD_VALUES",
+    "METHOD_ARCH14_SELL_SIDE",
+    "METHOD_ARCH18_PRE_CONSOLIDATION",
+    "METHOD_ARCH18_SUPPLIER_COST",
+    "RECOGNITION_METHOD_VALUES",
+    "RECOGNITION_REASON_VALUES",
+    "SCHEDULE_STATUS_VALUES",
+    "RecognitionMethod",
+    "RecognitionReason",
+    "RecognizedRevenueEntry",
+    "RevenueSchedule",
+    "RevenueScheduleStatus",
     "Attribution",
     "FindingSeverity",
     "CATEGORY_ORDER",

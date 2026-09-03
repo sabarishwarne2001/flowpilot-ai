@@ -47,6 +47,7 @@ import {
   formatSignedMicros,
   statusTone,
   UNKNOWN_LABEL,
+  type CostBasisMethod,
   type MarginFigures,
   type MarginOrder,
   type SupplierInvoice,
@@ -221,6 +222,17 @@ const TenantRow: React.FC<{ readonly entry: TenantEconomicsEntry }> = ({
   );
 };
 
+/**
+ * ARCH-24 discriminator labels. Kept as a lookup rather than prettified
+ * inline so the three legal values stay visible in one place and an unknown
+ * fourth value shows up as undefined instead of being silently formatted.
+ */
+const COST_BASIS_LABEL: Record<CostBasisMethod, string> = {
+  ARCH18_SUPPLIER_COST: "supplier cost",
+  ARCH18_PRE_CONSOLIDATION: "supplier cost (pre-ARCH-24)",
+  ARCH14_SELL_SIDE: "customer price",
+};
+
 const StatusBadge: React.FC<{ readonly status: string }> = ({ status }) => {
   const tone = statusTone(status as never);
   const className =
@@ -251,6 +263,19 @@ const InvoiceRow: React.FC<{
         <div className="text-xs text-muted-foreground">
           {invoice.period_start} → {invoice.period_end}
           {invoice.invoice_reference ? ` · ${invoice.invoice_reference}` : ""}
+        </div>
+        {/*
+          ARCH-24 N-3. A statement pull is an API estimate; an operator upload
+          is a human holding the actual invoice. A reviewer signing off a
+          variance needs to know which one they are looking at.
+        */}
+        <div className="mt-0.5 text-[11px] text-muted-foreground">
+          {invoice.origin === "STATEMENT_PULL"
+            ? "from provider statement pull"
+            : "operator-supplied invoice"}
+          {invoice.superseded_invoice_id
+            ? " · supersedes an earlier statement row"
+            : ""}
         </div>
       </td>
       <td className="py-2 pr-4 text-right tabular-nums">
@@ -285,6 +310,30 @@ const InvoiceRow: React.FC<{
         {latest ? (
           <div className="space-y-1">
             <StatusBadge status={latest.status} />
+            {/*
+              ARCH-24. The denominator that produced this variance. An
+              ARCH14_SELL_SIDE row is customer-price denominated and inflated
+              by gross margin — it is NOT COGS variance, and the backend says
+              so via is_authoritative_cost rather than the client inferring it
+              from the string.
+            */}
+            {latest.is_authoritative_cost ? (
+              <div
+                className="text-[11px] text-muted-foreground"
+                title="Variance computed against genuine supplier cost."
+              >
+                basis: {COST_BASIS_LABEL[latest.cost_basis_method]}
+              </div>
+            ) : (
+              <div
+                role="note"
+                className="text-[11px] font-medium text-amber-700"
+                title="Denominated in customer price, not supplier cost. Do not read as COGS."
+              >
+                not cost-authoritative ·{" "}
+                {COST_BASIS_LABEL[latest.cost_basis_method]}
+              </div>
+            )}
             {latest.unknown_cost_event_count > 0 ? (
               <div className="text-xs text-destructive">
                 {latest.unknown_cost_event_count.toLocaleString()} events in this
@@ -401,7 +450,7 @@ export const AdminMarginsHub: React.FC = () => {
   const handleAccept = useCallback(
     (reconciliationId: string) => {
       setError(null);
-       
+
       const note = globalThis.prompt(
         "Why is this variance acceptable? A note is required — an accepted variance with no stated reason is indistinguishable from a mistake.",
       );

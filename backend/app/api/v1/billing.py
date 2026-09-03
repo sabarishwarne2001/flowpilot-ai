@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import OrganizationContext, RequireOrgOwner, RequireOrgRole, get_db
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.organization import OrganizationRole
+from app.schemas.billing import SeatPriceBookResponse
 from app.schemas.invoice import (
     BillingAccessResponse,
     CheckoutSessionRequest,
@@ -55,6 +56,44 @@ RequireOrgBillingReader = RequireOrgRole(
 )
 
 _NOT_FOUND = "Invoice not found."
+
+
+@router.get(
+    "/organizations/{organization_id}/billing/price-book/seat",
+    response_model=SeatPriceBookResponse,
+    summary="Disclose seat unit price and Stripe-sourced proration (ARCH-24)",
+)
+def get_seat_price_book(
+    organization_id: uuid.UUID,
+    additional_seats: int = Query(
+        1,
+        ge=1,
+        le=1000,
+        description="Seats the caller is about to allocate.",
+    ),
+    context: OrganizationContext = Depends(RequireOrgBillingReader),
+    db: Session = Depends(get_db),
+) -> SeatPriceBookResponse:
+    """What one more seat costs, before anything allocates one.
+
+    ARCH-24 Tranche 4. The IdP policy panel calls this so an administrator
+    enabling JIT provisioning sees a real figure rather than a reassuring
+    blank.
+
+    Both money fields are nullable and both carry provenance. Nothing here is
+    computed locally: the unit price is read from the subscription's pinned
+    price book (the same lookup the invoice will make), and the proration is
+    whatever Stripe's preview says. When Stripe is unreachable this returns
+    200 with `proration_micros = null` and a stated reason, rather than 502 —
+    the unit price alone still answers most of the question, and taking the
+    panel down over a third-party timeout helps nobody.
+    """
+    disclosure = seat_service.seat_price_disclosure(
+        db,
+        organization_id=context.organization_id,
+        additional_seats=additional_seats,
+    )
+    return SeatPriceBookResponse.build(disclosure)
 
 
 def _invoice_or_404(

@@ -237,9 +237,18 @@ class AssemblyResult:
 # ============================================================================
 
 
-def _seat_entry(
+def seat_price_entry(
     db: Session, *, price_book_id: uuid.UUID
 ) -> Optional[PriceBookEntry]:
+    """The seat line's price entry in one specific, pinned price book.
+
+    ARCH-24 made this public. The seat-price *disclosure* endpoint has to
+    resolve exactly what the invoice will resolve, against the same pinned
+    book — otherwise the figure shown before a JIT provision and the figure on
+    the invoice are two independent lookups that will eventually disagree, and
+    the disagreement is discovered by a customer. One implementation, two
+    callers.
+    """
     return db.execute(
         select(PriceBookEntry).where(
             PriceBookEntry.price_book_id == price_book_id,
@@ -399,7 +408,7 @@ def assemble(
 
     # -- 1. the seat line -------------------------------------------------
     seats = int(subscription.seats_purchased)
-    seat_entry = _seat_entry(db, price_book_id=subscription.price_book_id)
+    seat_entry = seat_price_entry(db, price_book_id=subscription.price_book_id)
 
     if seat_entry is not None:
         seat_price = Decimal(str(seat_entry.unit_price_micros))

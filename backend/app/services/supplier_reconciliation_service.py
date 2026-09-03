@@ -46,6 +46,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.supplier_cogs import (
+    METHOD_ARCH18_SUPPLIER_COST,
     STATUS_ACCEPTED,
     STATUS_INVESTIGATE,
     STATUS_MATCHED,
@@ -337,6 +338,10 @@ def reconcile(
         status=result.status,
         modelled_event_count=result.modelled_event_count,
         unknown_cost_event_count=result.unknown_cost_event_count,
+        # ARCH-24. Explicit rather than relying on the column default, so that
+        # a row written by this function is self-describing even if someone
+        # later changes the default on the table.
+        cost_basis_method=METHOD_ARCH18_SUPPLIER_COST,
         note=note,
         reconciled_by_user_id=reconciled_by_user_id,
         reconciled_at=now or datetime.now(timezone.utc),
@@ -416,7 +421,12 @@ def accept(
         variance_ratio=original.variance_ratio,
         status=STATUS_ACCEPTED,
         modelled_event_count=original.modelled_event_count,
+        # ARCH-24: inherited, never upgraded. Accepting a variance that was
+        # computed against the pre-consolidation denominator does not convert
+        # it into a supplier-cost figure; it records that someone signed off
+        # the number as it was actually produced.
         unknown_cost_event_count=original.unknown_cost_event_count,
+        cost_basis_method=original.cost_basis_method,
         note=note.strip(),
         reconciled_by_user_id=accepted_by_user_id,
         reconciled_at=moment,

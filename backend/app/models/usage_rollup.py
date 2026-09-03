@@ -1,4 +1,19 @@
-"""ARCH-14 Step 2 — the aggregation tables."""
+"""ARCH-14 Step 2 — the aggregation tables.
+
+ARCH-24 adds a cost basis alongside the existing revenue figure. The two are
+deliberately not symmetrical:
+
+    cost_micros        NOT NULL  — what we charged. Always known, because we
+                                   refuse to meter an event we cannot price.
+    cost_basis_micros  NULL-able — what the supplier charged us. Frequently
+                                   unknown, and unknown must stay unknown.
+
+`COALESCE(cost_basis_micros, 0)` turns an unknown supplier cost into a 100%
+gross margin, and somebody eventually prices an enterprise contract off that
+number. The column is nullable so the mistake cannot be silent, and
+`unknown_cost_basis_event_count` carries the partial-ness so a bucket that is
+40% unpriced is visibly untrustworthy rather than quietly wrong.
+"""
 
 from __future__ import annotations
 
@@ -63,6 +78,19 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
             "estimated_quantity <= quantity", name="estimated_within_total"
         ),
         CheckConstraint("late_event_count >= 0", name="late_count_non_negative"),
+        # ---- ARCH-24 -----------------------------------------------------
+        CheckConstraint(
+            "cost_basis_micros IS NULL OR cost_basis_micros >= 0",
+            name="cost_basis_non_negative",
+        ),
+        CheckConstraint(
+            "unknown_cost_basis_event_count >= 0",
+            name="unknown_cost_basis_count_non_negative",
+        ),
+        CheckConstraint(
+            "unknown_cost_basis_event_count <= event_count",
+            name="unknown_cost_basis_within_events",
+        ),
         CheckConstraint(
             "grain <> 'ORG_TOTAL' OR ("
             " workspace_id IS NULL AND provider IS NULL AND model IS NULL"
@@ -99,6 +127,13 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
             "granularity",
             "bucket_start",
             postgresql_where=text("sealed_at IS NULL"),
+        ),
+        Index(
+            "ix_usage_rollups_unknown_cost_basis",
+            "organization_id",
+            "granularity",
+            "bucket_start",
+            postgresql_where=text("unknown_cost_basis_event_count > 0"),
         ),
     )
 
@@ -148,6 +183,26 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
         Integer, nullable=False, server_default=text("0")
     )
 
+    # ---- ARCH-24: the supplier side of the same bucket --------------------
+    #
+    # Sum of `usage_events.cost_basis_micros` over the events folded here that
+    # actually carried one. NULL when not a single event in the bucket did.
+    #
+    # Forward-only by construction: `usage_rollups_seal_immutable()` refuses
+    # every UPDATE on a sealed row, so buckets sealed before ARCH-24 keep NULL
+    # forever. That is the intended outcome — back-writing a financial column
+    # across invoiced periods is what ARCH-18 exists to forbid — but it does
+    # mean a reader must expect NULL for history rather than read it as free.
+    cost_basis_micros: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+    unknown_cost_basis_event_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    cost_basis_source_mix: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+
     estimated_quantity: Mapped[Decimal] = mapped_column(
         Numeric(30, 6), nullable=False, server_default=text("0")
     )
@@ -182,11 +237,43 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
     def is_sealed(self) -> bool:
         return self.sealed_at is not None
 
+    @property
+    def known_cost_basis_event_count(self) -> int:
+        """Events here whose supplier cost is known."""
+        return int(self.event_count) - int(self.unknown_cost_basis_event_count)
+
+    @property
+    def has_cost_basis(self) -> bool:
+        """True only when a real figure exists. Never confuses NULL with zero.
+
+        Note the asymmetry with a zero basis: a BYOK bucket legitimately costs
+        us nothing and reports 0 with source ZERO_BYOK. `cost_basis_micros == 0`
+        is therefore a *known* cost and this returns True for it.
+        """
+        return self.cost_basis_micros is not None
+
+    @property
+    def cost_basis_is_complete(self) -> bool:
+        """Every event in the bucket carried a basis.
+
+        A margin computed where this is False is a lower bound on cost and so
+        an upper bound on margin. A caller that cannot express that distinction
+        should refuse rather than round.
+        """
+        return self.has_cost_basis and int(self.unknown_cost_basis_event_count) == 0
+
     def __repr__(self) -> str:  # pragma: no cover
+        basis = (
+            "basis=unknown"
+            if self.cost_basis_micros is None
+            else f"basis={self.cost_basis_micros}"
+        )
+        if self.unknown_cost_basis_event_count:
+            basis += f"(+{self.unknown_cost_basis_event_count} unpriced)"
         return (
             f"<UsageRollup {self.grain}/{self.granularity} {self.event_type} "
             f"org={self.organization_id} @{self.bucket_start.isoformat()} "
-            f"qty={self.quantity} cost={self.cost_micros}"
+            f"qty={self.quantity} cost={self.cost_micros} {basis}"
             f"{' SEALED' if self.is_sealed else ''}>"
         )
 

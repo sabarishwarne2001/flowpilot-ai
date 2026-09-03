@@ -303,6 +303,8 @@ export const COGS_ENDPOINTS = {
   providerCosts: (): string => `/admin/cogs/margins/providers`,
   rateCard: (): string => `/admin/cogs/rate-card`,
   supplierInvoices: (): string => `/admin/cogs/supplier-invoices`,
+  consolidatedReconciliations: (): string =>
+    `/admin/cogs/reconciliations/consolidated`,
   reconcileInvoice: (supplierInvoiceId: string): string =>
     `/admin/cogs/supplier-invoices/${seg(supplierInvoiceId)}/reconcile`,
   invoiceReconciliations: (supplierInvoiceId: string): string =>

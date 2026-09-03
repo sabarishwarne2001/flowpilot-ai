@@ -19,6 +19,19 @@ Deriving a prorated amount locally guarantees eventually disagreeing with the
 invoice Stripe issues — over a leap day, a mid-period plan change, a trial
 ending an hour into a period — and the customer is looking at Stripe's number,
 not ours.
+
+ARCH-24 did not relax that. `seat_price_disclosure` below has to put a real
+proration figure in front of an admin before a JIT provision allocates a seat,
+and it does it by *asking Stripe* through `preview_seat_change`, not by
+multiplying a unit price by a fraction of a month. When Stripe cannot be
+reached the function returns `proration_micros=None` and says why. An unknown
+proration renders as unknown; it never renders as a number we made up, for the
+same reason `COALESCE(cost_basis_micros, 0)` is banned two services over.
+
+The seat *unit price* is a different question with a different answer: it comes
+from the price book, resolved against the subscription's pinned book by
+`invoice_service.seat_price_entry`, so the disclosed figure and the invoiced
+figure are one lookup rather than two.
 """
 
 from __future__ import annotations
@@ -26,6 +39,8 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Iterable, Optional
 
 from sqlalchemy import func, select
@@ -40,9 +55,19 @@ from app.models.organization import (
 )
 from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
 from app.services import outbox_service
-from app.services.billing import account_service, stripe_gateway, subscription_service
+from app.services.billing import (
+    account_service,
+    invoice_service,
+    stripe_gateway,
+    subscription_service,
+)
 
 logger = logging.getLogger("app.services.billing.seat")
+
+#: How long the disclosure endpoint will wait on Stripe before giving up and
+#: reporting the proration as unknown. Deliberately short: a human is waiting
+#: on a page, and a slow honest "unknown" beats a fast invented number.
+SEAT_PREVIEW_TIMEOUT_SECONDS: float = 4.0
 
 SEAT_ADDED_EVENT: str = "billing.seat_added"
 SEAT_REMOVED_EVENT: str = "billing.seat_removed"
@@ -262,6 +287,192 @@ def on_ownership_transferred(
 # ============================================================================
 
 
+@dataclass(frozen=True)
+class SeatPriceDisclosure:
+    """Everything the JIT policy panel is allowed to render, and its provenance.
+
+    Two independently-unknowable figures live here, and they fail separately:
+
+      * `unit_price_micros` is None when the pinned price book has no seat
+        entry. That is a configuration fault and the panel should say so.
+      * `proration_micros` is None when Stripe could not be reached in time.
+        That is a transient fault and the panel should say *that*.
+
+    Collapsing either to 0 would put a free seat in front of an administrator
+    about to provision a paid one.
+    """
+
+    organization_id: uuid.UUID
+    seats_current: int
+    seats_after: int
+
+    unit_price_micros: Optional[int]
+    unit: Optional[str]
+    currency: str
+    price_book_id: Optional[uuid.UUID]
+    price_book_version: Optional[int]
+    price_source: str
+
+    proration_micros: Optional[int]
+    proration_source: str
+    proration_unavailable_reason: Optional[str]
+
+    period_start: Optional[datetime]
+    period_end: Optional[datetime]
+
+    @property
+    def is_priced(self) -> bool:
+        return self.unit_price_micros is not None
+
+    @property
+    def proration_is_known(self) -> bool:
+        return self.proration_micros is not None
+
+
+#: Provenance discriminators. `24-G6` asserts the disclosed proration is
+#: sourced, so the value that means "we computed it ourselves" deliberately
+#: does not exist in this vocabulary.
+PRICE_SOURCE_BOOK: str = "PRICE_BOOK"
+PRICE_SOURCE_UNPRICED: str = "UNPRICED"
+PRORATION_SOURCE_STRIPE: str = "STRIPE_PREVIEW"
+PRORATION_SOURCE_UNAVAILABLE: str = "UNAVAILABLE"
+
+
+def seat_price_disclosure(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    additional_seats: int = 1,
+    gateway: Optional[Any] = None,
+) -> SeatPriceDisclosure:
+    """Seat unit price from the price book, proration from Stripe.
+
+    Never raises for a Stripe failure. A disclosure with an unknown proration
+    is still useful — the unit price alone answers most of the question — and
+    an exception here would take out the whole IdP policy panel over a
+    third-party timeout.
+    """
+    if additional_seats < 1:
+        raise SeatError("additional_seats must be at least 1.")
+
+    subscription = subscription_service.live_subscription_for_organization(
+        db, organization_id=organization_id
+    )
+
+    if subscription is None:
+        seats_now = billable_seats(db, organization_id=organization_id)
+        return SeatPriceDisclosure(
+            organization_id=organization_id,
+            seats_current=seats_now,
+            seats_after=seats_now + additional_seats,
+            unit_price_micros=None,
+            unit=None,
+            currency="USD",
+            price_book_id=None,
+            price_book_version=None,
+            price_source=PRICE_SOURCE_UNPRICED,
+            proration_micros=None,
+            proration_source=PRORATION_SOURCE_UNAVAILABLE,
+            proration_unavailable_reason=(
+                "This organization has no live subscription, so a seat change "
+                "has no price to disclose."
+            ),
+            period_start=None,
+            period_end=None,
+        )
+
+    current = int(subscription.seats_purchased)
+    after = current + additional_seats
+
+    entry = invoice_service.seat_price_entry(
+        db, price_book_id=subscription.price_book_id
+    )
+
+    if entry is None:
+        unit_price: Optional[int] = None
+        unit: Optional[str] = None
+        price_source = PRICE_SOURCE_UNPRICED
+        logger.error(
+            "billing.seat_disclosure_unpriced",
+            extra={
+                "organization_id": str(organization_id),
+                "price_book_id": str(subscription.price_book_id),
+                "event_type": settings.BILLING_SEAT_EVENT_TYPE,
+            },
+        )
+    else:
+        # Quantised to whole micros here rather than in the schema: the panel
+        # renders what it is given, and a Decimal that formats differently in
+        # two places is the drift ARCH-21 formatMeasurement exists to prevent.
+        unit_price = int(
+            Decimal(str(entry.unit_price_micros)).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+        unit = entry.unit
+        price_source = PRICE_SOURCE_BOOK
+
+    proration: Optional[int] = None
+    proration_source = PRORATION_SOURCE_UNAVAILABLE
+    reason: Optional[str] = None
+    period_start: Optional[datetime] = subscription.current_period_start
+    period_end: Optional[datetime] = subscription.current_period_end
+
+    try:
+        client = gateway or stripe_gateway.get_gateway()
+        preview = client.preview_seat_change(
+            subscription_id=subscription.stripe_subscription_id,
+            seats=after,
+            timeout_seconds=SEAT_PREVIEW_TIMEOUT_SECONDS,
+        )
+        proration = int(preview.proration_micros)
+        proration_source = PRORATION_SOURCE_STRIPE
+        if preview.period_start is not None:
+            period_start = preview.period_start
+        if preview.period_end is not None:
+            period_end = preview.period_end
+    except Exception as exc:  # noqa: BLE001 — see docstring
+        reason = (
+            "Stripe could not be reached for a proration preview. The figure "
+            "is unknown rather than zero; it will be whatever Stripe invoices."
+        )
+        logger.warning(
+            "billing.seat_preview_unavailable",
+            extra={
+                "organization_id": str(organization_id),
+                "subscription_id": str(subscription.id),
+                "error": type(exc).__name__,
+            },
+        )
+
+    return SeatPriceDisclosure(
+        organization_id=organization_id,
+        seats_current=current,
+        seats_after=after,
+        unit_price_micros=unit_price,
+        unit=unit,
+        currency=(entry_currency(db, subscription) if entry is not None else "USD"),
+        price_book_id=subscription.price_book_id if entry is not None else None,
+        price_book_version=(
+            subscription.price_book.version
+            if entry is not None and subscription.price_book is not None
+            else None
+        ),
+        price_source=price_source,
+        proration_micros=proration,
+        proration_source=proration_source,
+        proration_unavailable_reason=reason,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def entry_currency(db: Session, subscription: Subscription) -> str:
+    """Currency of the pinned book, defaulting to USD when unavailable."""
+    book = subscription.price_book
+    return str(getattr(book, "currency", None) or "USD").upper()
+
+
 def detect_drift(
     db: Session, *, organization_id: uuid.UUID
 ) -> Optional[SeatDrift]:
@@ -444,6 +655,13 @@ def organizations_needing_sync(
 
 
 __all__ = [
+    "PRICE_SOURCE_BOOK",
+    "PRICE_SOURCE_UNPRICED",
+    "PRORATION_SOURCE_STRIPE",
+    "PRORATION_SOURCE_UNAVAILABLE",
+    "SEAT_PREVIEW_TIMEOUT_SECONDS",
+    "SeatPriceDisclosure",
+    "seat_price_disclosure",
     "SEAT_ADDED_EVENT",
     "SEAT_REMOVED_EVENT",
     "SEAT_SYNC_NEEDED_EVENT",

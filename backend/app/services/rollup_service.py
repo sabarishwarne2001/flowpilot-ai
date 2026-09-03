@@ -90,6 +90,15 @@ class Delta:
     late_cost_micros: int = 0
     late_from: dict[str, int] = field(default_factory=dict)
 
+    # ---- ARCH-24 ---------------------------------------------------------
+    #
+    # None is not zero. It stays None until an event actually contributes a
+    # basis, so a batch in which nothing was priced writes NULL rather than a
+    # confident 0 that reads as 100% gross margin downstream.
+    cost_basis_micros: Optional[int] = None
+    unknown_cost_basis_event_count: int = 0
+    cost_basis_source_mix: dict[str, int] = field(default_factory=dict)
+
     def add(
         self,
         *,
@@ -97,10 +106,30 @@ class Delta:
         cost_micros: int,
         estimated: bool,
         late_from: Optional[datetime],
+        cost_basis_micros: Optional[int] = None,
+        cost_basis_source: Optional[str] = None,
     ) -> None:
         self.quantity += quantity
         self.cost_micros += cost_micros
         self.event_count += 1
+
+        # A basis of 0 is a *known* cost (BYOK: the tenant paid the supplier
+        # directly, so it cost us nothing). `is None` rather than falsiness is
+        # therefore load-bearing here — `if not cost_basis_micros` would file
+        # every BYOK event as unpriced and make BYOK tenants look untrustworthy.
+        if cost_basis_micros is None:
+            self.unknown_cost_basis_event_count += 1
+        else:
+            self.cost_basis_micros = (
+                int(cost_basis_micros)
+                if self.cost_basis_micros is None
+                else self.cost_basis_micros + int(cost_basis_micros)
+            )
+            if cost_basis_source:
+                self.cost_basis_source_mix[cost_basis_source] = (
+                    self.cost_basis_source_mix.get(cost_basis_source, 0) + 1
+                )
+
         if estimated:
             self.estimated_quantity += quantity
             self.estimated_cost_micros += cost_micros
@@ -158,6 +187,13 @@ _CLAIM_SQL = text(
               u.unit_price_micros,
               u.quantity,
               COALESCE(u.cost_micros, 0)                         AS cost_micros,
+              -- ARCH-24: deliberately NOT coalesced. usage_events.cost_micros
+              -- is what we charged and is always known; cost_basis_micros is
+              -- what the supplier charged us and frequently is not. Coalescing
+              -- it to 0 here would launder every unknown supplier cost into a
+              -- 100% margin before the rollup ever sees it.
+              u.cost_basis_micros,
+              u.cost_basis_source,
               u.occurred_at,
               COALESCE((u.details ->> 'estimated')::boolean, false) AS estimated
     """
@@ -177,6 +213,8 @@ class ClaimedEvent:
     unit_price_micros: Optional[Decimal]
     quantity: Decimal
     cost_micros: int
+    cost_basis_micros: Optional[int]
+    cost_basis_source: Optional[str]
     occurred_at: datetime
     estimated: bool
 
@@ -202,6 +240,12 @@ def claim_batch(
             ),
             quantity=Decimal(str(row["quantity"])),
             cost_micros=int(row["cost_micros"]),
+            cost_basis_micros=(
+                int(row["cost_basis_micros"])
+                if row["cost_basis_micros"] is not None
+                else None
+            ),
+            cost_basis_source=row["cost_basis_source"],
             occurred_at=row["occurred_at"].astimezone(timezone.utc),
             estimated=bool(row["estimated"]),
         )
@@ -272,6 +316,7 @@ _UPSERT_SQL = text(
         event_type, provider, model, price_book_id, unit_price_micros,
         bucket_start, bucket_end,
         quantity, cost_micros, event_count,
+        cost_basis_micros, unknown_cost_basis_event_count,
         estimated_quantity, estimated_cost_micros, estimated_event_count,
         late_event_count, late_quantity, late_cost_micros
     )
@@ -280,6 +325,7 @@ _UPSERT_SQL = text(
         :event_type, :provider, :model, :price_book_id, :unit_price_micros,
         :bucket_start, :bucket_end,
         :quantity, :cost_micros, :event_count,
+        :cost_basis_micros, :unknown_cost_basis_event_count,
         :estimated_quantity, :estimated_cost_micros, :estimated_event_count,
         :late_event_count, :late_quantity, :late_cost_micros
     )
@@ -298,6 +344,29 @@ _UPSERT_SQL = text(
         quantity              = usage_rollups.quantity + EXCLUDED.quantity,
         cost_micros           = usage_rollups.cost_micros + EXCLUDED.cost_micros,
         event_count           = usage_rollups.event_count + EXCLUDED.event_count,
+        -- ARCH-24 24-G3: the ONE sanctioned COALESCE on a cost basis in this
+        -- codebase, and the reason the gate whitelists this statement by name
+        -- rather than banning the token outright.
+        --
+        -- The guard is the CASE, not the COALESCE. Both sides NULL -> NULL, so
+        -- a bucket in which nothing was ever priced stays honestly unknown.
+        -- Only once at least one side carries a real figure does the addition
+        -- happen, and then COALESCE(...,0) is arithmetically correct: it is
+        -- adding a known partial sum to nothing, not inventing a zero cost.
+        --
+        -- Writing this as a plain sum instead would be actively wrong: SQL's
+        -- NULL + x = NULL, so a single unpriced event would erase the basis of
+        -- every priced event already folded into the bucket.
+        cost_basis_micros     = CASE
+            WHEN usage_rollups.cost_basis_micros IS NULL
+                 AND EXCLUDED.cost_basis_micros IS NULL
+            THEN NULL
+            ELSE COALESCE(usage_rollups.cost_basis_micros, 0)
+                 + COALESCE(EXCLUDED.cost_basis_micros, 0)
+        END,
+        unknown_cost_basis_event_count =
+            usage_rollups.unknown_cost_basis_event_count
+            + EXCLUDED.unknown_cost_basis_event_count,
         estimated_quantity    = usage_rollups.estimated_quantity
                                 + EXCLUDED.estimated_quantity,
         estimated_cost_micros = usage_rollups.estimated_cost_micros
@@ -351,6 +420,53 @@ _MERGE_LATE_DETAILS_SQL = text(
      WHERE id = :rollup_id
     """
 )
+
+
+_MERGE_SOURCE_MIX_SQL = text(
+    """
+    UPDATE usage_rollups
+       SET cost_basis_source_mix = (
+             SELECT jsonb_object_agg(k, total)
+               FROM (
+                 SELECT k, sum(v::bigint) AS total
+                   FROM (
+                     SELECT key AS k, value AS v
+                       FROM jsonb_each_text(
+                         COALESCE(cost_basis_source_mix, '{}'::jsonb)
+                       )
+                     UNION ALL
+                     SELECT key AS k, value AS v
+                       FROM jsonb_each_text(CAST(:incoming AS jsonb))
+                   ) merged
+                  GROUP BY k
+               ) totals
+           ),
+           updated_at = now()
+     WHERE id = :rollup_id
+       AND sealed_at IS NULL
+    """
+)
+
+
+def _merge_source_mix(
+    db: Session, *, rollup_id: uuid.UUID, source_mix: dict[str, int]
+) -> None:
+    """Fold this batch's {source: count} map into the bucket's running map.
+
+    Merged in a second statement rather than inside the upsert for the same
+    reason `late_from_buckets` is: summing two JSONB counter maps inside an
+    ON CONFLICT expression needs a correlated subquery over EXCLUDED, which is
+    both harder to read and harder to be sure of than one keyed UPDATE.
+
+    The COALESCE here is on the *map*, not on a cost figure — an absent map is
+    genuinely an empty map, unlike an absent cost which is not zero.
+    """
+    if not source_mix:
+        return
+    db.execute(
+        _MERGE_SOURCE_MIX_SQL,
+        {"rollup_id": rollup_id, "incoming": json.dumps(source_mix)},
+    )
 
 
 def _keys_for(event: ClaimedEvent) -> list[BucketKey]:
@@ -425,6 +541,10 @@ def _write_bucket(
                 "quantity": delta.quantity,
                 "cost_micros": delta.cost_micros,
                 "event_count": delta.event_count,
+                "cost_basis_micros": delta.cost_basis_micros,
+                "unknown_cost_basis_event_count": (
+                    delta.unknown_cost_basis_event_count
+                ),
                 "estimated_quantity": delta.estimated_quantity,
                 "estimated_cost_micros": delta.estimated_cost_micros,
                 "estimated_event_count": delta.estimated_event_count,
@@ -484,6 +604,8 @@ def fold(
                 cost_micros=event.cost_micros,
                 estimated=event.estimated,
                 late_from=late_from,
+                cost_basis_micros=event.cost_basis_micros,
+                cost_basis_source=event.cost_basis_source,
             )
         result.folded += 1
 
@@ -522,6 +644,11 @@ def fold(
         if delta.late_from:
             _merge_late_details(db, rollup_id=rollup_id, late_from=delta.late_from)
 
+        if delta.cost_basis_source_mix:
+            _merge_source_mix(
+                db, rollup_id=rollup_id, source_mix=delta.cost_basis_source_mix
+            )
+
         touched_days.add((key.organization_id, day_bucket(start)))
         result.buckets_touched += 1
 
@@ -544,6 +671,7 @@ _DERIVE_SQL_TEMPLATE = """
         event_type, provider, model, price_book_id, unit_price_micros,
         bucket_start, bucket_end,
         quantity, cost_micros, event_count,
+        cost_basis_micros, unknown_cost_basis_event_count,
         estimated_quantity, estimated_cost_micros, estimated_event_count,
         late_event_count, late_quantity, late_cost_micros
     )
@@ -553,6 +681,12 @@ _DERIVE_SQL_TEMPLATE = """
                 THEN NULL ELSE max(unit_price_micros) END,
            :start, :end,
            sum(quantity), sum(cost_micros), sum(event_count),
+           -- ARCH-24: no COALESCE needed and none wanted. SQL sum() skips
+           -- NULLs and returns NULL for an all-NULL set, which is exactly the
+           -- semantic: a day assembled from hours that were never priced is
+           -- unknown, while a day with one priced hour is that hour's figure
+           -- plus an unknown-count that says so.
+           sum(cost_basis_micros), sum(unknown_cost_basis_event_count),
            sum(estimated_quantity), sum(estimated_cost_micros),
            sum(estimated_event_count),
            sum(late_event_count), sum(late_quantity), sum(late_cost_micros)
@@ -578,6 +712,12 @@ _DERIVE_SQL_TEMPLATE = """
         quantity              = EXCLUDED.quantity,
         cost_micros           = EXCLUDED.cost_micros,
         event_count           = EXCLUDED.event_count,
+        -- The derive path recomputes from source rather than accumulating, so
+        -- a straight assignment is correct here. EXCLUDED.cost_basis_micros is
+        -- already NULL-when-nothing-known by virtue of sum() above.
+        cost_basis_micros     = EXCLUDED.cost_basis_micros,
+        unknown_cost_basis_event_count =
+            EXCLUDED.unknown_cost_basis_event_count,
         estimated_quantity    = EXCLUDED.estimated_quantity,
         estimated_cost_micros = EXCLUDED.estimated_cost_micros,
         estimated_event_count = EXCLUDED.estimated_event_count,
@@ -590,6 +730,49 @@ _DERIVE_SQL_TEMPLATE = """
 """
 
 _DERIVE_SQL = text(_DERIVE_SQL_TEMPLATE.format(nil=NIL_UUID))
+
+
+_DERIVE_SOURCE_MIX_SQL = text(
+    """
+    UPDATE usage_rollups t
+       SET cost_basis_source_mix = agg.mix,
+           updated_at = now()
+      FROM (
+            SELECT organization_id, workspace_id, grain, event_type,
+                   provider, model, price_book_id,
+                   jsonb_object_agg(source_key, source_total) AS mix
+              FROM (
+                    SELECT r.organization_id, r.workspace_id, r.grain,
+                           r.event_type, r.provider, r.model, r.price_book_id,
+                           kv.key                AS source_key,
+                           sum(kv.value::bigint) AS source_total
+                      FROM usage_rollups r
+                      CROSS JOIN LATERAL
+                           jsonb_each_text(r.cost_basis_source_mix) kv
+                     WHERE r.granularity     = :source_granularity
+                       AND r.organization_id = :organization_id
+                       AND r.bucket_start   >= :start
+                       AND r.bucket_start   <  :end
+                       AND r.cost_basis_source_mix IS NOT NULL
+                     GROUP BY r.organization_id, r.workspace_id, r.grain,
+                              r.event_type, r.provider, r.model,
+                              r.price_book_id, kv.key
+                   ) per_source
+             GROUP BY organization_id, workspace_id, grain, event_type,
+                      provider, model, price_book_id
+           ) agg
+     WHERE t.granularity     = :target_granularity
+       AND t.bucket_start    = :start
+       AND t.organization_id = agg.organization_id
+       AND t.grain           = agg.grain
+       AND t.event_type      = agg.event_type
+       AND t.workspace_id  IS NOT DISTINCT FROM agg.workspace_id
+       AND t.provider      IS NOT DISTINCT FROM agg.provider
+       AND t.model         IS NOT DISTINCT FROM agg.model
+       AND t.price_book_id IS NOT DISTINCT FROM agg.price_book_id
+       AND t.sealed_at IS NULL
+    """
+)
 
 
 def _window_sealed(db: Session, *, granularity: str, start: datetime) -> bool:
@@ -616,16 +799,15 @@ def derive(
                 extra={"day": day.isoformat(), "organization_id": str(organization_id)},
             )
         else:
-            db.execute(
-                _DERIVE_SQL,
-                {
-                    "target_granularity": DAY,
-                    "source_granularity": HOUR,
-                    "organization_id": organization_id,
-                    "start": day,
-                    "end": bucket_end(DAY, day),
-                },
-            )
+            derive_params = {
+                "target_granularity": DAY,
+                "source_granularity": HOUR,
+                "organization_id": organization_id,
+                "start": day,
+                "end": bucket_end(DAY, day),
+            }
+            db.execute(_DERIVE_SQL, derive_params)
+            db.execute(_DERIVE_SOURCE_MIX_SQL, derive_params)
             touch_window(db, granularity=DAY, start=day, now=now)
             derived += 1
         touched_months.add((organization_id, month_bucket(day)))
@@ -635,16 +817,15 @@ def derive(
     ):
         if _window_sealed(db, granularity=MONTH, start=month):
             continue
-        db.execute(
-            _DERIVE_SQL,
-            {
-                "target_granularity": MONTH,
-                "source_granularity": DAY,
-                "organization_id": organization_id,
-                "start": month,
-                "end": bucket_end(MONTH, month),
-            },
-        )
+        derive_params = {
+            "target_granularity": MONTH,
+            "source_granularity": DAY,
+            "organization_id": organization_id,
+            "start": month,
+            "end": bucket_end(MONTH, month),
+        }
+        db.execute(_DERIVE_SQL, derive_params)
+        db.execute(_DERIVE_SOURCE_MIX_SQL, derive_params)
         touch_window(db, granularity=MONTH, start=month, now=now)
         derived += 1
 

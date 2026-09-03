@@ -1,4 +1,31 @@
-r"""ARCH-14 Step 5 — the reconciliation engine."""
+r"""ARCH-14 Step 5 — the reconciliation engine.
+
+ARCH-24 — THIS ENGINE NO LONGER SPEAKS FOR COST
+================================================
+Every figure below is denominated in `usage_rollups.cost_micros`, which is what
+we *charged the customer*, not what the supplier charged us. Comparing a
+supplier statement against it inflates apparent cost drift by our own gross
+margin — a 60%-margin tenant makes a perfectly reconciled provider look badly
+under-billed.
+
+ARCH-24 decision D-24.1 Option B makes `supplier_reconciliation_service` the
+sole authority on supplier cost variance. This module keeps what it is uniquely
+good at, none of which ARCH-18 replicates:
+
+  * boundary exposure at period edges,
+  * estimated-vs-measured attribution,
+  * per-model PRICE_DRIFT — book rate against provider effective rate, which is
+    a price-book correctness signal on the sell side and genuinely ours,
+  * the CATEGORY_ORDER finding taxonomy.
+
+What it gave up is the *claim*, not the arithmetic. The numbers are still
+computed and still useful; every run is stamped `cost_basis_method =
+ARCH14_SELL_SIDE` and carries `cost_authority: false` so that no reader,
+dashboard, or future maintainer mistakes them for COGS variance.
+
+If you are here to add a supplier cost comparison, this is the wrong module.
+Gate check 24-G2 fails the build if you do it anyway.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +52,7 @@ from app.models.reconciliation import (
     ReconciliationRun,
     ReconciliationStatus,
 )
+from app.models.supplier_cogs import METHOD_ARCH14_SELL_SIDE
 from app.models.usage_rollup import UsageRollup
 from app.services import rollup_service
 from app.services.reconciliation.base import (
@@ -542,6 +570,10 @@ def reconcile(
         attribution=statement.attribution,
         status=ReconciliationStatus.RUNNING.value,
         started_at=moment,
+        # Stamped at creation, not completion: a run that REFUSES or FAILS
+        # still leaves a row, and a row without a denominator is exactly the
+        # ambiguity ARCH-24 exists to remove.
+        cost_basis_method=METHOD_ARCH14_SELL_SIDE,
     )
     db.add(run)
     db.flush([run])
@@ -649,6 +681,17 @@ def reconcile(
     alert = bool(has_critical or abs(unexplained_bps) > alert_bps)
 
     details: dict[str, Any] = {
+        # ARCH-24. Carried in details as well as in the column so a consumer
+        # reading only the JSON payload — an export, a notebook, a dashboard
+        # written next year — cannot miss it.
+        "cost_authority": False,
+        "cost_basis_method": METHOD_ARCH14_SELL_SIDE,
+        "cost_denomination": "CUSTOMER_PRICE",
+        "cost_authority_note": (
+            "Denominated in customer price and inflated by gross margin "
+            "relative to supplier cost. Use supplier_reconciliations for "
+            "COGS variance."
+        ),
         "boundary_hours": window,
         "alert_bps_threshold": alert_bps,
         "ledger_pairs": len(ledger),

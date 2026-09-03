@@ -200,6 +200,27 @@ class SupplierReconciliationResponse(BaseModel):
     status: str
     modelled_event_count: int
     unknown_cost_event_count: int
+
+    # ---- ARCH-24 ---------------------------------------------------------
+    cost_basis_method: str = Field(
+        ...,
+        description=(
+            "Which denominator produced this variance. ARCH18_SUPPLIER_COST "
+            "and ARCH18_PRE_CONSOLIDATION are genuine supplier cost; "
+            "ARCH14_SELL_SIDE is customer price and is inflated by gross "
+            "margin. Required, not optional: a variance whose denominator is "
+            "unstated is the exact ambiguity ARCH-24 closed."
+        ),
+    )
+    is_authoritative_cost: bool = Field(
+        ...,
+        description=(
+            "Whether this row may be read as COGS variance. Sent from the "
+            "backend rather than derived in the client, so the threshold "
+            "cannot drift between the two."
+        ),
+    )
+
     note: Optional[str] = None
     reconciled_at: datetime
     reconciled_by_user_id: Optional[uuid.UUID] = None
@@ -225,11 +246,84 @@ class SupplierInvoiceResponse(BaseModel):
     notes: Optional[str] = None
     latest_reconciliation: Optional[SupplierReconciliationResponse] = None
 
+    # ARCH-24 N-3. STATEMENT_PULL rows came from a provider API; OPERATOR_UPLOAD
+    # rows came from a human with the actual invoice. A pull never overwrites an
+    # upload, and the margins hub shows which is which so a reviewer knows
+    # whether they are looking at an estimate or a document.
+    origin: str = Field(
+        "OPERATOR_UPLOAD",
+        description="STATEMENT_PULL or OPERATOR_UPLOAD.",
+    )
+    superseded_invoice_id: Optional[uuid.UUID] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class SupplierInvoiceListResponse(BaseModel):
     entries: list[SupplierInvoiceResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RollupCostBasisEntry(BaseModel):
+    """One rollup bucket's cost basis, with its honesty attached.
+
+    `cost_basis_micros` is nullable and stays nullable all the way to the
+    browser. The frontend renders "unknown", never a dash that looks like zero
+    and never a computed margin.
+    """
+
+    organization_id: uuid.UUID
+    granularity: str
+    bucket_start: datetime
+    event_type: str
+    provider: Optional[str] = None
+
+    event_count: int
+    cost_micros: int
+
+    cost_basis_micros: Optional[int] = Field(
+        None,
+        description=(
+            "Supplier cost for the priced events in this bucket. NULL when no "
+            "event in it carried a basis. Buckets sealed before ARCH-24 are "
+            "permanently NULL by design \u2014 the seal trigger refuses every "
+            "update, and back-writing an invoiced period is what ARCH-18 "
+            "exists to forbid."
+        ),
+    )
+    unknown_cost_basis_event_count: int = 0
+    cost_basis_source_mix: Optional[dict[str, int]] = None
+
+    is_trustworthy: bool = Field(
+        ...,
+        description=(
+            "Complete basis with no unpriced events. Computed on the backend "
+            "and travelled to the client; the client never recomputes the "
+            "threshold."
+        ),
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConsolidatedReconciliationResponse(BaseModel):
+    """The single cost-variance view the margins hub renders.
+
+    Carries the ARCH-18 rows (authoritative) alongside a count of ARCH-14 runs
+    in the same window, so a reader can see that the volume loop is still
+    running without being invited to read its micros as cost.
+    """
+
+    entries: list[SupplierReconciliationResponse] = []
+    authoritative_method: str = "ARCH18_SUPPLIER_COST"
+    sell_side_run_count: int = Field(
+        0,
+        description=(
+            "ARCH-14 runs covering this window. Volume and price-book drift "
+            "only. Their drift figures are NOT cost variance."
+        ),
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -266,6 +360,8 @@ MarginOrder = Literal["MARGIN_ASC", "MARGIN_DESC", "REVENUE_DESC", "UNKNOWN_DESC
 
 
 __all__ = [
+    "ConsolidatedReconciliationResponse",
+    "RollupCostBasisEntry",
     "AcceptVarianceRequest",
     "MarginFiguresResponse",
     "MarginOrder",

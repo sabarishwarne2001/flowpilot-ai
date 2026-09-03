@@ -145,6 +145,32 @@ class StripeInvoiceSnapshot:
 
 
 @dataclass(frozen=True)
+class StripeSeatChangePreview:
+    """What Stripe says a seat change costs, before anyone commits to it.
+
+    ARCH-24 D5. Every field here came back from Stripe. Nothing on this object
+    is derived locally, which is the entire point: ARCH-15 established that
+    deriving a prorated amount in our own code guarantees eventually
+    disagreeing with the invoice Stripe actually issues — over a leap day, a
+    mid-period plan change, a trial ending an hour into a period — and the
+    customer is looking at Stripe's number, not ours.
+    """
+
+    #: The prorated amount for the change, in micros. Positive means a charge.
+    proration_micros: int
+    currency: str
+    #: Seat count the preview was computed against.
+    seats: int
+    #: Stripe's period boundaries, echoed so a caller can show what window the
+    #: proration covers without guessing.
+    period_start: Optional[datetime]
+    period_end: Optional[datetime]
+    #: Total of the previewed upcoming invoice, for context.
+    invoice_total_micros: Optional[int]
+    raw: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class StripeCustomerSnapshot:
     id: str
     email: Optional[str]
@@ -675,6 +701,105 @@ class StripeGateway:
 
         return self._snapshot_subscription(_as_mapping(obj), state_version=issued_at)
 
+    def preview_seat_change(
+        self,
+        *,
+        subscription_id: str,
+        seats: int,
+        item_id: Optional[str] = None,
+        proration_behavior: Optional[str] = None,
+        timeout_seconds: Optional[float] = None,
+    ) -> StripeSeatChangePreview:
+        """Ask Stripe what changing to `seats` would cost right now.
+
+        Read-only. Creates no invoice, moves no subscription, charges nobody.
+
+        This exists because ARCH-24 Tranche 4 has to disclose a proration
+        figure before a JIT provision allocates a seat, and ARCH-15 forbids
+        computing one locally. The only honest way to satisfy both is to ask
+        the system that will actually issue the invoice.
+
+        `timeout_seconds` is separately settable and defaults tighter than the
+        gateway default, because the caller is a synchronous GET on a page a
+        human is waiting for. A caller that cannot get an answer quickly must
+        render "unknown", never a locally derived stand-in.
+        """
+        behavior = proration_behavior or settings.BILLING_SEAT_PRORATION_BEHAVIOR
+
+        target_item = item_id or self._primary_item_id(subscription_id)
+        if target_item is None:
+            raise StripePermanentError(
+                f"Subscription {subscription_id} has no licensed item to "
+                "resize, so a seat change has no price to preview."
+            )
+
+        timeout_ms = int(
+            (timeout_seconds if timeout_seconds is not None else self._timeout_seconds)
+            * 1000
+        )
+
+        client = self._stripe_client()
+        params: dict[str, Any] = {
+            "subscription": subscription_id,
+            "subscription_details": {
+                "items": [{"id": target_item, "quantity": int(seats)}],
+                "proration_behavior": behavior,
+            },
+        }
+
+        try:
+            obj = client.v1.invoices.create_preview(
+                params, {"timeout": timeout_ms}
+            )
+        except AttributeError:
+            # Older SDK surfaces the same operation as upcoming-invoice
+            # retrieval. Falling back keeps the disclosure working on an image
+            # that has not been bumped yet, rather than degrading the endpoint
+            # to "unknown" for a reason that has nothing to do with Stripe.
+            try:
+                obj = client.v1.invoices.upcoming(params, {"timeout": timeout_ms})
+            except Exception as exc:  # noqa: BLE001 - classified below
+                raise self._classify(
+                    exc, context=f"invoice.preview {subscription_id}"
+                ) from exc
+        except Exception as exc:  # noqa: BLE001 - classified below
+            raise self._classify(
+                exc, context=f"invoice.preview {subscription_id}"
+            ) from exc
+
+        raw = _as_mapping(obj)
+
+        # Stripe reports money in minor units; the platform stores micros.
+        # 1 cent = 10_000 micros.
+        def _to_micros(value: Any) -> Optional[int]:
+            if value is None:
+                return None
+            try:
+                return int(value) * 10_000
+            except (TypeError, ValueError):
+                return None
+
+        proration = 0
+        for line in (raw.get("lines") or {}).get("data") or []:
+            entry = _as_mapping(line)
+            if entry.get("proration"):
+                amount = _to_micros(entry.get("amount"))
+                if amount is not None:
+                    proration += amount
+
+        period_start = _as_datetime(raw.get("period_start"))
+        period_end = _as_datetime(raw.get("period_end"))
+
+        return StripeSeatChangePreview(
+            proration_micros=proration,
+            currency=str(raw.get("currency") or "usd").upper(),
+            seats=int(seats),
+            period_start=period_start,
+            period_end=period_end,
+            invoice_total_micros=_to_micros(raw.get("total")),
+            raw=raw,
+        )
+
     def _primary_item_id(self, subscription_id: str) -> Optional[str]:
         raw = self._retrieve_subscription(subscription_id)
         for item in _items(raw):
@@ -901,6 +1026,7 @@ __all__ = [
     "StripePermanentError",
     "StripeSignatureError",
     "StripeSubscriptionSnapshot",
+    "StripeSeatChangePreview",
     "StripeTransientError",
     "configured_secrets",
     "get_gateway",

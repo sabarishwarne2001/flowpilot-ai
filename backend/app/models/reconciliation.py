@@ -27,6 +27,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
+# ARCH-24. Imported rather than restated so this table's CHECK and
+# supplier_reconciliations' CHECK cannot drift apart. supplier_cogs imports
+# nothing from this module, so there is no cycle.
+from app.models.supplier_cogs import (  # noqa: E402
+    COST_BASIS_METHOD_VALUES,
+    METHOD_ARCH14_SELL_SIDE,
+)
+
+_COST_BASIS_METHOD_IN = ", ".join(f"'{v}'" for v in COST_BASIS_METHOD_VALUES)
+
 
 class StatementGrain(str, PyEnum):
     DAY = "DAY"
@@ -228,6 +238,10 @@ class ReconciliationRun(Base, UUIDMixin, TimestampMixin):
             name="attribution_known",
         ),
         CheckConstraint("findings_count >= 0", name="findings_non_negative"),
+        CheckConstraint(
+            f"cost_basis_method IN ({_COST_BASIS_METHOD_IN})",
+            name="cost_basis_method_known",
+        ),
         Index(
             "ix_reconciliation_runs_period",
             "provider",
@@ -288,6 +302,20 @@ class ReconciliationRun(Base, UUIDMixin, TimestampMixin):
     )
     alert_raised: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
+    )
+
+    # ---- ARCH-24 ---------------------------------------------------------
+    #
+    # Always ARCH14_SELL_SIDE. This engine's micros are customer price, so its
+    # drift is inflated by our own gross margin and must never be read as COGS
+    # variance. It keeps what it is uniquely good at — boundary exposure,
+    # estimate attribution, per-model price-book drift — and gives up the claim
+    # to cost authority, which now belongs solely to
+    # supplier_reconciliation_service.compute_variance.
+    cost_basis_method: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text(f"'{METHOD_ARCH14_SELL_SIDE}'"),
     )
 
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)

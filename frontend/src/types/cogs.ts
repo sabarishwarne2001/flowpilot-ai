@@ -1,5 +1,5 @@
 /**
- * ARCH-18 — COGS, unit economics and supplier reconciliation DTOs.
+ * ARCH-18 / ARCH-24 — COGS, unit economics and supplier reconciliation DTOs.
  *
  * Every `| null` in this file is load-bearing. The backend returns null for a
  * margin it cannot compute, a share it cannot take, and a ratio that is
@@ -125,6 +125,21 @@ export interface RateCardResponse {
 
 export type ReconciliationStatus = "MATCHED" | "INVESTIGATE" | "ACCEPTED";
 
+/**
+ * ARCH-24. Which denominator produced a variance figure.
+ *
+ * `ARCH14_SELL_SIDE` is denominated in customer price and is inflated by our
+ * own gross margin. It is NOT cost variance and must never be rendered as
+ * COGS, however tempting the adjacency.
+ */
+export type CostBasisMethod =
+  | "ARCH18_SUPPLIER_COST"
+  | "ARCH18_PRE_CONSOLIDATION"
+  | "ARCH14_SELL_SIDE";
+
+/** ARCH-24 N-3. Where a supplier invoice row came from. */
+export type SupplierInvoiceOrigin = "STATEMENT_PULL" | "OPERATOR_UPLOAD";
+
 export interface SupplierReconciliation {
   readonly id: string;
   readonly supplier_invoice_id: string;
@@ -135,6 +150,10 @@ export interface SupplierReconciliation {
   readonly status: ReconciliationStatus;
   readonly modelled_event_count: number;
   readonly unknown_cost_event_count: number;
+  /** ARCH-24: Denominator method indicator. */
+  readonly cost_basis_method: CostBasisMethod;
+  /** ARCH-24: True when variance is denominated in genuine supplier cost. */
+  readonly is_authoritative_cost: boolean;
   readonly note: string | null;
   readonly reconciled_at: string;
   readonly reconciled_by_user_id: string | null;
@@ -154,6 +173,39 @@ export interface SupplierInvoice {
   readonly ingested_by_user_id: string | null;
   readonly notes: string | null;
   readonly latest_reconciliation: SupplierReconciliation | null;
+  readonly origin: SupplierInvoiceOrigin;
+  readonly superseded_invoice_id: string | null;
+}
+
+export interface ConsolidatedReconciliationResponse {
+  readonly entries: readonly SupplierReconciliation[];
+  readonly authoritative_method: CostBasisMethod;
+  /**
+   * ARCH-14 runs in the same window. A count only, deliberately: their drift
+   * figures are customer-price denominated and showing them beside these rows
+   * would invite exactly the misreading ARCH-24 removed.
+   */
+  readonly sell_side_run_count: number;
+}
+
+export interface RollupCostBasisEntry {
+  readonly organization_id: string;
+  readonly granularity: string;
+  readonly bucket_start: string;
+  readonly event_type: string;
+  readonly provider: string | null;
+  readonly event_count: number;
+  readonly cost_micros: number;
+  /**
+   * NULL means unknown, not zero. Buckets sealed before ARCH-24 are
+   * permanently null by design. Render "unknown" — never a dash that reads
+   * as free, and never a margin computed against it.
+   */
+  readonly cost_basis_micros: number | null;
+  readonly unknown_cost_basis_event_count: number;
+  readonly cost_basis_source_mix: Readonly<Record<string, number>> | null;
+  /** Computed by the backend. The client never recomputes the threshold. */
+  readonly is_trustworthy: boolean;
 }
 
 export interface SupplierInvoiceListResponse {
@@ -182,10 +234,6 @@ export interface AcceptVarianceRequest {
 
 /* -------------------------------------------------------------------------
  * Formatting
- *
- * All four helpers return a string for an unknown rather than accepting a
- * fallback number, so a caller cannot pass `0` as the "default" and quietly
- * reintroduce the silent-zero problem at the render layer.
  * ---------------------------------------------------------------------- */
 
 export const UNKNOWN_LABEL = "unknown";
@@ -233,8 +281,7 @@ export const formatSignedMicros = (
  *
  * Mirrors margin_service.MIN_TRUSTWORTHY_KNOWN_SHARE, but the UI never
  * recomputes the verdict — the backend sends `is_trustworthy` and this only
- * chooses the wording. Two independent thresholds would eventually disagree
- * and the dashboard would contradict its own warning banner.
+ * chooses the wording.
  */
 export const confidenceLabel = (figures: MarginFigures): string => {
   if (figures.event_count === 0) {

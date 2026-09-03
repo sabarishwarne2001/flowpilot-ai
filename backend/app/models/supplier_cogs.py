@@ -43,6 +43,35 @@ HARD_COST_BASIS_SOURCES: frozenset[str] = frozenset(
     {SOURCE_SUPPLIER_RATE_CARD, SOURCE_MEASURED, SOURCE_ZERO_BYOK}
 )
 
+# ---- ARCH-24: which denominator produced a variance ------------------------
+#
+# Two loops used to answer "did the supplier bill us what we expected" with
+# different numbers. ARCH-14 compared statements against *customer price*, which
+# inflates apparent cost drift by our own gross margin; ARCH-18 compares against
+# genuine supplier cost. ARCH-24 makes ARCH-18 the sole authority.
+#
+# Historical rows are annotated, never recomputed. A silently corrected
+# financial history is worse than an annotated wrong one: the annotated one can
+# still be reasoned about a year later.
+METHOD_ARCH18_SUPPLIER_COST: str = "ARCH18_SUPPLIER_COST"
+METHOD_ARCH18_PRE_CONSOLIDATION: str = "ARCH18_PRE_CONSOLIDATION"
+METHOD_ARCH14_SELL_SIDE: str = "ARCH14_SELL_SIDE"
+
+COST_BASIS_METHOD_VALUES: tuple[str, ...] = (
+    METHOD_ARCH18_SUPPLIER_COST,
+    METHOD_ARCH18_PRE_CONSOLIDATION,
+    METHOD_ARCH14_SELL_SIDE,
+)
+
+#: Methods whose figures are denominated in genuine supplier cost and may
+#: therefore be read as COGS. ARCH14_SELL_SIDE is deliberately absent.
+AUTHORITATIVE_COST_METHODS: frozenset[str] = frozenset(
+    {METHOD_ARCH18_SUPPLIER_COST, METHOD_ARCH18_PRE_CONSOLIDATION}
+)
+
+_METHOD_IN = ", ".join(f"'{v}'" for v in COST_BASIS_METHOD_VALUES)
+
+
 RECONCILIATION_STATUS_VALUES: tuple[str, ...] = (
     "MATCHED",
     "INVESTIGATE",
@@ -121,6 +150,9 @@ class SupplierReconciliation(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(f"status IN ({_STATUS_IN})", name="status_known"),
+        CheckConstraint(
+            f"cost_basis_method IN ({_METHOD_IN})", name="cost_basis_method_known"
+        ),
         CheckConstraint("modelled_total_micros >= 0", name="modelled_non_negative"),
         CheckConstraint(
             "(modelled_total_micros = 0) = (variance_ratio IS NULL)",
@@ -163,6 +195,16 @@ class SupplierReconciliation(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         server_default=text("0"),
     )
+    cost_basis_method: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text(f"'{METHOD_ARCH18_SUPPLIER_COST}'"),
+        doc=(
+            "ARCH18_PRE_CONSOLIDATION for rows written before ARCH-24, "
+            "ARCH18_SUPPLIER_COST after. Written by ADD COLUMN DEFAULT at "
+            "migration time, so no historical variance was recomputed."
+        ),
+    )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reconciled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
@@ -175,6 +217,16 @@ class SupplierReconciliation(Base, UUIDMixin, TimestampMixin):
     supplier_invoice: Mapped[SupplierInvoice] = relationship(
         "SupplierInvoice", back_populates="reconciliations"
     )
+
+    @property
+    def is_authoritative_cost(self) -> bool:
+        """Whether this row's variance is denominated in supplier cost.
+
+        False means the figure was produced against customer price and is
+        inflated by gross margin. A caller that renders it as COGS without
+        checking this is reproducing the defect ARCH-24 exists to close.
+        """
+        return self.cost_basis_method in AUTHORITATIVE_COST_METHODS
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

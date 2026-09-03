@@ -182,6 +182,13 @@ export const billingKeys = {
     [...billingKeys.all(organizationId), "subscription"] as const,
   access: (organizationId: string) =>
     [...billingKeys.all(organizationId), "access"] as const,
+  seatPriceBook: (organizationId: string, additionalSeats: number) =>
+    [
+      ...billingKeys.all(organizationId),
+      "price-book",
+      "seat",
+      additionalSeats,
+    ] as const,
   invoices: (organizationId: string) =>
     [...billingKeys.all(organizationId), "invoices"] as const,
   invoice: (organizationId: string, invoiceId: string) =>

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -101,8 +101,95 @@ class InboundEventRead(BaseModel):
     last_error: Optional[str] = None
 
 
+class SeatPriceBookResponse(BaseModel):
+    """The seat figures the JIT policy panel is allowed to render.
+
+    ARCH-24 Tranche 4. Two nullable money fields, each nullable for a different
+    reason, each carrying its own provenance discriminator:
+
+      unit_price_micros / price_source
+          NULL means the subscription's pinned price book has no seat entry.
+          A configuration fault, not a free seat.
+
+      proration_micros / proration_source
+          NULL means Stripe could not be reached. The real figure is whatever
+          Stripe eventually invoices; we decline to guess it.
+
+    `24-G6` asserts these are sourced rather than computed, which is why the
+    provenance fields are required rather than optional: a payload that cannot
+    say where a number came from should not be renderable at all.
+
+    The frontend must not do arithmetic on any of this. Rendering
+    `unit_price_micros * seats` as a total would reintroduce, in TypeScript,
+    exactly the local-proration drift ARCH-15 removed from Python.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    organization_id: uuid.UUID
+
+    seats_current: int = Field(
+        ..., description="Seats currently purchased on the live subscription."
+    )
+    seats_after: int = Field(
+        ..., description="Seats after the prospective change."
+    )
+
+    unit_price_micros: Optional[int] = Field(
+        None,
+        description=(
+            "Seat unit price from the subscription's PINNED price book, in "
+            "micros. NULL when unpriced \u2014 never 0."
+        ),
+    )
+    unit: Optional[str] = None
+    currency: str = "USD"
+    price_book_id: Optional[uuid.UUID] = None
+    price_book_version: Optional[int] = None
+    price_source: str = Field(
+        ..., description="PRICE_BOOK or UNPRICED."
+    )
+
+    proration_micros: Optional[int] = Field(
+        None,
+        description=(
+            "Prorated amount for the change, in micros, AS REPORTED BY STRIPE. "
+            "NULL when unavailable \u2014 never 0, never locally derived."
+        ),
+    )
+    proration_source: str = Field(
+        ..., description="STRIPE_PREVIEW or UNAVAILABLE."
+    )
+    proration_unavailable_reason: Optional[str] = None
+
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+
+    @classmethod
+    def build(cls, disclosure: Any) -> "SeatPriceBookResponse":
+        return cls(
+            organization_id=disclosure.organization_id,
+            seats_current=disclosure.seats_current,
+            seats_after=disclosure.seats_after,
+            unit_price_micros=disclosure.unit_price_micros,
+            unit=disclosure.unit,
+            currency=disclosure.currency,
+            price_book_id=disclosure.price_book_id,
+            price_book_version=disclosure.price_book_version,
+            price_source=disclosure.price_source,
+            proration_micros=disclosure.proration_micros,
+            proration_source=disclosure.proration_source,
+            proration_unavailable_reason=(
+                disclosure.proration_unavailable_reason
+            ),
+            period_start=disclosure.period_start,
+            period_end=disclosure.period_end,
+        )
+
+
 __all__ = [
     "BillingAccountRead",
+    "SeatPriceBookResponse",
     "InboundEventRead",
     "SeatStateRead",
     "SeatSyncResult",

@@ -1,6 +1,7 @@
 import apiClient from "@/services/api/client";
 import type {
   BillingAccessResponse,
+  SeatPriceBookResponse,
   CheckoutSessionRequest,
   EphemeralSessionResponse,
   InvoiceDetailResponse,
@@ -51,6 +52,8 @@ export const BILLING_ENDPOINTS = {
     `/organizations/${org(organizationId)}/billing/portal-session`,
   seats: (organizationId: string) =>
     `/organizations/${org(organizationId)}/billing/seats`,
+  seatPriceBook: (organizationId: string) =>
+    `/organizations/${org(organizationId)}/billing/price-book/seat`,
 
   invoices: (organizationId: string) =>
     `/organizations/${org(organizationId)}/invoices`,
@@ -262,3 +265,22 @@ export const billingApi = {
 } as const;
 
 export default billingApi;
+
+/**
+ * ARCH-24 Tranche 4 — what one more seat costs, straight from the backend.
+ *
+ * Returns 200 with `proration_micros: null` when Stripe is unreachable rather
+ * than failing, so the caller must handle the null explicitly. That is the
+ * point: an unknown proration is a real state the panel has to be able to
+ * express, and a client that treats null as 0 shows a free seat.
+ */
+export const fetchSeatPriceBook = async (
+  organizationId: string,
+  additionalSeats = 1,
+): Promise<SeatPriceBookResponse> => {
+  const { data } = await apiClient.get<SeatPriceBookResponse>(
+    BILLING_ENDPOINTS.seatPriceBook(organizationId),
+    { params: { additional_seats: additionalSeats } },
+  );
+  return data;
+};
