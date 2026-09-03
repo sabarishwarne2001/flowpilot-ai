@@ -51,6 +51,10 @@ class AuditResourceType(str, PyEnum):
     # arch22_step1_byok_vocabulary; this enum must stay in step with it.
     PROVIDER_CREDENTIAL = "PROVIDER_CREDENTIAL"
     MODEL_ROUTE = "MODEL_ROUTE"
+    # ARCH-25 — white-label. Added to the PostgreSQL type by
+    # arch25_step1_branding_vocabulary; this enum must stay in step with it.
+    CUSTOM_DOMAIN = "CUSTOM_DOMAIN"
+    TENANT_BRANDING = "TENANT_BRANDING"
 
 
 class AuditAction(str, PyEnum):
@@ -86,6 +90,21 @@ class AuditAction(str, PyEnum):
     # ARCH-22 — BYOK.
     CREDENTIAL_VALIDATED = "CREDENTIAL_VALIDATED"
     FALLBACK_POLICY_CHANGED = "FALLBACK_POLICY_CHANGED"
+    # ARCH-25 — white-label.
+    #
+    # DOMAIN_VERIFIED is the event that unlocks certificate issuance, and
+    # TLS_ISSUED records a certificate now existing for a customer-controlled
+    # hostname. Both are things an incident review filters on directly, which
+    # is why neither is an UPDATED carrying a details payload.
+    #
+    # A lapsed sender domain reuses DISABLED rather than adding a fifth
+    # action: the visibility invariant is carried by
+    # tenant_branding.sender_domain_status = 'LAPSED', and a second
+    # vocabulary for one event makes the audit log harder to read, not easier.
+    DOMAIN_VERIFIED = "DOMAIN_VERIFIED"
+    DOMAIN_REVOKED = "DOMAIN_REVOKED"
+    TLS_ISSUED = "TLS_ISSUED"
+    BRANDING_UPDATED = "BRANDING_UPDATED"
 
 
 _resource_type_pg = PgEnum(

@@ -12,6 +12,7 @@ from app.api.v1 import (
     avatar,
     byok,
     compliance,
+    custom_domains,
     dashboard,
     developer,
     document_settings,
@@ -25,6 +26,7 @@ from app.api.v1 import (
     organizations,
     ownership_transfers,
     slos,
+    tenant_branding,
     upload,
     usage,
     verifications,
@@ -61,6 +63,18 @@ api_router.include_router(compliance.router)
 api_router.include_router(developer.router)  # ARCH-21 Tenant Developer Portal
 api_router.include_router(public_gateway_router)  # ARCH-21 Public Developer Gateway
 api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routing
+
+# ARCH-25 White-label. Two routers rather than one because the role
+# boundary differs: every domain write is OWNER-gated (a vanity hostname
+# is an authentication-adjacent control), while branding writes are
+# ADMIN-gated. Mounting them together would invite one shared dependency.
+#
+# tenant_branding.public_router carries the ONE unauthenticated route in
+# this phase and is mounted separately so that adding an endpoint to it
+# is a visible act rather than an accident of file position.
+api_router.include_router(custom_domains.router)
+api_router.include_router(tenant_branding.router)
+api_router.include_router(tenant_branding.public_router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

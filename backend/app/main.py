@@ -21,11 +21,13 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
+from app.middleware.host_tenant import HostTenantMiddleware
 from app.middleware.public_rate_limit import (
     RATE_LIMIT_HEADERS,
     PublicApiRateLimitMiddleware,
 )
 from app.middleware.request_trace import REQUEST_ID_HEADER, RequestTraceMiddleware
+from app.services.branding.errors import BrandingError
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
 from app.workers.handlers import register_all
@@ -168,6 +170,18 @@ if settings.cors_origins:
 else:
     logger.warning("No CORS_ORIGINS configured. Accessing endpoints from external domains may be blocked.")
 
+# ARCH-25 host resolution. Registered FIRST, which in Starlette makes it
+# the INNERMOST of the four: the effective order is RequestTrace ->
+# PublicApiRateLimit -> GlobalRateLimit -> HostTenant -> app.
+#
+# That ordering is deliberate in both directions. Host resolution runs
+# INSIDE the rate limiters so that sweeping the vanity namespace to
+# discover which hostnames belong to FlowPilot customers is rate-limited
+# like any other probe. It runs INSIDE RequestTrace so that every refusal
+# carries a request id and lands in the same log stream as everything
+# else, because an unmatched Host is the first thing anyone will look for
+# when a tenant reports their vanity domain returning 404.
+app.add_middleware(HostTenantMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(PublicApiRateLimitMiddleware)
 app.add_middleware(RequestTraceMiddleware)
@@ -189,8 +203,21 @@ async def identity_error_handler(request: Request, exc: IdentityError):
     )
 
 
+async def branding_error_handler(request: Request, exc: BrandingError):
+    return JSONResponse(
+        content={
+            "detail": exc.message,
+            "message": exc.message,
+            "code": getattr(exc, "code", "BAD_REQUEST"),
+            "details": getattr(exc, "details", {}),
+        },
+        status_code=getattr(exc, "status_code", 400),
+    )
+
+
 app.add_exception_handler(ScimError, scim_error_handler)
 app.add_exception_handler(IdentityError, identity_error_handler)
+app.add_exception_handler(BrandingError, branding_error_handler)
 
 # Versioned API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)

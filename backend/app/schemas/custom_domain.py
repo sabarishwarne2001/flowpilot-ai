@@ -55,12 +55,16 @@ CertificateStatus = Literal["NONE", "PENDING", "ISSUED", "FAILED", "EXPIRED"]
 #: The Python mirror of HOSTNAME_SQL_REGEX in app/models/custom_domain.py.
 #: verify_arch25.py G8 asserts the two agree, because a schema that admits
 #: what the CHECK refuses turns a 422 into a 500 from an IntegrityError.
+#: `\Z` and not `$`, for the same reason as HEX_COLOR_RE in
+#: app/models/tenant_branding.py: Python's `$` matches before a trailing
+#: newline and PostgreSQL's does not, so `"ai.acme.com\n"` would satisfy this
+#: mirror and violate ck_custom_domains_hostname_shape.
 _HOSTNAME_RE = re.compile(
     r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
-    r"(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+    r"(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+\Z"
 )
 
-_IPV4_RE = re.compile(r"^[0-9.]+$")
+_IPV4_RE = re.compile(r"^[0-9.]+\Z")
 
 
 def normalise_hostname(raw: str) -> str:
@@ -77,7 +81,18 @@ def normalise_hostname(raw: str) -> str:
     dropping the port would leave them with a working row and a broken
     expectation.
     """
-    value = (raw or "").strip()
+    if raw is None:
+        raise ValueError("A hostname is required.")
+
+    # Explicitly refuse line breaks and tabs (header injection & trailing newline tests)
+    if any(ch in raw for ch in "\r\n\t"):
+        raise ValueError(
+            f"{raw!r} is not a valid hostname. Expected something like "
+            "ai.acme.com — lowercase letters, digits and hyphens, in two or "
+            "more dot-separated labels."
+        )
+
+    value = raw.strip(" ")
     if not value:
         raise ValueError("A hostname is required.")
 
@@ -91,7 +106,7 @@ def normalise_hostname(raw: str) -> str:
         value = value.rsplit("@", 1)[1]
 
     value = value.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
-    value = value.strip().rstrip(".").lower()
+    value = value.strip(" ").rstrip(".").lower()
 
     if ":" in value:
         raise ValueError(

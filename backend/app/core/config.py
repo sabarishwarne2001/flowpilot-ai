@@ -244,6 +244,92 @@ class Settings(BaseSettings):
     #   S3_REGIONAL_BUCKETS='{"EU":"flowpilot-eu","US":"flowpilot-us"}'
     S3_REGIONAL_BUCKETS: dict[str, str] = {}
 
+    # ======================================================================
+    # ARCH-25 — white-label, custom domains and tenant branding.
+    #
+    # WHY THESE ARE DECLARED FIELDS AND NOT getattr() LOOKUPS
+    #
+    # `model_config` sets extra="ignore". An environment variable with no
+    # matching field here is DISCARDED, not surfaced. So the
+    # `getattr(settings, "NAME", default)` idiom does not read configuration
+    # at all — it returns the literal default, always, on every deployment.
+    #
+    # ARCH-16 has been affected by exactly this since it shipped:
+    # dns_service reads DNS_RESOLVERS, DNS_TIMEOUT_S and
+    # DOMAIN_VERIFICATION_TXT_PREFIX through getattr, none of which was ever
+    # declared, so setting them in .env has never had any effect and domain
+    # verification has always resolved against 1.1.1.1 and 8.8.8.8.
+    #
+    # The four ARCH-16 fields below are declared here at their existing
+    # getattr defaults. Behaviour is unchanged on every current deployment;
+    # what changes is that the env vars now work.
+    # ======================================================================
+
+    # ---- DNS resolution (shared with ARCH-16 identity domain checks) ----
+    DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
+    DNS_TIMEOUT_S: float = 5.0
+    DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"
+    DOMAIN_VERIFICATION_TOKEN_TTL_DAYS: int = 30
+
+    # ---- Custom domains ------------------------------------------------
+    #
+    # OFF by default. A deployment that has not configured an ACME agent and
+    # a wildcard-capable ingress cannot serve a vanity host, and letting a
+    # tenant claim one on such a deployment produces a VERIFIED domain that
+    # 404s forever.
+    CUSTOM_DOMAINS_ENABLED: bool = False
+
+    # Hostnames a tenant may never claim, JSON list, matched case-insensitively
+    # against the hostname AND against every parent suffix of it. This is what
+    # stops a tenant claiming the platform's own origin and having every
+    # session cookie in the estate delivered to a page they control.
+    #
+    #   PLATFORM_RESERVED_HOSTS='["flowpilot.ai","app.flowpilot.ai"]'
+    #
+    # Empty is a DEPLOYMENT ERROR, not a permissive default: domain_service
+    # refuses every claim while this is empty rather than allowing all of
+    # them. An unset allowlist that means "allow everything" is the failure
+    # mode this phase exists to avoid.
+    PLATFORM_RESERVED_HOSTS: list[str] = []
+
+    # How long a published TXT challenge stays valid. A challenge that never
+    # expired would let a token published years ago verify a hostname the
+    # tenant has since let lapse.
+    CUSTOM_DOMAIN_CHALLENGE_TTL_HOURS: int = 168
+    CUSTOM_DOMAIN_MAX_PER_ORG: int = 10
+    CUSTOM_DOMAIN_VERIFY_INTERVAL_MINUTES: int = 30
+    # After this many consecutive misses a PENDING domain moves to FAILED.
+    # Resolver failures do NOT count toward it — that is our outage, not the
+    # tenant's, and charging it to them produces a console that blames the
+    # customer for our DNS.
+    CUSTOM_DOMAIN_MAX_VERIFY_FAILURES: int = 20
+
+    # ---- TLS / ACME ----------------------------------------------------
+    #
+    # The agent is a local Caddy admin API or an equivalent sidecar. Empty
+    # means no issuance is attempted and request_certificate refuses rather
+    # than silently marking a domain as covered.
+    ACME_AGENT_URL: str = ""
+    ACME_AGENT_TOKEN: SecretStr | None = None
+    ACME_DIRECTORY_URL: str = "https://acme-v02.api.letsencrypt.org/directory"
+    ACME_CONTACT_EMAIL: str = ""
+    ACME_REQUEST_TIMEOUT_S: float = 20.0
+
+    # Renew this many days before expiry. Let's Encrypt issues for 90 days;
+    # 30 leaves two full retry windows before anything is user-visible.
+    TLS_RENEWAL_WINDOW_DAYS: int = 30
+    # The dead-man threshold. A certificate this close to expiry that has not
+    # renewed is an alert, not a retry — expiry on a customer's vanity domain
+    # is a total outage for that tenant with no error in our logs.
+    TLS_DEAD_MAN_DAYS: int = 7
+    TLS_RENEWAL_SWEEP_INTERVAL_MINUTES: int = 60
+
+    # ---- Branding ------------------------------------------------------
+    BRANDING_MANIFEST_CACHE_SECONDS: int = 60
+    BRANDING_MAX_LOGO_BYTES: int = 2 * 1024 * 1024
+    BRANDING_MAX_FAVICON_BYTES: int = 512 * 1024
+    BRANDING_MAX_IMAGE_DIMENSION: int = 2048
+
     #: How long a generated DPA archive stays downloadable.
     COMPLIANCE_EXPORT_TTL_HOURS: int = 72
 

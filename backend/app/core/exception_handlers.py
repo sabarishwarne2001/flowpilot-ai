@@ -5,7 +5,7 @@ Global domain exception translation for FlowPilot AI.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
@@ -60,6 +60,22 @@ from app.core.exceptions import (
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
 )
+from app.services.branding.errors import (
+    BrandingAssetError,
+    BrandingError,
+    CertificateProvisioningError,
+    CertificateRefusedError,
+    CrossTenantAssetError,
+    CustomDomainsDisabledError,
+    DomainAlreadyClaimedError,
+    DomainError,
+    DomainLimitExceededError,
+    DomainNotFoundError,
+    DomainPolicyError,
+    DomainVerificationError,
+    ResolverUnavailableError,
+    SenderDomainError,
+)
 
 logger = logging.getLogger("app.core.exception_handlers")
 
@@ -67,6 +83,7 @@ logger = logging.getLogger("app.core.exception_handlers")
 class ErrorResponse(BaseModel):
     code: str
     message: str
+    detail: Optional[str] = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -138,6 +155,22 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     CannotTransferToSelfError: (400, "CANNOT_TRANSFER_TO_SELF"),
     OwnershipTransferError: (400, "OWNERSHIP_TRANSFER_ERROR"),
 
+    # --- ARCH-25 White-Label, Custom Domains & Branding --------------------
+    DomainPolicyError: (422, "DOMAIN_POLICY_ERROR"),
+    DomainAlreadyClaimedError: (409, "DOMAIN_ALREADY_CLAIMED"),
+    DomainNotFoundError: (404, "DOMAIN_NOT_FOUND"),
+    DomainLimitExceededError: (409, "DOMAIN_LIMIT_EXCEEDED"),
+    DomainVerificationError: (409, "DOMAIN_VERIFICATION_ERROR"),
+    ResolverUnavailableError: (503, "RESOLVER_UNAVAILABLE"),
+    CertificateRefusedError: (409, "CERTIFICATE_REFUSED"),
+    CertificateProvisioningError: (502, "CERTIFICATE_PROVISIONING_ERROR"),
+    CustomDomainsDisabledError: (501, "CUSTOM_DOMAINS_DISABLED"),
+    BrandingAssetError: (400, "BRANDING_ASSET_ERROR"),
+    CrossTenantAssetError: (404, "CROSS_TENANT_ASSET_ERROR"),
+    SenderDomainError: (409, "SENDER_DOMAIN_ERROR"),
+    DomainError: (400, "DOMAIN_ERROR"),
+    BrandingError: (400, "BRANDING_ERROR"),
+
     # --- Root --------------------------------------------------------------
     FlowPilotError: _DEFAULT_MAPPING,
 }
@@ -148,6 +181,9 @@ def resolve_exception_mapping(exc: Exception) -> tuple[int, str]:
         mapping = _EXCEPTION_MAPPING.get(klass)
         if mapping is not None:
             return mapping
+        if hasattr(klass, "status_code"):
+            code = getattr(klass, "code", getattr(klass, "error_code", "BAD_REQUEST"))
+            return (getattr(klass, "status_code"), str(code))
     return _DEFAULT_MAPPING
 
 
@@ -170,6 +206,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         content=ErrorResponse(
             code=code,
             message=str(exc),
+            detail=str(exc),
             details={},
         ).model_dump(),
         headers=headers,

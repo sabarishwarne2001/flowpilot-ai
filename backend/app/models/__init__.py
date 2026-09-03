@@ -217,6 +217,20 @@ from app.models.byok import (
     TenantModelRoute,
     TenantProviderCredential,
 )
+from app.models.custom_domain import (
+    CERTIFICATE_STATUS_VALUES,
+    CHALLENGE_LABEL,
+    CUSTOM_DOMAIN_STATUS_VALUES,
+    RESOLVABLE_DOMAIN_STATUSES,
+    CustomDomain,
+)
+from app.models.tenant_branding import (
+    BRANDING_COLOR_TOKENS,
+    COLOR_SCHEME_VALUES,
+    SENDABLE_SENDER_STATUSES,
+    SENDER_DOMAIN_STATUS_VALUES,
+    TenantBranding,
+)
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -461,4 +475,15 @@ __all__ = [
     "LATENCY_BUCKET_COUNT",
     "bucket_index_for",
     "empty_buckets",
+    # ARCH-25 — white-label, custom domains and tenant branding.
+    "CustomDomain",
+    "TenantBranding",
+    "CUSTOM_DOMAIN_STATUS_VALUES",
+    "CERTIFICATE_STATUS_VALUES",
+    "RESOLVABLE_DOMAIN_STATUSES",
+    "CHALLENGE_LABEL",
+    "SENDER_DOMAIN_STATUS_VALUES",
+    "SENDABLE_SENDER_STATUSES",
+    "COLOR_SCHEME_VALUES",
+    "BRANDING_COLOR_TOKENS",
 ]

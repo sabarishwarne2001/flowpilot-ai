@@ -161,6 +161,54 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         rate_limit_policy="POLICY_SCIM",
         prefix_match=True,
     ),
+    # ARCH-25 — the host-resolved branding surface.
+    #
+    # Unauthenticated by necessity: a visitor landing on ai.acme.com sees the
+    # login page BEFORE they have a session, and theming that page is most of
+    # what the tenant bought. `assert_public_route_registry` refuses to start
+    # the app with an unauthenticated route missing from this tuple, so these
+    # entries are load-bearing rather than documentation.
+    #
+    # None of the three takes a parameter. The tenant is resolved solely by
+    # HostTenantMiddleware's exact match against a VERIFIED custom domain, and
+    # an unmatched Host never reaches the handler at all.
+    #
+    # WHY THERE ARE THREE AND NOT ONE
+    #
+    # The Phase 2 audit proposed a single manifest route. That was wrong, and
+    # the reason is worth recording. A manifest is useless without the logo it
+    # references, and the logo has to be fetchable by the same unauthenticated
+    # visitor. The two alternatives were both worse:
+    #
+    #   * a presigned storage URL in the manifest would expose the object key,
+    #     which is `{organization_id}/logos/...` — leaking the tenant id the
+    #     manifest exists to withhold;
+    #   * a base64 data URI would put two megabytes into a JSON body served on
+    #     every cold load.
+    #
+    # So the asset bytes get their own routes. They return image/png or 404
+    # and nothing else: no filename, no id, no headers naming a tenant.
+    PublicRoute(
+        path="/api/v1/branding/manifest",
+        methods=("GET",),
+        phase="ARCH-25",
+        credential="none — tenant resolved from a verified Host, response carries no identifiers",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/branding/logo",
+        methods=("GET",),
+        phase="ARCH-25",
+        credential="none — tenant resolved from a verified Host, returns image bytes or 404",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
+    PublicRoute(
+        path="/api/v1/branding/favicon",
+        methods=("GET",),
+        phase="ARCH-25",
+        credential="none — tenant resolved from a verified Host, returns image bytes or 404",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
 )
 
 

@@ -57,6 +57,19 @@ LIGHT = WorkerProfile(
             "identity.purge_assertion_payloads",
             "identity.sweep_replay_guard",
             "identity.sweep_auth_requests",
+            # ARCH-25 white-label. A DNS TXT lookup and an HTTP call to the
+            # local ACME agent — no heavy imports, so they belong on the thin
+            # image with the rest of the housekeeping types.
+            #
+            # This entry is not optional bookkeeping.
+            # assert_imports_match_profile() runs uncovered_job_types() at
+            # EVERY worker's startup and raises ProfileError on a handler no
+            # profile claims. Registering these two in handlers/__init__.py
+            # without adding them here stops the entire fleet booting — the
+            # same defect ARCH-16 shipped and had to remediate, recorded in
+            # the comment directly above.
+            "domain.verify_dns",
+            "tls.renew_sweep",
         }
     ),
     allow_heavy=frozenset(),

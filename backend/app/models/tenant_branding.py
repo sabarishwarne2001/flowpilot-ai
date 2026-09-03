@@ -109,26 +109,41 @@ HEX_COLOR_SQL_REGEX: str = r"^#[0-9a-f]{6}$"
 #: The Python half of the same rule, used by the Pydantic validator so a bad
 #: value is a 422 with a readable message rather than a 500 from an
 #: IntegrityError. The two must agree; verify_arch25.py G8 asserts they do.
-HEX_COLOR_RE: re.Pattern[str] = re.compile(HEX_COLOR_SQL_REGEX)
-
-#: Angle brackets, both quote characters, ampersand, backslash. None has a
-#: legitimate place in a company's display name; all six are markup-injection
-#: material.
-BRAND_TEXT_FORBIDDEN_RE: re.Pattern[str] = re.compile(r"[<>\"'&\\]")
-
-#: The same character class, written for embedding inside a single-quoted SQL
-#: string literal. The apostrophe is DOUBLED, because that is how PostgreSQL
-#: escapes one inside a literal.
 #:
-#: Worth stating plainly: getting this wrong does not produce a weaker
-#: constraint that silently admits quotes. It produces a syntax error at
-#: CREATE TABLE time, because the bare apostrophe terminates the literal and
-#: the rest of the expression becomes garbage. That is the good failure — it
-#: happens during migration, not during an incident.
+#: `\Z` and not `$`. Python's `$` also matches immediately BEFORE a trailing
+#: newline; PostgreSQL's `$`, with newline-sensitive matching off (the
+#: default), matches only at end of string. So `"#aabbcc\n"` satisfies
+#: `re.match` and violates the CHECK — the exact drift where a readable 422
+#: becomes a 500 from an IntegrityError. Found by G8 rather than in
+#: production, which is the entire argument for mirroring the regex in three
+#: places and asserting the mirror.
+HEX_COLOR_RE: re.Pattern[str] = re.compile(r"^#[0-9a-f]{6}\Z")
+
+#: ARCH-25 finding N1, decided after the Phase 2 audit.
 #:
-#: Mirrored by BRAND_TEXT_FORBIDDEN_SQL_REGEX in
-#: arch25_step2_custom_domains; verify_arch25.py G8 asserts the two agree.
-BRAND_TEXT_FORBIDDEN_SQL_REGEX: str = r"[<>\"''&\\]"
+#: Forbidden: `<` `>` `"` `\`. Permitted: `&` and `'`.
+#:
+#: The first four have no legitimate place in a company's display name and are
+#: the characters that open a tag, close one, break out of a double-quoted
+#: attribute, or escape a delimiter in a JSON or JS string. The last two DO
+#: have a legitimate place — "Barnes & Noble" and "O'Reilly" are real customer
+#: names — and refusing them was over-broad. Neither can open a tag or break a
+#: double-quoted attribute on its own.
+#:
+#: What that costs, stated plainly rather than waved away: `&` and `'` are now
+#: the tenant's to supply, so the render boundary carries them. React escapes
+#: both in text and in attribute position, and Pydantic's JSON encoder escapes
+#: neither because it does not need to. If a future surface ever puts this
+#: string into `dangerouslySetInnerHTML`, a single-quoted HTML attribute, or a
+#: server-rendered email template built by concatenation, this constraint no
+#: longer protects it and that surface must do its own encoding.
+#:
+#: The class contains no apostrophe, so the Python and SQL spellings are now
+#: identical. If one is ever re-added it must be DOUBLED in the SQL form —
+#: a bare apostrophe terminates the string literal and the migration fails
+#: with a syntax error.
+BRAND_TEXT_FORBIDDEN_SQL_REGEX: str = r"[<>\"\\]"
+BRAND_TEXT_FORBIDDEN_RE: re.Pattern[str] = re.compile(BRAND_TEXT_FORBIDDEN_SQL_REGEX)
 
 COLOR_SCHEME_LIGHT: str = "LIGHT"
 COLOR_SCHEME_DARK: str = "DARK"

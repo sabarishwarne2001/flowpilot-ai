@@ -134,17 +134,15 @@ HEX_COLOR_SQL_REGEX = r"^#[0-9a-f]{6}$"
 
 #: Mirrors app.models.tenant_branding.BRAND_TEXT_FORBIDDEN_SQL_REGEX.
 #:
-#: Angle brackets, both quote characters, ampersand and backslash. The brand
-#: name reaches a document title and an email subject line; none of those six
-#: characters has a legitimate place in one, and all six are markup-injection
-#: material.
+#: ARCH-25 finding N1. Forbidden: `<` `>` `"` `\`. Permitted: `&` and `'`,
+#: because "Barnes & Noble" and "O'Reilly" are real names and refusing them
+#: was over-broad. See the model module for the full reasoning and for what
+#: the permission costs at the render boundary.
 #:
-#: The apostrophe is DOUBLED because this string is embedded inside a
-#: single-quoted SQL literal below. A single apostrophe here terminates the
-#: literal and the migration fails with a syntax error rather than installing
-#: a constraint that admits quotes — which is the failure you want, since it
-#: lands during migration instead of during an incident.
-BRAND_TEXT_FORBIDDEN_SQL_REGEX = r"[<>\"''&\\]"
+#: No apostrophe in the class means no SQL escaping is required here. If one
+#: is ever re-added it must be DOUBLED, or the literal terminates early and
+#: this migration fails with a syntax error.
+BRAND_TEXT_FORBIDDEN_SQL_REGEX = r"[<>\"\\]"
 
 MAX_HOSTNAME_LENGTH: int = 253
 

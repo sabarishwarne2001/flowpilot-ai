@@ -273,6 +273,40 @@ export const BYOK_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-25 — white-label, custom domains and tenant branding.
+ *
+ * `manifest` is the odd one out and deliberately so: it takes no organization
+ * id because the tenant is resolved server-side from the Host header. Passing
+ * an id would make it an endpoint that answers "what does organization X look
+ * like" to an unauthenticated caller, which is exactly what it must not be.
+ */
+export const BRANDING_ENDPOINTS = {
+  domains: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains`,
+  domain: (organizationId: string, domainId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains/${seg(domainId)}`,
+  verifyDomain: (organizationId: string, domainId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains/${seg(domainId)}/verify`,
+  reissueChallenge: (organizationId: string, domainId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains/${seg(domainId)}/challenge`,
+  primaryDomain: (organizationId: string, domainId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains/${seg(domainId)}/primary`,
+  certificate: (organizationId: string, domainId: string): string =>
+    `/organizations/${org(organizationId)}/custom-domains/${seg(domainId)}/certificate`,
+  branding: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/branding`,
+  logo: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/branding/logo`,
+  favicon: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/branding/favicon`,
+  senderDomain: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/branding/sender-domain`,
+  verifySenderDomain: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/branding/sender-domain/verify`,
+  manifest: "/branding/manifest",
+} as const;
+
+/**
  * ARCH-21 — the public gateway.
  *
  * Listed for documentation and for the API explorer's copy targets. The

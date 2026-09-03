@@ -37,6 +37,9 @@ ARCH16_JOB_TYPES: frozenset[str] = frozenset(
         "identity.sweep_auth_requests",
     }
 )
+ARCH25_JOB_TYPES: frozenset[str] = frozenset(
+    {"domain.verify_dns", "tls.renew_sweep"}
+)
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -142,6 +145,20 @@ def _identity_sweep_auth_requests(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_sweep_auth_requests(db, payload)
 
 
+def _domain_verify_dns(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.branding import handle_domain_verify_dns
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_domain_verify_dns(db, payload)
+
+
+def _tls_renew_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.branding import handle_tls_renew_sweep
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_tls_renew_sweep(db, payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -162,6 +179,11 @@ _HANDLERS = {
     "identity.purge_assertion_payloads": _identity_purge_assertions,
     "identity.sweep_replay_guard": _identity_sweep_replay_guard,
     "identity.sweep_auth_requests": _identity_sweep_auth_requests,
+    # ARCH-25. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "domain.verify_dns": _domain_verify_dns,
+    "tls.renew_sweep": _tls_renew_sweep,
 }
 
 
@@ -194,5 +216,6 @@ __all__ = [
     "ARCH14_JOB_TYPES",
     "ARCH15_JOB_TYPES",
     "ARCH16_JOB_TYPES",
+    "ARCH25_JOB_TYPES",
     "register_all",
 ]

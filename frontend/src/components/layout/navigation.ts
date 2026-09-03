@@ -11,6 +11,7 @@ import {
   MessageSquare,
   ScrollText,
   Gauge,
+  Palette,
   TerminalSquare,
   Shield,
   Settings,
@@ -27,6 +28,7 @@ import {
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
+  organizationBrandingPath,
   organizationBYOKPath,
   organizationCompliancePath,
   organizationDeveloperPath,
@@ -146,6 +148,16 @@ export const buildOrganizationNavigationItems = (
       name: "Enterprise BYOK & models",
       path: organizationBYOKPath(orgSlug),
       icon: KeySquare,
+    });
+    // ARCH-25. ADMIN sees the console because visual branding is an
+    // administrator's job. Every DOMAIN operation behind it is OWNER-gated by
+    // RequireOrgOwner on the route: a vanity hostname resolves to a tenant,
+    // which makes claiming one authentication-adjacent rather than cosmetic.
+    // Hiding the link is not what protects the domain endpoints.
+    items.push({
+      name: "Branding & custom domains",
+      path: organizationBrandingPath(orgSlug),
+      icon: Palette,
     });
   }
 

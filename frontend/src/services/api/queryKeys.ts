@@ -146,6 +146,23 @@ export const byokKeys = {
     [...byokKeys.all(organizationId), "savings", windowDays] as const,
 };
 
+export const brandingKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "branding"] as const,
+  domains: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "domains"] as const,
+  domain: (organizationId: string, domainId: string) =>
+    [...brandingKeys.domains(organizationId), domainId] as const,
+  branding: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "tokens"] as const,
+  sender: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "sender"] as const,
+  // Not organization-scoped, because the manifest is not addressed by
+  // organization: it is resolved from the Host header. Scoping it would
+  // suggest a per-tenant cache key the request does not actually have.
+  manifest: ["branding", "manifest"] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

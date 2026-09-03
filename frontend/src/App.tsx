@@ -54,6 +54,12 @@ const OrganizationDeveloperPortal = lazy(
 const OrganizationBYOK = lazy(
   () => import("@/pages/organization/OrganizationBYOK"),
 );
+// ARCH-25. Lazy like every other organization surface. The branding console
+// pulls in a colour-picker preview and an image uploader that no other page
+// needs, so keeping it out of the main chunk matters more here than most.
+const OrganizationBranding = lazy(
+  () => import("@/pages/organization/OrganizationBranding"),
+);
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -244,6 +250,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationBYOK}
                       element={<OrganizationBYOK />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationBranding}
+                      element={<OrganizationBranding />}
                     />
                   </Route>
                 </Route>

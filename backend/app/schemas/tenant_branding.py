@@ -90,9 +90,9 @@ def validate_brand_text(value: Optional[str]) -> Optional[str]:
         )
     if BRAND_TEXT_FORBIDDEN_RE.search(candidate):
         raise ValueError(
-            "A brand name cannot contain < > \" ' & or \\. It is rendered "
-            "into a page title and an email subject on an origin shared with "
-            "other tenants."
+            "A brand name cannot contain < > \" or \\. It is rendered into a "
+            "page title and an email subject on an origin shared with other "
+            "tenants. Ampersands and apostrophes are fine."
         )
     return candidate
 
