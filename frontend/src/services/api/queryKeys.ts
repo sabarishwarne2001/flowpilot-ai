@@ -163,6 +163,23 @@ export const brandingKeys = {
   manifest: ["branding", "manifest"] as const,
 };
 
+export const analyticsKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "analytics"] as const,
+  destinations: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "destinations"] as const,
+  destination: (organizationId: string, destinationId: string) =>
+    [...analyticsKeys.destinations(organizationId), destinationId] as const,
+  schedules: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "schedules"] as const,
+  runs: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "runs"] as const,
+  consumption: (organizationId: string, windowDays: number) =>
+    [...analyticsKeys.all(organizationId), "consumption", windowDays] as const,
+  datasets: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "datasets"] as const,
+};
+
 export const sessionKeys = {
   all: ["sessions"] as const,
   list: () => [...sessionKeys.all, "list"] as const,

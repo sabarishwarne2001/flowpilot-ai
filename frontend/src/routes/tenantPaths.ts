@@ -72,6 +72,11 @@ export const ROUTE_PATTERNS = {
   // /organizations/:orgSlug/branding cannot be misread by parseTenantPath as
   // a workspace route. No new reserved segment is needed.
   organizationBranding: "branding",
+  // ARCH-26. Same reasoning as compliance, developer, byok and branding:
+  // "organizations" is already in RESERVED_ROUTE_SEGMENTS, so
+  // /organizations/:orgSlug/analytics cannot be misread by parseTenantPath as
+  // a workspace route. No new reserved segment is needed.
+  organizationAnalytics: "analytics",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
@@ -137,6 +142,9 @@ export const organizationDeveloperPath = (orgSlug: string): string =>
 
 export const organizationBYOKPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/byok`;
+
+export const organizationAnalyticsPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/analytics`;
 
 export const organizationBrandingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/branding`;

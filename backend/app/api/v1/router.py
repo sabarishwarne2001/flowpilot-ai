@@ -30,6 +30,7 @@ from app.api.v1 import (
     upload,
     usage,
     verifications,
+    warehouse_sync,
     work_items,
     workspaces,
 )
@@ -75,6 +76,13 @@ api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routin
 api_router.include_router(custom_domains.router)
 api_router.include_router(tenant_branding.router)
 api_router.include_router(tenant_branding.public_router)
+
+# ARCH-26 Enterprise Analytics, BI Egress & Warehouse Sync.
+#
+# One router. Unlike ARCH-25's domain/branding split, the role boundary here
+# is uniform — reads ADMIN, writes OWNER — and is carried by per-endpoint
+# dependencies rather than by which router an endpoint landed in.
+api_router.include_router(warehouse_sync.router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

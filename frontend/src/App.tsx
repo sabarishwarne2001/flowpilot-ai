@@ -57,6 +57,11 @@ const OrganizationBYOK = lazy(
 // ARCH-25. Lazy like every other organization surface. The branding console
 // pulls in a colour-picker preview and an image uploader that no other page
 // needs, so keeping it out of the main chunk matters more here than most.
+// ARCH-26. Lazy like every other organization surface, so the analytics
+// console's forms and charts stay out of the initial bundle.
+const OrganizationAnalytics = lazy(
+  () => import("@/pages/organization/OrganizationAnalytics"),
+);
 const OrganizationBranding = lazy(
   () => import("@/pages/organization/OrganizationBranding"),
 );
@@ -250,6 +255,10 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationBYOK}
                       element={<OrganizationBYOK />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationAnalytics}
+                      element={<OrganizationAnalytics />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.organizationBranding}

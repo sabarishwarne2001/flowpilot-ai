@@ -40,6 +40,9 @@ ARCH16_JOB_TYPES: frozenset[str] = frozenset(
 ARCH25_JOB_TYPES: frozenset[str] = frozenset(
     {"domain.verify_dns", "tls.renew_sweep"}
 )
+ARCH26_JOB_TYPES: frozenset[str] = frozenset(
+    {"analytics.export_sync", "analytics.warehouse_push"}
+)
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -159,6 +162,16 @@ def _tls_renew_sweep(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_tls_renew_sweep(db, payload)
 
 
+def _analytics_export_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.analytics import handle_export_sync
+    return handle_export_sync(payload)
+
+
+def _analytics_warehouse_push(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.analytics import handle_warehouse_push
+    return handle_warehouse_push(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -184,6 +197,11 @@ _HANDLERS = {
     # that enqueues cleanly and never runs.
     "domain.verify_dns": _domain_verify_dns,
     "tls.renew_sweep": _tls_renew_sweep,
+    # ARCH-26. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "analytics.export_sync": _analytics_export_sync,
+    "analytics.warehouse_push": _analytics_warehouse_push,
 }
 
 
@@ -217,5 +235,6 @@ __all__ = [
     "ARCH15_JOB_TYPES",
     "ARCH16_JOB_TYPES",
     "ARCH25_JOB_TYPES",
+    "ARCH26_JOB_TYPES",
     "register_all",
 ]

@@ -70,6 +70,18 @@ LIGHT = WorkerProfile(
             # the comment directly above.
             "domain.verify_dns",
             "tls.renew_sweep",
+            # ARCH-26 analytics egress. Parquet generation and an HTTPS push
+            # to a tenant warehouse — no heavy ML imports, so the thin image
+            # is the right home. pyarrow is a build dependency of the image,
+            # not a member of HEAVY_MODULES.
+            #
+            # As with the two entries above, this is not optional bookkeeping:
+            # assert_imports_match_profile() raises ProfileError at every
+            # worker's startup on a handler no profile claims, so registering
+            # these in handlers/__init__.py without adding them here stops the
+            # entire fleet booting.
+            "analytics.export_sync",
+            "analytics.warehouse_push",
         }
     ),
     allow_heavy=frozenset(),

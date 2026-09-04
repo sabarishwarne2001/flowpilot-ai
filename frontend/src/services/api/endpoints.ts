@@ -273,6 +273,34 @@ export const BYOK_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-26 — enterprise analytics, BI egress and warehouse sync.
+ *
+ * `org()` throws on an empty organizationId rather than producing
+ * `/organizations//analytics/...`, which the server answers with a 404 that
+ * reads like a missing feature.
+ */
+export const ANALYTICS_ENDPOINTS = {
+  destinations: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/destinations`,
+  destination: (organizationId: string, destinationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/destinations/${seg(destinationId)}`,
+  testDestination: (organizationId: string, destinationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/destinations/${seg(destinationId)}/test`,
+  schedules: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/schedules`,
+  schedule: (organizationId: string, scheduleId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/schedules/${seg(scheduleId)}`,
+  sync: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/sync`,
+  runs: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/runs`,
+  consumption: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/consumption`,
+  datasets: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/analytics/datasets`,
+} as const;
+
+/**
  * ARCH-25 — white-label, custom domains and tenant branding.
  *
  * `manifest` is the odd one out and deliberately so: it takes no organization

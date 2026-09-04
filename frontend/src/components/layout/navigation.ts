@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Bell,
   ClipboardCheck,
   CreditCard,
@@ -28,6 +29,7 @@ import {
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
+  organizationAnalyticsPath,
   organizationBrandingPath,
   organizationBYOKPath,
   organizationCompliancePath,
@@ -158,6 +160,17 @@ export const buildOrganizationNavigationItems = (
       name: "Branding & custom domains",
       path: organizationBrandingPath(orgSlug),
       icon: Palette,
+    });
+    // ARCH-26. ADMIN sees the console because reading which warehouses the
+    // tenant syncs to, and why last night's run failed, is support work.
+    // Every write behind it is OWNER-gated by RequireOrgOwner on the
+    // endpoint: registering a destination hands a credential for third-party
+    // infrastructure to this platform and starts a recurring egress of tenant
+    // data to it. Hiding the link is not what protects those endpoints.
+    items.push({
+      name: "Analytics & BI egress",
+      path: organizationAnalyticsPath(orgSlug),
+      icon: BarChart3,
     });
   }
 

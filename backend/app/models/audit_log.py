@@ -55,6 +55,12 @@ class AuditResourceType(str, PyEnum):
     # arch25_step1_branding_vocabulary; this enum must stay in step with it.
     CUSTOM_DOMAIN = "CUSTOM_DOMAIN"
     TENANT_BRANDING = "TENANT_BRANDING"
+    # ARCH-26 — enterprise analytics and BI egress. Added to the PostgreSQL
+    # type by arch26_step1_export_vocabulary; this enum must stay in step with
+    # it. verify_arch26.py G2 asserts both sides agree.
+    WAREHOUSE_DESTINATION = "WAREHOUSE_DESTINATION"
+    EXPORT_SCHEDULE = "EXPORT_SCHEDULE"
+    EXPORT_SYNC_RUN = "EXPORT_SYNC_RUN"
 
 
 class AuditAction(str, PyEnum):
@@ -105,6 +111,19 @@ class AuditAction(str, PyEnum):
     DOMAIN_REVOKED = "DOMAIN_REVOKED"
     TLS_ISSUED = "TLS_ISSUED"
     BRANDING_UPDATED = "BRANDING_UPDATED"
+    # ARCH-26 — enterprise analytics and BI egress.
+    #
+    # EXPORTED is deliberately NOT reused for a warehouse push. ARCH-20 emits
+    # it when an operator downloads a compliance bundle: a human pulling data
+    # out under a legal obligation. A warehouse sync is a scheduled machine
+    # push into infrastructure the tenant controls, and a reviewer filtering
+    # EXPORTED to answer "what left by human hand?" must not have to subtract
+    # several thousand cron-driven rows to get the answer.
+    DESTINATION_CREATED = "DESTINATION_CREATED"
+    DESTINATION_TESTED = "DESTINATION_TESTED"
+    SYNC_TRIGGERED = "SYNC_TRIGGERED"
+    SYNC_COMPLETED = "SYNC_COMPLETED"
+    SYNC_FAILED = "SYNC_FAILED"
 
 
 _resource_type_pg = PgEnum(
