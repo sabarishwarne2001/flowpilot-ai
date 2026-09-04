@@ -82,6 +82,17 @@ LIGHT = WorkerProfile(
             # entire fleet booting.
             "analytics.export_sync",
             "analytics.warehouse_push",
+            # ARCH-27 partner revenue share. Two SQL sweeps over sealed
+            # rollups and a SHA-256 over a canonical payload — no heavy ML
+            # imports, so the thin image is the right home.
+            #
+            # As with every entry above, this is not optional bookkeeping:
+            # assert_imports_match_profile() raises ProfileError at every
+            # worker's startup on a handler no profile claims, so registering
+            # these in handlers/__init__.py without adding them here stops the
+            # entire fleet booting.
+            "partner.rev_share_compute",
+            "partner.rev_share_seal",
         }
     ),
     allow_heavy=frozenset(),

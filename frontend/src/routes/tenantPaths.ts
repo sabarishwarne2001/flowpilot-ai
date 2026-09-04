@@ -77,12 +77,24 @@ export const ROUTE_PATTERNS = {
   // /organizations/:orgSlug/analytics cannot be misread by parseTenantPath as
   // a workspace route. No new reserved segment is needed.
   organizationAnalytics: "analytics",
+  // ARCH-27. Same reasoning as compliance, developer, byok, branding and
+  // analytics: "organizations" is already in RESERVED_ROUTE_SEGMENTS, so
+  // /organizations/:orgSlug/marketplace cannot be misread by parseTenantPath
+  // as a workspace route. No new reserved segment is needed.
+  organizationMarketplace: "marketplace",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
   // pages read across every organization.
   platformShell: "/admin",
   platformMargins: "margins",
+
+  // ARCH-27 partner portal. A sibling of the organization shell, never a child
+  // of it — the same decision ARCH-18 made for /admin. A partner principal
+  // reads across a BOOK of organizations, so nesting this inside
+  // OrganizationGuard would render a tenant switcher beside figures that do
+  // not respond to it.
+  partnerPortalShell: "/partners",
 
   workspaceShell: `/${P_ORG}/${P_WS}`,
   workspaceDashboard: "",
@@ -148,6 +160,11 @@ export const organizationAnalyticsPath = (orgSlug: string): string =>
 
 export const organizationBrandingPath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/branding`;
+
+export const organizationMarketplacePath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/marketplace`;
+
+export const partnerPortalPath = (): string => "/partners";
 
 export const platformPath = (): string => "/admin";
 

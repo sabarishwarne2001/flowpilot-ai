@@ -17,6 +17,7 @@ import {
   Shield,
   Settings,
   ShieldCheck,
+  Store,
   Sliders,
   Scale,
   Users,
@@ -31,6 +32,7 @@ import {
   organizationBillingPath,
   organizationAnalyticsPath,
   organizationBrandingPath,
+  organizationMarketplacePath,
   organizationBYOKPath,
   organizationCompliancePath,
   organizationDeveloperPath,
@@ -171,6 +173,17 @@ export const buildOrganizationNavigationItems = (
       name: "Analytics & BI egress",
       path: organizationAnalyticsPath(orgSlug),
       icon: BarChart3,
+    });
+    // ARCH-27. ADMIN sees the catalog because reading which third-party
+    // workflows are installed, and what they do, is support work. Installing
+    // is OWNER-gated by RequireOrgOwner on the endpoint: admitting executable
+    // code authored by a third party into the tenant's own automation engine
+    // is an ownership decision. Hiding the link is not what protects it —
+    // marketplace_installations.verified_signature_id being NOT NULL is.
+    items.push({
+      name: "Partner marketplace",
+      path: organizationMarketplacePath(orgSlug),
+      icon: Store,
     });
   }
 

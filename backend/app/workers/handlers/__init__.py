@@ -43,6 +43,33 @@ ARCH25_JOB_TYPES: frozenset[str] = frozenset(
 ARCH26_JOB_TYPES: frozenset[str] = frozenset(
     {"analytics.export_sync", "analytics.warehouse_push"}
 )
+ARCH27_JOB_TYPES: frozenset[str] = frozenset(
+    {"partner.rev_share_compute", "partner.rev_share_seal"}
+)
+
+#: Every job type this package claims to register, by phase.
+#:
+#: ARCH-27 carried-forward resolution 2. Before this, ARCH16_JOB_TYPES,
+#: ARCH25_JOB_TYPES and ARCH26_JOB_TYPES were module-level exports with zero
+#: consumers — the recurring "orphaned guard" defect class in this codebase:
+#: correct declarations that no code path reads, invisible to linters, and
+#: therefore free to drift from the registry they claim to describe.
+#:
+#: `register_all()` now asserts this union equals `_HANDLERS.keys()`, so a
+#: phase constant that falls out of step with the handler table fails loudly
+#: at import instead of silently documenting a lie.
+ALL_PHASE_JOB_TYPES: frozenset[str] = (
+    ARCH10_JOB_TYPES
+    | ARCH11_JOB_TYPES
+    | ARCH12_JOB_TYPES
+    | ARCH13_JOB_TYPES
+    | ARCH14_JOB_TYPES
+    | ARCH15_JOB_TYPES
+    | ARCH16_JOB_TYPES
+    | ARCH25_JOB_TYPES
+    | ARCH26_JOB_TYPES
+    | ARCH27_JOB_TYPES
+)
 
 
 def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -172,6 +199,20 @@ def _analytics_warehouse_push(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_warehouse_push(payload)
 
 
+def _partner_rev_share_compute(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.partner import handle_rev_share_compute
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_rev_share_compute(db, payload)
+
+
+def _partner_rev_share_seal(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.partner import handle_rev_share_seal
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_rev_share_seal(db, payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -202,7 +243,35 @@ _HANDLERS = {
     # that enqueues cleanly and never runs.
     "analytics.export_sync": _analytics_export_sync,
     "analytics.warehouse_push": _analytics_warehouse_push,
+    # ARCH-27. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "partner.rev_share_compute": _partner_rev_share_compute,
+    "partner.rev_share_seal": _partner_rev_share_seal,
 }
+
+
+def _assert_vocabulary_matches_registry() -> None:
+    """ARCH-27 CF2. Give the per-phase constants a consumer.
+
+    A frozenset nothing reads is a comment with a type annotation. Comparing
+    the union against the registry means a job type added to one and not the
+    other raises here, at import, naming both sides — rather than surfacing
+    weeks later as a queue that never drains.
+    """
+    registered = frozenset(_HANDLERS)
+    undeclared = registered - ALL_PHASE_JOB_TYPES
+    unregistered = ALL_PHASE_JOB_TYPES - registered
+    if undeclared or unregistered:
+        raise RuntimeError(
+            "job type vocabulary and handler registry disagree. "
+            f"registered but undeclared: {sorted(undeclared)}; "
+            f"declared but unregistered: {sorted(unregistered)}. "
+            "Update the ARCHnn_JOB_TYPES constant for the owning phase."
+        )
+
+
+_assert_vocabulary_matches_registry()
 
 
 def register_all(*, replace: bool = False) -> list[str]:
@@ -236,5 +305,7 @@ __all__ = [
     "ARCH16_JOB_TYPES",
     "ARCH25_JOB_TYPES",
     "ARCH26_JOB_TYPES",
+    "ARCH27_JOB_TYPES",
+    "ALL_PHASE_JOB_TYPES",
     "register_all",
 ]

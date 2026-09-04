@@ -61,6 +61,19 @@ class AuditResourceType(str, PyEnum):
     WAREHOUSE_DESTINATION = "WAREHOUSE_DESTINATION"
     EXPORT_SCHEDULE = "EXPORT_SCHEDULE"
     EXPORT_SYNC_RUN = "EXPORT_SYNC_RUN"
+    # ARCH-27 — partner marketplace and reseller tenancy. Added to the
+    # PostgreSQL type by arch27_step1_partner_vocabulary; this enum must stay
+    # in step with it. verify_arch27.py G2 asserts both sides agree.
+    #
+    # Four, not seven. MARKETPLACE_ITEM covers manifests, signatures and
+    # installations: unlike ARCH-26's destination/schedule/run split, where run
+    # rows arrive orders of magnitude more often and would drown the credential
+    # rows, a catalog item and its versions share a lifetime and a reader.
+    # `details.manifest_id` and `details.installation_id` carry the finer grain.
+    PARTNER = "PARTNER"
+    PARTNER_AGREEMENT = "PARTNER_AGREEMENT"
+    REV_SHARE_LEDGER = "REV_SHARE_LEDGER"
+    MARKETPLACE_ITEM = "MARKETPLACE_ITEM"
 
 
 class AuditAction(str, PyEnum):
@@ -124,6 +137,27 @@ class AuditAction(str, PyEnum):
     SYNC_TRIGGERED = "SYNC_TRIGGERED"
     SYNC_COMPLETED = "SYNC_COMPLETED"
     SYNC_FAILED = "SYNC_FAILED"
+    # ARCH-27 — partner marketplace and reseller tenancy.
+    #
+    # CREATED is deliberately NOT reused for PARTNER_CREATED. A reseller tier
+    # gaining standing over customer accounts is the row somebody reaches for
+    # when asking "when did a third party acquire authority over these
+    # tenants?", and CREATED cannot answer it without filtering out every work
+    # item, webhook and API key ever made.
+    #
+    # TENANT_ASSIGNED is emitted on BOTH directions with `details.direction`
+    # carrying which. A release is the more interesting event: a burst of
+    # assign/release pairs against varying organizations is what book-scope
+    # probing looks like.
+    #
+    # MANIFEST_INSTALLED is the highest-consequence row in the phase — a
+    # tenant admitting third-party workflow code into their own automation
+    # engine — and shares an action with nothing else.
+    PARTNER_CREATED = "PARTNER_CREATED"
+    TENANT_ASSIGNED = "TENANT_ASSIGNED"
+    REV_SHARE_SETTLED = "REV_SHARE_SETTLED"
+    MANIFEST_PUBLISHED = "MANIFEST_PUBLISHED"
+    MANIFEST_INSTALLED = "MANIFEST_INSTALLED"
 
 
 _resource_type_pg = PgEnum(

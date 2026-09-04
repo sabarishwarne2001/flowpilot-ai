@@ -330,3 +330,52 @@ export const keepPreviousWithinWorkspace =
     const previousWorkspaceId = previousQuery?.queryKey?.[1];
     return previousWorkspaceId === workspaceId ? previousData : undefined;
   };
+
+/**
+ * ARCH-27 — partner portal query keys.
+ *
+ * Rooted at "partner" and NOT under organizationScope: invalidating an
+ * organization must not blow away a partner's book-wide ledger, and switching
+ * tenant must not refetch it. They are different subjects.
+ */
+export const partnerKeys = {
+  root: () => ["partner"] as const,
+  mine: () => [...partnerKeys.root(), "mine"] as const,
+  all: (partnerId: string) => [...partnerKeys.root(), partnerId] as const,
+  detail: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "detail"] as const,
+  members: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "members"] as const,
+  book: (partnerId: string) => [...partnerKeys.all(partnerId), "book"] as const,
+  signingKeys: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "signing-keys"] as const,
+  agreements: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "agreements"] as const,
+  payouts: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "payouts"] as const,
+  statement: (partnerId: string, periodId: string) =>
+    [...partnerKeys.payouts(partnerId), periodId] as const,
+  economics: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "economics"] as const,
+  catalog: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "catalog"] as const,
+};
+
+/** ARCH-27 — the tenant marketplace. Organization-scoped, unlike partnerKeys. */
+export const marketplaceKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "marketplace"] as const,
+  catalog: (organizationId: string) =>
+    [...marketplaceKeys.all(organizationId), "catalog"] as const,
+  manifest: (organizationId: string, manifestId: string) =>
+    [...marketplaceKeys.all(organizationId), "manifest", manifestId] as const,
+  installations: (organizationId: string) =>
+    [...marketplaceKeys.all(organizationId), "installations"] as const,
+};
+
+export const invalidatePartner = async (
+  queryClient: QueryClient,
+  partnerId: string,
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: partnerKeys.all(partnerId) });
+};

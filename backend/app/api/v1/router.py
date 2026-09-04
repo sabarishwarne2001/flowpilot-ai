@@ -19,7 +19,9 @@ from app.api.v1 import (
     email_change,
     email_settings,
     identity_admin,
+    marketplace,
     me,
+    partner,
     notifications,
     organization_email_settings,
     organization_notifications,
@@ -83,6 +85,20 @@ api_router.include_router(tenant_branding.public_router)
 # is uniform — reads ADMIN, writes OWNER — and is carried by per-endpoint
 # dependencies rather than by which router an endpoint landed in.
 api_router.include_router(warehouse_sync.router)
+
+# ARCH-27 Partner Marketplace, Reseller Tenancy & Revenue Share.
+#
+# Two routers, and the split is a role boundary rather than a filing
+# preference. partner.router authenticates a PARTNER principal — a tier above
+# organization, gated by partner_members and, for commercial operations, by
+# require_superadmin. marketplace.router authenticates an ORGANIZATION
+# principal through the ordinary RequireOrgAdmin/RequireOrgOwner dependencies.
+#
+# Mounting them together would invite one shared dependency across two
+# different subjects, which is how a partner principal ends up satisfying an
+# organization check.
+api_router.include_router(partner.router)
+api_router.include_router(marketplace.router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

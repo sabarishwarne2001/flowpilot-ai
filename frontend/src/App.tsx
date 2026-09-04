@@ -65,6 +65,16 @@ const OrganizationAnalytics = lazy(
 const OrganizationBranding = lazy(
   () => import("@/pages/organization/OrganizationBranding"),
 );
+// ARCH-27. Lazy like every other organization surface. The catalog pulls in a
+// manifest inspector that renders a DAG and a JSON viewer, which no other page
+// needs and most sessions never open.
+const MarketplaceCatalog = lazy(
+  () => import("@/pages/marketplace/MarketplaceCatalog"),
+);
+// ARCH-27. The partner portal is lazy for a stronger reason than the others:
+// the overwhelming majority of users are not partner members at all, and this
+// bundle would otherwise ship to every one of them.
+const PartnerPortal = lazy(() => import("@/pages/partner/PartnerPortal"));
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
 const IdentityAdminHub = lazy(
@@ -264,6 +274,10 @@ export default function App() {
                       path={ROUTE_PATTERNS.organizationBranding}
                       element={<OrganizationBranding />}
                     />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationMarketplace}
+                      element={<MarketplaceCatalog />}
+                    />
                   </Route>
                 </Route>
 
@@ -285,6 +299,26 @@ export default function App() {
                     element={<AdminMarginsHub />}
                   />
                 </Route>
+
+                {/* ARCH-27 partner portal.
+
+                    A sibling of the organization shell, never a child of it —
+                    the same decision ARCH-18 made for /admin. A partner reads
+                    across a BOOK of organizations, so nesting this inside
+                    OrganizationGuard would render a tenant switcher beside
+                    figures that do not respond to it, and would make a
+                    book-wide total appear to belong to whichever organization
+                    happened to be selected.
+
+                    It is behind PrivateRoute, not SuperAdminGuard: partner
+                    membership is authorized server-side by
+                    tenancy_service.require_membership, which returns 404 for a
+                    non-member so the route is not a partner enumeration
+                    oracle. */}
+                <Route
+                  path={ROUTE_PATTERNS.partnerPortalShell}
+                  element={<PartnerPortal />}
+                />
 
                 {/* Legacy redirects */}
                 <Route path="/" element={<LegacyRouteRedirect />} />

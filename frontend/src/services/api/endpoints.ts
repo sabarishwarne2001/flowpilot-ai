@@ -374,3 +374,53 @@ export const COGS_ENDPOINTS = {
   acceptVariance: (reconciliationId: string): string =>
     `/admin/cogs/reconciliations/${seg(reconciliationId)}/accept`,
 } as const;
+
+/**
+ * ARCH-27 — the partner tier.
+ *
+ * Note the absence of an organization id in these paths. A partner is a tier
+ * ABOVE organization and reads across a book of them; a path scoped to one
+ * organization would belong under ORGANIZATION_ENDPOINTS behind an org role,
+ * which is precisely the confusion these separate constants prevent.
+ */
+export const PARTNER_ENDPOINTS = {
+  list: "/partners",
+  detail: (partnerId: string): string => `/partners/${seg(partnerId)}`,
+  members: (partnerId: string): string => `/partners/${seg(partnerId)}/members`,
+  member: (partnerId: string, userId: string): string =>
+    `/partners/${seg(partnerId)}/members/${seg(userId)}`,
+  book: (partnerId: string): string => `/partners/${seg(partnerId)}/book`,
+  bookEntry: (partnerId: string, organizationId: string): string =>
+    `/partners/${seg(partnerId)}/book/${seg(organizationId)}`,
+  signingKeys: (partnerId: string): string =>
+    `/partners/${seg(partnerId)}/signing-keys`,
+  revokeSigningKey: (partnerId: string, keyId: string): string =>
+    `/partners/${seg(partnerId)}/signing-keys/${seg(keyId)}/revoke`,
+  agreements: (partnerId: string): string =>
+    `/partners/${seg(partnerId)}/agreements`,
+  payouts: (partnerId: string): string => `/partners/${seg(partnerId)}/payouts`,
+  payout: (partnerId: string, periodId: string): string =>
+    `/partners/${seg(partnerId)}/payouts/${seg(periodId)}`,
+  sealPayout: (partnerId: string, periodId: string): string =>
+    `/partners/${seg(partnerId)}/payouts/${seg(periodId)}/seal`,
+  economics: (partnerId: string): string =>
+    `/partners/${seg(partnerId)}/economics`,
+  catalog: (partnerId: string): string => `/partners/${seg(partnerId)}/catalog`,
+  manifests: (partnerId: string, itemId: string): string =>
+    `/partners/${seg(partnerId)}/catalog/${seg(itemId)}/manifests`,
+} as const;
+
+/**
+ * ARCH-27 — the tenant-facing marketplace. Organization-scoped, because what a
+ * tenant may browse depends on which partner currently holds them.
+ */
+export const MARKETPLACE_ENDPOINTS = {
+  catalog: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/marketplace/catalog`,
+  manifest: (organizationId: string, manifestId: string): string =>
+    `/organizations/${org(organizationId)}/marketplace/manifests/${seg(manifestId)}`,
+  installations: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/marketplace/installations`,
+  installation: (organizationId: string, installationId: string): string =>
+    `/organizations/${org(organizationId)}/marketplace/installations/${seg(installationId)}`,
+} as const;
