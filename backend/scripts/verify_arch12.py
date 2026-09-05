@@ -426,13 +426,26 @@ def _db_checks() -> None:
 
     from app.db.session import engine
 
-    @check("db    migration head is arch12_step7_notification_deliveries")
+    @check("db    arch12_step7_notification_deliveries is reachable from head")
     def _head() -> None:
+        # ARCH-28 reconciliation: ARCH-12's revision must be REACHABLE
+        # from the head, not BE the head. `EXPECTED_HEAD in rows` reads
+        # like a membership test but rows is the single-row contents of
+        # alembic_version, so it was an equality in disguise and has
+        # been false since ARCH-13.
+        from alembic.config import Config as _AlembicConfig
+        from alembic.script import ScriptDirectory as _ScriptDirectory
+
         with engine.connect() as connection:
             rows = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalars().all()
-        assert EXPECTED_HEAD in rows, f"head is {rows}, expected {EXPECTED_HEAD}"
+        assert len(rows) == 1, f"expected a single head, found {rows}"
+        _script = _ScriptDirectory.from_config(
+            _AlembicConfig(str(ROOT / "alembic.ini")))
+        lineage = {r.revision for r in _script.iterate_revisions(rows[0], "base")}
+        assert EXPECTED_HEAD in lineage, (
+            f"head is {rows[0]}; {EXPECTED_HEAD} is not in its lineage")
 
     @check("db    conversation_messages has the streaming columns")
     def _stream_columns() -> None:

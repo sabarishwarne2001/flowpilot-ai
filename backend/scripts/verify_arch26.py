@@ -216,10 +216,20 @@ def check_g1_migration_chain() -> None:
     heads = [rev for rev in revisions if rev not in parents]
 
     problems: list[str] = []
+    # ARCH-28 reconciliation: reachability, not a pinned head.
+    # This asserted the head WAS arch26_step2_warehouse_sync, which
+    # stopped being true the moment ARCH-27 shipped.
     if len(heads) != 1:
         problems.append(f"{len(heads)} heads: {sorted(heads)}")
-    elif heads[0] != "arch26_step2_warehouse_sync":
-        problems.append(f"head is {heads[0]!r}")
+    else:
+        _seen, _cursor = set(), heads[0]
+        while _cursor and _cursor not in _seen:
+            _seen.add(_cursor)
+            _cursor = revisions.get(_cursor)
+        if "arch26_step2_warehouse_sync" not in _seen:
+            problems.append(
+                f"arch26_step2_warehouse_sync is not an ancestor of "
+                f"the head {heads[0]!r}")
     if revisions.get("arch26_step1_export_vocabulary") != "arch25_step2_custom_domains":
         problems.append("step1 does not chain from arch25_step2_custom_domains")
     if revisions.get("arch26_step2_warehouse_sync") != "arch26_step1_export_vocabulary":

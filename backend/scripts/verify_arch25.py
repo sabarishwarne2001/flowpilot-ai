@@ -204,10 +204,22 @@ def g1_migrations_chained_single_head() -> None:
 
     children = {parent for parent in downs.values() if parent}
     heads = sorted(r for r in revs if r not in children)
+    # ARCH-28 reconciliation: reachability, not a rolling allowlist.
+    # The tuple gained a member when ARCH-26 shipped and was not
+    # extended for ARCH-27, so this gate has been red since. Asserting
+    # that ARCH-25's terminal revision is an ANCESTOR of the head is the
+    # invariant that was wanted, and it needs no maintenance.
     if len(heads) != 1:
         problems.append(f"expected a single head, found {heads}")
-    elif heads[0] not in ("arch25_step2_custom_domains", "arch26_step2_warehouse_sync"):
-        problems.append(f"unexpected head: {heads[0]}")
+    else:
+        _seen, _cursor = set(), heads[0]
+        while _cursor and _cursor not in _seen:
+            _seen.add(_cursor)
+            _cursor = downs.get(_cursor)
+        if "arch25_step2_custom_domains" not in _seen:
+            problems.append(
+                f"arch25_step2_custom_domains is not an ancestor of "
+                f"the head {heads[0]}")
 
     orphans = [r for r, parent in downs.items() if parent and parent not in revs]
     if orphans:

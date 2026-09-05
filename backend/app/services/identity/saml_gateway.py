@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol
 from urllib.parse import urlencode
 
+from app.services.auth import saml_security
 from app.services.identity._integration import get_settings, utcnow
 from app.services.identity.errors import AssertionRejected
 
@@ -256,10 +257,19 @@ def verify_response(
             raise AssertionRejected(
                 "REJECTED_SIGNATURE", f"digest algorithm {alg!r} is not permitted")
 
-    if envelope.find(".//xenc:EncryptedData", NS) is not None:
-        raise AssertionRejected(
-            "REJECTED_UNKNOWN",
-            "encrypted assertions require the xmlsec backend; set SAML_CRYPTO_BACKEND=python3-saml")
+    # ARCH-28 tranche 3. The previous message named
+    # SAML_CRYPTO_BACKEND=python3-saml as the remedy: an undeclared
+    # setting, discarded by extra="ignore", for a backend that is not
+    # installed. This one names the IdP screen to change instead.
+    saml_security.refuse_encrypted_assertion(envelope)
+
+    # ARCH-28: certificate windows first, so an expired IdP certificate
+    # produces a dated refusal instead of arriving as the generic
+    # "no configured certificate verified the signature" that
+    # SignXmlBackend.verify flattens every certificate error into.
+    policy = saml_security.hardening_policy_from_settings(settings)
+    idp_certificates = saml_security.verify_certificate_validity(
+        idp_certificates, now=now, policy=policy)
 
     verified_root = get_backend().verify(raw, idp_certificates)
 
@@ -274,6 +284,20 @@ def verify_response(
     assertion_id = assertion.get("ID")
     if not assertion_id:
         raise AssertionRejected("REJECTED_SIGNATURE", "verified assertion has no ID")
+
+    # ARCH-28 XSW GATE. signxml returns the subtree the Reference
+    # actually covered, so a wrapped document does not impersonate —
+    # but XSW-2, XSW-3, XSW-6 and plain injection all VERIFY, measured
+    # against signxml 5.1.0. What gets through is a document containing
+    # an assertion this SP never consumed, which then lands in
+    # sso_assertions.raw_payload and in front of every incident
+    # responder who reads it. Refusing the shape removes the whole
+    # family and removes the dependence on nobody ever reading from
+    # `envelope` again.
+    saml_security.enforce_structural_integrity(
+        raw, verified_assertion_id=assertion_id, policy=policy)
+
+    saml_security.require_bearer_confirmation(assertion, policy=policy)
 
     issuer = _text(assertion, "./saml:Issuer") or ""
 
@@ -297,10 +321,18 @@ def verify_response(
 
     subject_confirmation = assertion.find(
         "./saml:Subject/saml:SubjectConfirmation/saml:SubjectConfirmationData", NS)
-    in_response_to = (subject_confirmation.get("InResponseTo")
-                      if subject_confirmation is not None else None)
-    if in_response_to is None:
-        in_response_to = envelope.get("InResponseTo")
+    # ARCH-28: resolved from SIGNED data only.
+    #
+    # The removed line was `in_response_to = envelope.get("InResponseTo")`
+    # — a read from outside the signature, feeding the comparison two
+    # blocks below that decides whether this assertion answers an
+    # AuthnRequest we issued. An attacker replaying an IdP-initiated
+    # assertion at an SP with allow_unsolicited=False could satisfy that
+    # check by stamping a Response/@InResponseTo of their choosing; the
+    # assertion was never bound to our request at all.
+    in_response_to = saml_security.require_signed_request_binding(
+        assertion, expected_in_response_to=expected_in_response_to,
+        policy=policy)
 
     if expected_in_response_to is not None:
         if in_response_to != expected_in_response_to:

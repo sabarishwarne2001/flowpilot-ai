@@ -1,0 +1,291 @@
+{
+  "report": "FlowPilot AI \u2014 SOC 2 Type I evidence pack",
+  "report_type": "TYPE_I",
+  "generated_at": "2026-09-05T04:26:03.238190+00:00",
+  "ga_migration_head": "arch27_step3_revenue_share_ledger",
+  "summary": {
+    "SATISFIED": 16,
+    "EXCEPTION": 0,
+    "INDETERMINATE": 0
+  },
+  "findings": [
+    {
+      "control": "Change control",
+      "criterion": "CC8.1",
+      "status": "SATISFIED",
+      "detail": "deployed revision 06c55056f0ae",
+      "evidence": {
+        "revision": "06c55056f0ae0020da73f25458a09d7b79043756",
+        "committed_at": "2026-09-04T17:52:35+05:30",
+        "subject": "ARCH 27 DONE"
+      },
+      "source": "git"
+    },
+    {
+      "control": "Verification gates",
+      "criterion": "CC8.1",
+      "status": "SATISFIED",
+      "detail": "64 static verification gates present in backend/scripts",
+      "evidence": {
+        "gates": [
+          "verify_arch04_step2_models.py",
+          "verify_arch05_step0.py",
+          "verify_arch06_step0.py",
+          "verify_arch07_final.py",
+          "verify_arch07_step0.py",
+          "verify_arch07_step3.py",
+          "verify_arch07_step6_preflight.py",
+          "verify_arch08_final.py",
+          "verify_arch08_step0.py",
+          "verify_arch08_step1.py",
+          "verify_arch08_step10.py",
+          "verify_arch08_step11.py",
+          "verify_arch08_step12.py",
+          "verify_arch08_step1_preflight.py",
+          "verify_arch08_step2.py",
+          "verify_arch08_step3.py",
+          "verify_arch08_step4.py",
+          "verify_arch08_step5.py",
+          "verify_arch08_step6.py",
+          "verify_arch08_step7.py",
+          "verify_arch08_step8.py",
+          "verify_arch08_step9.py",
+          "verify_arch09_step0.py",
+          "verify_arch09_step10.py",
+          "verify_arch09_step2.py",
+          "verify_arch09_step4_5.py",
+          "verify_arch09_step6.py",
+          "verify_arch09_step7.py",
+          "verify_arch09_step8.py",
+          "verify_arch09_step9.py",
+          "verify_arch0g.py",
+          "verify_arch0v.py",
+          "verify_arch10_step0.py",
+          "verify_arch10_step3.py",
+          "verify_arch10_step6.py",
+          "verify_arch10_step9.py",
+          "verify_arch11_5.py",
+          "verify_arch11_step0.py",
+          "verify_arch11_step2.py",
+          "verify_arch11_step9.py",
+          "verify_arch12.py",
+          "verify_arch13.py",
+          "verify_arch14.py",
+          "verify_arch15.py",
+          "verify_arch16.py",
+          "verify_arch16_full_compatibility.py",
+          "verify_arch17.py",
+          "verify_arch18.py",
+          "verify_arch19.py",
+          "verify_arch20.py",
+          "verify_arch21.py",
+          "verify_arch22.py",
+          "verify_arch23.py",
+          "verify_arch24.py",
+          "verify_arch25.py",
+          "verify_arch26.py",
+          "verify_arch27.py",
+          "verify_arch28.py",
+          "verify_migration_history.py",
+          "verify_models_step2.py",
+          "verify_platform_email.py",
+          "verify_scope_vocabulary.py",
+          "verify_sec1.py",
+          "verify_step4.py"
+        ]
+      },
+      "source": "backend/scripts/verify_*.py"
+    },
+    {
+      "control": "Schema change control",
+      "criterion": "CC8.1",
+      "status": "SATISFIED",
+      "detail": "118 migrations; GA head is arch27_step3_revenue_share_ledger; ARCH-28 adds none (28-G8)",
+      "evidence": {
+        "migration_count": 118,
+        "arch28_migrations": []
+      },
+      "source": "backend/alembic/versions"
+    },
+    {
+      "control": "Encryption at rest",
+      "criterion": "CC6.6",
+      "status": "SATISFIED",
+      "detail": "MultiFernet round-trip verified against 1 configured key(s); the probe decrypted under key index 0 (0 = current head, higher = a retired key still accepted for reads, which is the expected state mid-rotation)",
+      "evidence": {
+        "key_count": 1,
+        "head_key_fingerprint": "5c252fc666b0",
+        "decrypting_key_index": 0,
+        "roundtrip": true,
+        "max_ciphertext_length": 512
+      },
+      "source": "app/core/encryption.py"
+    },
+    {
+      "control": "Credential storage",
+      "criterion": "CC6.6",
+      "status": "SATISFIED",
+      "detail": "password hashing schemes, in preference order: argon2, bcrypt",
+      "evidence": {
+        "schemes": [
+          "argon2",
+          "bcrypt"
+        ],
+        "default": "argon2"
+      },
+      "source": "app/core/security.py"
+    },
+    {
+      "control": "Audit chain continuity",
+      "criterion": "CC7.2",
+      "status": "SATISFIED",
+      "detail": "16 append-only / immutability triggers present and enabled across 15 tables",
+      "evidence": {
+        "triggers": [
+          "audit_logs.trg_audit_logs_immutable",
+          "audit_logs.trg_audit_logs_no_truncate",
+          "invoices.trg_invoices_finalized_immutable",
+          "invoice_line_items.trg_invoice_line_items_finalized_immutable",
+          "price_books.trg_price_books_publish_immutable",
+          "price_book_entries.trg_price_book_entries_publish_immutable",
+          "quota_tiers.trg_quota_tiers_publish_immutable",
+          "quota_tier_entries.trg_quota_tier_entries_publish_immutable",
+          "rollup_windows.trg_rollup_windows_seal_immutable",
+          "reconciliation_runs.trg_reconciliation_runs_immutable",
+          "reconciliation_findings.trg_reconciliation_findings_immutable",
+          "provider_statements.trg_provider_statements_immutable",
+          "provider_statement_lines.trg_provider_statement_lines_immutable",
+          "recognized_revenue_ledger.trg_recognized_revenue_append_only",
+          "partner_rev_share_ledger.trg_partner_rev_share_ledger_append_only",
+          "partner_payout_periods.trg_partner_payout_periods_seal_immutable"
+        ]
+      },
+      "source": "pg_trigger.tgenabled"
+    },
+    {
+      "control": "Schema state",
+      "criterion": "CC8.1",
+      "status": "SATISFIED",
+      "detail": "alembic head in the live database: ['arch27_step3_revenue_share_ledger']",
+      "evidence": {
+        "head": [
+          "arch27_step3_revenue_share_ledger"
+        ],
+        "expected": "arch27_step3_revenue_share_ledger"
+      },
+      "source": "alembic_version"
+    },
+    {
+      "control": "Tenant isolation",
+      "criterion": "CC6.7",
+      "status": "SATISFIED",
+      "detail": "route-level isolation matrix generated from the live app object",
+      "evidence": {
+        "summary": "[RouteVerdict(path='/api/v1/admin/cogs/margins/providers', methods=('GET',), name='get_provider_costs', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/margins/summary', methods=('GET',), name='get_margin_summary', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/margins/tenants', methods=('GET',), name='get_tenant_economics', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/rate-card', methods=('GET',), name='get_rate_card', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/reconciliations/consolidated', methods=('GET',), name='consolidated_reconciliations', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/reconciliations/{reconciliation_id}/accept', methods=('POST',), name='accept_variance', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/supplier-invoices', methods=('GET',), name='list_supplier_invoices', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/supplier-invoices', methods=('POST',), name='create_supplier_invoice', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/supplier-invoices/{supplier_invoice_id}/reconcile', methods=('POST',), name='reconcile_supplier_invoice', scoping=<Scoping.PLATFORM_ADMIN: 'PLATFORM_ADMIN'>, reason='Gated by a platform-superadmin dependency.'), RouteVerdict(path='/api/v1/admin/cogs/"
+      },
+      "source": "scripts/isolation_matrix.py"
+    },
+    {
+      "control": "SSO assertion handling",
+      "criterion": "CC6.1",
+      "status": "SATISFIED",
+      "detail": "SAML XSW structural defence, issuer binding, bearer confirmation and signed request binding are active; encrypted assertions are refused by documented policy",
+      "evidence": {
+        "policy": "REFUSE_ENCRYPTED_ASSERTIONS",
+        "encrypted_assertions_supported": false,
+        "xmlsec1_on_path": false,
+        "binary_required_for_support": "xmlsec1",
+        "rationale": "Encrypted assertions require a native XML security library on the one endpoint that parses unauthenticated attacker-controlled XML. FlowPilot AI refuses them and documents the IdP-side remedy.",
+        "idp_remedies": {
+          "Microsoft Entra ID": "Entra admin center > Enterprise applications > FlowPilot AI > Single sign-on > SAML Certificates > Edit > set 'Assertion encryption' to Disabled, then Save. Signing option must remain 'Sign SAML assertion' or 'Sign SAML response and assertion'.",
+          "Okta": "Okta Admin > Applications > FlowPilot AI > General > SAML Settings > Edit > Show Advanced Settings > set 'Assertion Encryption' to Unencrypted. 'Response' and 'Assertion Signature' stay Signed.",
+          "Google Workspace": "Admin console > Apps > Web and mobile apps > FlowPilot AI > SAML attribute mapping. Google Workspace does not encrypt assertions by default; if a third-party proxy is re-encrypting them, remove it from the SSO path."
+        }
+      },
+      "source": "app/services/auth/saml_security.py"
+    },
+    {
+      "control": "Deprovisioning",
+      "criterion": "CC6.2",
+      "status": "SATISFIED",
+      "detail": "SCIM provisioning and deprovisioning; the last OWNER cannot be deactivated (409)",
+      "evidence": {},
+      "source": "app.services.identity.scim_service"
+    },
+    {
+      "control": "Session policy",
+      "criterion": "CC6.1",
+      "status": "SATISFIED",
+      "detail": "per-organization session lifetime and re-authentication policy",
+      "evidence": {},
+      "source": "app.services.identity.session_policy_service"
+    },
+    {
+      "control": "Data residency",
+      "criterion": "P4.2",
+      "status": "SATISFIED",
+      "detail": "regional bucket routing; a write to a region with no configured bucket is refused rather than falling back",
+      "evidence": {},
+      "source": "app.services.compliance.residency_service"
+    },
+    {
+      "control": "Right to erasure",
+      "criterion": "P4.2",
+      "status": "SATISFIED",
+      "detail": "subject erasure with an append-only record of what was erased",
+      "evidence": {},
+      "source": "app.services.compliance.erasure_service"
+    },
+    {
+      "control": "Disaster recovery",
+      "criterion": "A1.2",
+      "status": "SATISFIED",
+      "detail": "ARCH-19 DR drill and the ARCH-28 live invoice canary are both present and runnable",
+      "evidence": {
+        "dr_drill": true,
+        "dr_drill_canary": true
+      },
+      "source": "backend/scripts"
+    },
+    {
+      "control": "Read replica",
+      "criterion": "A1.2",
+      "status": "SATISFIED",
+      "detail": "no distinct replica configured; reads fall back to the writer, which is a documented single-instance posture",
+      "evidence": {
+        "replica_configured": false
+      },
+      "source": "settings.sqlalchemy_replica_uri"
+    },
+    {
+      "control": "API deprecation policy",
+      "criterion": "CC2.2",
+      "status": "SATISFIED",
+      "detail": "RFC 8594 policy active; 1 deprecated path prefix(es) advertised with Deprecation, Sunset and Link headers",
+      "evidence": {
+        "policy": [
+          {
+            "path_prefix": "/api/v1/audit-logs",
+            "deprecation": "2026-03-01T00:00:00+00:00",
+            "sunset": "2027-03-01T00:00:00+00:00",
+            "deprecation_header": "Sun, 01 Mar 2026 00:00:00 GMT",
+            "sunset_header": "Mon, 01 Mar 2027 00:00:00 GMT",
+            "successor": "https://docs.flowpilot.ai/public-api/audit-logs#cursor",
+            "documentation": "https://docs.flowpilot.ai/public-api/deprecation-policy",
+            "methods": "*",
+            "note": "Offset pagination was removed in ARCH-08 and has raised 422 since. The twelve-month sunset covers the cursor migration for clients that still send the parameter. The endpoint itself is NOT being removed \u2014 only the offset parameter contract."
+          }
+        ]
+      },
+      "source": "app/middleware/deprecation.py"
+    }
+  ],
+  "caveat": "Type I evidences design and presence at a point in time, not operating effectiveness over a period. INDETERMINATE findings are controls this generator could not observe from where it ran; they are NOT passes and must be evidenced separately before the report is signed.",
+  "environment": {
+    "python": "3.12.10",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "backend_root": "C:\\Users\\sabar\\Desktop\\flowpilot-ai\\backend",
+    "database_observed": true
+  },
+  "content_digest": "sha256:2cd51f7b0e0315838957985d975ec7764bb9f674521c0ec85e1e64bd0e23cdec"
+}

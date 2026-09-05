@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""ARCH-0V Tranche 1 — run verification gates in phase order with UTF-8 encoding."""
+"""ARCH-0V Tranche 1 — run verification gates in phase order with UTF-8 encoding.
+
+    python scripts/run_all_gates.py --static-only
+    python scripts/run_all_gates.py --require-live-db
+    python scripts/run_all_gates.py --list
+"""
 
 from __future__ import annotations
 
@@ -14,19 +19,39 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+# Ensure standard output/error on Windows does not crash on non-cp1252 characters
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BACKEND_ROOT / "scripts"
 
+#: Gates with checks that need a live PostgreSQL.
 LIVE_DB_GATES: frozenset[str] = frozenset(
     {
+        "verify_arch07_final.py",
+        "verify_arch08_final.py",
+        "verify_arch11_step2.py",
+        "verify_arch12.py",
+        "verify_arch16_full_compatibility.py",
         "verify_arch20.py",
+        "verify_arch24.py",
     }
 )
 
+#: Gates that accept a flag letting them run without a database.
 STATIC_ONLY_FLAG: dict[str, str] = {
     "verify_arch19.py": "--static-only",
     "verify_arch20.py": "--static-only",
     "verify_arch22.py": "--verbose",
+    "verify_arch25.py": "--static-only",
+    "verify_arch26.py": "--static-only",
+    "verify_arch27.py": "--static-only",
+    "verify_arch28.py": "--static-only",
 }
 
 SPECIAL_ORDER: dict[str, tuple[int, int]] = {
@@ -58,6 +83,15 @@ class GateResult:
     returncode: Optional[int] = None
     detail: str = ""
     tail: list[str] = field(default_factory=list)
+
+
+def _safe_str(text: str) -> str:
+    """Sanitize string for console output across all Windows encodings."""
+    try:
+        encoding = sys.stdout.encoding or "utf-8"
+        return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    except Exception:
+        return text
 
 
 def _sort_key(filename: str) -> tuple[int, int]:
@@ -92,7 +126,7 @@ def discover() -> list[tuple[str, tuple[int, int]]]:
     if unclassifiable:
         print("\nUNCLASSIFIABLE GATES:\n")
         for message in unclassifiable:
-            print(f"  * {message}\n")
+            print(f"  * {_safe_str(message)}\n")
         raise SystemExit(2)
 
     ordered.sort(key=lambda item: (item[1], item[0]))
@@ -159,7 +193,17 @@ def main() -> int:
     parser.add_argument("--json", default=None)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument(
+        "--require-live-db",
+        action="store_true",
+        help="fail any live-database gate that SKIPs.",
+    )
     args = parser.parse_args()
+
+    if args.require_live_db and args.static_only:
+        raise SystemExit(
+            "--require-live-db and --static-only are contradictory."
+        )
 
     ordered = discover()
 
@@ -187,6 +231,13 @@ def main() -> int:
         result = _run_one(name, static_only=args.static_only, timeout=args.timeout)
         results.append(result)
 
+        if args.require_live_db and result.status == "SKIP" and name in LIVE_DB_GATES:
+            result.status = "FAIL"
+            result.detail = (
+                "SKIPped under --require-live-db: this gate's database checks "
+                "did not execute, so the phase is unverified"
+            )
+
         if result.status == "PASS":
             print(f"PASS  ({result.duration_s:5.2f}s)")
         elif result.status == "SKIP":
@@ -194,11 +245,49 @@ def main() -> int:
         else:
             print(f"{result.status}  ({result.duration_s:5.2f}s)")
 
+        if result.status in ("FAIL", "ERROR"):
+            for line in result.tail:
+                print(f"         | {_safe_str(line)}")
+            if args.fail_fast:
+                print("\n--fail-fast: stopping at the first failure.")
+                break
+
     passed = sum(1 for r in results if r.status == "PASS")
     failed = sum(1 for r in results if r.status in ("FAIL", "ERROR"))
     skipped = sum(1 for r in results if r.status == "SKIP")
     print("=" * 78)
     print(f"{passed} passed / {failed} failed / {skipped} skipped")
+
+    if args.json:
+        import json as _json
+
+        Path(args.json).write_text(
+            _json.dumps(
+                {
+                    "static_only": args.static_only,
+                    "require_live_db": args.require_live_db,
+                    "summary": {
+                        "passed": passed,
+                        "failed": failed,
+                        "skipped": skipped,
+                    },
+                    "gates": [
+                        {
+                            "name": r.name,
+                            "status": r.status,
+                            "returncode": r.returncode,
+                            "duration_s": round(r.duration_s, 3),
+                            "detail": r.detail,
+                        }
+                        for r in results
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"Report written to {args.json}")
+
     return 1 if failed else 0
 
 

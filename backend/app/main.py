@@ -20,6 +20,7 @@ from app.core.exception_handlers import domain_exception_handler
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.public_route_registry import is_public, registered_paths
+from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
 from app.middleware.public_rate_limit import (
@@ -185,6 +186,22 @@ app.add_middleware(HostTenantMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(PublicApiRateLimitMiddleware)
 app.add_middleware(RequestTraceMiddleware)
+
+# ARCH-28 RFC 8594. Registered LAST, which in Starlette makes it the
+# OUTERMOST layer: the effective order becomes
+#   Deprecation -> RequestTrace -> PublicApiRateLimit -> GlobalRateLimit
+#   -> HostTenant -> app.
+#
+# Outermost is deliberate. ARCH-21's _apply_version_headers runs INSIDE
+# each public gateway handler, so a 429 from the rate limiter, a 404
+# from host resolution and a 401 from an expired key all carry no
+# policy headers — and a client being throttled mid-migration is
+# precisely the client that needs to see the sunset date.
+#
+# It never overwrites a header a handler already set, and it MERGES
+# Link rather than replacing it, so the gateway's rel="describedby"
+# and this layer's rel="sunset" coexist.
+app.add_middleware(DeprecationMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 
 

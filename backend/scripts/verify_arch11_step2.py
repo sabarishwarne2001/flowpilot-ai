@@ -220,10 +220,24 @@ def main() -> int:  # noqa: C901 - a verifier is a list of checks
             check("S2.14", False, f"scoped_chunk_query failed: {exc}")
 
         # --- S2.15 single alembic head --------------------------------------
+        # ARCH-28 reconciliation: single head, ARCH-11 reachable.
+        # S2.15 asserted the head WAS arch11_step2_chunks_expand, which
+        # stopped being true at ARCH-12. The invariant it wanted is that
+        # the DAG has one head and this phase's expand migration is still
+        # in its lineage.
         heads = sql("SELECT version_num FROM alembic_version").scalars().all()
+        from alembic.config import Config as _AlembicConfig
+        from alembic.script import ScriptDirectory as _ScriptDirectory
+
+        _script = _ScriptDirectory.from_config(
+            _AlembicConfig(str(REPO_ROOT / "alembic.ini")))
+        _lineage = (
+            {r.revision for r in _script.iterate_revisions(heads[0], "base")}
+            if len(heads) == 1 else set()
+        )
         check(
             "S2.15",
-            heads == ["arch11_step2_chunks_expand"],
+            len(heads) == 1 and "arch11_step2_chunks_expand" in _lineage,
             f"alembic head: {heads}",
         )
 

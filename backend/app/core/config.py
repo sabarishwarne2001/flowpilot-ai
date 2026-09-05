@@ -6,6 +6,11 @@ from typing import Optional
 from cryptography.fernet import Fernet
 from pydantic import field_validator, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ARCH-28: Literal is used by SAML_CRYPTO_BACKEND to pin the one legal
+# value, so a deployment that sets it to python3-saml fails at startup
+# rather than at the first encrypted assertion.
+from typing import Literal  # noqa: E402
 from app.core.constants import APP_VERSION
 
 LEAKED_JWT_SECRET_KEYS: frozenset[str] = frozenset(
@@ -243,6 +248,34 @@ class Settings(BaseSettings):
     #
     #   S3_REGIONAL_BUCKETS='{"EU":"flowpilot-eu","US":"flowpilot-us"}'
     S3_REGIONAL_BUCKETS: dict[str, str] = {}
+
+    # ======================================================================
+    # ARCH-28 — SAML settings that ARCH-16 read but never declared.
+    #
+    # The same defect the ARCH-25 block below documents, four more
+    # instances of it. `saml_gateway` reads SAML_CLOCK_SKEW_S and
+    # `app/api/v1/saml.py` reads SAML_RAW_ASSERTION_RETENTION_DAYS, both
+    # through getattr(). Neither was declared, so extra="ignore"
+    # discarded them and both have returned their literal defaults on
+    # every deployment since ARCH-16 shipped.
+    #
+    # SAML_CRYPTO_BACKEND is the worst of the four: it was named to the
+    # operator as the REMEDY in the encrypted-assertion error message. It
+    # is declared here so the value is at least readable, and pinned to a
+    # single legal value, because python3-saml is not installed and
+    # xmlsec1 is not in the runtime image by deliberate policy. See
+    # app/services/auth/saml_security.XMLSEC1_POLICY for the decision and
+    # its reasoning.
+    SAML_CLOCK_SKEW_S: int = 120
+    SAML_RAW_ASSERTION_RETENTION_DAYS: int = 30
+    SAML_CRYPTO_BACKEND: Literal["signxml"] = "signxml"
+
+    # The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if
+    # settings cannot be read at all, hardening_policy_from_settings()
+    # returns the hardened policy. A GA platform needs a switch for the
+    # night a real IdP turns out to emit something structurally odd; it
+    # does not need one that can be reached by accident.
+    SAML_XSW_DEFENCE_ENABLED: bool = True
 
     # ======================================================================
     # ARCH-25 — white-label, custom domains and tenant branding.

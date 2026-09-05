@@ -175,11 +175,23 @@ def main() -> int:
               "run scripts/archive_logo_adoption_staging.py then "
               "`alembic -x archived=1 upgrade head`")
 
+        # ARCH-28 reconciliation: ARCH-07's revision must be REACHABLE
+        # from the head, not BE the head. This asserted equality against
+        # b6e1d94f07ca and has been false since ARCH-08 shipped; it only
+        # ever ran where PostgreSQL was reachable, which is why nobody
+        # saw it during eleven phases of static gate runs.
         head = session.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-        check(f"alembic head == {EXPECTED_HEAD}", head == EXPECTED_HEAD,
-              f"head={head}")
+        from alembic.config import Config as _AlembicConfig
+        from alembic.script import ScriptDirectory as _ScriptDirectory
+
+        _script = _ScriptDirectory.from_config(
+            _AlembicConfig(str(backend_dir / "alembic.ini")))
+        lineage = {r.revision for r in _script.iterate_revisions(head, "base")}
+        check(f"{EXPECTED_HEAD} is reachable from the live head",
+              EXPECTED_HEAD in lineage,
+              f"head={head}; ARCH-07's revision is not in its lineage")
 
     finally:
         session.close()

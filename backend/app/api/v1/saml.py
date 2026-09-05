@@ -281,6 +281,20 @@ def assertion_consumer_service(
             expected_in_response_to=expected_in_response_to,
             allow_unsolicited=bool(config.allow_unsolicited),
         )
+        # ARCH-28: the config above was chosen by reading saml:Issuer
+        # from the UNVERIFIED envelope. Nothing compared that choice
+        # back to the issuer inside the signed assertion. Today the
+        # mismatch is caught incidentally, because the wrong config
+        # carries the wrong certificate — but that is a property of the
+        # certificate inventory, not of the code. Two organizations
+        # behind one Entra tenant, or a certificate copied during a
+        # migration, and cross-tenant assertion acceptance is immediate.
+        from app.services.auth import saml_security
+
+        saml_security.bind_issuer(
+            verified_issuer=data.issuer,
+            configured_entity_id=config.idp_entity_id,
+        )
         saml_gateway.guard_replay(db, assertion_id=data.assertion_id,
                                   idp_config_id=config.id,
                                   not_on_or_after=data.not_on_or_after)

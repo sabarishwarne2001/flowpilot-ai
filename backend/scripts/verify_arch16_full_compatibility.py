@@ -85,10 +85,29 @@ def main() -> int:
     try:
         script = ScriptDirectory.from_config(Config(str(REPO / "alembic.ini")))
         heads = script.get_heads()
-        if len(heads) == 1 and heads[0] == "arch16_step8_outbox_identity_vocabulary":
-            record_pass("Alembic DAG Integrity", f"Single clean head at '{heads[0]}'")
+        # ARCH-28 reconciliation: assert single head, not a frozen literal.
+        #
+        # This asserted heads == ['arch16_step8_outbox_identity_vocabulary'],
+        # which stopped being true the moment ARCH-17 shipped. Bumping the
+        # literal to the current head would move the same failure to the
+        # next phase. The invariant ARCH-16 wanted is that the DAG has ONE
+        # head — that is what catches an alembic merge conflict — plus
+        # that ARCH-16's own revision is still reachable from it, which is
+        # what catches someone deleting it.
+        ARCH16_REVISION = "arch16_step8_outbox_identity_vocabulary"
+        if len(heads) != 1:
+            record_fail("Alembic DAG Integrity",
+                        f"Expected exactly one head, found: {heads}")
         else:
-            record_fail("Alembic DAG Integrity", f"Expected single head 'arch16_step8_outbox_identity_vocabulary', found: {heads}")
+            lineage = {rev.revision for rev in script.iterate_revisions(heads[0], "base")}
+            if ARCH16_REVISION in lineage:
+                record_pass("Alembic DAG Integrity",
+                            f"Single head '{heads[0]}'; {ARCH16_REVISION} "
+                            f"reachable across {len(lineage)} revisions")
+            else:
+                record_fail("Alembic DAG Integrity",
+                            f"{ARCH16_REVISION} is not in the lineage of "
+                            f"head '{heads[0]}'")
     except Exception as e:
         record_fail("Alembic DAG Integrity", str(e))
 
