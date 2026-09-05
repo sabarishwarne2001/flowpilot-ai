@@ -11,7 +11,7 @@ TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09> [args...]" >&2
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance> [args...]" >&2
     exit 64
 fi
 
@@ -22,6 +22,7 @@ case "${NAME}" in
     identity)    SCRIPT="scripts/sweep_identity.py"    ; HEARTBEAT="${HEARTBEAT_UUID_IDENTITY:-}"    ;;
     invitations) SCRIPT="scripts/sweep_invitations.py" ; HEARTBEAT="${HEARTBEAT_UUID_INVITATIONS:-}" ;;
     arch09)      SCRIPT="scripts/sweep_arch09.py"      ; HEARTBEAT="${HEARTBEAT_UUID_ARCH09:-}"      ;;
+    compliance)  SCRIPT="scripts/sweep_compliance.py"  ; HEARTBEAT="${HEARTBEAT_UUID_COMPLIANCE:-}" ;;
     *)
         echo "unknown sweeper: ${NAME}" >&2
         exit 64

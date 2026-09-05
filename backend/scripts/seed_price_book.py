@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""ARCH-14 Step 1 — publish a price book."""
+"""ARCH-14 Step 1 & ARCH-18 — publish a commercial price book with rate cards and cost bases.
+
+Idempotent. Safe to run with or without CLI arguments.
+
+    python scripts/seed_price_book.py
+    python scripts/seed_price_book.py --version 1 --json
+"""
 
 from __future__ import annotations
 
@@ -14,15 +20,20 @@ from typing import Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.session import SessionLocal  # noqa: E402
+from app.models.price_book import PriceBook  # noqa: E402
 from app.services import pricing_service  # noqa: E402
 from app.services.pricing_service import PriceSpec  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
+    # --- Groq ---
     {
         "event_type": "llm.input_token",
         "provider": "groq",
         "model": None,
         "unit_price_micros": "0.100000000",
+        "cost_basis_micros": "0.050000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Provider-wide default for Groq input tokens.",
     },
     {
@@ -30,6 +41,8 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "provider": "groq",
         "model": None,
         "unit_price_micros": "0.300000000",
+        "cost_basis_micros": "0.075000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Provider-wide default for Groq output tokens.",
     },
     {
@@ -37,6 +50,8 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "provider": "groq",
         "model": "llama-3.3-70b-versatile",
         "unit_price_micros": "0.590000000",
+        "cost_basis_micros": "0.059000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Groq Llama 3.3 70B input rate.",
     },
     {
@@ -44,13 +59,18 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "provider": "groq",
         "model": "llama-3.3-70b-versatile",
         "unit_price_micros": "0.790000000",
+        "cost_basis_micros": "0.079000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Groq Llama 3.3 70B output rate.",
     },
+    # --- Google Gemini ---
     {
         "event_type": "llm.input_token",
         "provider": "gemini",
         "model": None,
         "unit_price_micros": "0.150000000",
+        "cost_basis_micros": "0.075000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Provider-wide default for Gemini input tokens.",
     },
     {
@@ -58,20 +78,84 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "provider": "gemini",
         "model": None,
         "unit_price_micros": "0.600000000",
+        "cost_basis_micros": "0.300000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Provider-wide default for Gemini output tokens.",
     },
+    # --- OpenAI ---
+    {
+        "event_type": "llm.input_token",
+        "provider": "openai",
+        "model": None,
+        "unit_price_micros": "2.500000000",
+        "cost_basis_micros": "1.500000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for OpenAI input tokens.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "openai",
+        "model": None,
+        "unit_price_micros": "10.000000000",
+        "cost_basis_micros": "6.000000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for OpenAI output tokens.",
+    },
+    # --- Anthropic ---
+    {
+        "event_type": "llm.input_token",
+        "provider": "anthropic",
+        "model": None,
+        "unit_price_micros": "3.000000000",
+        "cost_basis_micros": "2.000000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for Anthropic input tokens.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "anthropic",
+        "model": None,
+        "unit_price_micros": "15.000000000",
+        "cost_basis_micros": "10.000000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for Anthropic output tokens.",
+    },
+    # --- Mistral ---
+    {
+        "event_type": "llm.input_token",
+        "provider": "mistral",
+        "model": None,
+        "unit_price_micros": "0.800000000",
+        "cost_basis_micros": "0.400000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for Mistral input tokens.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "mistral",
+        "model": None,
+        "unit_price_micros": "2.400000000",
+        "cost_basis_micros": "1.200000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Provider-wide default for Mistral output tokens.",
+    },
+    # --- Ingestion, OCR & Storage ---
     {
         "event_type": "ocr.page",
         "provider": "paddleocr",
         "model": None,
-        "unit_price_micros": "0",
-        "notes": "Self-hosted. Zero marginal provider cost.",
+        "unit_price_micros": "20000.000000000",  # $0.02 / page
+        "cost_basis_micros": "2000.000000000",   # $0.002 / page compute
+        "cost_basis_source": "MODELLED_ESTIMATE",
+        "notes": "Self-hosted OCR extraction.",
     },
     {
         "event_type": "embedding.token",
         "provider": "sentence_transformers",
         "model": None,
-        "unit_price_micros": "0",
+        "unit_price_micros": "0.100000000",
+        "cost_basis_micros": "0.010000000",
+        "cost_basis_source": "MODELLED_ESTIMATE",
         "notes": "Self-hosted embedding.",
     },
     {
@@ -79,38 +163,48 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "provider": "sentence_transformers",
         "model": None,
         "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
         "notes": "Non-billable backfill.",
     },
     {
         "event_type": "storage.gb_month",
         "provider": "internal",
         "model": None,
-        "unit_price_micros": "25000.000000000",
-        "notes": "$0.025 per GB-month.",
+        "unit_price_micros": "150000.000000000",  # $0.15 per GB-month
+        "cost_basis_micros": "23000.000000000",   # $0.023 per GB-month AWS/MinIO
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Tenant object storage.",
     },
     {
         "event_type": "document.processed",
         "provider": "internal",
         "model": None,
         "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
         "notes": "Non-billable document counter.",
     },
-    # --- Overage pricing entries required by Quota Tiers ---
+    # --- Overage Pricing Entries (Required by Quota Tiers) ---
     {
         "event_type": "storage.gb_month.overage",
         "provider": "internal",
         "model": None,
         "tier_key": "overage",
-        "unit_price_micros": "50000.000000000",
-        "notes": "$0.05 per overage GB-month.",
+        "unit_price_micros": "150000.000000000",
+        "cost_basis_micros": "23000.000000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "$0.15 per overage GB-month.",
     },
     {
         "event_type": "ocr.page.overage",
         "provider": "paddleocr",
         "model": None,
         "tier_key": "overage",
-        "unit_price_micros": "10000.000000000",
-        "notes": "$0.01 per overage OCR page.",
+        "unit_price_micros": "20000.000000000",
+        "cost_basis_micros": "2000.000000000",
+        "cost_basis_source": "MODELLED_ESTIMATE",
+        "notes": "$0.02 per overage OCR page.",
     },
     {
         "event_type": "llm.input_token.overage",
@@ -118,6 +212,8 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "model": None,
         "tier_key": "overage",
         "unit_price_micros": "1.000000000",
+        "cost_basis_micros": "0.059000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Overage rate for Groq input tokens.",
     },
     {
@@ -126,7 +222,19 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "model": None,
         "tier_key": "overage",
         "unit_price_micros": "2.000000000",
+        "cost_basis_micros": "0.079000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Overage rate for Groq output tokens.",
+    },
+    # --- Non-billable API Gateway Metering (ARCH-21) ---
+    {
+        "event_type": "api.request",
+        "provider": "platform",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Non-billable developer gateway request counter.",
     },
 ]
 
@@ -147,6 +255,10 @@ def _load_entries(path: Optional[Path]) -> list[PriceSpec]:
             tier_key=row.get("tier_key"),
             unit=row.get("unit"),
             unit_price_micros=Decimal(str(row["unit_price_micros"])),
+            cost_basis_micros=Decimal(str(row["cost_basis_micros"]))
+            if row.get("cost_basis_micros") is not None
+            else None,
+            cost_basis_source=row.get("cost_basis_source"),
             notes=row.get("notes"),
         )
         for row in raw
@@ -160,75 +272,106 @@ def _parse_instant(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def main() -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, required=True)
+    parser.add_argument("--version", type=int, default=1, help="Price book version (default: 1)")
     parser.add_argument(
         "--effective-from",
+        dest="effective_from",
         type=str,
-        required=True,
-        help="ISO-8601 instant, e.g. 2026-08-01T00:00:00Z.",
+        default=None,
+        help="ISO-8601 instant, e.g. 2026-08-01T00:00:00Z (default: current UTC timestamp)",
     )
     parser.add_argument("--from-json", type=Path, default=None)
     parser.add_argument("--currency", type=str, default="USD")
     parser.add_argument("--notes", type=str, default=None)
-    parser.add_argument(
-        "--no-close-predecessor",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-    )
-    args = parser.parse_args()
+    parser.add_argument("--no-close-predecessor", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    args = parser.parse_args(argv)
 
     entries = _load_entries(args.from_json)
-    effective_from = _parse_instant(args.effective_from)
-
-    digest = pricing_service.content_digest(
-        version=args.version,
-        currency=args.currency,
-        effective_from=effective_from,
-        entries=entries,
+    effective_from = (
+        _parse_instant(args.effective_from)
+        if args.effective_from
+        else datetime.now(timezone.utc)
     )
-    print(f"version:        {args.version}")
-    print(f"effective_from: {effective_from.isoformat()}")
-    print(f"entries:        {len(entries)}")
-    print(f"content_digest: {digest}")
-    for spec in sorted(entries, key=lambda s: (s.event_type, s.provider, s.model or "")):
-        print(
-            f"  {spec.event_type:<28} {spec.provider:<22} "
-            f"{(spec.model or '*'):<24} {spec.unit_price_micros}"
-        )
-
-    if args.dry_run:
-        print("\ndry-run: nothing written.")
-        return 0
 
     db = SessionLocal()
     try:
+        existing = db.execute(
+            select(PriceBook).where(PriceBook.version == args.version)
+        ).scalar_one_or_none()
+
+        if existing is not None:
+            msg = {
+                "status": "already-published",
+                "version": existing.version,
+                "price_book_id": str(existing.id),
+                "currency": existing.currency,
+                "published_at": existing.published_at.isoformat() if existing.published_at else None,
+            }
+            if args.as_json:
+                print(json.dumps(msg, indent=2))
+            else:
+                print(f"Price book v{existing.version} is already published ({existing.id}).")
+            return 0
+
+        digest = pricing_service.content_digest(
+            version=args.version,
+            currency=args.currency,
+            effective_from=effective_from,
+            entries=entries,
+        )
+
+        if args.dry_run:
+            print(f"version:        {args.version}")
+            print(f"effective_from: {effective_from.isoformat()}")
+            print(f"entries:        {len(entries)}")
+            print(f"content_digest: {digest}")
+            print("\ndry-run: nothing written.")
+            return 0
+
         book = pricing_service.publish(
             db,
             version=args.version,
             effective_from=effective_from,
             entries=entries,
             currency=args.currency,
-            notes=args.notes,
+            notes=args.notes or "Initial platform default price book",
             close_predecessor=not args.no_close_predecessor,
         )
         book_id = str(book.id)
         book_version = book.version
         db.commit()
-        print(f"\npublished price book {book_id} v{book_version}")
+
+        if args.as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "published",
+                        "version": book_version,
+                        "price_book_id": book_id,
+                        "currency": book.currency,
+                        "entries": len(entries),
+                        "content_digest": digest,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(f"Published price book {book_id} v{book_version} with {len(entries)} entries.")
     except pricing_service.PriceBookValidationError as exc:
         if "already exists" in str(exc):
-            print(f"\nPrice book v{args.version} is already published in the database.")
-        else:
-            db.rollback()
-            raise
-    except Exception:
+            print(f"Price book v{args.version} is already published.")
+            return 0
         db.rollback()
-        raise
+        print(f"Validation error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        db.rollback()
+        print(f"seed_price_book error: {exc}", file=sys.stderr)
+        return 1
     finally:
         db.close()
 

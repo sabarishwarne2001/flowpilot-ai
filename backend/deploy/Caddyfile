@@ -1,0 +1,145 @@
+# =============================================================================
+# FlowPilot AI — Caddy ingress.
+#
+# Mounted read-only at /etc/caddy/Caddyfile by docker-compose.prod.yml.
+# Caddy handles ACME itself: no certbot, no cron renewal, no manual steps.
+#
+# Two distinct TLS paths:
+#
+#   1. The platform host ({$APP_DOMAIN}) gets a normal ACME certificate at
+#      startup.
+#   2. Tenant custom domains (ARCH-25) get on-demand certificates, gated by
+#      an ask endpoint. The gate is not optional — without it, anyone who
+#      points a DNS record at this host can force Caddy to request a
+#      certificate for a domain you do not control, and Let's Encrypt will
+#      rate-limit the whole deployment.
+# =============================================================================
+
+{
+	email {$ACME_CONTACT_EMAIL}
+
+	# On-demand TLS asks the application before issuing. The endpoint must
+	# return 200 only for a domain in `custom_domains` whose ownership
+	# challenge has been satisfied.
+	on_demand_tls {
+		ask http://web:8000/api/v1/internal/tls/authorize
+		interval 2m
+		burst 5
+	}
+
+	servers {
+		# Caddy adds exactly one X-Forwarded-For hop, which is what
+		# TRUSTED_PROXY_HOPS=1 in .env.production records.
+		trusted_proxies static private_ranges
+	}
+}
+
+# ---------------------------------------------------------------- platform ---
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Server-sent events. Buffering here would defeat ARCH-12 streaming
+	# entirely: the client would receive the whole response at once, and the
+	# resume path would never be exercised.
+	@sse {
+		path /api/v1/assistant/*/stream*
+		path /api/v1/assistant/*/resume*
+	}
+	handle @sse {
+		reverse_proxy web:8000 {
+			flush_interval -1
+			transport http {
+				response_header_timeout 10m
+			}
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy web:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle /docs* {
+		reverse_proxy web:8000
+	}
+	handle /openapi.json {
+		reverse_proxy web:8000
+	}
+
+	# The built Vite bundle. Hashed assets are immutable; index.html must
+	# never be cached or a deploy leaves clients on a stale bundle pointing
+	# at asset filenames that no longer exist.
+	handle {
+		root * /srv/frontend
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-store"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# --------------------------------------------------- tenant custom domains ---
+
+# ARCH-25. Matches every host that is not the platform host. The ask endpoint
+# above is what stops this being an open certificate proxy.
+:443 {
+	tls {
+		on_demand
+	}
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# HostTenantMiddleware resolves the tenant by exact Host match, so the
+	# original Host must survive the proxy hop intact.
+	handle /api/* {
+		reverse_proxy web:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		root * /srv/frontend
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-store"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# HTTP always redirects. Caddy does this by default for named hosts; this is
+# explicit so the behaviour survives a future edit.
+http://{$APP_DOMAIN} {
+	redir https://{$APP_DOMAIN}{uri} permanent
+}

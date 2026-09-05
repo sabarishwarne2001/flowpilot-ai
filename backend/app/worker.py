@@ -418,9 +418,29 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="app.worker")
     parser.add_argument(
         "--loop",
-        choices=["relay", "delivery", "jobs", "stripe"],
+        choices=["relay", "delivery", "jobs", "stripe", "scheduler", "all"],
         required=True,
-        help="relay | delivery | jobs | stripe",
+        help=(
+            "relay | delivery | jobs | stripe | scheduler | all. "
+            "'all' runs every loop plus the scheduler in one supervised "
+            "process, which is the single-node and local-development shape. "
+            "'scheduler' runs only the recurring-job producer."
+        ),
+    )
+    parser.add_argument(
+        "--no-supervise",
+        action="store_true",
+        help=(
+            "Run the loop unsupervised, exactly as before RH-3: any exception "
+            "escaping the loop body terminates the process. Container "
+            "orchestrators with their own restart policy may prefer this."
+        ),
+    )
+    parser.add_argument(
+        "--max-restarts",
+        type=int,
+        default=0,
+        help="0 means unlimited. Supervised mode only.",
     )
     parser.add_argument("--profile", default=None, help="light | ocr | enrich | all")
     parser.add_argument("--batch-size", type=int, default=25)
@@ -463,20 +483,68 @@ def main(argv: Optional[list[str]] = None) -> int:
         lease_seconds=lease,
         idle_sleep_seconds=args.idle_sleep,
     )
-    if args.loop == "relay":
-        runner, extra = run_relay_loop, {"per_org_cap": args.per_org_cap}
-    elif args.loop == "delivery":
-        runner, extra = run_delivery_loop, {"per_org_cap": args.per_org_cap}
-    elif args.loop == "stripe":
-        runner, extra = run_stripe_inbound_loop, {}
+
+    from app.workers.supervisor import LoopSpec, run_supervised
+
+    def _spec(name: str) -> LoopSpec:
+        if name == "relay":
+            return LoopSpec(
+                name="relay",
+                runner=run_relay_loop,
+                kwargs={**kwargs, "per_org_cap": args.per_org_cap},
+            )
+        if name == "delivery":
+            return LoopSpec(
+                name="delivery",
+                runner=run_delivery_loop,
+                kwargs={**kwargs, "per_org_cap": args.per_org_cap},
+            )
+        if name == "stripe":
+            return LoopSpec(name="stripe", runner=run_stripe_inbound_loop, kwargs=dict(kwargs))
+        if name == "scheduler":
+            from app.workers.scheduler import run_scheduler_loop
+
+            return LoopSpec(
+                name="scheduler",
+                runner=run_scheduler_loop,
+                kwargs={
+                    "shutdown": shutdown,
+                    "tick_seconds": float(
+                        getattr(settings, "SCHEDULER_TICK_SECONDS", 30.0)
+                    ),
+                },
+            )
+        return LoopSpec(
+            name="jobs",
+            runner=run_jobs_loop,
+            kwargs={**kwargs, "job_types": claimable_job_types(profile)},
+        )
+
+    if args.loop == "all":
+        names = ["jobs", "relay", "delivery", "stripe", "scheduler"]
     else:
-        runner, extra = run_jobs_loop, {"job_types": claimable_job_types(profile)}
+        names = [args.loop]
+
+    specs = [_spec(name) for name in names]
+
+    if args.no_supervise:
+        if len(specs) != 1:
+            parser.error("--no-supervise is incompatible with --loop all")
+        spec = specs[0]
+        try:
+            spec.runner(**spec.kwargs)
+        except SystemExit as exc:
+            return int(exc.code or 0)
+        return 0
 
     try:
-        runner(**kwargs, **extra)
+        return run_supervised(
+            specs,
+            shutdown=shutdown,
+            max_restarts=args.max_restarts,
+        )
     except SystemExit as exc:
         return int(exc.code or 0)
-    return 0
 
 
 if __name__ == "__main__":

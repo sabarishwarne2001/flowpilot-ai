@@ -1,0 +1,91 @@
+
+################################################################################
+RUNTIME HARDENING PATCH + VERIFICATION RUN
+Started: 09/05/2026 23:40:13
+################################################################################
+
+================================================================================
+STEP 0 - Activate backend virtual environment
+Exit Code: 0
+================================================================================
+Backend .venv activated.
+
+
+================================================================================
+STEP 1 - Dry-run runtime hardening patch (expect: 5 edit(s) pending)
+Exit Code: 0
+================================================================================
+[RH-1] already applied: config.py
+[RH-2] already applied: s3.py
+[RH-3] already applied: worker.py
+[RH-4a] already applied: flowpilot-sweep
+[RH-4b] already applied: flowpilot-sweepers
+
+All runtime hardening edits are in place.
+
+
+================================================================================
+STEP 2 - Apply runtime hardening patch
+Exit Code: 0
+================================================================================
+[RH-1] already applied: config.py
+[RH-2] already applied: s3.py
+[RH-3] already applied: worker.py
+[RH-4a] already applied: flowpilot-sweep
+[RH-4b] already applied: flowpilot-sweepers
+
+All runtime hardening edits are in place.
+
+
+================================================================================
+STEP 3 - Verify patch idempotency (expect: all edits already in place, exit 0)
+Exit Code: 0
+================================================================================
+[RH-1] already applied: config.py
+[RH-2] already applied: s3.py
+[RH-3] already applied: worker.py
+[RH-4a] already applied: flowpilot-sweep
+[RH-4b] already applied: flowpilot-sweepers
+
+All runtime hardening edits are in place.
+
+
+================================================================================
+STEP 4 - Run hardening verification gate (14 checks expected)
+Exit Code: 0
+================================================================================
+PASS  G1  Settings declares S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY
+PASS  G2  AWS_* spellings are accepted as validation aliases
+PASS  G3  a production boot with no storage credentials raises
+PASS  G4  boto3.client('s3') is never called without credential kwargs
+PASS  G5  the supervisor restarts a crashed loop rather than exiting
+PASS  G6  no unbounded Thread.join() (blocks signal delivery on Windows)
+PASS  G7  app.worker exposes --loop all and --loop scheduler
+PASS  G8  every scheduled job type has a registered handler
+PASS  G9  every scheduled job type is claimable by some worker profile
+PASS  G10 the scheduler serialises replicas with an advisory lock
+PASS  G11 scheduler lock keys are hash-seed stable
+PASS  G12 the money-bearing recurring jobs are actually scheduled
+PASS  G13 scheduler adds no Alembic revision
+PASS  G14 every sweep_*.py script is reachable from the cron dispatcher
+
+14/14 checks passed.
+
+
+
+################################################################################
+RUNTIME HARDENING VERIFICATION COMPLETE
+Completed: 09/05/2026 23:40:21
+
+NOTE: start_dev.ps1 was NOT run by this script. It boots Docker, runs
+migrations, seeds data, and then starts long-running dev servers (uvicorn,
+the background worker, and Vite) that do not exit on their own - running it
+inside this batch runner would hang forever waiting for those processes to
+finish. Launch it separately and manually once this report confirms 14/14
+hardening checks passed:
+
+    Set-Location "C:\Users\sabar\Desktop\flowpilot-ai"
+    .\start_dev.ps1
+################################################################################
+
+

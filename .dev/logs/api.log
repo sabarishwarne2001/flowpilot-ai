@@ -1,0 +1,16 @@
+[2026-09-05 23:41:35] [INFO] [app.main:main.py:169] - CORS policies actively applied to HTTP pathways.
+[2026-09-05 23:41:35] [INFO] [app.main:main.py:170] - CORS response headers exposed to script: ['WWW-Authenticate', 'Retry-After', 'X-Request-Id', 'X-FlowPilot-API-Version', 'Deprecation', 'Sunset', 'Link', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'X-RateLimit-Tier']
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:241] - API endpoints registered under baseline prefix: /api/v1
+[2026-09-05 23:41:37] [INFO] [uvicorn.error:server.py:77] - Started server process [8320]
+[2026-09-05 23:41:37] [INFO] [uvicorn.error:on.py:48] - Waiting for application startup.
+[2026-09-05 23:41:37] [INFO] [app.middleware.deprecation:deprecation.py:263] - ARCH-28 deprecation policy active on 1 path prefix(es): /api/v1/audit-logs
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:112] - Starting FlowPilot AI Backend Core...
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:113] - Active Environment: 'development'
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:114] - Parsed Allowed Origin Domains: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000']
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:118] - Target file upload directory initialized at path: 'uploads'
+[2026-09-05 23:41:37] [INFO] [app.workers.handlers:__init__.py:294] - jobs.handlers_registered
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:125] - ARCH-10 / ARCH-16 asynchronous job handlers registered.
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:130] - Public route registry asserted successfully against all endpoints.
+[2026-09-05 23:41:37] [INFO] [app.core.slo_recorder:slo_recorder.py:152] - slo.recorder_installed
+[2026-09-05 23:41:37] [INFO] [app.main:main.py:134] - SLO stage recorder installed.
+[2026-09-05 23:41:37] [INFO] [uvicorn.error:on.py:62] - Application startup complete.

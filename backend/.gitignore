@@ -18,6 +18,7 @@ ENV/
 # Environment Variables
 # ==========================
 .env
+.env.production
 
 # ==========================
 # IDE

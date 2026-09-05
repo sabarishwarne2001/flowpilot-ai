@@ -84,6 +84,9 @@ class S3CompatibleStorageDriver(StorageDriver):
         multipart_chunksize: int = DEFAULT_MULTIPART_CHUNKSIZE,
         max_concurrency: int = 4,
         addressing_style: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
+        session_token: Optional[str] = None,
         client: Any = None,
     ) -> None:
         if not bucket:
@@ -114,6 +117,12 @@ class S3CompatibleStorageDriver(StorageDriver):
         elif self._flavor == "minio":
             s3_options["addressing_style"] = "path"
 
+        credentials = self._resolved_credentials(
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+            session_token=session_token,
+        )
+
         self._client = boto3.client(
             "s3",
             region_name="auto" if self._flavor == "r2" else region,
@@ -124,7 +133,48 @@ class S3CompatibleStorageDriver(StorageDriver):
                 s3=s3_options or None,
                 signature_version="s3v4",
             ),
+            **credentials,
         )
+
+    @staticmethod
+    def _resolved_credentials(
+        *,
+        access_key_id: Optional[str],
+        secret_access_key: Optional[str],
+        session_token: Optional[str],
+    ) -> dict[str, str]:
+        """Explicit credentials, falling back to Settings, never to ambient.
+
+        RH-2. This constructor previously called boto3.client() with no
+        credential kwargs at all, so botocore walked its ambient chain:
+        os.environ, ~/.aws/credentials, then IMDS. On a developer host with
+        none of those, the first PutObject raised NoCredentialsError from
+        four frames below document_intake_service, which made the failure
+        read as a storage bug rather than a configuration one.
+
+        Settings is imported lazily. app.core.storage.s3 is imported by
+        app.core.storage.__init__, which app.core.config must not depend on;
+        a module-level import here would close that cycle.
+
+        An explicitly passed credential always wins, which is what keeps the
+        ARCH-26 warehouse connectors and every test double able to inject
+        their own without touching global settings.
+        """
+        if access_key_id and secret_access_key:
+            resolved = {
+                "aws_access_key_id": access_key_id,
+                "aws_secret_access_key": secret_access_key,
+            }
+            if session_token:
+                resolved["aws_session_token"] = session_token
+            return resolved
+
+        from app.core.config import settings
+
+        from_settings = settings.s3_credentials
+        return {
+            key: value for key, value in from_settings.items() if value
+        }
 
     def _object_key(self, key: str) -> str:
         safe = sanitize_key(key)

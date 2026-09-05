@@ -1,8 +1,10 @@
-"""ARCH-14 Step 4 — publish quota tiers.
+#!/usr/bin/env python3
+"""ARCH-14 Step 4 — publish default commercial quota tiers.
 
-    python -m scripts.seed_quota_tiers --dry-run
-    python -m scripts.seed_quota_tiers --version 1 --effective-from 2026-09-01T00:00:00Z
-    python -m scripts.seed_quota_tiers --assign <org-uuid> --tier business
+Idempotent.
+
+    python scripts/seed_quota_tiers.py
+    python scripts/seed_quota_tiers.py --json
 """
 
 from __future__ import annotations
@@ -21,10 +23,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.db.session import SessionLocal  # noqa: E402
-from app.models.quota_tier import OveragePolicy  # noqa: E402
+from app.models.quota_tier import OveragePolicy, QuotaTier  # noqa: E402
 from app.models.spend_limit import SpendLimitPeriod  # noqa: E402
 from app.services import quota_service  # noqa: E402
 from app.services.quota_service import TierEntrySpec  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 OVERAGE_TIER_KEY = "overage"
 
@@ -181,46 +184,17 @@ def _parse_instant(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _print_tier(key: str, display_name: str, specs: list[TierEntrySpec]) -> None:
-    print(f"\n{key}  ({display_name})")
-    for spec in sorted(specs, key=lambda s: s.limit_key):
-        ceiling = (
-            f"qty<={spec.max_quantity}"
-            if spec.max_quantity is not None
-            else f"cost<={spec.max_cost_micros}µ"
-        )
-        grace = f" +{spec.grace_quantity} grace" if spec.grace_quantity else ""
-        price = (
-            f" @{spec.overage_price_tier_key}"
-            if spec.overage_price_tier_key
-            else ""
-        )
-        print(
-            f"  {spec.limit_key:<22} {spec.period.value:<6} {ceiling:<26}"
-            f"{spec.overage_policy}{price}{grace}"
-        )
-
-
-def main() -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", type=int, default=1)
-    parser.add_argument(
-        "--effective-from",
-        type=str,
-        default=None,
-    )
+    parser.add_argument("--effective-from", type=str, default=None)
     parser.add_argument("--from-json", type=Path, default=None)
-    parser.add_argument(
-        "--only", type=str, default=None,
-    )
-    parser.add_argument(
-        "--assign",
-        type=str,
-        default=None,
-    )
+    parser.add_argument("--only", type=str, default=None)
+    parser.add_argument("--assign", type=str, default=None)
     parser.add_argument("--tier", type=str, default=None)
     parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    args = parser.parse_args(argv)
 
     if args.assign:
         if not args.tier:
@@ -234,13 +208,14 @@ def main() -> int:
             )
             label = f"{tier.key}/v{tier.version}"
             db.commit()
-        except Exception:
+            print(f"organization {args.assign} -> {label}")
+            return 0
+        except Exception as exc:
             db.rollback()
-            raise
+            print(f"Error assigning tier: {exc}", file=sys.stderr)
+            return 1
         finally:
             db.close()
-        print(f"organization {args.assign} -> {label}")
-        return 0
 
     source: dict[str, Any] = (
         json.loads(args.from_json.read_text(encoding="utf-8"))
@@ -256,23 +231,14 @@ def main() -> int:
         else datetime.now(timezone.utc)
     )
 
-    if args.from_json is None:
-        print(
-            "WARNING: publishing PLACEHOLDER ceilings from this script's "
-            "source. Pass --from-json with the agreed plan limits.",
-            file=sys.stderr,
-        )
-
-    print(f"version:        {args.version}")
-    print(f"effective_from: {effective_from.isoformat()}")
     prepared = {
         key: (payload["display_name"], _specs(payload["entries"]))
         for key, payload in source.items()
     }
-    for key, (display_name, specs) in prepared.items():
-        _print_tier(key, display_name, specs)
 
     if args.dry_run:
+        print(f"version:        {args.version}")
+        print(f"effective_from: {effective_from.isoformat()}")
         print("\ndry-run: nothing written.")
         return 0
 
@@ -280,6 +246,17 @@ def main() -> int:
     published: list[str] = []
     try:
         for key, (display_name, specs) in prepared.items():
+            existing = db.execute(
+                select(QuotaTier).where(
+                    QuotaTier.key == key,
+                    QuotaTier.version == args.version,
+                )
+            ).scalar_one_or_none()
+
+            if existing is not None:
+                published.append(f"{existing.key}/v{existing.version} (existing)")
+                continue
+
             tier = quota_service.publish_tier(
                 db,
                 key=key,
@@ -290,13 +267,18 @@ def main() -> int:
             )
             published.append(f"{tier.key}/v{tier.version}")
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        raise
+        print(f"Error publishing quota tiers: {exc}", file=sys.stderr)
+        return 1
     finally:
         db.close()
 
-    print(f"\npublished: {', '.join(published)}")
+    if args.as_json:
+        print(json.dumps({"status": "ok", "tiers": published}, indent=2))
+    else:
+        print(f"Quota tiers: {', '.join(published)}")
+
     return 0
 
 

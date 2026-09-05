@@ -4,7 +4,13 @@ import warnings
 from pathlib import Path
 from typing import Optional
 from cryptography.fernet import Fernet
-from pydantic import field_validator, SecretStr, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    field_validator,
+    SecretStr,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ARCH-28: Literal is used by SAML_CRYPTO_BACKEND to pin the one legal
@@ -238,6 +244,44 @@ class Settings(BaseSettings):
     S3_MULTIPART_THRESHOLD: int = 16 * 1024 * 1024
     S3_MULTIPART_CHUNKSIZE: int = 16 * 1024 * 1024
     S3_MAX_CONCURRENCY: int = 4
+
+    # ======================================================================
+    # RH-1 — object storage credentials.
+    #
+    # These were never declared. backend/.env.example has shipped
+    # AWS_ACCESS_KEY_ID=minioadmin since ARCH-10, but `model_config` sets
+    # extra="ignore", so pydantic-settings read the key, found no matching
+    # field, and dropped it. It was never written to os.environ, which is
+    # the only place botocore's credential chain looks. Every host-run
+    # process (uvicorn in a venv, `python -m app.worker`) therefore had no
+    # credentials and raised NoCredentialsError on the first PutObject.
+    # docker-compose.yml masked this by exporting AWS_* into the container
+    # environment for real.
+    #
+    # AliasChoices keeps every existing .env and compose file working: the
+    # canonical name is S3_*, the AWS_* spelling is accepted verbatim.
+    # ======================================================================
+    S3_ACCESS_KEY_ID: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
+    )
+    S3_SECRET_ACCESS_KEY: Optional[SecretStr] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"
+        ),
+    )
+    S3_SESSION_TOKEN: Optional[SecretStr] = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_SESSION_TOKEN", "AWS_SESSION_TOKEN"),
+    )
+
+    #: When true and ENVIRONMENT is development or test, an object-storage
+    #: backend with no credentials resolves to the docker-compose MinIO
+    #: defaults instead of falling through to botocore's ambient chain.
+    #: Ignored outside development and test, where a missing credential is a
+    #: hard boot failure rather than something to paper over.
+    S3_DEV_FALLBACK_CREDENTIALS: bool = True
     # ARCH-20 — data residency.
     #
     # Region -> bucket. Empty by default, which leaves every tenant on GLOBAL
@@ -863,6 +907,111 @@ class Settings(BaseSettings):
     def replica_configured(self) -> bool:
         """True only when a distinct standby URI is in effect."""
         return self.sqlalchemy_replica_uri != self.sqlalchemy_database_uri
+
+
+    # ======================================================================
+    # RH-1 — storage credential resolution.
+    # ======================================================================
+
+    _DEV_S3_ACCESS_KEY_ID = "minioadmin"
+    _DEV_S3_SECRET_ACCESS_KEY = "minioadmin"
+    _DEV_S3_ENDPOINT_URL = "http://localhost:9000"
+    _DEV_S3_BUCKET = "flowpilot-dev"
+
+    @model_validator(mode="after")
+    def _resolve_storage_credentials(self) -> "Settings":
+        """Fill dev storage defaults, or refuse to boot in production.
+
+        The two failure modes this closes are asymmetric and are handled
+        asymmetrically on purpose.
+
+        Development: a founder running `uvicorn app.main:app` on the host
+        against docker-compose MinIO has no AWS_* in the shell. Silently
+        deferring to botocore's ambient chain turns that into a
+        NoCredentialsError at upload time, several layers below the cause.
+        Defaulting to the compose credentials is correct here because those
+        credentials are already the documented, committed, non-secret
+        defaults in docker-compose.yml.
+
+        Production: defaulting would be a security defect. An operator who
+        forgot S3_SECRET_ACCESS_KEY must get a boot failure naming the
+        variable, not a running process that writes tenant documents into
+        whatever bucket an instance role happens to reach.
+        """
+        backend = (self.STORAGE_BACKEND or "").strip().lower()
+        if backend not in {"s3", "r2", "minio"}:
+            return self
+
+        environment = (self.ENVIRONMENT or "").strip().lower()
+        is_dev = environment in {"development", "dev", "test", "testing", "local"}
+        has_key = bool(self.S3_ACCESS_KEY_ID)
+        has_secret = bool(
+            self.S3_SECRET_ACCESS_KEY
+            and self.S3_SECRET_ACCESS_KEY.get_secret_value().strip()
+        )
+
+        if has_key and has_secret:
+            return self
+
+        if is_dev and self.S3_DEV_FALLBACK_CREDENTIALS:
+            if not has_key:
+                object.__setattr__(
+                    self, "S3_ACCESS_KEY_ID", self._DEV_S3_ACCESS_KEY_ID
+                )
+            if not has_secret:
+                object.__setattr__(
+                    self,
+                    "S3_SECRET_ACCESS_KEY",
+                    SecretStr(self._DEV_S3_SECRET_ACCESS_KEY),
+                )
+            if not self.S3_ENDPOINT_URL:
+                object.__setattr__(
+                    self, "S3_ENDPOINT_URL", self._DEV_S3_ENDPOINT_URL
+                )
+            if not self.S3_BUCKET:
+                object.__setattr__(self, "S3_BUCKET", self._DEV_S3_BUCKET)
+            warnings.warn(
+                "STORAGE_BACKEND=%s with no S3_ACCESS_KEY_ID/"
+                "S3_SECRET_ACCESS_KEY. Falling back to the local MinIO "
+                "development credentials from docker-compose.yml. This "
+                "fallback is refused when ENVIRONMENT=production."
+                % backend,
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return self
+
+        missing = []
+        if not has_key:
+            missing.append("S3_ACCESS_KEY_ID (or AWS_ACCESS_KEY_ID)")
+        if not has_secret:
+            missing.append("S3_SECRET_ACCESS_KEY (or AWS_SECRET_ACCESS_KEY)")
+        raise ValueError(
+            f"STORAGE_BACKEND={backend!r} requires explicit object-storage "
+            f"credentials. Missing: {', '.join(missing)}. Refusing to fall "
+            "back to botocore's ambient credential chain, which would let a "
+            "misconfigured host write tenant documents to an unintended "
+            "bucket under an instance role."
+        )
+
+    @property
+    def s3_credentials(self) -> dict[str, Optional[str]]:
+        """The kwargs boto3.client() needs. Empty values become None."""
+        secret = (
+            self.S3_SECRET_ACCESS_KEY.get_secret_value()
+            if self.S3_SECRET_ACCESS_KEY
+            else None
+        )
+        token = (
+            self.S3_SESSION_TOKEN.get_secret_value()
+            if self.S3_SESSION_TOKEN
+            else None
+        )
+        return {
+            "aws_access_key_id": self.S3_ACCESS_KEY_ID or None,
+            "aws_secret_access_key": secret or None,
+            "aws_session_token": token or None,
+        }
 
     model_config = SettingsConfigDict(
         env_file=".env",

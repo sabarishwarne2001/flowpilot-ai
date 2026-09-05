@@ -6,4 +6,9 @@ MAILTO=""
 23 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep identity --retain-days 30
 31 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep invitations --send-delay-ms 250
 41 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep arch09 --all --apply
+# RH-4. scripts/sweep_compliance.py has existed since ARCH-20 and was
+# dispatched by nothing: not by this file, not by the flowpilot-sweep
+# case statement, not by any job handler. Retention and erasure
+# enforcement has therefore never executed on a deployed host.
+53 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog
