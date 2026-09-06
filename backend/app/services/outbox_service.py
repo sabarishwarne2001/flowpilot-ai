@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Sequence
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.automation_events import (
@@ -261,6 +262,27 @@ def emit(
     normalised = _normalise_payload(payload)
     depth, causation_id, correlation_id = _causality(caused_by)
 
+    # --- TRUE IDEMPOTENCY RESOLUTION ---
+    # If this exact idempotency key was already emitted for this organization,
+    # return the existing record instead of crashing PostgreSQL with a UniqueViolation.
+    if idempotency_key is not None:
+        existing = db.execute(
+            select(OutboxEvent).where(
+                OutboxEvent.organization_id == organization_id,
+                OutboxEvent.idempotency_key == idempotency_key,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            logger.info(
+                "outbox.idempotent_duplicate_reused",
+                extra={
+                    "outbox_event_id": str(existing.id),
+                    "idempotency_key": idempotency_key,
+                    "event_type": event_type,
+                },
+            )
+            return existing
+
     event = OutboxEvent(
         organization_id=organization_id,
         workspace_id=workspace_id,
@@ -345,6 +367,18 @@ def emit_many(
                 f"events[{index}] is missing required key {exc}."
             ) from exc
 
+        idempotency_key = spec.get("idempotency_key")
+        if idempotency_key is not None:
+            existing = db.execute(
+                select(OutboxEvent).where(
+                    OutboxEvent.organization_id == organization_id,
+                    OutboxEvent.idempotency_key == idempotency_key,
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                prepared.append(existing)
+                continue
+
         resolved_visibility = _resolve_visibility(event_type, spec.get("visibility"))
         _assert_event_type(event_type, visibility=resolved_visibility)
         normalised = _normalise_payload(spec.get("payload"))
@@ -357,7 +391,7 @@ def emit_many(
             resource_id=spec.get("resource_id"),
             payload=normalised,
             audit_log_id=spec.get("audit_log_id"),
-            idempotency_key=spec.get("idempotency_key"),
+            idempotency_key=idempotency_key,
             status=OutboxEventStatus.PENDING,
             visibility=resolved_visibility,
             depth=depth,
@@ -367,8 +401,8 @@ def emit_many(
         if spec.get("available_at") is not None:
             event.available_at = spec["available_at"]
         prepared.append(event)
+        db.add(event)
 
-    db.add_all(prepared)
     db.flush()
 
     for event in prepared:
@@ -392,7 +426,7 @@ def pending_count(
     organization_id: Optional[uuid.UUID] = None,
     visibility: Optional[str] = None,
 ) -> int:
-    from sqlalchemy import func, select
+    from sqlalchemy import func
 
     stmt = select(func.count()).select_from(OutboxEvent).where(
         OutboxEvent.status.in_(
@@ -409,7 +443,7 @@ def pending_count(
 def chain(
     db: Session, *, correlation_id: uuid.UUID, limit: int = 500
 ) -> list[OutboxEvent]:
-    from sqlalchemy import or_, select
+    from sqlalchemy import or_
 
     return list(
         db.execute(
@@ -431,8 +465,6 @@ def chain(
 def iter_dead_letters(
     db: Session, *, organization_id: Optional[uuid.UUID] = None, limit: int = 100
 ) -> Iterable[OutboxEvent]:
-    from sqlalchemy import select
-
     stmt = (
         select(OutboxEvent)
         .where(OutboxEvent.status == OutboxEventStatus.DEAD)
@@ -442,3 +474,22 @@ def iter_dead_letters(
     if organization_id is not None:
         stmt = stmt.where(OutboxEvent.organization_id == organization_id)
     return db.execute(stmt).scalars().all()
+
+
+__all__ = [
+    "CausalityError",
+    "DepthExceededError",
+    "ForbiddenEventTypeError",
+    "InvalidEventType",
+    "OutboxError",
+    "PayloadRejectedError",
+    "TransactionBoundaryError",
+    "UnknownEventTypeError",
+    "VisibilityMismatchError",
+    "chain",
+    "emit",
+    "emit_internal",
+    "emit_many",
+    "iter_dead_letters",
+    "pending_count",
+]

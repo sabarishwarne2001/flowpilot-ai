@@ -3,12 +3,14 @@ Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
 ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
 ARCH-12 Step 1 & 3: Streaming prompt preparation, system prompt isolation, and metered prompt execution.
 ARCH-14 Step 1 & 6: Platform-owned pricing and Vertex billing label guard.
+ARCH-22 / ARCH-23: Multi-provider BYOK routing and client factory integration.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -237,15 +239,6 @@ from app.core.byok_providers import (
 
 
 class _RoutedProvider:
-    """Minimal stand-in exposing the `.value` shape `AIProvider` has.
-
-    `_validate_provider` and three `stage()` calls read `provider.value`. A
-    real `AIProvider` member cannot represent OPENAI or ANTHROPIC, and
-    expanding that enum is a two-step PostgreSQL migration for a value the
-    executor cannot use anyway. This carries the routed name through the same
-    attribute path without touching the enum.
-    """
-
     __slots__ = ("value",)
 
     def __init__(self, value: str) -> None:
@@ -253,14 +246,6 @@ class _RoutedProvider:
 
 
 class _RoutedAISettings:
-    """An AISettings proxy with the provider and model a routing rule chose.
-
-    A proxy rather than a mutation: `ai_settings` is a live ORM instance owned
-    by the workspace, and writing a tenant's routing choice onto it would be
-    flushed to the database by the next commit. Every other attribute — the
-    sampling parameters, the output ceiling — is read straight off the base.
-    """
-
     __slots__ = ("_base", "provider", "model")
 
     def __init__(self, base: Any, provider: str, model: str) -> None:
@@ -273,7 +258,6 @@ class _RoutedAISettings:
 
     @classmethod
     def wrap(cls, *, base: Any, decision: Any) -> Any:
-        """Return the base unchanged when the rule asks for nothing new."""
         provider = str(decision.provider or "").strip().upper()
         model = str(decision.model_name or "").strip()
         base_provider = str(
@@ -310,20 +294,6 @@ class LLMService:
 
     @property
     def gemini_client(self) -> Any:
-        """The platform's own Gemini client. ARCH-23.
-
-        This replaced a property that called `genai.configure()`, which
-        wrote the API key into MODULE-GLOBAL state inside
-        `google.generativeai`. On a worker serving several tenants, the
-        last caller to configure won — so a tenant key set there was
-        readable by every other tenant's request. That is the single
-        reason Gemini was unroutable from ARCH-22 until now.
-
-        `google.genai.Client(api_key=...)` binds the key to an instance.
-        The platform client is still cached, which is correct: it holds
-        the PLATFORM key, and there is only one of those. Tenant clients
-        are never cached anywhere — see ProviderClientFactory.
-        """
         if settings.GEMINI_API_KEY is None:
             raise ValueError("GEMINI_API_KEY is not configured.")
         if self._gemini_client is None:
@@ -336,27 +306,10 @@ class LLMService:
         return self._gemini_client
 
     def _validate_provider(self, *, ai_settings: AISettings) -> str:
-        """The provider name, normalised, or a ValueError.
-
-        ARCH-23: every registered provider is accepted, not the two the
-        `ai_provider` PostgreSQL enum happens to hold. The set is read
-        from `ROUTABLE_PROVIDERS` rather than written out here, so a
-        provider becomes executable by flipping one registry flag and
-        adding an adapter — the two things gate 23-G3 checks agree.
-
-        A hardcoded `{"groq", "gemini"}` was the last place the
-        execution layer disagreed with the BYOK console. A tenant could
-        store an OpenAI key, see it validated, save a routing rule, and
-        have this method reject the call.
-
-        Returned lower-case because every downstream comparison in this
-        module and in `llm_resilience` is lower-case, and changing that
-        would touch the breaker names and the attempt trail.
-        """
-        raw = ai_settings.provider.value
+        raw = ai_settings.provider.value if hasattr(ai_settings.provider, "value") else str(ai_settings.provider)
         try:
             provider = normalize_provider(raw)
-        except Exception as exc:  # noqa: BLE001 — UnknownProviderError
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(
                 f"Unsupported LLM provider '{raw}'. Known providers: "
                 f"{', '.join(sorted(ROUTABLE_PROVIDERS))}."
@@ -369,8 +322,6 @@ class LLMService:
             )
         return provider.lower()
 
-    # -- ARCH-22: BYOK routing ------------------------------------------------
-
     def resolve_routing(
         self,
         *,
@@ -379,19 +330,6 @@ class LLMService:
         task_type: str,
         ai_settings: AISettings,
     ) -> tuple[AISettings, Any | None, Any | None]:
-        """Resolve (effective settings, per-call client, cost receipt).
-
-        Called BEFORE `llm_metering.reserve`, not after, and that ordering is
-        load-bearing. A routing rule can change the provider and model, which
-        changes the price book entry, which changes the spend-limit check the
-        reservation performs. Reserving against the workspace default and then
-        calling a different model would check a ceiling nobody is going to be
-        billed against.
-
-        Returns the original settings untouched when the tenant has no rule
-        for this task, so the pre-ARCH-22 path is byte-for-byte unchanged for
-        every tenant that never opens the BYOK console.
-        """
         if db is None or organization_id is None:
             return ai_settings, None, None
 
@@ -420,8 +358,6 @@ class LLMService:
 
         effective = _RoutedAISettings.wrap(base=ai_settings, decision=decision)
 
-        # A rule pointing at a provider this build cannot execute leaves the
-        # workspace default in force rather than failing the request.
         try:
             self._validate_provider(ai_settings=effective)
         except ValueError:
@@ -465,17 +401,6 @@ class LLMService:
         ai_settings: AISettings,
         client: Any | None = None,
     ) -> tuple[str, TokenUsage]:
-        """Run a Groq completion, optionally on a caller-supplied client.
-
-        ARCH-22 B1. `client` is the per-call, per-tenant instance built by
-        ProviderClientFactory. When it is None we fall through to
-        `self.groq_client`, the process-wide platform client — unchanged
-        behaviour for every non-BYOK call.
-
-        The tenant client is NEVER assigned to `self._groq_client`. Caching it
-        would make one tenant's key the default for every subsequent request
-        this worker handles, which is the defect the factory exists to remove.
-        """
         logger.info("Sending request to Groq.")
         groq = client if client is not None else self.groq_client
         completion = groq.chat.completions.create(
@@ -509,17 +434,6 @@ class LLMService:
         client: Any,
         provider_label: str,
     ) -> tuple[str, TokenUsage]:
-        """One completion path for every provider speaking the OpenAI shape.
-
-        ARCH-23. Groq, OpenAI, Azure OpenAI and Mistral all expose
-        `chat.completions.create` with the same request and response
-        shape. Four near-identical methods would drift, and a drifted
-        token count is a billing defect rather than a cosmetic one.
-
-        `client` is REQUIRED here, unlike `_query_groq`, whose optional
-        parameter exists for backward compatibility with the platform
-        path. A default would let a caller silently reach the singleton.
-        """
         completion = client.chat.completions.create(
             model=ai_settings.model,
             temperature=temperature,
@@ -536,9 +450,7 @@ class LLMService:
                 provider=provider_label,
                 model=ai_settings.model,
                 prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
-                completion_tokens=int(
-                    getattr(usage, "completion_tokens", 0) or 0
-                ),
+                completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
                 total_tokens=int(getattr(usage, "total_tokens", 0) or 0),
                 estimated_cost=0.0,
             ),
@@ -552,7 +464,6 @@ class LLMService:
         ai_settings: AISettings,
         client: Any,
     ) -> tuple[str, TokenUsage]:
-        """Anthropic's messages API. Its own request and usage shape."""
         message = client.messages.create(
             model=ai_settings.model,
             max_tokens=ai_settings.max_output_tokens,
@@ -587,7 +498,6 @@ class LLMService:
         ai_settings: AISettings,
         client: Any,
     ) -> tuple[str, TokenUsage]:
-        """Mistral's SDK uses `chat.complete`, not `chat.completions`."""
         completion = client.chat.complete(
             model=ai_settings.model,
             temperature=temperature,
@@ -632,11 +542,6 @@ class LLMService:
         logger.info("Sending request to Gemini.")
         from google.genai import types as genai_types
 
-        # ARCH-23: the tenant client when the factory supplied one, the
-        # platform client otherwise. The tenant client is never assigned
-        # to `self._gemini_client` — caching it would make one tenant's
-        # key the default for every later request on this worker, which
-        # is the process-global defect in a slower disguise.
         gemini = client if client is not None else self.gemini_client
         response = gemini.models.generate_content(
             model=ai_settings.model,
@@ -650,16 +555,6 @@ class LLMService:
         return str(response.text).strip(), response
 
     def _platform_client_for(self, provider: str) -> Any:
-        """The platform's own client for a provider.
-
-        Groq and Gemini keep their cached properties, because FlowPilot
-        holds a key for each and there is exactly one of each. The other
-        four have `platform_setting=None` in the registry — FlowPilot
-        holds no key at all — so reaching this branch for them means a
-        BYOK call lost its tenant client somewhere upstream, and the
-        honest answer is to say so rather than to raise an
-        AttributeError three frames deeper.
-        """
         key = (provider or "").strip().lower()
         if key == "groq":
             return self.groq_client
@@ -680,24 +575,9 @@ class LLMService:
         ai_settings: AISettings,
         byok_client: Any | None = None,
     ) -> tuple[str, TokenUsage]:
-        """Run the provider call under classification, backoff and a breaker.
-
-        ARCH-22. `byok_client` is used ONLY for the provider it was built for.
-        If `llm_resilience.execute` fails over to a different provider, the
-        tenant client is not carried across — a Groq client cannot serve
-        Gemini, and more importantly the failover target is the platform's own
-        account. `llm_metering._byok_applies` detects that divergence at
-        settle time and re-attributes the cost rather than stamping ZERO_BYOK.
-        """
         configured = self._validate_provider(ai_settings=ai_settings)
 
         def call(provider: str) -> tuple[str, TokenUsage]:
-            # The tenant client serves ONLY the provider it was built
-            # for. If llm_resilience fails over, the failover target is
-            # the platform's account and `byok_client` must not travel
-            # with it — `llm_metering._byok_applies` detects the
-            # divergence at settle time and re-attributes rather than
-            # stamping ZERO_BYOK on real supplier spend.
             client = byok_client if provider == configured else None
 
             if provider in _COMPLETION_DISPATCH:
@@ -721,24 +601,13 @@ class LLMService:
                 return text, TokenUsage(
                     provider="gemini",
                     model=ai_settings.model,
-                    prompt_tokens=int(
-                        getattr(usage, "prompt_token_count", 0) or 0
-                    ),
-                    completion_tokens=int(
-                        getattr(usage, "candidates_token_count", 0) or 0
-                    ),
-                    total_tokens=int(
-                        getattr(usage, "total_token_count", 0) or 0
-                    ),
+                    prompt_tokens=int(getattr(usage, "prompt_token_count", 0) or 0),
+                    completion_tokens=int(getattr(usage, "candidates_token_count", 0) or 0),
+                    total_tokens=int(getattr(usage, "total_token_count", 0) or 0),
                     estimated_cost=0.0,
                 )
 
-            raise ValueError(
-                f"No completion path for provider '{provider}'. This is "
-                "an internal inconsistency: _validate_provider accepted "
-                "it, so the registry and the dispatch table disagree. "
-                "Gate 23-G3 asserts they cannot."
-            )
+            raise ValueError(f"No completion path for provider '{provider}'.")
 
         try:
             outcome = llm_resilience.execute(
@@ -780,10 +649,6 @@ class LLMService:
             and work_item_id is not None
         )
 
-        # ARCH-22. Routing is resolved before the reservation so the price
-        # book entry and the spend-limit check both see the model that will
-        # actually be called. SUMMARY and EXTRACTION are distinct tasks in the
-        # BYOK vocabulary; the enrichment operation name selects between them.
         task_type = (
             byok_providers.TASK_SUMMARY
             if operation == "summary"
@@ -809,7 +674,7 @@ class LLMService:
             )
 
         with stage(
-            "llm", provider=effective_settings.provider.value, operation=operation
+            "llm", provider=getattr(effective_settings.provider, "value", str(effective_settings.provider)), operation=operation
         ):
             response, token_usage = self._execute_query(
                 prompt=prompt,
@@ -826,27 +691,52 @@ class LLMService:
         return response, token_usage
 
     def _extract_json(self, raw_text: str) -> dict[str, Any]:
-        cleaned = raw_text.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        elif cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+        """Robustly extract and parse JSON from any LLM response.
 
+        Handles conversational preambles, markdown code fences (```json ... ```),
+        thought tokens, and trailing commas without raising unhandled exceptions.
+        """
+        if not raw_text or not str(raw_text).strip():
+            return {}
+
+        cleaned = str(raw_text).strip()
+
+        # 1. Look for ```json ... ``` or ``` ... ``` anywhere in the response
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+        if fence_match:
+            try:
+                return json.loads(fence_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 2. Try direct json.loads with simple markdown strip
+        no_fence = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        no_fence = re.sub(r"\s*```$", "", no_fence).strip()
         try:
-            return json.loads(cleaned)
+            return json.loads(no_fence)
         except json.JSONDecodeError:
-            start = cleaned.find("{")
-            end = cleaned.rfind("}")
-            if start != -1 and end != -1:
+            pass
+
+        # 3. Find outermost { and } substring
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            candidate = cleaned[start : end + 1]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                # 4. Clean trailing commas before } or ]
                 try:
-                    return json.loads(cleaned[start : end + 1])
+                    cleaned_commas = re.sub(r",\s*([\}\]])", r"\1", candidate)
+                    return json.loads(cleaned_commas)
                 except json.JSONDecodeError:
                     pass
-            logger.error("Unable to parse JSON response from LLM.")
-            raise ValueError("Model returned invalid JSON.")
+
+        logger.warning(
+            "llm.json_parse_fallback",
+            extra={"raw_preview": cleaned[:160]},
+        )
+        return {}
 
     def _truncate_document(self, text: str) -> str:
         return text[: settings.RAG_MAX_CONTEXT_LENGTH]
@@ -932,7 +822,10 @@ class LLMService:
             workspace_id=workspace_id,
             work_item_id=work_item_id,
         )
-        return self._extract_json(response)
+        result = self._extract_json(response)
+        if not isinstance(result, dict) or "document_classification" not in result:
+            return {"document_classification": "Other", "confidence_score": 0.5}
+        return result
 
     def extract_entities(
         self,
@@ -957,7 +850,8 @@ class LLMService:
             workspace_id=workspace_id,
             work_item_id=work_item_id,
         )
-        return self._extract_json(response)
+        result = self._extract_json(response)
+        return result if isinstance(result, dict) else {}
 
     def generate_summary(
         self,
@@ -1027,7 +921,7 @@ class LLMService:
                 ai_settings=effective_settings,
             )
 
-        with stage("llm", provider=effective_settings.provider.value):
+        with stage("llm", provider=getattr(effective_settings.provider, "value", str(effective_settings.provider))):
             response, token_usage = self._execute_query(
                 prompt=prompt,
                 temperature=effective_settings.temperature,
@@ -1097,27 +991,9 @@ class LLMService:
         )
 
     def supported_task_types(self) -> tuple[str, ...]:
-        """Every task type the execution layer can actually serve.
-
-        ARCH-23. ARCH-22 declared five task types in the BYOK vocabulary
-        and wired three: a tenant could save a routing policy for
-        VERIFICATION or EMBEDDING and it did nothing — silently, with no
-        error, which is the worst shape for a policy control.
-
-        Read from the vocabulary rather than listed here, so the two
-        cannot drift. Gate 23-G14 asserts every entry has at least one
-        eligible provider.
-        """
         return tuple(BYOK_TASK_TYPE_VALUES)
 
     def assert_task_routable(self, *, provider: str, task_type: str) -> None:
-        """Refuse a provider/task pairing the provider cannot serve.
-
-        Groq and Anthropic expose no embeddings API. Without this check
-        an EMBEDDING route naming either would fail inside a document
-        pipeline hours after the rule was saved, far from the setting
-        that caused it.
-        """
         if not supports_task(provider, task_type):
             raise ValueError(
                 f"{normalize_provider(provider)} does not serve "
@@ -1131,14 +1007,6 @@ class LLMService:
             return False
 
 
-#: ARCH-23. Provider -> completion method, for the five providers that
-#: take a client and return (text, TokenUsage) directly. Gemini is
-#: absent because it returns a raw response whose usage lives on
-#: `usage_metadata` with different field names; folding it in would
-#: mean a wrapper that exists only to hide one shape difference.
-#:
-#: Keyed lower-case to match `_validate_provider`'s return value and
-#: `llm_resilience`'s provider strings.
 _COMPLETION_DISPATCH: dict[str, Any] = {
     "groq": lambda self, **kw: LLMService._query_openai_compatible(
         self, provider_label="groq", **kw

@@ -3,7 +3,7 @@
     FlowPilot AI — single-command local development launcher (Windows).
 
 .DESCRIPTION
-    Brings up the whole stack from a clean checkout:
+    Brings up the complete stack from a clean checkout:
       1. Verifies Docker, Python 3.12 and Node.js.
       2. Generates backend/.env and frontend/.env with validated defaults.
       3. Starts db (pgvector), redis, minio and minio-init.
@@ -11,7 +11,7 @@
       5. Seeds price books, quota tiers and the bootstrap admin.
       6. Starts the API and a single supervised worker (--loop all).
       7. Starts the Vite dev server.
-      8. Prints the login URL and credentials.
+      8. Automatically opens the browser to http://localhost:5173.
 #>
 
 [CmdletBinding()]
@@ -24,7 +24,7 @@ param(
     [int]$FrontendPort = 5173
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 Set-StrictMode -Version Latest
 $env:PYTHONUNBUFFERED = "1"
 
@@ -111,16 +111,16 @@ function Stop-Tracked {
     foreach ($entry in $tracked.PSObject.Properties) {
         $procId = [int]$entry.Value
         try {
-            $proc = Get-Process -Id $procId -ErrorAction Stop
-            Write-Host "    stopping $($entry.Name) (pid $procId)"
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
+            if ($proc) {
+                Write-Host "    stopping $($entry.Name) (pid $procId)"
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
         } catch { }
     }
     Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
     Write-Ok 'Tracked processes stopped.'
 }
-
-# ---------------------------------------------------------------------------
 
 Write-Host ''
 Write-Host '  FlowPilot AI — local development launcher' -ForegroundColor White
@@ -139,7 +139,6 @@ if ($Stop) {
 New-Item -ItemType Directory -Force -Path $RunDir, $LogDir | Out-Null
 
 # --- 1. Prerequisites ------------------------------------------------------
-
 Write-Step '1/8  Verifying prerequisites'
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -169,7 +168,6 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 
 # --- 2. Virtual environment ------------------------------------------------
-
 Write-Step '2/8  Python virtual environment'
 
 $venvPython = Join-Path $VenvDir 'Scripts\python.exe'
@@ -182,7 +180,6 @@ if (-not (Test-Path $venvPython)) {
 Write-Ok 'Virtual environment present.'
 
 # --- 3. Environment files --------------------------------------------------
-
 Write-Step '3/8  Environment configuration'
 
 $backendEnv = Join-Path $BackendDir '.env'
@@ -221,6 +218,7 @@ $hostDefaults = @{
     'AWS_SECRET_ACCESS_KEY' = 'minioadmin'
     'SERVICE_ROLE'          = 'web'
     'FRONTEND_URL'          = "http://localhost:$FrontendPort"
+    'RERANKER_ENABLED'      = 'false'
 }
 foreach ($pair in $hostDefaults.GetEnumerator()) {
     if ([string]::IsNullOrWhiteSpace((Get-EnvValue $backendEnv $pair.Key))) {
@@ -246,7 +244,6 @@ if (-not (Test-Path $frontendEnv)) {
 Set-EnvValue $frontendEnv 'VITE_API_URL' "http://localhost:$ApiPort/api/v1"
 
 # --- 4. Backing services ---------------------------------------------------
-
 Write-Step '4/8  Docker backing services'
 
 Push-Location $BackendDir
@@ -266,7 +263,6 @@ if (-not (Wait-ForPort 'MinIO'      9000  90)) { Fail-Hard 'MinIO did not open p
 Start-Sleep -Seconds 2
 
 # --- 5. Migrations ---------------------------------------------------------
-
 Write-Step '5/8  Database migrations'
 
 Push-Location $BackendDir
@@ -282,74 +278,63 @@ try {
 } finally { Pop-Location }
 
 # --- 6. Seed data ----------------------------------------------------------
-
 Write-Step '6/8  Seeding commercial defaults'
 
 Push-Location $BackendDir
 try {
-    $seeders = @(
-        @{ Script = 'scripts/seed_price_book.py'; Args = @('--version', '1') },
-        @{ Script = 'scripts/seed_quota_tiers.py'; Args = @() }
-    )
-    foreach ($item in $seeders) {
-        $seederPath = $item.Script
-        if (Test-Path $seederPath) {
-            $sArgs = $item.Args
-            $proc = Start-Process -FilePath $venvPython -ArgumentList (@($seederPath) + $sArgs) -NoNewWindow -PassThru -Wait
-            if ($proc.ExitCode -eq 0) {
-                Write-Ok "$seederPath"
-            } else {
-                Write-Warn2 "$seederPath exited $($proc.ExitCode) (may already be seeded)"
-            }
-        }
+    # 1. Price Book
+    if (Test-Path 'scripts/seed_price_book.py') {
+        & $venvPython scripts/seed_price_book.py
+        Write-Ok "scripts/seed_price_book.py"
     }
 
-    $seedProc = Start-Process -FilePath $venvPython -ArgumentList @('scripts/seed_admin.py', '--json') -NoNewWindow -PassThru -Wait -RedirectStandardOutput (Join-Path $RunDir 'admin_seed.json')
-    if ($seedProc.ExitCode -eq 0 -and (Test-Path (Join-Path $RunDir 'admin_seed.json'))) {
-        try {
-            $seed = Get-Content (Join-Path $RunDir 'admin_seed.json') -Raw | ConvertFrom-Json
-            $adminEmail = $seed.email
-            $adminPassword = $seed.password
-            Write-Ok "Admin account: $adminEmail ($($seed.status))"
-        } catch {
-            $adminEmail = 'admin@flowpilot.local'; $adminPassword = 'FlowPilot!Dev123'
-        }
-    } else {
-        $adminEmail = 'admin@flowpilot.local'; $adminPassword = 'FlowPilot!Dev123'
+    # 2. Quota Tiers
+    if (Test-Path 'scripts/seed_quota_tiers.py') {
+        & $venvPython scripts/seed_quota_tiers.py
+        Write-Ok "scripts/seed_quota_tiers.py"
+    }
+
+    # 3. Admin User
+    $adminSeedJson = & $venvPython scripts/seed_admin.py --json
+    try {
+        $seed = $adminSeedJson | ConvertFrom-Json
+        $adminEmail = $seed.email
+        $adminPassword = $seed.password
+        Write-Ok "Admin account: $adminEmail ($($seed.status))"
+    } catch {
+        $adminEmail = 'admin@flowpilot.local'
+        $adminPassword = 'FlowPilot!Dev123'
         Write-Ok "Admin default: $adminEmail"
     }
 } finally { Pop-Location }
 
 # --- 7. Application processes ---------------------------------------------
-
 Write-Step '7/8  Starting application processes'
 
 $tracked = @{}
 
+# Unified console logging for API
 $apiLog = Join-Path $LogDir 'api.log'
-$apiProc = Start-Process -FilePath $venvPython `
-    -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', "$ApiPort", '--reload') `
+$apiProc = Start-Process -FilePath 'cmd.exe' `
+    -ArgumentList @('/c', "$venvPython -m uvicorn app.main:app --host 127.0.0.1 --port $ApiPort --reload > ""$apiLog"" 2>&1") `
     -WorkingDirectory $BackendDir `
-    -RedirectStandardOutput $apiLog `
-    -RedirectStandardError (Join-Path $LogDir 'api.err.log') `
     -WindowStyle Hidden -PassThru
 $tracked['api'] = $apiProc.Id
-Write-Ok "API starting (pid $($apiProc.Id)) -> $apiLog"
+Write-Ok "API starting -> $apiLog"
 
+# Unified console logging for Worker
 $workerLog = Join-Path $LogDir 'worker.log'
-$workerProc = Start-Process -FilePath $venvPython `
-    -ArgumentList @('-m', 'app.worker', '--loop', 'all', '--profile', 'all', '--log-level', 'INFO') `
+$workerProc = Start-Process -FilePath 'cmd.exe' `
+    -ArgumentList @('/c', "$venvPython -m app.worker --loop all --profile all --log-level INFO > ""$workerLog"" 2>&1") `
     -WorkingDirectory $BackendDir `
-    -RedirectStandardOutput $workerLog `
-    -RedirectStandardError (Join-Path $LogDir 'worker.err.log') `
     -WindowStyle Hidden -PassThru
 $tracked['worker'] = $workerProc.Id
-Write-Ok "Worker starting (pid $($workerProc.Id)) -> $workerLog"
+Write-Ok "Worker supervisor starting -> $workerLog"
 
 if (-not (Wait-ForPort 'API' $ApiPort 90)) {
-    Write-Fail 'The API did not bind. Last 40 lines of api.err.log:'
-    if (Test-Path (Join-Path $LogDir 'api.err.log')) {
-        Get-Content -LiteralPath (Join-Path $LogDir 'api.err.log') -Tail 40 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
+    Write-Fail 'The API did not bind. Last 40 lines of api.log:'
+    if (Test-Path $apiLog) {
+        Get-Content -LiteralPath $apiLog -Tail 40 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     }
     $tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
     exit 1
@@ -364,20 +349,17 @@ if (-not $NoFrontend) {
     }
     $viteLog = Join-Path $LogDir 'vite.log'
     $viteProc = Start-Process -FilePath 'cmd.exe' `
-        -ArgumentList @('/c', "npm run dev -- --port $FrontendPort") `
+        -ArgumentList @('/c', "npm run dev -- --port $FrontendPort > ""$viteLog"" 2>&1") `
         -WorkingDirectory $FrontendDir `
-        -RedirectStandardOutput $viteLog `
-        -RedirectStandardError (Join-Path $LogDir 'vite.err.log') `
         -WindowStyle Hidden -PassThru
     $tracked['vite'] = $viteProc.Id
-    Write-Ok "Vite starting (pid $($viteProc.Id)) -> $viteLog"
+    Write-Ok "Vite starting -> $viteLog"
     Wait-ForPort 'Frontend' $FrontendPort 120 | Out-Null
 }
 
 $tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
 
 # --- 8. Ready --------------------------------------------------------------
-
 Write-Step '8/8  Ready'
 
 Write-Host ''
@@ -395,11 +377,15 @@ Write-Host '   Sign in with' -ForegroundColor White
 Write-Host "     email      $adminEmail" -ForegroundColor Yellow
 Write-Host "     password   $adminPassword" -ForegroundColor Yellow
 Write-Host ''
-Write-Host '   Logs' -ForegroundColor White
-Write-Host "     $LogDir" -ForegroundColor DarkGray
-Write-Host '     Get-Content .dev\logs\worker.log -Wait -Tail 50' -ForegroundColor DarkGray
+Write-Host '   Live Logs (Unified)' -ForegroundColor White
+Write-Host "     Get-Content .dev\logs\worker.log -Wait -Tail 40" -ForegroundColor DarkGray
+Write-Host "     Get-Content .dev\logs\api.log -Wait -Tail 40" -ForegroundColor DarkGray
 Write-Host ''
 Write-Host '   Stop everything' -ForegroundColor White
 Write-Host '     .\start_dev.ps1 -Stop' -ForegroundColor DarkGray
 Write-Host '  ---------------------------------------------------------------' -ForegroundColor DarkGray
 Write-Host ''
+
+if (-not $NoFrontend) {
+    Start-Process "http://localhost:$FrontendPort"
+}

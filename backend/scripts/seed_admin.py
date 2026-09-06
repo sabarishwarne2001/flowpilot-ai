@@ -100,7 +100,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 {
                     "status": "already-seeded",
                     "email": existing.email,
-                    "user_id": existing.id,
+                    "user_id": str(existing.id),
                     "organization": organization.name if organization else None,
                     "organization_slug": organization.slug if organization else None,
                     "password": "(unchanged)",
@@ -109,7 +109,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
             return EXIT_OK
 
-        with db.begin():
+        try:
             user = User(
                 email=email,
                 hashed_password=get_password_hash(args.password),
@@ -167,17 +167,22 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
             )
 
+            db.commit()
+
             seeded = {
                 "status": "seeded",
                 "email": email,
                 "password": args.password,
-                "user_id": user.id,
+                "user_id": str(user.id),
                 "organization": organization.name,
                 "organization_slug": organization.slug,
-                "organization_id": organization.id,
+                "organization_id": str(organization.id),
                 "workspace": workspace.workspace_name,
-                "workspace_id": workspace.id,
+                "workspace_id": str(workspace.id),
             }
+        except Exception:
+            db.rollback()
+            raise
 
     _emit(seeded, args.as_json)
     return EXIT_OK

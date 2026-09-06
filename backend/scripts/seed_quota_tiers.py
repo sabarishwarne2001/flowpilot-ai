@@ -106,7 +106,7 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             },
             {
                 "limit_key": "storage.gb_month",
-                "max_quantity": "500",
+                "max_quantity": "250",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
@@ -212,7 +212,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
         except Exception as exc:
             db.rollback()
-            print(f"Error assigning tier: {exc}", file=sys.stderr)
+            print(f"Error assigning tier: {exc}")
             return 1
         finally:
             db.close()
@@ -254,7 +254,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             ).scalar_one_or_none()
 
             if existing is not None:
-                published.append(f"{existing.key}/v{existing.version} (existing)")
+                published.append(f"{existing.key}/v{existing.version} (already exists)")
                 continue
 
             tier = quota_service.publish_tier(
@@ -269,7 +269,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         db.commit()
     except Exception as exc:
         db.rollback()
-        print(f"Error publishing quota tiers: {exc}", file=sys.stderr)
+        print(f"Error publishing quota tiers: {exc}")
         return 1
     finally:
         db.close()

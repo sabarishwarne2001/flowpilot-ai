@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ARCH-14 Step 1 & ARCH-18 — publish a commercial price book with rate cards and cost bases.
+"""ARCH-14 Step 1 & ARCH-18 — publish commercial price book with rate cards and cost bases.
 
 Idempotent. Safe to run with or without CLI arguments.
 
@@ -144,8 +144,8 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "event_type": "ocr.page",
         "provider": "paddleocr",
         "model": None,
-        "unit_price_micros": "20000.000000000",  # $0.02 / page
-        "cost_basis_micros": "2000.000000000",   # $0.002 / page compute
+        "unit_price_micros": "20000.000000000",
+        "cost_basis_micros": "2000.000000000",
         "cost_basis_source": "MODELLED_ESTIMATE",
         "notes": "Self-hosted OCR extraction.",
     },
@@ -171,8 +171,8 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "event_type": "storage.gb_month",
         "provider": "internal",
         "model": None,
-        "unit_price_micros": "150000.000000000",  # $0.15 per GB-month
-        "cost_basis_micros": "23000.000000000",   # $0.023 per GB-month AWS/MinIO
+        "unit_price_micros": "150000.000000000",
+        "cost_basis_micros": "23000.000000000",
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Tenant object storage.",
     },
@@ -185,7 +185,7 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "ZERO_BYOK",
         "notes": "Non-billable document counter.",
     },
-    # --- Overage Pricing Entries (Required by Quota Tiers) ---
+    # --- Overage Pricing Entries ---
     {
         "event_type": "storage.gb_month.overage",
         "provider": "internal",
@@ -226,7 +226,7 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Overage rate for Groq output tokens.",
     },
-    # --- Non-billable API Gateway Metering (ARCH-21) ---
+    # --- Non-billable API Gateway Metering ---
     {
         "event_type": "api.request",
         "provider": "platform",
@@ -366,11 +366,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"Price book v{args.version} is already published.")
             return 0
         db.rollback()
-        print(f"Validation error: {exc}", file=sys.stderr)
+        print(f"Validation error: {exc}")
         return 1
     except Exception as exc:
         db.rollback()
-        print(f"seed_price_book error: {exc}", file=sys.stderr)
+        print(f"seed_price_book error: {exc}")
         return 1
     finally:
         db.close()

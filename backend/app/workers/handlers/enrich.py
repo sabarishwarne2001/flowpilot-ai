@@ -77,8 +77,70 @@ def _pages_from_extraction(work_item: WorkItem) -> list[DocumentPage]:
     )
 
 
-def _enrich(db: Session, target: _Target) -> dict[str, Any]:
+def _get_or_create_ai_settings(db: Session, workspace_id: uuid.UUID) -> Any:
+    """Resolve workspace AI settings or auto-provision platform defaults."""
     from app import crud
+    from app.core.config import settings
+    from app.models.ai_settings import AISettings
+
+    ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)
+    if ai_settings is not None:
+        return ai_settings
+
+    provider = (settings.LLM_PROVIDER or "groq").strip().lower()
+    model = (
+        settings.GROQ_MODEL_NAME
+        if provider == "groq"
+        else (settings.GEMINI_MODEL_NAME or "llama-3.3-70b-versatile")
+    )
+
+    ai_settings = AISettings(
+        workspace_id=workspace_id,
+        provider=provider,
+        model=model,
+        temperature=0.2,
+        max_tokens=2000,
+    )
+    db.add(ai_settings)
+    db.flush()
+    logger.info(
+        "enrich.auto_created_ai_settings",
+        extra={"workspace_id": str(workspace_id), "provider": provider, "model": model},
+    )
+    return ai_settings
+
+
+def _get_or_create_document_settings(db: Session, workspace_id: uuid.UUID) -> Any:
+    """Resolve workspace document settings or auto-provision defaults."""
+    from app import crud
+    from app.models.document_settings import DocumentSettings
+    from app.services.chunking_service import (
+        DEFAULT_CHUNK_OVERLAP_PCT,
+        DEFAULT_CHUNK_SIZE_TOKENS,
+    )
+
+    doc_settings = crud.get_document_settings(db, workspace_id=workspace_id)
+    if doc_settings is not None:
+        return doc_settings
+
+    doc_settings = DocumentSettings(
+        workspace_id=workspace_id,
+        chunk_size_tokens=DEFAULT_CHUNK_SIZE_TOKENS,
+        chunk_overlap_pct=DEFAULT_CHUNK_OVERLAP_PCT,
+        automatic_classification=True,
+        automatic_entity_extraction=True,
+        automatic_summarization=True,
+    )
+    db.add(doc_settings)
+    db.flush()
+    logger.info(
+        "enrich.auto_created_document_settings",
+        extra={"workspace_id": str(workspace_id)},
+    )
+    return doc_settings
+
+
+def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     from app.services import spend_control_service as spend
     from app.services.chunk_writer import replace_document_chunks
     from app.services.chunking_service import (
@@ -89,7 +151,11 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     )
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
-    from app.services.llm_metering import already_recorded, estimate_enrichment_tokens, INPUT_EVENT
+    from app.services.llm_metering import (
+        INPUT_EVENT,
+        already_recorded,
+        estimate_enrichment_tokens,
+    )
     from app.services.llm_resilience import LLMPermanentError, LLMUnavailable
     from app.services.llm_service import llm_service
     from app.services.vocabulary_service import workspace_vocabulary_service
@@ -98,14 +164,9 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         select(WorkItem).where(WorkItem.id == target.work_item_id)
     ).scalar_one()
 
-    ai_settings = crud.get_ai_settings(db, workspace_id=target.workspace_id)
-    if ai_settings is None:
-        raise ValueError(f"No AI settings for workspace {target.workspace_id}")
-    document_settings = crud.get_document_settings(
-        db, workspace_id=target.workspace_id
-    )
-    if document_settings is None:
-        raise ValueError(f"No document settings for workspace {target.workspace_id}")
+    # Auto-resolve or create settings on the fly (Zero-Config Ingestion)
+    ai_settings = _get_or_create_ai_settings(db, target.workspace_id)
+    document_settings = _get_or_create_document_settings(db, target.workspace_id)
 
     pages = _pages_from_extraction(work_item)
     full_text = "\n\n".join(page.text for page in pages)
@@ -216,6 +277,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     }
 
     def _guarded(operation: str, call):
+        """Safely execute enrichment calls without failing the document if LLM formatting varies."""
         try:
             return call()
         except SpendLimitExceededError as exc:
@@ -240,6 +302,13 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
                 "enrich.llm_unavailable",
                 extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
             )
+        except Exception as exc:
+            # Defensive fallback: formatting/parsing quirks in optional AI metadata must NOT kill document ingestion
+            skipped[operation] = f"parse_fallback: {exc}"
+            logger.warning(
+                "enrich.llm_enrichment_parsed_with_fallback",
+                extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
+            )
         return None
 
     classification = None
@@ -250,7 +319,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
                 full_text, ai_settings=ai_settings, **metering_kwargs
             ),
         )
-    if classification is None:
+    if not isinstance(classification, dict):
         classification = {"document_classification": "Other"}
     document_class = classification.get("document_classification", "Other")
 
@@ -262,7 +331,8 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
                 full_text, document_class, ai_settings=ai_settings, **metering_kwargs
             ),
         )
-    entities = entities or {}
+    if not isinstance(entities, dict):
+        entities = {}
     entities["classification_details"] = classification
 
     summary = None
@@ -418,22 +488,6 @@ def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
             "limit_key": exc.limit_key,
             "resets_at": exc.resets_at.isoformat() if exc.resets_at else None,
         }
-
-    except ValueError as exc:
-        logger.warning(
-            "enrich.permanent_failure",
-            extra={"work_item_id": str(target.work_item_id), "error": str(exc)},
-        )
-        with SessionLocal() as db:
-            transition_by_id(
-                db,
-                work_item_id=target.work_item_id,
-                to_stage=PipelineStage.FAILED,
-                organization_id=target.organization_id,
-                failure_reason=str(exc),
-            )
-            db.commit()
-        return {"outcome": Outcome.PERMANENT_FAILURE, "error": str(exc)}
 
     except Exception as exc:
         logger.warning(

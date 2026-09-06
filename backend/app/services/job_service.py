@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.request_context import carrier
@@ -85,6 +86,28 @@ def enqueue(
         raise JobServiceError(
             "enqueue() was called outside an active transaction."
         )
+
+    # True Idempotency: If a job with this idempotency key already exists for this org, return it safely
+    if idempotency_key is not None:
+        stmt = select(Job).where(Job.idempotency_key == idempotency_key)
+        if organization_id is not None:
+            stmt = stmt.where(Job.organization_id == organization_id)
+        else:
+            stmt = stmt.where(Job.organization_id.is_(None))
+
+        existing = db.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            logger.info(
+                "jobs.enqueue_idempotent_hit",
+                extra={
+                    "job_id": str(existing.id),
+                    "seq": existing.seq,
+                    "job_type": job_type,
+                    "organization_id": str(organization_id) if organization_id else None,
+                    "idempotency_key": idempotency_key,
+                },
+            )
+            return existing
 
     context = carrier() if propagate_trace else {}
     resolved_trace = trace_id or context.get("trace_id")

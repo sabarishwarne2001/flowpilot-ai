@@ -12,6 +12,7 @@ from typing import Any, Mapping, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.outbox import OutboxEvent
 from app.models.work_item import WorkItem
 from app.services import outbox_service
 
@@ -53,6 +54,7 @@ STAGE_TRANSITIONS: Mapping[PipelineStage, frozenset[PipelineStage]] = {
             PipelineStage.EXTRACTED,
             PipelineStage.FAILED,
             PipelineStage.QUOTA_BLOCKED,
+            PipelineStage.QUEUED,  # Allow re-queuing from EXTRACTING
         }
     ),
     PipelineStage.EXTRACTED: frozenset(
@@ -60,14 +62,31 @@ STAGE_TRANSITIONS: Mapping[PipelineStage, frozenset[PipelineStage]] = {
             PipelineStage.ENRICHING,
             PipelineStage.COMPLETED,
             PipelineStage.FAILED,
+            PipelineStage.QUEUED,  # Allow re-queuing from EXTRACTED
         }
     ),
     PipelineStage.ENRICHING: frozenset(
-        {PipelineStage.COMPLETED, PipelineStage.FAILED}
+        {
+            PipelineStage.COMPLETED,
+            PipelineStage.FAILED,
+            PipelineStage.QUEUED,  # Allow re-queuing from ENRICHING
+        }
     ),
     PipelineStage.COMPLETED: frozenset({PipelineStage.QUEUED}),
-    PipelineStage.FAILED: frozenset({PipelineStage.QUEUED}),
-    PipelineStage.QUOTA_BLOCKED: frozenset({PipelineStage.QUEUED}),
+    PipelineStage.FAILED: frozenset(
+        {
+            PipelineStage.QUEUED,
+            PipelineStage.EXTRACTING,
+            PipelineStage.ENRICHING,
+        }
+    ),
+    PipelineStage.QUOTA_BLOCKED: frozenset(
+        {
+            PipelineStage.QUEUED,
+            PipelineStage.EXTRACTING,
+            PipelineStage.ENRICHING,
+        }
+    ),
 }
 
 TERMINAL_STAGES: frozenset[PipelineStage] = frozenset(
@@ -158,40 +177,56 @@ def transition(
     if to_stage in {PipelineStage.FAILED, PipelineStage.QUOTA_BLOCKED}:
         work_item.failure_stage = current.value
         work_item.failure_reason = (failure_reason or "")[:1000] or None
-    elif to_stage is PipelineStage.QUEUED:
-        work_item.failure_stage = None
-        work_item.failure_reason = None
+    elif to_stage in {PipelineStage.QUEUED, PipelineStage.EXTRACTING, PipelineStage.ENRICHING}:
+        if current is PipelineStage.FAILED:
+            work_item.failure_stage = None
+            work_item.failure_reason = None
 
     db.flush([work_item])
 
     event_type = EVENT_BY_STAGE.get(to_stage)
     if emit_event and event_type:
-        payload: dict[str, Any] = {
-            "work_item_id": str(work_item.id),
-            "workspace_id": str(work_item.workspace_id),
-            "original_filename": work_item.original_filename,
-            "stage": to_stage.value,
-            "previous_stage": current.value,
-            "status": public_status,
-        }
-        if work_item.page_count is not None:
-            payload["page_count"] = work_item.page_count
-        if to_stage in {PipelineStage.FAILED, PipelineStage.QUOTA_BLOCKED}:
-            payload["failure_stage"] = current.value
-            payload["failure_reason"] = work_item.failure_reason
-            payload["quota_blocked"] = to_stage is PipelineStage.QUOTA_BLOCKED
-        if event_payload:
-            payload.update(event_payload)
+        idempotency_key = f"{event_type}:{work_item.id}:{to_stage.value}"
 
-        outbox_service.emit(
-            db,
-            organization_id=organization_id,
-            workspace_id=work_item.workspace_id,
-            event_type=event_type,
-            resource_id=work_item.id,
-            payload=payload,
-            idempotency_key=f"{event_type}:{work_item.id}:{to_stage.value}",
-        )
+        already_emitted = db.execute(
+            select(OutboxEvent.id).where(
+                OutboxEvent.organization_id == organization_id,
+                OutboxEvent.idempotency_key == idempotency_key,
+            )
+        ).scalar_one_or_none()
+
+        if already_emitted is None:
+            payload: dict[str, Any] = {
+                "work_item_id": str(work_item.id),
+                "workspace_id": str(work_item.workspace_id),
+                "original_filename": work_item.original_filename,
+                "stage": to_stage.value,
+                "previous_stage": current.value,
+                "status": public_status,
+            }
+            if work_item.page_count is not None:
+                payload["page_count"] = work_item.page_count
+            if to_stage in {PipelineStage.FAILED, PipelineStage.QUOTA_BLOCKED}:
+                payload["failure_stage"] = current.value
+                payload["failure_reason"] = work_item.failure_reason
+                payload["quota_blocked"] = to_stage is PipelineStage.QUOTA_BLOCKED
+            if event_payload:
+                payload.update(event_payload)
+
+            outbox_service.emit(
+                db,
+                organization_id=organization_id,
+                workspace_id=work_item.workspace_id,
+                event_type=event_type,
+                resource_id=work_item.id,
+                payload=payload,
+                idempotency_key=idempotency_key,
+            )
+        else:
+            logger.debug(
+                "pipeline.outbox_already_emitted",
+                extra={"work_item_id": str(work_item.id), "idempotency_key": idempotency_key},
+            )
 
     logger.info(
         "pipeline.transition",
