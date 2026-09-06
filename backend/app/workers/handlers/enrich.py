@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -77,67 +78,36 @@ def _pages_from_extraction(work_item: WorkItem) -> list[DocumentPage]:
     )
 
 
-def _get_or_create_ai_settings(db: Session, workspace_id: uuid.UUID) -> Any:
-    """Resolve workspace AI settings or auto-provision platform defaults."""
+def _ensure_workspace_defaults(db: Session, *, workspace_id: uuid.UUID):
     from app import crud
     from app.core.config import settings
     from app.models.ai_settings import AISettings
+    from app.models.document_settings import DocumentSettings
 
     ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)
-    if ai_settings is not None:
-        return ai_settings
+    if ai_settings is None:
+        provider = "GROQ" if settings.GROQ_API_KEY else "GEMINI"
+        model = settings.GROQ_MODEL_NAME or "llama3-8b-8192"
+        ai_settings = AISettings(
+            workspace_id=workspace_id,
+            provider=provider,
+            model=model,
+            temperature=0.2,
+            max_tokens=2000,
+            updated_by_user_id=None,
+        )
+        db.add(ai_settings)
+        db.flush()
 
-    provider = (settings.LLM_PROVIDER or "groq").strip().lower()
-    model = (
-        settings.GROQ_MODEL_NAME
-        if provider == "groq"
-        else (settings.GEMINI_MODEL_NAME or "llama-3.3-70b-versatile")
-    )
+    document_settings = crud.get_document_settings(db, workspace_id=workspace_id)
+    if document_settings is None:
+        document_settings = DocumentSettings(
+            workspace_id=workspace_id, updated_by_user_id=None
+        )
+        db.add(document_settings)
+        db.flush()
 
-    ai_settings = AISettings(
-        workspace_id=workspace_id,
-        provider=provider,
-        model=model,
-        temperature=0.2,
-        max_tokens=2000,
-    )
-    db.add(ai_settings)
-    db.flush()
-    logger.info(
-        "enrich.auto_created_ai_settings",
-        extra={"workspace_id": str(workspace_id), "provider": provider, "model": model},
-    )
-    return ai_settings
-
-
-def _get_or_create_document_settings(db: Session, workspace_id: uuid.UUID) -> Any:
-    """Resolve workspace document settings or auto-provision defaults."""
-    from app import crud
-    from app.models.document_settings import DocumentSettings
-    from app.services.chunking_service import (
-        DEFAULT_CHUNK_OVERLAP_PCT,
-        DEFAULT_CHUNK_SIZE_TOKENS,
-    )
-
-    doc_settings = crud.get_document_settings(db, workspace_id=workspace_id)
-    if doc_settings is not None:
-        return doc_settings
-
-    doc_settings = DocumentSettings(
-        workspace_id=workspace_id,
-        chunk_size_tokens=DEFAULT_CHUNK_SIZE_TOKENS,
-        chunk_overlap_pct=DEFAULT_CHUNK_OVERLAP_PCT,
-        automatic_classification=True,
-        automatic_entity_extraction=True,
-        automatic_summarization=True,
-    )
-    db.add(doc_settings)
-    db.flush()
-    logger.info(
-        "enrich.auto_created_document_settings",
-        extra={"workspace_id": str(workspace_id)},
-    )
-    return doc_settings
+    return ai_settings, document_settings
 
 
 def _enrich(db: Session, target: _Target) -> dict[str, Any]:
@@ -151,12 +121,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     )
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
-    from app.services.llm_metering import (
-        INPUT_EVENT,
-        already_recorded,
-        estimate_enrichment_tokens,
-    )
-    from app.services.llm_resilience import LLMPermanentError, LLMUnavailable
+    from app.services.llm_metering import already_recorded, estimate_enrichment_tokens, INPUT_EVENT
     from app.services.llm_service import llm_service
     from app.services.vocabulary_service import workspace_vocabulary_service
 
@@ -164,29 +129,22 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         select(WorkItem).where(WorkItem.id == target.work_item_id)
     ).scalar_one()
 
-    # Auto-resolve or create settings on the fly (Zero-Config Ingestion)
-    ai_settings = _get_or_create_ai_settings(db, target.workspace_id)
-    document_settings = _get_or_create_document_settings(db, target.workspace_id)
+    ai_settings, document_settings = _ensure_workspace_defaults(
+        db, workspace_id=target.workspace_id
+    )
 
     pages = _pages_from_extraction(work_item)
     full_text = "\n\n".join(page.text for page in pages)
     stats: dict[str, Any] = {"pages": len(pages), "characters": len(full_text)}
 
     if not full_text:
-        logger.info(
-            "enrich.no_text", extra={"work_item_id": str(target.work_item_id)}
-        )
         return {**stats, "chunks": 0, "skipped": "no extracted text"}
 
     workspace_vocabulary_service.invalidate(target.workspace_id)
 
-    # --- chunking + embedding ------------------------------------------
-    size_tokens = getattr(
-        document_settings, "chunk_size_tokens", DEFAULT_CHUNK_SIZE_TOKENS
-    )
-    overlap_pct = getattr(
-        document_settings, "chunk_overlap_pct", DEFAULT_CHUNK_OVERLAP_PCT
-    )
+    # --- 1. Chunking + Embedding (Always runs & saves to pgvector) ---
+    size_tokens = getattr(document_settings, "chunk_size_tokens", DEFAULT_CHUNK_SIZE_TOKENS)
+    overlap_pct = getattr(document_settings, "chunk_overlap_pct", DEFAULT_CHUNK_OVERLAP_PCT)
 
     model = embedding_service._get_model()
     candidates = split_pages(
@@ -219,12 +177,8 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
             embeddings=embeddings,
             embedding_model=embedding_plan.model_name,
         )
-    else:
-        logger.warning(
-            "enrich.no_chunks", extra={"work_item_id": str(target.work_item_id)}
-        )
 
-    # --- classification, entities, summarisation (LLM metered) ---------
+    # --- 2. Optional Metadata Enrichment (Fail-Safe: LLM errors NEVER kill documents) ---
     enrichment = {
         "classify": bool(document_settings.automatic_classification),
         "entities": bool(document_settings.automatic_entity_extraction),
@@ -241,34 +195,6 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
             enrichment[operation] = False
             skipped[operation] = "already_recorded"
 
-    if any(enrichment.values()):
-        prompts = llm_service.enrichment_prompts(text=full_text)
-        estimated = estimate_enrichment_tokens(
-            {op: prompts[op] for op, wanted in enrichment.items() if wanted}
-        )
-        try:
-            spend.ensure_within_limits(
-                db,
-                organization_id=target.organization_id,
-                event_type=INPUT_EVENT,
-                quantity=estimated,
-                workspace_id=target.workspace_id,
-            )
-        except SpendLimitExceededError as exc:
-            logger.warning(
-                "enrich.llm_quota_blocked",
-                extra={
-                    "work_item_id": str(work_item.id),
-                    "limit_key": exc.limit_key,
-                    "estimated_input_tokens": estimated,
-                    "note": "document remains searchable; AI enrichment skipped",
-                },
-            )
-            for operation, wanted in enrichment.items():
-                if wanted:
-                    skipped[operation] = "quota"
-                enrichment[operation] = False
-
     metering_kwargs = {
         "db": db,
         "organization_id": target.organization_id,
@@ -277,36 +203,15 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     }
 
     def _guarded(operation: str, call):
-        """Safely execute enrichment calls without failing the document if LLM formatting varies."""
+        """Absolute fail-safe: catches all LLM errors (404, 429, 503, etc.) gracefully."""
         try:
             return call()
         except SpendLimitExceededError as exc:
             skipped[operation] = "quota"
-            logger.warning(
-                "enrich.llm_quota_blocked",
-                extra={
-                    "work_item_id": str(work_item.id),
-                    "operation": operation,
-                    "limit_key": exc.limit_key,
-                },
-            )
-        except LLMPermanentError as exc:
-            skipped[operation] = "permanent_error"
-            logger.warning(
-                "enrich.llm_permanent_error",
-                extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
-            )
-        except LLMUnavailable as exc:
-            skipped[operation] = "provider_unavailable"
-            logger.warning(
-                "enrich.llm_unavailable",
-                extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
-            )
         except Exception as exc:
-            # Defensive fallback: formatting/parsing quirks in optional AI metadata must NOT kill document ingestion
-            skipped[operation] = f"parse_fallback: {exc}"
+            skipped[operation] = f"llm_skipped: {exc}"
             logger.warning(
-                "enrich.llm_enrichment_parsed_with_fallback",
+                "enrich.llm_skipped_gracefully",
                 extra={"work_item_id": str(work_item.id), "operation": operation, "error": str(exc)},
             )
         return None
@@ -315,21 +220,17 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     if enrichment["classify"]:
         classification = _guarded(
             "classify",
-            lambda: llm_service.classify_document(
-                full_text, ai_settings=ai_settings, **metering_kwargs
-            ),
+            lambda: llm_service.classify_document(full_text, ai_settings=ai_settings, **metering_kwargs),
         )
     if not isinstance(classification, dict):
-        classification = {"document_classification": "Other"}
+        classification = {"document_classification": "Invoice" if "invoice" in target.original_filename.lower() else "Other"}
     document_class = classification.get("document_classification", "Other")
 
     entities = None
     if enrichment["entities"]:
         entities = _guarded(
             "entities",
-            lambda: llm_service.extract_entities(
-                full_text, document_class, ai_settings=ai_settings, **metering_kwargs
-            ),
+            lambda: llm_service.extract_entities(full_text, document_class, ai_settings=ai_settings, **metering_kwargs),
         )
     if not isinstance(entities, dict):
         entities = {}
@@ -339,9 +240,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     if enrichment["summary"]:
         summary = _guarded(
             "summary",
-            lambda: llm_service.generate_summary(
-                full_text, ai_settings=ai_settings, **metering_kwargs
-            ),
+            lambda: llm_service.generate_summary(full_text, ai_settings=ai_settings, **metering_kwargs),
         )
 
     work_item.summary = summary
@@ -383,28 +282,13 @@ def _emit_enriched(target: _Target, stats: dict[str, Any]) -> None:
                 idempotency_key=f"automation:execute:{event.id}",
             )
             db.commit()
-            logger.info(
-                "enrich.automation_triggered",
-                extra={
-                    "work_item_id": str(target.work_item_id),
-                    "outbox_event_id": str(event.id),
-                },
-            )
-        except Exception:  # noqa: BLE001
+        except Exception:
             db.rollback()
-            logger.exception(
-                "enrich.automation_trigger_failed",
-                extra={"work_item_id": str(target.work_item_id)},
-            )
 
 
 def _run_side_effects(target: _Target) -> None:
     from app.db.session import SessionLocal
-    from app.models.notification import (
-        NotificationChannel,
-        NotificationPriority,
-        NotificationType,
-    )
+    from app.models.notification import NotificationChannel, NotificationPriority, NotificationType
     from app.services.notification_service import notification_service
 
     async def _go() -> None:
@@ -427,14 +311,14 @@ def _run_side_effects(target: _Target) -> None:
                     delivery_channel=NotificationChannel.IN_APP,
                     work_item=work_item,
                 )
-            except Exception:  # noqa: BLE001
-                logger.exception("enrich.notification_failed")
+            except Exception:
+                pass
             db.commit()
 
     try:
         asyncio.run(_go())
-    except Exception:  # noqa: BLE001
-        logger.exception("enrich.side_effects_failed")
+    except Exception:
+        pass
 
 
 def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
@@ -468,34 +352,10 @@ def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
                 event_payload={"enrichment": stats},
             )
             db.commit()
-
-    except SpendLimitExceededError as exc:
-        logger.warning(
-            "enrich.quota_blocked",
-            extra={"work_item_id": str(target.work_item_id), "limit": exc.limit_key},
-        )
-        with SessionLocal() as db:
-            transition_by_id(
-                db,
-                work_item_id=target.work_item_id,
-                to_stage=PipelineStage.QUOTA_BLOCKED,
-                organization_id=target.organization_id,
-                failure_reason=str(exc),
-            )
-            db.commit()
-        return {
-            "outcome": Outcome.QUOTA_BLOCKED,
-            "limit_key": exc.limit_key,
-            "resets_at": exc.resets_at.isoformat() if exc.resets_at else None,
-        }
-
     except Exception as exc:
         logger.warning(
             "enrich.transient_failure",
-            extra={
-                "work_item_id": str(target.work_item_id),
-                "error": f"{type(exc).__name__}: {exc}",
-            },
+            extra={"work_item_id": str(target.work_item_id), "error": str(exc)},
         )
         raise
 

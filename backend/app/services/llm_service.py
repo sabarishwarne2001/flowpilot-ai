@@ -691,17 +691,14 @@ class LLMService:
         return response, token_usage
 
     def _extract_json(self, raw_text: str) -> dict[str, Any]:
-        """Robustly extract and parse JSON from any LLM response.
-
-        Handles conversational preambles, markdown code fences (```json ... ```),
-        thought tokens, and trailing commas without raising unhandled exceptions.
-        """
+        """Robustly extract and parse JSON from any LLM response."""
         if not raw_text or not str(raw_text).strip():
             return {}
 
+        import re
         cleaned = str(raw_text).strip()
 
-        # 1. Look for ```json ... ``` or ``` ... ``` anywhere in the response
+        # 1. Regex search for ```json ... ``` or ``` ... ```
         fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
         if fence_match:
             try:
@@ -717,7 +714,7 @@ class LLMService:
         except json.JSONDecodeError:
             pass
 
-        # 3. Find outermost { and } substring
+        # 3. Outermost { and } substring
         start = cleaned.find("{")
         end = cleaned.rfind("}")
         if start != -1 and end != -1 and end > start:
@@ -725,17 +722,13 @@ class LLMService:
             try:
                 return json.loads(candidate)
             except json.JSONDecodeError:
-                # 4. Clean trailing commas before } or ]
                 try:
                     cleaned_commas = re.sub(r",\s*([\}\]])", r"\1", candidate)
                     return json.loads(cleaned_commas)
                 except json.JSONDecodeError:
                     pass
 
-        logger.warning(
-            "llm.json_parse_fallback",
-            extra={"raw_preview": cleaned[:160]},
-        )
+        logger.warning("llm.json_parse_fallback", extra={"raw_preview": cleaned[:160]})
         return {}
 
     def _truncate_document(self, text: str) -> str:

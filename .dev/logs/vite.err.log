@@ -1,6 +1,0 @@
-[31merror when starting dev server:
-Error: Port 5173 is already in use
-    at Server.onError$1 (file:///C:/Users/sabar/Desktop/flowpilot-ai/frontend/node_modules/vite/dist/node/chunks/config.js:15006:28)
-    at Server.emit (node:events:509:28)
-    at emitErrorNT (node:net:2045:8)
-    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)[39m

@@ -23,3 +23,6 @@ flowpilot-*.sql
 backend/.env.production
 backend/.env.production.*
 # Environment files - never commit credentials
+
+# Local development runtime files
+.dev/

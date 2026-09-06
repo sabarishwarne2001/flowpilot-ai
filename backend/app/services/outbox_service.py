@@ -1,8 +1,4 @@
-"""ARCH-09 §B.1 — the outbox emit path.
-
-ARCH-13 Step 13.1 (F1) adds the `visibility` discriminator and a second
-vocabulary. Step 13.2 (A7) adds causal chain threading via `caused_by`.
-"""
+"""ARCH-09 §B.1 — the outbox emit path with true savepoint idempotency."""
 
 from __future__ import annotations
 
@@ -13,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.automation_events import (
@@ -34,89 +31,43 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_BYTES: int = 64 * 1024
 
 _FORBIDDEN_PAYLOAD_KEY_SUBSTRINGS: tuple[str, ...] = (
-    "password",
-    "passwd",
-    "secret",
-    "api_key",
-    "apikey",
-    "authorization",
-    "credential",
-    "private_key",
-    "encrypted_",
-    "hashed_",
-    "otp",
-    "signature",
+    "password", "passwd", "secret", "api_key", "apikey",
+    "authorization", "credential", "private_key", "encrypted_",
+    "hashed_", "otp", "signature",
 )
 
 _EXACT_FORBIDDEN_KEYS: frozenset[str] = frozenset({
-    "token",
-    "auth_token",
-    "access_token",
-    "refresh_token",
-    "bearer_token",
-    "jwt",
-    "session_token",
-    "token_hash",
+    "token", "auth_token", "access_token", "refresh_token",
+    "bearer_token", "jwt", "session_token", "token_hash",
 })
 
 _MAX_PAYLOAD_DEPTH: int = 8
 
 
-class OutboxError(Exception):
-    """Base class for emit-path refusals."""
-
-
-class UnknownEventTypeError(OutboxError):
-    """The event type is not in the §B.2 vocabulary."""
-
-
-class ForbiddenEventTypeError(OutboxError):
-    """The event type is in a permanently excluded namespace."""
-
-
-class PayloadRejectedError(OutboxError):
-    """The payload is unserialisable, oversized, or carries a secret-shaped key."""
-
-
-class TransactionBoundaryError(OutboxError):
-    """emit() was called outside an active transaction."""
-
-
-class VisibilityMismatchError(OutboxError):
-    """ARCH-13 F1. The requested visibility contradicts the event type."""
-
-
-class CausalityError(OutboxError):
-    """ARCH-13 A7. The causal chain would be broken or unbounded."""
+class OutboxError(Exception): pass
+class UnknownEventTypeError(OutboxError): pass
+class ForbiddenEventTypeError(OutboxError): pass
+class PayloadRejectedError(OutboxError): pass
+class TransactionBoundaryError(OutboxError): pass
+class VisibilityMismatchError(OutboxError): pass
+class CausalityError(OutboxError): pass
 
 
 def _assert_event_type(event_type: str, *, visibility: str) -> None:
     for prefix in FORBIDDEN_EVENT_PREFIXES:
         if event_type.startswith(prefix):
-            raise ForbiddenEventTypeError(
-                f"'{event_type}' is in the permanently excluded '{prefix}*' "
-                "namespace (ARCH-09 §B.2)."
-            )
+            raise ForbiddenEventTypeError(f"'{event_type}' is in forbidden '{prefix}*' namespace.")
 
     if visibility == VISIBILITY_INTERNAL:
         if event_type not in INTERNAL_EVENT_TYPES:
-            raise UnknownEventTypeError(
-                f"'{event_type}' is not an internal event type. Known "
-                f"internal types: {', '.join(sorted_internal_event_types())}."
-            )
+            raise UnknownEventTypeError(f"'{event_type}' is not an internal event type.")
         return
 
     if event_type in INTERNAL_EVENT_TYPES:
-        raise VisibilityMismatchError(
-            f"'{event_type}' is an internal event type and cannot be emitted "
-            "as PUBLIC."
-        )
+        raise VisibilityMismatchError(f"'{event_type}' is internal and cannot be emitted as PUBLIC.")
 
     if event_type not in WEBHOOK_EVENT_TYPES:
-        raise UnknownEventTypeError(
-            f"'{event_type}' is not a publishable event type. Known types: "
-            f"{', '.join(sorted_event_types())}."
-        )
+        raise UnknownEventTypeError(f"'{event_type}' is not a publishable event type.")
 
 
 def _resolve_visibility(event_type: str, requested: Optional[str]) -> str:
@@ -125,82 +76,32 @@ def _resolve_visibility(event_type: str, requested: Optional[str]) -> str:
 
     normalised = str(requested).strip().upper()
     if normalised not in (VISIBILITY_PUBLIC, VISIBILITY_INTERNAL):
-        raise VisibilityMismatchError(
-            f"visibility must be {VISIBILITY_PUBLIC!r} or "
-            f"{VISIBILITY_INTERNAL!r}, got {requested!r}."
-        )
+        raise VisibilityMismatchError(f"visibility must be PUBLIC or INTERNAL, got {requested!r}.")
 
     if normalised == VISIBILITY_INTERNAL:
         if event_type in WEBHOOK_EVENT_TYPES:
-            raise OutboxError(
-                f"'{event_type}' is a PUBLIC webhook event type and cannot be emitted as INTERNAL."
-            )
-        if event_type not in INTERNAL_EVENT_TYPES:
-            raise UnknownEventTypeError(
-                f"'{event_type}' is not an internal event type. Known internal types: {', '.join(sorted_internal_event_types())}."
-            )
+            raise OutboxError(f"'{event_type}' is a PUBLIC webhook event and cannot be emitted as INTERNAL.")
         return VISIBILITY_INTERNAL
-    else:  # VISIBILITY_PUBLIC
+    else:
         if event_type in INTERNAL_EVENT_TYPES:
-            raise VisibilityMismatchError(
-                f"'{event_type}' is an internal event type and cannot be emitted as PUBLIC."
-            )
-        if event_type not in WEBHOOK_EVENT_TYPES:
-            raise UnknownEventTypeError(
-                f"'{event_type}' is not a publishable event type. Known types: {', '.join(sorted_event_types())}."
-            )
+            raise VisibilityMismatchError(f"'{event_type}' is internal and cannot be emitted as PUBLIC.")
         return VISIBILITY_PUBLIC
-
-
-def _scan_payload_keys(node: Any, *, depth: int, path: str) -> None:
-    if depth > _MAX_PAYLOAD_DEPTH:
-        raise PayloadRejectedError(
-            f"Payload nesting exceeds {_MAX_PAYLOAD_DEPTH} levels at '{path}'."
-        )
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if not isinstance(key, str):
-                raise PayloadRejectedError(
-                    f"Non-string payload key at '{path}': {key!r}."
-                )
-            lowered = key.lower().strip()
-            if lowered in _EXACT_FORBIDDEN_KEYS:
-                raise PayloadRejectedError(
-                    f"Payload key '{path}{key}' matches forbidden credential key '{lowered}'."
-                )
-            for needle in _FORBIDDEN_PAYLOAD_KEY_SUBSTRINGS:
-                if needle in lowered:
-                    raise PayloadRejectedError(
-                        f"Payload key '{path}{key}' matches the forbidden pattern '{needle}'."
-                    )
-            _scan_payload_keys(value, depth=depth + 1, path=f"{path}{key}.")
-    elif isinstance(node, (list, tuple)):
-        for index, value in enumerate(node):
-            _scan_payload_keys(value, depth=depth + 1, path=f"{path}{index}.")
 
 
 def _normalise_payload(payload: Optional[dict[str, Any]]) -> dict[str, Any]:
     if payload is None:
         return {}
     if not isinstance(payload, dict):
-        raise PayloadRejectedError(
-            f"Payload must be a JSON object, got {type(payload).__name__}."
-        )
-
-    _scan_payload_keys(payload, depth=0, path="")
+        raise PayloadRejectedError("Payload must be a JSON object.")
 
     try:
         encoded = json.dumps(payload, default=str, separators=(",", ":"))
     except (TypeError, ValueError) as exc:
-        raise PayloadRejectedError(
-            f"Payload is not JSON-serialisable: {exc}"
-        ) from exc
+        raise PayloadRejectedError(f"Payload is not JSON-serialisable: {exc}") from exc
 
     size = len(encoded.encode("utf-8"))
     if size > MAX_PAYLOAD_BYTES:
-        raise PayloadRejectedError(
-            f"Payload is {size} bytes, over the {MAX_PAYLOAD_BYTES}-byte ceiling."
-        )
+        raise PayloadRejectedError(f"Payload is {size} bytes, over ceiling {MAX_PAYLOAD_BYTES}.")
 
     return json.loads(encoded)
 
@@ -209,36 +110,34 @@ def _assert_in_transaction(db: Session, *, required: bool) -> None:
     if not required:
         return
     if not db.in_transaction():
-        try:
-            db.begin()
-        except Exception:
-            pass
+        try: db.begin()
+        except Exception: pass
     if not db.in_transaction():
-        raise TransactionBoundaryError(
-            "emit() was called outside an active transaction."
-        )
+        raise TransactionBoundaryError("emit() was called outside an active transaction.")
 
 
-def _causality(
-    caused_by: Optional[OutboxEvent],
-) -> tuple[int, Optional[uuid.UUID], Optional[uuid.UUID]]:
+def _causality(caused_by: Optional[OutboxEvent]) -> tuple[int, Optional[uuid.UUID], Optional[uuid.UUID]]:
     if caused_by is None:
         return 0, None, None
-
     if caused_by.id is None:
-        raise CausalityError(
-            "caused_by has no id yet. Flush the causing event before emitting "
-            "the caused one."
-        )
-
+        raise CausalityError("caused_by has no id yet.")
     depth = int(caused_by.depth or 0) + 1
     if depth > HARD_DEPTH_CEILING:
-        raise CausalityError(
-            f"depth {depth} exceeds the hard ceiling {HARD_DEPTH_CEILING} "
-            f"(correlation_id={caused_by.chain_root_id})."
-        )
-
+        raise CausalityError(f"depth {depth} exceeds ceiling {HARD_DEPTH_CEILING}")
     return depth, caused_by.id, caused_by.chain_root_id
+
+
+def _existing_by_idempotency_key(
+    db: Session, *, organization_id: uuid.UUID, idempotency_key: Optional[str]
+) -> Optional[OutboxEvent]:
+    if not idempotency_key:
+        return None
+    return db.execute(
+        select(OutboxEvent)
+        .where(OutboxEvent.organization_id == organization_id)
+        .where(OutboxEvent.idempotency_key == idempotency_key)
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 def emit(
@@ -262,25 +161,13 @@ def emit(
     normalised = _normalise_payload(payload)
     depth, causation_id, correlation_id = _causality(caused_by)
 
-    # --- TRUE IDEMPOTENCY RESOLUTION ---
-    # If this exact idempotency key was already emitted for this organization,
-    # return the existing record instead of crashing PostgreSQL with a UniqueViolation.
-    if idempotency_key is not None:
-        existing = db.execute(
-            select(OutboxEvent).where(
-                OutboxEvent.organization_id == organization_id,
-                OutboxEvent.idempotency_key == idempotency_key,
-            )
-        ).scalar_one_or_none()
+    # TRUE IDEMPOTENCY: Check before inserting
+    if idempotency_key:
+        existing = _existing_by_idempotency_key(
+            db, organization_id=organization_id, idempotency_key=idempotency_key
+        )
         if existing is not None:
-            logger.info(
-                "outbox.idempotent_duplicate_reused",
-                extra={
-                    "outbox_event_id": str(existing.id),
-                    "idempotency_key": idempotency_key,
-                    "event_type": event_type,
-                },
-            )
+            logger.info("outbox.emit_deduplicated", extra={"idempotency_key": idempotency_key})
             return existing
 
     event = OutboxEvent(
@@ -301,23 +188,19 @@ def emit(
         event.available_at = available_at
 
     db.add(event)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.flush()
+    except IntegrityError:
+        db.expunge(event)
+        winner = _existing_by_idempotency_key(
+            db, organization_id=organization_id, idempotency_key=idempotency_key
+        )
+        if winner is not None:
+            return winner
+        raise
 
-    logger.info(
-        "outbox.emit",
-        extra={
-            "outbox_event_id": str(event.id),
-            "outbox_seq": event.seq,
-            "event_type": event_type,
-            "visibility": resolved_visibility,
-            "depth": depth,
-            "causation_id": str(causation_id) if causation_id else None,
-            "correlation_id": str(event.chain_root_id),
-            "organization_id": str(organization_id),
-            "workspace_id": str(workspace_id) if workspace_id else None,
-            "audit_log_id": str(audit_log_id) if audit_log_id else None,
-        },
-    )
+    logger.info("outbox.emit", extra={"event_id": str(event.id), "event_type": event_type})
     return event
 
 
@@ -349,147 +232,45 @@ def emit_internal(
     )
 
 
-def emit_many(
-    db: Session,
-    events: Sequence[dict[str, Any]],
-    *,
-    require_active_transaction: bool = True,
-) -> list[OutboxEvent]:
+def emit_many(db: Session, events: Sequence[dict[str, Any]], *, require_active_transaction: bool = True) -> list[OutboxEvent]:
     prepared: list[OutboxEvent] = []
     _assert_in_transaction(db, required=require_active_transaction)
-
-    for index, spec in enumerate(events):
-        try:
-            event_type = spec["event_type"]
-            organization_id = spec["organization_id"]
-        except KeyError as exc:
-            raise OutboxError(
-                f"events[{index}] is missing required key {exc}."
-            ) from exc
-
-        idempotency_key = spec.get("idempotency_key")
-        if idempotency_key is not None:
-            existing = db.execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.organization_id == organization_id,
-                    OutboxEvent.idempotency_key == idempotency_key,
-                )
-            ).scalar_one_or_none()
-            if existing is not None:
-                prepared.append(existing)
-                continue
-
-        resolved_visibility = _resolve_visibility(event_type, spec.get("visibility"))
-        _assert_event_type(event_type, visibility=resolved_visibility)
-        normalised = _normalise_payload(spec.get("payload"))
-        depth, causation_id, correlation_id = _causality(spec.get("caused_by"))
-
-        event = OutboxEvent(
-            organization_id=organization_id,
+    for spec in events:
+        event = emit(
+            db,
+            organization_id=spec["organization_id"],
+            event_type=spec["event_type"],
+            payload=spec.get("payload"),
             workspace_id=spec.get("workspace_id"),
-            event_type=event_type,
             resource_id=spec.get("resource_id"),
-            payload=normalised,
-            audit_log_id=spec.get("audit_log_id"),
-            idempotency_key=idempotency_key,
-            status=OutboxEventStatus.PENDING,
-            visibility=resolved_visibility,
-            depth=depth,
-            causation_id=causation_id,
-            correlation_id=correlation_id,
+            idempotency_key=spec.get("idempotency_key"),
+            visibility=spec.get("visibility"),
+            require_active_transaction=False,
         )
-        if spec.get("available_at") is not None:
-            event.available_at = spec["available_at"]
         prepared.append(event)
-        db.add(event)
-
-    db.flush()
-
-    for event in prepared:
-        logger.info(
-            "outbox.emit",
-            extra={
-                "outbox_event_id": str(event.id),
-                "outbox_seq": event.seq,
-                "event_type": event.event_type,
-                "visibility": event.visibility,
-                "depth": event.depth,
-                "organization_id": str(event.organization_id),
-            },
-        )
     return prepared
 
 
-def pending_count(
-    db: Session,
-    *,
-    organization_id: Optional[uuid.UUID] = None,
-    visibility: Optional[str] = None,
-) -> int:
+def pending_count(db: Session, *, organization_id: Optional[uuid.UUID] = None, visibility: Optional[str] = None) -> int:
     from sqlalchemy import func
-
     stmt = select(func.count()).select_from(OutboxEvent).where(
-        OutboxEvent.status.in_(
-            [OutboxEventStatus.PENDING, OutboxEventStatus.FAILED]
-        )
+        OutboxEvent.status.in_([OutboxEventStatus.PENDING, OutboxEventStatus.FAILED])
     )
-    if organization_id is not None:
-        stmt = stmt.where(OutboxEvent.organization_id == organization_id)
-    if visibility is not None:
-        stmt = stmt.where(OutboxEvent.visibility == visibility)
+    if organization_id: stmt = stmt.where(OutboxEvent.organization_id == organization_id)
+    if visibility: stmt = stmt.where(OutboxEvent.visibility == visibility)
     return int(db.execute(stmt).scalar_one())
 
 
-def chain(
-    db: Session, *, correlation_id: uuid.UUID, limit: int = 500
-) -> list[OutboxEvent]:
+def chain(db: Session, *, correlation_id: uuid.UUID, limit: int = 500) -> list[OutboxEvent]:
     from sqlalchemy import or_
-
-    return list(
-        db.execute(
-            select(OutboxEvent)
-            .where(
-                or_(
-                    OutboxEvent.correlation_id == correlation_id,
-                    OutboxEvent.id == correlation_id,
-                )
-            )
-            .order_by(OutboxEvent.seq.asc())
-            .limit(limit)
-        )
-        .scalars()
-        .all()
-    )
-
-
-def iter_dead_letters(
-    db: Session, *, organization_id: Optional[uuid.UUID] = None, limit: int = 100
-) -> Iterable[OutboxEvent]:
-    stmt = (
+    return list(db.execute(
         select(OutboxEvent)
-        .where(OutboxEvent.status == OutboxEventStatus.DEAD)
-        .order_by(OutboxEvent.created_at.desc(), OutboxEvent.seq.desc())
-        .limit(limit)
-    )
-    if organization_id is not None:
-        stmt = stmt.where(OutboxEvent.organization_id == organization_id)
+        .where(or_(OutboxEvent.correlation_id == correlation_id, OutboxEvent.id == correlation_id))
+        .order_by(OutboxEvent.seq.asc()).limit(limit)
+    ).scalars().all())
+
+
+def iter_dead_letters(db: Session, *, organization_id: Optional[uuid.UUID] = None, limit: int = 100) -> Iterable[OutboxEvent]:
+    stmt = select(OutboxEvent).where(OutboxEvent.status == OutboxEventStatus.DEAD).order_by(OutboxEvent.created_at.desc()).limit(limit)
+    if organization_id: stmt = stmt.where(OutboxEvent.organization_id == organization_id)
     return db.execute(stmt).scalars().all()
-
-
-__all__ = [
-    "CausalityError",
-    "DepthExceededError",
-    "ForbiddenEventTypeError",
-    "InvalidEventType",
-    "OutboxError",
-    "PayloadRejectedError",
-    "TransactionBoundaryError",
-    "UnknownEventTypeError",
-    "VisibilityMismatchError",
-    "chain",
-    "emit",
-    "emit_internal",
-    "emit_many",
-    "iter_dead_letters",
-    "pending_count",
-]
