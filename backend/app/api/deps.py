@@ -13,7 +13,7 @@ from typing import Annotated, Any, Generator, Optional, Sequence, Union
 from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from starlette.requests import Request
+from fastapi import Request
 
 from app import crud
 from app.core import security

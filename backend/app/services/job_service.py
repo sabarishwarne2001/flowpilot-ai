@@ -157,7 +157,8 @@ def enqueue(
         with db.begin_nested():
             db.flush()
     except IntegrityError:
-        db.expunge(job)
+        if job in db:
+            db.expunge(job)
         winner = _existing_job_by_idempotency_key(
             db,
             job_type=job_type,

@@ -44,6 +44,7 @@ it is a visible act rather than a consequence of file position.
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 import uuid

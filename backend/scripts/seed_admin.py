@@ -12,7 +12,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-DEFAULT_EMAIL = "admin@flowpilot.local"
+DEFAULT_EMAIL = "admin@flowpilot.ai"
 DEFAULT_PASSWORD = "FlowPilot!Dev123"
 DEFAULT_ORG_NAME = "FlowPilot Development"
 DEFAULT_ORG_SLUG = "flowpilot-dev"

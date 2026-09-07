@@ -1,6 +1,7 @@
 """ARCH-12 — the SSE generation endpoint."""
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 import uuid

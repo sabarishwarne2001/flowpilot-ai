@@ -39,6 +39,7 @@ up announcing its own sunset on four routes out of six.
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 import time

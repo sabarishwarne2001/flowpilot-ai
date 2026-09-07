@@ -33,6 +33,7 @@ each other over the same row. Verify, persist, acknowledge, hand to a job.
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 

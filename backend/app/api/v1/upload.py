@@ -7,6 +7,7 @@ security headers (nosniff, inline, private cache).
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import hashlib
 import io

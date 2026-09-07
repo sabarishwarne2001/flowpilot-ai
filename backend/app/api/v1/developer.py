@@ -26,6 +26,7 @@ the surface that did not exist yet.
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 import uuid

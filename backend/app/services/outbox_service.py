@@ -192,7 +192,8 @@ def emit(
         with db.begin_nested():
             db.flush()
     except IntegrityError:
-        db.expunge(event)
+        if event in db:
+            db.expunge(event)
         winner = _existing_by_idempotency_key(
             db, organization_id=organization_id, idempotency_key=idempotency_key
         )

@@ -1,6 +1,7 @@
 """ARCH-16 — SAML, SSO discovery and OIDC routers."""
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 import secrets

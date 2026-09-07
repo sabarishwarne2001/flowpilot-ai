@@ -1,6 +1,7 @@
 """ARCH-16 — SCIM 2.0 router (RFC 7644)."""
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 

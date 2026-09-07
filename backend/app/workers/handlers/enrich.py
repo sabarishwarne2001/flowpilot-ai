@@ -365,6 +365,7 @@ def _run_side_effects(target: _Target) -> None:
 
 
 def _ensure_workspace_defaults(db: Session, *, workspace_id: uuid.UUID):
+    from app import crud
     """Return this workspace's AI and document settings, provisioning defaults.
 
     Previously this raised ValueError when either row was absent. That raise

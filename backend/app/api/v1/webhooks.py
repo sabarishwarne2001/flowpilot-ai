@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from starlette.requests import Request
+from fastapi import Request
 
 from app.api.deps import (
     DbSession,

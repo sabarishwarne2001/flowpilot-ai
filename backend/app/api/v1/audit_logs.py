@@ -7,6 +7,7 @@ Organization audit log read and export API (ARCH-07 Step 4, ARCH-08 Step 2, Step
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import uuid
 from datetime import UTC, datetime

@@ -9,6 +9,7 @@ API Key management router for FlowPilot AI (ARCH-08 §B.1, §B.2, §B.12, §9.6)
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import logging
 from typing import Any
