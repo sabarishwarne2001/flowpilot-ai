@@ -1,11 +1,8 @@
-from __future__ import annotations
-from contextvars import ContextVar
-from app.core.principal import Principal
-_principal_var: ContextVar[Principal | None] = ContextVar('principal', default=None)
-"""Dependencies Module for FlowPilot AI."""
+﻿"""Dependencies Module for FlowPilot AI."""
 
 import logging
 import re
+import sys
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Any, Generator, Optional, Sequence, Union
@@ -13,7 +10,8 @@ from typing import Annotated, Any, Generator, Optional, Sequence, Union
 from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from fastapi import Request
+from starlette.requests import Request
+from starlette.responses import Response
 
 from app import crud
 from app.core import security
@@ -56,6 +54,24 @@ logger = logging.getLogger("app.api.deps")
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
+
+
+# ---------------------------------------------------------------------------
+# FIX-422: FastAPI callable-class dependency annotation resolution.
+# Resolves module globals dynamically to prevent string annotations under
+# PEP 563 from failing ForwardRef resolution and falling back to query params.
+# ---------------------------------------------------------------------------
+
+class ResolvableDependency:
+    """Mixin making a callable-class dependency's annotations resolvable.
+
+    Any class whose instances are passed to `Depends()` must inherit from
+    this. A plain function does not need it.
+    """
+
+    @property
+    def __globals__(self) -> dict[str, Any]:
+        return sys.modules[self.__class__.__module__].__dict__
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -401,7 +417,7 @@ SSOCompliantOrgContext = Annotated[OrganizationContext, Depends(get_sso_complian
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
 
 
-class RequireScope:
+class RequireScope(ResolvableDependency):
     def __init__(self, required_scope: Optional[ApiKeyScope] = None) -> None:
         self.required_scope = required_scope
 
@@ -446,7 +462,7 @@ class RequireScope:
         return context
 
 
-class RequireOrgRole:
+class RequireOrgRole(ResolvableDependency):
     def __init__(self, allowed_roles: Sequence[OrganizationRole]) -> None:
         self.allowed_roles = frozenset(allowed_roles)
 
@@ -475,7 +491,7 @@ class RequireOrgRole:
         return context
 
 
-class RequireWorkspaceRole:
+class RequireWorkspaceRole(ResolvableDependency):
     def __init__(self, minimum_role: WorkspaceRole) -> None:
         self.minimum_role = minimum_role
 
@@ -553,11 +569,6 @@ async def require_superadmin(
 
 RequireSuperAdmin = require_superadmin
 SuperAdminUser = Annotated[User, Depends(require_superadmin)]
-
-
-# ---------------------------------------------------------------------------
-# ARCH-21 §3.1 — Public API Gateway Principal
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)

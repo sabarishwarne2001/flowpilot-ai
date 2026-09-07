@@ -1,15 +1,15 @@
-from fastapi import Request
-"""FastAPI rate limiting dependencies (ARCH-08 §6.7, §11.4)."""
+﻿"""FastAPI rate limiting dependencies (ARCH-08 §6.7, §11.4)."""
 
 from typing import Optional
 from fastapi import Depends, Request, Response
 
+from app.api.deps import ResolvableDependency
 from app.core.exceptions import RateLimitExceededError
 from app.core.rate_limit.limiter import consume_rate_limit
 from app.core.rate_limit.policy import POLICY_API_KEY_DEFAULT, RateLimitPolicy
 
 
-class RateLimiter:
+class RateLimiter(ResolvableDependency):
     def __init__(self, policy: RateLimitPolicy) -> None:
         self.policy = policy
 
@@ -28,7 +28,7 @@ class RateLimiter:
             )
 
 
-class ApiKeyRateLimiter:
+class ApiKeyRateLimiter(ResolvableDependency):
     """Per-key rate limiter for API key authenticated requests."""
 
     def __init__(self, policy: RateLimitPolicy = POLICY_API_KEY_DEFAULT) -> None:
