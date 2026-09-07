@@ -1,29 +1,4 @@
-"""ARCH-13 Step 13.5 — the execution engine.
-
-RESOURCE CEILINGS, ALL CONFIGURED, ALL ENFORCED
-
-    AUTOMATION_MAX_DEPTH                  5       13.2, refusal + DB CHECK at 16
-    AUTOMATION_MAX_NODES                  50      validation at save
-    AUTOMATION_EXECUTION_TIMEOUT_S        120     deadline_at, checked between nodes
-    AUTOMATION_MAX_ACTIONS_PER_EXECUTION  20      counter
-    AUTOMATION_DEFAULT_BUDGET_MICROS      50_000  13.3
-
-TIMEOUT IS CHECKED BETWEEN NODES, NOT WITH A SIGNAL
-===================================================
-
-A node in flight is a provider call with its own timeout, and killing the
-worker mid-call would leave an LLM reservation unsettled — which ARCH-12
-established is the failure that produces unbillable generation. Between-node
-checking means a long node overruns the deadline by at most one node's
-duration and settles cleanly.
-
-ACTIONS NEVER RUN IN THE SAME TRANSACTION AS THE GRAPH WALK
-===========================================================
-
-Each action commits its own node run, then performs its effect, then records
-the outcome. An email that succeeds inside a transaction that later rolls back
-has still been sent, and the record of it has not.
-"""
+﻿"""ARCH-13 Step 13.5 — the execution engine."""
 
 from __future__ import annotations
 
@@ -110,7 +85,7 @@ def create_execution(
     outbox_event_id: Optional[uuid.UUID] = None,
     causation_id: Optional[uuid.UUID] = None,
     node_count: int = 0,
-) -> AutomationExecution:
+) -> tuple[AutomationExecution, bool]:
     suppression = cycle_detector.check(
         db,
         rule_id=rule.id,
@@ -136,11 +111,8 @@ def create_execution(
         error=suppression.reason if suppression else None,
         completed_at=_now() if suppression else None,
     )
-    # SEAM-I-3. uq_automation_executions_rule_event: (rule_id, outbox_event_id)
-    # WHERE outbox_event_id IS NOT NULL. The index is partial, so an
-    # execution with no originating event is never deduplicated and the
-    # lookup must return None for that case rather than matching on NULL.
-    execution, _created = insert_or_get(
+    
+    execution, created = insert_or_get(
         db,
         instance=execution,
         lookup=lambda: (
@@ -159,7 +131,8 @@ def create_execution(
             "outbox_event_id": str(outbox_event_id) if outbox_event_id else None,
         },
     )
-    return execution
+    # A-1: Returns (execution, created)
+    return execution, created
 
 
 @dataclass
@@ -170,7 +143,7 @@ class _WalkState:
     work_item: Optional[WorkItem]
     graph: graph_service.CompiledGraph
     trigger_event: Optional[OutboxEvent]
-    facts: FactSet = field(default_factory=FactSet)
+    facts: FactSet = field(default_factory=lambda: FactSet(()))
     actions_executed: int = 0
     emitted_event_ids: list[str] = field(default_factory=list)
     skipped: set[str] = field(default_factory=set)
@@ -191,31 +164,16 @@ def _evaluate_condition_node(state: _WalkState, config: dict[str, Any]) -> bool:
     return bool(_evaluate_rule_conditions(_Adapter(), state.work_item))
 
 
-def _tenant_scope_for(state: "_WalkState") -> TenantScope:
-    """The tenant this execution is acting for, cross-checked.
-
-    ARCH-0V Tranche 7. The assertion is the point: a rule belonging to
-    workspace A must never select an action against a work item in
-    workspace B. Nothing structurally prevented that before — the
-    executor received both objects and never compared them — and an
-    automation that mutates the wrong tenant's records is a
-    cross-tenant write with an audit trail that blames the wrong rule.
-    """
+def _tenant_scope_for(state: _WalkState) -> TenantScope:
     scope = TenantScope(
         workspace_id=state.rule.workspace_id,
         rule_id=state.rule.id,
         execution_id=state.execution.id,
     )
-
-    # The live call site for TenantScope.assert_owns. Shipping that
-    # method with the comparison inlined here instead would leave it
-    # exported and uncalled, which is the orphaned-guard defect
-    # (invariant I4) this repository has now found five times.
     if state.work_item is not None:
         scope.assert_owns(
             workspace_id=getattr(state.work_item, "workspace_id", None)
         )
-
     return scope
 
 
@@ -229,8 +187,7 @@ def _run_action_node(
     ceiling = int(settings.AUTOMATION_MAX_ACTIONS_PER_EXECUTION)
     if state.actions_executed >= ceiling:
         raise ExecutionHalted(
-            f"Execution reached AUTOMATION_MAX_ACTIONS_PER_EXECUTION "
-            f"({ceiling}). Action limit reached for this run."
+            f"Execution reached AUTOMATION_MAX_ACTIONS_PER_EXECUTION ({ceiling})."
         )
 
     node_config = ActionNodeConfig.from_node_config(config)
@@ -245,12 +202,6 @@ def _run_action_node(
     from app.services.fenced_context import TOOL_SELECTORS
 
     selector = TOOL_SELECTORS[selector_name]
-    # ARCH-0V Tranche 7. Selectors previously received a node config and
-    # a fact set and had no way to state which tenant they were acting
-    # for. The R33 boundary proved a document could not choose *what*
-    # happened; it could not prove anything about *whose* data it
-    # happened to. TenantScope closes that, and asserts the rule and
-    # the work item agree before any action is selected.
     spec = selector(
         node_config=node_config,
         facts=state.facts,
@@ -308,21 +259,8 @@ def run_execution(
         effective_deadline = execution.deadline_at or deadline
         if _now() >= effective_deadline:
             terminal = AutomationExecutionStatus.TIMED_OUT
-            error = (
-                f"Execution exceeded AUTOMATION_EXECUTION_TIMEOUT_S "
-                f"({settings.AUTOMATION_EXECUTION_TIMEOUT_S}s) before node "
-                f"{node_key!r}. Nodes already completed are recorded and their "
-                "effects have happened."
-            )
-            logger.warning(
-                "automation.execution_timed_out",
-                extra={
-                    "execution_id": str(execution.id),
-                    "rule_id": str(rule.id),
-                    "stopped_before": node_key,
-                    "nodes_executed": execution.nodes_executed,
-                },
-            )
+            error = f"Execution exceeded {settings.AUTOMATION_EXECUTION_TIMEOUT_S}s timeout."
+            logger.warning("automation.execution_timed_out", extra={"execution_id": str(execution.id)})
             break
 
         node = graph.node(node_key)
@@ -374,19 +312,10 @@ def run_execution(
                 error=str(exc),
                 details={"r33_violation": True},
             )
-            logger.error(
-                "automation.tool_boundary_violation",
-                extra={
-                    "execution_id": str(execution.id),
-                    "rule_id": str(rule.id),
-                    "node_key": node_key,
-                    "error": str(exc),
-                },
-            )
             terminal = AutomationExecutionStatus.FAILED
             error = str(exc)
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _record_node(
                 state,
                 node_key=node_key,
@@ -394,15 +323,7 @@ def run_execution(
                 status=AutomationNodeRunStatus.FAILED,
                 error=f"{type(exc).__name__}: {exc}",
             )
-            logger.warning(
-                "automation.node_failed",
-                extra={
-                    "execution_id": str(execution.id),
-                    "node_key": node_key,
-                    "on_error": on_error,
-                    "error": str(exc),
-                },
-            )
+            logger.warning("automation.node_failed", extra={"execution_id": str(execution.id), "error": str(exc)})
             if on_error == "HALT":
                 terminal = AutomationExecutionStatus.FAILED
                 error = f"Node {node_key!r} failed: {exc}"
@@ -443,12 +364,7 @@ def _execute_node(
     config = dict(node.config or {})
 
     if node.node_type == "trigger":
-        _record_node(
-            state,
-            node_key=node.node_key,
-            node_type=node.node_type,
-            status=AutomationNodeRunStatus.COMPLETED,
-        )
+        _record_node(state, node_key=node.node_key, node_type=node.node_type, status=AutomationNodeRunStatus.COMPLETED)
         return True
 
     if node.node_type in ("condition", "branch"):
@@ -467,23 +383,15 @@ def _execute_node(
         return matched
 
     if node.node_type == "join":
-        _record_node(
-            state,
-            node_key=node.node_key,
-            node_type=node.node_type,
-            status=AutomationNodeRunStatus.COMPLETED,
-        )
+        _record_node(state, node_key=node.node_key, node_type=node.node_type, status=AutomationNodeRunStatus.COMPLETED)
         return True
 
     if node.node_type == "action":
         action_type = str(config.get("action_type") or "").lower().strip()
-
         if action_type in ("llm.extract", "llm.classify"):
             return _run_llm_node(state, node=node, config=config, call_model=call_model)
 
-        outcome = _run_action_node(
-            state, node_key=node.node_key, config=config, perform=perform
-        )
+        outcome = _run_action_node(state, node_key=node.node_key, config=config, perform=perform)
         _record_node(
             state,
             node_key=node.node_key,
@@ -503,15 +411,10 @@ def _run_llm_node(
     config: dict[str, Any],
     call_model: Optional[Callable[[str, str], tuple[str, Any]]],
 ) -> bool:
-    from app.services.automation.extraction import (
-        run_classification_node,
-        run_extraction_node,
-    )
+    from app.services.automation.extraction import run_classification_node, run_extraction_node
 
     if call_model is None:
-        raise ValueError(
-            f"Node {node.node_key!r} is an LLM node but no model caller was provided."
-        )
+        raise ValueError(f"Node {node.node_key!r} is an LLM node but no model caller was provided.")
 
     context = _build_fence(state)
     action_type = str(config.get("action_type") or "").lower().strip()
@@ -537,9 +440,7 @@ def _run_llm_node(
         )
         return True
 
-    labels = tuple(
-        str(label) for label in (config.get("labels") or ()) if str(label).strip()
-    )
+    labels = tuple(str(label) for label in (config.get("labels") or ()) if str(label).strip())
     label, details = run_classification_node(
         context=context,
         labels=labels,
@@ -572,12 +473,7 @@ def _build_fence(state: _WalkState) -> Any:
         return empty_fence()
 
     assembled = ContextAssemblyService().assemble(
-        [
-            {
-                "text": work_item.extracted_text,
-                "metadata": {"filename": work_item.original_filename},
-            }
-        ],
+        [{"text": work_item.extracted_text, "metadata": {"filename": work_item.original_filename}}],
         max_characters=int(settings.RAG_MAX_CONTEXT_LENGTH),
     )
     return fence(assembled, chunk_ids=[str(work_item.id)])
@@ -595,10 +491,7 @@ def _propagate_skip(
             inbound = [e for e in graph.edges if e.to_node_key == candidate]
             reachable = any(
                 e.from_node_key not in state.skipped
-                and not (
-                    e.from_node_key == node_key
-                    and (taken is None or e.branch != taken)
-                )
+                and not (e.from_node_key == node_key and (taken is None or e.branch != taken))
                 for e in inbound
             )
             if reachable:
@@ -663,9 +556,7 @@ def _default_perform_action(
             ).require()
             if not spec.recipient:
                 raise ActionFailure("Email action has no recipient configured.")
-            title, body = _render_action_message(
-                rule=state.rule, work_item=state.work_item
-            )
+            title, body = _render_action_message(rule=state.rule, work_item=state.work_item)
             ok = asyncio.run(
                 notification_dispatcher.send(
                     action_type=spec.action_type,
@@ -676,9 +567,7 @@ def _default_perform_action(
                 )
             )
             if not ok:
-                raise ActionFailure(
-                    f"Provider '{spec.action_type}' reported a delivery failure."
-                )
+                raise ActionFailure(f"Provider '{spec.action_type}' reported a delivery failure.")
             return f"{spec.action_type} -> {spec.recipient}"
 
         if spec.action_type in ("set_field", "work_item.mutate"):
@@ -701,9 +590,7 @@ def _perform_mutation(state: _WalkState, spec: ActionSpec) -> str:
     if not hasattr(work_item, field_name) or field_name in (
         "id", "workspace_id", "created_by_user_id", "extracted_text",
     ):
-        raise ActionFailure(
-            f"Field {field_name!r} is not a mutable work item field."
-        )
+        raise ActionFailure(f"Field {field_name!r} is not a mutable work item field.")
 
     setattr(work_item, field_name, spec.target_value)
     state.db.flush([work_item])
@@ -743,15 +630,9 @@ def reap_stranded(db: Session, *, limit: int = 200) -> int:
         execution.status = AutomationExecutionStatus.TIMED_OUT
         execution.completed_at = _now()
         execution.deadline_at = None
-        execution.error = (
-            "Reaped: the worker holding this execution did not report a "
-            "result before the deadline."
-        )
+        execution.error = "Reaped: execution timed out before completion."
     if stranded:
         db.commit()
-        logger.warning(
-            "automation.executions_reaped", extra={"count": len(stranded)}
-        )
     return len(stranded)
 
 

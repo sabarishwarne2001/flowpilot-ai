@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -36,18 +36,18 @@ const StatusIcon: React.FC<{ status: AutomationExecutionStatus }> = ({
 }) => {
   switch (status) {
     case "COMPLETED":
-      return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
+      return <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />;
     case "FAILED":
     case "TIMED_OUT":
-      return <XCircle className="h-4 w-4 text-destructive" />;
+      return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
     case "SUPPRESSED_CYCLE":
-      return <RotateCcw className="h-4 w-4 text-amber-600" />;
+      return <RotateCcw className="h-4 w-4 text-amber-600 shrink-0" />;
     case "SUPPRESSED_DEPTH":
-      return <ArrowDown className="h-4 w-4 text-amber-600" />;
+      return <ArrowDown className="h-4 w-4 text-amber-600 shrink-0" />;
     case "BUDGET_EXHAUSTED":
-      return <Ban className="h-4 w-4 text-amber-600" />;
+      return <Ban className="h-4 w-4 text-amber-600 shrink-0" />;
     default:
-      return <Clock className="h-4 w-4 text-muted-foreground" />;
+      return <Clock className="h-4 w-4 text-muted-foreground shrink-0" />;
   }
 };
 
@@ -130,8 +130,8 @@ export const ExecutionTimeline: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4 w-full min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium">Execution traces</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -145,7 +145,7 @@ export const ExecutionTimeline: React.FC = () => {
           onClick={() => setSuppressedOnly((current) => !current)}
           aria-pressed={suppressedOnly}
           className={[
-            "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs",
+            "inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs self-start sm:self-auto",
             suppressedOnly
               ? "border-amber-500 bg-amber-500/10 text-amber-700"
               : "border-border hover:bg-muted",
@@ -163,7 +163,7 @@ export const ExecutionTimeline: React.FC = () => {
             : "No automation has run yet in this workspace."}
         </p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-3 w-full min-w-0">
           {chains.map((chain) => {
             const isOpen = expanded === chain.correlationId;
             const hasSuppression = chain.suppressed.length > 0;
@@ -172,7 +172,7 @@ export const ExecutionTimeline: React.FC = () => {
               <li
                 key={chain.correlationId}
                 className={[
-                  "rounded-lg border",
+                  "rounded-lg border overflow-hidden",
                   hasSuppression
                     ? "border-amber-500/50 bg-amber-500/5"
                     : "border-border bg-card",
@@ -184,7 +184,7 @@ export const ExecutionTimeline: React.FC = () => {
                     setExpanded(isOpen ? null : chain.correlationId)
                   }
                   aria-expanded={isOpen}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
                 >
                   <ChevronRight
                     className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
@@ -192,7 +192,7 @@ export const ExecutionTimeline: React.FC = () => {
                   />
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">
+                    <span className="block text-sm font-medium truncate">
                       {chain.executions.length}{" "}
                       {chain.executions.length === 1 ? "step" : "steps"}
                       {hasSuppression && (
@@ -217,7 +217,7 @@ export const ExecutionTimeline: React.FC = () => {
                 </button>
 
                 {isOpen && (
-                  <ol className="border-t border-border/60 px-4 py-3">
+                  <ol className="border-t border-border/60 px-4 py-3 space-y-2 overflow-x-auto">
                     {chain.executions.map((execution, index) => (
                       <ExecutionStep
                         key={execution.id}
@@ -273,7 +273,7 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
       : null;
 
   return (
-    <li className="relative pl-6">
+    <li className="relative pl-6 min-w-0">
       {!isLast && (
         <span
           aria-hidden="true"
@@ -286,13 +286,13 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
       </span>
 
       <div
-        className={`mb-3 rounded-md border p-2.5 ${TONE_CLASSES[presentation.tone]}`}
+        className={`mb-3 rounded-md border p-3 ${TONE_CLASSES[presentation.tone]} min-w-0`}
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium break-words">
             {execution.rule_name ?? `Rule ${execution.rule_id.slice(0, 8)}`}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground shrink-0">
             depth {execution.depth}
             {execution.duration_ms !== null && ` · ${execution.duration_ms}ms`}
           </span>
@@ -307,7 +307,7 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
         )}
 
         {execution.status === "SUPPRESSED_CYCLE" && counterpartRuleId && (
-          <p className="mt-1.5 rounded bg-background/60 px-2 py-1 text-xs">
+          <p className="mt-1.5 rounded bg-background/60 px-2 py-1 text-xs break-all">
             Triggered by rule{" "}
             <span className="font-mono">{counterpartRuleId.slice(0, 8)}</span>,
             which this rule also triggers. Change one of the two to break the
@@ -316,16 +316,16 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
         )}
 
         {reason && !presentation.explanation.includes(reason) && (
-          <p className="mt-1 text-xs text-muted-foreground">{reason}</p>
+          <p className="mt-1 text-xs text-muted-foreground break-words">{reason}</p>
         )}
 
         {execution.error && (
-          <p className="mt-1.5 break-words rounded bg-background/60 px-2 py-1 font-mono text-[11px] text-destructive">
+          <p className="mt-1.5 break-all rounded bg-background/60 px-2 py-1 font-mono text-[11px] text-destructive">
             {execution.error}
           </p>
         )}
 
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
           {execution.node_count > 0 && (
             <span>
               {execution.nodes_executed}/{execution.node_count} nodes
@@ -347,7 +347,7 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
             </span>
           )}
           {priorExecutionId && (
-            <span className="font-mono">
+            <span className="font-mono break-all">
               prior {priorExecutionId.slice(0, 8)}
             </span>
           )}

@@ -1,8 +1,4 @@
-"""ARCH-13 Step 13.5 — the `automation.execute` job handler.
-
-LIGHT profile: SQL plus action dispatch. The LLM actions run through the
-existing metering path and do not need a heavy image.
-"""
+﻿"""ARCH-13 Step 13.5 — the `automation.execute` job handler."""
 
 from __future__ import annotations
 
@@ -162,7 +158,7 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
 
         for rule in rules:
             try:
-                execution = executor.create_execution(
+                execution, created = executor.create_execution(
                     db,
                     rule=rule,
                     organization_id=organization_id,
@@ -176,11 +172,26 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
                 db.commit()
             except IntegrityError:
                 db.rollback()
+                logger.warning(
+                    "automation.execution_insert_failed",
+                    extra={
+                        "rule_id": str(rule.id),
+                        "outbox_event_id": str(event.id),
+                    },
+                    exc_info=True,
+                )
+                results.append({"rule_id": str(rule.id), "status": "ERROR"})
+                continue
+
+            if not created:
+                # A-1: Replay suppressed
                 logger.info(
                     "automation.replay_suppressed",
                     extra={
                         "rule_id": str(rule.id),
                         "outbox_event_id": str(event.id),
+                        "execution_id": str(execution.id),
+                        "existing_status": execution.status.value,
                     },
                 )
                 results.append({"rule_id": str(rule.id), "status": "REPLAY"})

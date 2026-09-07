@@ -674,13 +674,13 @@ export const Automation: React.FC = () => {
 
               <SelectContent>
                 <SelectItem value="PRIORITY_ASC">
-                  Priority Low â†’ High
+                  Priority Low → High
                 </SelectItem>
                 <SelectItem value="PRIORITY_DESC">
-                  Priority High â†’ Low
+                  Priority High → Low
                 </SelectItem>
-                <SelectItem value="NAME_ASC">Name (A â†’ Z)</SelectItem>
-                <SelectItem value="NAME_DESC">Name (Z â†’ A)</SelectItem>
+                <SelectItem value="NAME_ASC">Name (A → Z)</SelectItem>
+                <SelectItem value="NAME_DESC">Name (Z → A)</SelectItem>
                 <SelectItem value="CREATED_DESC">Recently Created</SelectItem>
                 <SelectItem value="UPDATED_DESC">Last Updated</SelectItem>
               </SelectContent>

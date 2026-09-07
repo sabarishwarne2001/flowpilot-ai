@@ -1,12 +1,4 @@
-"""ARCH-13 Step 13.6: the typed values that cross the R33 boundary.
-
-This module holds the argument and return types for app.services.tools.
-It lives outside that package because tests/services/test_arch12_isolation.py
-walks app.services.tools with ast and fails if any file there imports
-fenced_context — and while nothing here imports it either, the types
-are shared by the executor and the extraction node, neither of which
-is a tool.
-"""
+﻿"""ARCH-13 Step 13.6: the typed values that cross the R33 boundary."""
 
 from __future__ import annotations
 
@@ -78,7 +70,7 @@ class TenantScope:
 class FactSet:
     """Typed values produced by extraction nodes."""
 
-    facts: tuple[Fact, ...]
+    facts: tuple[Fact, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_extraction(
@@ -229,15 +221,10 @@ class ActionSpec:
             if normalised in derived:
                 raise ToolContractViolation(
                     f"ActionSpec.{name} carries a document-derived value "
-                    "from extraction. R33: a sentence inside an uploaded "
-                    "document must not be able to choose who an email "
-                    "reaches or what a field is set to. Action values come "
-                    "from the rule the customer wrote."
+                    "from extraction. Action values come from the rule author."
                 )
             raise ToolContractViolation(
-                f"ActionSpec.{name}={value!r} does not appear in the action's "
-                "authoring config. A selector may only emit values the rules "
-                "author supplied."
+                f"ActionSpec.{name}={value!r} does not appear in the action config."
             )
 
     def as_details(self) -> dict[str, Any]:
