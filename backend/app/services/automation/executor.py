@@ -79,17 +79,18 @@ def create_execution(
     rule: AutomationRule,
     organization_id: uuid.UUID,
     workspace_id: uuid.UUID,
-    correlation_id: uuid.UUID,
-    depth: int,
+    correlation_id: Optional[uuid.UUID] = None,
+    depth: int = 0,
     work_item_id: Optional[uuid.UUID] = None,
     outbox_event_id: Optional[uuid.UUID] = None,
     causation_id: Optional[uuid.UUID] = None,
     node_count: int = 0,
 ) -> tuple[AutomationExecution, bool]:
+    actual_correlation_id = correlation_id or uuid.uuid4()
     suppression = cycle_detector.check(
         db,
         rule_id=rule.id,
-        correlation_id=correlation_id,
+        correlation_id=actual_correlation_id,
         depth=depth,
         causation_id=causation_id,
     )
@@ -100,7 +101,7 @@ def create_execution(
         rule_id=rule.id,
         work_item_id=work_item_id,
         outbox_event_id=outbox_event_id,
-        correlation_id=correlation_id,
+        correlation_id=actual_correlation_id,
         depth=depth,
         status=(
             suppression.status if suppression else AutomationExecutionStatus.QUEUED
@@ -131,7 +132,6 @@ def create_execution(
             "outbox_event_id": str(outbox_event_id) if outbox_event_id else None,
         },
     )
-    # A-1: Returns (execution, created)
     return execution, created
 
 
@@ -143,7 +143,7 @@ class _WalkState:
     work_item: Optional[WorkItem]
     graph: graph_service.CompiledGraph
     trigger_event: Optional[OutboxEvent]
-    facts: FactSet = field(default_factory=lambda: FactSet(()))
+    facts: FactSet = field(default_factory=lambda: FactSet())
     actions_executed: int = 0
     emitted_event_ids: list[str] = field(default_factory=list)
     skipped: set[str] = field(default_factory=set)

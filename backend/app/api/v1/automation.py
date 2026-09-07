@@ -1,3 +1,4 @@
+from app.models.automation_execution import AutomationExecution
 """
 Automation Rules API router endpoints for FlowPilot AI.
 """
