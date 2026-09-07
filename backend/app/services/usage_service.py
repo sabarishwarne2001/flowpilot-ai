@@ -9,11 +9,13 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from sqlalchemy import select
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.principal import Principal, PrincipalKind, get_current_principal
+from app.core.idempotent_insert import insert_or_get
 from app.core.usage_events import (
     EmissionKind,
     MAX_EVENT_TYPE_LENGTH,
@@ -287,8 +289,29 @@ def record_usage(
         occurred_at=occurred_at or datetime.now(timezone.utc),
     )
 
-    db.add(event)
-    db.flush([event])
+    # SEAM-I-1. uq_usage_events_org_idempotency_key: (organization_id, idempotency_key)
+    # WHERE idempotency_key IS NOT NULL. Metering is the one place a lost
+    # write is unrecoverable — the tokens were served and the customer is
+    # never billed for them.
+    event, _created = insert_or_get(
+        db,
+        instance=event,
+        lookup=lambda: (
+            None
+            if not idempotency_key
+            else db.execute(
+                select(UsageEvent)
+                .where(UsageEvent.organization_id == organization_id)
+                .where(UsageEvent.idempotency_key == idempotency_key)
+                .limit(1)
+            ).scalar_one_or_none()
+        ),
+        label="usage.record_usage",
+        log_extra={
+            "organization_id": str(organization_id),
+            "idempotency_key": idempotency_key,
+        },
+    )
 
     logger.info(
         "usage.record",

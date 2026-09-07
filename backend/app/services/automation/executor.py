@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.automation import AutomationRule
+from app.core.idempotent_insert import insert_or_get
 from app.models.automation_execution import (
     AutomationExecution,
     AutomationExecutionStatus,
@@ -135,8 +136,29 @@ def create_execution(
         error=suppression.reason if suppression else None,
         completed_at=_now() if suppression else None,
     )
-    db.add(execution)
-    db.flush()
+    # SEAM-I-3. uq_automation_executions_rule_event: (rule_id, outbox_event_id)
+    # WHERE outbox_event_id IS NOT NULL. The index is partial, so an
+    # execution with no originating event is never deduplicated and the
+    # lookup must return None for that case rather than matching on NULL.
+    execution, _created = insert_or_get(
+        db,
+        instance=execution,
+        lookup=lambda: (
+            None
+            if outbox_event_id is None
+            else db.execute(
+                select(AutomationExecution)
+                .where(AutomationExecution.rule_id == rule.id)
+                .where(AutomationExecution.outbox_event_id == outbox_event_id)
+                .limit(1)
+            ).scalar_one_or_none()
+        ),
+        label="automation.execution",
+        log_extra={
+            "rule_id": str(rule.id),
+            "outbox_event_id": str(outbox_event_id) if outbox_event_id else None,
+        },
+    )
     return execution
 
 

@@ -1,3 +1,6 @@
+from __future__ import annotations
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
 #!/usr/bin/env python
 """ARCH-12 release gate.
 
@@ -14,7 +17,6 @@ number of failures.
     python scripts/verify_arch12.py --skip-db     # static checks only
 """
 
-from __future__ import annotations
 
 import argparse
 import ast

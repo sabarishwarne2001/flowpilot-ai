@@ -140,6 +140,34 @@ def build_classification_prompt(
     )
 
 
+def _first_json_value(text: str) -> Any:
+    """Longest valid JSON object or array in `text`, or None.
+
+    Scans both bracket kinds rather than braces alone. A bare top-level
+    array has no outermost brace pair spanning it, so brace-only scanning
+    reported "no JSON object" for a payload that was valid JSON throughout.
+
+    Longest-wins matters: a conversational preamble containing a stray "{"
+    produces a short span that parses to something useless, and it must not
+    beat the real payload that follows.
+    """
+    best: Any = None
+    best_length = 0
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = text.find(opener)
+        end = text.rfind(closer)
+        if start == -1 or end <= start:
+            continue
+        candidate = text[start : end + 1]
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if len(candidate) > best_length:
+            best, best_length = parsed, len(candidate)
+    return best
+
+
 def parse_extraction_response(
     raw: str, *, schema: dict[str, str]
 ) -> dict[str, Any]:
@@ -149,17 +177,25 @@ def parse_extraction_response(
         text = text.split("```")[1] if "```" in text[3:] else text[3:]
         if text.lstrip().lower().startswith("json"):
             text = text.lstrip()[4:]
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end <= start:
+    parsed = _first_json_value(text)
+    if parsed is None:
         raise SchemaViolation(
-            "Extraction returned no JSON object. The node produces data a "
+            "Extraction returned no JSON value. The node produces data a "
             "condition tests; free text is not data."
         )
 
-    try:
-        parsed = json.loads(text[start : end + 1])
-    except json.JSONDecodeError as exc:
-        raise SchemaViolation(f"Extraction returned invalid JSON: {exc}") from exc
+    # SEAM-B-2. A model told to emit one object sometimes wraps it in an array. That
+    # is a formatting quirk, not a schema violation, so unwrap a
+    # single-element list rather than failing the node over it. Anything
+    # longer is genuinely ambiguous and still fails.
+    if isinstance(parsed, list):
+        if len(parsed) == 1 and isinstance(parsed[0], dict):
+            parsed = parsed[0]
+        else:
+            raise SchemaViolation(
+                f"Extraction returned a {len(parsed)}-element array; the node "
+                "schema declares a single object."
+            )
 
     if not isinstance(parsed, dict):
         raise SchemaViolation(

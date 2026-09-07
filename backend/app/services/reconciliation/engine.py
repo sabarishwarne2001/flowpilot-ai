@@ -36,10 +36,12 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.idempotent_insert import insert_or_get
 from app.models.reconciliation import (
     CATEGORY_ORDER,
     DRIFT_ALERT_BPS,
@@ -176,8 +178,24 @@ def persist_statement(
         total_cost_micros=payload.total_cost_micros,
         details=payload.details or None,
     )
-    db.add(statement)
-    db.flush([statement])
+    # SEAM-I-6. uq_provider_statements_source: (provider, source_key).
+    statement, created = insert_or_get(
+        db,
+        instance=statement,
+        lookup=lambda: db.execute(
+            select(ProviderStatement)
+            .where(ProviderStatement.provider == payload.provider)
+            .where(ProviderStatement.source_key == payload.source_key)
+            .limit(1)
+        ).scalar_one_or_none(),
+        label="reconciliation.statement",
+        log_extra={"provider": payload.provider, "source_key": payload.source_key},
+    )
+    if not created:
+        # Statement lines belong to the statement. Re-inserting them against
+        # an existing header would double every supplier cost in the period,
+        # which is the one error class ARCH-18 exists to prevent.
+        return statement
 
     for line in payload.lines:
         db.add(

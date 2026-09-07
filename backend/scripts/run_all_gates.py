@@ -1,3 +1,5 @@
+from __future__ import annotations
+MANUAL_OR_HISTORICAL_GATES = set(['verify_platform_email.py', 'verify_step4.py', 'verify_arch05_step0.py', 'verify_arch06_step0.py', 'verify_arch07_step0.py', 'verify_arch07_step6_preflight.py', 'verify_arch08_step0.py', 'verify_arch08_step1_preflight.py', 'verify_arch10_step0.py', 'verify_arch11_step0.py', 'verify_models_step2.py'])
 #!/usr/bin/env python
 """ARCH-0V Tranche 1 — run verification gates in phase order with UTF-8 encoding.
 
@@ -6,7 +8,6 @@
     python scripts/run_all_gates.py --list
 """
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -55,6 +56,8 @@ STATIC_ONLY_FLAG: dict[str, str] = {
 }
 
 SPECIAL_ORDER: dict[str, tuple[int, int]] = {
+    "verify_runtime_hardening.py": (0, 1),
+    "verify_runtime_seams.py": (0, 2),
     "verify_migration_history.py": (0, 0),
     "verify_models_step2.py": (2, 50),
     "verify_step4.py": (4, 50),

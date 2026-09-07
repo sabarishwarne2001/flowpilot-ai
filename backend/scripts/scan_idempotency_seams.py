@@ -74,7 +74,6 @@ KNOWN_RETRY_PATH: frozenset[str] = frozenset({
     "app/services/billing/invoice_service.py::assemble",
     "app/services/billing/account_service.py::ensure_billing_account",
     "app/services/compliance/erasure_service.py::erase_subject",
-    "app/services/document_intake_service.py::ingest_validated",
     "app/services/supplier_reconciliation_service.py::ingest_invoice",
 })
 
@@ -104,6 +103,11 @@ KNOWN_USER_INTENT: frozenset[str] = frozenset({
     "app/services/slo_service.py::seed_platform_defaults",
     "app/services/spend_control_service.py::set_limit",
     "app/api/v1/partner.py::create_agreement",
+    # Reclassified from RETRY_PATH. Both unique columns are values this
+    # transaction just minted: stored_filename is the storage key the driver
+    # returned, uploaded_file_id is the row flushed three lines above. A retry
+    # mints new ones, so a collision is two different documents, not a replay.
+    "app/services/document_intake_service.py::ingest_validated",
     "app/crud/organization.py::create_organization",
     "app/services/branding/domain_service.py::claim_domain",
     "app/services/partner/marketplace_service.py::create_item",
@@ -113,7 +117,16 @@ KNOWN_USER_INTENT: frozenset[str] = frozenset({
     "app/services/partner/tenancy_service.py::register_signing_key",
 })
 
-GUARD_MARKERS = ("begin_nested", "on_conflict", "IntegrityError")
+# A savepoint is not the only valid guard. A row lock taken BEFORE the
+# create path serialises it just as well, and is the only correct option
+# when the insert follows a network side effect that a losing race would
+# orphan (see billing/account_service.ensure_billing_account).
+GUARD_MARKERS = (
+    "begin_nested",
+    "on_conflict",
+    "IntegrityError",
+    "with_for_update",
+)
 
 
 @dataclass

@@ -9,6 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.idempotent_insert import insert_or_get
 from app.models.verification import (
     DocumentVerification,
     VerificationStatus,
@@ -66,7 +67,21 @@ def _run_agent(
         db, reservation=reservation, token_usage=token_usage
     )
 
-    entities = llm_service._extract_json(response)
+    try:
+        entities = llm_service._extract_json(response)
+    except ValueError as exc:
+        # SEAM-B-3. Multi-agent verification is a quorum. One agent returning prose
+        # instead of JSON is a disagreement signal, not a pipeline fault —
+        # and letting the ValueError escape burned all five job attempts on
+        # a response that would never parse, stranding the document.
+        # An empty dict disagrees with every other agent, which drops the
+        # confidence score and routes the fields to the review queue. That
+        # is the behaviour a human reviewer needs anyway.
+        logger.warning(
+            "verification.agent_unparseable",
+            extra={"error": str(exc), "preview": (response or "")[:200]},
+        )
+        entities = {}
     return entities or {}, int(summary.get("total_cost_micros") or 0)
 
 
@@ -125,7 +140,30 @@ def handle_document_verify(payload: dict[str, Any]) -> dict[str, Any]:
             agent_count=agent_count,
             details={"classification": classification},
         )
-        db.add(verification)
+        # SEAM-I-9. uq_document_verifications_open_work_item: (work_item_id)
+        # WHERE status IN ('PENDING', 'DISAGREED').
+        #
+        # The status predicate is load-bearing and must be in the lookup.
+        # Without it, a work item with a RESOLVED verification from a prior
+        # run returns that closed record, the handler treats it as the open
+        # one it just created, and agent output is written against a
+        # verification a human already signed off.
+        verification, _created = insert_or_get(
+            db,
+            instance=verification,
+            lookup=lambda: db.execute(
+                select(DocumentVerification)
+                .where(DocumentVerification.work_item_id == work_item.id)
+                .where(
+                    DocumentVerification.status.in_(
+                        [VerificationStatus.PENDING, VerificationStatus.DISAGREED]
+                    )
+                )
+                .limit(1)
+            ).scalar_one_or_none(),
+            label="verification.open_record",
+            log_extra={"work_item_id": str(work_item.id)},
+        )
         db.commit()
 
         outputs: list[dict[str, Any]] = []

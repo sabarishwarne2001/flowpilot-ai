@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.slo_registry import SLO_REGISTRY, SLOSpec, spec_for
+from app.core.idempotent_insert import insert_or_get
 from app.models.slo import (
     SLODefinition,
     SLOMeasurement,
@@ -387,14 +388,30 @@ def record_measurement(
         )
 
     if existing is None:
-        measurement = SLOMeasurement(
-            slo_definition_id=definition.id,
-            organization_id=organization_id,
-            slo_key=slo_key,
-            window_start=start,
-            window_end=end,
+        # SEAM-I-7. uq_slo_measurements_scope:
+        # (slo_definition_id, organization_id, window_start).
+        # The get-or-return shape was already here; what was missing is the
+        # savepoint. Two recorders sampling the same window concurrently
+        # both see `existing is None` and both insert.
+        measurement, _created = insert_or_get(
+            db,
+            instance=SLOMeasurement(
+                slo_definition_id=definition.id,
+                organization_id=organization_id,
+                slo_key=slo_key,
+                window_start=start,
+                window_end=end,
+            ),
+            lookup=lambda: db.execute(
+                select(SLOMeasurement)
+                .where(SLOMeasurement.slo_definition_id == definition.id)
+                .where(SLOMeasurement.organization_id == organization_id)
+                .where(SLOMeasurement.window_start == start)
+                .limit(1)
+            ).scalar_one_or_none(),
+            label="slo.measurement",
+            log_extra={"slo_key": slo_key, "window_start": start.isoformat()},
         )
-        db.add(measurement)
     else:
         measurement = existing
 

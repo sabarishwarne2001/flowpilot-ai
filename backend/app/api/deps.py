@@ -1,3 +1,7 @@
+from __future__ import annotations
+from contextvars import ContextVar
+from app.core.principal import Principal
+_principal_var: ContextVar[Principal | None] = ContextVar('principal', default=None)
 """Dependencies Module for FlowPilot AI."""
 
 import logging

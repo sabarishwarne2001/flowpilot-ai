@@ -44,11 +44,13 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional, Sequence
 
+from sqlalchemy import select
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.models.billing_account import BillingAccount
+from app.core.idempotent_insert import insert_or_get
 from app.models.invoice import (
     DIGEST_PREFIX,
     Invoice,
@@ -562,8 +564,33 @@ def assemble(
         content_digest=DIGEST_PREFIX + "0" * 64,
         assembly_notes=notes or None,
     )
-    db.add(invoice)
-    db.flush()
+    # SEAM-I-5. uq_invoices_subscription_period: (subscription_id, period_start,
+    # period_end). Deliberately not uq_invoices_number — `number` was
+    # allocated by allocate_number() moments ago and is unique by
+    # construction, so matching on it would never find the prior attempt's
+    # row. The period tuple is what identifies the same logical invoice
+    # across a retried assemble job.
+    invoice, created = insert_or_get(
+        db,
+        instance=invoice,
+        lookup=lambda: db.execute(
+            select(Invoice)
+            .where(Invoice.subscription_id == subscription.id)
+            .where(Invoice.period_start == start)
+            .where(Invoice.period_end == end)
+            .limit(1)
+        ).scalar_one_or_none(),
+        label="billing.invoice_assemble",
+        log_extra={
+            "subscription_id": str(subscription.id),
+            "period_start": start.isoformat() if start else None,
+        },
+    )
+    if not created:
+        # The prior attempt already wrote this invoice and its line items.
+        # Re-running the line loop would duplicate them under
+        # uq_invoice_line_items_number.
+        return invoice
 
     lines: list[InvoiceLineItem] = []
     for index, draft in enumerate(drafts, start=1):

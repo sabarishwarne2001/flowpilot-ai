@@ -209,11 +209,35 @@ def ensure_billing_account(
     if existing is not None:
         return existing
 
+    # SEAM-I-10. uq_billing_accounts_organization_id.
+    #
+    # A savepoint at the db.add() would be the wrong fix here, and worse than
+    # the bug. The insert sits AFTER stripe_gateway.create_customer(), so a
+    # loser in the race would return the existing account while leaving behind
+    # a second Stripe customer that nothing references and nothing reaps —
+    # precisely the outcome this function's own docstring warns about.
+    #
+    # The create path has to be serialised BEFORE the remote call instead.
+    # FOR UPDATE on the organization row is the lock ARCH-05 already uses for
+    # ownership transfer, so this adds no new locking concept.
+    #
+    # Tradeoff, stated plainly: the row lock is held across a Stripe network
+    # call, so a slow Stripe blocks concurrent callers for that organization.
+    # That is a real cost and it is the cheaper one — an orphaned customer is
+    # silent, permanent, and reconciles against nothing.
     organization = db.execute(
-        select(Organization).where(Organization.id == organization_id)
+        select(Organization)
+        .where(Organization.id == organization_id)
+        .with_for_update()
     ).scalar_one_or_none()
     if organization is None:
         raise BillingAccountError(f"Organization {organization_id} does not exist.")
+
+    # Re-check under the lock. A caller that passed the unlocked check above
+    # and then blocked here must see the account the winner committed.
+    existing = get_for_organization(db, organization_id=organization_id)
+    if existing is not None:
+        return existing
 
     email = _normalise_email(
         billing_email or default_billing_email(db, organization_id=organization_id)

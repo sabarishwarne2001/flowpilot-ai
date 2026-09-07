@@ -12,7 +12,7 @@ from typing import Any, Mapping, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.outbox import OutboxEvent
+from app.models.outbox_event import OutboxEvent
 from app.models.work_item import WorkItem
 from app.services import outbox_service
 

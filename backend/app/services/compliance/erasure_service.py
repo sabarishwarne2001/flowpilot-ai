@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ from app.core import security
 from app.models.assistant import Conversation, ConversationMessage
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.auth_token import AuthToken
+from app.core.idempotent_insert import insert_or_get
 from app.models.compliance import ErasedSubject, erased_email_for
 from app.models.organization import (
     MembershipStatus,
@@ -493,8 +495,23 @@ def erase_subject(
             ),
         },
     )
-    db.add(tombstone)
-    db.flush()
+    # SEAM-I-8. uq_erased_subjects_org_email_hash:
+    # (organization_id, subject_email_hash). A second erasure request for a
+    # subject already erased must return the original tombstone, not raise:
+    # under Art. 17 the erasure has already happened and the record of it is
+    # the answer.
+    tombstone, _created = insert_or_get(
+        db,
+        instance=tombstone,
+        lookup=lambda: db.execute(
+            select(ErasedSubject)
+            .where(ErasedSubject.organization_id == organization_id)
+            .where(ErasedSubject.subject_email_hash == tombstone.subject_email_hash)
+            .limit(1)
+        ).scalar_one_or_none(),
+        label="compliance.erasure_tombstone",
+        log_extra={"organization_id": str(organization_id)},
+    )
 
     audit_service.record(
         db,

@@ -28,10 +28,10 @@ for something that already exists and the honest answer is 409.
 
 Turning a user-facing create into insert_or_get is not a hardening, it is a
 vulnerability. `create_user` inserts into `users`, unique on `email`. Making
-it get-or-return means a signup with an existing address silently hands the
-caller a session for someone else's account. The same argument applies to
-anything keyed on a `token_hash` or `secret_hash`: returning the existing row
-gives the caller a credential they did not generate.
+it get-or-return means a signup with an existing address silently returns the
+existing account, and the attacker is now holding a session for someone else's
+user. The same reasoning applies to anything keyed on a `token_hash` or `secret_hash`:
+returning the existing row gives the caller a credential they did not generate.
 
 `scripts/scan_idempotency_seams.py` enforces that split. Every insert on a
 unique-constrained model must be classified RETRY_PATH or USER_INTENT there,

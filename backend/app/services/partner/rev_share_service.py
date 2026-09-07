@@ -86,11 +86,13 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
 from app.models.organization import Organization
+from app.core.idempotent_insert import insert_or_get
 from app.models.partner import (
     BPS_DENOMINATOR,
     DIGEST_PREFIX,
@@ -477,7 +479,28 @@ def compute_period(
             source_rollup_ids=sorted(bucket.source_rollup_ids),
             cost_basis_source_mix=(bucket.source_mix or None),
         )
-        db.add(line)
+        # SEAM-I-4. uq_partner_rev_share_ledger_line:
+        # (payout_period_id, organization_id, basis_class).
+        # There is no flush inside this loop, so before this change a
+        # collision surfaced at the closing commit and took the whole
+        # period's ledger with it rather than the one duplicated line.
+        line, _created = insert_or_get(
+            db,
+            instance=line,
+            lookup=lambda: db.execute(
+                select(PartnerRevShareLedger)
+                .where(PartnerRevShareLedger.payout_period_id == period.id)
+                .where(PartnerRevShareLedger.organization_id == bucket.organization_id)
+                .where(PartnerRevShareLedger.basis_class == bucket.basis_class)
+                .limit(1)
+            ).scalar_one_or_none(),
+            label="partner.rev_share_line",
+            log_extra={
+                "payout_period_id": str(period.id),
+                "organization_id": str(bucket.organization_id),
+                "basis_class": bucket.basis_class,
+            },
+        )
 
         gross_revenue += bucket.revenue_micros
         payout_total += payout

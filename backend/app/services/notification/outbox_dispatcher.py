@@ -53,6 +53,7 @@ from app.models.notification import (
     NotificationChannel,
     NotificationStatus,
 )
+from app.core.idempotent_insert import insert_or_get
 from app.models.notification_delivery import (
     NotificationDelivery,
     NotificationDeliveryStatus,
@@ -173,11 +174,34 @@ def dispatch(
             delivery.mark_delivered()
             notification.delivery_status = NotificationStatus.SENT
 
-        db.add(delivery)
-        db.flush([delivery])
+        # SEAM-I-2. uq_notification_deliveries_org_idempotency_key:
+        # (organization_id, idempotency_key) WHERE idempotency_key IS NOT NULL.
+        # The constraint was named for this and never given the handling.
+        delivery, created = insert_or_get(
+            db,
+            instance=delivery,
+            lookup=lambda: (
+                None
+                if not idempotency_key
+                else db.execute(
+                    select(NotificationDelivery)
+                    .where(NotificationDelivery.organization_id == organization_id)
+                    .where(NotificationDelivery.idempotency_key == idempotency_key)
+                    .limit(1)
+                ).scalar_one_or_none()
+            ),
+            label="notification.delivery",
+            log_extra={
+                "organization_id": str(organization_id),
+                "idempotency_key": idempotency_key,
+            },
+        )
         result.deliveries.append(delivery.id)
 
-        if preference.channel is not NotificationChannel.IN_APP:
+        # `created` gates the enqueue. Without it, a replay returns the
+        # existing delivery and then queues a SECOND send job for it, which
+        # is how a retry turns into a duplicate email.
+        if created and preference.channel is not NotificationChannel.IN_APP:
             job_service.enqueue(
                 db,
                 job_type=JOB_TYPE,

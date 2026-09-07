@@ -3,14 +3,12 @@ Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
 ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
 ARCH-12 Step 1 & 3: Streaming prompt preparation, system prompt isolation, and metered prompt execution.
 ARCH-14 Step 1 & 6: Platform-owned pricing and Vertex billing label guard.
-ARCH-22 / ARCH-23: Multi-provider BYOK routing and client factory integration.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 import uuid
 from typing import Any
 
@@ -238,7 +236,15 @@ from app.core.byok_providers import (
 )
 
 
+#: Bracket pairs tried when a raw json.loads fails. Objects first: a model
+#: told to emit an object usually does, and preferring `{` keeps the common
+#: case cheap.
+_JSON_OPENERS: tuple[tuple[str, str], ...] = (("{", "}"), ("[", "]"))
+
+
 class _RoutedProvider:
+    """Minimal stand-in exposing the `.value` shape `AIProvider` has."""
+
     __slots__ = ("value",)
 
     def __init__(self, value: str) -> None:
@@ -246,6 +252,8 @@ class _RoutedProvider:
 
 
 class _RoutedAISettings:
+    """An AISettings proxy with the provider and model a routing rule chose."""
+
     __slots__ = ("_base", "provider", "model")
 
     def __init__(self, base: Any, provider: str, model: str) -> None:
@@ -306,7 +314,7 @@ class LLMService:
         return self._gemini_client
 
     def _validate_provider(self, *, ai_settings: AISettings) -> str:
-        raw = ai_settings.provider.value if hasattr(ai_settings.provider, "value") else str(ai_settings.provider)
+        raw = ai_settings.provider.value
         try:
             provider = normalize_provider(raw)
         except Exception as exc:  # noqa: BLE001
@@ -450,7 +458,9 @@ class LLMService:
                 provider=provider_label,
                 model=ai_settings.model,
                 prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
-                completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+                completion_tokens=int(
+                    getattr(usage, "completion_tokens", 0) or 0
+                ),
                 total_tokens=int(getattr(usage, "total_tokens", 0) or 0),
                 estimated_cost=0.0,
             ),
@@ -562,9 +572,7 @@ class LLMService:
             return self.gemini_client
         raise ValueError(
             f"FlowPilot holds no platform key for '{key}', so this call "
-            "cannot be served without a tenant credential. Either the "
-            "routing rule requested a platform key for a provider that "
-            "has none, or the tenant credential failed to resolve."
+            "cannot be served without a tenant credential."
         )
 
     def _execute_query(
@@ -601,9 +609,15 @@ class LLMService:
                 return text, TokenUsage(
                     provider="gemini",
                     model=ai_settings.model,
-                    prompt_tokens=int(getattr(usage, "prompt_token_count", 0) or 0),
-                    completion_tokens=int(getattr(usage, "candidates_token_count", 0) or 0),
-                    total_tokens=int(getattr(usage, "total_token_count", 0) or 0),
+                    prompt_tokens=int(
+                        getattr(usage, "prompt_token_count", 0) or 0
+                    ),
+                    completion_tokens=int(
+                        getattr(usage, "candidates_token_count", 0) or 0
+                    ),
+                    total_tokens=int(
+                        getattr(usage, "total_token_count", 0) or 0
+                    ),
                     estimated_cost=0.0,
                 )
 
@@ -674,7 +688,7 @@ class LLMService:
             )
 
         with stage(
-            "llm", provider=getattr(effective_settings.provider, "value", str(effective_settings.provider)), operation=operation
+            "llm", provider=effective_settings.provider.value, operation=operation
         ):
             response, token_usage = self._execute_query(
                 prompt=prompt,
@@ -691,45 +705,49 @@ class LLMService:
         return response, token_usage
 
     def _extract_json(self, raw_text: str) -> dict[str, Any]:
-        """Robustly extract and parse JSON from any LLM response."""
-        if not raw_text or not str(raw_text).strip():
-            return {}
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
 
-        import re
-        cleaned = str(raw_text).strip()
-
-        # 1. Regex search for ```json ... ``` or ``` ... ```
-        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-        if fence_match:
-            try:
-                return json.loads(fence_match.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        # 2. Try direct json.loads with simple markdown strip
-        no_fence = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        no_fence = re.sub(r"\s*```$", "", no_fence).strip()
         try:
-            return json.loads(no_fence)
+            return json.loads(cleaned)
         except json.JSONDecodeError:
             pass
 
-        # 3. Outermost { and } substring
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
+        # SEAM-B-1. Brace-only scanning missed a real case: Gemini returns a bare
+        # top-level array under some extraction prompts, and `[{...}]` has
+        # no outermost brace pair spanning the whole payload. Try both
+        # bracket kinds and keep whichever yields the longest valid span,
+        # so a preamble containing a stray "{" cannot win over the real
+        # object that follows it.
+        best: Any = None
+        best_length = 0
+        for opener, closer in _JSON_OPENERS:
+            start = cleaned.find(opener)
+            end = cleaned.rfind(closer)
+            if start == -1 or end <= start:
+                continue
             candidate = cleaned[start : end + 1]
             try:
-                return json.loads(candidate)
+                parsed = json.loads(candidate)
             except json.JSONDecodeError:
-                try:
-                    cleaned_commas = re.sub(r",\s*([\}\]])", r"\1", candidate)
-                    return json.loads(cleaned_commas)
-                except json.JSONDecodeError:
-                    pass
+                continue
+            if len(candidate) > best_length:
+                best, best_length = parsed, len(candidate)
 
-        logger.warning("llm.json_parse_fallback", extra={"raw_preview": cleaned[:160]})
-        return {}
+        if best is not None:
+            return best
+
+        logger.error(
+            "llm.json_parse_failed",
+            extra={"preview": cleaned[:200], "length": len(cleaned)},
+        )
+        raise ValueError("Model returned invalid JSON.")
 
     def _truncate_document(self, text: str) -> str:
         return text[: settings.RAG_MAX_CONTEXT_LENGTH]
@@ -815,10 +833,7 @@ class LLMService:
             workspace_id=workspace_id,
             work_item_id=work_item_id,
         )
-        result = self._extract_json(response)
-        if not isinstance(result, dict) or "document_classification" not in result:
-            return {"document_classification": "Other", "confidence_score": 0.5}
-        return result
+        return self._extract_json(response)
 
     def extract_entities(
         self,
@@ -843,8 +858,7 @@ class LLMService:
             workspace_id=workspace_id,
             work_item_id=work_item_id,
         )
-        result = self._extract_json(response)
-        return result if isinstance(result, dict) else {}
+        return self._extract_json(response)
 
     def generate_summary(
         self,
@@ -914,7 +928,7 @@ class LLMService:
                 ai_settings=effective_settings,
             )
 
-        with stage("llm", provider=getattr(effective_settings.provider, "value", str(effective_settings.provider))):
+        with stage("llm", provider=effective_settings.provider.value):
             response, token_usage = self._execute_query(
                 prompt=prompt,
                 temperature=effective_settings.temperature,
