@@ -1,23 +1,31 @@
-#!/usr/bin/env python3
-"""ARCH-14 Step 1 & ARCH-18 — publish commercial price book with rate cards and cost bases.
-
-Idempotent. Safe to run with or without CLI arguments.
-
-    python scripts/seed_price_book.py
-    python scripts/seed_price_book.py --version 1 --json
-"""
+﻿#!/usr/bin/env python3
+"""ARCH-14 Step 1 & ARCH-18 — publish commercial price book with ratecards and cost bases."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+BACKEND = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND))
+
+# Load backend/.env into environment
+env_file = BACKEND / ".env"
+if env_file.exists():
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k not in os.environ:
+                os.environ[k] = v
 
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.price_book import PriceBook  # noqa: E402
@@ -26,7 +34,7 @@ from app.services.pricing_service import PriceSpec  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
 PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
-    # --- Groq ---
+    # --- Groq (Provider Default & Active Models on your API Key) ---
     {
         "event_type": "llm.input_token",
         "provider": "groq",
@@ -48,20 +56,92 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
     {
         "event_type": "llm.input_token",
         "provider": "groq",
-        "model": "llama-3.3-70b-versatile",
-        "unit_price_micros": "0.590000000",
-        "cost_basis_micros": "0.059000000",
+        "model": "openai/gpt-oss-20b",
+        "unit_price_micros": "0.200000000",
+        "cost_basis_micros": "0.050000000",
         "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Groq Llama 3.3 70B input rate.",
+        "notes": "Groq GPT-OSS 20B input rate.",
     },
     {
         "event_type": "llm.output_token",
         "provider": "groq",
-        "model": "llama-3.3-70b-versatile",
-        "unit_price_micros": "0.790000000",
-        "cost_basis_micros": "0.079000000",
+        "model": "openai/gpt-oss-20b",
+        "unit_price_micros": "0.400000000",
+        "cost_basis_micros": "0.100000000",
         "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Groq Llama 3.3 70B output rate.",
+        "notes": "Groq GPT-OSS 20B output rate.",
+    },
+    {
+        "event_type": "llm.input_token",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "unit_price_micros": "0.600000000",
+        "cost_basis_micros": "0.150000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq GPT-OSS 120B input rate.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "unit_price_micros": "1.200000000",
+        "cost_basis_micros": "0.300000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq GPT-OSS 120B output rate.",
+    },
+    {
+        "event_type": "llm.input_token",
+        "provider": "groq",
+        "model": "qwen/qwen3.6-27b",
+        "unit_price_micros": "0.300000000",
+        "cost_basis_micros": "0.080000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Qwen 3.6 27B input rate.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "groq",
+        "model": "qwen/qwen3.6-27b",
+        "unit_price_micros": "0.600000000",
+        "cost_basis_micros": "0.160000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Qwen 3.6 27B output rate.",
+    },
+    {
+        "event_type": "llm.input_token",
+        "provider": "groq",
+        "model": "qwen/qwen3.8-27b",
+        "unit_price_micros": "0.300000000",
+        "cost_basis_micros": "0.080000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Qwen 3.8 27B input rate.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "groq",
+        "model": "qwen/qwen3.8-27b",
+        "unit_price_micros": "0.600000000",
+        "cost_basis_micros": "0.160000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Qwen 3.8 27B output rate.",
+    },
+    {
+        "event_type": "llm.input_token",
+        "provider": "groq",
+        "model": "groq/compound-mini",
+        "unit_price_micros": "0.250000000",
+        "cost_basis_micros": "0.060000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Compound Mini input rate.",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "groq",
+        "model": "groq/compound-mini",
+        "unit_price_micros": "0.500000000",
+        "cost_basis_micros": "0.120000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Groq Compound Mini output rate.",
     },
     # --- Google Gemini ---
     {
@@ -120,25 +200,6 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Provider-wide default for Anthropic output tokens.",
     },
-    # --- Mistral ---
-    {
-        "event_type": "llm.input_token",
-        "provider": "mistral",
-        "model": None,
-        "unit_price_micros": "0.800000000",
-        "cost_basis_micros": "0.400000000",
-        "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Provider-wide default for Mistral input tokens.",
-    },
-    {
-        "event_type": "llm.output_token",
-        "provider": "mistral",
-        "model": None,
-        "unit_price_micros": "2.400000000",
-        "cost_basis_micros": "1.200000000",
-        "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Provider-wide default for Mistral output tokens.",
-    },
     # --- Ingestion, OCR & Storage ---
     {
         "event_type": "ocr.page",
@@ -146,7 +207,7 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "model": None,
         "unit_price_micros": "20000.000000000",
         "cost_basis_micros": "2000.000000000",
-        "cost_basis_source": "MODELLED_ESTIMATE",
+        "cost_basis_source": "ESTIMATED",
         "notes": "Self-hosted OCR extraction.",
     },
     {
@@ -155,7 +216,7 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "model": None,
         "unit_price_micros": "0.100000000",
         "cost_basis_micros": "0.010000000",
-        "cost_basis_source": "MODELLED_ESTIMATE",
+        "cost_basis_source": "ESTIMATED",
         "notes": "Self-hosted embedding.",
     },
     {
@@ -203,7 +264,7 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "tier_key": "overage",
         "unit_price_micros": "20000.000000000",
         "cost_basis_micros": "2000.000000000",
-        "cost_basis_source": "MODELLED_ESTIMATE",
+        "cost_basis_source": "ESTIMATED",
         "notes": "$0.02 per overage OCR page.",
     },
     {
@@ -274,7 +335,7 @@ def _parse_instant(value: str) -> datetime:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, default=1, help="Price book version (default: 1)")
+    parser.add_argument("--version", type=int, default=1, help="Pricebook version (default: 1)")
     parser.add_argument(
         "--effective-from",
         dest="effective_from",

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -57,7 +57,6 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=dict,
         server_default="{}",
-        comment="ARCH-11.5. {intent: [keyword, ...]}. Empty dict follows platform defaults.",
     )
 
     chunk_size: Mapped[int] = mapped_column(
@@ -111,16 +110,15 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
     automatic_summarization: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=False,
+        default=True,
     )
 
     automatic_entity_extraction: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=False,
+        default=True,
     )
 
-    # ---- ARCH-13 Step 13.7 (F7) ---------------------------------------
     verification_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -144,5 +142,4 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
     )
 
     workspace: Mapped["Workspace"] = relationship("Workspace")
-
     updated_by: Mapped[Union["User", None]] = relationship("User")

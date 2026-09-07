@@ -1,4 +1,4 @@
-import apiClient from "@/services/api/client";
+﻿import { apiClient } from "@/services/api/client";
 import { ASSISTANT_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   ConversationSummary,
@@ -12,6 +12,7 @@ import type {
 
 const JSON_HEADERS = { Accept: "application/json" } as const;
 const DEFAULT_HISTORY_PAGE_SIZE = 50;
+const AI_TIMEOUT_MS = 60000; // 60s timeout for RAG + LLM inference
 
 export const createConversation = async (
   workspaceId: string,
@@ -21,7 +22,7 @@ export const createConversation = async (
   const response = await apiClient.post<ConversationSummary>(
     ASSISTANT_ENDPOINTS.conversations(workspaceId),
     payload,
-    { headers: JSON_HEADERS },
+    { headers: JSON_HEADERS, timeout: AI_TIMEOUT_MS },
   );
   return response.data;
 };
@@ -32,7 +33,7 @@ export const getDocumentConversation = async (
 ): Promise<ConversationSummary> => {
   const response = await apiClient.get<ConversationSummary>(
     ASSISTANT_ENDPOINTS.documentConversation(workspaceId, workItemId),
-    { headers: JSON_HEADERS },
+    { headers: JSON_HEADERS, timeout: AI_TIMEOUT_MS },
   );
   return response.data;
 };
@@ -55,7 +56,7 @@ export const getConversationHistory = async (
   const { limit = DEFAULT_HISTORY_PAGE_SIZE, cursor } = query;
   const queryParams = new URLSearchParams();
   queryParams.append("limit", limit.toString());
-  if (cursor) {queryParams.append("cursor", cursor);}
+  if (cursor) { queryParams.append("cursor", cursor); }
 
   const response = await apiClient.get<ConversationHistoryResponse>(
     ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
@@ -71,13 +72,17 @@ export const sendChatMessage = async (
   options?: { stream?: boolean; signal?: AbortSignal },
 ): Promise<ChatResponse> => {
   const trimmedContent = content.trim();
-  if (!trimmedContent) {throw new Error("Message content cannot be empty.");}
+  if (!trimmedContent) { throw new Error("Message content cannot be empty."); }
 
   const payload: ChatQueryRequest = { content: trimmedContent };
   const response = await apiClient.post<ChatResponse>(
     ASSISTANT_ENDPOINTS.messages(workspaceId, conversationId),
     payload,
-    { headers: JSON_HEADERS, ...(options?.signal ? { signal: options.signal } : {}) },
+    {
+      headers: JSON_HEADERS,
+      timeout: AI_TIMEOUT_MS,
+      ...(options?.signal ? { signal: options.signal } : {}),
+    },
   );
   return response.data;
 };
@@ -102,7 +107,6 @@ export const deleteConversation = async (
 ): Promise<void> => {
   await apiClient.delete(
     ASSISTANT_ENDPOINTS.conversation(workspaceId, conversationId),
-    { headers: JSON_HEADERS },
   );
 };
 
@@ -115,5 +119,3 @@ export const assistantApi = {
   renameConversation,
   deleteConversation,
 };
-
-export default assistantApi;

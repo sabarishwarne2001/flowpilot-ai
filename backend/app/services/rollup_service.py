@@ -1,4 +1,4 @@
-"""ARCH-14 Step 2 — the rollup engine."""
+﻿"""ARCH-14 Step 2 — the rollup engine."""
 
 from __future__ import annotations
 
@@ -89,12 +89,6 @@ class Delta:
     late_quantity: Decimal = Decimal(0)
     late_cost_micros: int = 0
     late_from: dict[str, int] = field(default_factory=dict)
-
-    # ---- ARCH-24 ---------------------------------------------------------
-    #
-    # None is not zero. It stays None until an event actually contributes a
-    # basis, so a batch in which nothing was priced writes NULL rather than a
-    # confident 0 that reads as 100% gross margin downstream.
     cost_basis_micros: Optional[int] = None
     unknown_cost_basis_event_count: int = 0
     cost_basis_source_mix: dict[str, int] = field(default_factory=dict)
@@ -113,10 +107,6 @@ class Delta:
         self.cost_micros += cost_micros
         self.event_count += 1
 
-        # A basis of 0 is a *known* cost (BYOK: the tenant paid the supplier
-        # directly, so it cost us nothing). `is None` rather than falsiness is
-        # therefore load-bearing here — `if not cost_basis_micros` would file
-        # every BYOK event as unpriced and make BYOK tenants look untrustworthy.
         if cost_basis_micros is None:
             self.unknown_cost_basis_event_count += 1
         else:
@@ -187,11 +177,6 @@ _CLAIM_SQL = text(
               u.unit_price_micros,
               u.quantity,
               COALESCE(u.cost_micros, 0)                         AS cost_micros,
-              -- ARCH-24: deliberately NOT coalesced. usage_events.cost_micros
-              -- is what we charged and is always known; cost_basis_micros is
-              -- what the supplier charged us and frequently is not. Coalescing
-              -- it to 0 here would launder every unknown supplier cost into a
-              -- 100% margin before the rollup ever sees it.
               u.cost_basis_micros,
               u.cost_basis_source,
               u.occurred_at,
@@ -344,19 +329,6 @@ _UPSERT_SQL = text(
         quantity              = usage_rollups.quantity + EXCLUDED.quantity,
         cost_micros           = usage_rollups.cost_micros + EXCLUDED.cost_micros,
         event_count           = usage_rollups.event_count + EXCLUDED.event_count,
-        -- ARCH-24 24-G3: the ONE sanctioned COALESCE on a cost basis in this
-        -- codebase, and the reason the gate whitelists this statement by name
-        -- rather than banning the token outright.
-        --
-        -- The guard is the CASE, not the COALESCE. Both sides NULL -> NULL, so
-        -- a bucket in which nothing was ever priced stays honestly unknown.
-        -- Only once at least one side carries a real figure does the addition
-        -- happen, and then COALESCE(...,0) is arithmetically correct: it is
-        -- adding a known partial sum to nothing, not inventing a zero cost.
-        --
-        -- Writing this as a plain sum instead would be actively wrong: SQL's
-        -- NULL + x = NULL, so a single unpriced event would erase the basis of
-        -- every priced event already folded into the bucket.
         cost_basis_micros     = CASE
             WHEN usage_rollups.cost_basis_micros IS NULL
                  AND EXCLUDED.cost_basis_micros IS NULL
@@ -451,16 +423,6 @@ _MERGE_SOURCE_MIX_SQL = text(
 def _merge_source_mix(
     db: Session, *, rollup_id: uuid.UUID, source_mix: dict[str, int]
 ) -> None:
-    """Fold this batch's {source: count} map into the bucket's running map.
-
-    Merged in a second statement rather than inside the upsert for the same
-    reason `late_from_buckets` is: summing two JSONB counter maps inside an
-    ON CONFLICT expression needs a correlated subquery over EXCLUDED, which is
-    both harder to read and harder to be sure of than one keyed UPDATE.
-
-    The COALESCE here is on the *map*, not on a cost figure — an absent map is
-    genuinely an empty map, unlike an absent cost which is not zero.
-    """
     if not source_mix:
         return
     db.execute(
@@ -571,9 +533,59 @@ def _merge_late_details(
     )
 
 
+_ORPHAN_ORG_SQL = text(
+    """
+    SELECT id FROM organizations WHERE id = ANY(:ids)
+    """
+)
+
+
+def drop_orphan_events(
+    db: Session, *, events: list[ClaimedEvent]
+) -> tuple[list[ClaimedEvent], list[ClaimedEvent]]:
+    """Split a claimed batch into (live, orphaned) by organization existence."""
+    if not events:
+        return [], []
+
+    org_ids = list({event.organization_id for event in events})
+    live_ids = {
+        row[0]
+        for row in db.execute(_ORPHAN_ORG_SQL, {"ids": org_ids}).fetchall()
+    }
+
+    if len(live_ids) == len(org_ids):
+        return events, []
+
+    live: list[ClaimedEvent] = []
+    orphaned: list[ClaimedEvent] = []
+    for event in events:
+        (live if event.organization_id in live_ids else orphaned).append(event)
+
+    missing = sorted(str(org) for org in set(org_ids) - live_ids)
+    logger.warning(
+        "USAGE_EVENT_DROPPED_ORPHAN_ORG",
+        extra={
+            "dropped_event_count": len(orphaned),
+            "missing_organization_ids": missing,
+            "event_types": sorted({event.event_type for event in orphaned}),
+            "usage_event_ids": [str(event.id) for event in orphaned[:20]],
+            "reason": (
+                "organization row absent; usually a database reset performed "
+                "while a worker held a claimed batch"
+            ),
+        },
+    )
+    return live, orphaned
+
+
 def fold(
     db: Session, *, events: list[ClaimedEvent], now: datetime, result: RollupResult
 ) -> set[tuple[uuid.UUID, datetime]]:
+    if not events:
+        return set()
+
+    # W-2: Drop events for missing organizations within this transaction
+    events, _orphaned = drop_orphan_events(db, events=events)
     if not events:
         return set()
 
@@ -636,9 +648,7 @@ def fold(
                 db, key=key, granularity=HOUR, start=open_hour, delta=delta
             )
             if rollup_id is None:
-                raise RuntimeError(
-                    "The current open hour is sealed."
-                )
+                raise RuntimeError("The current open hour is sealed.")
             start = open_hour
 
         if delta.late_from:
@@ -681,11 +691,6 @@ _DERIVE_SQL_TEMPLATE = """
                 THEN NULL ELSE max(unit_price_micros) END,
            :start, :end,
            sum(quantity), sum(cost_micros), sum(event_count),
-           -- ARCH-24: no COALESCE needed and none wanted. SQL sum() skips
-           -- NULLs and returns NULL for an all-NULL set, which is exactly the
-           -- semantic: a day assembled from hours that were never priced is
-           -- unknown, while a day with one priced hour is that hour's figure
-           -- plus an unknown-count that says so.
            sum(cost_basis_micros), sum(unknown_cost_basis_event_count),
            sum(estimated_quantity), sum(estimated_cost_micros),
            sum(estimated_event_count),
@@ -712,9 +717,6 @@ _DERIVE_SQL_TEMPLATE = """
         quantity              = EXCLUDED.quantity,
         cost_micros           = EXCLUDED.cost_micros,
         event_count           = EXCLUDED.event_count,
-        -- The derive path recomputes from source rather than accumulating, so
-        -- a straight assignment is correct here. EXCLUDED.cost_basis_micros is
-        -- already NULL-when-nothing-known by virtue of sum() above.
         cost_basis_micros     = EXCLUDED.cost_basis_micros,
         unknown_cost_basis_event_count =
             EXCLUDED.unknown_cost_basis_event_count,
