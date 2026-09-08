@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Organization API service for FlowPilot AI.
  *
  * The commercial tenant surface: provisioning, settings, the member directory,
@@ -24,7 +24,6 @@ import type {
   OrganizationMemberList,
   OrganizationMemberRoleUpdateRequest,
   OrganizationUpdateRequest,
-  OwnershipTransferRequest,
   SlugAvailability,
   Workspace,
   WorkspaceCreateRequest,
@@ -235,9 +234,9 @@ export const deactivateOrganizationMember = async (
 /**
  * Removes the acting user from the organization.
  *
- * A sole owner rejects with LAST_OWNER. Unlike the pre-ARCH-01 message that
- * named a nonexistent feature, transferOrganizationOwnership below is a real
- * path out.
+ * A sole owner rejects with LAST_OWNER. The path out is the ARCH-05
+ * ownership-transfer handshake in services/api/ownership.ts: propose, have
+ * the target accept, then leave.
  */
 export const leaveOrganization = async (
   organizationId: string,
@@ -250,26 +249,24 @@ export const leaveOrganization = async (
   return response.data;
 };
 
-/**
- * Transfers ownership to another active member.
+/*
+ * ARCH-05 LEGACY PURGE — transferOrganizationOwnership removed.
  *
- * Promotes the target to OWNER and demotes the caller to ADMIN, in one
- * transaction. The caller is not removed: losing the organization and losing
- * ownership of it are different intentions.
+ * It POSTed to `/organizations/{id}/transfer-ownership`, a route the backend
+ * does not serve and, on the evidence of the git history, never did under
+ * that name. Every call would have 404'd. It had zero callers, so nothing
+ * broke and nothing surfaced it.
  *
- * @returns The newly promoted owner's membership.
+ * Its docstring described the pre-ARCH-05 model: one request that promotes
+ * the target and demotes the caller. ARCH-05 replaced that with the
+ * two-phase handshake — propose, then the TARGET consents — precisely
+ * because a single-shot transfer hands someone an organization they never
+ * agreed to accept. The old client outlived the design it belonged to.
+ *
+ * The live path is services/api/ownership.ts against
+ * `/organizations/{id}/ownership-transfers`, with password step-up on
+ * initiation. OwnershipTransferPanel and IncomingOwnershipBanner both use it.
  */
-export const transferOrganizationOwnership = async (
-  organizationId: string,
-  data: OwnershipTransferRequest,
-): Promise<OrganizationMember> => {
-  const response = await apiClient.post<OrganizationMember>(
-    ORGANIZATION_ENDPOINTS.transferOwnership(organizationId),
-    data,
-    { headers: { Accept: "application/json" } },
-  );
-  return response.data;
-};
 
 export const organizationApi = {
   createOrganization,
@@ -283,7 +280,6 @@ export const organizationApi = {
   changeOrganizationMemberRole,
   deactivateOrganizationMember,
   leaveOrganization,
-  transferOrganizationOwnership,
 };
 
 export default organizationApi;

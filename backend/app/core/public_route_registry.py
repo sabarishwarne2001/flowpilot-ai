@@ -1,4 +1,4 @@
-"""S6 — ONE registry for routes that bypass authentication and rate limiting."""
+﻿"""S6 — ONE registry for routes that bypass authentication and rate limiting."""
 
 from __future__ import annotations
 
@@ -30,11 +30,18 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     # Invitations
+    #
+    # POST, not GET. The invitation token is a bearer secret, so it travels
+    # in the request body like every other token-bearing public route below
+    # (reset-password, verify-email, email-change/confirm). The GET form this
+    # replaced took the token as `?token=...`, which undid ARCH-04 B.10 --
+    # the fragment in the accept link keeps the token out of server logs
+    # right up until the page makes its first API call.
     PublicRoute(
         path="/api/v1/invitations/preview",
-        methods=("GET",),
+        methods=("POST",),
         phase="ARCH-04",
-        credential="invitation token",
+        credential="invitation token (request body)",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     # Auth endpoints

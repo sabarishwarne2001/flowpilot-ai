@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Centralized API path construction for FlowPilot AI.
  */
 
@@ -36,7 +36,6 @@ export const ORGANIZATION_ENDPOINTS = {
   detail: (organizationId: string): string => `/organizations/${seg(organizationId)}`,
   archive: (organizationId: string): string => `/organizations/${seg(organizationId)}/archive`,
   leave: (organizationId: string): string => `/organizations/${seg(organizationId)}/leave`,
-  transferOwnership: (organizationId: string): string => `/organizations/${seg(organizationId)}/transfer-ownership`,
   workspaces: (organizationId: string): string => `/organizations/${seg(organizationId)}/workspaces`,
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
   member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,

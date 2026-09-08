@@ -62,10 +62,6 @@ export interface OrganizationMemberRoleUpdateRequest {
   role: OrganizationRole;
 }
 
-export interface OwnershipTransferRequest {
-  target_membership_id: string;
-}
-
 export interface SlugAvailability {
   slug: string;
   available: boolean;

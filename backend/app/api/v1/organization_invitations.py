@@ -172,16 +172,48 @@ async def list_invitations(
 # Public / Recipient Lifecycle
 # ============================================================================
 
-@router.get(
+@router.post(
     "/invitations/preview",
     response_model=InvitationPreviewResponse,
     summary="Preview Invitation",
 )
 async def preview_invitation(
-    token: str,
+    payload: OrganizationInvitationTokenRequest,
     db: deps.DbSession,
 ) -> Any:
-    return organization_invitation_service.preview_invitation(db, token=token)
+    """
+    Resolves an invitation token to its display summary, unauthenticated.
+
+    POST, not GET, and the token rides in the body.
+
+    This was `GET /invitations/preview?token=...` and that is the one shape
+    an invitation token must never take. ARCH-04 B.10 moved the token out of
+    the accept LINK's query string into a fragment precisely so it could not
+    reach an access log, a proxy log, or a Referer header -- and then this
+    handler put it straight back into a query string on the very next
+    request the recipient makes. The fragment never leaves the browser; this
+    call did, with `?token=` attached, into every log between the client and
+    the app.
+
+    Every other token-bearing public route in PUBLIC_ROUTES already carries
+    its credential in a POST body: auth/reset-password, auth/verify-email,
+    auth/email-change/confirm. This route was the sole exception, and
+    accept/reject -- which take the SAME token, from the SAME page, moments
+    later -- are both POST with an OrganizationInvitationTokenRequest body.
+
+    So the frontend was never wrong. `previewInvitation` posting `{ token }`
+    matches its two siblings and matches the rest of the registry; the 405
+    was the backend disagreeing with its own convention. Making the frontend
+    issue a GET would have cleared the error and reintroduced the leak.
+
+    A GET is not semantically owed here either. This reads nothing the
+    caller owns, is not cacheable (the token is a bearer secret and a shared
+    cache keyed on the URL is a cross-user leak), and is rate-limited under
+    POLICY_PUBLIC_READ regardless of verb.
+    """
+    return organization_invitation_service.preview_invitation(
+        db, token=payload.token
+    )
 
 
 @router.post(

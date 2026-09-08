@@ -25,12 +25,17 @@ from app.services.notification.dispatcher import notification_dispatcher
 
 if TYPE_CHECKING:
     from app.models.email_settings import EmailSettings
+    from app.models.workspace_invitation import WorkspaceInvitation
     from app.core.smtp import SMTPConfig
 
 logger = logging.getLogger(__name__)
 
 
 class NotificationService:
+    """
+    Central orchestration service for notifications.
+    """
+
     def __init__(self) -> None:
         self.dispatcher = notification_dispatcher
 
@@ -133,6 +138,26 @@ class NotificationService:
             return notification
 
         return notification
+
+    # ARCH-05 LEGACY PURGE.
+    #
+    # send_workspace_invitation() was removed here. It had no callers
+    # anywhere in the repository -- app/workers/handlers/enrich.py imports
+    # this module for send_notification() only -- and it was the last place
+    # in the codebase that built an invitation link as
+    # `/invitations/accept?token=...`, in a query parameter.
+    #
+    # Its own comment said the query form 'violates B.9 and is fixed in
+    # Step 8'. ARCH-05 Step 9 closed that migration: app/core/links.py
+    # emits the fragment form, and InvitationAcceptPage.tsx deleted its
+    # useSearchParams().get('token') read. So this method could no longer
+    # produce a link the accept page was capable of reading -- anything
+    # wired to it would have shipped a token into referrer headers and
+    # proxy logs AND landed the recipient on a dead page.
+    #
+    # Organization invitations go through organization_invitation_service
+    # and app/core/links.build_invitation_accept_link. That is the only
+    # invitation mail path.
 
 
 notification_service = NotificationService()

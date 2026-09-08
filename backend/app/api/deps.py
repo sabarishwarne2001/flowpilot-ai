@@ -161,6 +161,30 @@ def _session_is_revoked(
     db: Session,
     claims: security.AccessTokenClaims,
 ) -> bool:
+    """
+    Rejects an access token whose own session row has been revoked.
+
+    P2.4 requires that revoking one device produces a 401 on that device's
+    NEXT request. _token_predates_revocation only reads
+    users.sessions_revoked_at, which is a per-USER cutoff stamped by global
+    logout and password change. Single-session revocation
+    (DELETE /auth/sessions/{id}) sets user_sessions.revoked_at and nothing
+    else, so before this check the revoked device kept authenticating on its
+    existing access token for the remainder of ACCESS_TOKEN_EXPIRE_MINUTES
+    while already having disappeared from the caller's Active Sessions list.
+    The UI said signed-out; the token said otherwise.
+
+    Bounded rather than unbounded -- rotation already refused the revoked
+    family, so the device could not extend past one access-token lifetime --
+    but "up to ten minutes" is not what "revoke this device" means to the
+    person clicking it, and ten minutes is ample for the case that button
+    exists for.
+
+    One indexed primary-key lookup on a request that has already done a user
+    lookup. Tokens minted before session_id was in the claim set carry
+    session_id=None and are left to the users.sessions_revoked_at cutoff;
+    they cannot be attributed to a session, so there is nothing to check.
+    """
     if claims.session_id is None:
         return False
 
@@ -170,6 +194,10 @@ def _session_is_revoked(
         )
     ).first()
 
+    # No row at all means the session was hard-deleted (erasure sweep, or a
+    # session id that never existed). Treat that as revoked rather than as
+    # absent: scalar_one_or_none() would collapse "no row" and
+    # "row with revoked_at IS NULL" into the same None and fail open.
     if row is None:
         return True
 
