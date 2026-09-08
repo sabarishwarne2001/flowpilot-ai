@@ -272,7 +272,7 @@ def tenant(db_session: Session) -> Fixture:
     _grant(db_session, workspace, viewer, WorkspaceRole.VIEWER)
     _grant(db_session, foreign, other_member, WorkspaceRole.ADMIN)
 
-    db_session.flush()
+    db_session.commit()
 
     return Fixture(
         organization=org,

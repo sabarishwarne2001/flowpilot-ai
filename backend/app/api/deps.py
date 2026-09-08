@@ -9,6 +9,7 @@ from typing import Annotated, Any, Generator, Optional, Sequence, Union
 
 from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 from starlette.responses import Response
@@ -124,6 +125,14 @@ async def get_current_user(
         )
         raise credentials_exception
 
+    if _session_is_revoked(db, claims):
+        logger.info(
+            "AUTH_REJECTED | user=%s | session=%s | reason=session_revoked",
+            user.id,
+            claims.session_id,
+        )
+        raise credentials_exception
+
     principal = Principal.for_user(user.id)
     set_current_principal(principal)
 
@@ -146,6 +155,25 @@ def _token_predates_revocation(
     return int(claims.issued_at.timestamp()) < int(
         user.sessions_revoked_at.timestamp()
     )
+
+
+def _session_is_revoked(
+    db: Session,
+    claims: security.AccessTokenClaims,
+) -> bool:
+    if claims.session_id is None:
+        return False
+
+    row = db.execute(
+        select(UserSession.revoked_at).where(
+            UserSession.id == claims.session_id
+        )
+    ).first()
+
+    if row is None:
+        return True
+
+    return row[0] is not None
 
 
 async def get_current_active_user(

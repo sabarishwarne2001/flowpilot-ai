@@ -1,8 +1,5 @@
-"""
+﻿"""
 Ownership transfer orchestration for FlowPilot AI (ARCH-05 Step 6, ARCH-06 Step 9, ARCH-07 Step 3).
-
-ARCH-07 Step 3: Converted AUDIT log sites to structured audit_service.record().
-Writes TWO audit log rows upon acceptance (OWNERSHIP_TRANSFER/ACCEPTED and ORGANIZATION/TRANSFERRED).
 """
 
 from __future__ import annotations
@@ -58,10 +55,6 @@ def _display_name(user: User) -> str:
     return user.display_name or user.email
 
 
-# ============================================================================
-# Carriers
-# ============================================================================
-
 @dataclass(frozen=True)
 class InitiatedTransfer:
     transfer_id: uuid.UUID
@@ -110,10 +103,6 @@ class CancelledTransfer:
     cancelled_at: datetime
 
 
-# ============================================================================
-# Shared claim helper
-# ============================================================================
-
 def _claim_or_raise(
     db: Session,
     *,
@@ -146,10 +135,6 @@ def _claim_or_raise(
         )
 
 
-# ============================================================================
-# Initiate
-# ============================================================================
-
 def initiate_transfer(
     db: Session,
     *,
@@ -164,8 +149,7 @@ def initiate_transfer(
 
     if not verify_password(current_password, actor.hashed_password):
         raise ReauthenticationFailedError(
-            "Your current password is incorrect. Re-enter your password to "
-            "confirm this transfer."
+            "Your current password is incorrect. Re-enter your password to confirm this transfer."
         )
 
     target_membership = get_membership_or_raise(
@@ -176,15 +160,11 @@ def initiate_transfer(
         raise CannotTransferToSelfError("You already own this organization.")
 
     if target_membership.status is not MembershipStatus.ACTIVE:
-        raise OrganizationMemberError(
-            "Ownership can only be transferred to an active member."
-        )
+        raise OrganizationMemberError("Ownership can only be transferred to an active member.")
 
     if target_membership.user.email_verified_at is None:
         raise TargetNotVerifiedError(
-            "This member has not verified their email address. They must "
-            "verify their address before ownership can be transferred to "
-            "them."
+            "This member has not verified their email address. They must verify their address before ownership can be transferred to them."
         )
 
     lock_organization_for_owner_change(
@@ -198,13 +178,10 @@ def initiate_transfer(
             "Only an organization owner can propose an ownership transfer."
         )
 
-    existing = transfer_crud.get_pending_transfer_for_org(
-        db, organization_id=organization.id
-    )
+    existing = transfer_crud.get_pending_transfer_for_org(db, organization_id=organization.id)
     if existing is not None:
         raise PendingTransferExistsError(
-            "This organization already has a pending ownership transfer. "
-            "Cancel it before proposing a new one."
+            "This organization already has a pending ownership transfer. Cancel it before proposing a new one."
         )
 
     try:
@@ -270,10 +247,6 @@ def initiate_transfer(
         )
 
 
-# ============================================================================
-# Accept
-# ============================================================================
-
 def accept_transfer(
     db: Session,
     *,
@@ -297,14 +270,10 @@ def accept_transfer(
     )
 
     if actor.id != target_membership.user_id:
-        raise TransferTargetMismatchError(
-            "This ownership transfer was not proposed to you."
-        )
+        raise TransferTargetMismatchError("This ownership transfer was not proposed to you.")
 
     if transfer.status is not OwnershipTransferStatus.PENDING:
-        raise TransferNotPendingError(
-            "This ownership transfer is no longer pending."
-        )
+        raise TransferNotPendingError("This ownership transfer is no longer pending.")
 
     try:
         now = datetime.now(UTC)
@@ -321,9 +290,7 @@ def accept_transfer(
         )
         if initiator_membership is None:
             raise OrganizationPermissionDeniedError(
-                "The organization owner who proposed this transfer is no "
-                "longer a member. Ask a current owner to propose a new "
-                "transfer."
+                "The organization owner who proposed this transfer is no longer a member."
             )
 
         previous_owner_email = initiator_membership.user.email
@@ -371,6 +338,9 @@ def accept_transfer(
             **context,
         )
 
+        # ARCH-07 DURABILITY FIX: Explicit commit so audit logs are saved permanently
+        db.commit()
+
         return AcceptedTransfer(
             transfer_id=transfer.id,
             organization_id=organization.id,
@@ -397,10 +367,6 @@ def accept_transfer(
         )
 
 
-# ============================================================================
-# Decline & Cancel
-# ============================================================================
-
 def decline_transfer(
     db: Session,
     *,
@@ -424,14 +390,10 @@ def decline_transfer(
     )
 
     if actor.id != target_membership.user_id:
-        raise TransferTargetMismatchError(
-            "This ownership transfer was not proposed to you."
-        )
+        raise TransferTargetMismatchError("This ownership transfer was not proposed to you.")
 
     if transfer.status is not OwnershipTransferStatus.PENDING:
-        raise TransferNotPendingError(
-            "This ownership transfer is no longer pending."
-        )
+        raise TransferNotPendingError("This ownership transfer is no longer pending.")
 
     try:
         now = datetime.now(UTC)
@@ -502,14 +464,10 @@ def cancel_transfer(
         raise TransferNotFoundError("No such ownership transfer.")
 
     if actor.id != transfer.initiated_by_id:
-        raise TransferInitiatorMismatchError(
-            "Only the person who proposed this transfer can cancel it."
-        )
+        raise TransferInitiatorMismatchError("Only the person who proposed this transfer can cancel it.")
 
     if transfer.status is not OwnershipTransferStatus.PENDING:
-        raise TransferNotPendingError(
-            "This ownership transfer is no longer pending."
-        )
+        raise TransferNotPendingError("This ownership transfer is no longer pending.")
 
     try:
         now = datetime.now(UTC)

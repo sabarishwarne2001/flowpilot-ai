@@ -41,9 +41,9 @@ def outbox_event(db_session, tenant):
 
 @pytest.fixture
 def second_db_session(test_database):
-    from app.db.session import SessionLocal
+    from tests.conftest import TestSessionLocal
 
-    session = SessionLocal()
+    session = TestSessionLocal()
     try:
         yield session
     finally:
