@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tenancy type contract for FlowPilot AI.
  */
 
@@ -193,9 +193,22 @@ export interface WorkspaceInvitationAccepted {
   workspace_role: WorkspaceRole;
 }
 
+/**
+ * One workspace-and-role pair provisioned when the invitation is accepted.
+ * Mirrors WorkspaceGrantInput in app/schemas/organization_invitation.py.
+ */
+export interface WorkspaceGrantInput {
+  workspace_id: string;
+  role: WorkspaceRole;
+}
+
+/**
+ * Input to issue an organization invitation.
+ */
 export interface WorkspaceInvitationCreateRequest {
   email: string;
-  role: WorkspaceRole;
+  organization_role: OrganizationRole;
+  grants: WorkspaceGrantInput[];
 }
 
 export interface InvitationTokenRequest {

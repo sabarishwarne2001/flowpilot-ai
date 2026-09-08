@@ -1,4 +1,4 @@
-"""Centralized API v1 routing gateway for FlowPilot AI."""
+﻿"""Centralized API v1 routing gateway for FlowPilot AI."""
 
 from fastapi import APIRouter
 
@@ -19,6 +19,7 @@ from app.api.v1 import (
     email_change,
     email_settings,
     identity_admin,
+    internal_tls,
     marketplace,
     me,
     partner,
@@ -76,6 +77,7 @@ api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routin
 # this phase and is mounted separately so that adding an endpoint to it
 # is a visible act rather than an accident of file position.
 api_router.include_router(custom_domains.router)
+api_router.include_router(internal_tls.router)  # ARCH-25 Caddy on-demand TLS `ask`
 api_router.include_router(tenant_branding.router)
 api_router.include_router(tenant_branding.public_router)
 

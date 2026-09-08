@@ -1,4 +1,4 @@
-"""
+﻿"""
 Request and response schemas for the ARCH-04 invitation lifecycle.
 
 Two grant shapes exist deliberately (§D7.5): WorkspaceGrantResponse carries a
@@ -62,6 +62,8 @@ class OrganizationInvitationCreate(BaseModel):
         max_length=settings.INVITATION_MAX_GRANTS,
         description="Workspace grants provisioned on acceptance. May be empty.",
     )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class OrganizationInvitationTokenRequest(BaseModel):

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,7 +39,11 @@ import {
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ROUTES } from "@/constants/routes";
 
-import type { WorkspaceMember, WorkspaceRole } from "@/types/tenancy";
+import type {
+  WorkspaceInvitationCreateRequest,
+  WorkspaceMember,
+  WorkspaceRole,
+} from "@/types/tenancy";
 
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
@@ -93,7 +97,6 @@ export const Workspace: React.FC = () => {
     queryFn: () => listWorkspaceMembers(workspaceId),
   });
 
-  // Hunk 1: Fetch pending invitations scoped to organization
   const { data: pendingInvitations, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ["organizations", "invitations", organizationId],
     queryFn: () => listPendingInvitations(organizationId),
@@ -167,9 +170,8 @@ export const Workspace: React.FC = () => {
     },
   });
 
-  // Hunk 2: Send invite mutation scoped to organization
   const { mutateAsync: sendInviteMutation, isPending: isInviting } = useMutation({
-    mutationFn: (payload: { email: string; role: WorkspaceRole }) =>
+    mutationFn: (payload: WorkspaceInvitationCreateRequest) =>
       createInvitation(organizationId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -186,7 +188,6 @@ export const Workspace: React.FC = () => {
     },
   });
 
-  // Hunk 3: Revoke invite mutation scoped to organization
   const { mutateAsync: revokeInviteMutation } = useMutation({
     mutationFn: (invitationId: string) => revokeInvitation(organizationId, invitationId),
     onSuccess: async () => {
@@ -202,7 +203,6 @@ export const Workspace: React.FC = () => {
     },
   });
 
-  // Hunk 4: Resend invite mutation scoped to organization
   const { mutateAsync: resendInviteMutation } = useMutation({
     mutationFn: (invitationId: string) => resendInvitation(organizationId, invitationId),
     onSuccess: async () => {
@@ -331,7 +331,11 @@ export const Workspace: React.FC = () => {
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) {return;}
-    await sendInviteMutation({ email: inviteEmail.trim(), role: inviteRole });
+    await sendInviteMutation({
+      email: inviteEmail.trim(),
+      organization_role: "MEMBER",
+      grants: [{ workspace_id: workspaceId, role: inviteRole }],
+    });
   };
 
   const assignableRoles = useMemo(() => {
@@ -736,7 +740,7 @@ export const Workspace: React.FC = () => {
                     return (
                       <tr key={inv.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition">
                         <td className="py-3.5 px-4 font-medium text-foreground">{inv.email}</td>
-                        <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">{inv.role}</td>
+                        <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">{inv.organization_role}</td>
                         <td className="py-3.5 px-4 text-muted-foreground text-xs">
                           {new Date(inv.expires_at).toLocaleString()}
                           {expired && (

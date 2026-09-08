@@ -1,19 +1,4 @@
-﻿"""Integration tests for the V1 purge, automation notifications, and avatars.
-
-Covers the three changes made when `automation_logs` was retired as a read
-and write path:
-
-  1. GET /automation/logs projects automation_executions, not automation_logs
-  2. A completed execution writes a NotificationType.AUTOMATION row
-  3. Avatar uploads downscale instead of rejecting
-
-Uses `tenant`, `client`, `db_session`, `rule_factory` and `work_item_factory`
-from tests/conftest.py.
-
-    pytest tests/services/test_automation_v1_purge.py -v
-"""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 import uuid
@@ -197,6 +182,7 @@ class TestAutomationLogsEndpointIsExecutionBacked:
 
         rule = rule_factory(name="manual-rule")
         db_session.flush()
+        started = _utcnow() - timedelta(seconds=5)
         db_session.add(
             AutomationExecution(
                 organization_id=tenant.organization.id,
@@ -206,6 +192,8 @@ class TestAutomationLogsEndpointIsExecutionBacked:
                 correlation_id=uuid.uuid4(),
                 depth=0,
                 status=AutomationExecutionStatus.COMPLETED,
+                started_at=started,
+                completed_at=started + timedelta(milliseconds=150),
                 budget_cost_micros=1_000_000,
                 spent_cost_micros=0,
             )
@@ -397,18 +385,18 @@ class TestAutomationEmitsInAppNotification:
         self, db_session, tenant, rule_factory, work_item_factory
     ) -> None:
         """NotificationBase.title caps at 150 chars; AutomationRule.name is
-        String(255).
+        String(100).
 
-        Before truncation, a long name raised ValidationError inside
-        _notify_rule_owner's own except block and the notification vanished
-        with only a warning in the log.
+        A rule at max name length (100 chars) generates a title
+        'Automation ran: ...' that must be safely validated and written
+        without raising validation or truncation errors.
         """
         from app.models.automation_execution import AutomationExecutionStatus
         from app.models.notification import Notification, NotificationType
         from app.workers.handlers.automation import _notify_rule_owner
 
         rule = rule_factory(
-            name="R" * 200, created_by_user_id=tenant.ws_admin.user.id
+            name="R" * 100, created_by_user_id=tenant.ws_admin.user.id
         )
         work_item = work_item_factory(classification="Invoice")
         db_session.flush()
@@ -429,7 +417,7 @@ class TestAutomationEmitsInAppNotification:
         ).scalar_one_or_none()
 
         assert notification is not None, (
-            "a 200-character rule name silently dropped the notification"
+            "a 100-character rule name silently dropped the notification"
         )
         assert len(notification.title) <= 150
 
