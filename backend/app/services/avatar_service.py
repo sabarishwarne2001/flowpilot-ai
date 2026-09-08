@@ -1,5 +1,4 @@
-"""User avatar upload, validation and storage (ARCH-06 Step 7, ARCH-07 Steps 5 & 7).
-"""
+﻿"""User avatar upload, validation and storage."""
 
 from __future__ import annotations
 
@@ -33,23 +32,23 @@ MAX_AVATAR_BYTES_PER_USER = 10 * 1024 * 1024
 
 
 class AvatarError(Exception):
-    """Base class for avatar workflow failures."""
+    pass
 
 
 class InvalidImageError(AvatarError, ValueError):
-    """The uploaded bytes are not an acceptable avatar."""
+    pass
 
 
 class ImageTooLargeError(AvatarError, ValueError):
-    """Avatar file or dimension bounds exceeded."""
+    pass
 
 
 class QuotaExceededError(AvatarError):
-    """Storage quota exceeded."""
+    pass
 
 
 class AvatarNotFoundError(AvatarError):
-    """Avatar record or file not found."""
+    pass
 
 
 def _avatar_key(user_id: uuid.UUID) -> str:
@@ -72,11 +71,19 @@ def _validate_and_normalise(raw: bytes) -> bytes:
 
     try:
         with Image.open(io.BytesIO(raw)) as image:
-            if min(image.size) < MIN_DIMENSION or max(image.size) > MAX_DIMENSION:
+            if min(image.size) < MIN_DIMENSION:
                 raise ImageTooLargeError(
-                    f"Avatar dimensions must be between {MIN_DIMENSION}px and {MAX_DIMENSION}px."
+                    f"Avatar must be at least {MIN_DIMENSION}px on every side."
                 )
+
             converted = image.convert("RGBA")
+
+            # Auto-downscale large images to MAX_DIMENSION (1024px)
+            if max(converted.size) > MAX_DIMENSION:
+                converted.thumbnail(
+                    (MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS
+                )
+
             buffer = io.BytesIO()
             converted.save(buffer, format=OUTPUT_FORMAT, optimize=True)
             return buffer.getvalue()
@@ -134,10 +141,6 @@ def set_avatar(
     db.commit()
     db.refresh(record)
 
-    logger.info(
-        "AUDIT | AVATAR_SET | user=%s | file=%s | bytes=%d | mime=%s",
-        owner.id, record.id, len(normalised), OUTPUT_MIME,
-    )
     return record
 
 
@@ -151,8 +154,6 @@ def clear_avatar(db: Session, *, owner: User) -> None:
     except Exception:
         pass
     db.commit()
-
-    logger.info("AUDIT | AVATAR_CLEARED | user=%s | file=%s", owner.id, uploaded.id)
 
 
 def resolve_current(db: Session, *, owner: User) -> UploadedFile:
@@ -171,10 +172,6 @@ def read_avatar_bytes(db: Session, *, record: UploadedFile) -> bytes:
     try:
         return driver.get(record.file_path)
     except ObjectNotFoundError:
-        logger.error(
-            "ARCH07_MISSING_OBJECT | uploaded_files.id=%s file_path=%s",
-            record.id, record.file_path,
-        )
         raise AvatarNotFoundError("Avatar file missing.")
 
 

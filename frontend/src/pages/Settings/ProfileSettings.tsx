@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldAlert, Trash2, Upload, UserRound } from "lucide-react";
 
@@ -21,8 +21,8 @@ import {
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
-  if (typeof detail === "string") {return detail;}
-  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
+  if (typeof detail === "string") { return detail; }
+  if (Array.isArray(detail) && detail[0]?.msg) { return String(detail[0].msg); }
   return fallback;
 }
 
@@ -63,7 +63,7 @@ export const ProfileSettings: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!profile || dirty) {return;}
+    if (!profile || dirty) { return; }
     setDisplayName(profile.display_name ?? "");
     setTimezone(profile.timezone);
     setLocale(profile.locale);
@@ -73,7 +73,6 @@ export const ProfileSettings: React.FC = () => {
     ? `${PROFILE_ENDPOINTS.userAvatar(profile.id)}?v=${avatarVersion}`
     : null;
 
-  // Note: useAuthenticatedImage returns string | null directly
   const avatarSrc = useAuthenticatedImage(avatarUrl);
 
   const save = useMutation({
@@ -99,6 +98,7 @@ export const ProfileSettings: React.FC = () => {
     onSuccess: () => {
       setAvatarError(null);
       setAvatarVersion((v) => v + 1);
+      queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
     onError: (err) =>
       setAvatarError(
@@ -114,13 +114,14 @@ export const ProfileSettings: React.FC = () => {
     onSuccess: () => {
       setAvatarError(null);
       setAvatarVersion((v) => v + 1);
+      queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
     onError: (err) =>
       setAvatarError(detailOf(err, "That avatar couldn't be removed.")),
   });
 
   const pickFile = async (file: File | undefined) => {
-    if (!file) {return;}
+    if (!file) { return; }
     setAvatarError(null);
 
     if (file.size > AVATAR_MAX_BYTES) {
@@ -133,11 +134,10 @@ export const ProfileSettings: React.FC = () => {
     const dimensions = await readDimensions(file);
     if (dimensions) {
       const smallest = Math.min(dimensions.w, dimensions.h);
-      const largest = Math.max(dimensions.w, dimensions.h);
-      if (smallest < AVATAR_MIN_DIMENSION || largest > AVATAR_MAX_DIMENSION) {
+      if (smallest < AVATAR_MIN_DIMENSION) {
         setAvatarError(
-          `That image is ${dimensions.w}×${dimensions.h}. It needs to be between ` +
-            `${AVATAR_MIN_DIMENSION}px and ${AVATAR_MAX_DIMENSION}px on every side.`,
+          `That image is ${dimensions.w}×${dimensions.h}. It needs to be at ` +
+            `least ${AVATAR_MIN_DIMENSION}px on every side.`,
         );
         return;
       }
@@ -159,7 +159,7 @@ export const ProfileSettings: React.FC = () => {
     return (
       <div className="p-6">
         <p role="alert" className="text-sm text-destructive">
-          Your profile couldn&apos;t be loaded.
+          Your profile couldn't be loaded.
         </p>
         <button
           type="button"
@@ -200,8 +200,9 @@ export const ProfileSettings: React.FC = () => {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">Profile picture</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            PNG or JPEG, up to 2 MB, between {AVATAR_MIN_DIMENSION}px and{" "}
-            {AVATAR_MAX_DIMENSION}px. Converted to PNG on upload.
+            PNG or JPEG up to 2 MB, at least {AVATAR_MIN_DIMENSION}px on every
+            side. Larger images are automatically resized to{" "}
+            {AVATAR_MAX_DIMENSION}px and converted to PNG.
           </p>
           {avatarError && (
             <p role="alert" className="mt-1 text-xs text-destructive">

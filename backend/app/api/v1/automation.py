@@ -1,7 +1,4 @@
-from app.models.automation_execution import AutomationExecution
-"""
-Automation Rules API router endpoints for FlowPilot AI.
-"""
+﻿"""Automation Rules API router endpoints for FlowPilot AI."""
 
 import logging
 import uuid
@@ -15,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
+from app.models.automation import AutomationRule
+from app.models.work_item import WorkItem
 from app.models.automation_execution import (
     AutomationExecution,
     AutomationExecutionStatus,
@@ -30,21 +29,12 @@ from app.schemas.automation import (
     AutomationRuleTestResponse,
 )
 
-
 router = APIRouter(tags=["Automation"])
 logger = logging.getLogger("app.api.v1.automation")
 
 
-# ==========================================================================
-# ARCH-13 execution traces
-# ==========================================================================
-
-
 class AutomationNodeRunResponse(BaseModel):
-    """One node inside an execution."""
-
     model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
     node_key: Optional[str] = None
     status: str
@@ -55,10 +45,7 @@ class AutomationNodeRunResponse(BaseModel):
 
 
 class AutomationExecutionResponse(BaseModel):
-    """One execution, with the fields a causal timeline needs."""
-
     model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
     organization_id: uuid.UUID
     workspace_id: uuid.UUID
@@ -66,23 +53,18 @@ class AutomationExecutionResponse(BaseModel):
     rule_name: Optional[str] = None
     work_item_id: Optional[uuid.UUID] = None
     outbox_event_id: Optional[uuid.UUID] = None
-
     correlation_id: uuid.UUID
     depth: int
     status: str
-
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     deadline_at: Optional[datetime] = None
     created_at: datetime
-
     budget_cost_micros: int
     spent_cost_micros: int
-
     node_count: int
     nodes_executed: int
     actions_executed: int
-
     emitted_event_ids: list[str] = Field(default_factory=list)
     error: Optional[str] = None
     details: dict[str, Any] = Field(default_factory=dict)
@@ -91,8 +73,6 @@ class AutomationExecutionResponse(BaseModel):
 
 
 class AutomationExecutionPage(BaseModel):
-    """A page of executions, newest first."""
-
     items: list[AutomationExecutionResponse]
     limit: int
     has_more: bool
@@ -105,14 +85,8 @@ def _execution_view(row: AutomationExecution) -> AutomationExecutionResponse:
         delta = row.completed_at - row.started_at
         duration_ms = max(int(delta.total_seconds() * 1000), 0)
 
-    status_value = (
-        row.status.value if hasattr(row.status, "value") else str(row.status)
-    )
-
-    rule_name: Optional[str] = None
-    rule = getattr(row, "rule", None)
-    if rule is not None:
-        rule_name = getattr(rule, "name", None)
+    status_value = row.status.value if hasattr(row.status, "value") else str(row.status)
+    rule_name = getattr(row.rule, "name", None) if getattr(row, "rule", None) else None
 
     return AutomationExecutionResponse(
         id=row.id,
@@ -137,54 +111,26 @@ def _execution_view(row: AutomationExecution) -> AutomationExecutionResponse:
         emitted_event_ids=list(row.emitted_event_ids or []),
         error=row.error,
         details=dict(row.details or {}),
-        is_suppressed=status_value
-        in {s.value for s in SUPPRESSED_STATUSES},
+        is_suppressed=status_value in {s.value for s in SUPPRESSED_STATUSES},
         duration_ms=duration_ms,
     )
 
 
-@router.get(
-    "/executions",
-    response_model=AutomationExecutionPage,
-    summary="List Automation Executions (causal traces)",
-    response_description=(
-        "Executions newest first, including SUPPRESSED_CYCLE and "
-        "SUPPRESSED_DEPTH refusals that never appear in /logs."
-    ),
-)
+@router.get("/executions", response_model=AutomationExecutionPage)
 async def list_executions(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
-    correlation_id: Optional[uuid.UUID] = Query(
-        None,
-        description=(
-            "Return one causal chain. This is the filter that makes a cycle "
-            "visible: a loop is a property of a chain, not of a rule."
-        ),
-    ),
-    rule_id: Optional[uuid.UUID] = Query(
-        None, description="Return executions of one rule."
-    ),
-    work_item_id: Optional[uuid.UUID] = Query(
-        None, description="Return executions triggered by one document."
-    ),
-    execution_status: Optional[AutomationExecutionStatus] = Query(
-        None, alias="status", description="Filter by execution status."
-    ),
-    suppressed_only: bool = Query(
-        False,
-        description=(
-            "Only refusals — SUPPRESSED_CYCLE and SUPPRESSED_DEPTH. The "
-            "'what is silently not running' view."
-        ),
-    ),
+    correlation_id: Optional[uuid.UUID] = Query(None),
+    rule_id: Optional[uuid.UUID] = Query(None),
+    work_item_id: Optional[uuid.UUID] = Query(None),
+    execution_status: Optional[AutomationExecutionStatus] = Query(None, alias="status"),
+    suppressed_only: bool = Query(False),
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
 ) -> AutomationExecutionPage:
     stmt = select(AutomationExecution).where(
         AutomationExecution.workspace_id == context.workspace_id,
     )
-
     if correlation_id is not None:
         stmt = stmt.where(AutomationExecution.correlation_id == correlation_id)
     if rule_id is not None:
@@ -209,7 +155,6 @@ async def list_executions(
         )
 
     rows = db.execute(stmt.offset(offset).limit(limit + 1)).scalars().all()
-
     has_more = len(rows) > limit
     page = rows[:limit]
 
@@ -221,12 +166,7 @@ async def list_executions(
     )
 
 
-@router.get(
-    "/executions/{execution_id}",
-    response_model=AutomationExecutionResponse,
-    summary="Get one Automation Execution",
-    response_description="A single execution including its suppression detail.",
-)
+@router.get("/executions/{execution_id}", response_model=AutomationExecutionResponse)
 async def get_execution(
     execution_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
@@ -244,17 +184,10 @@ async def get_execution(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found or you do not have permission to access it.",
         )
-
     return _execution_view(row)
 
 
-@router.post(
-    "/rules", 
-    response_model=AutomationRuleResponse, 
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new Automation Rule",
-    response_description="The registered Automation Rule with generated UUID."
-)
+@router.post("/rules", response_model=AutomationRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_rule(
     rule_in: AutomationRuleCreate,
     db: Session = Depends(deps.get_db),
@@ -266,78 +199,85 @@ async def create_rule(
         obj_in=rule_in,
         created_by_user_id=context.user_id,
     )
-    logger.info(f"User {context.user_id} created Automation Rule '{rule.name}' [ID: {rule.id}] in workspace {context.workspace_id}")
     return rule
 
 
-@router.get(
-    "/rules", 
-    response_model=list[AutomationRuleResponse],
-    summary="List all Automation Rules",
-    response_description="A paginated list of active and inactive Automation Rules."
-)
+@router.get("/rules", response_model=list[AutomationRuleResponse])
 async def list_rules(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
-    skip: int = Query(0, ge=0, description="The number of rules to skip for pagination."),
-    limit: int = Query(100, ge=1, le=100, description="The maximum number of rules to return.")
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100)
 ) -> Any:
-    rules = crud.list_automation_rules(db, workspace_id=context.workspace_id, skip=skip, limit=limit)
-    return rules
+    return crud.list_automation_rules(db, workspace_id=context.workspace_id, skip=skip, limit=limit)
 
 
-@router.get(
-    "/logs",
-    response_model=list[AutomationLogResponse],
-    summary="List Automation Execution Logs",
-    response_description="Execution history for all automation rules.",
-)
+_SUCCESS_STATUSES = frozenset({AutomationExecutionStatus.COMPLETED, AutomationExecutionStatus.SUCCEEDED if hasattr(AutomationExecutionStatus, "SUCCEEDED") else AutomationExecutionStatus.COMPLETED})
+
+
+def _legacy_status(status: AutomationExecutionStatus) -> str:
+    status_str = status.value if hasattr(status, "value") else str(status)
+    return "SUCCESS" if status in _SUCCESS_STATUSES or status_str in ("COMPLETED", "SUCCEEDED") else "FAILED"
+
+
+def _duration_ms(execution: AutomationExecution) -> Optional[int]:
+    if execution.started_at is None or execution.completed_at is None:
+        return None
+    delta = execution.completed_at - execution.started_at
+    return max(0, int(delta.total_seconds() * 1000))
+
+
+def _action_summary(execution: AutomationExecution) -> str:
+    actions = int(execution.actions_executed or 0)
+    if actions == 0:
+        return "no actions"
+    if actions == 1:
+        return "1 action"
+    return f"{actions} actions"
+
+
+@router.get("/logs", response_model=list[AutomationLogResponse])
 async def list_rule_logs(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=100),
 ) -> list[AutomationLogResponse]:
-    logs = crud.list_automation_logs(
-        db,
-        workspace_id=context.workspace_id,
-        skip=skip,
-        limit=limit,
-    )
+    rows = db.execute(
+        select(AutomationExecution, AutomationRule.name, WorkItem.original_filename)
+        .join(AutomationRule, AutomationExecution.rule_id == AutomationRule.id)
+        .join(WorkItem, AutomationExecution.work_item_id == WorkItem.id)
+        .where(AutomationExecution.workspace_id == context.workspace_id)
+        .order_by(AutomationExecution.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    ).all()
 
     response: list[AutomationLogResponse] = []
-
-    for log in logs:
+    for execution, rule_name, filename in rows:
         response.append(
             AutomationLogResponse(
-                id=log.id,
-                rule_id=log.rule_id,
-                work_item_id=log.work_item_id,
-                rule_name=log.rule_name,
-                document_name=log.document_name,
-                action_type=log.action_type,
-                status=log.status,
-                log_message=log.log_message,
-                created_at=log.created_at,
-                updated_at=log.updated_at,
+                id=execution.id,
+                rule_id=execution.rule_id,
+                work_item_id=execution.work_item_id,
+                rule_name=rule_name,
+                document_name=filename,
+                action_type=_action_summary(execution),
+                status=_legacy_status(execution.status),
+                log_message=execution.error,
+                execution_status=execution.status.value if hasattr(execution.status, "value") else str(execution.status),
+                execution_time_ms=_duration_ms(execution),
+                spent_cost_micros=execution.spent_cost_micros,
+                nodes_executed=execution.nodes_executed,
+                actions_executed=execution.actions_executed,
+                created_at=execution.created_at,
+                updated_at=execution.updated_at if execution.updated_at else execution.created_at,
             )
         )
-
-    logger.info(
-        "Returned %d automation logs for workspace %s.",
-        len(response),
-        context.workspace_id,
-    )
-
     return response
 
 
-@router.get(
-    "/rules/{rule_id}", 
-    response_model=AutomationRuleResponse,
-    summary="Get an Automation Rule by ID",
-    response_description="The details of the requested Automation Rule."
-)
+@router.get("/rules/{rule_id}", response_model=AutomationRuleResponse)
 async def get_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
@@ -345,19 +285,11 @@ async def get_rule(
 ) -> Any:
     rule = crud.get_rule_by_id(db, workspace_id=context.workspace_id, rule_id=rule_id)
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found or you do not have permission to access it."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
     return rule
 
 
-@router.patch(
-    "/rules/{rule_id}", 
-    response_model=AutomationRuleResponse,
-    summary="Update an Automation Rule",
-    response_description="The updated Automation Rule."
-)
+@router.patch("/rules/{rule_id}", response_model=AutomationRuleResponse)
 async def update_rule(
     rule_id: uuid.UUID,
     rule_in: AutomationRuleUpdate,
@@ -366,22 +298,11 @@ async def update_rule(
 ) -> Any:
     rule = crud.get_rule_by_id(db, workspace_id=context.workspace_id, rule_id=rule_id)
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found or you do not have permission to access it."
-        )
-    
-    updated_rule = crud.update_automation_rule(db, db_obj=rule, obj_in=rule_in)
-    logger.info(f"User {context.user_id} updated Automation Rule [ID: {rule_id}] inside workspace {context.workspace_id}")
-    return updated_rule
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+    return crud.update_automation_rule(db, db_obj=rule, obj_in=rule_in)
 
 
-@router.delete(
-    "/rules/{rule_id}", 
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete an Automation Rule",
-    response_description="Empty response indicating successful deletion."
-)
+@router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
@@ -389,22 +310,12 @@ async def delete_rule(
 ) -> Response:
     rule = crud.get_rule_by_id(db, workspace_id=context.workspace_id, rule_id=rule_id)
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found or you do not have permission to access it."
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
     crud.delete_automation_rule(db, db_obj=rule)
-    logger.info(f"User {context.user_id} deleted Automation Rule [ID: {rule_id}] in workspace {context.workspace_id}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post(
-    "/rules/{rule_id}/test",
-    response_model=AutomationRuleTestResponse,
-    summary="Test an Automation Rule against a Work Item",
-    response_description="Detailed results of the test match evaluation."
-)
+@router.post("/rules/{rule_id}/test", response_model=AutomationRuleTestResponse)
 async def test_rule(
     rule_id: uuid.UUID,
     payload: AutomationRuleTestRequest,
@@ -413,24 +324,10 @@ async def test_rule(
 ) -> Any:
     rule = crud.get_rule_by_id(db, workspace_id=context.workspace_id, rule_id=rule_id)
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Automation rule not found or you do not have permission to access it."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
 
-    work_item = crud.get_work_item(
-        db,
-        workspace_id=context.workspace_id,
-        work_item_id=payload.work_item_id,
-    )
-    
+    work_item = crud.get_work_item(db, workspace_id=context.workspace_id, work_item_id=payload.work_item_id)
     if work_item is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Work item not found or you do not have permission to access it."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
 
-    result = await automation_service.test_rule_for_work_item(
-        db, rule=rule, work_item=work_item
-    )
-    return result
+    return await automation_service.test_rule_for_work_item(db, rule=rule, work_item=work_item)
