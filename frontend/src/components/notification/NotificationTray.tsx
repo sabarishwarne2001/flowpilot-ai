@@ -1,6 +1,7 @@
-import React, { useEffect, useCallback, useState } from "react";
+﻿import React, { useEffect, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { workItemDetailsPath } from "@/routes/tenantPaths";
 import { toast } from "sonner";
 import {
   Bell,
@@ -16,7 +17,6 @@ import { notificationApi } from "@/services/api/notification";
 import { useUIStore } from "@/store/useUIStore";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
-import { ROUTES } from "@/constants/routes";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { notificationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
@@ -124,17 +124,21 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen, onClose]);
 
+  const { orgSlug, workspaceSlug } = useParams<{ orgSlug?: string; workspaceSlug?: string }>();
+
   const handleCardClick = useCallback(
     (id: string, isRead: boolean, workItemId: string | null): void => {
       if (!isRead) {
         triggerMarkSingleRead({ id, isRead: true });
       }
       onClose();
-      if (workItemId) {
-        navigate(ROUTES.WORK_ITEM_DETAILS.replace(":id", workItemId));
+
+      if (!workItemId || !orgSlug || !workspaceSlug) {
+        return;
       }
+      navigate(workItemDetailsPath(orgSlug, workspaceSlug, workItemId));
     },
-    [triggerMarkSingleRead, navigate, onClose]
+    [triggerMarkSingleRead, navigate, onClose, orgSlug, workspaceSlug]
   );
 
   if (!isOpen) {

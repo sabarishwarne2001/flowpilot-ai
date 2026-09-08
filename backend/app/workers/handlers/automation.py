@@ -1,4 +1,8 @@
-﻿"""ARCH-13 Step 13.5 — the `automation.execute` job handler."""
+﻿"""ARCH-13 Step 13.5 — the `automation.execute` job handler.
+
+LIGHT profile: SQL plus action dispatch. The LLM actions run through the
+existing metering path and do not need a heavy image.
+"""
 
 from __future__ import annotations
 
@@ -109,6 +113,10 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
         if event is None:
             return {"outcome": Outcome.SKIPPED, "reason": "event no longer exists"}
         if not event.is_internal:
+            logger.error(
+                "automation.public_event_reached_engine",
+                extra={"outbox_event_id": str(event_id), "event_type": event.event_type},
+            )
             return {"outcome": Outcome.SKIPPED, "reason": "event is not INTERNAL"}
 
         workspace_id = event.workspace_id
@@ -133,7 +141,14 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
         )
 
         if work_item is not None and _verification_blocks(db, work_item_id=work_item.id):
-            return {"outcome": Outcome.SKIPPED, "reason": "verification pending human review"}
+            logger.info(
+                "automation.blocked_pending_verification",
+                extra={"work_item_id": str(work_item.id)},
+            )
+            return {
+                "outcome": Outcome.SKIPPED,
+                "reason": "verification pending human review",
+            }
 
         rules = _resolve_rules(
             db, workspace_id=workspace_id, event_type=event.event_type
@@ -142,6 +157,7 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
             return {"outcome": Outcome.SKIPPED, "reason": "no matching rules"}
 
         from app import crud
+
         ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)
 
         for rule in rules:
@@ -159,16 +175,51 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
                 )
                 db.commit()
             except IntegrityError:
+                # A-1. No longer the replay path — create_execution absorbs the
+                # duplicate-key case itself and reports it via `created`. This
+                # now catches a violation of some OTHER constraint on
+                # automation_executions, where rolling back and skipping this
+                # rule is still better than aborting the remaining rules in
+                # the loop.
                 db.rollback()
+                logger.warning(
+                    "automation.execution_insert_failed",
+                    extra={
+                        "rule_id": str(rule.id),
+                        "outbox_event_id": str(event.id),
+                    },
+                    exc_info=True,
+                )
                 results.append({"rule_id": str(rule.id), "status": "ERROR"})
                 continue
 
             if not created:
+                # A-1. Replayed outbox event. uq_automation_executions_rule_event
+                # already holds a row for this (rule, outbox_event) pair, which
+                # means the actions fired on the first delivery. Running the DAG
+                # again would repeat every webhook, notification and emitted
+                # event, and spend the budget twice.
+                #
+                # is_suppressed does NOT cover this: SUPPRESSED_STATUSES is only
+                # SUPPRESSED_CYCLE and SUPPRESSED_DEPTH, so an execution that
+                # completed successfully reads as not-suppressed and falls
+                # straight through to run_execution.
+                logger.info(
+                    "automation.replay_suppressed",
+                    extra={
+                        "rule_id": str(rule.id),
+                        "outbox_event_id": str(event.id),
+                        "execution_id": str(execution.id),
+                        "existing_status": execution.status.value,
+                    },
+                )
                 results.append({"rule_id": str(rule.id), "status": "REPLAY"})
                 continue
 
             if execution.is_suppressed:
-                results.append({"rule_id": str(rule.id), "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status)})
+                results.append(
+                    {"rule_id": str(rule.id), "status": execution.status.value}
+                )
                 continue
 
             result = executor.run_execution(
@@ -183,9 +234,9 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 ),
             )
-            results.append({"rule_id": str(rule.id), "status": result.status.value if hasattr(result.status, 'value') else str(result.status)})
+            results.append({"rule_id": str(rule.id), "status": result.status.value})
 
-            # L-3: Dispatch in-app notification to the rule author
+            # L-3. Surface the run in the workspace alert center.
             _notify_rule_owner(
                 db,
                 rule=rule,
@@ -214,7 +265,10 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _verification_blocks(db: Session, *, work_item_id: uuid.UUID) -> bool:
     try:
-        from app.models.verification import DocumentVerification, VerificationStatus
+        from app.models.verification import (
+            DocumentVerification,
+            VerificationStatus,
+        )
     except ImportError:
         return False
 
@@ -223,10 +277,13 @@ def _verification_blocks(db: Session, *, work_item_id: uuid.UUID) -> bool:
             select(DocumentVerification.id)
             .where(
                 DocumentVerification.work_item_id == work_item_id,
-                DocumentVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.DISAGREED]),
+                DocumentVerification.status.in_(
+                    [VerificationStatus.PENDING, VerificationStatus.DISAGREED]
+                ),
             )
             .limit(1)
-        ).first() is not None
+        ).first()
+        is not None
     )
 
 
@@ -238,29 +295,59 @@ def _notify_rule_owner(
     work_item: Any,
     status: AutomationExecutionStatus,
 ) -> None:
+    """Write an in-app AUTOMATION notification for the rule's author.
+
+    Why the author and not "the workspace": Notification.user_id is not
+    nullable, so a notification needs a recipient. The person who built the
+    rule is the one who wants to know it fired; fanning out to every
+    workspace member would make a chatty rule unusable for everyone else.
+    A rule with no created_by_user_id (seeded or API-created) gets no
+    notification rather than an arbitrary one.
+
+    crud.create_notification is called directly rather than
+    notification_service.send_notification, which is async. This handler is
+    synchronous and runs inside a supervisor thread; opening an event loop
+    per execution to perform two synchronous inserts would be pure overhead.
+    The IN_APP path in send_notification does exactly these two calls.
+
+    Never raises. A notification is a courtesy — losing one must not fail an
+    automation that already ran its actions and cannot be re-run safely.
+    """
     if rule.created_by_user_id is None:
         return
 
     try:
         from app import crud
-        from app.models.notification import NotificationChannel, NotificationPriority, NotificationType
+        from app.models.notification import (
+            NotificationChannel,
+            NotificationPriority,
+            NotificationType,
+        )
         from app.schemas.notification import NotificationCreate
 
-        status_str = status.value if hasattr(status, "value") else str(status)
-        succeeded = status_str in ("COMPLETED", "SUCCEEDED")
+        succeeded = status is AutomationExecutionStatus.COMPLETED
         document = getattr(work_item, "original_filename", None)
         subject = f" on {document}" if document else ""
 
         if succeeded:
             title = f"Automation ran: {rule.name}"
             actions = int(getattr(execution, "actions_executed", 0) or 0)
-            message = f"{rule.name} completed{subject} ({actions} action{'s' if actions != 1 else ''})."
+            message = (
+                f"{rule.name} completed{subject} "
+                f"({actions} action{'s' if actions != 1 else ''})."
+            )
             priority = NotificationPriority.INFO
         else:
             title = f"Automation failed: {rule.name}"
-            message = f"{rule.name} finished with status {status_str}{subject}."
+            message = (
+                f"{rule.name} finished with status {status.value}{subject}."
+            )
             priority = NotificationPriority.WARNING
 
+        # NotificationBase caps title at 150 chars and message at 500.
+        # AutomationRule.name is String(255), so a long rule name overflows
+        # the title and ValidationError lands in the except below — the
+        # notification would vanish silently rather than crash. Truncate.
         crud.create_notification(
             db,
             workspace_id=rule.workspace_id,
@@ -274,8 +361,15 @@ def _notify_rule_owner(
                 delivery_channel=NotificationChannel.IN_APP,
             ),
         )
-    except Exception:
-        logger.warning("automation.notification_failed", exc_info=True)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "automation.notification_failed",
+            extra={
+                "rule_id": str(rule.id),
+                "execution_id": str(getattr(execution, "id", None)),
+            },
+            exc_info=True,
+        )
 
 
 def _emit_budget_exhausted(db: Session, *, execution: Any, event: OutboxEvent) -> None:

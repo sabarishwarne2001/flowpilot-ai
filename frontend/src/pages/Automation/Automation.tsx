@@ -255,6 +255,11 @@ export const Automation: React.FC = () => {
       total,
       active,
       disabled,
+      // SEAM-3. The EXECUTIONS TODAY card rendered a literal 0 with the
+      // subtitle "Backend metrics coming soon". The number was already here:
+      // totalLogs counts the rows /automation/logs returns, which now project
+      // automation_executions rather than the retired automation_logs table.
+      totalExecutions: totalLogs,
       activePct,
       disabledPct,
       avgPriority,
@@ -560,10 +565,10 @@ export const Automation: React.FC = () => {
           </div>
           <div>
             <h4 className="text-2xl font-black tracking-tight text-foreground">
-              0
+              {stats.totalExecutions}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Backend metrics coming soon
+              Live DAG executions
             </p>
           </div>
         </div>
@@ -675,13 +680,13 @@ export const Automation: React.FC = () => {
 
               <SelectContent>
                 <SelectItem value="PRIORITY_ASC">
-                  Priority Low â†’ High
+                  Priority Low → High
                 </SelectItem>
                 <SelectItem value="PRIORITY_DESC">
-                  Priority High â†’ Low
+                  Priority High → Low
                 </SelectItem>
-                <SelectItem value="NAME_ASC">Name (A â†’ Z)</SelectItem>
-                <SelectItem value="NAME_DESC">Name (Z â†’ A)</SelectItem>
+                <SelectItem value="NAME_ASC">Name (A → Z)</SelectItem>
+                <SelectItem value="NAME_DESC">Name (Z → A)</SelectItem>
                 <SelectItem value="CREATED_DESC">Recently Created</SelectItem>
                 <SelectItem value="UPDATED_DESC">Last Updated</SelectItem>
               </SelectContent>

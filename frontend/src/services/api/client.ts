@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared Axios instance and interceptors for the FlowPilot AI frontend.
  *
  * FE-0 extends the ARCH-03 client from "401 with one refresh" to the full
@@ -122,8 +122,36 @@ export const apiClient = axios.create({
   },
 });
 
+/**
+ * SEAM-1. Strip the JSON default for multipart bodies.
+ *
+ * The instance above sets `Content-Type: application/json` as a default.
+ * Axios only computes a multipart boundary when Content-Type is UNSET, so a
+ * FormData body inherited the JSON header, went out with no boundary, and
+ * FastAPI's multipart parser never ran — surfacing as 422 "field required"
+ * for a field the client did send.
+ *
+ * This affected every upload that did NOT hand-set the header:
+ *   services/api/profile.ts   uploadAvatar        (reported: POST /me/avatar 422)
+ *   services/api/branding.ts  uploadBrandingLogo  (same bug, not yet reported —
+ *                             its comment says the browser must set the
+ *                             boundary, which the instance default prevented)
+ *
+ * upload.ts and workItem.ts happened to work because they pass
+ * "multipart/form-data" explicitly, which axios then rewrites with a
+ * boundary. Fixing it here rather than at each call site means the next
+ * FormData upload cannot reintroduce it.
+ */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      // Delete rather than set: any value here, including
+      // "multipart/form-data", suppresses boundary generation in some axios
+      // versions. Absent is the only reliably correct state.
+      delete config.headers["Content-Type"];
+      delete (config.headers as Record<string, unknown>)["content-type"];
+    }
+
     const token = useAuthStore.getState().token;
 
     if (token) {
