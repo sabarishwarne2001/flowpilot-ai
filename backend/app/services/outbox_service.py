@@ -123,7 +123,7 @@ def _causality(caused_by: Optional[OutboxEvent]) -> tuple[int, Optional[uuid.UUI
         raise CausalityError("caused_by has no id yet.")
     depth = int(caused_by.depth or 0) + 1
     if depth > HARD_DEPTH_CEILING:
-        raise CausalityError(f"depth {depth} exceeds ceiling {HARD_DEPTH_CEILING}")
+        raise CausalityError(f"depth {depth} exceeds hard ceiling {HARD_DEPTH_CEILING}")
     return depth, caused_by.id, caused_by.chain_root_id
 
 

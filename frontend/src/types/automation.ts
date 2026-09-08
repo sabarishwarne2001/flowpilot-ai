@@ -1,26 +1,13 @@
-/**
+﻿/**
  * Automation Engine Data Transfer Objects (DTOs) for FlowPilot AI.
- *
- * Mirrors the backend Pydantic models while remaining provider-agnostic and
- * extensible for future automation channels and workflow engines.
  */
 
-/* ============================================================================
- * Enums / Union Types
- * ========================================================================== */
-
-/**
- * Events capable of triggering an automation rule.
- */
 export type AutomationEvent =
   | "WORK_ITEM_CREATED"
   | "WORK_ITEM_COMPLETED"
   | "WORK_ITEM_FAILED"
   | "WORK_ITEM_REPROCESSED";
 
-/**
- * Supported evaluation logic operators.
- */
 export type AutomationOperator =
   | "EQUALS"
   | "NOT_EQUALS"
@@ -41,119 +28,56 @@ export type AutomationOperator =
   | "ARRAY_CONTAINS_ANY"
   | "ARRAY_CONTAINS_ALL";
 
-/**
- * Supported automation actions.
- */
 export type AutomationActionType = "SEND_EMAIL";
-
-/**
- * Execution status of an automation log.
- */
 export type AutomationExecutionStatus = "SUCCESS" | "FAILED";
-
-/**
- * Logical operators supporting multiple conditions.
- */
 export type AutomationLogicOperator = "AND" | "OR";
 
-/* ============================================================================
- * Sub-Structures
- * ========================================================================== */
-
-/**
- * Single logical evaluate criteria constraint configured for rule matching.
- */
 export interface AutomationCondition {
   readonly field: string;
   readonly operator: AutomationOperator;
   readonly value: string;
 }
 
-/**
- * Single trigger action workflow configured for rule matching executions.
- */
 export interface AutomationAction {
   readonly action_type: string;
   readonly config: Record<string, unknown>;
 }
 
-/* ============================================================================
- * Rule DTOs
- * ========================================================================== */
-
-/**
- * Persisted automation rule returned by the backend.
- * Reconciled with AutomationRuleResponse (workspace_id, created_by_user_id).
- */
 export interface AutomationRule {
   readonly id: string;
   readonly workspace_id?: string;
-  /* ARCH-0V: `user_id` removed. It was declared here and had no
-     backend source — AutomationRuleResponse carries
-     `created_by_user_id` (app/schemas/automation.py) and the model
-     column is `created_by_user_id` (app/models/automation.py). An
-     optional field that never arrives type-checks perfectly and
-     reads `undefined` forever. Gate 0V-G7 now enforces that every
-     field declared here exists on the response_model. */
   readonly created_by_user_id?: string | null;
-
   readonly name: string;
   readonly priority: number;
-
   readonly event: AutomationEvent;
-
   readonly conditions: readonly AutomationCondition[];
   readonly logic_operator: AutomationLogicOperator;
-
   readonly actions: readonly AutomationAction[];
-
   readonly is_active: boolean;
-
   readonly created_at: string;
   readonly updated_at: string;
 }
 
-/**
- * Payload used when creating a rule.
- */
 export interface AutomationRuleCreateRequest {
   readonly name: string;
   readonly priority: number;
-
   readonly event: AutomationEvent;
-
   readonly conditions: readonly AutomationCondition[];
   readonly logic_operator: AutomationLogicOperator;
-
   readonly actions: readonly AutomationAction[];
-
   readonly is_active?: boolean;
 }
 
-/**
- * Partial payload used when updating a rule.
- */
 export interface AutomationRuleUpdateRequest {
   readonly name?: string;
   readonly priority?: number;
-
   readonly event?: AutomationEvent;
-
   readonly conditions?: readonly AutomationCondition[];
   readonly logic_operator?: AutomationLogicOperator;
-
   readonly actions?: readonly AutomationAction[];
-
   readonly is_active?: boolean;
 }
 
-/* ============================================================================
- * Automation Logs
- * ========================================================================== */
-
-/**
- * Historical automation execution record.
- */
 export interface AutomationLog {
   readonly id: string;
   readonly rule_id: string;
@@ -165,11 +89,38 @@ export interface AutomationLog {
   readonly log_message: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+
+  readonly execution_status?: string | null;
+  readonly execution_time_ms?: number | null;
+  readonly spent_cost_micros?: number | null;
+  readonly nodes_executed?: number | null;
+  readonly actions_executed?: number | null;
 }
 
-/**
- * Response returned after manually testing an automation rule.
- */
+export const formatCostMicros = (micros: number | null | undefined): string => {
+  if (micros === null || micros === undefined) {
+    return "—";
+  }
+  const dollars = micros / 1_000_000;
+  const decimals = dollars !== 0 && Math.abs(dollars) < 0.01 ? 4 : 2;
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(dollars);
+};
+
+export const formatDurationMs = (ms: number | null | undefined): string => {
+  if (ms === null || ms === undefined) {
+    return "—";
+  }
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)}s`;
+};
+
 export interface AutomationRuleTestResponse {
   readonly success: boolean;
   readonly matched: boolean;

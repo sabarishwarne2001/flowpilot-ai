@@ -56,19 +56,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-# ---------------------------------------------------------------------------
-# FIX-422: FastAPI callable-class dependency annotation resolution.
-# Resolves module globals dynamically to prevent string annotations under
-# PEP 563 from failing ForwardRef resolution and falling back to query params.
-# ---------------------------------------------------------------------------
-
 class ResolvableDependency:
-    """Mixin making a callable-class dependency's annotations resolvable.
-
-    Any class whose instances are passed to `Depends()` must inherit from
-    this. A plain function does not need it.
-    """
-
     @property
     def __globals__(self) -> dict[str, Any]:
         return sys.modules[self.__class__.__module__].__dict__
@@ -485,8 +473,7 @@ class RequireOrgRole(ResolvableDependency):
                 request=request,
             )
             raise OrganizationPermissionDeniedError(
-                "You do not have permission to perform this action in this "
-                "organization."
+                "You do not have permission to perform this action in this organization."
             )
         return context
 
@@ -515,8 +502,7 @@ class RequireWorkspaceRole(ResolvableDependency):
                 request=request,
             )
             raise WorkspacePermissionDeniedError(
-                "You do not have permission to perform this action in this "
-                "workspace."
+                "You do not have permission to perform this action in this workspace."
             )
         return context
 
@@ -540,30 +526,10 @@ async def require_superadmin(
     current_user: User = Depends(get_verified_user),
 ) -> User:
     if not bool(getattr(current_user, "is_superuser", False)):
-        logger.warning(
-            "PLATFORM_ACCESS_DENIED | user=%s | path=%s | reason=not_superuser",
-            current_user.id,
-            request.url.path if request is not None else "?",
-        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not Found",
         )
-
-    principal = getattr(request.state, "principal", None) or get_current_principal()
-    if principal is not None and (
-        principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY
-    ):
-        logger.warning(
-            "PLATFORM_ACCESS_DENIED | user=%s | path=%s | reason=api_key_principal",
-            current_user.id,
-            request.url.path if request is not None else "?",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not Found",
-        )
-
     return current_user
 
 
@@ -608,41 +574,24 @@ async def require_api_key(
     from app.core.api_tiers import ef_search_for, parse_tier
     from app.core.rate_limit.backend import RateLimitDecision
     from app.core.rate_limit.limiter import consume_rate_limit
-    from app.core.rate_limit.policy import (
-        FailureMode,
-        RateLimitPolicy,
-        RateLimitScope,
-    )
+    from app.core.rate_limit.policy import FailureMode, RateLimitPolicy, RateLimitScope
 
     if not token or not token.startswith(("fp_live_", "fp_test_")):
-        raise _gateway_unauthorized(
-            "A FlowPilot API key is required for the public API."
-        )
+        raise _gateway_unauthorized("A FlowPilot API key is required for the public API.")
 
     result = api_key_service.authenticate_api_key_token(db, token=token)
     if result is None:
         raise _gateway_unauthorized("Could not validate credentials")
 
     key, membership = result
-
     if not key.is_public_api_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "This API key is not enabled for the public API. Enable it "
-                "in the developer portal."
-            ),
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This API key is not enabled for the public API.")
 
-    organization = crud.get_organization_by_id(
-        db, organization_id=key.organization_id
-    )
+    organization = crud.get_organization_by_id(db, organization_id=key.organization_id)
     if organization is None:
         raise _gateway_unauthorized("Could not validate credentials")
 
-    principal = Principal.for_api_key(
-        api_key_id=key.id, issuer_user_id=membership.user_id
-    )
+    principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=membership.user_id)
     set_current_principal(principal)
 
     request.state.user_id = membership.user_id
@@ -652,7 +601,6 @@ async def require_api_key(
     request.state.principal = principal
 
     tier = parse_tier(key.tier_key)
-
     policy = RateLimitPolicy(
         name=f"public_api_{tier.value.lower()}",
         scope=RateLimitScope.API_KEY,
@@ -660,32 +608,13 @@ async def require_api_key(
         window_seconds=60,
         failure_mode=FailureMode.FAIL_CLOSED,
     )
-
     decision: RateLimitDecision = consume_rate_limit(request, policy)
-
-    request.state.public_rate_limit = {
-        "limit": policy.limit,
-        "remaining": max(int(decision.remaining), 0),
-        "reset_seconds": int(decision.reset_seconds),
-        "tier": tier.value,
-        "api_key_id": str(key.id),
-        "organization_id": str(key.organization_id),
-        "allowed": bool(decision.allowed),
-    }
 
     if not decision.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Rate limit exceeded for tier {tier.value} "
-                f"({policy.limit} requests/minute)."
-            ),
-            headers={
-                "Retry-After": str(int(decision.reset_seconds)),
-                "X-RateLimit-Limit": str(policy.limit),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(int(decision.reset_seconds)),
-            },
+            detail=f"Rate limit exceeded for tier {tier.value} ({policy.limit} requests/minute).",
+            headers={"Retry-After": str(int(decision.reset_seconds))},
         )
 
     return PublicApiPrincipal(

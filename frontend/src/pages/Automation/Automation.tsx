@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+﻿import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,7 @@ import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import { getFriendlyFieldName } from "@/constants/automationFields";
 import type { AutomationRule, AutomationLog } from "@/types/automation";
+import { formatCostMicros, formatDurationMs } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { automationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
@@ -674,13 +675,13 @@ export const Automation: React.FC = () => {
 
               <SelectContent>
                 <SelectItem value="PRIORITY_ASC">
-                  Priority Low → High
+                  Priority Low â†’ High
                 </SelectItem>
                 <SelectItem value="PRIORITY_DESC">
-                  Priority High → Low
+                  Priority High â†’ Low
                 </SelectItem>
-                <SelectItem value="NAME_ASC">Name (A → Z)</SelectItem>
-                <SelectItem value="NAME_DESC">Name (Z → A)</SelectItem>
+                <SelectItem value="NAME_ASC">Name (A â†’ Z)</SelectItem>
+                <SelectItem value="NAME_DESC">Name (Z â†’ A)</SelectItem>
                 <SelectItem value="CREATED_DESC">Recently Created</SelectItem>
                 <SelectItem value="UPDATED_DESC">Last Updated</SelectItem>
               </SelectContent>
@@ -1158,9 +1159,63 @@ export const Automation: React.FC = () => {
                           </span>
                         </div>
 
-                        <span className="text-muted-foreground/80 font-mono">
-                          Duration: &lt; 15ms
-                        </span>
+                        {/*
+                          Item 2. This read "Duration: < 15ms" — a hardcoded
+                          string, not a measurement. It claimed a number the
+                          UI never had, for every row.
+
+                          Now projected from automation_executions. Each badge
+                          hides rather than showing a placeholder when its
+                          field is absent, so an older server that omits these
+                          optional fields degrades to the previous layout
+                          instead of a row of em dashes.
+
+                          flex-wrap + min-w-0 keeps these from forcing
+                          horizontal scroll at 375px; the parent already wraps.
+                        */}
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-muted-foreground/80">
+                          {log.actions_executed !== null &&
+                            log.actions_executed !== undefined && (
+                              <span className="rounded-md bg-muted px-2 py-0.5 font-bold">
+                                {log.actions_executed}{" "}
+                                {log.actions_executed === 1 ? "action" : "actions"}
+                              </span>
+                            )}
+
+                          {log.execution_time_ms !== null &&
+                            log.execution_time_ms !== undefined && (
+                              <span
+                                className="rounded-md bg-muted px-2 py-0.5 font-bold"
+                                title="Wall clock from execution start to completion"
+                              >
+                                {formatDurationMs(log.execution_time_ms)}
+                              </span>
+                            )}
+
+                          {log.spent_cost_micros !== null &&
+                            log.spent_cost_micros !== undefined && (
+                              <span
+                                className="rounded-md bg-muted px-2 py-0.5 font-bold"
+                                title="Spend against this execution's budget"
+                              >
+                                {formatCostMicros(log.spent_cost_micros)}
+                              </span>
+                            )}
+
+                          {log.execution_status &&
+                            log.execution_status !== "SUCCEEDED" &&
+                            log.execution_status !== "FAILED" && (
+                              /*
+                                Only shown when it adds information. status
+                                above is the two-value union; this surfaces
+                                BUDGET_EXHAUSTED, TIMED_OUT and the suppressed
+                                states, which all collapse to "FAILED" there.
+                              */
+                              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 font-bold text-amber-600">
+                                {log.execution_status}
+                              </span>
+                            )}
+                        </div>
                       </div>
 
                       {log.log_message && (

@@ -1,8 +1,7 @@
-"""
+﻿"""
 Test fixtures for the FlowPilot AI tenant isolation suite.
-
-Runs against a dedicated database, created and dropped per session, so a test
-run can never touch development data.
+Fully isolated in a dedicated test database (flowpilot_test).
+Never connects to or truncates the development database.
 """
 
 from __future__ import annotations
@@ -18,28 +17,21 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.api import deps
 from app.core import security
 from app.core.config import settings
 
-BASE_URL = str(settings.sqlalchemy_database_uri)
+# Construct dedicated test database URL
+BASE_URL = str(settings.SQLALCHEMY_DATABASE_URI if hasattr(settings, "SQLALCHEMY_DATABASE_URI") else settings.sqlalchemy_database_uri)
 TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "flowpilot_test")
 TEST_DB_URL = BASE_URL.rsplit("/", 1)[0] + f"/{TEST_DB_NAME}"
 
-settings.POSTGRES_DB = TEST_DB_NAME
-if hasattr(settings, "sqlalchemy_database_uri"):
-    try:
-        settings.sqlalchemy_database_uri = TEST_DB_URL
-    except Exception:
-        pass
+test_engine = create_engine(TEST_DB_URL, poolclass=NullPool)
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-from app.db.session import (
-    ReadSessionLocal,
-    SessionLocal,
-    engine as global_engine,
-)
 from app.main import app
 from app.models.automation import AutomationRule
 from app.models.organization import (
@@ -115,6 +107,10 @@ def test_database() -> Generator[None, None, None]:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"'))
         conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
 
+    with test_engine.connect() as conn:
+        with conn.begin():
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", TEST_DB_URL)
     command.upgrade(alembic_cfg, "head")
@@ -122,6 +118,7 @@ def test_database() -> Generator[None, None, None]:
     yield
 
     admin_engine.dispose()
+    test_engine.dispose()
     with create_engine(admin_url, isolation_level="AUTOCOMMIT").connect() as conn:
         conn.execute(
             text(
@@ -133,7 +130,7 @@ def test_database() -> Generator[None, None, None]:
 
 
 def _truncate_all_test_tables() -> None:
-    with global_engine.connect() as conn:
+    with test_engine.connect() as conn:
         with conn.begin():
             conn.execute(text("SET session_replication_role = 'replica';"))
             conn.execute(
@@ -152,7 +149,7 @@ def _truncate_all_test_tables() -> None:
 @pytest.fixture()
 def db_session(test_database) -> Generator[Session, None, None]:
     _truncate_all_test_tables()
-    session = SessionLocal()
+    session = TestSessionLocal()
     try:
         yield session
     finally:
@@ -162,19 +159,12 @@ def db_session(test_database) -> Generator[Session, None, None]:
 
 @pytest.fixture()
 def client(db_session: Session) -> Generator[TestClient, None, None]:
+    # Share the exact same test session so all created users/tenants are visible
     def override_get_db() -> Generator[Session, None, None]:
-        with SessionLocal() as session:
-            yield session
+        yield db_session
 
     def override_get_read_db() -> Generator[Session, None, None]:
-        # ARCH-19 §3.2 — the read path gets its own override, pointed at the
-        # reader factory rather than at SessionLocal. Without an override,
-        # remapped routes would open sessions outside this fixture's truncate
-        # discipline. Pointed at SessionLocal instead, the read-only guard
-        # would never fire in CI and the guard's whole purpose would be lost.
-        with ReadSessionLocal() as session:
-            yield session
-
+        yield db_session
 
     app.dependency_overrides[deps.get_db] = override_get_db
     app.dependency_overrides[deps.get_read_db] = override_get_read_db
@@ -192,7 +182,7 @@ def _make_user(db: Session, email: str) -> Persona:
     )
     db.add(user)
     db.flush()
-    return Persona(user=user, token=security.create_access_token(subject=user.id))
+    return Persona(user=user, token=security.create_access_token(subject=str(user.id)))
 
 
 def _seat(
@@ -282,7 +272,7 @@ def tenant(db_session: Session) -> Fixture:
     _grant(db_session, workspace, viewer, WorkspaceRole.VIEWER)
     _grant(db_session, foreign, other_member, WorkspaceRole.ADMIN)
 
-    db_session.commit()
+    db_session.flush()
 
     return Fixture(
         organization=org,

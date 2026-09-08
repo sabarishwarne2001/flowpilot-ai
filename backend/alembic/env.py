@@ -1,40 +1,26 @@
-import os
+﻿import os
 import sys
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Dynamically prepend parent directory to sys.path to allow imports from app package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.config import settings
 from app.models import Base
 
-# This is the Alembic Config object, which provides access to values within the .ini file.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Bind Base metadata to allow Alembic to read active ORM schemas during autogenerate runs
 target_metadata = Base.metadata
 
 _PARTITION_TABLE_PREFIX = "document_chunks_p"
-
-#: Database objects that exist by design and are not mapped by any model.
 UNMANAGED_TABLES: frozenset[str] = frozenset({"billable_seats"})
 
 
 def include_object(obj, name, type_, reflected, compare_to):
-    """Keep autogenerate honest by hiding only what is deliberately unmapped.
-
-    `reflected and compare_to is None` is the whole guard: it suppresses
-    "present in the database, absent from the models" and never the reverse.
-    A table declared on a model and missing from a migration still produces a
-    diff, because that is a real defect and this hook must not hide it.
-    """
     if name == "billable_seats":
         return False
     if name and name.startswith(_PARTITION_TABLE_PREFIX):
@@ -46,7 +32,6 @@ def include_object(obj, name, type_, reflected, compare_to):
 
 
 def _is_comment_only_alter(op_) -> bool:
-    """True for an AlterColumnOp whose only change is the comment."""
     from alembic.operations import ops as alembic_ops
 
     if not isinstance(op_, alembic_ops.AlterColumnOp):
@@ -63,7 +48,6 @@ def _is_comment_only_alter(op_) -> bool:
 
 
 def _strip_comment_only_ops(directives) -> None:
-    """Drop comment-only alterations from a generated revision."""
     from alembic.operations import ops as alembic_ops
 
     comment_op_names = (
@@ -106,9 +90,17 @@ def process_revision_directives(context_, revision, directives) -> None:
     _strip_comment_only_ops(directives)
 
 
+def _get_target_url() -> str:
+    ini_url = config.get_main_option("sqlalchemy.url")
+    # If ini_url is set by test suite (postgresql://...flowpilot_test), use it
+    if ini_url and not ini_url.startswith("driver://") and ini_url.strip() != "":
+        return ini_url
+    return str(settings.SQLALCHEMY_DATABASE_URI if hasattr(settings, "SQLALCHEMY_DATABASE_URI") else settings.sqlalchemy_database_uri)
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = settings.sqlalchemy_database_uri
+    url = _get_target_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -127,7 +119,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = settings.sqlalchemy_database_uri
+    configuration["sqlalchemy.url"] = _get_target_url()
 
     connectable = engine_from_config(
         configuration,
