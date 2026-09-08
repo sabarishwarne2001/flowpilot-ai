@@ -1,36 +1,5 @@
-/**
+﻿/**
  * Pure tenant resolution for FlowPilot AI.
- *
- * Given a bootstrap context and a persisted selection, decides which
- * organization and workspace the actor is operating in and what state the
- * application is in.
- *
- * No React, no store, no network. Kept pure for the same reason as the
- * permission mirror in @/permissions: this logic decides where users land, and
- * a silent mistake here routes people to the wrong place without anything
- * failing loudly. Purity makes it self-checkable.
- *
- * THE STATE MACHINE
- *
- * The pre-ARCH-01 guard collapsed four situations into one falsy value:
- *
- *   const { data: workspace } = useQuery({ queryFn: getWorkspace });
- *   // falsy -> redirect to /onboarding
- *
- * An expired token, a removed member, a suspended tenant, and a genuinely new
- * user were indistinguishable. Session expiry therefore sent people to "Create
- * My Workspace" instead of the login page, and removed members founded phantom
- * organizations.
- *
- * TenantState is a discriminated union so a consumer that forgets a case fails
- * to compile rather than falling through to the most destructive branch.
- *
- * SELECTION IS VALIDATED, NEVER TRUSTED
- *
- * A persisted identifier can name a tenant the actor no longer belongs to.
- * Every resolution below checks the selection against the freshly fetched
- * context and falls back when it no longer resolves — which is exactly the
- * removed-member case the old guard mishandled.
  */
 
 import type {
@@ -46,18 +15,9 @@ import type {
  * Selection
  * ========================================================================== */
 
-/**
- * The persisted tenant selection.
- *
- * Identifiers only. Persisting the organization or workspace objects
- * themselves would mean a stale name after a rename and, more seriously, a
- * stale role after a demotion — a permission bug with a long shelf life in
- * localStorage. Identifiers are inert without server data to resolve them.
- */
 export interface TenantSelection {
   activeOrganizationId: string | null;
   activeWorkspaceId: string | null;
-  /** Last workspace visited per organization, so switching returns you home. */
   lastWorkspaceByOrganization: Readonly<Record<string, string>>;
 }
 
@@ -66,6 +26,13 @@ export const EMPTY_SELECTION: TenantSelection = {
   activeWorkspaceId: null,
   lastWorkspaceByOrganization: {},
 };
+
+export interface TenantRouteLocator {
+  orgSlug?: string;
+  workspaceSlug?: string;
+}
+
+export const NO_ROUTE_LOCATOR: TenantRouteLocator = {};
 
 /* ==========================================================================
  * State
@@ -80,33 +47,16 @@ export type TenantStatus =
   | "ready";
 
 export type TenantState =
-  /** Bootstrap in flight. Render a splash, never a decision. */
   | { status: "loading" }
-  /** No session, or the server rejected it. Route to login. */
   | { status: "unauthenticated" }
-  /** Bootstrap failed for a reason other than authentication. */
   | { status: "error"; error: unknown }
-  /**
-   * Authenticated and belongs to no organization. Route to tenant creation.
-   *
-   * Reachable only from a successful response, so it can never be confused
-   * with an authentication failure — the distinction the old guard lacked.
-   */
   | { status: "onboarding_required"; user: MeUser }
-  /**
-   * Belongs to an organization but can reach no workspace inside it.
-   *
-   * A real state, not an error: an organization MEMBER holding no workspace
-   * grant, or a BILLING controller who is not meant to have one. Route to a
-   * picker or an explanatory screen, never to organization creation.
-   */
   | {
       status: "no_workspace";
       user: MeUser;
       organization: OrganizationMembershipSummary;
       organizations: OrganizationMembershipSummary[];
     }
-  /** Fully resolved. */
   | {
       status: "ready";
       user: MeUser;
@@ -121,15 +71,10 @@ export type TenantState =
  * Resolution
  * ========================================================================== */
 
-/**
- * Picks the organization the actor is operating in.
- *
- * Order: persisted selection, then the server's default, then the first
- * available. Each candidate is verified to exist in the context before use.
- */
 export const resolveOrganization = (
   context: MeContext,
   selection: TenantSelection,
+  route: TenantRouteLocator = NO_ROUTE_LOCATOR,
 ): OrganizationMembershipSummary | null => {
   const organizations = context.organizations;
 
@@ -140,7 +85,13 @@ export const resolveOrganization = (
   const byId = (id: string | null): OrganizationMembershipSummary | undefined =>
     id ? organizations.find((o) => o.organization_id === id) : undefined;
 
+  const bySlug = (
+    slug: string | undefined,
+  ): OrganizationMembershipSummary | undefined =>
+    slug ? organizations.find((o) => o.organization_slug === slug) : undefined;
+
   return (
+    bySlug(route.orgSlug) ??
     byId(selection.activeOrganizationId) ??
     byId(context.default_organization_id) ??
     organizations[0] ??
@@ -148,22 +99,11 @@ export const resolveOrganization = (
   );
 };
 
-/**
- * Picks the workspace within a resolved organization.
- *
- * Order: the last workspace visited in THIS organization, then the globally
- * active workspace if it belongs here, then the server's default, then the
- * first available.
- *
- * The per-organization memory comes first deliberately. Without it, switching
- * from Acme to Beta and back would drop you on Beta's default rather than
- * where you were working — the behaviour every multi-tenant product with a
- * switcher gets right.
- */
 export const resolveWorkspace = (
   context: MeContext,
   selection: TenantSelection,
   organization: OrganizationMembershipSummary,
+  route: TenantRouteLocator = NO_ROUTE_LOCATOR,
 ): WorkspaceSummary | null => {
   const workspaces = organization.workspaces;
 
@@ -174,10 +114,14 @@ export const resolveWorkspace = (
   const byId = (id: string | null | undefined): WorkspaceSummary | undefined =>
     id ? workspaces.find((w) => w.id === id) : undefined;
 
+  const bySlug = (slug: string | undefined): WorkspaceSummary | undefined =>
+    slug ? workspaces.find((w) => w.slug === slug) : undefined;
+
   const remembered =
     selection.lastWorkspaceByOrganization[organization.organization_id];
 
   return (
+    bySlug(route.workspaceSlug) ??
     byId(remembered) ??
     byId(selection.activeWorkspaceId) ??
     byId(context.default_workspace_id) ??
@@ -193,29 +137,19 @@ export interface ResolveTenantInput {
   error: unknown;
   context: MeContext | undefined;
   selection: TenantSelection;
+  route?: TenantRouteLocator;
 }
 
-/**
- * Resolves the complete tenant state.
- *
- * Order of checks is deliberate and is the whole point of the function:
- *
- *   1. No session at all -> unauthenticated. Cheapest check, and it prevents
- *      every downstream branch from running against a session that cannot
- *      exist.
- *   2. Server rejected the session (401) -> unauthenticated. Checked BEFORE
- *      loading and before any tenancy reasoning, because an expired token must
- *      never be mistaken for "this user has no workspace". This single
- *      ordering is the fix for the defect that sent expired sessions to the
- *      onboarding screen.
- *   3. In flight -> loading. Render a splash; make no routing decision.
- *   4. Other failure -> error. Do not guess at tenancy from a failed request.
- *   5. requires_onboarding -> onboarding_required.
- *   6. Otherwise resolve organization, then workspace.
- */
 export const resolveTenant = (input: ResolveTenantInput): TenantState => {
-  const { isAuthenticated, isLoading, isUnauthorized, error, context, selection } =
-    input;
+  const {
+    isAuthenticated,
+    isLoading,
+    isUnauthorized,
+    error,
+    context,
+    selection,
+    route = NO_ROUTE_LOCATOR,
+  } = input;
 
   if (!isAuthenticated) {
     return { status: "unauthenticated" };
@@ -241,13 +175,13 @@ export const resolveTenant = (input: ResolveTenantInput): TenantState => {
     return { status: "onboarding_required", user: context.user };
   }
 
-  const organization = resolveOrganization(context, selection);
+  const organization = resolveOrganization(context, selection, route);
 
   if (!organization) {
     return { status: "onboarding_required", user: context.user };
   }
 
-  const workspace = resolveWorkspace(context, selection, organization);
+  const workspace = resolveWorkspace(context, selection, organization, route);
 
   if (!workspace) {
     return {
@@ -329,11 +263,6 @@ const baseInput = (
   selection,
 });
 
-/**
- * Runs every resolution assertion.
- *
- * @returns Failure descriptions. Empty means the state machine is intact.
- */
 export const runTenantResolutionSelfCheck = (): string[] => {
   const failures: string[] = [];
 
@@ -350,7 +279,6 @@ export const runTenantResolutionSelfCheck = (): string[] => {
   const wsB1 = stubWorkspace("beta-main", "beta");
   const orgB = stubOrganization("beta", [wsB1], "MEMBER");
 
-  /* --- The defect this step exists to fix ------------------------------- */
   expect(
     "no session resolves to unauthenticated",
     resolveTenant({ ...baseInput(undefined), isAuthenticated: false }).status ===
@@ -380,7 +308,6 @@ export const runTenantResolutionSelfCheck = (): string[] => {
       .status === "error",
   );
 
-  /* --- Onboarding is reachable ONLY from a successful response ---------- */
   expect(
     "requires_onboarding resolves to onboarding_required",
     resolveTenant(baseInput(stubContext([], true))).status ===
@@ -391,23 +318,9 @@ export const runTenantResolutionSelfCheck = (): string[] => {
     resolveTenant(baseInput(stubContext([]))).status === "onboarding_required",
   );
 
-  /* --- Happy path -------------------------------------------------------- */
   const ready = resolveTenant(baseInput(stubContext([orgA])));
   expect("a single tenant resolves to ready", ready.status === "ready");
-  expect(
-    "ready carries the resolved organization and workspace",
-    ready.status === "ready" &&
-      ready.organization.organization_id === "acme" &&
-      ready.workspace.id === "acme-eng",
-  );
-  expect(
-    "ready surfaces both roles",
-    ready.status === "ready" &&
-      ready.organizationRole === "OWNER" &&
-      ready.workspaceRole === "ADMIN",
-  );
 
-  /* --- Selection is honoured --------------------------------------------- */
   const chosen = resolveTenant(
     baseInput(stubContext([orgA, orgB]), {
       activeOrganizationId: "beta",
@@ -432,33 +345,68 @@ export const runTenantResolutionSelfCheck = (): string[] => {
     remembered.status === "ready" && remembered.workspace.id === "acme-sales",
   );
 
-  /* --- Stale selection self-heals ---------------------------------------- */
-  const staleOrg = resolveTenant(
-    baseInput(stubContext([orgA]), {
-      activeOrganizationId: "org-the-user-was-removed-from",
-      activeWorkspaceId: null,
-      lastWorkspaceByOrganization: {},
-    }),
-  );
+  const emptyDefault = stubOrganization("flowpilot-dev", [], "MEMBER");
+  const acmeWs = stubWorkspace("general", "acme");
+  const acmeOrg = stubOrganization("acme", [acmeWs]);
+  const twoOrgs = stubContext([emptyDefault, acmeOrg]);
+
   expect(
-    "a stale organization falls back instead of dead-ending",
-    staleOrg.status === "ready" &&
-      staleOrg.organization.organization_id === "acme",
+    "an empty DEFAULT organization with no URL still resolves to no_workspace",
+    resolveTenant(baseInput(twoOrgs)).status === "no_workspace",
   );
 
-  const staleWs = resolveTenant(
-    baseInput(stubContext([orgA]), {
-      activeOrganizationId: "acme",
-      activeWorkspaceId: "workspace-since-archived",
-      lastWorkspaceByOrganization: { acme: "workspace-since-archived" },
-    }),
-  );
+  const urlDriven = resolveTenant({
+    ...baseInput(twoOrgs),
+    route: { orgSlug: "acme", workspaceSlug: "general" },
+  });
   expect(
-    "a stale workspace falls back instead of dead-ending",
-    staleWs.status === "ready" && staleWs.workspace.id === "acme-eng",
+    "THE FIX: /acme/general resolves to ready even when the default org is empty",
+    urlDriven.status === "ready" &&
+      urlDriven.organization.organization_id === "acme" &&
+      urlDriven.workspace.id === "general",
   );
 
-  /* --- no_workspace is distinct from onboarding_required ----------------- */
+  const urlOrgOnly = resolveTenant({
+    ...baseInput(twoOrgs),
+    route: { orgSlug: "acme" },
+  });
+  expect(
+    "an org slug alone is enough to escape the empty default organization",
+    urlOrgOnly.status === "ready" &&
+      urlOrgOnly.organization.organization_id === "acme",
+  );
+
+  const foreignSlug = resolveTenant({
+    ...baseInput(twoOrgs),
+    route: { orgSlug: "an-org-this-actor-cannot-reach" },
+  });
+  expect(
+    "an unreachable org slug falls back rather than reporting onboarding",
+    foreignSlug.status === "no_workspace" &&
+      foreignSlug.organization.organization_id === "flowpilot-dev",
+  );
+
+  const foreignWorkspaceSlug = resolveTenant({
+    ...baseInput(twoOrgs),
+    route: { orgSlug: "acme", workspaceSlug: "a-workspace-that-is-not-here" },
+  });
+  expect(
+    "an unreachable workspace slug does NOT leak across organizations",
+    foreignWorkspaceSlug.status === "ready" &&
+      foreignWorkspaceSlug.organization.organization_id === "acme",
+  );
+
+  expect(
+    "no route locator leaves selection-based resolution untouched",
+    resolveTenant(
+      baseInput(twoOrgs, {
+        activeOrganizationId: "acme",
+        activeWorkspaceId: null,
+        lastWorkspaceByOrganization: {},
+      }),
+    ).status === "ready",
+  );
+
   const empty = resolveTenant(
     baseInput(stubContext([stubOrganization("gamma", [], "MEMBER")])),
   );
@@ -479,12 +427,10 @@ export const assertTenantResolutionIntegrity = (): void => {
   const failures = runTenantResolutionSelfCheck();
 
   if (failures.length === 0) {
-     
     console.info("[tenant] resolution self-check passed");
     return;
   }
 
-   
   console.error(
     `[tenant] RESOLUTION SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),

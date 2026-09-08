@@ -1,34 +1,19 @@
-/**
+﻿/**
  * Tenant picker for FlowPilot AI.
- *
- * Reached in three situations, each of which needs a different explanation:
- *
- *   1. The actor belongs to an organization but can reach no workspace in it —
- *      an organization MEMBER with no grant, or a BILLING controller who is
- *      not meant to have one. They HAVE a tenant, so telling them to create
- *      one would be wrong. That distinction is why no_workspace and
- *      onboarding_required are separate states.
- *
- *   2. The URL named a tenant they cannot reach — removed, archived, never a
- *      member. TenantGuard routes here with an `unreachable` reason rather
- *      than silently substituting a different workspace, so the actor learns
- *      their destination is gone instead of quietly appearing somewhere else.
- *
- *   3. They belong to several tenants and want to choose.
- *
- * This page could not exist before ARCH-01: a second membership crashed the
- * account with MultipleResultsFound, so there was never more than one tenant
- * to pick from.
  */
 
 import React from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { Building2, Loader2, Plus } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Building2, Loader2, LogOut, Plus } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
 import { loginPathWithRedirect, workspacePath, createWorkspacePath } from "@/routes/tenantPaths";
 import { canCreateWorkspace } from "@/permissions/organizationPermissions";
+import { leaveOrganization } from "@/services/api/organization";
+import { ApiError } from "@/services/api/errors";
 import type { OrganizationMembershipSummary } from "@/types/tenancy";
 
 interface UnreachableState {
@@ -44,65 +29,102 @@ const UNREACHABLE_MESSAGE: Record<"organization" | "workspace", string> = {
 
 const OrganizationCard: React.FC<{
   organization: OrganizationMembershipSummary;
-}> = ({ organization }) => (
-  <section className="space-y-3 rounded-xl border border-border/60 bg-card p-5">
-    <header className="flex items-start justify-between gap-4">
-      <div className="min-w-0 space-y-0.5">
-        <h2 className="truncate text-sm font-bold text-foreground">
-          {organization.organization_name}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          /{organization.organization_slug} · {organization.role.toLowerCase()}
+  onLeft: () => void;
+}> = ({ organization, onLeft }) => {
+  const canCreate = canCreateWorkspace(organization.role);
+  const stranded = organization.workspaces.length === 0 && !canCreate;
+
+  const { mutate: leave, isPending: isLeaving } = useMutation({
+    mutationFn: () => leaveOrganization(organization.organization_id),
+    onSuccess: () => {
+      toast.success(`You have left ${organization.organization_name}.`);
+      onLeft();
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Could not leave this organization. Please try again.",
+      );
+    },
+  });
+
+  return (
+    <section className="space-y-3 rounded-xl border border-border/60 bg-card p-5">
+      <header className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="truncate text-sm font-bold text-foreground">
+            {organization.organization_name}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            /{organization.organization_slug} · {organization.role.toLowerCase()}
+          </p>
+        </div>
+        {organization.organization_status !== "ACTIVE" && (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {organization.organization_status.toLowerCase()}
+          </span>
+        )}
+      </header>
+
+      {organization.workspaces.length === 0 ? (
+        <p className="rounded-lg bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          {canCreate
+            ? "No workspaces yet. Create one to get started."
+            : "You do not have access to any workspace in this organization yet. An organization admin can grant you access."}
         </p>
-      </div>
-      {organization.organization_status !== "ACTIVE" && (
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {organization.organization_status.toLowerCase()}
-        </span>
+      ) : (
+        <ul className="space-y-1.5">
+          {organization.workspaces.map((workspace) => (
+            <li key={workspace.id}>
+              <Link
+                to={workspacePath(organization.organization_slug, workspace.slug)}
+                className="flex items-center justify-between gap-3 rounded-lg border border-transparent bg-muted/20 px-3 py-2.5 text-sm transition hover:border-border hover:bg-muted/40"
+              >
+                <span className="min-w-0 truncate font-semibold text-foreground">
+                  {workspace.workspace_name}
+                </span>
+                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {workspace.effective_role.toLowerCase()}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
-    </header>
 
-    {organization.workspaces.length === 0 ? (
-      <p className="rounded-lg bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-        {canCreateWorkspace(organization.role)
-          ? "No workspaces yet. Create one to get started."
-          : "You do not have access to any workspace in this organization yet. An organization admin can grant you access."}
-      </p>
-    ) : (
-      <ul className="space-y-1.5">
-        {organization.workspaces.map((workspace) => (
-          <li key={workspace.id}>
-            <Link
-              to={workspacePath(organization.organization_slug, workspace.slug)}
-              className="flex items-center justify-between gap-3 rounded-lg border border-transparent bg-muted/20 px-3 py-2.5 text-sm transition hover:border-border hover:bg-muted/40"
-            >
-              <span className="min-w-0 truncate font-semibold text-foreground">
-                {workspace.workspace_name}
-              </span>
-              <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {workspace.effective_role.toLowerCase()}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    )}
+      {canCreate && (
+        <Link
+          to={createWorkspacePath(organization.organization_slug)}
+          className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New workspace
+        </Link>
+      )}
 
-    {canCreateWorkspace(organization.role) && (
-      <Link
-        to={createWorkspacePath(organization.organization_slug)}
-        className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New workspace
-      </Link>
-    )}
-  </section>
-);
+      {stranded && (
+        <button
+          type="button"
+          onClick={() => leave()}
+          disabled={isLeaving}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-destructive/50 hover:text-destructive disabled:opacity-60"
+        >
+          {isLeaving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <LogOut className="h-3.5 w-3.5" />
+          )}
+          {isLeaving ? "Leaving..." : "Leave organization"}
+        </button>
+      )}
+    </section>
+  );
+};
 
 export const WorkspacePicker: React.FC = () => {
   const location = useLocation();
-  const { state } = useTenant();
+  const { state, refresh } = useTenant();
 
   const unreachable = (location.state as UnreachableState | null)?.unreachable;
 
@@ -124,9 +146,6 @@ export const WorkspacePicker: React.FC = () => {
     return <Navigate to={ROUTES.ONBOARDING} replace />;
   }
 
-  // "error" resolves to an empty list below rather than a redirect: this page
-  // is already a safe landing place, and bouncing a failed bootstrap elsewhere
-  // would loop.
   const organizations =
     state.status === "ready" || state.status === "no_workspace"
       ? state.organizations
@@ -166,6 +185,7 @@ export const WorkspacePicker: React.FC = () => {
             <OrganizationCard
               key={organization.organization_id}
               organization={organization}
+              onLeft={refresh}
             />
           ))}
         </div>

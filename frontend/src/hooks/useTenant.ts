@@ -1,31 +1,21 @@
-/**
+﻿/**
  * The single source of truth for tenant context in the FlowPilot AI UI.
- *
- * Composes the bootstrap query with the persisted selection and returns a
- * discriminated TenantState. Every guard, switcher, and tenant-scoped page
- * reads from here.
- *
- * Consumers switch on `state.status`. Because TenantState is a discriminated
- * union, a consumer that omits a case fails to compile — which is the
- * structural difference from the boolean it replaces. The old guard could not
- * distinguish an expired session from a new user, so it defaulted to the most
- * destructive branch and sent both to organization creation.
  */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 
 import { useMeContext } from "@/hooks/useMeContext";
-import { resolveTenant } from "@/hooks/tenantResolution";
+import { NO_ROUTE_LOCATOR, resolveTenant } from "@/hooks/tenantResolution";
 import type { TenantState } from "@/hooks/tenantResolution";
+import { parseTenantPath } from "@/routes/tenantPaths";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useTenantStore } from "@/store/useTenantStore";
 
 export interface UseTenantResult {
   state: TenantState;
-  /** True while the context is refetching in the background. */
   isRefreshing: boolean;
   refresh: () => void;
-  /** Switches organization. Resolution picks the workspace. */
   selectOrganization: (organizationId: string) => void;
   selectWorkspace: (organizationId: string, workspaceId: string) => void;
 }
@@ -59,6 +49,15 @@ export const useTenant = (): UseTenantResult => {
     [activeOrganizationId, activeWorkspaceId, lastWorkspaceByOrganization],
   );
 
+  const { pathname } = useLocation();
+
+  const route = useMemo(() => {
+    const parsed = parseTenantPath(pathname);
+    return parsed
+      ? { orgSlug: parsed.orgSlug, workspaceSlug: parsed.workspaceSlug }
+      : NO_ROUTE_LOCATOR;
+  }, [pathname]);
+
   const state = useMemo(
     () =>
       resolveTenant({
@@ -68,21 +67,11 @@ export const useTenant = (): UseTenantResult => {
         error,
         context,
         selection,
+        route,
       }),
-    [isAuthenticated, isLoading, isUnauthorized, error, context, selection],
+    [isAuthenticated, isLoading, isUnauthorized, error, context, selection, route],
   );
 
-  // Self-healing write-back.
-  //
-  // Resolution falls back silently when a persisted identifier no longer
-  // resolves — a removed membership, an archived workspace. Persisting the
-  // resolved values means the next boot starts from a valid selection rather
-  // than repeating the fallback, and the switcher highlights what the user is
-  // actually looking at.
-  //
-  // Guarded by an inequality check, so this writes only when the resolved
-  // values genuinely differ from what is stored. Without the guard the store
-  // update would retrigger the effect and loop.
   useEffect(() => {
     if (state.status !== "ready") {
       return;
