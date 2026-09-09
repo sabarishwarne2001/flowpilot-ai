@@ -19,7 +19,7 @@ export default function InfoTooltip({
           <div>
             <h4 className="font-semibold text-white">{title}</h4>
 
-            <p className="mt-1 text-sm leading-relaxed text-slate-300">
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {description}
             </p>
           </div>
@@ -40,7 +40,7 @@ export default function InfoTooltip({
     >
       <button
         type="button"
-        className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         aria-label={`More information about ${title}`}
       >
         <Info size={15} strokeWidth={2.25} />

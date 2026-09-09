@@ -8,6 +8,8 @@ import {
   toMicros,
 } from "@/services/api/cogs";
 import { cogsKeys } from "@/services/api/queryKeys";
+import StatusPill from "@/components/ui/StatusPill";
+import { OVERLAY } from "@/components/ui/primitives";
 import {
   formatMicros,
   formatRatio,
@@ -170,9 +172,7 @@ export const ReconciliationHistory: React.FC<{
                 </div>
               </td>
               <td className="py-1.5 pr-3">
-                <span className="rounded border border-border px-1.5 py-0.5 text-[11px]">
-                  {run.status}
-                </span>
+                <StatusPill status={run.status} />
                 {run.note ? (
                   <div className="mt-0.5 max-w-[22ch] text-[11px] text-muted-foreground">
                     {run.note}
@@ -301,7 +301,7 @@ export const SupplierInvoiceModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+      className={OVERLAY}
       role="dialog"
       aria-modal="true"
       aria-labelledby="supplier-invoice-title"

@@ -49,7 +49,7 @@ import {
 type Tab = "book" | "ledger" | "payouts";
 
 const TONE_CLASS: Record<string, string> = {
-  slate: "bg-slate-100 text-slate-700 ring-slate-200",
+  slate: "bg-muted/60 text-foreground ring-border",
   emerald: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   amber: "bg-amber-50 text-amber-800 ring-amber-200",
 };
@@ -62,7 +62,7 @@ const StatusPill = ({ status }: { status: PayoutPeriod["status"] }) => {
         ? "bg-blue-50 text-blue-700 ring-blue-200"
         : status === "VOID"
           ? "bg-red-50 text-red-700 ring-red-200"
-          : "bg-slate-100 text-slate-600 ring-slate-200";
+          : "bg-muted/60 text-muted-foreground ring-border";
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${tone}`}
@@ -99,12 +99,12 @@ const Metric = ({
   value: string;
   hint?: string;
 }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-4">
-    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+  <div className="rounded-lg border border-border bg-card p-4">
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
     </p>
-    <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-    {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
+    {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
   </div>
 );
 
@@ -169,11 +169,11 @@ export default function PartnerPortal() {
   if (!partnerId) {
     return (
       <div className="mx-auto max-w-2xl p-12 text-center">
-        <Building2 className="mx-auto h-10 w-10 text-slate-300" />
-        <h1 className="mt-4 text-lg font-semibold text-slate-900">
+        <Building2 className="mx-auto h-10 w-10 text-muted-foreground" />
+        <h1 className="mt-4 text-lg font-semibold text-foreground">
           No partner account
         </h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-muted-foreground">
           Your user is not a member of a reseller partner. If you believe this
           is wrong, ask your partner owner to add you.
         </p>
@@ -186,10 +186,10 @@ export default function PartnerPortal() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-xl font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold text-foreground">
           {partner?.name}
         </h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           Book of business, revenue share and payout statements.
         </p>
       </header>
@@ -241,7 +241,7 @@ export default function PartnerPortal() {
         </div>
       ) : null}
 
-      <nav className="flex gap-1 border-b border-slate-200">
+      <nav className="flex gap-1 border-b border-border">
         {(
           [
             ["book", "Book of business", Building2],
@@ -255,8 +255,8 @@ export default function PartnerPortal() {
             onClick={() => setTab(key)}
             className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium ${
               tab === key
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-700"
+                ? "text-muted-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -266,18 +266,18 @@ export default function PartnerPortal() {
       </nav>
 
       {tab === "book" ? (
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-lg border border-border bg-card">
           {bookQuery.isLoading ? (
-            <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
+            <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading book…
             </div>
           ) : (bookQuery.data?.length ?? 0) === 0 ? (
-            <p className="p-6 text-sm text-slate-500">
+            <p className="p-6 text-sm text-muted-foreground">
               No client accounts assigned yet.
             </p>
           ) : (
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y text-muted-foreground text-sm">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2">Organization</th>
                   <th className="px-4 py-2">Slug</th>
@@ -285,16 +285,16 @@ export default function PartnerPortal() {
                   <th className="px-4 py-2">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y text-muted-foreground">
                 {bookQuery.data?.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="px-4 py-2 font-medium text-slate-900">
+                    <td className="px-4 py-2 font-medium text-foreground">
                       {entry.organization_name}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-2 text-muted-foreground">
                       {entry.organization_slug}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-2 text-muted-foreground">
                       {new Date(entry.effective_from).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">{entry.status}</td>
@@ -311,13 +311,13 @@ export default function PartnerPortal() {
           <div className="flex items-center gap-3">
             <label
               htmlFor="period"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-medium text-foreground"
             >
               Period
             </label>
             <select
               id="period"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
               value={effectivePeriodId ?? ""}
               onChange={(event) => setSelectedPeriodId(event.target.value)}
             >
@@ -330,7 +330,7 @@ export default function PartnerPortal() {
           </div>
 
           {statementQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading statement…
             </div>
           ) : statementQuery.data ? (
@@ -357,15 +357,15 @@ export default function PartnerPortal() {
                   </span>
                 </div>
               ) : (
-                <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                   This period is still a draft. It has no digest yet and its
                   figures can still change.
                 </p>
               )}
 
-              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <table className="min-w-full divide-y text-muted-foreground text-sm">
+                  <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2">Client</th>
                       <th className="px-4 py-2">Class</th>
@@ -376,10 +376,10 @@ export default function PartnerPortal() {
                       <th className="px-4 py-2 text-right">Payout</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y text-muted-foreground">
                     {statementQuery.data.lines.map((line) => (
                       <tr key={line.id}>
-                        <td className="px-4 py-2 font-medium text-slate-900">
+                        <td className="px-4 py-2 font-medium text-foreground">
                           {line.organization_name ?? line.organization_id}
                         </td>
                         <td className="px-4 py-2">
@@ -389,16 +389,16 @@ export default function PartnerPortal() {
                           {formatMicros(line.revenue_micros, currency)}
                         </td>
                         {/* null, not 0. */}
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-600">
+                        <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                           {formatMicros(line.supplier_cost_micros, currency)}
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-600">
+                        <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                           {formatMicros(line.margin_micros, currency)}
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-500">
+                        <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                           {formatBps(line.share_bps)}
                         </td>
-                        <td className="px-4 py-2 text-right font-medium tabular-nums text-slate-900">
+                        <td className="px-4 py-2 text-right font-medium tabular-nums text-foreground">
                           {formatMicros(line.payout_micros, currency)}
                         </td>
                       </tr>
@@ -408,24 +408,24 @@ export default function PartnerPortal() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-500">No statement selected.</p>
+            <p className="text-sm text-muted-foreground">No statement selected.</p>
           )}
         </section>
       ) : null}
 
       {tab === "payouts" ? (
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-lg border border-border bg-card">
           {payoutsQuery.isLoading ? (
-            <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
+            <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading statements…
             </div>
           ) : (payoutsQuery.data?.length ?? 0) === 0 ? (
-            <p className="p-6 text-sm text-slate-500">
+            <p className="p-6 text-sm text-muted-foreground">
               No payout periods computed yet.
             </p>
           ) : (
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y text-muted-foreground text-sm">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2">Period</th>
                   <th className="px-4 py-2">Status</th>
@@ -436,10 +436,10 @@ export default function PartnerPortal() {
                   <th className="px-4 py-2 text-right">Payout</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y text-muted-foreground">
                 {payoutsQuery.data?.map((period) => (
                   <tr key={period.id}>
-                    <td className="px-4 py-2 font-medium text-slate-900">
+                    <td className="px-4 py-2 font-medium text-foreground">
                       {period.period_start} — {period.period_end}
                     </td>
                     <td className="px-4 py-2">
@@ -448,7 +448,7 @@ export default function PartnerPortal() {
                     <td className="px-4 py-2 text-right tabular-nums">
                       {formatMicros(period.gross_revenue_micros, period.currency)}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-600">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {formatMicros(period.margin_micros, period.currency)}
                     </td>
                     {/* Invariant 4 on the statement list, not only inside it. */}
@@ -464,7 +464,7 @@ export default function PartnerPortal() {
                         period.currency,
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right font-medium tabular-nums text-slate-900">
+                    <td className="px-4 py-2 text-right font-medium tabular-nums text-foreground">
                       <span className="inline-flex items-center gap-1">
                         {period.status === "PAID" ? (
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />

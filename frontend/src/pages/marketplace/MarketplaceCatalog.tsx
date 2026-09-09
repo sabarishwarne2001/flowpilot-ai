@@ -47,8 +47,8 @@ const NODE_TONE: Record<ManifestNode["node_type"], string> = {
   trigger: "bg-blue-50 text-blue-700 ring-blue-200",
   condition: "bg-violet-50 text-violet-700 ring-violet-200",
   action: "bg-amber-50 text-amber-800 ring-amber-200",
-  branch: "bg-slate-100 text-slate-700 ring-slate-200",
-  join: "bg-slate-100 text-slate-700 ring-slate-200",
+  branch: "bg-muted/60 text-foreground ring-border",
+  join: "bg-muted/60 text-foreground ring-border",
 };
 
 export default function MarketplaceCatalog() {
@@ -126,10 +126,10 @@ export default function MarketplaceCatalog() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-xl font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold text-foreground">
           Partner marketplace
         </h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           Signed automation workflows published by FlowPilot partners. Every
           manifest is cryptographically verified before it can be installed.
         </p>
@@ -137,10 +137,10 @@ export default function MarketplaceCatalog() {
 
       {installationsQuery.data && installationsQuery.data.length > 0 ? (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-900">Installed</h2>
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <h2 className="text-sm font-semibold text-foreground">Installed</h2>
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <table className="min-w-full divide-y text-muted-foreground text-sm">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2">Workflow</th>
                   <th className="px-4 py-2">Version</th>
@@ -148,16 +148,16 @@ export default function MarketplaceCatalog() {
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y text-muted-foreground">
                 {installationsQuery.data.map((installation) => (
                   <tr key={installation.id}>
-                    <td className="px-4 py-2 font-medium text-slate-900">
+                    <td className="px-4 py-2 font-medium text-foreground">
                       {installation.item_name}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-2 text-muted-foreground">
                       {installation.manifest_version}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-2 text-muted-foreground">
                       {new Date(
                         installation.installed_at,
                       ).toLocaleDateString()}
@@ -168,7 +168,7 @@ export default function MarketplaceCatalog() {
                         onClick={() =>
                           uninstallMutation.mutate(installation.id)
                         }
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-muted/40"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Remove
@@ -183,13 +183,13 @@ export default function MarketplaceCatalog() {
       ) : null}
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-slate-900">Available</h2>
+        <h2 className="text-sm font-semibold text-foreground">Available</h2>
         {catalogQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…
           </div>
         ) : (catalogQuery.data?.length ?? 0) === 0 ? (
-          <p className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
+          <p className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
             No published workflows are available to your organization yet.
           </p>
         ) : (
@@ -197,36 +197,36 @@ export default function MarketplaceCatalog() {
             {catalogQuery.data?.map((item) => (
               <article
                 key={item.id}
-                className="flex flex-col rounded-lg border border-slate-200 bg-white p-4"
+                className="flex flex-col rounded-lg border border-border bg-card p-4"
               >
                 <div className="flex items-start gap-3">
-                  <Package className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
+                  <Package className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
-                    <h3 className="truncate font-medium text-slate-900">
+                    <h3 className="truncate font-medium text-foreground">
                       {item.name}
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {item.partner_name}
                       {item.latest_version ? ` · v${item.latest_version}` : ""}
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 flex-1 text-sm text-slate-600">
+                <p className="mt-3 flex-1 text-sm text-muted-foreground">
                   {item.summary ?? "No description provided."}
                 </p>
                 <div className="mt-4 flex items-center justify-between">
                   {item.visibility === "PARTNER_ONLY" ? (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">
+                    <span className="rounded-full bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-inset ring-border">
                       Private to your partner
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400">Public</span>
+                    <span className="text-xs text-muted-foreground">Public</span>
                   )}
                   <button
                     type="button"
                     disabled={item.installed || !item.latest_manifest_id}
                     onClick={() => setInspecting(item)}
-                    className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:bg-slate-200 disabled:text-slate-500"
+                    className="rounded-md text-muted-foreground px-3 py-1.5 text-xs font-medium text-white disabled:text-muted-foreground disabled:text-muted-foreground"
                   >
                     {item.installed ? "Installed" : "Review & install"}
                   </button>
@@ -238,20 +238,20 @@ export default function MarketplaceCatalog() {
       </section>
 
       {inspecting ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
-            <div className="border-b border-slate-200 p-5">
-              <h2 className="text-lg font-semibold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center text-muted-foreground/40 p-4">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-card shadow-xl">
+            <div className="border-b border-border p-5">
+              <h2 className="text-lg font-semibold text-foreground">
                 {inspecting.name}
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 {inspecting.partner_name} · v{inspecting.latest_version}
               </p>
             </div>
 
             <div className="space-y-4 p-5">
               {detailQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-slate-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Verifying
                   signature…
                 </div>
@@ -284,8 +284,8 @@ export default function MarketplaceCatalog() {
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <p>
                       Installing creates an automation rule in this workspace.
                       It is created <strong>disabled</strong>; review it in
@@ -294,14 +294,14 @@ export default function MarketplaceCatalog() {
                   </div>
 
                   <div>
-                    <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                    <h3 className="mb-2 text-sm font-semibold text-foreground">
                       What this workflow does
                     </h3>
                     <ul className="space-y-2">
                       {detailQuery.data.nodes.map((node) => (
                         <li
                           key={node.node_key}
-                          className="rounded-md border border-slate-200 p-2 text-sm"
+                          className="rounded-md border border-border p-2 text-sm"
                         >
                           <div className="flex items-center gap-2">
                             <span
@@ -311,12 +311,12 @@ export default function MarketplaceCatalog() {
                             >
                               {node.node_type}
                             </span>
-                            <span className="font-mono text-xs text-slate-600">
+                            <span className="font-mono text-xs text-muted-foreground">
                               {node.node_key}
                             </span>
                           </div>
                           {Object.keys(node.config).length > 0 ? (
-                            <pre className="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-700">
+                            <pre className="mt-2 overflow-x-auto rounded bg-muted/40 p-2 text-xs text-foreground">
                               {JSON.stringify(node.config, null, 2)}
                             </pre>
                           ) : null}
@@ -325,18 +325,18 @@ export default function MarketplaceCatalog() {
                     </ul>
                   </div>
 
-                  <p className="font-mono text-xs text-slate-400">
+                  <p className="font-mono text-xs text-muted-foreground">
                     {detailQuery.data.manifest.content_digest}
                   </p>
                 </>
               ) : null}
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-200 p-4">
+            <div className="flex justify-end gap-2 border-t border-border p-4">
               <button
                 type="button"
                 onClick={() => setInspecting(null)}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted/40"
               >
                 Cancel
               </button>
@@ -350,7 +350,7 @@ export default function MarketplaceCatalog() {
                   installMutation.isPending
                 }
                 onClick={() => installMutation.mutate()}
-                className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:bg-slate-200 disabled:text-slate-500"
+                className="inline-flex items-center gap-2 rounded-md text-muted-foreground px-3 py-1.5 text-sm font-medium text-white disabled:text-muted-foreground disabled:text-muted-foreground"
               >
                 {installMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

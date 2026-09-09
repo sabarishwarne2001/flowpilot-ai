@@ -171,11 +171,14 @@ export const STATUS_LABELS: Readonly<Record<CredentialStatus, string>> = {
 };
 
 export const STATUS_CLASSES: Readonly<Record<CredentialStatus, string>> = {
-  ACTIVE: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  INVALID: "bg-red-100 text-red-800 border-red-200",
-  UNVALIDATED: "bg-slate-100 text-slate-700 border-slate-200",
-  UNCONFIGURED: "bg-slate-100 text-slate-500 border-slate-200",
-  UNROUTABLE: "bg-amber-100 text-amber-900 border-amber-200",
+  ACTIVE:
+    "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400",
+  INVALID:
+    "bg-destructive/10 text-destructive border-destructive/30 dark:text-red-400",
+  UNVALIDATED: "bg-muted/60 text-foreground border-border",
+  UNCONFIGURED: "bg-muted/60 text-muted-foreground border-border",
+  UNROUTABLE:
+    "bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400",
 };
 
 export const TASK_ORDER: readonly BYOKTaskType[] = [

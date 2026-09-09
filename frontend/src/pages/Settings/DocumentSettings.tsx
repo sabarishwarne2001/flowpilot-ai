@@ -137,7 +137,7 @@ export const DocumentSettings: React.FC = () => {
 
         <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">
           <h3 className="text-sm font-semibold text-blue-300">Ingestion & Processing Parameters</h3>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="mt-2 text-sm text-muted-foreground">
             These parameters control how uploaded files are processed, vectorized, and parsed.
           </p>
         </div>

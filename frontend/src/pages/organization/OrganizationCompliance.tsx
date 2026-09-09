@@ -22,6 +22,8 @@ import {
   updateRetentionPolicy,
 } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
+import StatusPill from "@/components/ui/StatusPill";
+import { OVERLAY } from "@/components/ui/primitives";
 import { ErasureImpactPreview } from "@/components/organization/ErasureImpactPreview";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
@@ -443,9 +445,7 @@ const ExportsCard: React.FC<{
                 <tr key={record.id} className="border-t border-border">
                   <td className="py-2 pr-4">{formatDate(record.created_at)}</td>
                   <td className="py-2 pr-4">
-                    <span className="rounded border border-border px-1.5 py-0.5 text-[11px]">
-                      {record.status}
-                    </span>
+                    <StatusPill status={record.status} />
                     {record.error_message ? (
                       <span className="ml-2 text-xs text-destructive">
                         {record.error_message}
@@ -534,7 +534,7 @@ const ErasureModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={OVERLAY}
       role="dialog"
       aria-modal="true"
       aria-labelledby="erasure-title"

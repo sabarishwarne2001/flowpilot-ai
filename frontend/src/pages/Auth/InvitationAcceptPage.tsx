@@ -32,13 +32,15 @@ const stashToken = (token: string): void => {
       TOKEN_STASH_KEY,
       JSON.stringify({ token, at: Date.now() }),
     );
-  } catch {}
+  } catch {
+    // Storage unavailable
+  }
 };
 
 const readStashedToken = (): string | null => {
   try {
     const raw = window.sessionStorage.getItem(TOKEN_STASH_KEY);
-    if (!raw) return null;
+    if (!raw) { return null; }
     const parsed = JSON.parse(raw) as { token?: unknown; at?: unknown };
     if (
       typeof parsed.token !== "string" ||
@@ -57,7 +59,9 @@ const readStashedToken = (): string | null => {
 const clearStashedToken = (): void => {
   try {
     window.sessionStorage.removeItem(TOKEN_STASH_KEY);
-  } catch {}
+  } catch {
+    // Storage unavailable
+  }
 };
 
 const stripCredentialFromAddressBar = (): void => {
@@ -100,8 +104,8 @@ export const InvitationAcceptPage: React.FC = () => {
   });
 
   const resolvedPhase: Phase = useMemo(() => {
-    if (phase) return phase;
-    if (!token) return "invalid";
+    if (phase) { return phase; }
+    if (!token) { return "invalid"; }
 
     if (previewError instanceof ApiError) {
       return previewError.code === API_ERROR_CODES.INVITATION_EXPIRED
@@ -109,9 +113,9 @@ export const InvitationAcceptPage: React.FC = () => {
         : "invalid";
     }
 
-    if (previewError) return "invalid";
+    if (previewError) { return "invalid"; }
 
-    if (preview && !isAuthenticated) return "auth_required";
+    if (preview && !isAuthenticated) { return "auth_required"; }
 
     if (
       preview &&
@@ -136,7 +140,7 @@ export const InvitationAcceptPage: React.FC = () => {
   }, [resolvedPhase]);
 
   const previewMessage = useMemo(() => {
-    if (previewError instanceof ApiError) return previewError.message;
+    if (previewError instanceof ApiError) { return previewError.message; }
     if (!token) {
       return "The secure invitation token is missing from the link. Open the link from your invitation email again.";
     }
@@ -200,7 +204,7 @@ export const InvitationAcceptPage: React.FC = () => {
   });
 
   const handleAuthRedirect = (targetRoute: string): void => {
-    if (token) stashToken(token);
+    if (token) { stashToken(token); }
     navigate(
       `${targetRoute}?redirect=${encodeURIComponent(ROUTES.INVITATION_ACCEPT)}`,
     );

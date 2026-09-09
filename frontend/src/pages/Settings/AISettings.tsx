@@ -211,7 +211,7 @@ export const AISettings: React.FC = () => {
 
         <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">
           <h3 className="text-sm font-semibold text-blue-300">Advanced AI Parameters</h3>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="mt-2 text-sm text-muted-foreground">
             These settings control how the AI model behaves. The default values are optimized for most business workflows.
           </p>
         </div>

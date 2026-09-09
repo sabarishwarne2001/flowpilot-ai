@@ -69,14 +69,14 @@ export default function Tooltip({ content, children }: TooltipProps) {
             w-72
             rounded-xl
             border
-            border-slate-700/80
-            bg-slate-900/95
+            border-border/80
+            bg-popover/95
             backdrop-blur-md
             p-4
             shadow-2xl
             text-sm
             leading-relaxed
-            text-slate-200
+            text-popover-foreground
           "
         >
           <div>{content}</div>
