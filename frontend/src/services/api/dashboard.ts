@@ -1,4 +1,4 @@
-import apiClient from "@/services/api/client";
+﻿import apiClient from "@/services/api/client";
 import { DASHBOARD_ENDPOINTS } from "@/services/api/endpoints";
 import type { DashboardMetricsResponse } from "@/types/dashboard";
 
@@ -14,7 +14,5 @@ export const getDashboardOverview = async (
   return response.data;
 };
 
-export const getDashboardHealth = async (): Promise<void> => Promise.resolve();
-
-export const dashboardApi = { getDashboardOverview, getDashboardHealth };
+export const dashboardApi = { getDashboardOverview };
 export default dashboardApi;

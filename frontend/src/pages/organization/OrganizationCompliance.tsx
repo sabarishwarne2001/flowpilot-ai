@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback,  useMemo, useState  } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import {
   updateRetentionPolicy,
 } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
+import { ErasureImpactPreview } from "@/components/organization/ErasureImpactPreview";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
   formatBytes,
@@ -496,6 +497,12 @@ const ErasureModal: React.FC<{
   const [ticket, setTicket] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [typedPhrase, setTypedPhrase] = useState("");
+  const [previewedSubject, setPreviewedSubject] = useState<string | null>(null);
+
+  const handlePreviewedSubjectChange = useCallback(
+    (next: string | null) => setPreviewedSubject(next),
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const PHRASE = "ERASE";
@@ -515,11 +522,15 @@ const ErasureModal: React.FC<{
     onError: (err) => setError(errorMessage(err)),
   });
 
+  const previewIsCurrent =
+    previewedSubject !== null && previewedSubject === subjectUserId.trim();
+
   const ready =
     subjectUserId.trim().length > 0 &&
     ticket.trim().length > 0 &&
     confirmEmail.trim().length > 0 &&
-    typedPhrase === PHRASE;
+    typedPhrase === PHRASE &&
+    previewIsCurrent;
 
   return (
     <div
@@ -560,6 +571,13 @@ const ErasureModal: React.FC<{
               placeholder="00000000-0000-0000-0000-000000000000"
             />
           </div>
+
+          <ErasureImpactPreview
+            organizationId={organizationId}
+            subjectUserId={subjectUserId}
+            disabled={mutation.isPending}
+            onPreviewedSubjectChange={handlePreviewedSubjectChange}
+          />
           <div>
             <label className={LABEL} htmlFor="erasure-email">
               Confirm their email address

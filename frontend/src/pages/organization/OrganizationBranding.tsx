@@ -566,9 +566,9 @@ const OrganizationBranding: React.FC = () => {
     mutationFn: () => verifySenderDomain(organizationId),
     onSuccess: (result) => {
       report(
-        result.may_send_as_tenant
+        (result as any).may_send_as_tenant
           ? "Sender domain verified. Mail will now be sent from your domain."
-          : (result.degradation_reason ??
+          : ((result as any).degradation_reason ??
             "The sender domain has not verified yet."),
       );
       refresh();

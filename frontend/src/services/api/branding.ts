@@ -1,7 +1,6 @@
-import apiClient from "@/services/api/client";
+﻿import apiClient from "@/services/api/client";
 import { BRANDING_ENDPOINTS } from "@/services/api/endpoints";
 import type {
-  BrandingManifest,
   CertificateStatusResponse,
   CustomDomainCreate,
   CustomDomainDetail,
@@ -149,8 +148,6 @@ const uploadAsset = async (
 ): Promise<TenantBrandingResponse> => {
   const form = new FormData();
   form.append("file", file);
-  // No explicit Content-Type: the browser has to set the multipart boundary,
-  // and overriding it here produces a request the server cannot parse.
   const response = await apiClient.post<TenantBrandingResponse>(url, form);
   return response.data;
 };
@@ -205,21 +202,6 @@ export const verifySenderDomain = async (
   const response = await apiClient.post<SenderDomainStatusResponse>(
     BRANDING_ENDPOINTS.verifySenderDomain(organizationId),
     undefined,
-    { headers: JSON_HEADERS },
-  );
-  return response.data;
-};
-
-/**
- * The unauthenticated, host-resolved theme payload.
- *
- * Takes no organization id: the tenant is decided entirely by the Host the
- * browser sent. Adding a parameter here would be adding one to an endpoint
- * that must not have one.
- */
-export const getBrandingManifest = async (): Promise<BrandingManifest> => {
-  const response = await apiClient.get<BrandingManifest>(
-    BRANDING_ENDPOINTS.manifest,
     { headers: JSON_HEADERS },
   );
   return response.data;

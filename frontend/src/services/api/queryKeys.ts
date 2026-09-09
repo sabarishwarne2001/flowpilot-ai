@@ -110,6 +110,12 @@ export const complianceKeys = {
     [...complianceKeys.all(organizationId), "retention"] as const,
   erasures: (organizationId: string) =>
     [...complianceKeys.all(organizationId), "erasures"] as const,
+  erasurePreview: (organizationId: string, subjectUserId: string) =>
+    [
+      ...complianceKeys.all(organizationId),
+      "erasure-preview",
+      subjectUserId,
+    ] as const,
   exports: (organizationId: string) =>
     [...complianceKeys.all(organizationId), "exports"] as const,
 };
