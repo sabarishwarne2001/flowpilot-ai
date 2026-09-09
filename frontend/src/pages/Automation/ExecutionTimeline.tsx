@@ -23,6 +23,7 @@ import type {
 } from "@/services/api/executions";
 import { workspaceScope } from "@/services/api/queryKeys";
 import { formatMicros } from "@/types/billing";
+import { pollUnlessRefused } from "@/services/api/polling";
 
 const TONE_CLASSES: Record<string, string> = {
   ok: "border-emerald-500/40 bg-emerald-500/5",
@@ -72,7 +73,7 @@ export const ExecutionTimeline: React.FC = () => {
       }),
     enabled: Boolean(workspaceId),
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    refetchInterval: pollUnlessRefused(30_000),
   });
 
   const chains = useMemo(() => {

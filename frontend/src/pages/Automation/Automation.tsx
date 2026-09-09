@@ -32,6 +32,7 @@ import { formatCostMicros, formatDurationMs } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { automationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
+import { pollUnlessRefused } from "@/services/api/polling";
 import {
   Select,
   SelectTrigger,
@@ -128,7 +129,7 @@ export const Automation: React.FC = () => {
     queryFn: () => automationApi.getAutomationLogs(workspaceId!),
     enabled: Boolean(workspaceId),
     staleTime: 5000,
-    refetchInterval: 5000,
+    refetchInterval: pollUnlessRefused(5000),
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     placeholderData: keepPreviousWithinWorkspace<readonly AutomationLog[]>(workspaceId!),

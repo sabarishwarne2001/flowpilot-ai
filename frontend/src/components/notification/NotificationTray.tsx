@@ -21,6 +21,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { notificationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import type { Notification } from "@/types/notification";
+import { pollUnlessRefused } from "@/services/api/polling";
 
 interface NotificationTrayProps {
   readonly isOpen: boolean;
@@ -53,7 +54,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
     queryFn: () => notificationApi.getNotifications(workspaceId!),
     enabled: Boolean(workspaceId),
     staleTime: 5_000,
-    refetchInterval: 5_000,
+    refetchInterval: pollUnlessRefused(5_000),
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     placeholderData: keepPreviousWithinWorkspace<readonly Notification[]>(workspaceId!),

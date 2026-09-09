@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { createPortalSession, getBillingAccess } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
+import { pollUnlessRefused } from "@/services/api/polling";
 
 const HEALTHY_STATES = new Set(["ACTIVE", "OK", "CURRENT", "TRIALING"]);
 
@@ -22,7 +23,7 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
     queryKey: billingKeys.access(organizationId),
     queryFn: () => getBillingAccess(organizationId),
     enabled: Boolean(organizationId),
-    refetchInterval: 60_000,
+    refetchInterval: pollUnlessRefused(60_000),
     refetchOnWindowFocus: true,
     staleTime: 30_000,
   });

@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useMemo } from "react";
-import { Navigate, Outlet, useParams } from "react-router-dom";
+import React, { createContext, useContext, useEffect, useMemo } from "react";
+import { Navigate, Outlet, useLocation, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { LoadingScreen } from "@/components/common/LoadingScreen";
 import { useTenant } from "@/hooks/useTenant";
 import { ROUTES } from "@/constants/routes";
+import { organizationSettingsPath } from "@/routes/tenantPaths";
 import type { OrganizationMembershipSummary } from "@/types/tenancy";
 
 export interface ResolvedOrganization {
@@ -27,6 +29,7 @@ export const useResolvedOrganization = (): ResolvedOrganization => {
 export const OrganizationGuard: React.FC = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { state } = useTenant();
+  const location = useLocation();
 
   const organizations = useMemo<OrganizationMembershipSummary[]>(
     () =>
@@ -64,6 +67,50 @@ export const OrganizationGuard: React.FC = () => {
 
   if (!resolved) {
     return <Navigate to={ROUTES.WORKSPACES} replace />;
+  }
+
+  return (
+    <ArchivedOrganizationGate
+      resolved={resolved}
+      pathname={location.pathname}
+    />
+  );
+};
+
+/**
+ * Narrows an archived organization to its General page.
+ *
+ * An archived organization is readable, not operable. Its records survive on
+ * purpose -- that is the entire argument for archiving rather than deleting --
+ * so General must stay reachable to show the status and the retention notice.
+ * Every other console under this shell (Billing, Members, BYOK, Analytics,
+ * Compliance) issues writes or queries that `deps.OrgContext` refuses, and a
+ * page whose every request 403s is a worse answer than being told why.
+ *
+ * A separate component because the toast is a side effect and side effects
+ * belong in an effect. Firing it inline in a render path means React
+ * StrictMode's double-invoke shows it twice in development -- a real bug that
+ * reads as a rendering glitch and gets "fixed" by disabling StrictMode.
+ */
+const ArchivedOrganizationGate: React.FC<{
+  resolved: ResolvedOrganization;
+  pathname: string;
+}> = ({ resolved, pathname }) => {
+  const isArchived = resolved.organization.organization_status !== "ACTIVE";
+  const generalPath = organizationSettingsPath(
+    resolved.organization.organization_slug,
+  );
+  const isOnGeneral = pathname === generalPath;
+  const shouldRedirect = isArchived && !isOnGeneral;
+
+  useEffect(() => {
+    if (shouldRedirect) {
+      toast.info("This organization is archived. Records are read-only.");
+    }
+  }, [shouldRedirect]);
+
+  if (shouldRedirect) {
+    return <Navigate to={generalPath} replace />;
   }
 
   return (

@@ -13,9 +13,11 @@ import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
 import {
   archiveWorkspace,
+  changeWorkspaceMemberRole,
   getWorkspaceById,
   leaveWorkspace,
   listWorkspaceMembers,
+  removeWorkspaceLogo,
   restoreWorkspace,
   revokeWorkspaceAccess,
   updateWorkspaceById,
@@ -70,6 +72,7 @@ export const Workspace: React.FC = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
@@ -325,6 +328,82 @@ export const Workspace: React.FC = () => {
     });
   };
 
+  /**
+   * Clears the workspace logo.
+   *
+   * `removeWorkspaceLogo` has existed and been unreachable: there was an
+   * Upload button and no way to undo it, so a workspace that uploaded the
+   * wrong image could only replace it, never go back to none.
+   *
+   * The local preview is cleared first, before awaiting. The image is served
+   * through useAuthenticatedImage from a URL that stops resolving the moment
+   * the server drops the object, so leaving the preview up during the request
+   * shows a broken image for as long as the round trip takes.
+   */
+  const { mutate: removeLogo, isPending: isRemovingLogo } = useMutation({
+    mutationFn: () => removeWorkspaceLogo(workspaceId),
+    onMutate: () => {
+      setLogoPreview(null);
+      setValue("company_logo_url", "", { shouldDirty: false });
+    },
+    onSuccess: () => {
+      toast.success("Logo removed.");
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "detail", workspaceId],
+      });
+    },
+    onError: (error: unknown) => {
+      // Put the preview back. The object is still there if the delete failed,
+      // and leaving the UI showing "no logo" would be a lie the next reload
+      // contradicts.
+      setLogoPreview(workspaceDetail?.company_logo_url ?? null);
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Could not remove the logo. Please try again.",
+      );
+    },
+  });
+
+  /**
+   * Changes one member's workspace role.
+   *
+   * `changeWorkspaceMemberRole` was the other unreachable mutation: the table
+   * rendered `mem.role` as static text, so the only way to correct a role was
+   * to remove the person and re-add them -- which loses their membership row
+   * and any audit continuity attached to it.
+   *
+   * Derived members are excluded at the call site rather than here. Their role
+   * comes from an organization role, not a workspace grant, so there is no
+   * membership row to patch; changing it means changing their organization
+   * role on the members page.
+   */
+  const { mutate: changeRole, isPending: isChangingRole } = useMutation({
+    mutationFn: ({
+      membershipId,
+      role,
+    }: {
+      membershipId: string;
+      role: WorkspaceRole;
+    }) => changeWorkspaceMemberRole(workspaceId, membershipId, { role }),
+    onSuccess: (updated) => {
+      toast.success(`Role updated to ${updated.role.toLowerCase()}.`);
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "members", workspaceId],
+      });
+    },
+    onError: (error: unknown) => {
+      // Surfaced verbatim: the server refuses privilege escalation and
+      // last-admin demotion with specific messages, and both tell the actor
+      // something a generic string cannot.
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Could not change this member's role. Please try again.",
+      );
+    },
+  });
+
   const assignableRoles = useMemo(() => {
     const candidates: WorkspaceRole[] = ["VIEWER", "CONTRIBUTOR", "ADMIN"];
     return candidates.filter((role) =>
@@ -416,6 +495,17 @@ export const Workspace: React.FC = () => {
                 >
                   Upload Logo
                 </button>
+
+                {logoPreview && (
+                  <button
+                    type="button"
+                    disabled={!canEditWorkspace || isRemovingLogo}
+                    onClick={() => removeLogo()}
+                    className="rounded-lg border border-transparent px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    {isRemovingLogo ? "Removing…" : "Remove Logo"}
+                  </button>
+                )}
               </div>
 
               <input
@@ -593,11 +683,54 @@ export const Workspace: React.FC = () => {
                       {mem.user.email} {isSelf && "(You)"}
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">
-                      {mem.role}
-                      {mem.is_derived && (
-                        <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground/70">
-                          via {mem.organization_role?.toLowerCase()} role
-                        </span>
+                      {/*
+                        Editable only for a real membership row the actor may
+                        assign. A derived member has no row to patch, and
+                        assignableRoles is already filtered by
+                        canAssignWorkspaceRole -- the same predicate the server
+                        enforces -- so the dropdown cannot offer a role the
+                        request would be refused for.
+                      */}
+                      {canManageTeam && !mem.is_derived && mem.id ? (
+                        <select
+                          value={mem.role}
+                          disabled={isChangingRole}
+                          onChange={(event) =>
+                            changeRole({
+                              membershipId: mem.id as string,
+                              role: event.target.value as WorkspaceRole,
+                            })
+                          }
+                          className="rounded-lg border border-border bg-background px-2 py-1 text-xs font-semibold uppercase text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                          aria-label={`Workspace role for ${mem.user.email}`}
+                        >
+                          {/*
+                            The member's CURRENT role is always present, even
+                            when it is outside assignableRoles. Omitting it
+                            would make the select render blank for anyone
+                            holding a role this actor cannot grant, which reads
+                            as data loss.
+                          */}
+                          {Array.from(
+                            new Set<WorkspaceRole>([
+                              mem.role as WorkspaceRole,
+                              ...assignableRoles,
+                            ]),
+                          ).map((role) => (
+                            <option key={role} value={role}>
+                              {role.charAt(0) + role.slice(1).toLowerCase()}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          {mem.role}
+                          {mem.is_derived && (
+                            <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground/70">
+                              via {mem.organization_role?.toLowerCase()} role
+                            </span>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="py-3.5 px-4">

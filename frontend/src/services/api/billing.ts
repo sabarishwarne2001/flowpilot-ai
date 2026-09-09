@@ -246,26 +246,18 @@ export const syncSeats = async (
   return response.data;
 };
 
-export const billingApi = {
-  getPlans,
-  getSubscriptionState,
-  getBillingAccess,
-  getUsageSummary,
-  getUsageSeries,
-  getUsageLimits,
-  setSpendLimit,
-  getWorkspaceUsageSummary,
-  getWorkspaceUsageSeries,
-  getInvoices,
-  getInvoice,
-  getInvoiceReproduction,
-  createCheckoutSession,
-  createPortalSession,
-  syncSeats,
-} as const;
-
-export default billingApi;
-
+/*
+ * The billingApi namespace wrapper was removed here, with its default export.
+ *
+ * It was an object literal re-exporting the named functions above, and it had
+ * exactly two references in the whole repository: its own declaration and its
+ * own `export default`. Every consumer imports the standalone functions
+ * directly, which is why it could sit here for months looking like API
+ * surface while being reachable from nothing.
+ *
+ * Safe to delete precisely because of that count -- anything importing it
+ * would have appeared in the same grep that found it dead.
+ */
 /**
  * ARCH-24 Tranche 4 — what one more seat costs, straight from the backend.
  *

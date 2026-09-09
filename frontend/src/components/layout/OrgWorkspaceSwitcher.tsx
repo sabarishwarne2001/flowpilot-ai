@@ -53,14 +53,39 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
     setOpen(false);
   }, [location.pathname]);
 
-  const totalWorkspaces = useMemo(
-    () => organizations.reduce((sum, org) => sum + org.workspaces.length, 0),
+  // Only ACTIVE organizations are switchable.
+  //
+  // This dropdown is the one place inside the app that offers a jump into
+  // another tenant, and an archived one cannot be entered: TenantGuard turns
+  // it away and deps.OrgContext refuses every request underneath. Listing it
+  // offers a destination that does not exist -- the actor clicks, the app
+  // bounces them to the picker, and nothing explains why.
+  //
+  // The workspace picker at /workspaces still shows archived organizations,
+  // greyed and inert. That is the right place for them: it is an inventory of
+  // what you belong to, whereas this is a control for going somewhere.
+  const switchableOrganizations = useMemo(
+    () =>
+      organizations.filter((org) => org.organization_status === "ACTIVE"),
     [organizations],
+  );
+
+  const totalWorkspaces = useMemo(
+    () =>
+      switchableOrganizations.reduce(
+        (sum, org) => sum + org.workspaces.length,
+        0,
+      ),
+    [switchableOrganizations],
   );
 
   const canCreate = canCreateWorkspace(organizationRole);
 
-  if (totalWorkspaces <= 1 && organizations.length <= 1 && !canCreate) {
+  if (
+    totalWorkspaces <= 1 &&
+    switchableOrganizations.length <= 1 &&
+    !canCreate
+  ) {
     return null;
   }
 
@@ -128,7 +153,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
           role="listbox"
           className="absolute left-3 right-3 z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-card p-1.5 shadow-lg"
         >
-          {organizations.map((org) => (
+          {switchableOrganizations.map((org) => (
             <div key={org.organization_id} className="mb-1 last:mb-0">
               <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {org.organization_name}

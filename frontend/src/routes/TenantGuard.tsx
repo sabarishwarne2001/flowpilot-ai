@@ -175,6 +175,33 @@ export const TenantGuard: React.FC = () => {
         );
       }
 
+      // ARCHIVED / SUSPENDED organizations never mount the dashboard.
+      //
+      // Reconciliation asks "can this actor reach this tenant", which is a
+      // membership question, and membership survives archiving -- so a URL
+      // into an archived organization resolved as `render` and mounted
+      // DashboardLayout. Every query underneath then fired against
+      // deps.OrgContext, which refuses any non-ACTIVE organization, and the
+      // actor got a dashboard frame full of failures instead of an answer.
+      //
+      // Refusing here rather than letting each query fail is the difference
+      // between one redirect and thirty 403s. It also matters for the rate
+      // limiter: the pollers below this point (notifications at 5s,
+      // automation at 5s) would otherwise keep asking forever.
+      //
+      // Reusing the `unreachable` channel is deliberate. The picker already
+      // renders a notice for it, and "you asked for a tenant you cannot open"
+      // is exactly what an archived organization is from here.
+      if (reconciliation.organization.organization_status !== "ACTIVE") {
+        return (
+          <Navigate
+            to={ROUTES.WORKSPACES}
+            replace
+            state={{ unreachable: "organization" }}
+          />
+        );
+      }
+
       return (
         <TenantContextProvider
           value={{

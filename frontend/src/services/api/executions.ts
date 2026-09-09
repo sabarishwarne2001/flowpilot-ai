@@ -161,9 +161,15 @@ export const EXECUTION_STATUS_PRESENTATION: Record<
   },
 };
 
-export const executionApi = {
-  listExecutions,
-  getExecution,
-} as const;
-
-export default executionApi;
+/*
+ * The executionApi namespace wrapper was removed here, with its default export.
+ *
+ * It was an object literal re-exporting the named functions above, and it had
+ * exactly two references in the whole repository: its own declaration and its
+ * own `export default`. Every consumer imports the standalone functions
+ * directly, which is why it could sit here for months looking like API
+ * surface while being reachable from nothing.
+ *
+ * Safe to delete precisely because of that count -- anything importing it
+ * would have appeared in the same grep that found it dead.
+ */
