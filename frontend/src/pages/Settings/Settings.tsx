@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   Building2,
   Cpu,
@@ -51,7 +51,7 @@ const ACCOUNT_SECTIONS = new Set<SettingsSection>(["profile", "sessions"]);
 const SETTINGS_TABS: readonly TabConfig[] = [
   { id: "profile", label: "Profile", icon: UserRound },
   { id: "workspace", label: "Workspace", icon: Building2 },
-  { id: "email", label: "Email", icon: Mail },
+  { id: "email", label: "Automation email", icon: Mail },
   { id: "ai", label: "AI Settings", icon: Cpu },
   { id: "document", label: "Document Settings", icon: FileText },
   { id: "sessions", label: "Active sessions", icon: MonitorSmartphone },

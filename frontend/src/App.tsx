@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+﻿import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
   useParams,
@@ -30,6 +31,9 @@ const OrganizationWebhooks = lazy(
 );
 const OrganizationEmailSettings = lazy(
   () => import("@/pages/organization/OrganizationEmailSettings"),
+);
+const OrganizationGeneral = lazy(
+  () => import("@/pages/organization/OrganizationGeneral"),
 );
 const OrganizationNotifications = lazy(
   () => import("@/pages/organization/OrganizationNotifications"),
@@ -214,6 +218,28 @@ export default function App() {
                   element={<OrganizationGuard />}
                 >
                   <Route element={<OrganizationLayout />}>
+                    {/*
+                      ARCH-01. General is the organization's own settings page
+                      and the home of the archive flow. ROUTE_PATTERNS
+                      .organizationSettings and organizationSettingsPath() both
+                      already existed in tenantPaths.ts with nothing mounted on
+                      them; this fills the slot rather than inventing a path.
+
+                      The index redirect gives /organizations/:orgSlug a
+                      destination. Before this it matched the shell, rendered
+                      the layout, and left an empty <main> — a blank screen
+                      reachable from any hand-edited URL.
+                    */}
+                    <Route
+                      index
+                      element={
+                        <Navigate to={ROUTE_PATTERNS.organizationSettings} replace />
+                      }
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.organizationSettings}
+                      element={<OrganizationGeneral />}
+                    />
                     <Route
                       path={ROUTE_PATTERNS.organizationMembers}
                       element={<OrganizationMembers />}

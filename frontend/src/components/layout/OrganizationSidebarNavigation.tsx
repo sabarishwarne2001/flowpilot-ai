@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
@@ -38,7 +38,7 @@ const OrganizationSidebarNavigation: React.FC<OrganizationSidebarNavigationProps
 
   return (
     <nav
-      className="flex h-full min-h-0 flex-col px-3 py-5 overflow-y-auto overflow-x-hidden"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5"
       aria-label="Organization Navigation"
     >
       <NavLink

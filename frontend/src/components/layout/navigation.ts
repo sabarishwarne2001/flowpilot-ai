@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+﻿import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Bell,
@@ -40,6 +40,7 @@ import {
   organizationIdentityPath,
   organizationMembersPath,
   organizationNotificationsPath,
+  organizationSettingsPath,
   organizationSLOsPath,
   organizationWebhooksPath,
   platformMarginsPath,
@@ -98,6 +99,16 @@ export const buildOrganizationNavigationItems = (
   const role = String(organizationRole).toUpperCase();
   const items: NavigationItem[] = [];
 
+  // General is first for everyone. It is the organization's own settings page
+  // and, for an OWNER, the only route to the archive flow. Placing it below
+  // role-gated entries would put the lifecycle control underneath the things
+  // whose lifecycle it governs.
+  items.push({
+    name: "General",
+    path: organizationSettingsPath(orgSlug),
+    icon: Settings,
+  });
+
   items.push({
     name: "Notifications",
     path: organizationNotificationsPath(orgSlug),
@@ -111,7 +122,7 @@ export const buildOrganizationNavigationItems = (
       icon: Users,
     });
     items.push({
-      name: "Email delivery",
+      name: "Transactional email",
       path: organizationEmailPath(orgSlug),
       icon: Mail,
     });

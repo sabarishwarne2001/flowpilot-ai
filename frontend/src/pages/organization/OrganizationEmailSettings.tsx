@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, Mail, Send, ShieldAlert, XCircle } from "lucide-react";
 
@@ -152,10 +152,34 @@ export const OrganizationEmailSettings: React.FC = () => {
         <header>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
             <Mail className="h-5 w-5" />
-            Email delivery
+            Organization Transactional Email
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name} · Configure custom SMTP for outgoing mail.
+            {organization.organization_name} · Configures custom SMTP delivery
+            for team invitations, password resets, and security notices.
+          </p>
+          {/*
+            ARCH-06. Two SMTP screens exist and both said "email settings",
+            which is why members could not tell them apart. They are not
+            duplicates and neither is redundant:
+
+              organization_email_settings — THIS screen. System and
+              transactional mail: invitations, password resets, email-change
+              handshakes, security notices. Sent to people, about their
+              account.
+
+              email_settings (workspace) — Settings -> Email inside a
+              workspace. Outbound mail for ARCH-13 automation `email.send`
+              actions. Sent by a workflow, about a document.
+
+            The distinction that matters operationally: if this screen is
+            misconfigured nobody can join or recover an account. If the
+            workspace one is, automations stop alerting. Different blast
+            radius, different owner, different screen.
+          */}
+          <p className="mt-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            Automation alerts are configured separately, per workspace, under
+            Settings → Email.
           </p>
         </header>
 

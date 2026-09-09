@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -135,9 +135,26 @@ export const EmailSettings: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">Email Settings</h1>
+        {/*
+          ARCH-06 / ARCH-13. This is the AUTOMATION sender, not the account
+          sender. See the note on OrganizationEmailSettings for the split.
+
+          One limitation is worth stating rather than hiding: the workspace
+          `email_settings` model carries `sender_name` but no `sender_email`,
+          so this screen can change the display name on an automation alert
+          and not the address it arrives from. A workspace that needs its own
+          FROM address cannot express that yet — that needs a migration
+          adding the column, not a field on this form.
+        */}
+        <h1 className="text-2xl font-bold">Automation Action Dispatch SMTP</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Configure SMTP settings used to send automation emails.
+          Configures the dedicated outgoing mail server used by Automation DAG
+          workflow actions (<code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">email.send</code>).
+        </p>
+        <p className="mt-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          This does not affect invitations, password resets or security
+          notices. Those use the organization&rsquo;s transactional email
+          settings.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
