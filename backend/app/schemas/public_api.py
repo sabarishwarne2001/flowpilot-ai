@@ -1,15 +1,4 @@
-"""ARCH-21 §4.4 — the public gateway's request and response contracts.
-
-These are a PUBLIC contract in the versioning sense: external code depends on
-the field names, and removing or renaming one is a breaking change that needs
-the `Sunset` / `Deprecation` header machinery in `app/api/v1/public/gateway.py`,
-not a patch release. Additions are safe; subtractions are not.
-
-Every response carries `RateLimitSnapshot`. Putting the budget in the body as
-well as the headers is redundant on purpose — the headers are the standard and
-the SDKs read them, but a developer debugging through a proxy that strips
-non-safelisted headers has otherwise no way to see why they were throttled.
-"""
+﻿"""ARCH-21 §4.4 — the public gateway's request and response contracts."""
 
 from __future__ import annotations
 
@@ -21,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RateLimitSnapshot(BaseModel):
-    """The caller's remaining budget, mirrored from the response headers."""
-
     tier: str = Field(description="Rate tier that produced these numbers.")
     limit: int = Field(description="Requests permitted per minute.")
     remaining: int = Field(description="Requests left in the current window.")
@@ -61,6 +48,8 @@ class PublicDocumentResponse(BaseModel):
 
 
 class PublicQueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     workspace_id: uuid.UUID = Field(
         description=(
             "Workspace to search. Must belong to the organization that owns "
@@ -93,10 +82,6 @@ class PublicQueryResponse(BaseModel):
     result_count: int
     latency_ms: float
     tier: str
-    #: The HNSW candidate-list depth this tier bought, reported rather than
-    #: assumed. A caller comparing recall between tiers needs to see the knob
-    #: that changed, and an operator debugging a slow query needs to know
-    #: whether the tuning actually applied.
     ef_search: int
     retrieval_arms: list[str] = Field(default_factory=list)
     rate_limit: RateLimitSnapshot
@@ -120,6 +105,8 @@ class PublicWorkflowList(BaseModel):
 
 
 class PublicWorkflowTriggerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     workspace_id: uuid.UUID
     work_item_id: uuid.UUID
 
@@ -139,21 +126,11 @@ class PublicWorkflowTriggerResponse(BaseModel):
 
 
 class PublicErrorBody(BaseModel):
-    """The gateway's error envelope.
-
-    Flat and stable. FastAPI's default `{"detail": ...}` shape is preserved
-    as the transport, and this model documents what external code should
-    parse — `code` is the machine-readable half and does not change when the
-    prose in `message` is improved.
-    """
-
     code: str
     message: str
 
 
 class PublicApiVersion(BaseModel):
-    """Served by `GET /api/v1/public` so a client can assert compatibility."""
-
     version: str
     status: str = Field(description="STABLE | DEPRECATED | SUNSET")
     deprecation: Optional[datetime] = None

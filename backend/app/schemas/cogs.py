@@ -1,17 +1,4 @@
-"""ARCH-18 — COGS, margin and supplier reconciliation DTOs.
-
-Every optional numeric field here is optional on purpose. `gross_margin_micros`
-is None when no cost is known; `unknown_cost_share` is None when there is no
-revenue to take a share of; `variance_ratio` is None when the modelled total is
-zero. The frontend renders each of those as "unknown" and never as a number,
-which is the whole reason they are not defaulted to 0 for the convenience of
-the serializer.
-
-Micros are serialised as JSON numbers, not strings. They are integers bounded
-by BIGINT, and JavaScript holds integers exactly to 2^53 — about 9 billion
-dollars expressed in micros. Ratios are floats because they are already
-approximations and pretending otherwise in the wire format would be theatre.
-"""
+﻿"""ARCH-18 — COGS, margin and supplier reconciliation DTOs."""
 
 from __future__ import annotations
 
@@ -28,8 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class MarginFiguresResponse(BaseModel):
-    """The numeric core shared by the platform summary and every tenant row."""
-
     revenue_micros: int
     attributed_revenue_micros: int = Field(
         description=(
@@ -144,9 +129,6 @@ class RateCardEntry(BaseModel):
 
     @field_serializer("unit_price_micros", "cost_basis_micros", "unit_margin_micros")
     def _decimal_as_string(self, value: Optional[Decimal]) -> Optional[str]:
-        # Nine decimal places of per-unit price does not survive a float. The
-        # frontend treats these as display strings and never does arithmetic
-        # on them; totals come from the integer micros fields above.
         return None if value is None else format(value, "f")
 
 
@@ -188,7 +170,7 @@ class SupplierInvoiceCreate(BaseModel):
     )
     notes: Optional[str] = Field(default=None, max_length=1000)
 
-    model_config = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
 
 class SupplierReconciliationResponse(BaseModel):
@@ -201,7 +183,6 @@ class SupplierReconciliationResponse(BaseModel):
     modelled_event_count: int
     unknown_cost_event_count: int
 
-    # ---- ARCH-24 ---------------------------------------------------------
     cost_basis_method: str = Field(
         ...,
         description=(
@@ -246,10 +227,6 @@ class SupplierInvoiceResponse(BaseModel):
     notes: Optional[str] = None
     latest_reconciliation: Optional[SupplierReconciliationResponse] = None
 
-    # ARCH-24 N-3. STATEMENT_PULL rows came from a provider API; OPERATOR_UPLOAD
-    # rows came from a human with the actual invoice. A pull never overwrites an
-    # upload, and the margins hub shows which is which so a reviewer knows
-    # whether they are looking at an estimate or a document.
     origin: str = Field(
         "OPERATOR_UPLOAD",
         description="STATEMENT_PULL or OPERATOR_UPLOAD.",
@@ -266,13 +243,6 @@ class SupplierInvoiceListResponse(BaseModel):
 
 
 class RollupCostBasisEntry(BaseModel):
-    """One rollup bucket's cost basis, with its honesty attached.
-
-    `cost_basis_micros` is nullable and stays nullable all the way to the
-    browser. The frontend renders "unknown", never a dash that looks like zero
-    and never a computed margin.
-    """
-
     organization_id: uuid.UUID
     granularity: str
     bucket_start: datetime
@@ -287,7 +257,7 @@ class RollupCostBasisEntry(BaseModel):
         description=(
             "Supplier cost for the priced events in this bucket. NULL when no "
             "event in it carried a basis. Buckets sealed before ARCH-24 are "
-            "permanently NULL by design \u2014 the seal trigger refuses every "
+            "permanently NULL by design — the seal trigger refuses every "
             "update, and back-writing an invoiced period is what ARCH-18 "
             "exists to forbid."
         ),
@@ -308,13 +278,6 @@ class RollupCostBasisEntry(BaseModel):
 
 
 class ConsolidatedReconciliationResponse(BaseModel):
-    """The single cost-variance view the margins hub renders.
-
-    Carries the ARCH-18 rows (authoritative) alongside a count of ARCH-14 runs
-    in the same window, so a reader can see that the volume loop is still
-    running without being invited to read its micros as cost.
-    """
-
     entries: list[SupplierReconciliationResponse] = []
     authoritative_method: str = "ARCH18_SUPPLIER_COST"
     sell_side_run_count: int = Field(
@@ -329,6 +292,8 @@ class ConsolidatedReconciliationResponse(BaseModel):
 
 
 class ReconcileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     note: Optional[str] = Field(default=None, max_length=4000)
     threshold_ratio: Optional[float] = Field(
         default=None,
@@ -346,6 +311,8 @@ class ReconcileRequest(BaseModel):
 
 
 class AcceptVarianceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     note: str = Field(
         min_length=1,
         max_length=4000,

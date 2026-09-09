@@ -1,17 +1,4 @@
-"""ARCH-20 — data governance, residency and compliance DTOs.
-
-Two things in here are deliberately not what a first draft would produce.
-
-`ComplianceExportResponse` has no `download_url` field. The URL is minted per
-request from `storage_key` and served by its own endpoint, because a presigned
-URL is a bearer credential with a TTL and does not belong in a list payload
-that a browser will cache.
-
-`RetentionPolicyUpdate.audit_retention_days` is floored at 400 in the schema
-as well as in the database. Rejecting it at the boundary produces a 422 that
-names the reason; letting it reach PostgreSQL produces an IntegrityError that
-names a constraint. The first is an explanation, the second is a stack trace.
-"""
+﻿"""ARCH-20 — data governance, residency and compliance DTOs."""
 
 from __future__ import annotations
 
@@ -36,8 +23,6 @@ ComplianceExportStatus = Literal[
 
 
 class ResidencyRegionOption(BaseModel):
-    """One selectable region and whether this deployment can actually serve it."""
-
     region: DataResidencyRegion
     configured: bool = Field(
         description=(
@@ -54,6 +39,8 @@ class DataResidencyResponse(BaseModel):
 
 
 class DataResidencyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     region: DataResidencyRegion
     acknowledge_no_migration: bool = Field(
         default=False,
@@ -94,6 +81,8 @@ class RetentionPolicyResponse(BaseModel):
 
 
 class RetentionPolicyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     work_item_retention_days: Optional[int] = Field(
         default=None, ge=MINIMUM_RETENTION_DAYS
     )
@@ -125,6 +114,8 @@ class RetentionPolicyUpdate(BaseModel):
 
 
 class ErasureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     subject_user_id: uuid.UUID
     erasure_ticket: str = Field(
         min_length=1,

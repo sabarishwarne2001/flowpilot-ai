@@ -1,4 +1,4 @@
-"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
+﻿"""ARCH-14 Step 7 — the tenant usage API's response shapes."""
 
 from __future__ import annotations
 
@@ -28,8 +28,6 @@ MAX_SERIES_BUCKETS: int = 800
 
 
 class UsageLine(BaseModel):
-    """One event type's contribution to a period."""
-
     event_type: str
     unit: str
     quantity: Decimal
@@ -74,15 +72,6 @@ class UsageBucket(BaseModel):
     total_cost_micros: int = 0
     estimated_cost_micros: int = 0
 
-    # ---- ARCH-24 ---------------------------------------------------------
-    #
-    # Optional and defaulting to None, not 0. This DTO is serialised on
-    # customer-facing usage paths as well as internal ones, so the field being
-    # absent must be indistinguishable from the cost being unknown \u2014 and both
-    # must be distinguishable from the cost being nothing.
-    #
-    # Note this is supplier cost, not customer price. It is only populated on
-    # superadmin-gated reads; the tenant-facing serialiser leaves it None.
     cost_basis_micros: Optional[int] = None
     unknown_cost_basis_event_count: int = 0
     cost_basis_is_complete: Optional[bool] = None
@@ -146,6 +135,8 @@ class UsageLimitsResponse(BaseModel):
 
 
 class SpendLimitUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     limit_key: str = Field(min_length=1, max_length=100)
     period: SpendLimitPeriod
     max_quantity: Decimal | None = None
@@ -176,14 +167,7 @@ class SpendLimitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
-# =============================================================================
-# Plan list endpoint schemas (Deliverable A)
-# =============================================================================
-
-
 class PlanEntitlement(BaseModel):
-    """One metered limit inside a plan, as the server computed it."""
-
     event_type: str
     limit_quantity: Optional[int] = None
     limit_cost_micros: Optional[int] = None
@@ -194,8 +178,6 @@ class PlanEntitlement(BaseModel):
 
 
 class PlanOption(BaseModel):
-    """A tier a customer could subscribe to."""
-
     key: str
     display_name: str
     version: int
@@ -220,14 +202,6 @@ class PlanListResponse(BaseModel):
 
 
 class UsageCostBasisSummary(BaseModel):
-    """Rollup cost basis over a window, with its incompleteness stated.
-
-    `known_share` exists so a reader cannot accidentally treat a 12%-priced
-    window as a margin figure. It mirrors `margin_service.is_trustworthy`
-    at the rollup grain: the threshold lives on the backend and travels to the
-    client, which never recomputes it.
-    """
-
     organization_id: uuid.UUID
     range_start: datetime
     range_end: datetime

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Data validation and serialization schemas (Pydantic v2) for FlowPilot AI.
 
 Enforces parameter boundaries on user registration and login parameters, 
@@ -91,6 +91,7 @@ class VerifyEmailRequest(BaseModel):
     """
     Submits a verification token read from the URL fragment.
     """
+    model_config = ConfigDict(extra="forbid")
 
     token: str = Field(..., min_length=1, description="Verification token.")
 
@@ -126,6 +127,7 @@ class ResetPasswordRequest(BaseModel):
     """
     Completes a reset with a token read from the URL fragment.
     """
+    model_config = ConfigDict(extra="forbid")
 
     token: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=128)
@@ -135,6 +137,7 @@ class ChangePasswordRequest(BaseModel):
     """
     Replaces a password the caller already knows.
     """
+    model_config = ConfigDict(extra="forbid")
 
     current_password: str = Field(..., min_length=1, max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)
