@@ -41,43 +41,24 @@ const OrganizationNotifications = lazy(
 const OrganizationSLOs = lazy(
   () => import("@/pages/organization/OrganizationSLOs"),
 );
-// ARCH-20. Lazy like every other organization settings surface: the
-// compliance console pulls three queries and a modal that most sessions never
-// open.
 const OrganizationCompliance = lazy(
   () => import("@/pages/organization/OrganizationCompliance"),
 );
-// ARCH-21. Lazy like every other organization surface: the portal pulls
-// three queries, a chart, a code-snippet explorer and an issuance modal that
-// the overwhelming majority of sessions never open.
 const OrganizationDeveloperPortal = lazy(
   () => import("@/pages/organization/OrganizationDeveloperPortal"),
 );
-// ARCH-22. Lazy like every other organization surface, so the BYOK console's
-// provider cards and routing table stay out of the entry chunk.
 const OrganizationBYOK = lazy(
   () => import("@/pages/organization/OrganizationBYOK"),
 );
-// ARCH-25. Lazy like every other organization surface. The branding console
-// pulls in a colour-picker preview and an image uploader that no other page
-// needs, so keeping it out of the main chunk matters more here than most.
-// ARCH-26. Lazy like every other organization surface, so the analytics
-// console's forms and charts stay out of the initial bundle.
 const OrganizationAnalytics = lazy(
   () => import("@/pages/organization/OrganizationAnalytics"),
 );
 const OrganizationBranding = lazy(
   () => import("@/pages/organization/OrganizationBranding"),
 );
-// ARCH-27. Lazy like every other organization surface. The catalog pulls in a
-// manifest inspector that renders a DAG and a JSON viewer, which no other page
-// needs and most sessions never open.
 const MarketplaceCatalog = lazy(
   () => import("@/pages/marketplace/MarketplaceCatalog"),
 );
-// ARCH-27. The partner portal is lazy for a stronger reason than the others:
-// the overwhelming majority of users are not partner members at all, and this
-// bundle would otherwise ship to every one of them.
 const PartnerPortal = lazy(() => import("@/pages/partner/PartnerPortal"));
 const BillingHub = lazy(() => import("@/pages/billing/BillingHub"));
 const CheckoutReturn = lazy(() => import("@/pages/billing/CheckoutReturn"));
@@ -85,8 +66,6 @@ const IdentityAdminHub = lazy(
   () => import("@/pages/identity/IdentityAdminHub"),
 );
 const AuditExplorer = lazy(() => import("@/pages/admin/AuditExplorer"));
-// ARCH-18. Lazy, like every other admin surface: the margins hub pulls in
-// four queries and a table the overwhelming majority of sessions never open.
 const AdminMarginsHub = lazy(() => import("@/pages/admin/AdminMarginsHub"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
@@ -200,6 +179,10 @@ export default function App() {
                   element={<CreateOrganizationPage />}
                 />
                 <Route
+                  path={ROUTES.NEW_ORGANIZATION}
+                  element={<CreateOrganizationPage />}
+                />
+                <Route
                   path={ROUTES.WORKSPACES}
                   element={<WorkspacePicker />}
                 />
@@ -218,18 +201,6 @@ export default function App() {
                   element={<OrganizationGuard />}
                 >
                   <Route element={<OrganizationLayout />}>
-                    {/*
-                      ARCH-01. General is the organization's own settings page
-                      and the home of the archive flow. ROUTE_PATTERNS
-                      .organizationSettings and organizationSettingsPath() both
-                      already existed in tenantPaths.ts with nothing mounted on
-                      them; this fills the slot rather than inventing a path.
-
-                      The index redirect gives /organizations/:orgSlug a
-                      destination. Before this it matched the shell, rendered
-                      the layout, and left an empty <main> — a blank screen
-                      reachable from any hand-edited URL.
-                    */}
                     <Route
                       index
                       element={
@@ -307,15 +278,6 @@ export default function App() {
                   </Route>
                 </Route>
 
-                {/* ARCH-18 platform administration.
-
-                    A sibling of the organization shell, never a child of it.
-                    Nesting a cross-tenant page inside OrganizationGuard would
-                    make platform-wide totals appear to belong to whichever
-                    organization happened to be selected — the precise
-                    misreading the COGS dashboard must not invite. It also has
-                    no OrganizationLayout, so no tenant switcher is rendered
-                    beside numbers that do not respond to it. */}
                 <Route
                   path={ROUTE_PATTERNS.platformShell}
                   element={<SuperAdminGuard />}
@@ -326,21 +288,6 @@ export default function App() {
                   />
                 </Route>
 
-                {/* ARCH-27 partner portal.
-
-                    A sibling of the organization shell, never a child of it —
-                    the same decision ARCH-18 made for /admin. A partner reads
-                    across a BOOK of organizations, so nesting this inside
-                    OrganizationGuard would render a tenant switcher beside
-                    figures that do not respond to it, and would make a
-                    book-wide total appear to belong to whichever organization
-                    happened to be selected.
-
-                    It is behind PrivateRoute, not SuperAdminGuard: partner
-                    membership is authorized server-side by
-                    tenancy_service.require_membership, which returns 404 for a
-                    non-member so the route is not a partner enumeration
-                    oracle. */}
                 <Route
                   path={ROUTE_PATTERNS.partnerPortalShell}
                   element={<PartnerPortal />}

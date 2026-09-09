@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 
@@ -198,7 +198,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
               type="button"
               onClick={() => {
                 setOpen(false);
-                navigate(ROUTES.ONBOARDING);
+                navigate(ROUTES.NEW_ORGANIZATION);
               }}
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >

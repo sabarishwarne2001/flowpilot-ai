@@ -12,6 +12,9 @@
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "codegen:types": "openapi-typescript http://localhost:8000/api/v1/openapi.json -o src/types/api.generated.d.ts",
+    "verify:contracts": "node scripts/verify-api-contracts.mjs",
+    "verify:contracts:ci": "node scripts/verify-api-contracts.mjs --schema ../openapi.json",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "clean": "rimraf dist",
     "prepare": "husky install"
@@ -52,6 +55,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
     "rimraf": "^6.0.1",

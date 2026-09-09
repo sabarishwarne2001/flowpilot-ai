@@ -28,9 +28,7 @@ import {
   revokeInvitation,
 } from "@/services/api/invitations";
 
-import { updateOrganization } from "@/services/api/organization";
-
-import { canManageOrganizationSettings, canDeleteWorkspace } from "@/permissions/organizationPermissions";
+import { canDeleteWorkspace } from "@/permissions/organizationPermissions";
 import {
   canAssignWorkspaceRole,
   canManageWorkspaceMembers,
@@ -65,7 +63,6 @@ export const Workspace: React.FC = () => {
   const authenticatedLogoSrc = useAuthenticatedImage(logoPreview);
 
   const canEditWorkspace = canManageWorkspaceSettings(workspaceRole);
-  const canEditOrganization = canManageOrganizationSettings(organizationRole);
   const canManageTeam = canManageWorkspaceMembers(workspaceRole);
   const canArchive = canDeleteWorkspace(organizationRole);
 
@@ -78,7 +75,6 @@ export const Workspace: React.FC = () => {
     resolver: zodResolver(workspaceSchema),
     defaultValues: {
       workspace_name: "",
-      company_name: "",
       company_logo_url: "",
       timezone: "UTC",
       language: "en",
@@ -110,7 +106,6 @@ export const Workspace: React.FC = () => {
 
     reset({
       workspace_name: workspaceDetail.workspace_name,
-      company_name: organization.organization_name,
       company_logo_url: workspaceDetail.company_logo_url ?? "",
       timezone: workspaceDetail.timezone as WorkspaceFormData["timezone"],
       language: workspaceDetail.language as WorkspaceFormData["language"],
@@ -141,13 +136,6 @@ export const Workspace: React.FC = () => {
 
   const { mutateAsync: saveWorkspaceMutation, isPending: isSaving } = useMutation({
     mutationFn: async (data: WorkspaceFormData) => {
-      if (
-        canEditOrganization &&
-        data.company_name !== organization.organization_name
-      ) {
-        await updateOrganization(organizationId, { name: data.company_name });
-      }
-
       return updateWorkspaceById(workspaceId, {
         workspace_name: data.workspace_name,
         timezone: data.timezone,
@@ -284,7 +272,6 @@ export const Workspace: React.FC = () => {
 
     reset({
       workspace_name: workspaceDetail.workspace_name,
-      company_name: organization.organization_name,
       company_logo_url: workspaceDetail.company_logo_url ?? "",
       timezone: workspaceDetail.timezone as WorkspaceFormData["timezone"],
       language: workspaceDetail.language as WorkspaceFormData["language"],
@@ -400,29 +387,6 @@ export const Workspace: React.FC = () => {
             />
             {errors.workspace_name && (
               <p className="text-xs text-destructive">{errors.workspace_name.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="company_name" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              Company Name
-            </label>
-            <input
-              id="company_name"
-              type="text"
-              disabled={!canEditOrganization}
-              placeholder="Company Name"
-              required
-              {...register("company_name")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
-            />
-            {errors.company_name ? (
-              <p className="text-xs text-destructive">{errors.company_name.message}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Shared across every workspace in this organization.
-                {!canEditOrganization && " Only an organization admin can change it."}
-              </p>
             )}
           </div>
 

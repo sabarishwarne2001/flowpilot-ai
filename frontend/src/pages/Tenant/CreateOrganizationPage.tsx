@@ -1,31 +1,17 @@
-/**
+﻿/**
  * Tenant provisioning page for FlowPilot AI.
- *
- * Replaces pages/Auth/OnboardingPage.tsx, which called PUT /workspace — a
- * single endpoint that both created and updated. That conflation is audit
- * blocker B7: an existing owner who revisited the onboarding screen silently
- * overwrote their live workspace name, company, timezone, and currency with
- * the form's defaults.
- *
- * The backend half of that fix was deleting the endpoint. The frontend half is
- * the redirect below: an actor who already belongs to an organization is sent
- * to their workspace and never sees this form. Creation and update are now
- * separate operations reached from separate places.
- *
- * Provisioning is atomic on the server — organization, first workspace, and
- * both memberships commit together or not at all. There is no partial state to
- * recover from here.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, Check, Loader2, X } from "lucide-react";
 
 import { API_ERROR_CODES } from "@/constants/errorCodes";
+import { ROUTES } from "@/constants/routes";
 import { meContextQueryKey } from "@/hooks/useMeContext";
 import { useTenant } from "@/hooks/useTenant";
 import {
@@ -43,13 +29,6 @@ import {
 } from "@/services/api/organization";
 import { useAuthStore } from "@/store/useAuthStore";
 
-/**
- * Debounces a value.
- *
- * The slug availability check runs on every keystroke otherwise, which is a
- * request per character for a result the user cannot act on until they stop
- * typing.
- */
 const useDebouncedValue = <T,>(value: T, delayMs: number): T => {
   const [debounced, setDebounced] = useState<T>(value);
 
@@ -63,6 +42,10 @@ const useDebouncedValue = <T,>(value: T, delayMs: number): T => {
 
 export const CreateOrganizationPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isAdditionalOrganization =
+    location.pathname === ROUTES.NEW_ORGANIZATION;
   const queryClient = useQueryClient();
 
   const userId = useAuthStore((store) => store.user?.id ?? null);
@@ -89,9 +72,6 @@ export const CreateOrganizationPage: React.FC = () => {
   const organizationName = watch("organization_name");
   const slug = watch("organization_slug");
 
-  // Mirror the name into the slug until the user edits the slug directly.
-  // After that the slug is theirs and is never overwritten — silently changing
-  // a field someone has typed into is a reliable way to lose their input.
   useEffect(() => {
     if (slugTouched) {
       return;
@@ -123,10 +103,6 @@ export const CreateOrganizationPage: React.FC = () => {
         ...(data.workspace_name ? { workspace_name: data.workspace_name } : {}),
       });
 
-      // POST /organizations returns the organization only, not the workspace
-      // created alongside it. Refetching the bootstrap context is how the
-      // destination is resolved — and keeps /me/context the single answer to
-      // "where can this user go" rather than adding a second one here.
       await queryClient.invalidateQueries({ queryKey: ["me"] });
 
       const context = await queryClient.fetchQuery({
@@ -148,9 +124,6 @@ export const CreateOrganizationPage: React.FC = () => {
         return;
       }
 
-      // Provisioning succeeded but the context has not caught up. Sending the
-      // user to the picker is honest; re-submitting the form would create a
-      // second organization.
       navigate("/workspaces", { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -186,9 +159,7 @@ export const CreateOrganizationPage: React.FC = () => {
     return null;
   }, [slug, errors.organization_slug, isCheckingSlug, availability]);
 
-  // Blocker B7, frontend half. An actor who already belongs to an organization
-  // must never reach this form.
-  if (state.status === "ready") {
+  if (!isAdditionalOrganization && state.status === "ready") {
     return (
       <Navigate
         to={workspacePath(
@@ -200,8 +171,8 @@ export const CreateOrganizationPage: React.FC = () => {
     );
   }
 
-  if (state.status === "no_workspace") {
-    return <Navigate to="/workspaces" replace />;
+  if (!isAdditionalOrganization && state.status === "no_workspace") {
+    return <Navigate to={ROUTES.WORKSPACES} replace />;
   }
 
   if (state.status === "loading") {

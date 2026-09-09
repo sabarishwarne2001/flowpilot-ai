@@ -32,7 +32,10 @@ const OrganizationCard: React.FC<{
   onLeft: () => void;
 }> = ({ organization, onLeft }) => {
   const canCreate = canCreateWorkspace(organization.role);
-  const stranded = organization.workspaces.length === 0 && !canCreate;
+  const isArchived = organization.organization_status !== "ACTIVE";
+
+  const stranded =
+    !isArchived && organization.workspaces.length === 0 && !canCreate;
 
   const { mutate: leave, isPending: isLeaving } = useMutation({
     mutationFn: () => leaveOrganization(organization.organization_id),
@@ -67,7 +70,31 @@ const OrganizationCard: React.FC<{
         )}
       </header>
 
-      {organization.workspaces.length === 0 ? (
+      {isArchived ? (
+        <div className="space-y-2">
+          <p className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            This organization is archived. All workspaces and API integrations
+            are inactive.
+          </p>
+          {organization.workspaces.length > 0 && (
+            <ul className="space-y-1.5">
+              {organization.workspaces.map((workspace) => (
+                <li
+                  key={workspace.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-transparent bg-muted/10 px-3 py-2.5 text-sm opacity-60"
+                >
+                  <span className="min-w-0 truncate font-semibold text-muted-foreground">
+                    {workspace.workspace_name}
+                  </span>
+                  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    inactive
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : organization.workspaces.length === 0 ? (
         <p className="rounded-lg bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
           {canCreate
             ? "No workspaces yet. Create one to get started."
@@ -93,7 +120,7 @@ const OrganizationCard: React.FC<{
         </ul>
       )}
 
-      {canCreate && (
+      {canCreate && !isArchived && (
         <Link
           to={createWorkspacePath(organization.organization_slug)}
           className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
@@ -191,7 +218,7 @@ export const WorkspacePicker: React.FC = () => {
         </div>
 
         <Link
-          to={ROUTES.ONBOARDING}
+          to={ROUTES.NEW_ORGANIZATION}
           className="flex items-center gap-3 rounded-xl border border-dashed border-border px-4 py-3.5 transition hover:border-primary/50 hover:bg-muted/20"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">

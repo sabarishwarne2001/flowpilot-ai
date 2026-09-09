@@ -96,10 +96,22 @@ export default [
       "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
-  {
+    {
     files: ["src/types/**/*.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+      },
     },
   },
 ];
