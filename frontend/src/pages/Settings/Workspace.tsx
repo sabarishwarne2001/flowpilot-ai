@@ -38,6 +38,7 @@ import {
 } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ROUTES } from "@/constants/routes";
+import GrantWorkspaceAccessModal from "@/components/workspace/GrantWorkspaceAccessModal";
 
 import type {
   WorkspaceInvitationCreateRequest,
@@ -60,6 +61,7 @@ export const Workspace: React.FC = () => {
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>("VIEWER");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [grantOpen, setGrantOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const authenticatedLogoSrc = useAuthenticatedImage(logoPreview);
@@ -654,10 +656,23 @@ export const Workspace: React.FC = () => {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <h2 className="text-xl font-bold">Team Members</h2>
-        <p className="text-sm text-muted-foreground">
-          View active accounts and access privilege levels within this workspace.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">Team Members</h2>
+            <p className="text-sm text-muted-foreground">
+              View active accounts and access privilege levels within this workspace.
+            </p>
+          </div>
+          {canManageTeam && (
+            <button
+              type="button"
+              onClick={() => setGrantOpen(true)}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"
+            >
+              Add member
+            </button>
+          )}
+        </div>
 
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-left text-sm border-collapse border-b border-border">
@@ -907,6 +922,20 @@ export const Workspace: React.FC = () => {
           void archiveMutation();
         }}
       />
+      {grantOpen && (
+        <GrantWorkspaceAccessModal
+          workspaceId={workspaceId}
+          organizationId={organizationId}
+          currentMembers={members}
+          actorOrganizationRole={organizationRole}
+          onClose={() => setGrantOpen(false)}
+          onGranted={() => {
+            void queryClient.invalidateQueries({
+              queryKey: ["workspaces", "members", workspaceId],
+            });
+          }}
+        />
+      )}
     </div>
   );
 };

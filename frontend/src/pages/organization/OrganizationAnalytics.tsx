@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Database,
   Loader2,
+  Pencil,
   PlayCircle,
   Plug,
   Trash2,
@@ -27,6 +28,11 @@ import {
   updateSchedule,
 } from "@/services/api/analytics";
 import { analyticsKeys } from "@/services/api/queryKeys";
+import {
+  buildCredential,
+  CredentialFieldset,
+} from "@/components/organization/warehouseCredential";
+import WarehouseDestinationEditor from "@/components/organization/WarehouseDestinationEditor";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
   DATASET_HINTS,
@@ -88,7 +94,7 @@ const errorMessage = (error: unknown): string => {
   if (typeof detail === "string") {
     return detail;
   }
-  if (Array.isArray(detail) && detail.length > 0) {
+  if (Array.isArray(detail) && detail[0]?.msg) {
     const first = detail[0] as { msg?: string };
     return first?.msg ?? "The request was rejected.";
   }
@@ -97,11 +103,6 @@ const errorMessage = (error: unknown): string => {
 
 // ---------------------------------------------------------------------------
 // Destination form
-//
-// One form per warehouse kind, switched on `kind`. The alternative — one form
-// with every field and a note saying which ones apply — is how a tenant ends
-// up pasting a BigQuery key into a Snowflake destination and finding out at
-// the first scheduled run.
 // ---------------------------------------------------------------------------
 
 const DestinationForm: React.FC<{
@@ -119,56 +120,18 @@ const DestinationForm: React.FC<{
 
   const value = (key: string): string => fields[key] ?? "";
 
-  const buildCredential = (): WarehouseCredentialInput => {
-    switch (kind) {
-      case "SNOWFLAKE":
-        return {
-          kind: "SNOWFLAKE",
-          account: value("account"),
-          user: value("user"),
-          warehouse: value("warehouse"),
-          database: value("database"),
-          db_schema: value("db_schema") || "PUBLIC",
-          stage_name: value("stage_name"),
-          stage_bucket: value("stage_bucket"),
-          stage_region: value("stage_region"),
-          private_key: value("private_key"),
-          stage_access_key_id: value("stage_access_key_id"),
-          stage_secret_access_key: value("stage_secret_access_key"),
-        };
-      case "BIGQUERY":
-        return {
-          kind: "BIGQUERY",
-          project_id: value("project_id"),
-          dataset: value("dataset"),
-          location: value("location") || "US",
-          service_account_json: value("service_account_json"),
-        };
-      case "DATABRICKS":
-        return {
-          kind: "DATABRICKS",
-          host: value("host"),
-          warehouse_id: value("warehouse_id"),
-          catalog: value("catalog") || "main",
-          db_schema: value("db_schema") || "default",
-          volume: value("volume"),
-          access_token: value("access_token"),
-        };
-      default:
-        return {
-          kind: "S3",
-          bucket: value("bucket"),
-          region: value("region"),
-          prefix: value("prefix") || "flowpilot/",
-          access_key_id: value("access_key_id"),
-          secret_access_key: value("secret_access_key"),
-        };
-    }
-  };
+  /**
+   * ARCH-29 Slice 2 — the per-kind credential shape now lives in one place
+   * (components/organization/warehouseCredential.tsx) so the create form and
+   * the editor cannot drift apart. Adding a field to a credential is now a
+   * one-line change that both surfaces pick up.
+   */
+  const credential = (): WarehouseCredentialInput =>
+    buildCredential(kind, value);
 
   const save = useMutation({
     mutationFn: () =>
-      createDestination(organizationId, { label, credential: buildCredential() }),
+      createDestination(organizationId, { label, credential: credential() }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: analyticsKeys.destinations(organizationId),
@@ -178,54 +141,6 @@ const DestinationForm: React.FC<{
       onDone();
     },
   });
-
-  const text = (key: string, title: string, hint?: string) => (
-    <div key={key}>
-      <label className={LABEL} htmlFor={`field-${key}`}>
-        {title}
-      </label>
-      <input
-        id={`field-${key}`}
-        className={INPUT}
-        value={value(key)}
-        onChange={set(key)}
-        autoComplete="off"
-      />
-      {hint ? <p className={HINT}>{hint}</p> : null}
-    </div>
-  );
-
-  const secret = (key: string, title: string, hint?: string) => (
-    <div key={key}>
-      <label className={LABEL} htmlFor={`field-${key}`}>
-        {title}
-      </label>
-      <input
-        id={`field-${key}`}
-        className={INPUT}
-        type="password"
-        value={value(key)}
-        onChange={set(key)}
-        autoComplete="new-password"
-      />
-      {hint ? <p className={HINT}>{hint}</p> : null}
-    </div>
-  );
-
-  const area = (key: string, title: string, hint?: string) => (
-    <div key={key}>
-      <label className={LABEL} htmlFor={`field-${key}`}>
-        {title}
-      </label>
-      <textarea
-        id={`field-${key}`}
-        className={`${INPUT} h-28 font-mono text-xs`}
-        value={value(key)}
-        onChange={set(key)}
-      />
-      {hint ? <p className={HINT}>{hint}</p> : null}
-    </div>
-  );
 
   return (
     <div className={CARD}>
@@ -270,75 +185,12 @@ const DestinationForm: React.FC<{
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {kind === "S3" ? (
-          <>
-            {text("bucket", "Bucket")}
-            {text("region", "Region", "e.g. eu-west-1")}
-            {text("prefix", "Key prefix", "Defaults to flowpilot/")}
-            {text("access_key_id", "Access key ID")}
-            {secret("secret_access_key", "Secret access key")}
-          </>
-        ) : null}
-
-        {kind === "BIGQUERY" ? (
-          <>
-            {text("project_id", "Project ID")}
-            {text("dataset", "Dataset")}
-            {text(
-              "location",
-              "Location",
-              "Must match the dataset's own location, or the load is rejected after upload.",
-            )}
-            <div className="md:col-span-2">
-              {area(
-                "service_account_json",
-                "Service account JSON",
-                "Paste the whole key file. A user OAuth client will not work for unattended loads.",
-              )}
-            </div>
-          </>
-        ) : null}
-
-        {kind === "DATABRICKS" ? (
-          <>
-            {text("host", "Workspace host", "Hostname only, no https://")}
-            {text("warehouse_id", "SQL warehouse ID")}
-            {text("catalog", "Catalog", "Defaults to main")}
-            {text("db_schema", "Schema", "Defaults to default")}
-            {text(
-              "volume",
-              "Unity Catalog volume",
-              "Receives the Parquet before COPY INTO reads it.",
-            )}
-            {secret("access_token", "Personal access token")}
-          </>
-        ) : null}
-
-        {kind === "SNOWFLAKE" ? (
-          <>
-            {text("account", "Account identifier", "e.g. xy12345.eu-west-1")}
-            {text("user", "User")}
-            {text("warehouse", "Warehouse")}
-            {text("database", "Database")}
-            {text("db_schema", "Schema", "Defaults to PUBLIC")}
-            {text(
-              "stage_name",
-              "External stage",
-              "A stage you have already created, pointing at the bucket below.",
-            )}
-            {text("stage_bucket", "Stage bucket")}
-            {text("stage_region", "Stage region")}
-            {text("stage_access_key_id", "Stage access key ID")}
-            {secret("stage_secret_access_key", "Stage secret access key")}
-            <div className="md:col-span-2">
-              {area(
-                "private_key",
-                "Private key (PKCS#8 PEM)",
-                "Snowflake's SQL API authenticates with a key pair; it has no password path. Paste the private half — the public half stays in Snowflake.",
-              )}
-            </div>
-          </>
-        ) : null}
+        <CredentialFieldset
+          kind={kind}
+          value={value}
+          onChange={set}
+          idPrefix="field"
+        />
       </div>
 
       {kind === "SNOWFLAKE" ? (
@@ -384,6 +236,7 @@ const DestinationRow: React.FC<{
   destination: WarehouseDestination;
 }> = ({ organizationId, destination }) => {
   const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
 
   const probe = useMutation({
     mutationFn: () => testDestination(organizationId, destination.id),
@@ -401,8 +254,6 @@ const DestinationRow: React.FC<{
       }),
   });
 
-  // null, true and false are three states, not two. A destination nobody has
-  // probed must not show the same icon as one that answered.
   const probeIcon =
     destination.last_test_ok === null ? (
       <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -414,6 +265,13 @@ const DestinationRow: React.FC<{
 
   return (
     <div className={`${CARD} flex flex-col gap-3`}>
+      {editing ? (
+        <WarehouseDestinationEditor
+          organizationId={organizationId}
+          destination={destination}
+          onClose={() => setEditing(false)}
+        />
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -441,6 +299,14 @@ const DestinationRow: React.FC<{
           <button
             type="button"
             className={SECONDARY}
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
+          <button
+            type="button"
+            className={SECONDARY}
             disabled={probe.isPending}
             onClick={() => probe.mutate()}
           >
@@ -455,7 +321,11 @@ const DestinationRow: React.FC<{
             type="button"
             className={DANGER}
             disabled={remove.isPending}
-            onClick={() => remove.mutate()}
+            onClick={() => {
+              if (window.confirm(`Delete "${destination.label}"?`)) {
+                remove.mutate();
+              }
+            }}
           >
             <Trash2 className="h-4 w-4" />
             Remove
@@ -1088,9 +958,6 @@ const OrganizationAnalytics: React.FC = () => {
                 </div>
 
                 <div className={`${HINT} mt-2 grid gap-1 md:grid-cols-3`}>
-                  {/* "Not counted" is deliberate: a crashed run has an unknown
-                      row count, and rendering 0 would make it look like an
-                      empty window. */}
                   <span>Rows: {formatCount(run.row_count)}</span>
                   <span>Size: {formatBytes(run.byte_count)}</span>
                   <span>Parts: {formatCount(run.part_count)}</span>

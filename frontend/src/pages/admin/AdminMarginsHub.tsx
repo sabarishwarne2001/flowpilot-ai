@@ -15,6 +15,11 @@
  */
 
 import React, { useCallback, useMemo, useState } from "react";
+import {
+  ReconciliationHistory,
+  SupplierInvoiceModal,
+} from "@/components/billing/SupplierInvoicePanels";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -375,6 +380,7 @@ const InvoiceRow: React.FC<{
 /* ---------------------------------------------------------------------- */
 
 export const AdminMarginsHub: React.FC = () => {
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const [days, setDays] = useState(30);
   const [order, setOrder] = useState<MarginOrder>("MARGIN_ASC");
@@ -737,10 +743,19 @@ export const AdminMarginsHub: React.FC = () => {
       ) : null}
 
       <section className="rounded-lg border border-border p-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <FileText className="h-4 w-4" aria-hidden />
-          Supplier invoices
-        </h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <FileText className="h-4 w-4" aria-hidden />
+            Supplier invoices
+          </h2>
+          <button
+            type="button"
+            onClick={() => setInvoiceModalOpen(true)}
+            className="shrink-0 rounded border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted"
+          >
+            Record invoice
+          </button>
+        </div>
 
         {invoices.isLoading ? (
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -762,13 +777,29 @@ export const AdminMarginsHub: React.FC = () => {
               </thead>
               <tbody>
                 {invoices.data.entries.map((invoice) => (
-                  <InvoiceRow
-                    key={invoice.id}
-                    invoice={invoice}
-                    busy={busy}
-                    onReconcile={handleReconcile}
-                    onAccept={handleAccept}
-                  />
+                  <React.Fragment key={invoice.id}>
+                    <InvoiceRow
+                      invoice={invoice}
+                      busy={busy}
+                      onReconcile={handleReconcile}
+                      onAccept={handleAccept}
+                    />
+                    <tr className="border-b border-border last:border-0">
+                      <td colSpan={6} className="p-0">
+                        <details className="group">
+                          <summary className="cursor-pointer px-4 py-1.5 text-xs text-muted-foreground marker:content-[''] hover:text-foreground">
+                            <span className="group-open:hidden">
+                              Show reconciliation history
+                            </span>
+                            <span className="hidden group-open:inline">
+                              Hide reconciliation history
+                            </span>
+                          </summary>
+                          <ReconciliationHistory invoice={invoice} />
+                        </details>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -781,6 +812,15 @@ export const AdminMarginsHub: React.FC = () => {
           </p>
         )}
       </section>
+
+      {invoiceModalOpen && (
+        <SupplierInvoiceModal
+          onClose={() => setInvoiceModalOpen(false)}
+          onCreated={() => {
+            void queryClient.invalidateQueries({ queryKey: cogsKeys.all() });
+          }}
+        />
+      )}
     </div>
   );
 };

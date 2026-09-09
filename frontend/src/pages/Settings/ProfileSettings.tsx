@@ -12,6 +12,7 @@ import { profileKeys } from "@/services/api/queryKeys";
 import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import EmailChangePanel from "@/pages/Settings/EmailChangePanel";
+import PasswordChangePanel from "@/pages/Settings/PasswordChangePanel";
 import {
   AVATAR_MAX_BYTES,
   AVATAR_MAX_DIMENSION,
@@ -356,6 +357,8 @@ export const ProfileSettings: React.FC = () => {
       </div>
 
       <EmailChangePanel currentEmail={profile.email} />
+
+      <PasswordChangePanel />
     </div>
   );
 };
