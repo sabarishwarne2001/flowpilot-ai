@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldAlert, Trash2, Upload, UserRound } from "lucide-react";
 
@@ -13,6 +13,7 @@ import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import EmailChangePanel from "@/pages/Settings/EmailChangePanel";
 import PasswordChangePanel from "@/pages/Settings/PasswordChangePanel";
+import MyWorkspaceGrantsPanel from "@/pages/Settings/MyWorkspaceGrantsPanel";
 import {
   AVATAR_MAX_BYTES,
   AVATAR_MAX_DIMENSION,
@@ -359,6 +360,8 @@ export const ProfileSettings: React.FC = () => {
       <EmailChangePanel currentEmail={profile.email} />
 
       <PasswordChangePanel />
+
+      <MyWorkspaceGrantsPanel />
     </div>
   );
 };

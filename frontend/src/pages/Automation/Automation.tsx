@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -27,7 +27,7 @@ import { RuleTestDialog } from "@/pages/Automation/RuleTestDialog";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import { getFriendlyFieldName } from "@/constants/automationFields";
-import type { AutomationRule, AutomationLog } from "@/types/automation";
+import type { AutomationRule, AutomationLog, AutomationErrorPolicy } from "@/types/automation";
 import { formatCostMicros, formatDurationMs } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
@@ -66,6 +66,32 @@ const OPERATOR_DISPLAY_MAP: Record<string, string> = {
 /**
  * Split-pane business Automation Rules and Audit Logs control panel for FlowPilot AI.
  */
+const RuleErrorPolicyBadge: React.FC<{
+  readonly policy: AutomationErrorPolicy | undefined;
+  readonly graphVersion: number | undefined;
+}> = ({ policy, graphVersion }) => {
+  if (!policy) {
+    return null;
+  }
+
+  const isContinue = policy === "CONTINUE";
+  const graphLabel =
+    graphVersion === undefined ? "" : graphVersion >= 1 ? " · DAG" : "";
+
+  return (
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap border ${
+        isContinue
+          ? "border-amber-300 bg-amber-50 text-amber-800"
+          : "border-border/40 bg-secondary text-secondary-foreground"
+      }`}
+    >
+      {isContinue ? "On failure: continue" : "On failure: halt"}
+      {graphLabel}
+    </span>
+  );
+};
+
 export const Automation: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
@@ -762,6 +788,10 @@ export const Automation: React.FC = () => {
                             Disabled
                           </span>
                         )}
+                        <RuleErrorPolicyBadge
+                          policy={rule.on_error}
+                          graphVersion={rule.graph_version}
+                        />
                       </div>
                     </div>
 

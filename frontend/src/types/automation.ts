@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Automation Engine Data Transfer Objects (DTOs) for FlowPilot AI.
  */
 
@@ -38,6 +38,8 @@ export interface AutomationCondition {
   readonly value: string;
 }
 
+export type AutomationErrorPolicy = "HALT" | "CONTINUE";
+
 export interface AutomationAction {
   readonly action_type: string;
   readonly config: Record<string, unknown>;
@@ -56,6 +58,8 @@ export interface AutomationRule {
   readonly is_active: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly graph_version?: number;
+  readonly on_error?: AutomationErrorPolicy;
 }
 
 export interface AutomationRuleCreateRequest {
@@ -89,6 +93,8 @@ export interface AutomationLog {
   readonly log_message: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly graph_version?: number;
+  readonly on_error?: AutomationErrorPolicy;
 
   readonly execution_status?: string | null;
   readonly execution_time_ms?: number | null;

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Organization General Settings — ARCH-01 / ARCH-05.
  *
  * WHY THIS PAGE DID NOT EXIST
@@ -71,6 +71,7 @@ import {
 
 import { ROUTES } from "@/constants/routes";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import OrganizationDetailPanel from "@/components/organization/OrganizationDetailPanel";
 import {
   archiveOrganization,
   updateOrganization,
@@ -390,6 +391,8 @@ export const OrganizationGeneral: React.FC = () => {
           </div>
         </section>
       )}
+
+      <OrganizationDetailPanel organizationId={organizationId} />
 
       {isArchived && (
         <section className="rounded-xl border border-border/60 bg-muted/20 p-6">

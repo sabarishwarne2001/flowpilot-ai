@@ -1,4 +1,4 @@
-﻿"""Data validation and serialization schemas for Automation Rules and Logs."""
+"""Data validation and serialization schemas for Automation Rules and Logs."""
 
 import uuid
 from datetime import datetime
@@ -104,6 +104,15 @@ class AutomationRuleResponse(AutomationRuleBase):
     created_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
+
+    graph_version: int = Field(
+        default=0,
+        description="0 for condition/action rule, 1 for DAG rule.",
+    )
+    on_error: Literal["HALT", "CONTINUE"] = Field(
+        default="HALT",
+        description="What the engine does when a node fails.",
+    )
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 

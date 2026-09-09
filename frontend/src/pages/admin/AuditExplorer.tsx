@@ -7,7 +7,8 @@ import {
   exportAuditLogs,
   listAuditLogs,
 } from "@/services/api/audit";
-import type { AuditExportFormat, AuditLogQuery } from "@/services/api/audit";
+import type { AuditExportFormat, AuditLogQuery, AuditLogRead } from "@/services/api/audit";
+import AuditDetailInspector from "@/components/organization/AuditDetailInspector";
 import { auditKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 
@@ -20,6 +21,7 @@ export const AuditExplorer: React.FC = () => {
   const [cursor, setCursor] = useState<string | null>(null);
   const [history, setHistory] = useState<(string | null)[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [inspecting, setInspecting] = useState<AuditLogRead | null>(null);
 
   const query = useQuery({
     queryKey: auditKeys.list(organizationId, {
@@ -196,6 +198,7 @@ export const AuditExplorer: React.FC = () => {
                 <th scope="col" className="px-3 py-2 font-medium">Action</th>
                 <th scope="col" className="px-3 py-2 font-medium">Resource</th>
                 <th scope="col" className="px-3 py-2 font-medium">Outcome</th>
+                <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Inspect</span></th>
               </tr>
             </thead>
             <tbody>
@@ -250,6 +253,15 @@ export const AuditExplorer: React.FC = () => {
                       {row.outcome}
                     </span>
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setInspecting(row)}
+                      className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                    >
+                      Inspect
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -281,6 +293,13 @@ export const AuditExplorer: React.FC = () => {
           Next
         </button>
       </div>
+
+      {inspecting ? (
+        <AuditDetailInspector
+          entry={inspecting}
+          onClose={() => setInspecting(null)}
+        />
+      ) : null}
     </div>
   );
 };
