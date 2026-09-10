@@ -17,6 +17,7 @@ from app.models.identity import (
     AuthMethod, EnterpriseIdpConfig, IdpProtocol, IdpSigningCertificate,
     SsoAssertion, SsoAuthRequest, VerifiedDomain,
 )
+from app.core.cookies import set_refresh_cookie
 from app.services.identity import (
     jit_service, oidc_gateway, saml_gateway, session_policy_service,
 )
@@ -325,7 +326,12 @@ def assertion_consumer_service(
         db, organization_id=config.organization_id)
     pinned_ip, pinned_prefix = session_policy_service.pin_for(policy, source_ip)
 
-    session = create_session(
+    # ARCH-30 Step 0. `create_session` returns an `IssuedSession`, NOT a
+    # Session — it is a pair of (session, plaintext_token). Binding it to a
+    # name called `session` is what caused both defects fixed in this block:
+    # the plaintext token was discarded, and `getattr(session, "id")` silently
+    # returned None because IssuedSession has no `.id`.
+    issued = create_session(
         db,
         user_id=result.user_id,
         authenticated_at=data.authn_instant,
@@ -342,10 +348,10 @@ def assertion_consumer_service(
                       outcome="ACCEPTED", reason=None,
                       authn_instant=data.authn_instant,
                       session_index=data.session_index, user_id=result.user_id,
-                      session_id=getattr(session, "id", None),
+                      session_id=issued.session.id,
                       attributes=data.attributes, source_ip=source_ip)
     write_audit(db, organization_id=config.organization_id, action="CREATED",
-                resource_type="SESSION", resource_id=getattr(session, "id", None),
+                resource_type="SESSION", resource_id=issued.session.id,
                 principal=principal_for_idp(config.id),
                 details={"auth_method": "SAML2", "user_id": str(result.user_id)})
     db.commit()
@@ -354,7 +360,37 @@ def assertion_consumer_service(
     target = (auth_request.redirect_path
               if auth_request and is_safe_redirect_path(auth_request.redirect_path)
               else "/")
-    return RedirectResponse(f"{frontend}{target}", status_code=302)
+
+    # ARCH-30 Step 0 — THE FIX THAT MAKES SAML LOGIN WORK AT ALL.
+    #
+    # This block previously returned a bare RedirectResponse. Everything above
+    # it was correct: XSW 1-8 defences held, InResponseTo binding verified, the
+    # assertion was recorded, the audit row was written, a session row existed
+    # in the database. And the browser was then redirected to the SPA carrying
+    # NO CREDENTIAL OF ANY KIND.
+    #
+    # `PrivateRoute` reads `isAuthenticated` from the auth store, finds it
+    # false, and bounces to /login. So a successful SAML login presented as a
+    # redirect loop back to the login page, with a server-side audit trail
+    # showing CREATED SESSION and no error anywhere. The most expensive kind of
+    # defect: every component correct, the seam between them missing.
+    #
+    # WHY THE COOKIE AND NOT THE ACCESS TOKEN
+    # =======================================
+    #
+    # `_issue` in auth.py sets the refresh cookie AND returns an access token in
+    # the JSON body. A 302 has no body, so the only options are a cookie or the
+    # URL. It must not be the URL: an access token in a query string or fragment
+    # is written to browser history, to any intermediary access log, and to the
+    # Referer header of the next request the SPA makes.
+    #
+    # So the refresh cookie is set here — HttpOnly, SameSite=Lax, which survives
+    # a top-level cross-site POST redirect from the IdP — and the SPA exchanges
+    # it for an access token at /auth/refresh on landing. Identical to the
+    # password path, minus the body.
+    response = RedirectResponse(f"{frontend}{target}", status_code=302)
+    set_refresh_cookie(response, token=issued.plaintext_token)
+    return response
 
 
 @saml_router.post("/slo")
@@ -450,7 +486,10 @@ def oidc_callback(request: Request, code: str = Query(...),
         db, organization_id=config.organization_id)
     pinned_ip, pinned_prefix = session_policy_service.pin_for(policy, source_ip)
 
-    session = create_session(
+    # ARCH-30 Step 0. Same defect as the SAML ACS above, same fix. Both
+    # federated login paths discarded the plaintext refresh token and both
+    # recorded a NULL session_id in the assertion row.
+    issued = create_session(
         db,
         user_id=result.user_id,
         authenticated_at=claims.auth_time,
@@ -464,11 +503,13 @@ def oidc_callback(request: Request, code: str = Query(...),
     _record_assertion(db, config=config, digest=claims.payload_digest, raw=None,
                       outcome="ACCEPTED", reason=None,
                       authn_instant=claims.auth_time, user_id=result.user_id,
-                      session_id=getattr(session, "id", None),
+                      session_id=issued.session.id,
                       attributes={"sub": [claims.subject]}, source_ip=source_ip)
     db.commit()
 
     frontend = str(getattr(settings, "FRONTEND_URL", "")).rstrip("/")
     target = (auth_request.redirect_path
               if is_safe_redirect_path(auth_request.redirect_path) else "/")
-    return RedirectResponse(f"{frontend}{target}", status_code=302)
+    response = RedirectResponse(f"{frontend}{target}", status_code=302)
+    set_refresh_cookie(response, token=issued.plaintext_token)
+    return response
