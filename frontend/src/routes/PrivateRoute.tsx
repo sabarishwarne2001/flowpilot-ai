@@ -25,7 +25,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useMeContext } from "@/hooks/useMeContext";
-import { loginPathWithRedirect } from "@/routes/tenantPaths";
+import { useLoginRedirect } from "@/routes/useLoginRedirect";
 import { useAuthStore } from "@/store/useAuthStore";
 
 interface PrivateRouteProps {
@@ -46,15 +46,19 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
 
   const destination = `${location.pathname}${location.search}`;
 
+  // ARCH-29 Tranche 1. Hooks must run before any early return, so this is
+  // resolved unconditionally even on the paths that never use it.
+  const loginPath = useLoginRedirect(destination);
+
   // Fast negative: no persisted session means no request is worth making.
   if (!isAuthenticated) {
-    return <Navigate to={loginPathWithRedirect(destination)} replace />;
+    return <Navigate to={loginPath} replace />;
   }
 
   // The server rejected the token. The interceptor has already cleared local
   // state; this routes to login with the destination preserved.
   if (isUnauthorized) {
-    return <Navigate to={loginPathWithRedirect(destination)} replace />;
+    return <Navigate to={loginPath} replace />;
   }
 
   // Validation in flight. Render a splash rather than the authenticated shell

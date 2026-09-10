@@ -2,6 +2,7 @@ import React from "react";
 import { X, LogOut } from "lucide-react";
 
 import { Brand } from "@/components/branding/Brand";
+import { Avatar } from "@/components/common/Avatar";
 import { useUIStore } from "@/store/useUIStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import OrgWorkspaceSwitcher from "./OrgWorkspaceSwitcher";
@@ -51,9 +52,14 @@ const MobileSidebarContent: React.FC<MobileSidebarContentProps> = ({
 
       {/* Bottom Profile & Sign Out Section */}
       <div className="border-t border-border/40 bg-muted/20 p-4">
-        <div className="mb-3 truncate text-xs">
-          <span className="block font-semibold text-muted-foreground">Signed in as</span>
-          <span className="font-bold text-foreground">{user?.email ?? "User Profile"}</span>
+        <div className="mb-3 flex min-w-0 items-center gap-2.5 text-xs">
+          <Avatar userId={user?.id} email={user?.email} size="md" />
+          <div className="min-w-0 truncate">
+            <span className="block font-semibold text-muted-foreground">Signed in as</span>
+            <span className="block truncate font-bold text-foreground">
+              {user?.email ?? "User Profile"}
+            </span>
+          </div>
         </div>
 
         <button

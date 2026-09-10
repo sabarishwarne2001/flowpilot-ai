@@ -32,7 +32,8 @@ import { Loader2 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { loginPathWithRedirect, toTenantPath } from "@/routes/tenantPaths";
+import { toTenantPath } from "@/routes/tenantPaths";
+import { useLoginRedirect } from "@/routes/useLoginRedirect";
 
 /**
  * Forwards the current flat path to its tenant-scoped equivalent.
@@ -43,6 +44,9 @@ import { loginPathWithRedirect, toTenantPath } from "@/routes/tenantPaths";
  */
 export const LegacyRouteRedirect: React.FC = () => {
   const location = useLocation();
+
+  // ARCH-29 Tranche 1. Hoisted above the switch.
+  const loginPath = useLoginRedirect(`${location.pathname}${location.search}`);
   const { state } = useTenant();
 
   switch (state.status) {
@@ -56,7 +60,7 @@ export const LegacyRouteRedirect: React.FC = () => {
     case "unauthenticated":
       return (
         <Navigate
-          to={loginPathWithRedirect(`${location.pathname}${location.search}`)}
+          to={loginPath}
           replace
         />
       );

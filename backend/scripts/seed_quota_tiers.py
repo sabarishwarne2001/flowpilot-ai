@@ -31,6 +31,57 @@ from sqlalchemy import select  # noqa: E402
 
 OVERAGE_TIER_KEY = "overage"
 
+# ARCH-29 Tranche 2 (D-2). Presence of this entry entitles a tenant to run
+# inference on the PLATFORM's provider account. Absent, `model_routing_service`
+# raises `PlatformKeyNotEntitledError` instead of silently billing the
+# operator, and the tenant must configure BYOK.
+#
+# All four seeded tiers grant it, which is correct commercially — a self-serve
+# customer expects the product to work without supplying an API key, and
+# consumption is still bounded by `llm.input_token` and the `*` cost ceiling.
+# What changed is that the grant is now DECLARED. It is versioned, published
+# through the normal path, visible on the plan card, and revocable for a tier
+# by deleting one line here and publishing a new version. Before, it was the
+# unconditional behaviour of six separate fallback branches.
+PLATFORM_KEY = {
+    "limit_key": "llm.platform_key",
+    "max_cost_micros": 0,
+    "overage_policy": "REFUSE",
+}
+
+# ARCH-29 Tranche 2. Commercial terms, per BUSINESS-BLUEPRINT.md §3.
+#
+# `gateway_price_id` is read from the environment rather than written here: the
+# id is issued by the payment gateway, differs between test and live mode, and
+# a literal committed to a seed script is a value that will be wrong in one of
+# those two environments and silently charge against the other. Absent, the
+# tier seeds unpriced and renders "Contact us for pricing" — honest, and
+# fixable by setting the variable and publishing a new version.
+#
+# Enterprise is deliberately absent from this map. It is quoted, not listed,
+# and a published floor price is a negotiating position surrendered before the
+# conversation starts.
+COMMERCIALS: dict[str, dict[str, Any]] = {
+    "free": {
+        "unit_amount_micros": 0,
+        "currency": "USD",
+        "billing_interval": "month",
+        "gateway_price_id_env": None,
+    },
+    "developer": {
+        "unit_amount_micros": 49_000_000,
+        "currency": "USD",
+        "billing_interval": "month",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_DEVELOPER",
+    },
+    "business": {
+        "unit_amount_micros": 299_000_000,
+        "currency": "USD",
+        "billing_interval": "month",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_BUSINESS",
+    },
+}
+
 PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
     "free": {
         "display_name": "Free",
@@ -53,6 +104,14 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "grace_quantity": "250",
             },
             {"limit_key": "ocr.page", "max_quantity": "100", "overage_policy": "REFUSE"},
+            # ARCH-29. Free previously declared no storage ceiling at all, so
+            # the plan card listed tokens and OCR and was silent on documents.
+            {
+                "limit_key": "storage.gb_month",
+                "max_quantity": "1",
+                "overage_policy": "REFUSE",
+            },
+            PLATFORM_KEY,
         ],
     },
     "developer": {
@@ -81,6 +140,17 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            # ARCH-29. Developer sat between Free and Business, both of which
+            # declared an OCR ceiling, and declared none itself — so the tier
+            # the screenshots showed offered storage but appeared to offer no
+            # document processing at all.
+            {
+                "limit_key": "ocr.page",
+                "max_quantity": "5000",
+                "overage_policy": "ALLOW_AND_BILL",
+                "overage_price_tier_key": OVERAGE_TIER_KEY,
+            },
+            PLATFORM_KEY,
         ],
     },
     "business": {
@@ -116,6 +186,7 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            PLATFORM_KEY,
         ],
     },
     "enterprise": {
@@ -144,6 +215,16 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            # ARCH-29. Enterprise declared no OCR ceiling while Business
+            # declared 50,000 — reading the two cards side by side, the more
+            # expensive plan appeared to remove a capability.
+            {
+                "limit_key": "ocr.page",
+                "max_quantity": "1000000",
+                "overage_policy": "ALLOW_AND_BILL",
+                "overage_price_tier_key": OVERAGE_TIER_KEY,
+            },
+            PLATFORM_KEY,
         ],
     },
 }

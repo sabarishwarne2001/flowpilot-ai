@@ -7,6 +7,7 @@ import type { NavigationItem } from "./navigation";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { workspaceDashboardPath } from "@/routes/tenantPaths";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Avatar } from "@/components/common/Avatar";
 import { useTenantStore } from "@/store/useTenantStore";
 import { ROUTES } from "@/constants/routes";
 
@@ -184,7 +185,9 @@ const OrganizationSidebarNavigation: React.FC<
 
       {onLogout ? (
         <div className="shrink-0 border-t border-border/60 px-3 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <Avatar userId={user?.id} email={user?.email} size="md" />
+
             <div className="min-w-0 flex-1">
               <span className="block text-xs font-semibold text-muted-foreground">
                 Signed in as

@@ -6,6 +6,7 @@ import { createCheckoutSession, getPlans } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
 import type { PlanOption } from "@/types/billing";
+import { describeEntitlement } from "@/types/planEntitlements";
 
 interface PlanSelectorProps {
   readonly organizationId: string;
@@ -168,21 +169,48 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     </p>
                   )}
 
-                  {plan.entitlements.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {plan.entitlements.slice(0, 5).map((e) => (
-                        <li
-                          key={e.event_type}
-                          className="text-xs text-muted-foreground"
-                        >
-                          <span className="font-mono text-[11px] text-foreground/80">{e.event_type}</span>:{" "}
-                          {e.limit_quantity === null
-                            ? "Unlimited"
-                            : `${e.limit_quantity.toLocaleString()} per ${e.period.toLowerCase()}`}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {/*
+                    ARCH-29 Tranche 2. Mapped through the display vocabulary
+                    rather than printed raw. `describeEntitlement` returns null
+                    for rows that should not appear at all — notably the `*`
+                    catch-all, which rendered as "*: Unlimited" above three
+                    explicit limits and contradicted them.
+
+                    Filtering happens BEFORE the slice, or hidden rows would
+                    consume slots in the visible five and a plan would appear
+                    to offer less than it does.
+                  */}
+                  {(() => {
+                    const lines = plan.entitlements
+                      .map((e) =>
+                        describeEntitlement(
+                          e.event_type,
+                          e.limit_quantity,
+                          e.period,
+                        ),
+                      )
+                      .filter((line): line is NonNullable<typeof line> =>
+                        line !== null,
+                      );
+
+                    if (lines.length === 0) {
+                      return null;
+                    }
+
+                    return (
+                      <ul className="mt-2 space-y-1">
+                        {lines.slice(0, 5).map((line) => (
+                          <li
+                            key={line.key}
+                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                          >
+                            <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                            <span>{line.text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
                 </div>
               </label>
             </li>
@@ -261,10 +289,33 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   );
 };
 
+/**
+ * ARCH-29 Tranche 2.
+ *
+ * This function did not change much and that is the point: it was already
+ * correct. It rendered "Contact us for pricing" because the backend hardcoded
+ * `unit_amount=None` on every plan, `quota_tiers` had no price columns, and
+ * there was genuinely nothing to show. The fix was upstream.
+ *
+ * What changed is that the fallback now means what it says. A tier reaches it
+ * only by being deliberately unpriced — Enterprise, which is quoted — rather
+ * than by the schema having nowhere to put a number. `is_priced` is the
+ * server's explicit statement of which case this is, so the client no longer
+ * infers sellability from a null.
+ *
+ * Zero is a price. `unit_amount === 0` on a Free tier must render "Free", not
+ * fall through to "Contact us" — which is exactly what a truthiness test on
+ * `unit_amount` would have done.
+ */
 function formatPrice(plan: PlanOption): string {
-  if (plan.unit_amount === null || plan.currency === null) {
+  if (!plan.is_priced || plan.unit_amount === null || plan.currency === null) {
     return "Contact us for pricing";
   }
+
+  if (plan.unit_amount === 0) {
+    return "Free";
+  }
+
   const amount = new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: plan.currency.toUpperCase(),

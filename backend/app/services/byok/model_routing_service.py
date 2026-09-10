@@ -45,6 +45,37 @@ class RoutingError(ValueError):
     """A routing rule could not be resolved or stored."""
 
 
+#: ARCH-29 Tranche 2 (D-2). The entitlement that permits inference on the
+#: PLATFORM's provider account.
+#:
+#: A tier granting this is spending the operator's money. A tier withholding it
+#: requires the tenant to bring their own key, and gets a refusal rather than a
+#: silent transfer of cost.
+PLATFORM_KEY_LIMIT_KEY = "llm.platform_key"
+
+
+class PlatformKeyNotEntitledError(RoutingError):
+    """This tenant's tier does not include inference on the platform account.
+
+    Raised, not returned as a downgrade. `resolve()` has six paths that end in
+    `use_tenant_key=False` — no route rule, rule disabled, rule explicitly
+    requesting the platform key, provider unroutable, no tenant credential,
+    and a credential whose last validation failed. Every one of them was a
+    silent fallback onto the operator's provider account, logged at INFO or
+    WARNING and never refused.
+
+    The common case is the dangerous one: `no_route_rule_configured` is the
+    state of every organization that has never opened the BYOK page, which is
+    all of them at signup. The expensive case is subtler — a tenant configures
+    BYOK, their key later expires, and the cost of their inference moves onto
+    the operator's card without anyone being told.
+
+    A raise is correct because a caller that receives a RoutingDecision will
+    execute it. There is no in-band value for "do not run this" that an
+    existing call site would honour.
+    """
+
+
 class UnroutableProviderError(RoutingError):
     """A rule targets a provider the execution layer cannot use with a tenant key."""
 
@@ -132,9 +163,41 @@ def resolve(
 
     route = get_route(db, organization_id=organization_id, task_type=task)
 
+    # ARCH-29 Tranche 2 (D-2). Fail closed.
+    #
+    # Placed here, ABOVE every branch, because all six downgrade paths below
+    # converge on the same outcome — inference billed to the platform account
+    # — and gating them one at a time would leave the seventh, added later,
+    # ungated. This is the structural closure: a new downgrade reason inherits
+    # the check without anyone remembering it exists.
+    #
+    # The check is skipped for decisions that will use the TENANT's key, which
+    # cost the operator nothing. That branch is reached at the bottom of this
+    # function, so the cheap test here is "would this end on the platform
+    # account", evaluated per branch rather than once.
+    def _assert_platform_key_entitled(reason: str) -> None:
+        if _platform_key_entitled(db, organization_id=organization_id):
+            return
+        logger.warning(
+            "byok.platform_key_refused",
+            extra={
+                "organization_id": str(organization_id),
+                "task_type": task,
+                "downgrade_reason": reason,
+            },
+        )
+        raise PlatformKeyNotEntitledError(
+            f"This plan does not include inference on the platform account "
+            f"({reason}). Configure a provider key under BYOK, or upgrade to "
+            f"a plan that includes platform inference."
+        )
+
     if route is None or not route.is_enabled:
         provider = _provider_of(ai_settings)
         model = str(getattr(ai_settings, "model", "") or "")
+        _assert_platform_key_entitled(
+            "no_route_rule_configured" if route is None else "route_rule_disabled"
+        )
         return RoutingDecision(
             task_type=task,
             provider=provider,
@@ -152,6 +215,7 @@ def resolve(
     wants_tenant_key = bool(route.use_tenant_key)
 
     if not wants_tenant_key:
+        _assert_platform_key_entitled("route_rule_requests_platform_key")
         return RoutingDecision(
             task_type=task,
             provider=provider,
@@ -170,6 +234,7 @@ def resolve(
                 "provider": provider,
             },
         )
+        _assert_platform_key_entitled("provider_unroutable")
         return RoutingDecision(
             task_type=task,
             provider=provider,
@@ -183,6 +248,7 @@ def resolve(
         db, organization_id=organization_id, provider=provider
     )
     if credential is None:
+        _assert_platform_key_entitled("no_tenant_credential_configured")
         return RoutingDecision(
             task_type=task,
             provider=provider,
@@ -203,6 +269,7 @@ def resolve(
                 "provider": provider,
             },
         )
+        _assert_platform_key_entitled("tenant_credential_last_validation_failed")
         return RoutingDecision(
             task_type=task,
             provider=provider,
@@ -220,6 +287,31 @@ def resolve(
         origin="route_rule",
         downgrade_reason=None,
     )
+
+
+def _platform_key_entitled(db: Session, *, organization_id: uuid.UUID) -> bool:
+    """Does this organization's tier include inference on the platform account?
+
+    ARCH-29 Tranche 2 (D-2). Deliberately conservative in both directions that
+    matter:
+
+    An organization with NO RESOLVABLE TIER gets False. That is the unsigned,
+    unseeded, or misconfigured state, and the safe answer to "may this unknown
+    tenant spend the operator's money" is no. The alternative — treating an
+    absent tier as permissive — is precisely the unbounded default this change
+    exists to remove.
+
+    The entitlement is a normal quota tier entry, so it is versioned,
+    effective-dated and published through the same path as every other limit.
+    It carries no ceiling of its own: presence is the grant. Consumption is
+    still metered and still capped by `llm.input_token` and friends.
+    """
+    from app.services import quota_service  # local: avoids an import cycle
+
+    tier = quota_service.resolve_tier(db, organization_id=organization_id)
+    if tier is None:
+        return False
+    return any(entry.limit_key == PLATFORM_KEY_LIMIT_KEY for entry in tier.entries)
 
 
 def _provider_of(ai_settings: Any) -> str:

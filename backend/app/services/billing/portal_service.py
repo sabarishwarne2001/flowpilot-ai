@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import decode_access_token_claims
 from app.models.billing_account import BillingAccount
+from app.services import quota_service
 from app.services.billing import account_service, stripe_gateway
 
 logger = logging.getLogger("app.services.billing.portal")
@@ -175,12 +176,42 @@ def create_checkout_session(
     success_url: Optional[str] = None,
     cancel_url: Optional[str] = None,
 ) -> EphemeralSession:
-    resolved_price = price_id or settings.BILLING_SEAT_PRICE_ID
+    # ARCH-29 Tranche 2 (F-2). The price is a property of the tier being
+    # sold, resolved here from the tier key the caller named.
+    #
+    # The previous form fell back to `settings.BILLING_SEAT_PRICE_ID` — one
+    # price for every tier. It refused only when that global was unset, so the
+    # failure mode was not "no checkout" but "every checkout at one price".
+    # An explicit `price_id` argument is still honoured for the operator paths
+    # that pass one, but it is no longer the silent default for all four tiers.
+    if price_id:
+        resolved_price = price_id
+    else:
+        tier = quota_service.published_tier_by_key(db, key=quota_tier_key)
+        if tier is None:
+            raise CheckoutConfigurationError(
+                f"No published quota tier named {quota_tier_key!r}. Refusing "
+                "to start a checkout for a plan that is not on sale."
+            )
+        if tier.unit_amount_micros == 0:
+            raise CheckoutConfigurationError(
+                f"Tier {quota_tier_key!r} is free. A free plan is assigned, "
+                "not purchased; there is no gateway price to check out "
+                "against and starting a session would create an invoice for "
+                "nothing."
+            )
+        if not tier.is_priced:
+            raise CheckoutConfigurationError(
+                f"Tier {quota_tier_key!r} v{tier.version} carries no price. "
+                "This tier is quoted, not self-serve — route the customer to "
+                "sales rather than to a gateway that would have to invent an "
+                "amount."
+            )
+        resolved_price = tier.gateway_price_id
+
     if not resolved_price:
         raise CheckoutConfigurationError(
-            "No Stripe price configured. Set BILLING_SEAT_PRICE_ID or pass "
-            "price_id explicitly; refusing to start a checkout that cannot "
-            "name what it is selling."
+            "Refusing to start a checkout that cannot name what it is selling."
         )
     if seats < 1:
         raise CheckoutConfigurationError("A subscription needs at least one seat.")

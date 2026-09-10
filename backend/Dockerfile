@@ -87,6 +87,40 @@ ENV WORKER_PROFILE=enrich \
     TRANSFORMERS_OFFLINE=0 \
     HF_HOME=/home/flowpilot/.cache/huggingface
 
+# ARCH-29 Tranche 1 — pre-bake the embedding weights.
+#
+# The `ocr` target below has pre-baked PaddleOCR since ARCH-10 and the reranker
+# image has pre-baked its CrossEncoder since ARCH-11. This target did not, so
+# `embedding_service._load_model()` pulled all-MiniLM-L6-v2 from the Hugging
+# Face Hub on the first vector generation of a cold container — over the
+# network, unauthenticated, on the request path.
+#
+# WHY THE NAME COMES FROM `canonical_model_name` AND IS NOT WRITTEN OUT HERE
+# =========================================================================
+#
+# `SentenceTransformer("all-MiniLM-L6-v2")` and
+# `SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")` load the same
+# weights into DIFFERENT cache directories. `settings.EMBEDDING_MODEL_NAME` is
+# the bare form and the `document_settings` default is the qualified form —
+# two strings, one model, as `app/core/embeddings.py` has documented since
+# ARCH-11. Baking under one spelling and loading under the other produces a
+# cache MISS and a silent runtime download: the optimisation appears to be
+# applied, the image grows by 90MB, and nothing gets faster.
+#
+# Resolving through `canonical_model_name` at build time means the string baked
+# is by construction the string loaded. `verify_arch29_tranche1.py` G7 asserts
+# both configured spellings still canonicalise to the same known model, so a
+# future config edit that breaks the equality fails the gate rather than
+# quietly reintroducing the download.
+RUN python -c "\
+from app.core.embeddings import canonical_model_name; \
+from app.core.config import settings; \
+from sentence_transformers import SentenceTransformer; \
+name = canonical_model_name(settings.EMBEDDING_MODEL_NAME); \
+print('ARCH-29 pre-baking embedding model:', name); \
+SentenceTransformer(name)" || \
+    (echo 'Embedding warmup notice: weights will download on first run' && true)
+
 CMD ["python", "-m", "app.worker", "--loop", "jobs", "--profile", "enrich"]
 
 

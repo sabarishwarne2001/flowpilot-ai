@@ -90,6 +90,41 @@ class QuotaTier(Base, UUIDMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+
+    # ARCH-29 Tranche 2 (D-1). The commercial face of a tier.
+    #
+    # All four move together — `ck_quota_tiers_price_complete` refuses any
+    # partial combination — so a reader may test one and rely on the rest.
+    # All-NULL is a legitimate, deliberate state meaning "quote this one",
+    # which is what Enterprise is.
+    #
+    # Micros, like every other money column in this schema. The API converts
+    # at the boundary; nothing internal handles cents.
+    unit_amount_micros: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+    currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    billing_interval: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True
+    )
+
+    # Per tier, per version. The global `settings.BILLING_SEAT_PRICE_ID` that
+    # this replaces was read inside `list_plans`' per-tier loop, so every plan
+    # carried the same gateway price while granting different entitlements
+    # (finding F-2). A partial unique index refuses two tiers sharing one id,
+    # so the defect cannot be reintroduced by a call site.
+    gateway_price_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+
+    @property
+    def is_priced(self) -> bool:
+        """True when this tier can be sold self-serve.
+
+        Tests one column because the CHECK constraint guarantees the other
+        three agree with it.
+        """
+        return self.unit_amount_micros is not None
     notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 

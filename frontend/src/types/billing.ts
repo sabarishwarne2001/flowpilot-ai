@@ -232,6 +232,8 @@ export interface PlanOption {
   readonly unit_amount: number | null;
   readonly currency: string | null;
   readonly interval: string | null;
+  /** ARCH-29 Tranche 2. True when this tier can be bought self-serve. */
+  readonly is_priced: boolean;
   readonly entitlements: readonly PlanEntitlement[];
   readonly notes: string | null;
 }

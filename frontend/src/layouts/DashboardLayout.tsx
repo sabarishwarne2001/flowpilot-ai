@@ -15,13 +15,32 @@ export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
 
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const beginSignOut = useAuthStore((state) => state.beginSignOut);
   const isSidebarCollapsed = useUIStore((state) => state.isSidebarCollapsed);
 
   const handleLogout = useCallback(async (): Promise<void> => {
-    await authApi.logoutRequest();
-    clearAuth();
-    navigate(ROUTES.LOGIN, { replace: true });
-  }, [clearAuth, navigate]);
+    // ARCH-29 Tranche 1. Set BEFORE the await, not after.
+    //
+    // `logoutRequest()` revokes the session server-side. Any authenticated
+    // request still in flight during that await 401s, the interceptor clears
+    // local state, and the guard above this layout re-renders while still
+    // mounted at the current deep path — emitting its own redirect to
+    // `/login?redirect=<deep path>` before either line below executes. That
+    // guard redirect, not this handler, is what put the user back into their
+    // settings tab after signing out. Raising the flag first means the guard
+    // already knows the exit was deliberate when the race opens.
+    beginSignOut();
+    try {
+      await authApi.logoutRequest();
+    } finally {
+      // `finally`, because a network failure on the way out must still end the
+      // session locally. It also lowers `isSigningOut`: left raised by a failed
+      // request, the flag would make the NEXT involuntary expiry discard its
+      // destination, which is the bug inverted rather than fixed.
+      clearAuth();
+      navigate(ROUTES.LOGIN, { replace: true });
+    }
+  }, [beginSignOut, clearAuth, navigate]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground transition-colors duration-200">

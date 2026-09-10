@@ -90,6 +90,20 @@ class _TierSnapshot:
     effective_to: Optional[datetime]
     entries: tuple[TierLimit, ...]
 
+    # ARCH-29 Tranche 2. Carried on the snapshot because `list_published_tiers`
+    # returns snapshots, not ORM rows, and `list_plans` reads only what the
+    # snapshot exposes. Omitted here, the columns would exist in the database,
+    # be correctly populated by the seed, and still render as
+    # "Contact us for pricing" — the original bug surviving its own fix.
+    unit_amount_micros: Optional[int] = None
+    currency: Optional[str] = None
+    billing_interval: Optional[str] = None
+    gateway_price_id: Optional[str] = None
+
+    @property
+    def is_priced(self) -> bool:
+        return self.unit_amount_micros is not None
+
     def covers(self, at: datetime) -> bool:
         if at < self.effective_from:
             return False
@@ -128,6 +142,14 @@ def _snapshot(tier: QuotaTier) -> _TierSnapshot:
         version=tier.version,
         effective_from=_as_utc(tier.effective_from),
         effective_to=_as_utc(tier.effective_to) if tier.effective_to else None,
+        unit_amount_micros=(
+            int(tier.unit_amount_micros)
+            if tier.unit_amount_micros is not None
+            else None
+        ),
+        currency=tier.currency,
+        billing_interval=tier.billing_interval,
+        gateway_price_id=tier.gateway_price_id,
         entries=tuple(
             TierLimit(
                 limit_key=entry.limit_key,
@@ -831,8 +853,31 @@ def list_published_tiers(
     return sorted(live.values(), key=lambda t: (rank.get(t.key, 99), t.key))
 
 
+def published_tier_by_key(
+    db: Session,
+    *,
+    key: str,
+    at: Optional[datetime] = None,
+) -> Optional[_TierSnapshot]:
+    """The tier version currently on sale under `key`, or None.
+
+    ARCH-29 Tranche 2. `create_checkout_session` needs the price attached to
+    the tier the caller named, and it must be the SAME version `list_plans`
+    showed them — so this filters through `list_published_tiers` rather than
+    querying `quota_tiers` directly. A second query with its own notion of
+    "current" is how a customer comes to check out at a price they were never
+    shown: the read path and the sell path would each be internally consistent
+    and disagree with each other.
+    """
+    for tier in list_published_tiers(db, at=at):
+        if tier.key == key:
+            return tier
+    return None
+
+
 __all__ = [
     "OverageOutcome",
+    "published_tier_by_key",
     "OveragePolicy",
     "QuotaError",
     "QuotaStatus",

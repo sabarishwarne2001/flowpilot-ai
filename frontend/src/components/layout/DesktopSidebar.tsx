@@ -4,6 +4,7 @@ import { ChevronLeft, LogOut } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
 import { Brand } from "@/components/branding/Brand";
+import { Avatar } from "@/components/common/Avatar";
 import SidebarNavigation from "./SidebarNavigation";
 import OrgWorkspaceSwitcher from "./OrgWorkspaceSwitcher";
 
@@ -92,27 +93,41 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
             }
           `}
         >
-          <div
-            className={`
-              min-w-0
-              overflow-hidden
-              transition-all
-              duration-300
-              ease-in-out
-              ${
-                isDesktopCollapsed
-                  ? "max-w-0 opacity-0"
-                  : "max-w-[220px] opacity-100"
-              }
-            `}
-          >
-            <span className="block truncate text-xs font-semibold text-muted-foreground select-none">
-              Signed in as
-            </span>
+          {/*
+            ARCH-29 Tranche 1. The avatar stays rendered when the sidebar is
+            collapsed — it is the identity affordance that survives the text
+            being clipped to zero width, which is the collapsed state's whole
+            point.
+          */}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Avatar
+              userId={user?.id}
+              email={user?.email}
+              size={isDesktopCollapsed ? "sm" : "md"}
+            />
 
-            <span className="mt-1 block truncate text-sm font-extrabold leading-none">
-              {user?.email ?? "User Profile"}
-            </span>
+            <div
+              className={`
+                min-w-0
+                overflow-hidden
+                transition-all
+                duration-300
+                ease-in-out
+                ${
+                  isDesktopCollapsed
+                    ? "max-w-0 opacity-0"
+                    : "max-w-[180px] opacity-100"
+                }
+              `}
+            >
+              <span className="block truncate text-xs font-semibold text-muted-foreground select-none">
+                Signed in as
+              </span>
+
+              <span className="mt-1 block truncate text-sm font-extrabold leading-none">
+                {user?.email ?? "User Profile"}
+              </span>
+            </div>
           </div>
 
           <button

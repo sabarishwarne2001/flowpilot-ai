@@ -23,7 +23,7 @@ import { Loader2 } from "lucide-react";
 
 import { useMeContext } from "@/hooks/useMeContext";
 import { ROUTES } from "@/constants/routes";
-import { loginPathWithRedirect } from "@/routes/tenantPaths";
+import { useLoginRedirect } from "@/routes/useLoginRedirect";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const Splash: React.FC = () => (
@@ -40,11 +40,12 @@ export const SuperAdminGuard: React.FC = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isSuperAdmin = useIsSuperAdmin();
   const { isLoading, isUnauthorized } = useMeContext();
+  const loginPath = useLoginRedirect(location.pathname);
 
   if (!isAuthenticated || isUnauthorized) {
     return (
       <Navigate
-        to={loginPathWithRedirect(location.pathname)}
+        to={loginPath}
         replace
       />
     );

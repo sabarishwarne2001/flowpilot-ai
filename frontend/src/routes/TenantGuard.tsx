@@ -30,7 +30,8 @@ import { Loader2, RefreshCw } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { ROUTE_PARAMS, loginPathWithRedirect } from "@/routes/tenantPaths";
+import { ROUTE_PARAMS } from "@/routes/tenantPaths";
+import { useLoginRedirect } from "@/routes/useLoginRedirect";
 import { reconcileTenantWithUrl } from "@/routes/tenantReconciliation";
 import { TenantContextProvider } from "@/routes/TenantContext";
 import type { TenantRouteParams } from "@/routes/tenantPaths";
@@ -94,6 +95,10 @@ const TenantError: React.FC<TenantErrorProps> = ({ onRetry }) => (
  */
 export const TenantGuard: React.FC = () => {
   const location = useLocation();
+
+  // ARCH-29 Tranche 1. Hoisted above the switch: hooks cannot be called from
+  // inside a case arm.
+  const loginPath = useLoginRedirect(`${location.pathname}${location.search}`);
   const params = useParams() as TenantRouteParams;
   const { state, refresh, selectWorkspace } = useTenant();
 
@@ -133,7 +138,7 @@ export const TenantGuard: React.FC = () => {
       // other half was landing on onboarding instead of login.
       return (
         <Navigate
-          to={loginPathWithRedirect(`${location.pathname}${location.search}`)}
+          to={loginPath}
           replace
         />
       );

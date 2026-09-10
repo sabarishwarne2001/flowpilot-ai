@@ -311,6 +311,42 @@ export const loginPathWithRedirect = (destination: string): string => {
   return `/login?redirect=${encodeURIComponent(destination)}`;
 };
 
+/**
+ * ARCH-29 Tranche 1 — the login path for a guard that is turning a user away.
+ *
+ * Two situations reach every guard's redirect branch and they want opposite
+ * treatment:
+ *
+ *   INVOLUNTARY — the token expired, the server revoked the session, the
+ *   refresh failed. The user did not choose to leave. Preserving where they
+ *   were standing is correct and is the whole reason `loginPathWithRedirect`
+ *   exists.
+ *
+ *   VOLUNTARY — the user clicked "Sign Out". Remembering the deep settings tab
+ *   they were on and putting them back there after the next login is not
+ *   helpful; it is the application overriding an explicit decision to leave.
+ *
+ * Before this function, both produced `?redirect=…` because a guard cannot
+ * see intent from `location` alone. `useAuthStore.isSigningOut` carries the
+ * intent; this function is where it is applied.
+ *
+ * WHY THE VOLUNTARY BRANCH IS NOT "JUST RETURN THE SAME THING"
+ * ============================================================
+ *
+ * It returns bare `"/login"`, discarding the destination entirely rather than
+ * validating and dropping it. The open-redirect defence in
+ * `isSafeRedirectPath` is untouched and still guards the involuntary path —
+ * this branch simply never reaches it, because there is nothing to guard.
+ *
+ * Deep links are unaffected. An invitation URL carries `?redirect=` in the
+ * link the user clicked, which arrives on `/login` directly and is parsed by
+ * `Login.tsx`; it does not pass through a guard's turn-away branch at all.
+ */
+export const loginPathForExit = (
+  destination: string,
+  voluntary: boolean,
+): string => (voluntary ? "/login" : loginPathWithRedirect(destination));
+
 export const runTenantPathSelfCheck = (): string[] => {
   const failures: string[] = [];
   const expect = (label: string, condition: boolean): void => {
@@ -431,6 +467,25 @@ export const runTenantPathSelfCheck = (): string[] => {
     loginPathWithRedirect("//evil.example.com") === "/login",
   );
 
+  // ARCH-29 Tranche 1.
+  expect(
+    "an involuntary exit preserves the destination",
+    loginPathForExit("/acme/engineering/settings", false) ===
+      `/login?redirect=${encodeURIComponent("/acme/engineering/settings")}`,
+  );
+  expect(
+    "a voluntary exit discards the destination",
+    loginPathForExit("/acme/engineering/settings", true) === "/login",
+  );
+  expect(
+    "a voluntary exit discards an unsafe destination too",
+    loginPathForExit("//evil.example.com", true) === "/login",
+  );
+  expect(
+    "an involuntary exit still refuses an unsafe destination",
+    loginPathForExit("//evil.example.com", false) === "/login",
+  );
+
   return failures;
 };
 
@@ -439,7 +494,7 @@ export const assertTenantPathIntegrity = (): void => {
   if (failures.length === 0) {
     return;
   }
-   
+
   console.error(
     `[routes] TENANT PATH SELF-CHECK FAILED — ${failures.length} case(s):\n  - ` +
       failures.join("\n  - "),

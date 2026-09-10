@@ -148,7 +148,28 @@ def list_plans(
             for entry in tier.entries
         ]
 
-        price_id = getattr(settings, "BILLING_SEAT_PRICE_ID", None)
+        # ARCH-29 Tranche 2 (D-1, F-2).
+        #
+        # This block previously read
+        #     price_id = getattr(settings, "BILLING_SEAT_PRICE_ID", None)
+        # INSIDE this loop, which is loop-invariant: every tier received the
+        # same gateway price while advertising different entitlements. Setting
+        # that env var would have charged an Enterprise subscriber the one
+        # global amount and granted them Enterprise limits, with nothing in
+        # this system disagreeing until a provider statement arrived.
+        #
+        # The price now comes from the tier version being described. A tier
+        # with no price is not free and is not an error: it is quoted, which
+        # is what Enterprise is, and `is_priced` says so explicitly rather
+        # than leaving the client to infer it from three nulls.
+        #
+        # Micros to minor units happens here, at the API boundary. Nothing
+        # inside the application handles cents.
+        unit_amount = (
+            tier.unit_amount_micros // 10_000
+            if tier.unit_amount_micros is not None
+            else None
+        )
 
         plans.append(
             PlanOption(
@@ -156,10 +177,11 @@ def list_plans(
                 display_name=tier.display_name,
                 version=tier.version,
                 is_current=(tier.key == current_key),
-                price_id=price_id,
-                unit_amount=None,
-                currency=None,
-                interval=None,
+                price_id=tier.gateway_price_id,
+                unit_amount=unit_amount,
+                currency=tier.currency,
+                interval=tier.billing_interval,
+                is_priced=tier.is_priced,
                 entitlements=entitlements,
                 notes=None,
             )

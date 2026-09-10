@@ -51,6 +51,47 @@ interface AuthState {
   readonly isAuthenticated: boolean;
 
   /**
+   * ARCH-29 Tranche 1. True between the moment the user clicks "Sign Out" and
+   * the moment the session is torn down.
+   *
+   * WHY A FLAG AND NOT A NAVIGATION ARGUMENT
+   * ========================================
+   *
+   * `handleLogout` already navigated to a bare `/login`. The deep URL that
+   * came back anyway was not written by the logout handler at all — it was
+   * written by a GUARD, during the await.
+   *
+   * The sequence: `logoutRequest()` invalidates the session server-side and is
+   * awaited. Any authenticated request still in flight during that window —
+   * a TanStack refetch, the `/auth/me` poll — now 401s. The client interceptor
+   * clears local state, `useMeContext` reports unauthorized, and `PrivateRoute`
+   * re-renders while STILL MOUNTED at `/caretakers-global-inc/general/settings`.
+   * It returns `<Navigate to={loginPathWithRedirect(destination)} replace />`,
+   * which commits before `clearAuth()` and `navigate()` on the next lines ever
+   * run. The guard is behaving exactly as designed; it simply cannot tell a
+   * session that was revoked from a session the user chose to end.
+   *
+   * This flag is that distinction, and it is set BEFORE the await so it is
+   * already true when the race opens.
+   *
+   * WHY IT IS NOT PERSISTED
+   * =======================
+   *
+   * `partialize` below lists `user` and `isAuthenticated` and nothing else, so
+   * this stays in memory. That is load-bearing: persisted, a tab closed
+   * mid-logout would leave the flag true on disk forever, and every subsequent
+   * session expiry on that machine would silently discard its destination —
+   * a permanent regression written by a transient failure. `verify_arch29_
+   * tranche1.py` G6 asserts it is absent from `partialize`.
+   */
+  readonly isSigningOut: boolean;
+
+  /**
+   * Marks the sign-out as voluntary. Call before any await in the handler.
+   */
+  readonly beginSignOut: () => void;
+
+  /**
    * Stores only the JWT token.
    *
    * Used immediately after login so authenticated
@@ -99,6 +140,13 @@ export const useAuthStore = create<AuthState>()(
         user: null,
         token: null,
         isAuthenticated: false,
+        isSigningOut: false,
+
+        beginSignOut: () =>
+          set((state) => ({
+            ...state,
+            isSigningOut: true,
+          })),
 
         /**
          * Stores only the access token.
@@ -154,6 +202,14 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             token: null,
             isAuthenticated: false,
+            // ARCH-29. Reset here, not at the call sites, for the same reason
+            // the tenant reset lives here: clearAuth is reached from explicit
+            // sign-out, the 401 interceptor, and a failed login. A path that
+            // forgot to lower this flag would leave the NEXT session expiry
+            // silently discarding its destination — the involuntary case
+            // wearing the voluntary case's behaviour, which is the exact
+            // inversion of the bug this flag was added to fix.
+            isSigningOut: false,
           });
         },
 

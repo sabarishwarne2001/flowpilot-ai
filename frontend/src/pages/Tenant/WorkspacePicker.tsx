@@ -10,7 +10,8 @@ import { Building2, Loader2, LogOut, Plus } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { loginPathWithRedirect, workspacePath, createWorkspacePath } from "@/routes/tenantPaths";
+import { workspacePath, createWorkspacePath } from "@/routes/tenantPaths";
+import { useLoginRedirect } from "@/routes/useLoginRedirect";
 import { canCreateWorkspace } from "@/permissions/organizationPermissions";
 import { leaveOrganization } from "@/services/api/organization";
 import { ApiError } from "@/services/api/errors";
@@ -151,6 +152,9 @@ const OrganizationCard: React.FC<{
 
 export const WorkspacePicker: React.FC = () => {
   const location = useLocation();
+
+  // ARCH-29 Tranche 1. Hoisted above the early returns.
+  const loginPath = useLoginRedirect(location.pathname);
   const { state, refresh } = useTenant();
 
   const unreachable = (location.state as UnreachableState | null)?.unreachable;
@@ -165,7 +169,7 @@ export const WorkspacePicker: React.FC = () => {
 
   if (state.status === "unauthenticated") {
     return (
-      <Navigate to={loginPathWithRedirect(location.pathname)} replace />
+      <Navigate to={loginPath} replace />
     );
   }
 

@@ -183,9 +183,19 @@ class PlanOption(BaseModel):
     version: int
     is_current: bool
     price_id: Optional[str] = None
+
+    #: Minor units (cents), converted from `unit_amount_micros` at this
+    #: boundary. NULL means this tier is not sold self-serve — the client
+    #: renders "Contact us" — and never means free. Free is 0.
     unit_amount: Optional[int] = None
     currency: Optional[str] = None
     interval: Optional[str] = None
+
+    #: ARCH-29 Tranche 2. True when all four commercial columns are set, so a
+    #: client can branch on sellability without re-deriving the CHECK
+    #: constraint's logic from three nullable fields and getting it subtly
+    #: wrong on the zero case.
+    is_priced: bool = False
     entitlements: list[PlanEntitlement] = Field(default_factory=list)
     notes: Optional[str] = None
 

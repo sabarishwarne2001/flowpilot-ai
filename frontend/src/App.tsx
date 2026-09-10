@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -67,6 +67,7 @@ const IdentityAdminHub = lazy(
 );
 const AuditExplorer = lazy(() => import("@/pages/admin/AuditExplorer"));
 const AdminMarginsHub = lazy(() => import("@/pages/admin/AdminMarginsHub"));
+const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
@@ -282,10 +283,19 @@ export default function App() {
                   path={ROUTE_PATTERNS.platformShell}
                   element={<SuperAdminGuard />}
                 >
-                  <Route
-                    path={ROUTE_PATTERNS.platformMargins}
-                    element={<AdminMarginsHub />}
-                  />
+                  {/*
+                    ARCH-29 Tranche 1. A pathless layout route, so the guard
+                    stays a guard and the chrome stays chrome. Every future
+                    platform page mounts inside PlatformLayout and inherits the
+                    cross-tenant scope band and the exit; a page added as a
+                    sibling of this element would ship without both.
+                  */}
+                  <Route element={<PlatformLayout />}>
+                    <Route
+                      path={ROUTE_PATTERNS.platformMargins}
+                      element={<AdminMarginsHub />}
+                    />
+                  </Route>
                 </Route>
 
                 <Route
