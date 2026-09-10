@@ -30,7 +30,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from typing import TYPE_CHECKING
+
 from app.core.config import settings
+
+if TYPE_CHECKING:  # avoids an import cycle: payment_gateway does not import this
+    from app.services.billing.payment_gateway import GatewayEvent
 from app.models.stripe_inbound_event import (
     StripeInboundEvent,
     StripeInboundStatus,
@@ -171,6 +176,91 @@ def record_event(
             "event_type": event.type,
             "is_created": created,
             "organization_id": str(organization_id) if organization_id else None,
+        },
+    )
+    return row_id, created
+
+
+def persist_gateway_event(
+    db: Session,
+    *,
+    event: "GatewayEvent",
+    signature_header: str = "",
+    organization_id: Optional[uuid.UUID] = None,
+) -> tuple[Optional[uuid.UUID], bool]:
+    """Persist a verified event from ANY gateway, exactly once.
+
+    ARCH-29 Tranche 3. The gateway-neutral sibling of `record_event`.
+
+    WHY A SECOND FUNCTION RATHER THAN WIDENING `record_event`
+    =========================================================
+
+    `record_event` takes a `StripeEvent` and reads `event.api_version`, which
+    is a Stripe concept with no Dodo equivalent. Widening it would mean an
+    `Optional[api_version]` and a union parameter type, and every existing
+    Stripe call site would silently start accepting Dodo events it was never
+    written to handle. Two functions writing to one table, each honest about
+    its input, is the smaller lie.
+
+    Both write `gateway_event_id` and `gateway`, so the CONTRACT step that
+    drops `stripe_event_id` has one place to converge rather than a union type
+    to unpick.
+
+    IDEMPOTENCY
+    ===========
+
+    `ON CONFLICT DO NOTHING` against `uq_inbound_events_gateway_event`, the
+    per-gateway partial unique index from `arch29_step2`. This is not a nicety:
+    Dodo retries a failed delivery 8 times over roughly 28 hours, and its
+    `webhook-id` header is explicitly documented as the idempotency key. A
+    replayed event must be a no-op that still returns 200, or the retry ladder
+    never terminates.
+
+    Scoped BY GATEWAY because two vendors can issue the same opaque string, and
+    a global unique index would refuse the second one at random.
+
+    `stripe_event_id` IS STILL WRITTEN FOR STRIPE
+    =============================================
+
+    That column is NOT NULL until the CONTRACT migration. A Dodo event writes
+    NULL there, which the column already permits; a Stripe event routed through
+    this function keeps populating it so the old unique constraint and every
+    existing reader continue to work during the EXPAND window.
+    """
+    values: dict[str, Any] = {
+        "gateway": event.gateway,
+        "gateway_event_id": event.id,
+        # Retained during EXPAND. Dropped by the CONTRACT migration once
+        # verify_arch29_tranche3.py G2 reports zero readers.
+        "stripe_event_id": event.id if event.gateway == "STRIPE" else None,
+        "event_type": event.type,
+        "api_version": None,
+        "stripe_created_at": event.created_epoch,
+        "livemode": bool(event.livemode),
+        "payload": _sanitize_for_json(dict(event.payload or {})),
+        "signature_header": _truncate(signature_header or ""),
+        "organization_id": organization_id,
+        "status": StripeInboundStatus.PENDING.value,
+        "max_attempts": int(settings.STRIPE_INBOUND_MAX_ATTEMPTS),
+    }
+
+    stmt = (
+        pg_insert(StripeInboundEvent.__table__)
+        .values(**values)
+        .on_conflict_do_nothing(index_elements=["gateway", "gateway_event_id"])
+        .returning(StripeInboundEvent.__table__.c.id)
+    )
+
+    row_id = db.execute(stmt).scalar_one_or_none()
+    created = row_id is not None
+
+    logger.info(
+        "gateway_inbound.recorded" if created else "gateway_inbound.replayed",
+        extra={
+            "gateway": event.gateway,
+            "gateway_event_id": event.id,
+            "event_type": event.type,
+            "is_created": created,
         },
     )
     return row_id, created
@@ -355,6 +445,7 @@ __all__ = [
     "mark_ignored",
     "mark_processed",
     "reap_expired_leases",
+    "persist_gateway_event",
     "record_event",
     "resolve_organization_id",
 ]

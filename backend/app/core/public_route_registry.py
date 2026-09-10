@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -17,7 +18,14 @@ class PublicRoute:
     def matches(self, path: str, method: str) -> bool:
         if method.upper() not in self.methods and "*" not in self.methods:
             return False
-        return path.startswith(self.path) if self.prefix_match else path == self.path
+        if self.prefix_match:
+            return path.startswith(self.path)
+        if self.path == path:
+            return True
+        if "{" in self.path:
+            pattern = "^" + re.sub(r"\{[^}]+\}", r"[^/]+", self.path) + "$"
+            return bool(re.match(pattern, path))
+        return False
 
 
 PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
@@ -30,13 +38,6 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     # Invitations
-    #
-    # POST, not GET. The invitation token is a bearer secret, so it travels
-    # in the request body like every other token-bearing public route below
-    # (reset-password, verify-email, email-change/confirm). The GET form this
-    # replaced took the token as `?token=...`, which undid ARCH-04 B.10 --
-    # the fragment in the accept link keeps the token out of server logs
-    # right up until the page makes its first API call.
     PublicRoute(
         path="/api/v1/invitations/preview",
         methods=("POST",),
@@ -45,20 +46,6 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     # ARCH-25 on-demand TLS authorization (Caddy `ask`)
-    #
-    # Unauthenticated because Caddy has no credential to present: it resolves
-    # this BEFORE terminating TLS, so there is no session, token or
-    # certificate in existence yet.
-    #
-    # DEPLOYMENT CONSTRAINT, and it is load-bearing: Caddy reaches this as
-    # `http://web:8000/...` on the compose network. It must NOT be published
-    # through the ingress. Adding a public route for `/api/v1/internal/*` in
-    # a Caddyfile site block would expose an unauthenticated endpoint that
-    # enumerates which hostnames are verified tenant domains.
-    #
-    # The handler mutates nothing and performs one indexed read. A refusal is
-    # the safe direction -- Caddy declines to issue and retries on its own
-    # interval.
     PublicRoute(
         path="/api/v1/internal/tls/authorize",
         methods=("GET",),
@@ -123,7 +110,7 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="email-change token",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
-    # Billing webhooks (Stripe)
+    # Billing webhooks (Stripe & Multi-Gateway / Dodo)
     PublicRoute(
         path="/api/v1/billing/webhooks/stripe",
         methods=("POST",),
@@ -138,6 +125,13 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="Stripe-Signature HMAC over the raw body",
         rate_limit_policy="POLICY_WEBHOOK_INBOUND",
     ),
+    PublicRoute(
+        path="/api/v1/billing/webhooks/{gateway}",
+        methods=("POST",),
+        phase="ARCH-29",
+        credential="Gateway webhook signature (Standard Webhooks HMAC-SHA256 or Stripe HMAC)",
+        rate_limit_policy="POLICY_WEBHOOK_INBOUND",
+    ),
     # SAML / SSO
     PublicRoute(
         path="/api/v1/saml/metadata",
@@ -150,7 +144,7 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         path="/api/v1/saml/acs",
         methods=("POST",),
         phase="ARCH-16",
-        credential="XML signature over the assertion, verified against a live idp_signing_certificates row",
+        credential="XML signature over the assertion",
         rate_limit_policy="POLICY_SSO_ACS",
     ),
     PublicRoute(
@@ -164,14 +158,14 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         path="/api/v1/sso/discover",
         methods=("GET",),
         phase="ARCH-16",
-        credential="none — keyed on DOMAIN, never on email, so it cannot enumerate accounts",
+        credential="none — keyed on DOMAIN",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     PublicRoute(
         path="/api/v1/sso/start",
         methods=("GET",),
         phase="ARCH-16",
-        credential="none — issues an AuthnRequest for a public IdP redirect",
+        credential="none",
         rate_limit_policy="POLICY_SSO_ACS",
     ),
     PublicRoute(
@@ -186,30 +180,30 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         path="/scim/v2",
         methods=("*",),
         phase="ARCH-16",
-        credential="organization-owned SCIM bearer token (scim_api_keys)",
+        credential="organization-owned SCIM bearer token",
         rate_limit_policy="POLICY_SCIM",
         prefix_match=True,
     ),
-    # ARCH-25 — the host-resolved branding surface.
+    # ARCH-25 branding surface
     PublicRoute(
         path="/api/v1/branding/manifest",
         methods=("GET",),
         phase="ARCH-25",
-        credential="none — tenant resolved from a verified Host, response carries no identifiers",
+        credential="none — tenant resolved from a verified Host",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     PublicRoute(
         path="/api/v1/branding/logo",
         methods=("GET",),
         phase="ARCH-25",
-        credential="none — tenant resolved from a verified Host, returns image bytes or 404",
+        credential="none — returns image bytes or 404",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
     PublicRoute(
         path="/api/v1/branding/favicon",
         methods=("GET",),
         phase="ARCH-25",
-        credential="none — tenant resolved from a verified Host, returns image bytes or 404",
+        credential="none — returns image bytes or 404",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
 )

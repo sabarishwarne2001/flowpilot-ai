@@ -12,6 +12,7 @@ from fastapi.routing import APIRoute
 
 from app.api.v1 import billing as billing_v1
 from app.api.v1 import billing_webhook as billing_webhook_v1
+from app.api.v1 import billing_webhook_multi
 from app.api.v1 import scim as scim_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
@@ -245,6 +246,10 @@ app.include_router(webhooks_v1.router, prefix=settings.API_V1_STR)
 
 # ARCH-15 Billing routes
 app.include_router(billing_webhook_v1.router, prefix=settings.API_V1_STR)
+# ARCH-29 Tranche 3. Mounted ALONGSIDE the Stripe-specific route, not in
+# place of it: an in-flight gateway migration must not require
+# reconfiguring the Stripe dashboard before the Dodo endpoint works.
+app.include_router(billing_webhook_multi.router, prefix=settings.API_V1_STR)
 app.include_router(billing_v1.router, prefix=settings.API_V1_STR)
 
 # ARCH-16 SCIM 2.0 root mount

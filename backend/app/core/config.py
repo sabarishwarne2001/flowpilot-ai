@@ -610,6 +610,23 @@ class Settings(BaseSettings):
     STRIPE_INBOUND_MAX_ATTEMPTS: int = 8
 
     # ---- ARCH-15: billing policy ------------------------------------------
+    # ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather
+    # than inferred from which credentials happen to be present: a deployment
+    # carrying both Stripe and Dodo keys during migration must not have its
+    # payment routing decided by import order.
+    BILLING_GATEWAY: str = "STRIPE"
+
+    DODO_API_KEY: SecretStr | None = None
+    DODO_WEBHOOK_SECRET: SecretStr | None = None
+    DODO_API_BASE: str = "https://live.dodopayments.com"
+    DODO_TIMEOUT_SECONDS: float = 20.0
+    # 30 minutes. Must exceed Dodo's early retry intervals (immediate, 5s, 5m,
+    # 30m) so a legitimate late delivery still verifies, without leaving a
+    # captured request replayable indefinitely.
+    DODO_WEBHOOK_TOLERANCE_SECONDS: int = 1800
+    DODO_LIVEMODE: bool = False
+    DODO_MAX_WEBHOOK_BODY_BYTES: int = 512 * 1024
+
     BILLING_DEFAULT_CURRENCY: str = "USD"
     BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None
     BILLING_SEAT_PRICE_LOOKUP_KEY: str | None = None

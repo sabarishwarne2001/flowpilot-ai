@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldAlert, Trash2, Upload, UserRound } from "lucide-react";
 
@@ -19,6 +19,7 @@ import {
   AVATAR_MAX_DIMENSION,
   AVATAR_MIN_DIMENSION,
 } from "@/types/profile";
+import { bumpAvatarVersion } from "@/store/useAvatarVersionStore";
 
 function detailOf(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })
@@ -64,6 +65,16 @@ export const ProfileSettings: React.FC = () => {
     staleTime: 60_000,
   });
 
+  // ARCH-29 Tranche 3. The local counter above only repaints THIS page's
+  // preview. `bumpAvatarVersion` is what reaches the three sidebar avatars,
+  // which otherwise keep the browser-cached copy until a full reload — and,
+  // after a delete, keep showing a photo the server no longer has.
+  const broadcastAvatarChange = useCallback((): void => {
+    setAvatarVersion((v) => v + 1);
+    bumpAvatarVersion(profile?.id);
+  }, [profile?.id]);
+
+
   useEffect(() => {
     if (!profile || dirty) { return; }
     setDisplayName(profile.display_name ?? "");
@@ -99,7 +110,7 @@ export const ProfileSettings: React.FC = () => {
     mutationFn: (file: File) => uploadAvatar(file),
     onSuccess: () => {
       setAvatarError(null);
-      setAvatarVersion((v) => v + 1);
+      broadcastAvatarChange();
       queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
     onError: (err) =>
@@ -115,7 +126,7 @@ export const ProfileSettings: React.FC = () => {
     mutationFn: deleteAvatar,
     onSuccess: () => {
       setAvatarError(null);
-      setAvatarVersion((v) => v + 1);
+      broadcastAvatarChange();
       queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
     onError: (err) =>

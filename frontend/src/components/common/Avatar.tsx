@@ -53,6 +53,7 @@ import React from "react";
 
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
+import { useAvatarVersion } from "@/store/useAvatarVersionStore";
 
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 
@@ -146,9 +147,16 @@ export const Avatar: React.FC<AvatarProps> = ({
   version,
   className = "",
 }) => {
+  // ARCH-29 Tranche 3. The shared version, so an upload in ProfileSettings
+  // repaints every mounted Avatar for this user rather than only the one on
+  // the page that performed it. An explicit `version` prop still wins, for the
+  // caller that is driving its own preview.
+  const sharedVersion = useAvatarVersion(userId);
+  const effectiveVersion = version ?? (sharedVersion > 0 ? sharedVersion : undefined);
+
   const path = userId
     ? `${PROFILE_ENDPOINTS.userAvatar(userId)}${
-        version === undefined ? "" : `?v=${version}`
+        effectiveVersion === undefined ? "" : `?v=${effectiveVersion}`
       }`
     : null;
 

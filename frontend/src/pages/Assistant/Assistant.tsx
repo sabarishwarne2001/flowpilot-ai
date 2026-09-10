@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +16,8 @@ import {
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
+
+import { PortalMenu } from "@/components/common/PortalMenu";
 
 import { assistantApi } from "@/services/api/assistant";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
@@ -119,6 +121,10 @@ export const Assistant: React.FC = () => {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [openConversationMenu, setOpenConversationMenu] = useState<string | null>(null);
+
+  // ARCH-29 Tranche 3. One trigger element per conversation, so PortalMenu
+  // can compute fixed coordinates from the button's bounding rect.
+  const conversationMenuAnchors = useRef<Record<string, HTMLButtonElement | null>>({});
   const [conversationToDelete, setConversationToDelete] = useState<ConversationSummary | null>(null);
 
   useEffect(() => {
@@ -376,8 +382,18 @@ export const Assistant: React.FC = () => {
                             {conversation.title}
                           </span>
                         </div>
-                        <div className="relative">
+                        {/*
+                          ARCH-29 Tranche 3. Rendered through a portal to
+                          document.body. This was `absolute ... z-50` inside a
+                          `relative` wrapper nested in the `overflow-y-auto`
+                          conversation list, and an overflow container is a
+                          CLIPPING context — the menu was cut off regardless of
+                          z-index. Raising z-index is the intuitive fix and
+                          changes nothing.
+                        */}
+                        <div>
                           <button
+                            ref={(node) => { conversationMenuAnchors.current[conversation.id] = node; }}
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
@@ -388,7 +404,11 @@ export const Assistant: React.FC = () => {
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
                           {openConversationMenu === conversation.id && (
-                            <div className="absolute right-0 top-6 z-50 w-36 rounded-lg border border-border bg-card shadow-lg p-1">
+                            <PortalMenu
+                              anchorRef={{ current: conversationMenuAnchors.current[conversation.id] ?? null }}
+                              open
+                              onClose={() => setOpenConversationMenu(null)}
+                            >
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -413,7 +433,7 @@ export const Assistant: React.FC = () => {
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Delete
                               </button>
-                            </div>
+                            </PortalMenu>
                           )}
                         </div>
                       </div>

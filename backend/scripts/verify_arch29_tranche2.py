@@ -388,12 +388,27 @@ def g9_head_and_model(static_only: bool) -> None:
     if len(heads) != 1:
         record(check, FAIL, f"{len(heads)} alembic heads: {heads}")
         return
-    if heads[0] != "arch29_step1_quota_tier_commercials":
-        record(check, FAIL, f"head is {heads[0]}, expected the ARCH-29 revision")
+
+    # Presence in the chain, NOT identity with the head.
+    #
+    # The first version asserted `heads[0] == "arch29_step1_quota_tier_
+    # commercials"`. That passed when written and broke the moment Tranche 3
+    # added `arch29_step2_multi_gateway_expand` on top of it — a gate failing
+    # on correct forward progress. A revision that is no longer the head has
+    # not been reverted; it has been built upon, which is the normal and
+    # desired state. What this check actually cares about is that the Tranche 2
+    # migration still exists in the applied chain and that the chain has not
+    # forked.
+    if "arch29_step1_quota_tier_commercials" not in revs:
+        record(
+            check,
+            FAIL,
+            "the ARCH-29 Tranche 2 revision is absent from the chain",
+        )
         return
 
     if static_only:
-        record(check, PASS, f"single head ({heads[0]}); model check skipped")
+        record(check, PASS, f"single head ({heads[0]}); T2 revision in chain")
         return
 
     try:
