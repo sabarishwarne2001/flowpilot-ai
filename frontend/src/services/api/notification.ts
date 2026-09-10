@@ -103,12 +103,25 @@ export const getOrganizationNotifications = async (
   return response.data;
 };
 
+export const updateOrganizationNotificationRead = async (
+  organizationId: string,
+  notificationId: string,
+  isRead: boolean,
+): Promise<Notification> => {
+  const response = await apiClient.patch<Notification>(
+    ORG_NOTIFICATION_ENDPOINTS.detail(organizationId, notificationId),
+    { is_read: isRead },
+  );
+  return response.data;
+};
+
 export const notificationApi = {
   getNotifications,
   updateNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
   getOrganizationNotifications,
+  updateOrganizationNotificationRead,
 };
 
 export default notificationApi;

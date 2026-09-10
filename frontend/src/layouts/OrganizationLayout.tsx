@@ -1,51 +1,41 @@
-﻿import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+﻿import React, { useCallback, useState } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 
 import OrganizationSidebarNavigation from "@/components/layout/OrganizationSidebarNavigation";
+import ThemeToggle from "@/components/layout/ThemeToggle";
+import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { authApi } from "@/services/api/auth";
+import { useAuthStore } from "@/store/useAuthStore";
+import { ROUTES } from "@/constants/routes";
 
-/**
- * Minimal shell for organization-scoped pages (Billing, Enterprise identity,
- * Audit log).
- *
- * Deliberately NOT DashboardLayout. DashboardLayout and everything it renders
- * (Header, WorkspaceLogo, OrgWorkspaceSwitcher, etc.) is built around a
- * resolved WORKSPACE, which does not exist on these routes -- only an
- * organization does. Reusing it here risks a crash in any descendant that
- * assumes useResolvedTenant() will succeed. This shell reads only from
- * OrganizationGuard's context and renders nothing that assumes a workspace.
- */
 export const OrganizationLayout: React.FC = () => {
-  const { organization } = useResolvedOrganization();
+  const { organization, organizationId } = useResolvedOrganization();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const navigate = useNavigate();
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+
+  const handleLogout = useCallback(async (): Promise<void> => {
+    await authApi.logoutRequest();
+    clearAuth();
+    navigate(ROUTES.LOGIN, { replace: true });
+  }, [clearAuth, navigate]);
+
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/*
-        Scroll bounding, not decoration.
-
-        This was `hidden lg:block` with no height or overflow of its own. The
-        nav inside asks for `h-full`, which only resolves because a block-level
-        flex item happens to be stretched to the row's cross size -- an
-        implicit dependency on flex stretch semantics that quietly stops
-        holding the moment anything here gains a sibling or a wrapper.
-
-        Making it an explicit flex column with `min-h-0` states the intent:
-        this column is exactly viewport-tall, and its child owns the scroll.
-        `min-h-0` is the load-bearing part -- a flex child defaults to
-        `min-height: auto`, so without it the nav can push the column taller
-        than the viewport and the scrollbar migrates to the page, which is
-        what a second scrollbar next to a sidebar actually is.
-      */}
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground transition-colors duration-200">
       <aside className="hidden h-screen w-64 min-h-0 flex-shrink-0 flex-col border-r border-border lg:flex">
-        <OrganizationSidebarNavigation />
+        <OrganizationSidebarNavigation onLogout={handleLogout} />
       </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
           <div className="flex h-full w-64 min-h-0 flex-col border-r border-border bg-background">
-            <OrganizationSidebarNavigation onNavigate={() => setMobileOpen(false)} />
+            <OrganizationSidebarNavigation
+              onNavigate={() => setMobileOpen(false)}
+              onLogout={handleLogout}
+            />
           </div>
           <div
             className="flex-1 bg-black/40"
@@ -55,27 +45,42 @@ export const OrganizationLayout: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center gap-3 border-b border-border px-4 lg:px-6">
-          <button
-            type="button"
-            className="lg:hidden rounded-lg p-2 hover:bg-muted/50"
-            onClick={() => setMobileOpen((open) => !open)}
-            aria-label="Toggle organization navigation"
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-          <span className="text-sm font-semibold">
-            {organization.organization_name}
-          </span>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-card px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              className="rounded-lg p-2 hover:bg-muted/50 lg:hidden"
+              onClick={() => setMobileOpen((open) => !open)}
+              aria-label="Toggle organization navigation"
+            >
+              {mobileOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+
+            <h1 className="min-w-0 truncate text-sm">
+              <span className="font-semibold text-foreground">
+                {organization.organization_name}
+              </span>
+              <span className="mx-2 text-muted-foreground/60" aria-hidden="true">
+                ·
+              </span>
+              <span className="text-muted-foreground">Settings</span>
+            </h1>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            <OrganizationNotificationBell
+              organizationId={organizationId}
+              orgSlug={organization.organization_slug}
+            />
+          </div>
         </header>
 
-        {/*
-          `min-h-0` for the same reason as the aside, and `overscroll-contain`
-          so reaching the end of this pane does not chain the scroll to the
-          document behind it -- the effect that reads as two scrollbars
-          fighting even when only one element is scrollable.
-        */}
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:p-6">
           <Outlet />
         </main>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Centralized API path construction for FlowPilot AI.
  */
 
@@ -52,6 +52,8 @@ export const ORG_EMAIL_ENDPOINTS = {
 export const ORG_NOTIFICATION_ENDPOINTS = {
   list: (organizationId: string): string =>
     `/organizations/${seg(organizationId)}/notifications`,
+  detail: (organizationId: string, notificationId: string): string =>
+    `/organizations/${seg(organizationId)}/notifications/${seg(notificationId)}`,
 } as const;
 
 export const KNOWLEDGE_ENDPOINTS = {
