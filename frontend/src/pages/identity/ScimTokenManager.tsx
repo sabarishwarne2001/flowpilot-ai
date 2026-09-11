@@ -19,6 +19,7 @@ import {
   revokeScimKey,
   rotateScimKey,
 } from "@/services/api/identity";
+import { apiOrigin } from "@/services/api/client";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { ScimKeyIssued, ScimKeyRead } from "@/types/identity";
@@ -103,6 +104,7 @@ export const ScimTokenManager: React.FC = () => {
             Tokens your identity provider uses to create and deactivate members
             automatically.
           </p>
+          <ScimBaseUrl />
         </div>
 
         {isOwner && configs.length > 0 && (
@@ -451,6 +453,51 @@ const SecretDialog: React.FC<{
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+/**
+ * ARCH-30 Tranche 1 (T4-F3). The SCIM base URL, with a copy control.
+ *
+ * Okta and Entra ID ask for two values: a base URL and a bearer token. This
+ * console offered the token and never the URL, so an administrator had to
+ * guess — and the natural guess, `<host>/api/v1/scim/v2`, is wrong, because
+ * the router is mounted at the application root.
+ *
+ * Built from `apiOrigin()`, so it is this page's origin in production and the
+ * uvicorn origin in development. On a tenant custom domain it is that domain,
+ * which is valid: the ingress proxies SCIM there and `scim_key` accepts a token
+ * whose organization matches the host.
+ */
+const ScimBaseUrl: React.FC = () => {
+  const baseUrl = `${apiOrigin()}/scim/v2`;
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(baseUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, [baseUrl]);
+
+  return (
+    <div className="mt-2 flex max-w-xl items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
+      <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+        SCIM base URL
+      </span>
+      <code className="min-w-0 flex-1 truncate font-mono text-xs">{baseUrl}</code>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        aria-label="Copy SCIM base URL"
+        className="inline-flex shrink-0 items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 };

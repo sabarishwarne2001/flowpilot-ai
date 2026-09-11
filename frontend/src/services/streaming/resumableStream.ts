@@ -2,6 +2,7 @@
  * A13-safe streaming client for the assistant.
  */
 
+import { API_BASE_URL } from "@/services/api/client";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export interface StartFrame {
@@ -109,7 +110,12 @@ export interface StreamOptions {
   readonly maxRetries?: number;
 }
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+// ARCH-30 Tranche 1 (T4-F5). This module computed its own API base with the
+// same `?? "http://localhost:8000/api/v1"` default client.ts used to have, so
+// every production build streamed assistant responses from localhost — mixed
+// content on https, blocked outright — while every non-streaming request
+// worked. One owner now; gate 30T1-G9 rejects a second reader of VITE_API_URL.
+const API_URL = API_BASE_URL;
 const DEFAULT_MAX_RETRIES = 6;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 15_000;

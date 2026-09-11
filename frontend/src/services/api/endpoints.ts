@@ -336,6 +336,20 @@ export const BRANDING_ENDPOINTS = {
 } as const;
 
 /**
+ * ARCH-16 / ARCH-30 Tranche 1 (T4-F4) — enterprise single sign-on.
+ *
+ * `start` is never called through axios. It answers with a 302 to the identity
+ * provider, whose login page must own the window, so it is a top-level
+ * navigation built with `apiHref`. That also means the server's `start_url`
+ * field is not followed: the browser's destination is composed here from a
+ * constant and encoded parameters, and nothing in a response body steers it.
+ */
+export const SSO_ENDPOINTS = {
+  discover: "/sso/discover",
+  start: "/sso/start",
+} as const;
+
+/**
  * ARCH-21 — the public gateway.
  *
  * Listed for documentation and for the API explorer's copy targets. The

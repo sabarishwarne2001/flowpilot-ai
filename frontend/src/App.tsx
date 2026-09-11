@@ -76,6 +76,7 @@ const VerificationReviewQueue = lazy(
 );
 
 import { Login } from "@/pages/Auth/Login";
+import { SsoComplete } from "@/pages/Auth/SsoComplete";
 import { Register } from "@/pages/Auth/Register";
 import VerifyEmail from "@/pages/Auth/VerifyEmail";
 import ForgotPassword from "@/pages/Auth/ForgotPassword";
@@ -170,6 +171,25 @@ export default function App() {
                 <Route
                   path={ROUTES.REGISTER}
                   element={<Register />}
+                />
+              </Route>
+
+              {/*
+                ARCH-30 Tranche 1 (T4-F4). Federated login completion.
+
+                Outside PublicRoute AND outside PrivateRoute, deliberately.
+                PrivateRoute redirects a browser with no persisted session to
+                /login before the refresh cookie is ever exchanged, which is
+                the loop this route exists to break. PublicRoute redirects a
+                browser WITH a persisted session straight to the dashboard,
+                skipping the exchange and keeping the previous user's profile
+                in the store. Under AuthLayout so a tenant host shows its own
+                branding while the exchange runs.
+              */}
+              <Route element={<AuthLayout />}>
+                <Route
+                  path={ROUTES.SSO_COMPLETE}
+                  element={<SsoComplete />}
                 />
               </Route>
 

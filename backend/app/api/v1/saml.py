@@ -6,7 +6,7 @@ from fastapi import Request
 import logging
 import secrets
 from datetime import timedelta
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -14,8 +14,8 @@ from sqlalchemy import text as sql_text
 
 from app.api import deps
 from app.models.identity import (
-    AuthMethod, EnterpriseIdpConfig, IdpProtocol, IdpSigningCertificate,
-    SsoAssertion, SsoAuthRequest, VerifiedDomain,
+    AuthMethod, DomainStatus, EnterpriseIdpConfig, IdpProtocol,
+    IdpSigningCertificate, SsoAssertion, SsoAuthRequest, VerifiedDomain,
 )
 from app.core.cookies import set_refresh_cookie
 from app.services.identity import (
@@ -34,6 +34,138 @@ sso_router = APIRouter(prefix="/sso", tags=["identity"])
 oidc_router = APIRouter(prefix="/oidc", tags=["identity"])
 
 _GENERIC_FAILURE = {"detail": "Authentication failed."}
+
+
+# ---------------------------------------------------------------------------
+# ARCH-30 Tranche 1 (T4-F4) — SSO resolution and federated login completion
+# ---------------------------------------------------------------------------
+
+#: The SPA route that turns the refresh cookie into a signed-in session. Must
+#: equal `ROUTES.SSO_COMPLETE` in frontend/src/constants/routes.ts;
+#: verify_arch30_tranche1.py G7 compares the two literals.
+SSO_COMPLETE_PATH = "/auth/sso/complete"
+
+#: Domain states in which an email domain may route a login to an IdP. The
+#: same set as `VerifiedDomain.provisioning_allowed`. PENDING proves nothing,
+#: and LAPSED or REVOKED prove the proof expired.
+_SSO_ROUTABLE_DOMAIN_STATUSES = (DomainStatus.VERIFIED, DomainStatus.GRACE)
+
+_AMBIGUOUS_BINDING = {
+    "detail": (
+        "Single sign-on for this domain is misconfigured. "
+        "Contact your administrator."
+    )
+}
+
+
+class AmbiguousSsoBinding(Exception):
+    """More than one active IdP configuration claims the same email domain."""
+
+
+def _normalise_sso_domain(value: str) -> str:
+    return value.strip().lower().rsplit("@", 1)[-1]
+
+
+def _resolve_sso_binding(db, domain: str) -> EnterpriseIdpConfig | None:
+    """THE lookup from an email domain to the IdP that authenticates it.
+
+    WHY ONE FUNCTION
+    ================
+
+    `discover` and `start_sso` each carried their own copy of this query, and
+    the copies had drifted: discover ended in `.first()`, start in
+    `.one_or_none()`. On a domain with two bindings, discover told the login
+    page SSO was available and start then raised `MultipleResultsFound` — a
+    500 on the button the page had just shown. Worse, `.first()` without an
+    ORDER BY routed the user to whichever organization's IdP the planner
+    returned first.
+
+    WHY AMBIGUITY IS REACHABLE
+    ==========================
+
+    `uq_verified_domains_org_domain` is `(organization_id, domain)`, not
+    `(domain)`. Two organizations can each verify `acme.com` — after a domain
+    changes hands, or when the owner publishes both TXT records — and each can
+    mark it as an SSO binding. Nothing in the schema prevents it, so this
+    function must not assume it away.
+
+    The structural fix is a partial unique index on `verified_domains(domain)
+    WHERE is_sso_binding`. That is a migration and belongs with the inherited
+    `idp_entity_id` `.one_or_none()` defect in the ACS, which is the same class
+    one table over. Until then, ambiguity is REFUSED and logged at ERROR on
+    both endpoints. Refusing blocks a login; routing arbitrarily hands a user's
+    credentials page to another tenant's IdP.
+
+    WHY THE STATUS FILTER
+    =====================
+
+    Neither original query filtered `VerifiedDomain.status`. An organization
+    holding a PENDING claim on a domain it never proved — or a LAPSED one it no
+    longer controls — could, if the binding flag was set, have that domain's
+    users sent to its IdP from the login page. `limit(2)` fetches just enough
+    rows to tell one from many.
+    """
+    normalised = _normalise_sso_domain(domain)
+    rows = (
+        db.query(EnterpriseIdpConfig)
+        .join(VerifiedDomain,
+              EnterpriseIdpConfig.verified_domain_id == VerifiedDomain.id)
+        .filter(
+            VerifiedDomain.domain == normalised,
+            VerifiedDomain.is_sso_binding.is_(True),
+            VerifiedDomain.status.in_(_SSO_ROUTABLE_DOMAIN_STATUSES),
+            EnterpriseIdpConfig.is_active.is_(True),
+        )
+        .limit(2)
+        .all()
+    )
+    if len(rows) > 1:
+        logger.error(
+            "sso.ambiguous_domain_binding",
+            extra={
+                "domain": normalised,
+                "idp_config_ids": sorted(str(row.id) for row in rows),
+                "organization_ids": sorted(
+                    {str(row.organization_id) for row in rows}
+                ),
+            },
+        )
+        raise AmbiguousSsoBinding(normalised)
+    return rows[0] if rows else None
+
+
+def _sso_landing_redirect(*, target: str | None,
+                          plaintext_token: str) -> RedirectResponse:
+    """Hand the browser to the SPA route that completes a federated login.
+
+    ARCH-30 Step 0 made both federated handlers set the refresh cookie, and
+    its comment said the SPA "exchanges it for an access token at
+    /auth/refresh on landing". Nothing in the SPA did that for a browser that
+    had never signed in:
+
+      * `SessionBootstrap` restores only when the persisted `isAuthenticated`
+        flag is already true, which on a first SSO login it is not;
+      * `PrivateRoute` then redirects on that same flag before any request is
+        made.
+
+    So the cookie arrived, went unread, and the user was sent to /login — the
+    loop Step 0 was written to end, moved one layer up. Landing on a route
+    whose only job is the exchange makes the seam explicit instead of
+    depending on a guard to guess that a session might exist.
+
+    `next` is re-validated by the SPA with `isSafeRedirectPath`; it is
+    validated here too so a bad value never reaches a URL at all. A path is not
+    a credential, so the query string is an acceptable carrier — unlike the
+    access token, which is why the token still travels only in the cookie.
+    """
+    frontend = str(getattr(get_settings(), "FRONTEND_URL", "")).rstrip("/")
+    destination = target if target and is_safe_redirect_path(target) else "/"
+    response = RedirectResponse(
+        f"{frontend}{SSO_COMPLETE_PATH}?next={quote(destination, safe='')}",
+        status_code=302,
+    )
+    set_refresh_cookie(response, token=plaintext_token)
+    return response
 
 
 def _sp_urls():
@@ -128,19 +260,13 @@ def sp_metadata(db=Depends(deps.get_db)) -> Response:
 
 @sso_router.get("/discover")
 def discover(domain: str = Query(..., min_length=3), db=Depends(deps.get_db)):
-    normalised = domain.strip().lower().rsplit("@", 1)[-1]
-    row = (
-        db.query(VerifiedDomain, EnterpriseIdpConfig)
-        .join(EnterpriseIdpConfig,
-              EnterpriseIdpConfig.verified_domain_id == VerifiedDomain.id)
-        .filter(VerifiedDomain.domain == normalised,
-                VerifiedDomain.is_sso_binding.is_(True),
-                EnterpriseIdpConfig.is_active.is_(True))
-        .first()
-    )
-    if row is None:
+    normalised = _normalise_sso_domain(domain)
+    try:
+        config = _resolve_sso_binding(db, normalised)
+    except AmbiguousSsoBinding:
+        return JSONResponse(status_code=409, content=_AMBIGUOUS_BINDING)
+    if config is None:
         return {"sso_enabled": False}
-    _, config = row
     return {
         "sso_enabled": True,
         "protocol": str(config.protocol.value if hasattr(config.protocol, "value") else config.protocol),
@@ -154,15 +280,11 @@ def start_sso(request: Request, domain: str = Query(...),
               redirect_path: str | None = Query(None),
               force_authn: bool = Query(False),
               db=Depends(deps.get_db)):
-    normalised = domain.strip().lower().rsplit("@", 1)[-1]
-    row = (
-        db.query(EnterpriseIdpConfig)
-        .join(VerifiedDomain, EnterpriseIdpConfig.verified_domain_id == VerifiedDomain.id)
-        .filter(VerifiedDomain.domain == normalised,
-                VerifiedDomain.is_sso_binding.is_(True),
-                EnterpriseIdpConfig.is_active.is_(True))
-        .one_or_none()
-    )
+    normalised = _normalise_sso_domain(domain)
+    try:
+        row = _resolve_sso_binding(db, normalised)
+    except AmbiguousSsoBinding:
+        return JSONResponse(status_code=409, content=_AMBIGUOUS_BINDING)
     if row is None:
         return JSONResponse(status_code=404,
                             content={"detail": "No SSO is configured for that domain."})
@@ -356,7 +478,6 @@ def assertion_consumer_service(
                 details={"auth_method": "SAML2", "user_id": str(result.user_id)})
     db.commit()
 
-    frontend = str(getattr(get_settings(), "FRONTEND_URL", "")).rstrip("/")
     target = (auth_request.redirect_path
               if auth_request and is_safe_redirect_path(auth_request.redirect_path)
               else "/")
@@ -388,9 +509,8 @@ def assertion_consumer_service(
     # a top-level cross-site POST redirect from the IdP — and the SPA exchanges
     # it for an access token at /auth/refresh on landing. Identical to the
     # password path, minus the body.
-    response = RedirectResponse(f"{frontend}{target}", status_code=302)
-    set_refresh_cookie(response, token=issued.plaintext_token)
-    return response
+    return _sso_landing_redirect(target=target,
+                                 plaintext_token=issued.plaintext_token)
 
 
 @saml_router.post("/slo")
@@ -507,9 +627,7 @@ def oidc_callback(request: Request, code: str = Query(...),
                       attributes={"sub": [claims.subject]}, source_ip=source_ip)
     db.commit()
 
-    frontend = str(getattr(settings, "FRONTEND_URL", "")).rstrip("/")
     target = (auth_request.redirect_path
               if is_safe_redirect_path(auth_request.redirect_path) else "/")
-    response = RedirectResponse(f"{frontend}{target}", status_code=302)
-    set_refresh_cookie(response, token=issued.plaintext_token)
-    return response
+    return _sso_landing_redirect(target=target,
+                                 plaintext_token=issued.plaintext_token)

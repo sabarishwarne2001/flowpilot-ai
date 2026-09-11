@@ -241,7 +241,22 @@ if (-not (Test-Path $frontendEnv)) {
     Copy-Item (Join-Path $FrontendDir '.env.example') $frontendEnv
     Write-Ok 'Created frontend/.env from .env.example.'
 }
-Set-EnvValue $frontendEnv 'VITE_API_URL' "http://localhost:$ApiPort/api/v1"
+# ARCH-30 Tranche 1 (T4-F5). VITE_API_URL belongs in .env.development.local,
+# which Vite loads for the dev server only. Written to .env it was ALSO loaded by
+# `vite build`, baking this machine's localhost API into production bundles;
+# vite.config.ts now refuses that build. Any copy an earlier run left in .env is
+# stripped, once, so an existing checkout builds again.
+$frontendDevEnv = Join-Path $FrontendDir '.env.development.local'
+if (Select-String -Path $frontendEnv -Pattern '^\s*VITE_API_URL\s*=' -Quiet) {
+    $kept = @(Get-Content $frontendEnv | Where-Object { $_ -notmatch '^\s*VITE_API_URL\s*=' })
+    Set-Content -Path $frontendEnv -Value $kept -Encoding UTF8
+    Write-Ok 'Moved VITE_API_URL out of frontend/.env.'
+}
+if (Test-Path $frontendDevEnv) {
+    Set-EnvValue $frontendDevEnv 'VITE_API_URL' "http://localhost:$ApiPort/api/v1"
+} else {
+    Set-Content -Path $frontendDevEnv -Value "VITE_API_URL=http://localhost:$ApiPort/api/v1" -Encoding UTF8
+}
 
 # --- 4. Backing services ---------------------------------------------------
 Write-Step '4/8  Docker backing services'

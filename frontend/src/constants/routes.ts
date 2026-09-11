@@ -4,6 +4,11 @@
 
 export const ROUTES = {
   LOGIN: "/login",
+  /**
+   * ARCH-30 Tranche 1 (T4-F4). Where federated logins land. Must equal
+   * SSO_COMPLETE_PATH in backend/app/api/v1/saml.py (gate 30T1-G7).
+   */
+  SSO_COMPLETE: "/auth/sso/complete",
   REGISTER: "/register",
   VERIFY_EMAIL: "/verify-email",
   FORGOT_PASSWORD: "/forgot-password",

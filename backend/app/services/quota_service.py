@@ -23,6 +23,7 @@ from app.core.usage_events import (
     overage_type_for,
     is_overage_type,
 )
+from app.core import entitlements
 from app.models.organization import Organization
 from app.models.quota_tier import (
     POLICIES_REQUIRING_PRICE,
@@ -619,9 +620,41 @@ def _validate(
     validated: list[TierEntrySpec] = []
 
     for spec in entries:
+        # ARCH-30 Tranche 1 (T4-F1). Capability entitlements are validated by
+        # their own rule, BEFORE the meter-vocabulary refusal below.
+        #
+        # Without this branch `llm.platform_key` reached the refusal, every
+        # seeded tier was rejected, the seed's single transaction rolled all
+        # four back, and `_platform_key_entitled` correctly refused inference
+        # to every tenant without BYOK. The ordering is not an accident: an
+        # entitlement must never fall through to `is_limit_key`, and
+        # `entitlements._assert_disjoint_from_meters` guarantees no key can
+        # satisfy both, so there is no string for which the order matters.
+        if entitlements.is_entitlement_key(spec.limit_key):
+            violation = entitlements.shape_violation(
+                limit_key=spec.limit_key,
+                period=spec.period,
+                max_quantity=spec.max_quantity,
+                max_cost_micros=spec.max_cost_micros,
+                overage_policy=spec.overage_policy,
+                overage_price_tier_key=spec.overage_price_tier_key,
+                grace_quantity=spec.grace_quantity,
+            )
+            if violation is not None:
+                raise QuotaTierValidationError(violation)
+            entitlement_scope = (spec.limit_key, spec.period.value)
+            if entitlement_scope in seen:
+                raise QuotaTierValidationError(
+                    f"Duplicate entry {entitlement_scope!r}."
+                )
+            seen.add(entitlement_scope)
+            validated.append(spec)
+            continue
+
         if not is_limit_key(spec.limit_key):
             raise QuotaTierValidationError(
-                f"'{spec.limit_key}' is neither the wildcard '{TOTAL_COST_KEY}' nor a billable usage event type."
+                f"'{spec.limit_key}' is neither the wildcard '{TOTAL_COST_KEY}', "
+                f"a billable usage event type, nor a registered entitlement."
             )
         if spec.max_quantity is None and spec.max_cost_micros is None:
             raise QuotaTierValidationError(

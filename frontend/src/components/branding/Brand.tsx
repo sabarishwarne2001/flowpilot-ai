@@ -3,6 +3,8 @@ import { Zap } from "lucide-react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
+import { resolveApiAssetUrl } from "@/services/api/client";
 
 export type BrandVariant =
   | "sidebar"
@@ -66,6 +68,34 @@ function BrandSkeleton({ variant }: { variant: BrandVariant }) {
   );
 }
 
+/**
+ * The product mark, in whichever identity applies to this surface.
+ *
+ * THREE SOURCES, IN PRIORITY ORDER
+ * ================================
+ *
+ * 1. A resolved tenant (authenticated, inside a workspace). Logo via
+ *    `useAuthenticatedImage`, which attaches the session — unchanged.
+ * 2. ARCH-30 Tranche 1 (T4-F5): no tenant, but the page was served on a
+ *    verified tenant custom domain. The host-resolved public manifest supplies
+ *    the brand name and an UNAUTHENTICATED logo URL. This is what makes
+ *    `ai.acme.com/login` say Acme before anyone has signed in.
+ * 3. Neither: FlowPilot defaults.
+ *
+ * ARCH-29 finding Issue 5 established why (2) could not be done in this
+ * component alone: pre-auth there is no tenant to read and no session to fetch
+ * with. ARCH-25 had already built the server half — a public endpoint keyed by
+ * Host — and nothing consumed it.
+ *
+ * The manifest is only requested when there is no tenant. Inside a workspace
+ * the tenant's own logo is authoritative and a second, host-keyed opinion
+ * about branding would only be a chance to disagree.
+ *
+ * `has_custom_branding` gates (2) rather than a non-null `brand_name`: the
+ * platform origin and a tenant with branding disabled both return the
+ * default manifest, and the flag is the server's statement that the values
+ * are a tenant's rather than defaults to display.
+ */
 export const Brand: React.FC<BrandProps> = ({
   variant = "sidebar",
   className = "",
@@ -73,12 +103,23 @@ export const Brand: React.FC<BrandProps> = ({
   const tenant = useOptionalTenant();
   const [imgError, setImgError] = useState(false);
 
-  const workspaceName = tenant?.workspace.workspace_name ?? "FlowPilot AI";
+  const manifest = usePublicBrandingManifest({ enabled: tenant === null });
+  const publicBrand =
+    tenant === null && manifest?.has_custom_branding ? manifest : null;
+
+  const workspaceName =
+    tenant?.workspace.workspace_name ?? publicBrand?.brand_name ?? "FlowPilot AI";
   const companyName =
-    tenant?.organization.organization_name ?? "AI Document Intelligence";
+    tenant?.organization.organization_name ??
+    (publicBrand ? "Secure sign-in" : "AI Document Intelligence");
 
   const logoPath = tenant?.workspace.company_logo_url ?? null;
   const authenticatedLogo = useAuthenticatedImage(logoPath);
+
+  // `resolveApiAssetUrl`, never the raw manifest string: the manifest is
+  // unauthenticated input, and the helper refuses any URL off the API origin.
+  const publicLogo = resolveApiAssetUrl(publicBrand?.logo_url);
+  const logoSrc = authenticatedLogo ?? publicLogo;
 
   const initials = (workspaceName || companyName || "FP")
     .trim()
@@ -114,17 +155,17 @@ export const Brand: React.FC<BrandProps> = ({
           justify-center
           overflow-hidden
           rounded-lg
-          ${authenticatedLogo && !imgError ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
+          ${logoSrc && !imgError ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
         `}
       >
-        {authenticatedLogo && !imgError ? (
+        {logoSrc && !imgError ? (
           <img
-            src={authenticatedLogo}
-            alt={companyName}
+            src={logoSrc}
+            alt={publicBrand?.brand_name ?? companyName}
             className="h-full w-full object-cover"
             onError={() => setImgError(true)}
           />
-        ) : isAuthPage ? (
+        ) : isAuthPage && !publicBrand ? (
           <div className="flex h-full w-full items-center justify-center bg-primary">
             <Zap className="h-6 w-6 text-primary-foreground fill-primary-foreground" />
           </div>

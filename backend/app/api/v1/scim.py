@@ -44,7 +44,36 @@ def scim_key(request: Request, authorization: str | None = Header(None),
     from app.core.client_ip import client_ip as resolve_client_ip
 
     client_ip = resolve_client_ip(request)
-    return scim_service.authenticate(db, bearer=token, source_ip=client_ip)
+    key = scim_service.authenticate(db, bearer=token, source_ip=client_ip)
+
+    # ARCH-30 Tranche 1 (T4-F3). SCIM is now proxied on tenant custom domains
+    # as well as the platform host, so a request can arrive on `ai.acme.com`
+    # carrying a token issued to a different organization.
+    #
+    # The token alone already decides which directory is written — every
+    # scim_service call is scoped by `key.organization_id` — so this is not
+    # closing a read. It is closing a CONFUSION: an IdP configured with Acme's
+    # hostname and Globex's token would provision into Globex while every log
+    # line and every admin looking at the URL says Acme. ARCH-25's rule is that
+    # a verified Host adds a constraint and never replaces authorization; this
+    # applies that rule to the one router mounted outside /api.
+    #
+    # 404 with the same body as a bad token, so a mismatched host is
+    # indistinguishable from a wrong credential. The platform host resolves no
+    # tenant (`host_org is None`) and is unaffected.
+    from app.middleware.host_tenant import host_organization_id
+
+    host_org = host_organization_id(request)
+    if host_org is not None and host_org != key.organization_id:
+        logger.warning(
+            "scim.host_token_mismatch",
+            extra={
+                "host_organization_id": str(host_org),
+                "scim_key_organization_id": str(key.organization_id),
+            },
+        )
+        raise ScimNotFound("Invalid credentials.")
+    return key
 
 
 def assert_write_allowed(db, *, organization_id, operation: str) -> None:

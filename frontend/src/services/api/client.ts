@@ -72,7 +72,81 @@ import { buildLoginRedirect } from "@/utils/security";
 export { ApiError } from "@/services/api/errors";
 export type { ParsedApiError } from "@/services/api/errors";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+/**
+ * ARCH-30 Tranche 1 (T4-F5). The API base URL.
+ *
+ * This previously defaulted to `http://localhost:8000/api/v1` in EVERY build.
+ * A production bundle built without VITE_API_URL shipped a localhost API; one
+ * built with an absolute platform URL was worse, because it looked fine.
+ *
+ * ARCH-25 resolves a tenant from the Host header. Caddy serves the SPA and
+ * proxies /api/* on each tenant custom domain with `header_up Host {host}`, so
+ * a same-origin call from `ai.acme.com` arrives with Acme's host. An absolute
+ * `https://app.flowpilot.ai/api/v1` sends that call to the PLATFORM host
+ * instead: the branding manifest returns FlowPilot defaults, the refresh
+ * cookie set on the tenant's origin is not sent, and nothing reports an error.
+ *
+ * Production therefore defaults to the relative `/api/v1`. `vite.config.ts`
+ * refuses to build a production bundle with an absolute VITE_API_URL unless
+ * VITE_ALLOW_CROSS_ORIGIN_API=true is set deliberately, so the silent case now
+ * fails at build time. Development keeps the absolute default because Vite and
+ * uvicorn run on different ports with no proxy between them.
+ *
+ * ONE OWNER. `services/streaming/resumableStream.ts` carried its own copy of
+ * the old expression, so fixing only this file would have left every
+ * production assistant stream pointed at `http://localhost:8000`. It now
+ * imports this constant, and gate 30T1-G9 fails if any other module reads
+ * `VITE_API_URL` again.
+ */
+export const API_BASE_URL: string =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000/api/v1" : "/api/v1");
+
+const API_URL = API_BASE_URL;
+
+/**
+ * The origin serving the API, always absolute.
+ *
+ * `new URL` against `window.location.origin` resolves both shapes: the relative
+ * production base becomes this page's origin, the absolute development base
+ * stays what it is. Used where a full URL must leave the browser — the SCIM
+ * base URL an administrator pastes into their IdP.
+ */
+export const apiOrigin = (): string =>
+  new URL(API_URL, window.location.origin).origin;
+
+/**
+ * An href for a path under the API base, for top-level navigations.
+ *
+ * SSO start is a 302 to the identity provider and must own the window, so it
+ * cannot go through axios. Composed from the base and a caller-built path —
+ * never from a URL string in a response body.
+ */
+export const apiHref = (path: string): string => `${API_URL}${path}`;
+
+/**
+ * Resolve a server-supplied asset path against the API origin.
+ *
+ * The branding manifest returns `/api/v1/branding/logo`, an origin-relative
+ * path. Rendered raw in development it would resolve against Vite's port and
+ * 404. Anything that resolves OFF the API origin returns null: a manifest is
+ * unauthenticated input to an `<img>` on the login page, and the only logo it
+ * may point at is one this API serves.
+ */
+export const resolveApiAssetUrl = (
+  path: string | null | undefined,
+): string | null => {
+  if (!path) {
+    return null;
+  }
+  try {
+    const origin = apiOrigin();
+    const resolved = new URL(path, origin);
+    return resolved.origin === origin ? resolved.toString() : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Routes that must never trigger a refresh attempt.

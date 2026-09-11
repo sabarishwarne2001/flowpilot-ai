@@ -200,7 +200,15 @@ ok 'backend/.env validated for host execution.'
 
 FRONTEND_ENV="${FRONTEND_DIR}/.env"
 [[ -f "${FRONTEND_ENV}" ]] || cp "${FRONTEND_DIR}/.env.example" "${FRONTEND_ENV}"
-env_set "${FRONTEND_ENV}" VITE_API_URL "http://localhost:${API_PORT}/api/v1"
+# ARCH-30 Tranche 1 (T4-F5) — see start_dev.ps1. Dev-server-only file, and any
+# copy an earlier run left in .env is stripped so `vite build` stops refusing.
+FRONTEND_DEV_ENV="${FRONTEND_DIR}/.env.development.local"
+if grep -q '^[[:space:]]*VITE_API_URL[[:space:]]*=' "${FRONTEND_ENV}"; then
+    { grep -v '^[[:space:]]*VITE_API_URL[[:space:]]*=' "${FRONTEND_ENV}" || true; } > "${FRONTEND_ENV}.tmp"
+    mv "${FRONTEND_ENV}.tmp" "${FRONTEND_ENV}"
+fi
+[[ -f "${FRONTEND_DEV_ENV}" ]] || printf 'VITE_API_URL=http://localhost:%s/api/v1\n' "${API_PORT}" > "${FRONTEND_DEV_ENV}"
+env_set "${FRONTEND_DEV_ENV}" VITE_API_URL "http://localhost:${API_PORT}/api/v1"
 
 step '4/8  Docker backing services'
 cd "${BACKEND_DIR}"

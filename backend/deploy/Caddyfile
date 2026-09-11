@@ -70,6 +70,20 @@
         }
     }
 
+    # ARCH-30 Tranche 1 (T4-F3) — SCIM on the platform host.
+    #
+    # `app.main` mounts the SCIM router at /scim/v2, at the application ROOT,
+    # not under /api. Every block above matches /api/* only, so an IdP's
+    # POST /scim/v2/Users fell through to the catch-all file server below and
+    # was answered with index.html. SCIM worked in development only because
+    # start_dev.ps1 talks to uvicorn directly with no ingress in front.
+    handle /scim/v2/* {
+        reverse_proxy web:8000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
     handle /docs* {
         reverse_proxy web:8000
     }
@@ -111,6 +125,19 @@
     # GATE 10.3 — internal namespace unreachable on custom domains
     handle /api/v1/internal/* {
         respond 404
+    }
+
+    # ARCH-30 Tranche 1 (T4-F3) — SCIM on tenant custom domains.
+    #
+    # `header_up Host {host}` is load-bearing: `scim_key` refuses a token whose
+    # organization differs from the tenant this hostname resolves to, and
+    # HostTenantMiddleware can only resolve the tenant if the Host survives.
+    handle /scim/v2/* {
+        reverse_proxy web:8000 {
+            header_up Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
     }
 
     handle /api/* {

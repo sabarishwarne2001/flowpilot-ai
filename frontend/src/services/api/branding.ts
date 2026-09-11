@@ -1,6 +1,7 @@
 ﻿import apiClient from "@/services/api/client";
 import { BRANDING_ENDPOINTS } from "@/services/api/endpoints";
 import type {
+  BrandingManifest,
   CertificateStatusResponse,
   CustomDomainCreate,
   CustomDomainDetail,
@@ -12,6 +13,31 @@ import type {
 } from "@/types/branding";
 
 const JSON_HEADERS = { Accept: "application/json" } as const;
+
+// ---------------------------------------------------------------------------
+// Public, host-resolved — ARCH-30 Tranche 1 (T4-F5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The theme for whichever hostname this page was served on.
+ *
+ * ARCH-25 built this endpoint, mounted it, registered it as public and gave it
+ * `Vary: Host`. `BRANDING_ENDPOINTS.manifest` and `brandingKeys.manifest` were
+ * declared for it. Nothing called either, so the login page on a tenant's own
+ * domain rendered FlowPilot's name — data with no reader, invisible to the
+ * compiler because an unused export is legal.
+ *
+ * It takes no organization id and must never take one. The tenant is the
+ * Host, resolved server-side against verified domains only; a parameter would
+ * turn this into an unauthenticated "what does organization X look like" query.
+ */
+export const getPublicBrandingManifest = async (): Promise<BrandingManifest> => {
+  const response = await apiClient.get<BrandingManifest>(
+    BRANDING_ENDPOINTS.manifest,
+    { headers: JSON_HEADERS },
+  );
+  return response.data;
+};
 
 // ---------------------------------------------------------------------------
 // Custom domains — OWNER for every write, ADMIN for reads
