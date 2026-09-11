@@ -34,6 +34,8 @@ import {
 } from "@/components/organization/warehouseCredential";
 import WarehouseDestinationEditor from "@/components/organization/WarehouseDestinationEditor";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
+import { useAddonAccess } from "@/hooks/useAddonAccess";
 import {
   DATASET_HINTS,
   DATASET_LABELS,
@@ -791,9 +793,17 @@ const ManualTrigger: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationAnalytics: React.FC = () => {
-  const { organizationId } = useResolvedOrganization();
+  const { organizationId, organizationRole } = useResolvedOrganization();
   const [tab, setTab] = useState<Tab>("destinations");
   const [adding, setAdding] = useState(false);
+
+  // ARCH-30 Tranche 2 (D-8, D-6). Consumption analytics is not part of the
+  // add-on and is never locked. Destinations, schedules and runs are.
+  const isOwner = String(organizationRole).toUpperCase() === "OWNER";
+  const warehouseAddon = useAddonAccess(organizationId, "addon.warehouse_sync");
+  const warehouseLocked = warehouseAddon.access?.state === "NOT_GRANTED";
+  const warehouseCanCreate = warehouseAddon.access?.can_create ?? false;
+  const warehouseTab = tab !== "consumption";
 
   const destinations = useQuery({
     queryKey: analyticsKeys.destinations(organizationId),
@@ -869,7 +879,23 @@ const OrganizationAnalytics: React.FC = () => {
         ))}
       </nav>
 
-      {tab === "destinations" ? (
+      {warehouseTab && warehouseLocked && warehouseAddon.access ? (
+        <AddOnLockCard
+          organizationId={organizationId}
+          addon={warehouseAddon.access}
+          canPurchase={isOwner}
+        />
+      ) : null}
+
+      {warehouseTab && !warehouseLocked && warehouseAddon.access ? (
+        <AddOnGraceNotice
+          organizationId={organizationId}
+          addon={warehouseAddon.access}
+          canPurchase={isOwner}
+        />
+      ) : null}
+
+      {!warehouseLocked && tab === "destinations" ? (
         <div className="space-y-4">
           {adding ? (
             <DestinationForm
@@ -880,6 +906,8 @@ const OrganizationAnalytics: React.FC = () => {
             <button
               type="button"
               className={PRIMARY}
+              disabled={!warehouseCanCreate}
+              title={warehouseCanCreate ? undefined : "Warehouse sync is needed to add destinations"}
               onClick={() => setAdding(true)}
             >
               <Plug className="h-4 w-4" />
@@ -903,7 +931,7 @@ const OrganizationAnalytics: React.FC = () => {
         </div>
       ) : null}
 
-      {tab === "schedules" ? (
+      {!warehouseLocked && tab === "schedules" ? (
         <div className="space-y-4">
           <ScheduleForm
             organizationId={organizationId}
@@ -927,7 +955,7 @@ const OrganizationAnalytics: React.FC = () => {
         </div>
       ) : null}
 
-      {tab === "runs" ? (
+      {!warehouseLocked && tab === "runs" ? (
         <div className={CARD}>
           <h3 className="text-base font-semibold">Recent runs</h3>
           {runs.isLoading ? <p className={`${HINT} mt-2`}>Loading…</p> : null}

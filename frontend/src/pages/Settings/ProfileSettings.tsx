@@ -301,7 +301,7 @@ export const ProfileSettings: React.FC = () => {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="profile-tz" className="text-sm font-semibold text-foreground">
-              Timezone
+              Display timezone
             </label>
             <input
               id="profile-tz"
@@ -315,7 +315,8 @@ export const ProfileSettings: React.FC = () => {
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground focus:border-primary focus:outline-none"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              IANA key. Current:{" "}
+              Timestamps are shown to you in this timezone. Schedules follow the workspace
+              timezone. IANA key. Current:{" "}
               <button
                 type="button"
                 onClick={() => {

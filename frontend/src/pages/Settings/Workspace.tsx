@@ -523,7 +523,7 @@ export const Workspace: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="timezone" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Timezone
+                Scheduling timezone
               </label>
               <select
                 id="timezone"
@@ -542,31 +542,21 @@ export const Workspace: React.FC = () => {
                 <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
                 <option value="UTC">UTC</option>
               </select>
+              <p className="text-xs text-muted-foreground">
+                Scheduled exports and automation schedules run on this clock.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="language" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Language
-              </label>
-              <select
-                id="language"
-                disabled={!canEditWorkspace}
-                {...register("language")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="ta">Tamil</option>
-                <option value="ml">Malayalam</option>
-                <option value="te">Telugu</option>
-                <option value="kn">Kannada</option>
-                <option value="ar">Arabic</option>
-                <option value="de">German</option>
-                <option value="fr">French</option>
-                <option value="es">Spanish</option>
-                <option value="ja">Japanese</option>
-                <option value="zh">Chinese</option>
-              </select>
+            {/* ARCH-30 Tranche 2 (D-5). The workspace governs accounting currency,
+                date format and the scheduling clock. Language and how timestamps
+                are displayed belong to each person, so they live on the profile;
+                the workspace `language` value is still sent unchanged on save. */}
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/40 p-3">
+              <p className="text-sm font-medium text-foreground">Language is a personal setting</p>
+              <p className="text-xs text-muted-foreground">
+                Each member picks their language and display timezone in their own profile, so
+                one workspace can serve people in different countries.
+              </p>
             </div>
 
             <div className="space-y-2">

@@ -627,6 +627,20 @@ class Settings(BaseSettings):
     DODO_LIVEMODE: bool = False
     DODO_MAX_WEBHOOK_BODY_BYTES: int = 512 * 1024
 
+    # ---- ARCH-30 Tranche 2: add-ons and delinquency (D-6, D-8, D-11) ------
+    # Dodo product ids for purchasable add-ons. Test and live ids differ, so
+    # these are environment values, never literals in code. Unset means the
+    # add-on is not self-serve on this deployment and the console says so.
+    DODO_ADDON_PRODUCT_CUSTOM_DOMAIN: str | None = None
+    DODO_ADDON_PRODUCT_WAREHOUSE_SYNC: str | None = None
+    # D-6. Days existing add-on resources keep working after the grant ends.
+    BILLING_ADDON_GRACE_DAYS: int = 14
+    # D-11. Days of full access after a renewal failure. Matches Dodo's default
+    # Payment Retries recovery window, so access ends when retries do.
+    BILLING_ON_HOLD_GRACE_DAYS: int = 13
+    # The tier an organization falls back to when its subscription ends.
+    BILLING_LAPSED_TIER_KEY: str = "free"
+
     BILLING_DEFAULT_CURRENCY: str = "USD"
     BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None
     BILLING_SEAT_PRICE_LOOKUP_KEY: str | None = None

@@ -232,6 +232,13 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
             "ix_subscriptions_stale_reconcile",
             "last_reconciled_at",
         ),
+        Index(
+            "uq_subscriptions_gateway_subscription",
+            "gateway",
+            "gateway_subscription_id",
+            unique=True,
+            postgresql_where=text("gateway_subscription_id IS NOT NULL"),
+        ),
     )
 
     billing_account_id: Mapped[uuid.UUID] = mapped_column(
@@ -240,7 +247,29 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    stripe_subscription_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+
+    # ---- ARCH-30 Tranche 2 (D-10): which vendor issued the identifier -----
+    gateway: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'STRIPE'")
+    )
+    gateway_subscription_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+
+    # ---- ARCH-30 Tranche 2 (D-11): end of full access after a failed renewal
+    grace_ends_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc=(
+            "Stamped once, on the first observed renewal failure. Dodo has no "
+            "past_due state and no grace timestamp; this is ours. "
+            "`dunning_service.access_state` reads a past_due row whose grace "
+            "has passed as RESTRICTED."
+        ),
+    )
 
     status: Mapped[SubscriptionStatus] = mapped_column(
         subscription_status_enum(), nullable=False

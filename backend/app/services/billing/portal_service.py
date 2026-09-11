@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.security import decode_access_token_claims
 from app.models.billing_account import BillingAccount
 from app.services import quota_service
-from app.services.billing import account_service, stripe_gateway
+from app.services.billing import account_service, payment_gateway, stripe_gateway
 
 logger = logging.getLogger("app.services.billing.portal")
 
@@ -134,6 +134,62 @@ def assert_recent_authentication(
 # ============================================================================
 
 
+def _expires(epoch: Optional[int]) -> Optional[datetime]:
+    return datetime.fromtimestamp(int(epoch), tz=timezone.utc) if epoch else None
+
+
+def _gateway_checkout(
+    db: Session,
+    *,
+    gateway_name: str,
+    organization_id: uuid.UUID,
+    quota_tier_key: str,
+    price_id: str,
+    seats: int,
+    success_url: Optional[str],
+    cancel_url: Optional[str],
+) -> EphemeralSession:
+    """ARCH-30 Tranche 2 (D-10). Checkout through a Merchant of Record.
+
+    No billing account is created first. Under an MoR the customer is created
+    by the checkout itself, and `dodo_reconcile_service` adopts it on the
+    first subscription event from the metadata set here. Creating a Stripe
+    customer before a Dodo checkout — what this function previously did for
+    every gateway — left an orphaned customer at a vendor this deployment does
+    not use.
+    """
+    existing = account_service.get_for_organization(db, organization_id=organization_id)
+    customer_id = (
+        existing.gateway_customer_id
+        if existing is not None and existing.gateway == gateway_name
+        else None
+    )
+    customer_email = (
+        None
+        if customer_id
+        else account_service.default_billing_email(db, organization_id=organization_id)
+    )
+    remote = payment_gateway.get_payment_gateway(gateway_name).create_checkout_session(
+        customer_id=customer_id,
+        customer_email=customer_email,
+        price_id=price_id,
+        quantity=int(seats),
+        success_url=str(success_url or settings.BILLING_CHECKOUT_SUCCESS_URL or ""),
+        cancel_url=str(cancel_url or settings.BILLING_CHECKOUT_CANCEL_URL or ""),
+        client_reference_id=str(organization_id),
+        metadata={
+            "organization_id": str(organization_id),
+            "quota_tier_key": quota_tier_key,
+        },
+    )
+    return EphemeralSession(
+        url=remote.url,
+        expires_at=_expires(remote.expires_at_epoch),
+        kind="checkout",
+        stripe_session_id=remote.session_id,
+    )
+
+
 def create_portal_session(
     db: Session,
     *,
@@ -151,10 +207,29 @@ def create_portal_session(
         db, organization_id=organization_id
     )
 
-    session = stripe_gateway.get_gateway().create_portal_session(
-        customer_id=account.stripe_customer_id,
-        return_url=return_url or settings.BILLING_PORTAL_RETURN_URL,
-    )
+    if account.gateway != "STRIPE":
+        # ARCH-30 Tranche 2 (D-10). The portal belongs to whichever vendor
+        # holds the customer, not to whichever gateway is configured today.
+        if not account.gateway_customer_id:
+            raise account_service.BillingAccountNotFoundError(
+                f"Organization {organization_id} has a {account.gateway} billing "
+                "account with no customer id yet."
+            )
+        remote = payment_gateway.get_payment_gateway(account.gateway).create_portal_session(
+            customer_id=account.gateway_customer_id,
+            return_url=str(return_url or settings.BILLING_PORTAL_RETURN_URL or ""),
+        )
+        session = EphemeralSession(
+            url=remote.url,
+            expires_at=_expires(remote.expires_at_epoch),
+            kind="portal",
+            stripe_session_id=remote.session_id,
+        )
+    else:
+        session = stripe_gateway.get_gateway().create_portal_session(
+            customer_id=account.stripe_customer_id,
+            return_url=return_url or settings.BILLING_PORTAL_RETURN_URL,
+        )
 
     logger.info(
         "billing.portal_session_minted",
@@ -215,6 +290,31 @@ def create_checkout_session(
         )
     if seats < 1:
         raise CheckoutConfigurationError("A subscription needs at least one seat.")
+
+    # ARCH-30 Tranche 2 (D-10). `BILLING_GATEWAY="DODO"` previously changed
+    # nothing here: this function called Stripe unconditionally.
+    gateway_name = payment_gateway.active_gateway_name()
+    if gateway_name != "STRIPE":
+        session = _gateway_checkout(
+            db,
+            gateway_name=gateway_name,
+            organization_id=organization_id,
+            quota_tier_key=quota_tier_key,
+            price_id=resolved_price,
+            seats=int(seats),
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        logger.info(
+            "billing.checkout_session_created",
+            extra={
+                "organization_id": str(organization_id),
+                "quota_tier_key": quota_tier_key,
+                "seats": int(seats),
+                "gateway": gateway_name,
+            },
+        )
+        return session
 
     account = account_service.ensure_billing_account(
         db, organization_id=organization_id

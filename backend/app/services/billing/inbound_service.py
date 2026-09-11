@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional, Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -222,9 +222,12 @@ def persist_gateway_event(
     `stripe_event_id` IS STILL WRITTEN FOR STRIPE
     =============================================
 
-    That column is NOT NULL until the CONTRACT migration. A Dodo event writes
-    NULL there, which the column already permits; a Stripe event routed through
-    this function keeps populating it so the old unique constraint and every
+    That column WAS NOT NULL until ARCH-30 Tranche 2. This docstring used to
+    say a Dodo NULL was already permitted; `arch15_step1` said otherwise, and
+    every Dodo insert failed. `arch30_step1_gateway_lifecycle_addons` relaxes
+    it and adds `ck_stripe_inbound_events_stripe_requires_event_id`, so a
+    Stripe row still cannot omit it. A Stripe event routed through this
+    function keeps populating it so the old unique constraint and every
     existing reader continue to work during the EXPAND window.
     """
     values: dict[str, Any] = {
@@ -235,7 +238,11 @@ def persist_gateway_event(
         "stripe_event_id": event.id if event.gateway == "STRIPE" else None,
         "event_type": event.type,
         "api_version": None,
-        "stripe_created_at": event.created_epoch,
+        # ARCH-30 Tranche 2 (T4-F2c). The column is timestamptz; an integer
+        # epoch is a type error at insert, not a coercion.
+        "stripe_created_at": datetime.fromtimestamp(
+            int(event.created_epoch), tz=timezone.utc
+        ),
         "livemode": bool(event.livemode),
         "payload": _sanitize_for_json(dict(event.payload or {})),
         "signature_header": _truncate(signature_header or ""),
@@ -247,7 +254,15 @@ def persist_gateway_event(
     stmt = (
         pg_insert(StripeInboundEvent.__table__)
         .values(**values)
-        .on_conflict_do_nothing(index_elements=["gateway", "gateway_event_id"])
+        # ARCH-30 Tranche 2 (T4-F2d). The unique index is PARTIAL
+        # (`WHERE gateway_event_id IS NOT NULL`). Postgres infers an arbiter
+        # index only when the ON CONFLICT predicate implies the index
+        # predicate; without `index_where` it raises "there is no unique or
+        # exclusion constraint matching the ON CONFLICT specification".
+        .on_conflict_do_nothing(
+            index_elements=["gateway", "gateway_event_id"],
+            index_where=text("gateway_event_id IS NOT NULL"),
+        )
         .returning(StripeInboundEvent.__table__.c.id)
     )
 

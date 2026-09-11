@@ -60,6 +60,8 @@ from app.schemas.custom_domain import (
     CustomDomainResponse,
     DomainVerificationResult,
 )
+from app.api import addon_gate
+from app.core.entitlements import CUSTOM_DOMAIN_ADDON
 from app.services.branding import domain_service
 
 logger = logging.getLogger("app.api.v1.custom_domains")
@@ -171,6 +173,13 @@ def claim_custom_domain(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> Any:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=CUSTOM_DOMAIN_ADDON,
+        operation="claim",
+        allow_grace=False,
+    )
     domain = domain_service.claim_domain(
         db,
         organization_id=organization_id,
@@ -206,6 +215,13 @@ def verify_custom_domain(
     without limit.
     """
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=CUSTOM_DOMAIN_ADDON,
+        operation="verify",
+        allow_grace=True,
+    )
     domain = domain_service.get_domain(
         db, organization_id=organization_id, domain_id=domain_id
     )
@@ -232,6 +248,13 @@ def reissue_challenge(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> Any:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=CUSTOM_DOMAIN_ADDON,
+        operation="reissue_challenge",
+        allow_grace=True,
+    )
     domain = domain_service.get_domain(
         db, organization_id=organization_id, domain_id=domain_id
     )
@@ -256,6 +279,13 @@ def set_primary_domain(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> Any:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=CUSTOM_DOMAIN_ADDON,
+        operation="set_primary",
+        allow_grace=True,
+    )
     domain = domain_service.get_domain(
         db, organization_id=organization_id, domain_id=domain_id
     )
@@ -289,6 +319,13 @@ def request_certificate(
     and the one that matters is the one closest to the write.
     """
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=CUSTOM_DOMAIN_ADDON,
+        operation="request_certificate",
+        allow_grace=True,
+    )
     domain = domain_service.get_domain(
         db, organization_id=organization_id, domain_id=domain_id
     )

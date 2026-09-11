@@ -18,6 +18,7 @@ from app.api.v1 import (
     document_settings,
     email_change,
     email_settings,
+    entitlements,
     identity_admin,
     internal_tls,
     marketplace,
@@ -87,6 +88,7 @@ api_router.include_router(tenant_branding.public_router)
 # is uniform — reads ADMIN, writes OWNER — and is carried by per-endpoint
 # dependencies rather than by which router an endpoint landed in.
 api_router.include_router(warehouse_sync.router)
+api_router.include_router(entitlements.router)  # ARCH-30 add-on entitlements (D-8)
 
 # ARCH-27 Partner Marketplace, Reseller Tenancy & Revenue Share.
 #

@@ -47,6 +47,17 @@ class MarginFiguresResponse(BaseModel):
     known_cost_event_count: int
     unknown_cost_event_count: int
 
+    zero_byok_revenue_micros: int = Field(
+        default=0,
+        description=(
+            "Revenue on events whose provider key the tenant supplied. Cost "
+            "basis is $0.00 by declaration (ZERO_BYOK); the provider bills the "
+            "tenant directly."
+        ),
+    )
+    zero_byok_event_count: int = 0
+    zero_byok_share: Optional[float] = None
+
     is_trustworthy: bool = Field(
         description=(
             "False when too little of the revenue has a known cost for the "

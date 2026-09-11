@@ -89,7 +89,10 @@ import hmac
 import json
 import logging
 import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
+from urllib.parse import quote
 
 from app.core.config import settings
 from app.services.billing.payment_gateway import (
@@ -140,16 +143,68 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "dispute.lost": "dispute.lost",
     "subscription.active": "subscription.active",
     "subscription.renewed": "subscription.renewed",
-    "subscription.on_hold": "subscription.past_due",
-    "subscription.failed": "subscription.payment_failed",
+    # ARCH-30 Tranche 2 (D-11). These five were previously folded into
+    # Stripe-shaped names — `on_hold` became `subscription.past_due` and
+    # `expired` became `subscription.cancelled`. D-11 is built on exactly the
+    # distinction that folding erased, and no Stripe handler ever received a
+    # Dodo event anyway. Dodo's own names are kept; `dodo_reconcile_service`
+    # dispatches on them.
+    "subscription.on_hold": "subscription.on_hold",
+    "subscription.failed": "subscription.failed",
     "subscription.cancelled": "subscription.cancelled",
-    "subscription.expired": "subscription.cancelled",
-    "subscription.plan_changed": "subscription.updated",
+    "subscription.expired": "subscription.expired",
+    "subscription.plan_changed": "subscription.plan_changed",
+    "subscription.updated": "subscription.updated",
 }
 
 
 class DodoGatewayError(GatewayPermanentError):
     """A Dodo API call failed in a way that will not succeed on retry."""
+
+
+class DodoObjectNotFoundError(DodoGatewayError):
+    """The object an event names no longer exists at Dodo."""
+
+
+@dataclass(frozen=True)
+class DodoSubscriptionSnapshot:
+    """Authoritative Dodo subscription state, as of one fetch (D-9).
+
+    `state_version` is epoch microseconds taken when the fetch was ISSUED, the
+    meaning `subscriptions.stripe_state_version` already has: a fetch issued
+    earlier that returns later must lose, and only the issue time orders them.
+    """
+
+    id: str
+    status: str
+    customer_id: str
+    customer_email: Optional[str]
+    product_id: Optional[str]
+    quantity: int
+    current_period_start: datetime
+    current_period_end: datetime
+    cancel_at_next_billing_date: bool
+    cancelled_at: Optional[datetime]
+    currency: Optional[str]
+    state_version: int
+    #: True when Dodo reported a billing window that does not move forward and
+    #: the end was advanced by one second to satisfy
+    #: `ck_subscriptions_period_ordered`. Surfaced in the audit row, never hidden.
+    window_normalised: bool = False
+    metadata: dict[str, str] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+def _parse_instant(value: Any) -> Optional[datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _secret_bytes(raw: str) -> bytes:
@@ -269,8 +324,10 @@ class DodoGateway:
             )
         return raw
 
-    def _post(self, path: str, body: Mapping[str, Any]) -> dict[str, Any]:
-        """POST JSON to the Dodo API.
+    def _request(
+        self, method: str, path: str, body: Optional[Mapping[str, Any]] = None
+    ) -> dict[str, Any]:
+        """Call the Dodo API and return a JSON object, or raise.
 
         `httpx` is imported here rather than at module scope so that importing
         this module — which `payment_gateway.get_payment_gateway` does lazily —
@@ -282,22 +339,31 @@ class DodoGateway:
         url = f"{self._api_base}{path}"
         headers = {
             "Authorization": f"Bearer {self._resolved_key()}",
-            "Content-Type": "application/json",
+            "Accept": "application/json",
         }
+        if body is not None:
+            headers["Content-Type"] = "application/json"
 
         try:
             with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(url, json=dict(body), headers=headers)
+                response = client.request(
+                    method,
+                    url,
+                    json=dict(body) if body is not None else None,
+                    headers=headers,
+                )
         except Exception as exc:  # noqa: BLE001
             raise GatewayTransientError(
                 f"Dodo API unreachable at {path}: {exc}"
             ) from exc
 
-        if response.status_code >= 500:
+        if response.status_code >= 500 or response.status_code == 429:
             # Retryable. The caller's backoff, not ours.
             raise GatewayTransientError(
                 f"Dodo API returned {response.status_code} for {path}"
             )
+        if response.status_code == 404:
+            raise DodoObjectNotFoundError(f"Dodo API has no object at {path}")
         if response.status_code >= 400:
             raise DodoGatewayError(
                 f"Dodo API rejected {path} with {response.status_code}: "
@@ -314,6 +380,73 @@ class DodoGateway:
         if not isinstance(payload, dict):
             raise DodoGatewayError(f"Dodo API returned a non-object for {path}")
         return payload
+
+    def _post(self, path: str, body: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", path, body)
+
+    # -- re-fetch (D-9) ---------------------------------------------------
+
+    def fetch_subscription(self, subscription_id: str) -> DodoSubscriptionSnapshot:
+        """`GET /subscriptions/{id}` — current truth, whatever the event said."""
+        if not subscription_id:
+            raise DodoGatewayError("No subscription id to fetch.")
+
+        issued_at = time.time_ns() // 1_000
+        raw = self._request(
+            "GET", f"/subscriptions/{quote(str(subscription_id), safe='')}"
+        )
+
+        customer = raw.get("customer") if isinstance(raw.get("customer"), dict) else {}
+        customer_id = str(customer.get("customer_id") or raw.get("customer_id") or "")
+        if not customer_id:
+            raise DodoGatewayError(
+                f"Dodo subscription {subscription_id} carries no customer id."
+            )
+
+        start = (
+            _parse_instant(raw.get("previous_billing_date"))
+            or _parse_instant(raw.get("created_at"))
+        )
+        end = _parse_instant(raw.get("next_billing_date"))
+        if start is None or end is None:
+            raise DodoGatewayError(
+                f"Dodo subscription {subscription_id} has no usable billing "
+                "window (previous/next billing date). Refusing to invent one."
+            )
+        normalised = False
+        if end <= start:
+            end = start + timedelta(seconds=1)
+            normalised = True
+            logger.warning(
+                "dodo.subscription_window_normalised",
+                extra={"gateway_subscription_id": subscription_id},
+            )
+
+        metadata_raw = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+        metadata = {str(k): str(v) for k, v in metadata_raw.items() if v is not None}
+
+        try:
+            quantity = int(raw.get("quantity") or 1)
+        except (TypeError, ValueError):
+            quantity = 1
+
+        return DodoSubscriptionSnapshot(
+            id=str(raw.get("subscription_id") or subscription_id),
+            status=str(raw.get("status") or ""),
+            customer_id=customer_id,
+            customer_email=(str(customer["email"]) if customer.get("email") else None),
+            product_id=(str(raw["product_id"]) if raw.get("product_id") else None),
+            quantity=max(1, quantity),
+            current_period_start=start,
+            current_period_end=end,
+            cancel_at_next_billing_date=bool(raw.get("cancel_at_next_billing_date")),
+            cancelled_at=_parse_instant(raw.get("cancelled_at")),
+            currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+            state_version=int(issued_at),
+            window_normalised=normalised,
+            metadata=metadata,
+            raw=dict(raw),
+        )
 
     # -- checkout ---------------------------------------------------------
 
@@ -506,6 +639,8 @@ def reset_dodo_gateway() -> None:
 __all__ = [
     "DodoGateway",
     "DodoGatewayError",
+    "DodoObjectNotFoundError",
+    "DodoSubscriptionSnapshot",
     "EVENT_TYPE_MAP",
     "GATEWAY_NAME",
     "get_dodo_gateway",

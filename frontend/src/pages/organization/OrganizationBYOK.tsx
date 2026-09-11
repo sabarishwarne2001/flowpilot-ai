@@ -675,6 +675,16 @@ const OrganizationBYOK: React.FC = () => {
         <p className={`${HINT} mt-1 max-w-3xl`}>
           Bring your own provider API keys across Groq, Gemini, OpenAI, Anthropic, Azure OpenAI, and Mistral.
         </p>
+        {/* ARCH-30 Tranche 2 (B.5). Two bills, stated once, before a key is added. */}
+        <div className="mt-3 max-w-3xl rounded-lg border border-border/60 bg-muted/40 p-3 text-sm">
+          <p className="font-medium text-foreground">Seat fees still apply</p>
+          <p className="mt-1 text-muted-foreground">
+            Your FlowPilot subscription covers seats and platform features whether or not you
+            use your own keys. Requests made with your keys are billed to you directly by that
+            provider, and FlowPilot records them at $0.00 provider cost, so you are never
+            charged twice for the same tokens.
+          </p>
+        </div>
       </header>
 
       <SavingsCard overview={data} />

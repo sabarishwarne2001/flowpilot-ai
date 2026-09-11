@@ -27,6 +27,7 @@ ARCH15_JOB_TYPES: frozenset[str] = frozenset(
         "billing.seat_drift",
         "billing.assemble_invoice",
         "billing.dunning_sweep",
+        "billing.addon_grace_sweep",
     }
 )
 ARCH16_JOB_TYPES: frozenset[str] = frozenset(
@@ -147,6 +148,11 @@ def _billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_billing_dunning_sweep(payload)
 
 
+def _billing_addon_grace_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_addon_grace_sweep
+    return handle_billing_addon_grace_sweep(payload)
+
+
 def _identity_recheck_domains(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.identity_jobs import handle_recheck_domains
     from app.db.session import SessionLocal
@@ -229,6 +235,7 @@ _HANDLERS = {
     "billing.seat_drift": _billing_seat_drift,
     "billing.assemble_invoice": _billing_assemble_invoice,
     "billing.dunning_sweep": _billing_dunning_sweep,
+    "billing.addon_grace_sweep": _billing_addon_grace_sweep,
     "identity.recheck_domains": _identity_recheck_domains,
     "identity.purge_assertion_payloads": _identity_purge_assertions,
     "identity.sweep_replay_guard": _identity_sweep_replay_guard,

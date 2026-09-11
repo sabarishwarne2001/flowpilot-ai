@@ -123,6 +123,9 @@ def _figures(figures: MarginFigures) -> MarginFiguresResponse:
         known_cost_event_count=figures.known_cost_event_count,
         unknown_cost_event_count=figures.unknown_cost_event_count,
         is_trustworthy=figures.is_trustworthy,
+        zero_byok_revenue_micros=figures.zero_byok_revenue_micros,
+        zero_byok_event_count=figures.zero_byok_event_count,
+        zero_byok_share=figures.zero_byok_share,
     )
 
 

@@ -34,6 +34,8 @@ import {
 } from "@/services/api/branding";
 import { brandingKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
+import { useAddonAccess } from "@/hooks/useAddonAccess";
 import {
   CERTIFICATE_STATUS_LABELS,
   DOMAIN_STATUS_CLASSES,
@@ -394,6 +396,17 @@ const OrganizationBranding: React.FC = () => {
     queryFn: () => listCustomDomains(organizationId),
   });
 
+  // ARCH-30 Tranche 2 (D-8, D-6). The lock card replaces the section only when
+  // there is nothing on file; a tenant with hostnames always sees them, so it
+  // can revoke or release what it no longer pays for.
+  const domainAddon = useAddonAccess(organizationId, "addon.custom_domain");
+  const domainCount = domainsQuery.data?.length ?? 0;
+  const showDomainLock =
+    domainAddon.access?.state === "NOT_GRANTED" &&
+    !domainsQuery.isLoading &&
+    domainCount === 0;
+  const domainCanCreate = domainAddon.access?.can_create ?? false;
+
   const brandingQuery = useQuery({
     queryKey: brandingKeys.branding(organizationId),
     queryFn: () => getBranding(organizationId),
@@ -632,15 +645,29 @@ const OrganizationBranding: React.FC = () => {
       ) : null}
 
       {/* ---- Custom domains ---- */}
+      {showDomainLock && domainAddon.access ? (
+        <AddOnLockCard
+          organizationId={organizationId}
+          addon={domainAddon.access}
+          canPurchase={isOwner}
+        />
+      ) : (
       <section className={CARD}>
         <h2 className="text-base font-semibold">Custom domains</h2>
+        {domainAddon.access && domainAddon.access.state !== "ACTIVE" ? (
+          <AddOnGraceNotice
+            organizationId={organizationId}
+            addon={domainAddon.access}
+            canPurchase={isOwner}
+          />
+        ) : null}
         <p className={`${HINT} mt-1`}>
           A hostname resolves to exactly one organization, so we verify you
           control the DNS zone before serving it. A certificate is only ever
           requested after that verification succeeds.
         </p>
 
-        {isOwner ? (
+        {isOwner && domainCanCreate ? (
           <div className="mt-4 flex flex-wrap items-end gap-2">
             <div className="min-w-64 flex-1">
               <label className={LABEL} htmlFor="hostname">
@@ -696,6 +723,7 @@ const OrganizationBranding: React.FC = () => {
           )}
         </div>
       </section>
+      )}
 
       {/* ---- Brand tokens ---- */}
       <section className={CARD}>

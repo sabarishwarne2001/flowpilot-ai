@@ -439,3 +439,11 @@ export const MARKETPLACE_ENDPOINTS = {
   installation: (organizationId: string, installationId: string): string =>
     `/organizations/${org(organizationId)}/marketplace/installations/${seg(installationId)}`,
 } as const;
+
+/** ARCH-30 Tranche 2 (D-8) — add-on entitlements and add-on checkout. */
+export const ENTITLEMENT_ENDPOINTS = {
+  entitlements: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/entitlements`,
+  addonCheckout: (organizationId: string, addonKey: string): string =>
+    `/organizations/${org(organizationId)}/billing/addons/${seg(addonKey)}/checkout-session`,
+} as const;

@@ -110,7 +110,19 @@ class BillingAccount(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
-    stripe_customer_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # ARCH-30 Tranche 2 (D-10). Nullable since arch29_step2; the model still
+    # said NOT NULL, so a Dodo-adopted account could not be constructed.
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    gateway: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'STRIPE'")
+    )
+    gateway_customer_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        doc="The customer id at `gateway`. Unique per gateway.",
+    )
 
     currency: Mapped[str] = mapped_column(
         String(3),

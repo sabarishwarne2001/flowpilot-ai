@@ -237,6 +237,12 @@ export const billingKeys = {
     [...billingKeys.all(organizationId), "invoice", invoiceId, "reproduction"] as const,
 };
 
+/** ARCH-30 Tranche 2 (D-8). One key: every lock card reads the same response. */
+export const entitlementKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "entitlements"] as const,
+};
+
 export const usageKeys = {
   all: (organizationId: string) =>
     [...organizationScope(organizationId), "usage"] as const,

@@ -39,7 +39,7 @@ from sqlalchemy import Select, and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.organization import Organization
-from app.models.supplier_cogs import HARD_COST_BASIS_SOURCES
+from app.models.supplier_cogs import HARD_COST_BASIS_SOURCES, SOURCE_ZERO_BYOK
 from app.models.usage_event import UsageEvent
 
 logger = logging.getLogger("app.services.margin")
@@ -85,6 +85,17 @@ class MarginFigures:
     #: rate-carded. Included in the margin, reported separately, because
     #: "62% margin, 40% of it resting on estimates" is a different sentence.
     soft_cost_revenue_micros: int = 0
+    #: ARCH-30 Tranche 2 (B.5). Revenue on events stamped ZERO_BYOK: the tenant
+    #: supplied the provider key, so the supplier cost is genuinely $0.00 and
+    #: the provider bills the tenant directly. Reported separately because a
+    #: margin that is high BECAUSE customers pay their own inference is a
+    #: different business from one that is high because inference is cheap.
+    zero_byok_revenue_micros: int = 0
+    zero_byok_event_count: int = 0
+
+    @property
+    def zero_byok_share(self) -> Optional[float]:
+        return _ratio(self.zero_byok_revenue_micros, self.revenue_micros)
 
     @property
     def unknown_cost_revenue_micros(self) -> int:
@@ -192,6 +203,16 @@ _SOFT_REVENUE = func.coalesce(
     0,
 )
 
+_IS_ZERO_BYOK = UsageEvent.cost_basis_source == SOURCE_ZERO_BYOK
+
+_ZERO_BYOK_REVENUE = func.coalesce(
+    func.sum(case((_IS_ZERO_BYOK, UsageEvent.cost_micros), else_=0)), 0
+)
+
+_ZERO_BYOK_EVENTS = func.coalesce(func.sum(case((_IS_ZERO_BYOK, 1), else_=0)), 0)
+
+# Appended, never inserted: `_figures_from_row` reads by position and
+# `tenant_economics` prefixes the organization id with offset=1.
 _AGGREGATE_COLUMNS = (
     _REVENUE,
     _ATTRIBUTED_REVENUE,
@@ -199,6 +220,8 @@ _AGGREGATE_COLUMNS = (
     _EVENTS,
     _KNOWN_EVENTS,
     _SOFT_REVENUE,
+    _ZERO_BYOK_REVENUE,
+    _ZERO_BYOK_EVENTS,
 )
 
 
@@ -209,6 +232,8 @@ def _figures_from_row(row: Sequence[Any], offset: int = 0) -> MarginFigures:
     events = int(row[offset + 3] or 0)
     known = int(row[offset + 4] or 0)
     soft = int(row[offset + 5] or 0)
+    zero_byok_revenue = int(row[offset + 6] or 0)
+    zero_byok_events = int(row[offset + 7] or 0)
     return MarginFigures(
         revenue_micros=revenue,
         attributed_revenue_micros=attributed,
@@ -217,8 +242,9 @@ def _figures_from_row(row: Sequence[Any], offset: int = 0) -> MarginFigures:
         known_cost_event_count=known,
         unknown_cost_event_count=events - known,
         soft_cost_revenue_micros=soft,
+        zero_byok_revenue_micros=zero_byok_revenue,
+        zero_byok_event_count=zero_byok_events,
     )
-
 
 def _window(stmt: Select, *, period_start: datetime, period_end: datetime) -> Select:
     return stmt.where(

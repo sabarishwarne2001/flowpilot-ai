@@ -140,6 +140,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         at_hour=6,
         description="Advance dunning state for past-due subscriptions (ARCH-15).",
     ),
+    ScheduledJob(
+        job_type="billing.addon_grace_sweep",
+        interval_seconds=900,
+        description=(
+            "Start, advance and end add-on grace windows; halt custom domains "
+            "and export schedules after grace (ARCH-30 D-6)."
+        ),
+    ),
 )
 
 

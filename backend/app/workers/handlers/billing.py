@@ -17,6 +17,7 @@ from app.services.billing import (
     seat_service,
     stripe_gateway,
 )
+from app.services.billing.payment_gateway import GatewayPermanentError
 from app.services.billing.reconcile_service import ReconcileRefused
 
 logger = logging.getLogger("app.workers.handlers.billing")
@@ -26,6 +27,7 @@ SEAT_SYNC_JOB_TYPE = "billing.seat_sync"
 SEAT_DRIFT_JOB_TYPE = "billing.seat_drift"
 ASSEMBLE_INVOICE_JOB_TYPE = "billing.assemble_invoice"
 DUNNING_SWEEP_JOB_TYPE = "billing.dunning_sweep"
+ADDON_GRACE_SWEEP_JOB_TYPE = "billing.addon_grace_sweep"
 
 
 def _int(payload: dict[str, Any], key: str, default: int) -> int:
@@ -137,8 +139,17 @@ def _reconcile_claimed_row(
                     if row is None:
                         raise ValueError(f"Inbound event {event_id} vanished.")
 
-                    event = reconcile_service.event_from_row(row)
-                    outcome = reconcile_service.reconcile_event(db, event)
+                    # ARCH-30 Tranche 2 (T4-F2e). Route by the gateway that
+                    # issued the event. Rebuilding a Dodo row as a StripeEvent
+                    # gave it id=NULL and a type no Stripe handler knows, so
+                    # every Dodo event was marked IGNORED.
+                    if (row.gateway or "STRIPE") == "STRIPE":
+                        event = reconcile_service.event_from_row(row)
+                        outcome = reconcile_service.reconcile_event(db, event)
+                    else:
+                        from app.services.billing import dodo_reconcile_service
+
+                        outcome = dodo_reconcile_service.reconcile_row(db, row)
 
                     if outcome.organization_id is not None:
                         inbound_service.attach_organization(
@@ -170,7 +181,11 @@ def _reconcile_claimed_row(
             )
             return status
 
-        except (ReconcileRefused, stripe_gateway.StripePermanentError) as exc:
+        except (
+            ReconcileRefused,
+            stripe_gateway.StripePermanentError,
+            GatewayPermanentError,
+        ) as exc:
             with SessionLocal() as db:
                 with db.begin():
                     inbound_service.mark_failed(
@@ -392,6 +407,28 @@ def handle_billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================================
+# billing.addon_grace_sweep (ARCH-30 Tranche 2, D-6)
+# ============================================================================
+
+
+def handle_billing_addon_grace_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    """Start, advance and end add-on grace windows; halt resources after grace."""
+    from app.services.billing import addon_service
+
+    limit = _int(payload, "limit", 500)
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.addon_grace_sweep"):
+            with db.begin():
+                outcome = addon_service.sweep(db, limit=limit)
+
+    if any(t.get("halted") for t in outcome.get("transitions", [])):
+        logger.warning("billing.addon_grace_sweep_halted", extra=outcome)
+    else:
+        logger.info("billing.addon_grace_sweep_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
 # Enqueue helpers
 # ============================================================================
 
@@ -428,7 +465,9 @@ def enqueue_seat_sync(
 
 
 __all__ = [
+    "ADDON_GRACE_SWEEP_JOB_TYPE",
     "ASSEMBLE_INVOICE_JOB_TYPE",
+    "handle_billing_addon_grace_sweep",
     "DUNNING_SWEEP_JOB_TYPE",
     "RECONCILE_JOB_TYPE",
     "SEAT_DRIFT_JOB_TYPE",

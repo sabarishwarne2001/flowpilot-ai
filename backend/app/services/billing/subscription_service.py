@@ -219,6 +219,9 @@ def upsert_from_stripe(
     values: dict[str, Any] = {
         "billing_account_id": account.id,
         "stripe_subscription_id": snapshot.id,
+        # ARCH-30 Tranche 2. The gateway-neutral id is kept in step on every
+        # Stripe write, so the EXPAND columns never disagree.
+        "gateway_subscription_id": snapshot.id,
         "status": status.value,
         "quota_tier_key": tier.key,
         "quota_tier_id": tier.id,
@@ -310,9 +313,30 @@ def _resolve_pins(
       agreement, so re-pin both. The tier because it is the plan; the price
       book because agreeing a new plan is agreeing today's prices.
     """
-    requested_key = tier_key_from(snapshot)
-    period_start = snapshot.current_period_start
+    return resolve_pins_for_key(
+        db,
+        requested_key=tier_key_from(snapshot),
+        period_start=snapshot.current_period_start,
+        existing=existing,
+        subscription_ref=snapshot.id,
+    )
 
+
+def resolve_pins_for_key(
+    db: Session,
+    *,
+    requested_key: str,
+    period_start: datetime,
+    existing: Optional[Subscription],
+    subscription_ref: str,
+) -> tuple[QuotaTier, PriceBook]:
+    """The pin policy, for any gateway. ARCH-30 Tranche 2 (D-10).
+
+    Extracted unchanged from `_resolve_pins` so the Dodo reconciler applies
+    the same three rules rather than a second copy of them: new subscription
+    pins to what is in force; same plan keeps its pins; a changed plan is a
+    new agreement and re-pins both.
+    """
     if existing is None:
         return (
             resolve_tier_version(db, tier_key=requested_key, at=period_start),
@@ -331,7 +355,7 @@ def _resolve_pins(
     logger.info(
         "subscription.plan_changed",
         extra={
-            "stripe_subscription_id": snapshot.id,
+            "gateway_subscription_id": subscription_ref,
             "from_tier": existing.quota_tier_key,
             "to_tier": requested_key,
         },
@@ -341,7 +365,6 @@ def _resolve_pins(
         resolve_tier_version(db, tier_key=requested_key, at=changed_at),
         resolve_price_book(db, at=changed_at),
     )
-
 
 def _propagate_tier_to_organization(
     db: Session, *, account: BillingAccount, subscription: Subscription
@@ -363,6 +386,13 @@ def _propagate_tier_to_organization(
             "quota_tier_key": subscription.quota_tier_key,
         },
     )
+
+
+def propagate_tier_to_organization(
+    db: Session, *, account: BillingAccount, subscription: Subscription
+) -> None:
+    """Public entry to the organization tier pointer update, for any gateway."""
+    _propagate_tier_to_organization(db, account=account, subscription=subscription)
 
 
 def _coerce_status(raw: str) -> SubscriptionStatus:
@@ -420,7 +450,9 @@ __all__ = [
     "get_by_stripe_id",
     "live_subscription_for_organization",
     "organization_id_for",
+    "propagate_tier_to_organization",
     "record_seat_count",
+    "resolve_pins_for_key",
     "resolve_price_book",
     "resolve_tier_version",
     "tier_key_from",

@@ -83,6 +83,8 @@ from app.schemas.warehouse_sync import (
     WarehouseDestinationUpdate,
 )
 from app.services import job_service
+from app.api import addon_gate
+from app.core.entitlements import WAREHOUSE_SYNC_ADDON
 from app.services.analytics import export_engine, sync_service
 
 logger = logging.getLogger("app.api.v1.warehouse_sync")
@@ -198,6 +200,13 @@ def create_destination(
     db: Session = Depends(get_db),
 ) -> WarehouseDestinationResponse:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="create_destination",
+        allow_grace=False,
+    )
     try:
         destination = sync_service.create_destination(
             db,
@@ -257,6 +266,13 @@ def update_destination(
     db: Session = Depends(get_db),
 ) -> WarehouseDestinationResponse:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="update_destination",
+        allow_grace=True,
+    )
     try:
         destination = sync_service.update_destination(
             db,
@@ -327,6 +343,13 @@ def test_destination(
     working feature reporting a bad credential as an outage.
     """
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="test_destination",
+        allow_grace=True,
+    )
     try:
         outcome = sync_service.test_destination(
             db,
@@ -383,6 +406,13 @@ def create_schedule(
     db: Session = Depends(get_db),
 ) -> ExportScheduleResponse:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="create_schedule",
+        allow_grace=False,
+    )
     try:
         schedule = sync_service.create_schedule(
             db,
@@ -433,6 +463,13 @@ def update_schedule(
     db: Session = Depends(get_db),
 ) -> ExportScheduleResponse:
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="update_schedule",
+        allow_grace=True,
+    )
     try:
         schedule = sync_service.update_schedule(
             db,
@@ -508,6 +545,13 @@ def trigger_sync(
 ) -> dict[str, Any]:
     """Enqueue a run now. 202 with the job id, not a synchronous push."""
     _assert_scope(context, organization_id)
+    addon_gate.require_addon(
+        db,
+        context=context,
+        addon_key=WAREHOUSE_SYNC_ADDON,
+        operation="trigger_sync",
+        allow_grace=True,
+    )
     try:
         destination = sync_service.get_destination(
             db,

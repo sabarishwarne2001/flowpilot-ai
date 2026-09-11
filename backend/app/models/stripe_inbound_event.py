@@ -198,6 +198,30 @@ class StripeInboundEvent(Base, UUIDMixin, TimestampMixin):
                 f"status = 'DEAD'::{STRIPE_INBOUND_STATUS_ENUM_NAME}"
             ),
         ),
+        # ---- ARCH-29 EXPAND, declared by ARCH-30 Tranche 2 (T4-F2a) -------
+        # The columns existed in the database from arch29_step2 and did not
+        # exist here, so `pg_insert(StripeInboundEvent.__table__).values(
+        # gateway=...)` raised "Unconsumed column names" before any SQL was
+        # sent. Every Dodo webhook returned 500.
+        Index(
+            "uq_inbound_events_gateway_event",
+            "gateway",
+            "gateway_event_id",
+            unique=True,
+            postgresql_where=text("gateway_event_id IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "gateway IN ('STRIPE', 'DODO')",
+            name="ck_stripe_inbound_events_gateway_known",
+        ),
+        CheckConstraint(
+            "gateway <> 'STRIPE' OR stripe_event_id IS NOT NULL",
+            name="ck_stripe_inbound_events_stripe_requires_event_id",
+        ),
+        CheckConstraint(
+            "gateway = 'STRIPE' OR gateway_event_id IS NOT NULL",
+            name="ck_stripe_inbound_events_gateway_event_id_present",
+        ),
     )
 
     seq: Mapped[int] = mapped_column(
@@ -205,7 +229,26 @@ class StripeInboundEvent(Base, UUIDMixin, TimestampMixin):
     )
 
     # ---- identity, as Stripe states it -----------------------------------
-    stripe_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    stripe_event_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        doc=(
+            "Stripe's `evt_` id. NULL for other gateways, which "
+            "`ck_stripe_inbound_events_stripe_requires_event_id` permits only "
+            "when gateway is not STRIPE."
+        ),
+    )
+    gateway: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'STRIPE'")
+    )
+    gateway_event_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        doc=(
+            "The gateway's idempotency key: Stripe's `evt_`, Dodo's "
+            "`webhook-id` header. Covered by uq_inbound_events_gateway_event."
+        ),
+    )
     event_type: Mapped[str] = mapped_column(String(150), nullable=False)
     api_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     stripe_created_at: Mapped[datetime] = mapped_column(

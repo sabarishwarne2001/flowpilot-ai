@@ -67,14 +67,16 @@ in an immutable tier version. Period is pinned to MONTH because the unique
 index is `(quota_tier_id, limit_key, period)`: allowing a DAY and a MONTH copy
 of the same grant would give a presence check two rows to disagree about.
 
-WHAT IS DELIBERATELY NOT HERE YET
+ADD-ONS (ARCH-30 TRANCHE 2, D-8)
 =================================
 
-`addon.custom_domain` and `addon.warehouse_sync`. They land with add-on gating,
-after decisions D-6 (downgrade grace) and D-8 (bundled vs purchasable add-ons).
-Registering them now would create vocabulary with no reader — the orphaned
-guard class with the polarity flipped — and D-8 may move their grant source off
-tier entries entirely.
+`addon.custom_domain` and `addon.warehouse_sync` are registered here now that
+they have readers: `entitlement_service.tier_grants` for the tier source and
+`app.api.addon_gate.require_addon` on every create and maintain endpoint of
+the two routers they gate. A tier grants an add-on by carrying the row, in
+exactly the canonical shape `llm.platform_key` uses; a PURCHASED add-on is
+recorded in `organization_addons` instead, because a purchase is a gateway
+subscription with its own lifecycle and a published tier version is immutable.
 """
 
 from __future__ import annotations
@@ -86,7 +88,10 @@ from typing import Any, Optional
 from app.core.usage_events import TOTAL_COST_KEY, USAGE_EVENT_TYPES
 
 __all__ = [
+    "ADDON_KEYS",
     "CANONICAL_MAX_COST_MICROS",
+    "CUSTOM_DOMAIN_ADDON",
+    "WAREHOUSE_SYNC_ADDON",
     "CANONICAL_OVERAGE_POLICY",
     "CANONICAL_PERIOD",
     "ENTITLEMENT_KEYS",
@@ -112,6 +117,16 @@ class Entitlement:
 #: Tranche 2 gate reads; `verify_arch30_tranche1.py` G4 asserts the two agree.
 PLATFORM_KEY: str = "llm.platform_key"
 
+#: ARCH-30 Tranche 2 (D-8). Serving the tenant on its own verified hostname.
+CUSTOM_DOMAIN_ADDON: str = "addon.custom_domain"
+
+#: ARCH-30 Tranche 2 (D-8). Scheduled exports into the tenant's warehouse.
+WAREHOUSE_SYNC_ADDON: str = "addon.warehouse_sync"
+
+#: Every add-on key. `entitlement_service` asserts its catalog equals this set
+#: at import, so a key cannot be registered without a price and a halt effect.
+ADDON_KEYS: tuple[str, ...] = (CUSTOM_DOMAIN_ADDON, WAREHOUSE_SYNC_ADDON)
+
 _ENTITLEMENTS: tuple[Entitlement, ...] = (
     Entitlement(
         name=PLATFORM_KEY,
@@ -119,6 +134,20 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Inference on the platform's provider account. Withheld, the "
             "tenant must configure BYOK, and model routing refuses rather "
             "than falling back onto the operator's key."
+        ),
+    ),
+    Entitlement(
+        name=CUSTOM_DOMAIN_ADDON,
+        description=(
+            "Custom domains: claim, verify and serve the tenant on its own "
+            "hostname. Bundled with Enterprise; purchasable on other plans."
+        ),
+    ),
+    Entitlement(
+        name=WAREHOUSE_SYNC_ADDON,
+        description=(
+            "Warehouse sync: register destinations and run scheduled exports. "
+            "Bundled with Enterprise; purchasable on other plans."
         ),
     ),
 )

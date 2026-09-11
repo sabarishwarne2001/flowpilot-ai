@@ -24,7 +24,8 @@ from app.services.identity._integration import (
     principal_for_scim, utcnow, write_audit,
 )
 from app.services.identity.errors import (
-    ScimConflict, ScimInvalidFilter, ScimInvalidValue, ScimNotFound,
+    IdentityRefused, ScimConflict, ScimError, ScimInvalidFilter,
+    ScimInvalidValue, ScimNotFound,
 )
 
 logger = logging.getLogger(__name__)
@@ -394,9 +395,175 @@ def _patch_active_value(op: dict):
     return None
 
 
+# ---------------------------------------------------------------------------
+# ARCH-30 Tranche 2 (D-7) — directory email changes, scoped to the tenant
+# ---------------------------------------------------------------------------
+#
+# PATCH and PUT previously ignored email entirely: `patch_user` read only
+# `active`. That closed the cross-tenant hazard by accident and left every IdP
+# rename silently unsynced. `users.email` is GLOBAL — one account can belong to
+# several organizations — so an IdP may rewrite it only when every one of these
+# holds, and each refusal is audited in its own transaction before the error
+# is raised:
+#
+#   1. the new address is on THIS IdP's verified domain, and that domain is
+#      VERIFIED or in GRACE;
+#   2. the CURRENT address is on the same domain — an IdP does not get to
+#      rename a personal account that merely joined the organization;
+#   3. the account has no ACTIVE membership in any other organization;
+#   4. no other account already holds the new address.
+
+_EMAIL_PATHS = {
+    "emails",
+    'emails[type eq "work"].value',
+    "emails[primary eq true].value",
+    "username",
+}
+
+
+def _normalise_requested_email(value) -> str | None:
+    if isinstance(value, list) and value:
+        primary = next((e for e in value if isinstance(e, dict) and e.get("primary")), None)
+        chosen = primary or value[0]
+        value = chosen.get("value") if isinstance(chosen, dict) else chosen
+    if isinstance(value, str) and "@" in value.strip()[1:]:
+        return value.strip().lower()
+    return None
+
+
+def _patch_email_value(payload: dict) -> str | None:
+    requested: str | None = None
+    for op in _normalise_patch_ops(payload):
+        if str(op.get("op", "")).lower() not in ("replace", "add"):
+            continue
+        path = str(op.get("path") or "").strip().lower()
+        value = op.get("value")
+        if path in _EMAIL_PATHS:
+            requested = _normalise_requested_email(value) or requested
+        elif not path and isinstance(value, dict):
+            if value.get("emails") is not None:
+                requested = _normalise_requested_email(value.get("emails")) or requested
+            elif value.get("userName") is not None:
+                requested = _normalise_requested_email(value.get("userName")) or requested
+    return requested
+
+
+def _payload_email_or_none(payload: dict) -> str | None:
+    if payload.get("emails"):
+        return _normalise_requested_email(payload.get("emails"))
+    return _normalise_requested_email(payload.get("userName"))
+
+
+def _email_change_refusal(db, *, key: ScimApiKey, identity: DirectoryIdentity,
+                          current_email: str, email: str):
+    """(reason_code, http_status, scim_type, detail) or None when permitted."""
+    config = db.get(EnterpriseIdpConfig, key.idp_config_id)
+    if config is None:
+        return ("idp_config_missing", 403, "mutability",
+                "The IdP configuration for this token no longer exists.")
+    try:
+        domain_row = jit_service.assert_email_on_verified_domain(
+            db, config=config, email=email)
+    except IdentityRefused:
+        return ("domain_not_verified_for_organization", 403, "mutability",
+                "The new email address is not on a domain this organization has "
+                "verified for this identity provider.")
+    if str(getattr(domain_row.status, "value", domain_row.status)) not in ("VERIFIED", "GRACE"):
+        return ("verified_domain_inactive", 403, "mutability",
+                "The organization's verified domain is not active, so directory "
+                "email changes are paused.")
+    try:
+        jit_service.assert_email_on_verified_domain(db, config=config, email=current_email)
+    except IdentityRefused:
+        return ("account_outside_verified_domain", 403, "mutability",
+                "This account's current email is not on the organization's verified "
+                "domain. The directory cannot rename an account it does not own.")
+    shared = db.execute(
+        sql_text(f"SELECT 1 FROM {TBL_ORG_MEMBERS} WHERE user_id = :uid "
+                 f"AND organization_id <> :org AND status = 'ACTIVE' LIMIT 1"),
+        {"uid": identity.user_id, "org": key.organization_id},
+    ).first()
+    if shared is not None:
+        return ("account_shared_with_other_organizations", 403, "mutability",
+                "This account belongs to other organizations as well, so its sign-in "
+                "email cannot be changed from one organization's directory.")
+    taken = db.execute(
+        sql_text(f"SELECT 1 FROM {TBL_USERS} WHERE lower(email) = :e AND id <> :uid LIMIT 1"),
+        {"e": email, "uid": identity.user_id},
+    ).first()
+    if taken is not None:
+        return ("email_in_use", 409, "uniqueness",
+                "Another account already uses that email address.")
+    return None
+
+
+def _apply_directory_email(db, *, key: ScimApiKey, identity: DirectoryIdentity,
+                           email: str, principal) -> bool:
+    row = db.execute(
+        sql_text(f"SELECT email FROM {TBL_USERS} WHERE id = :uid"),
+        {"uid": identity.user_id},
+    ).first()
+    current_email = str(row[0] if row else (identity.user_name or "")).strip().lower()
+    if email == current_email:
+        if identity.user_name != email:
+            identity.user_name = email
+        return False
+
+    refusal = _email_change_refusal(db, key=key, identity=identity,
+                                    current_email=current_email, email=email)
+    if refusal is not None:
+        code, status_code, scim_type, detail = refusal
+        from app.services.audit_service import record_independently
+        details = {
+            "change": "scim_email",
+            "reason": code,
+            "requested_domain": email.rsplit("@", 1)[-1],
+            "directory_identity_id": str(identity.id),
+        }
+        if principal is not None:
+            details.update(principal.audit_details())
+        record_independently(
+            organization_id=key.organization_id,
+            actor_id=getattr(principal, "actor_id", None),
+            resource_type="USER",
+            resource_id=identity.user_id,
+            action="UPDATED",
+            outcome="DENIED",
+            details=details,
+        )
+        logger.warning("scim.email_change_refused", extra={
+            "organization_id": str(key.organization_id), "reason": code})
+        raise ScimError(status_code, detail, scim_type)
+
+    db.execute(
+        sql_text(f"UPDATE {TBL_USERS} SET email = :e, updated_at = now() WHERE id = :uid"),
+        {"e": email, "uid": identity.user_id},
+    )
+    identity.user_name = email
+    write_audit(db, organization_id=key.organization_id, action="UPDATED",
+                resource_type="USER", resource_id=identity.user_id,
+                principal=principal, details={
+                    "change": "scim_email",
+                    "previous_domain": current_email.rsplit("@", 1)[-1],
+                    "new_domain": email.rsplit("@", 1)[-1],
+                })
+    from app.services import organization_notification_service
+    organization_notification_service.notify_directory_email_changed(
+        db, organization_id=key.organization_id,
+        previous_email=current_email, email=email)
+    return True
+
+
 def patch_user(db, *, key: ScimApiKey, resource_id, payload: dict) -> DirectoryIdentity:
     identity = get_user(db, key=key, resource_id=resource_id)
     principal = principal_for_scim(key.id, key.idp_config_id)
+
+    # D-7. Evaluated before any `active` change so a refused rename cannot
+    # leave half of a PATCH applied.
+    requested_email = _patch_email_value(payload)
+    if requested_email is not None:
+        _apply_directory_email(db, key=key, identity=identity,
+                               email=requested_email, principal=principal)
 
     target_active: bool | None = None
     for op in _normalise_patch_ops(payload):
@@ -433,6 +600,10 @@ def patch_user(db, *, key: ScimApiKey, resource_id, payload: dict) -> DirectoryI
 
 def replace_user(db, *, key: ScimApiKey, resource_id, payload: dict) -> DirectoryIdentity:
     identity = get_user(db, key=key, resource_id=resource_id)
+    requested_email = _payload_email_or_none(payload)
+    if requested_email is not None:
+        _apply_directory_email(db, key=key, identity=identity, email=requested_email,
+                               principal=principal_for_scim(key.id, key.idp_config_id))
     active = payload.get("active")
     if isinstance(active, str):
         active = active.strip().lower() == "true"

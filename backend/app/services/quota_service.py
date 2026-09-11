@@ -82,6 +82,41 @@ class TierEntrySpec:
 
 
 @dataclass(frozen=True)
+class TierCommercials:
+    """ARCH-30 Tranche 2 (T5-F1). The price terms a tier version is published with.
+
+    `publish_tier` had no parameter for these, so `seed_quota_tiers.py`
+    defined `COMMERCIALS` and never passed it anywhere. Every published
+    version — v2 included — reached the database with NULL prices, and a
+    published tier is immutable, so the only repair is a new version.
+
+    Validated here against the same all-or-nothing rule as
+    `ck_quota_tiers_price_complete`, so a malformed price is a readable
+    `QuotaTierValidationError` before the insert rather than a CHECK violation
+    after it.
+    """
+
+    unit_amount_micros: int
+    currency: str
+    billing_interval: str
+    gateway_price_id: Optional[str] = None
+
+    def violation(self) -> Optional[str]:
+        if self.unit_amount_micros < 0:
+            return "unit_amount_micros must be >= 0."
+        if len(self.currency or "") != 3 or self.currency != self.currency.upper():
+            return f"currency must be a 3-letter upper-case ISO code, got {self.currency!r}."
+        if self.billing_interval not in ("month", "year"):
+            return f"billing_interval must be 'month' or 'year', got {self.billing_interval!r}."
+        if self.unit_amount_micros > 0 and not self.gateway_price_id:
+            return (
+                "A paid tier needs gateway_price_id. Without it checkout would "
+                "have to invent what it is selling; publish it unpriced instead."
+            )
+        return None
+
+
+@dataclass(frozen=True)
 class _TierSnapshot:
     id: uuid.UUID
     key: str
@@ -730,8 +765,13 @@ def publish_tier(
     published_by_user_id: Optional[uuid.UUID] = None,
     notes: Optional[str] = None,
     close_predecessor: bool = True,
+    commercials: Optional[TierCommercials] = None,
 ) -> QuotaTier:
     moment = _as_utc(effective_from)
+    if commercials is not None:
+        problem = commercials.violation()
+        if problem is not None:
+            raise QuotaTierValidationError(f"Tier {key} v{version}: {problem}")
     known = {t.value for t in QuotaTierKey}
     if key not in known:
         logger.warning(
@@ -759,6 +799,12 @@ def publish_tier(
         effective_to=None,
         is_active=False,
         notes=notes,
+        # Written at INSERT, while `published_at` is still NULL. The
+        # immutability trigger refuses any later UPDATE of these columns.
+        unit_amount_micros=(commercials.unit_amount_micros if commercials else None),
+        currency=(commercials.currency if commercials else None),
+        billing_interval=(commercials.billing_interval if commercials else None),
+        gateway_price_id=(commercials.gateway_price_id if commercials else None),
     )
     db.add(tier)
     db.flush([tier])

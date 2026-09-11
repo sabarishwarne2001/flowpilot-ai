@@ -15,6 +15,10 @@ export interface MarginFigures {
   readonly known_cost_event_count: number;
   readonly unknown_cost_event_count: number;
   readonly is_trustworthy: boolean;
+  /** ARCH-30 Tranche 2 (B.5). Revenue on ZERO_BYOK events: $0.00 supplier cost. */
+  readonly zero_byok_revenue_micros: number;
+  readonly zero_byok_event_count: number;
+  readonly zero_byok_share: number | null;
 }
 
 export interface PlatformMarginSummary {

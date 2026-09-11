@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -26,7 +27,7 @@ from app.db.session import SessionLocal  # noqa: E402
 from app.models.quota_tier import OveragePolicy, QuotaTier  # noqa: E402
 from app.models.spend_limit import SpendLimitPeriod  # noqa: E402
 from app.services import quota_service  # noqa: E402
-from app.services.quota_service import TierEntrySpec  # noqa: E402
+from app.services.quota_service import TierCommercials, TierEntrySpec  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
 OVERAGE_TIER_KEY = "overage"
@@ -45,6 +46,21 @@ OVERAGE_TIER_KEY = "overage"
 # unconditional behaviour of six separate fallback branches.
 PLATFORM_KEY = {
     "limit_key": "llm.platform_key",
+    "max_cost_micros": 0,
+    "overage_policy": "REFUSE",
+}
+
+# ARCH-30 Tranche 2 (D-8). Enterprise bundles both add-ons. Developer and
+# Business buy them as separate gateway subscriptions ($199 and $300 a month),
+# recorded in `organization_addons`, not here: a purchase has its own lifecycle
+# and a published tier version cannot change.
+ADDON_CUSTOM_DOMAIN = {
+    "limit_key": "addon.custom_domain",
+    "max_cost_micros": 0,
+    "overage_policy": "REFUSE",
+}
+ADDON_WAREHOUSE_SYNC = {
+    "limit_key": "addon.warehouse_sync",
     "max_cost_micros": 0,
     "overage_policy": "REFUSE",
 }
@@ -225,6 +241,8 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
             PLATFORM_KEY,
+            ADDON_CUSTOM_DOMAIN,
+            ADDON_WAREHOUSE_SYNC,
         ],
     },
 }
@@ -258,6 +276,36 @@ def _specs(rows: list[dict[str, Any]]) -> list[TierEntrySpec]:
     ]
 
 
+def _commercials(key: str, *, allow_unpriced: bool) -> Optional[TierCommercials]:
+    """ARCH-30 Tranche 2 (T5-F1). `COMMERCIALS` was defined and never read.
+
+    A paid tier whose gateway price id is missing from the environment is a
+    REFUSAL, not an unpriced publication, unless `--allow-unpriced` says
+    otherwise. A published version is immutable: seeding without the id would
+    publish another version that can never be sold, which is exactly how v2
+    ended up unpriced.
+    """
+    terms = COMMERCIALS.get(key)
+    if terms is None:
+        return None
+    env_name = terms.get("gateway_price_id_env")
+    price_id = os.environ.get(env_name, "").strip() if env_name else ""
+    if int(terms["unit_amount_micros"]) > 0 and not price_id:
+        if allow_unpriced:
+            print(f"warning: {key} published unpriced ({env_name} is not set)")
+            return None
+        raise ValueError(
+            f"{key}: {env_name} is not set. Create the product at the gateway and "
+            f"export its id, or pass --allow-unpriced to publish a quoted tier."
+        )
+    return TierCommercials(
+        unit_amount_micros=int(terms["unit_amount_micros"]),
+        currency=str(terms["currency"]),
+        billing_interval=str(terms["billing_interval"]),
+        gateway_price_id=price_id or None,
+    )
+
+
 def _parse_instant(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -274,6 +322,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--assign", type=str, default=None)
     parser.add_argument("--tier", type=str, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--allow-unpriced",
+        action="store_true",
+        help="publish a paid tier without a gateway price id (it cannot be sold)",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
@@ -317,6 +370,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         for key, payload in source.items()
     }
 
+    try:
+        commercials = {
+            key: _commercials(key, allow_unpriced=args.allow_unpriced)
+            for key in source
+        }
+    except ValueError as exc:
+        print(f"Refusing to publish: {exc}")
+        return 2
+
+    for key, terms in commercials.items():
+        label = (
+            f"{terms.unit_amount_micros / 1_000_000:.2f} {terms.currency}/"
+            f"{terms.billing_interval} price={terms.gateway_price_id or '-'}"
+            if terms
+            else "unpriced (quoted)"
+        )
+        print(f"{key}/v{args.version}: {label}")
+
     if args.dry_run:
         print(f"version:        {args.version}")
         print(f"effective_from: {effective_from.isoformat()}")
@@ -345,6 +416,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 version=args.version,
                 effective_from=effective_from,
                 entries=specs,
+                commercials=commercials[key],
             )
             published.append(f"{tier.key}/v{tier.version}")
         db.commit()

@@ -44,6 +44,8 @@
  */
 
 export type MeterKey =
+  | "addon.custom_domain"
+  | "addon.warehouse_sync"
   | "*"
   | "llm.input_token"
   | "llm.output_token"
@@ -106,6 +108,16 @@ export const KNOWN_METERS: Record<MeterKey, MeterDisplay> = {
   "embedding.token": {
     label: "Search indexing",
     unit: "tokens",
+  },
+  "addon.custom_domain": {
+    label: "Custom vanity domain",
+    unit: "none",
+    capability: true,
+  },
+  "addon.warehouse_sync": {
+    label: "Data warehouse sync",
+    unit: "none",
+    capability: true,
   },
 };
 

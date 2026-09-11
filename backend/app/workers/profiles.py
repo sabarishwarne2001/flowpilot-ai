@@ -46,6 +46,9 @@ LIGHT = WorkerProfile(
             "billing.seat_drift",
             "billing.assemble_invoice",
             "billing.dunning_sweep",
+            # ARCH-30 Tranche 2 (D-6). Row updates and existing domain
+            # revocation only; no heavy imports.
+            "billing.addon_grace_sweep",
             # ARCH-16 identity hygiene. These are DNS lookups, row deletions,
             # and replay-guard pruning -- no heavy imports, so they belong on
             # the thin image alongside the other housekeeping types. They

@@ -538,7 +538,7 @@ export const AdminMarginsHub: React.FC = () => {
         <>
           <CoverageBanner figures={figures} />
 
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Stat
               label="Revenue"
               value={formatMicros(figures.revenue_micros)}
@@ -574,6 +574,13 @@ export const AdminMarginsHub: React.FC = () => {
               caption={`${formatRatio(
                 figures.unknown_cost_share,
               )} of revenue · ${figures.unknown_cost_event_count.toLocaleString()} events`}
+            />
+            <Stat
+              label="BYOK traffic"
+              value={formatMicros(figures.zero_byok_revenue_micros)}
+              caption={`${formatRatio(
+                figures.zero_byok_share,
+              )} of revenue · $0.00 provider cost · ${figures.zero_byok_event_count.toLocaleString()} events`}
             />
           </section>
         </>

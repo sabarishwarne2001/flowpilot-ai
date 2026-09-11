@@ -54,6 +54,17 @@ class BillingAccessState(str, PyEnum):
     def export_allowed(self) -> bool:
         return True
 
+    @property
+    def is_read_only(self) -> bool:
+        """ARCH-30 Tranche 2 (SCIM-F1).
+
+        `scim.assert_write_allowed` has always asked for this property with
+        `getattr(state, "is_read_only", False)`. It did not exist, so the
+        default answered False for every organization and seat-consuming
+        SCIM provisioning was never refused in a read-only billing state.
+        """
+        return not self.writes_allowed
+
 
 @dataclass(frozen=True)
 class DunningPosition:
@@ -216,24 +227,12 @@ def _notify(
     invoice: Invoice,
     step: DunningStep,
 ) -> int:
-    from app.services.organization_notification_service import _emit
+    from app.services import organization_notification_service
 
-    recipients = (
-        db.execute(
-            select(OrganizationMember.user_id).where(
-                OrganizationMember.organization_id == organization_id,
-                OrganizationMember.status == MembershipStatus.ACTIVE,
-                OrganizationMember.role.in_(
-                    [
-                        OrganizationRole.OWNER,
-                        OrganizationRole.ADMIN,
-                        OrganizationRole.BILLING,
-                    ]
-                ),
-            )
-        )
-        .scalars()
-        .all()
+    recipients = organization_notification_service.recipients_with_roles(
+        db,
+        organization_id=organization_id,
+        roles=organization_notification_service.BILLING_ROLES,
     )
 
     amount = invoice.amount_due_micros / 1_000_000
@@ -273,7 +272,7 @@ def _notify(
     title, message = messages[step]
 
     for user_id in recipients:
-        _emit(
+        organization_notification_service.emit(
             db,
             organization_id=organization_id,
             user_id=user_id,
@@ -353,6 +352,36 @@ def on_payment_succeeded(
     }
 
 
+def _subscription_access_state(
+    db: Session, *, organization_id: uuid.UUID
+) -> BillingAccessState:
+    """ARCH-30 Tranche 2 (D-11). Access implied by the live subscription itself.
+
+    Dunning steps are recorded against OPEN invoices, and under a Merchant of
+    Record those rows are not how delinquency arrives: the gateway reports it
+    on the subscription. `unpaid` is live but not entitled, and a `past_due`
+    row whose grace has passed is read-only even before another webhook moves
+    it to `unpaid`.
+    """
+    from app.services.billing import subscription_service
+    from app.models.subscription import SubscriptionStatus
+
+    subscription = subscription_service.live_subscription_for_organization(
+        db, organization_id=organization_id
+    )
+    if subscription is None:
+        return BillingAccessState.ACTIVE
+    if subscription.status == SubscriptionStatus.UNPAID:
+        return BillingAccessState.RESTRICTED
+    if (
+        subscription.status == SubscriptionStatus.PAST_DUE
+        and subscription.grace_ends_at is not None
+        and subscription.grace_ends_at <= datetime.now(timezone.utc)
+    ):
+        return BillingAccessState.RESTRICTED
+    return BillingAccessState.ACTIVE
+
+
 def access_state(db: Session, *, organization_id: uuid.UUID) -> BillingAccessState:
     row = db.execute(
         select(DunningAction.step)
@@ -366,11 +395,13 @@ def access_state(db: Session, *, organization_id: uuid.UUID) -> BillingAccessSta
         .order_by(DunningAction.applied_at.desc())
     ).scalars().all()
 
-    if not row:
-        return BillingAccessState.ACTIVE
-    if DunningStep.SUSPEND_WRITES in row:
+    if row and DunningStep.SUSPEND_WRITES in row:
         return BillingAccessState.SUSPENDED
-    return BillingAccessState.RESTRICTED
+    if row:
+        return BillingAccessState.RESTRICTED
+    # The stricter of the two sources wins; with no restrictive dunning step,
+    # the subscription's own state decides.
+    return _subscription_access_state(db, organization_id=organization_id)
 
 
 def position(db: Session, *, organization_id: uuid.UUID) -> DunningPosition:
