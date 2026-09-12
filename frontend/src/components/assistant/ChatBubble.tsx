@@ -1,3 +1,4 @@
+import { formatTimestamp, formatTimestampTime } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { Bot, User, FileText } from "lucide-react";
 import { useOptionalTenant } from "@/routes/TenantContext";
@@ -193,7 +194,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
               className="text-[10px] font-medium text-muted-foreground"
               dateTime={message.created_at}
             >
-              {new Date(message.created_at).toLocaleString()}
+              {formatTimestamp(message.created_at)}
             </time>
           </header>
 
@@ -336,7 +337,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
 
               <span>
                 {message.created_at
-                  ? new Date(message.created_at).toLocaleTimeString([], {
+                  ? formatTimestampTime(message.created_at, {
                       hour: "2-digit",
                       minute: "2-digit",
                     })

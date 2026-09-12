@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RefreshCw, Users } from "lucide-react";
@@ -168,9 +169,7 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
           {state.subscription && (
             <p className="mt-1.5 text-xs text-muted-foreground">
               Current period ends{" "}
-              {new Date(
-                state.subscription.current_period_end,
-              ).toLocaleDateString()}
+              {formatTimestampDate(state.subscription.current_period_end,)}
               .
             </p>
           )}
@@ -217,7 +216,7 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
           <>
             {" "}
             Payment has been outstanding since{" "}
-            {new Date(state.delinquent_since).toLocaleDateString()}.
+            {formatTimestampDate(state.delinquent_since)}.
           </>
         )}
       </p>

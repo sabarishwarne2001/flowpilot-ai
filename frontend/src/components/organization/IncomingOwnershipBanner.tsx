@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Crown, Loader2 } from "lucide-react";
@@ -85,7 +86,7 @@ export const IncomingOwnershipBanner: React.FC = () => {
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {isConfirming
                   ? "Accepting gives you full control of this organization, including responsibility for its billing. The current owner becomes an administrator."
-                  : `Expires ${new Date(transfer.expires_at).toLocaleDateString()}.`}
+                  : `Expires ${formatTimestampDate(transfer.expires_at)}.`}
               </p>
               {error && (
                 <p role="alert" className="mt-0.5 text-xs text-destructive">

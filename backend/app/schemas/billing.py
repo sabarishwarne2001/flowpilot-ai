@@ -39,7 +39,11 @@ class BillingAccountRead(BaseModel):
 
     id: uuid.UUID
     organization_id: uuid.UUID
-    stripe_customer_id: str
+    # ARCH-30 Tranche 3. Optional since the gateway columns: a Dodo-adopted
+    # account has no Stripe customer, and `str` made this endpoint a 500.
+    stripe_customer_id: Optional[str] = None
+    gateway: str = "STRIPE"
+    gateway_customer_id: Optional[str] = None
     currency: str
     billing_email: str
     tax_id: Optional[str] = None
@@ -51,7 +55,9 @@ class SubscriptionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    stripe_subscription_id: str
+    stripe_subscription_id: Optional[str] = None
+    gateway: str = "STRIPE"
+    gateway_subscription_id: Optional[str] = None
     status: str
     quota_tier_key: str
     quota_tier_id: uuid.UUID
@@ -62,6 +68,7 @@ class SubscriptionRead(BaseModel):
     cancel_at_period_end: bool
     canceled_at: Optional[datetime] = None
     trial_end: Optional[datetime] = None
+    grace_ends_at: Optional[datetime] = None
     last_reconciled_at: datetime
 
 

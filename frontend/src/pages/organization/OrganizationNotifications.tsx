@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Info, Loader2 } from "lucide-react";
@@ -130,7 +131,7 @@ export const OrganizationNotifications: React.FC = () => {
                       {notification.message}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(notification.created_at).toLocaleString()}
+                      {formatTimestamp(notification.created_at)}
                     </p>
                   </div>
                 </div>

@@ -1,3 +1,4 @@
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -214,13 +215,13 @@ export const OrganizationApiKeys: React.FC = () => {
             </p>
 
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Created {new Date(key.created_at).toLocaleDateString()} · last
+              Created {formatTimestampDate(key.created_at)} · last
               used{" "}
               {key.last_used_at
-                ? new Date(key.last_used_at).toLocaleDateString()
+                ? formatTimestampDate(key.last_used_at)
                 : "never"}
               {key.expires_at &&
-                ` · expires ${new Date(key.expires_at).toLocaleDateString()}`}
+                ` · expires ${formatTimestampDate(key.expires_at)}`}
               {isRevoked &&
                 key.deactivated_reason &&
                 ` · ${key.deactivated_reason.toLowerCase()}`}
@@ -241,7 +242,7 @@ export const OrganizationApiKeys: React.FC = () => {
             {overlapActive && (
               <p className="mt-1.5 text-xs text-muted-foreground">
                 The previous secret still works until{" "}
-                {new Date(key.previous_secret_expires_at!).toLocaleString()} —
+                {formatTimestamp(key.previous_secret_expires_at!)} —
                 migrate your integration before then.
               </p>
             )}
@@ -310,7 +311,7 @@ export const OrganizationApiKeys: React.FC = () => {
               This key was rotated recently and the old secret is still valid
               until{" "}
               {key.previous_secret_expires_at
-                ? new Date(key.previous_secret_expires_at).toLocaleString()
+                ? formatTimestamp(key.previous_secret_expires_at)
                 : "shortly"}
               . Rotating again now will stop the old secret working
               immediately, and anything still using it will start failing.

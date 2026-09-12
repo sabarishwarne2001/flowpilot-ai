@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, Download, Filter, Loader2, User } from "lucide-react";
@@ -205,7 +206,7 @@ export const AuditExplorer: React.FC = () => {
               {rows.map((row) => (
                 <tr key={row.id} className="border-t border-border align-top">
                   <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                    {new Date(row.created_at).toLocaleString()}
+                    {formatTimestamp(row.created_at)}
                   </td>
 
                   <td className="px-3 py-2 text-xs">

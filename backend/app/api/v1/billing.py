@@ -245,6 +245,9 @@ def get_billing_access(
 ) -> BillingAccessResponse:
     state = dunning_service.access_state(db, organization_id=context.organization_id)
     position = dunning_service.position(db, organization_id=context.organization_id)
+    live = subscription_service.live_subscription_for_organization(
+        db, organization_id=context.organization_id
+    )
 
     return BillingAccessResponse(
         organization_id=context.organization_id,
@@ -257,6 +260,12 @@ def get_billing_access(
         next_dunning_step=(
             position.next_step.value if position.next_step else None
         ),
+        subscription_status=(
+            (live.status.value if hasattr(live.status, "value") else str(live.status))
+            if live
+            else None
+        ),
+        grace_ends_at=live.grace_ends_at if live else None,
     )
 
 

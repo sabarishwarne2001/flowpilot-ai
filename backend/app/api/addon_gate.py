@@ -5,13 +5,16 @@ Lives in the API layer because it speaks HTTP. The decision itself is
 into a 402 the console can render, and writes the refusal to the audit log in
 its own transaction so the rollback that follows the exception cannot erase it.
 
-WHY 402
-=======
+WHY 402, AND WHY A DOMAIN ERROR
+===============================
 
-403 already means "your role may not do this" everywhere in this API, and the
-console treats it as a permissions problem. An owner refused a custom domain
-has the right role and the wrong plan. 402 Payment Required is the status that
-says so, and the structured body carries what the lock card needs.
+403 already means "your role may not do this" everywhere in this API. An owner
+refused a custom domain has the right role and the wrong plan; 402 says so.
+
+Tranche 3 changed the raise from an HTTP exception carrying a dict to
+`AddonRequiredError`, a `FlowPilotError`. The console's client parses only the
+ARCH-01 envelope `{code, message, details}` and sent every other 402 to the
+quota banner, so the Tranche 2 body was never read.
 
 TWO POLICIES, NAMED AT EACH CALL SITE
 =====================================
@@ -30,10 +33,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core import entitlements
+from app.core.billing_errors import AddonRequiredError
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
 from app.services import audit_service
 from app.services.billing import entitlement_service
@@ -92,19 +95,16 @@ def require_addon(
             "to a plan that includes it."
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_402_PAYMENT_REQUIRED,
-        detail={
-            "code": ADDON_REQUIRED_CODE,
+    raise AddonRequiredError(
+        message,
+        details={
             "addon_key": addon_key,
             "addon_name": offer.display_name,
             "state": access.state,
             "grace_ends_at": (
                 access.grace_ends_at.isoformat() if access.grace_ends_at else None
             ),
-            "message": message,
         },
     )
-
 
 __all__ = ["ADDON_REQUIRED_CODE", "require_addon"]

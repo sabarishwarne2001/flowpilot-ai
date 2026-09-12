@@ -187,6 +187,20 @@ def resolve_exception_mapping(exc: Exception) -> tuple[int, str]:
     return _DEFAULT_MAPPING
 
 
+def _exception_details(exc: Exception) -> dict:
+    """ARCH-30 Tranche 3. Forward structured context a domain error carries.
+
+    Every domain error previously rendered `details={}`, so an error that knew
+    which add-on was missing, or which billing state blocked a write, could
+    not tell the console. Only a mapping is forwarded; anything else is not a
+    details payload and is dropped rather than stringified.
+    """
+    from collections.abc import Mapping
+
+    raw = getattr(exc, "details", None)
+    return dict(raw) if isinstance(raw, Mapping) else {}
+
+
 async def domain_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     status_code, code = resolve_exception_mapping(exc)
 
@@ -207,7 +221,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
             code=code,
             message=str(exc),
             detail=str(exc),
-            details={},
+            details=_exception_details(exc),
         ).model_dump(),
         headers=headers,
     )

@@ -528,6 +528,13 @@ apiClient.interceptors.response.use(
     /* ---------------------------------------------------------------- 402 */
 
     if (status === 402) {
+      // ARCH-30 Tranche 3. Two 402s are about what the organization pays for,
+      // not a usage ceiling. They carry their own message and details for the
+      // page that asked, and must not raise the global quota banner.
+      if (parsed.code === "ADDON_REQUIRED" || parsed.code === "BILLING_READ_ONLY") {
+        return reject();
+      }
+
       // Held, not retried. See the module header.
       //
       // Two shapes arrive here and both are accepted: the domain envelope from

@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -84,8 +85,8 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
                   {invoice.number}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  {new Date(invoice.period_start).toLocaleDateString()} –{" "}
-                  {new Date(invoice.period_end).toLocaleDateString()} ·{" "}
+                  {formatTimestampDate(invoice.period_start)} –{" "}
+                  {formatTimestampDate(invoice.period_end)} ·{" "}
                   {invoice.seats_billed}{" "}
                   {invoice.seats_billed === 1 ? "seat" : "seats"}
                 </span>

@@ -1,3 +1,4 @@
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Info, Loader2 } from "lucide-react";
@@ -101,15 +102,15 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({
 
           <div className="text-right text-xs text-muted-foreground">
             <p>
-              {new Date(summary.period_start).toLocaleDateString()} –{" "}
-              {new Date(summary.period_end).toLocaleDateString()}
+              {formatTimestampDate(summary.period_start)} –{" "}
+              {formatTimestampDate(summary.period_end)}
             </p>
             <p className="mt-0.5">
               {summary.sealed ? (
                 <span className="text-foreground">
                   Final · sealed{" "}
                   {summary.sealed_at
-                    ? new Date(summary.sealed_at).toLocaleDateString()
+                    ? formatTimestampDate(summary.sealed_at)
                     : ""}
                 </span>
               ) : (
@@ -218,7 +219,7 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({
               return (
                 <div
                   key={bucket.bucket_start}
-                  title={`${new Date(bucket.bucket_start).toLocaleString()} — ${formatMicros(bucket.total_cost_micros, currency)}${bucket.sealed ? "" : " (running)"}`}
+                  title={`${formatTimestamp(bucket.bucket_start)} — ${formatMicros(bucket.total_cost_micros, currency)}${bucket.sealed ? "" : " (running)"}`}
                   className={[
                     "min-w-[3px] flex-1 rounded-t transition-colors",
                     bucket.sealed ? "bg-primary/70" : "bg-primary/30",
@@ -324,7 +325,7 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
       )}
 
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>Resets {new Date(limit.resets_at).toLocaleDateString()}</span>
+        <span>Resets {formatTimestampDate(limit.resets_at)}</span>
         {limit.hard_stop ? (
           <span className="inline-flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" aria-hidden="true" />

@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -373,7 +374,7 @@ const KeyRow: React.FC<{
           <dt className="text-xs text-muted-foreground">Last used</dt>
           <dd className="text-foreground">
             {apiKey.last_used_at
-              ? new Date(apiKey.last_used_at).toLocaleDateString()
+              ? formatTimestampDate(apiKey.last_used_at)
               : "—"}
           </dd>
         </div>

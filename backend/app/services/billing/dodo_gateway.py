@@ -289,7 +289,9 @@ class DodoGateway:
     def capabilities(self) -> GatewayCapabilities:
         return GatewayCapabilities(
             is_merchant_of_record=True,
-            supports_seat_proration=False,
+            # ARCH-30 Tranche 3. POST /subscriptions/{id}/change-plan accepts
+            # a quantity and a proration mode; `set_subscription_seats` uses it.
+            supports_seat_proration=True,
             # Pending verification with Dodo — see the module docstring. Do not
             # flip this without confirming the usage API can accept
             # `usage_rollups` quantities at the overage model's granularity.
@@ -447,6 +449,45 @@ class DodoGateway:
             metadata=metadata,
             raw=dict(raw),
         )
+
+    def set_subscription_seats(
+        self,
+        *,
+        subscription_id: str,
+        product_id: str,
+        seats: int,
+        proration_mode: str,
+    ) -> DodoSubscriptionSnapshot:
+        """Change the seat quantity on a live subscription, then re-fetch (D-9).
+
+        Dodo's change-plan requires the product id even when only the quantity
+        changes; the caller passes the product of the tier the subscription is
+        pinned to. The response body is not trusted for state: the subscription
+        is re-fetched so `state_version` orders this write against webhooks.
+        """
+        if int(seats) < 1:
+            raise DodoGatewayError("Dodo subscriptions need at least one unit.")
+        allowed = {
+            "prorated_immediately",
+            "full_immediately",
+            "difference_immediately",
+            "do_not_bill",
+        }
+        if proration_mode not in allowed:
+            raise DodoGatewayError(
+                f"Unknown Dodo proration mode {proration_mode!r}; expected one of "
+                f"{sorted(allowed)}."
+            )
+        self._request(
+            "POST",
+            f"/subscriptions/{quote(str(subscription_id), safe='')}/change-plan",
+            {
+                "product_id": product_id,
+                "quantity": int(seats),
+                "proration_billing_mode": proration_mode,
+            },
+        )
+        return self.fetch_subscription(subscription_id)
 
     # -- checkout ---------------------------------------------------------
 

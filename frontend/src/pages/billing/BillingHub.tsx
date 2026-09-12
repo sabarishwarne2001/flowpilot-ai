@@ -2,7 +2,6 @@ import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 
-import DunningBanner from "@/components/billing/DunningBanner";
 import ConsumptionDashboard from "@/pages/billing/ConsumptionDashboard";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
 import PlanSelector from "@/pages/billing/PlanSelector";
@@ -43,10 +42,7 @@ export const BillingHub: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <DunningBanner
-        organizationId={organizationId}
-        canManageBilling={canManageBilling}
-      />
+      {/* The dunning banner is rendered by the organization layout (ARCH-30 Tranche 3). */}
 
       <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
         <header className="flex flex-wrap items-start justify-between gap-3">

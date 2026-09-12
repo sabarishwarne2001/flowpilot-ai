@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback,  useMemo, useState  } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -47,7 +48,7 @@ const INPUT =
   "mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
 
 const formatDate = (value: string | null): string =>
-  value ? new Date(value).toLocaleString() : "—";
+  value ? formatTimestamp(value) : "—";
 
 const errorMessage = (error: unknown): string => {
   const detail = (error as { response?: { data?: { detail?: unknown } } })

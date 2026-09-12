@@ -41,8 +41,10 @@ export const formatBytes = (
   return `${Number(value.toFixed(precision))} ${FILE_SIZE_UNITS[index]}`;
 };
 
+import { formatTimestamp } from "@/utils/displayTime";
+
 /**
- * Format dates using the user's locale.
+ * Format dates in the reader's profile timezone and language (ARCH-30 D-5).
  */
 export const formatDateTime = (
   dateInput: string | number | Date,
@@ -54,16 +56,7 @@ export const formatDateTime = (
       return "Invalid Date";
     }
 
-    return new Intl.DateTimeFormat(
-      navigator.language,
-      {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      },
-    ).format(date);
+    return formatTimestamp(date, "Invalid Date");
   } catch {
     return "Invalid Date";
   }

@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import { formatTimestamp } from "@/utils/displayTime";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -543,7 +544,7 @@ export const Workspace: React.FC = () => {
                 <option value="UTC">UTC</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                Scheduled exports and automation schedules run on this clock.
+                The workspace clock. Organization-wide warehouse exports still run on UTC.
               </p>
             </div>
 
@@ -844,7 +845,7 @@ export const Workspace: React.FC = () => {
                         <td className="py-3.5 px-4 font-medium text-foreground">{inv.email}</td>
                         <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">{inv.organization_role}</td>
                         <td className="py-3.5 px-4 text-muted-foreground text-xs">
-                          {new Date(inv.expires_at).toLocaleString()}
+                          {formatTimestamp(inv.expires_at)}
                           {expired && (
                             <span className="ml-2 font-semibold text-destructive">Expired</span>
                           )}

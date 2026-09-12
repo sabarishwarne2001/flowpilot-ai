@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, History, Loader2, Upload } from "lucide-react";
@@ -80,7 +81,7 @@ function detailOf(error: unknown, fallback: string): string {
 }
 
 const formatDateTime = (value: string): string =>
-  new Date(value).toLocaleString();
+  formatTimestamp(value);
 
 /* ---------------------------------------------------------------------- */
 /* Reconciliation history                                                  */

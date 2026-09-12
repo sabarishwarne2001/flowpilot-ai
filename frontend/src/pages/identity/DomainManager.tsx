@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Globe, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
@@ -371,21 +372,19 @@ export const DomainManager: React.FC = () => {
                       {domain.challenge_expires_at && (
                         <p>
                           Challenge expires{" "}
-                          {new Date(
-                            domain.challenge_expires_at,
-                          ).toLocaleString()}
+                          {formatTimestamp(domain.challenge_expires_at,)}
                         </p>
                       )}
                       {domain.last_checked_at && (
                         <p>
                           Last checked{" "}
-                          {new Date(domain.last_checked_at).toLocaleString()}
+                          {formatTimestamp(domain.last_checked_at)}
                         </p>
                       )}
                       {domain.grace_expires_at && (
                         <p>
                           Grace period ends{" "}
-                          {new Date(domain.grace_expires_at).toLocaleString()}
+                          {formatTimestamp(domain.grace_expires_at)}
                         </p>
                       )}
                       <p>

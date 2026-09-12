@@ -75,7 +75,7 @@ export const SsoComplete: React.FC = () => {
     const requested = new URLSearchParams(location.search).get("next");
     return requested && requested !== "/" && isSafeRedirectPath(requested)
       ? requested
-      : ROUTES.WORKSPACES;
+      : `${ROUTES.WORKSPACES}?landing=1`;
   }, [location.search]);
 
   React.useEffect(() => {

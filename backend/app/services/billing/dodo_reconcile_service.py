@@ -66,12 +66,8 @@ from app.models.organization import Organization
 from app.models.organization_addon import OrganizationAddon
 from app.models.quota_tier import QuotaTier
 from app.models.stripe_inbound_event import StripeInboundEvent
-from app.models.subscription import (
-    ENTITLED_SUBSCRIPTION_STATUSES,
-    Subscription,
-    SubscriptionStatus,
-)
-from app.services import audit_service, organization_notification_service, quota_service
+from app.models.subscription import Subscription, SubscriptionStatus
+from app.services import audit_service, organization_notification_service
 from app.services.billing import (
     account_service,
     addon_service,
@@ -89,9 +85,6 @@ from app.services.billing.reconcile_service import ReconcileOutcome, ReconcileRe
 logger = logging.getLogger("app.services.billing.dodo_reconcile")
 
 Handler = Callable[[Session, StripeInboundEvent], ReconcileOutcome]
-
-_TERMINAL = (SubscriptionStatus.CANCELED, SubscriptionStatus.INCOMPLETE_EXPIRED)
-
 
 # ============================================================================
 # Payload helpers — the body is only ever used to find what to re-fetch
@@ -334,6 +327,26 @@ def reconcile_subscription_event(db: Session, row: StripeInboundEvent) -> Reconc
     return _reconcile_plan(db, row=row, snapshot=snapshot, organization_id=organization_id)
 
 
+def upsert_statement(values: dict[str, Any]):
+    """The guarded subscription upsert, exposed so a gate can EXPLAIN it on real Postgres.
+
+    The arbiter is the PARTIAL index `uq_subscriptions_gateway_subscription`,
+    so `index_where` must restate its predicate or Postgres cannot infer it.
+    """
+    table = Subscription.__table__
+    stmt = pg_insert(table).values(**values)
+    return stmt.on_conflict_do_update(
+        index_elements=[table.c.gateway, table.c.gateway_subscription_id],
+        index_where=text("gateway_subscription_id IS NOT NULL"),
+        set_={
+            key: getattr(stmt.excluded, key)
+            for key in values
+            if key not in ("gateway", "gateway_subscription_id")
+        },
+        where=table.c.stripe_state_version < stmt.excluded.stripe_state_version,
+    ).returning(table.c.id)
+
+
 def _reconcile_plan(
     db: Session,
     *,
@@ -378,18 +391,7 @@ def _reconcile_plan(
         "last_reconciled_at": now,
     }
 
-    table = Subscription.__table__
-    stmt = pg_insert(table).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[table.c.gateway, table.c.gateway_subscription_id],
-        index_where=text("gateway_subscription_id IS NOT NULL"),
-        set_={
-            key: getattr(stmt.excluded, key)
-            for key in values
-            if key not in ("gateway", "gateway_subscription_id")
-        },
-        where=table.c.stripe_state_version < stmt.excluded.stripe_state_version,
-    ).returning(table.c.id)
+    stmt = upsert_statement(values)
 
     written_id = db.execute(stmt).scalar_one_or_none()
     if written_id is None:
@@ -408,27 +410,12 @@ def _reconcile_plan(
     subscription = db.get(Subscription, written_id)
     account = db.get(BillingAccount, account.id)
 
-    fallback_error: Optional[str] = None
-    if status in ENTITLED_SUBSCRIPTION_STATUSES:
-        subscription_service.propagate_tier_to_organization(
-            db, account=account, subscription=subscription
-        )
-    elif status in _TERMINAL:
-        # Without this the organization keeps the paid tier: `resolve_tier`
-        # falls back to `organizations.quota_tier_id` once no LIVE subscription
-        # exists, and that pointer still names what was bought.
-        try:
-            quota_service.assign_tier(
-                db,
-                organization_id=organization_id,
-                tier_key=str(getattr(settings, "BILLING_LAPSED_TIER_KEY", "free")),
-            )
-        except Exception as exc:  # noqa: BLE001
-            fallback_error = f"{type(exc).__name__}: {exc}"
-            logger.error(
-                "dodo.fallback_tier_unassignable",
-                extra={"organization_id": str(organization_id), "error": fallback_error},
-            )
+    # ARCH-30 Tranche 3. One rule for every gateway: entitled statuses pin the
+    # tier; terminal statuses release a tier this subscription pinned.
+    tier_outcome = subscription_service.apply_tier_for_status(
+        db, account=account, subscription=subscription
+    )
+    fallback_error: Optional[str] = tier_outcome.get("error")
 
     changed = previous_status != status
     plan_changed = previous_tier_key is not None and previous_tier_key != tier.key
@@ -481,6 +468,7 @@ def _reconcile_plan(
         grace_ends_at=grace_ends_at.isoformat() if grace_ends_at else None,
         state_version=snapshot.state_version,
         applied=True,
+        tier_action=tier_outcome.get("tier_action"),
         fallback_tier_error=fallback_error,
         addon_transitions=[r for r in addon_results if r.get("changed")],
     )
@@ -594,4 +582,5 @@ __all__ = [
     "map_status",
     "reconcile_row",
     "reconcile_subscription_event",
+    "upsert_statement",
 ]

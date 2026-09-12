@@ -42,7 +42,10 @@ class InvoiceLineItemRead(BaseModel):
 
 class SubscriptionBrief(BaseModel):
     id: uuid.UUID
-    stripe_subscription_id: str
+    stripe_subscription_id: Optional[str] = None
+    gateway: str = "STRIPE"
+    gateway_subscription_id: Optional[str] = None
+    grace_ends_at: Optional[datetime] = None
     status: str
     quota_tier_key: str
     quota_tier_id: uuid.UUID
@@ -79,6 +82,9 @@ class InvoiceSummary(BaseModel):
         return SubscriptionBrief(
             id=subscription.id,
             stripe_subscription_id=subscription.stripe_subscription_id,
+            gateway=str(getattr(subscription, "gateway", None) or "STRIPE"),
+            gateway_subscription_id=getattr(subscription, "gateway_subscription_id", None),
+            grace_ends_at=getattr(subscription, "grace_ends_at", None),
             status=(
                 subscription.status.value
                 if hasattr(subscription.status, "value")
@@ -186,6 +192,11 @@ class BillingAccessResponse(BaseModel):
     )
     dunning_steps_applied: list[str]
     next_dunning_step: Optional[str] = None
+    # ARCH-30 Tranche 3 (D-11). During a renewal-failure grace the access state
+    # is still ACTIVE; these let the console say "payment failed, full access
+    # until ..." instead of saying nothing until the day writes stop.
+    subscription_status: Optional[str] = None
+    grace_ends_at: Optional[datetime] = None
 
 
 class CheckoutSessionRequest(BaseModel):

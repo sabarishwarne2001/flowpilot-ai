@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 /**
  * ARCH-26 — Enterprise Analytics, BI Egress & Warehouse Sync.
  *
@@ -396,7 +397,7 @@ export const formatBytes = (value: number | null): string => {
 };
 
 export const formatDateTime = (value: string | null): string =>
-  value ? new Date(value).toLocaleString() : "—";
+  value ? formatTimestamp(value) : "—";
 
 /**
  * Describe a probe result in words, keeping null distinct from false.

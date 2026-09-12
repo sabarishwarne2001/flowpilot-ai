@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
@@ -40,7 +41,7 @@ export const PendingInvitationsBanner: React.FC = () => {
                   {" · "}
                 </>
               )}
-              Expires {new Date(invitation.expires_at).toLocaleDateString()}.
+              Expires {formatTimestampDate(invitation.expires_at)}.
               Open the link in your invitation email to accept.
             </p>
           </div>

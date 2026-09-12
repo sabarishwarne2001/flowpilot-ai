@@ -1,4 +1,5 @@
-﻿import React, { useMemo, useState } from "react";
+﻿import { formatTimestamp } from "@/utils/displayTime";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -204,7 +205,7 @@ export const ExecutionTimeline: React.FC = () => {
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {chain.startedAt
-                        ? new Date(chain.startedAt).toLocaleString()
+                        ? formatTimestamp(chain.startedAt)
                         : ""}{" "}
                       · chain {chain.correlationId.slice(0, 8)}
                     </span>

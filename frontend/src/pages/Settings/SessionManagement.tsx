@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Monitor, ShieldAlert, Smartphone } from "lucide-react";
@@ -70,7 +71,7 @@ function formatWhen(value: string | null): string {
   if (minutes < 60) {return `${minutes}m ago`;}
   const hours = Math.round(minutes / 60);
   if (hours < 24) {return `${hours}h ago`;}
-  return new Date(value).toLocaleDateString();
+  return formatTimestampDate(value);
 }
 
 export const SessionManagement: React.FC = () => {
@@ -205,7 +206,7 @@ export const SessionManagement: React.FC = () => {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {session.ip_address ?? "IP unknown"} · last used{" "}
                     {formatWhen(session.last_used_at)} · signed in{" "}
-                    {new Date(session.created_at).toLocaleDateString()}
+                    {formatTimestampDate(session.created_at)}
                   </p>
                 </div>
 

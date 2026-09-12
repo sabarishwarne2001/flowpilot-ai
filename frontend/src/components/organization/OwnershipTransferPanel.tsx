@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Crown, Loader2, ShieldAlert } from "lucide-react";
@@ -139,8 +140,8 @@ export const OwnershipTransferPanel: React.FC<Props> = ({
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Proposed{" "}
-                    {new Date(transfer.created_at).toLocaleDateString()} ·
-                    expires {new Date(transfer.expires_at).toLocaleDateString()}
+                    {formatTimestampDate(transfer.created_at)} ·
+                    expires {formatTimestampDate(transfer.expires_at)}
                     . You are still the owner until they accept.
                   </p>
                 </div>

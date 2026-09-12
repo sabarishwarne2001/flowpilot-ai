@@ -82,7 +82,8 @@ class SeatError(Exception):
 class SeatDrift:
     organization_id: uuid.UUID
     subscription_id: uuid.UUID
-    stripe_subscription_id: str
+    #: ARCH-30 Tranche 3. The vendor's id, whichever vendor issued it.
+    gateway_subscription_id: Optional[str]
     seats_billable: int
     seats_purchased: int
 
@@ -106,7 +107,7 @@ class SeatDrift:
         return {
             "organization_id": str(self.organization_id),
             "subscription_id": str(self.subscription_id),
-            "stripe_subscription_id": self.stripe_subscription_id,
+            "gateway_subscription_id": self.gateway_subscription_id,
             "seats_billable": self.seats_billable,
             "seats_purchased": self.seats_purchased,
             "delta": self.delta,
@@ -419,6 +420,11 @@ def seat_price_disclosure(
     period_end: Optional[datetime] = subscription.current_period_end
 
     try:
+        if gateway is None and subscription.gateway != "STRIPE":
+            # ARCH-30 Tranche 3. Only the Stripe adapter offers a preview here;
+            # asking Stripe about a Dodo subscription would fail and be
+            # reported as Stripe being unreachable.
+            raise LookupError(f"no proration preview for {subscription.gateway}")
         client = gateway or stripe_gateway.get_gateway()
         preview = client.preview_seat_change(
             subscription_id=subscription.stripe_subscription_id,
@@ -432,9 +438,10 @@ def seat_price_disclosure(
         if preview.period_end is not None:
             period_end = preview.period_end
     except Exception as exc:  # noqa: BLE001 — see docstring
+        vendor = "Stripe" if subscription.gateway == "STRIPE" else str(subscription.gateway).title()
         reason = (
-            "Stripe could not be reached for a proration preview. The figure "
-            "is unknown rather than zero; it will be whatever Stripe invoices."
+            f"A proration preview is not available from {vendor} right now. The "
+            f"figure is unknown rather than zero; it will be whatever {vendor} charges."
         )
         logger.warning(
             "billing.seat_preview_unavailable",
@@ -490,7 +497,7 @@ def detect_drift(
     return SeatDrift(
         organization_id=organization_id,
         subscription_id=subscription.id,
-        stripe_subscription_id=subscription.stripe_subscription_id,
+        gateway_subscription_id=subscription.gateway_subscription_id,
         seats_billable=billable_seats(db, organization_id=organization_id),
         seats_purchased=int(subscription.seats_purchased),
     )
@@ -507,7 +514,7 @@ def detect_all_drift(db: Session, *, limit: int = 1000) -> list[SeatDrift]:
         select(
             BillingAccount.organization_id,
             Subscription.id,
-            Subscription.stripe_subscription_id,
+            Subscription.gateway_subscription_id,
             Subscription.seats_purchased,
             func.coalesce(BillableSeat.seats, 0),
         )
@@ -524,14 +531,14 @@ def detect_all_drift(db: Session, *, limit: int = 1000) -> list[SeatDrift]:
         SeatDrift(
             organization_id=organization_id,
             subscription_id=subscription_id,
-            stripe_subscription_id=stripe_subscription_id,
+            gateway_subscription_id=gateway_subscription_id,
             seats_billable=int(seats_billable),
             seats_purchased=int(seats_purchased),
         )
         for (
             organization_id,
             subscription_id,
-            stripe_subscription_id,
+            gateway_subscription_id,
             seats_purchased,
             seats_billable,
         ) in rows
@@ -624,17 +631,39 @@ def sync_seats(
             },
         )
 
-    snapshot = stripe_gateway.get_gateway().set_subscription_seats(
-        subscription_id=subscription.stripe_subscription_id,
-        seats=seats,
-        reason=reason,
-    )
+    if subscription.gateway == "STRIPE":
+        snapshot = stripe_gateway.get_gateway().set_subscription_seats(
+            subscription_id=subscription.stripe_subscription_id,
+            seats=seats,
+            reason=reason,
+        )
+        synced_seats, state_version = snapshot.seats, snapshot.state_version
+    else:
+        # ARCH-30 Tranche 3 (D-10). Seats on the live gateway. Previously every
+        # Dodo-billed organization reached the Stripe call above with a NULL
+        # subscription id: the job failed and added seats were never billed.
+        from app.models.quota_tier import QuotaTier
+        from app.services.billing.payment_gateway import get_payment_gateway
+
+        tier = db.get(QuotaTier, subscription.quota_tier_id)
+        if tier is None or not tier.gateway_price_id:
+            raise SeatError(
+                f"Subscription {subscription.id} is pinned to a tier with no gateway "
+                "price id; the seat count cannot be changed at the gateway."
+            )
+        dodo_snapshot = get_payment_gateway(subscription.gateway).set_subscription_seats(
+            subscription_id=subscription.gateway_subscription_id,
+            product_id=tier.gateway_price_id,
+            seats=seats,
+            proration_mode=str(settings.BILLING_DODO_SEAT_PRORATION_MODE),
+        )
+        synced_seats, state_version = dodo_snapshot.quantity, dodo_snapshot.state_version
 
     applied = subscription_service.record_seat_count(
         db,
         subscription=subscription,
-        seats=snapshot.seats,
-        state_version=snapshot.state_version,
+        seats=synced_seats,
+        state_version=state_version,
     )
 
     return {
@@ -643,7 +672,8 @@ def sync_seats(
         "outcome": "SYNCED" if applied else "SUPERSEDED",
         "seats_billable": seats,
         "seats_previously_purchased": purchased,
-        "seats_now_purchased": snapshot.seats,
+        "seats_now_purchased": synced_seats,
+        "gateway": subscription.gateway,
         "proration_behavior": settings.BILLING_SEAT_PRORATION_BEHAVIOR,
     }
 

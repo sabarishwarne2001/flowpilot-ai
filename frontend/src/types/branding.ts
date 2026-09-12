@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 /**
  * ARCH-25 — white-label, custom domains and tenant branding.
  *
@@ -233,4 +234,4 @@ export const isValidHexColor = (value: string): boolean =>
   normaliseHexColor(value) !== null;
 
 export const formatDateTime = (value: string | null): string =>
-  value ? new Date(value).toLocaleString() : "—";
+  value ? formatTimestamp(value) : "—";

@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -55,7 +56,7 @@ const DANGER = `${BUTTON} border border-red-200 text-red-700 hover:bg-red-50`;
 const WINDOW_DAYS = 30;
 
 const formatDate = (value: string | null): string =>
-  value ? new Date(value).toLocaleString() : "—";
+  value ? formatTimestamp(value) : "—";
 
 const errorMessage = (error: unknown): string => {
   const detail = (error as { response?: { data?: { detail?: unknown } } })

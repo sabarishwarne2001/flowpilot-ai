@@ -10,6 +10,9 @@ import { Header } from "@/components/layout/Header";
 import { VerificationBanner } from "@/components/common/VerificationBanner";
 import IncomingOwnershipBanner from "@/components/organization/IncomingOwnershipBanner";
 import PendingInvitationsBanner from "@/components/invitations/PendingInvitationsBanner";
+import DunningBanner from "@/components/billing/DunningBanner";
+import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
+import { useTenant } from "@/hooks/useTenant";
 
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -17,6 +20,12 @@ export const DashboardLayout: React.FC = () => {
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const beginSignOut = useAuthStore((state) => state.beginSignOut);
   const isSidebarCollapsed = useUIStore((state) => state.isSidebarCollapsed);
+  const { state: tenantState } = useTenant();
+  const billingOrganizationId =
+    tenantState.status === "ready" &&
+    ["OWNER", "ADMIN", "BILLING"].includes(String(tenantState.organizationRole).toUpperCase())
+      ? tenantState.organization.organization_id
+      : null;
 
   const handleLogout = useCallback(async (): Promise<void> => {
     // ARCH-29 Tranche 1. Set BEFORE the await, not after.
@@ -63,9 +72,14 @@ export const DashboardLayout: React.FC = () => {
         <IncomingOwnershipBanner />
         <PendingInvitationsBanner />
         <VerificationBanner />
+        {billingOrganizationId ? (
+          <DunningBanner organizationId={billingOrganizationId} canManageBilling />
+        ) : null}
 
         <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">
-          <Outlet />
+          <DisplayPreferencesBoundary>
+            <Outlet />
+          </DisplayPreferencesBoundary>
         </main>
       </div>
     </div>

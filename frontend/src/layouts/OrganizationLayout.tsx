@@ -6,12 +6,18 @@ import OrganizationSidebarNavigation from "@/components/layout/OrganizationSideb
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import DunningBanner from "@/components/billing/DunningBanner";
+import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
 import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ROUTES } from "@/constants/routes";
 
 export const OrganizationLayout: React.FC = () => {
-  const { organization, organizationId } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
+  // ARCH-30 Tranche 3 (D-11). Billing state is visible wherever the tenant
+  // works, not only on the Billing page. Limited to roles that can read billing
+  // so members do not generate a denied request on every navigation.
+  const canSeeBilling = ["OWNER", "ADMIN", "BILLING"].includes(String(organizationRole).toUpperCase());
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navigate = useNavigate();
@@ -100,8 +106,14 @@ export const OrganizationLayout: React.FC = () => {
           </div>
         </header>
 
+        {canSeeBilling ? (
+          <DunningBanner organizationId={organizationId} canManageBilling />
+        ) : null}
+
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:p-6">
-          <Outlet />
+          <DisplayPreferencesBoundary>
+            <Outlet />
+          </DisplayPreferencesBoundary>
         </main>
       </div>
     </div>

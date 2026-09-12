@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """ARCH-30 Tranche 2 — verification by execution.
 
     python scripts/verify_arch30_tranche2.py            # in-process gates
@@ -431,9 +430,8 @@ def g10() -> str:
 
 @gate("G11", "require_addon answers 402 with a structured body and an independent audit row")
 def g11() -> str:
-    from fastapi import HTTPException
-
     from app.api import addon_gate
+    from app.core.billing_errors import AddonRequiredError
     from app.services import audit_service
     from app.services.billing import entitlement_service as es
 
@@ -447,9 +445,10 @@ def g11() -> str:
         try:
             addon_gate.require_addon(None, context=context, addon_key="addon.warehouse_sync",
                                      operation="create_destination", allow_grace=False)
-        except HTTPException as exc:
-            assert exc.status_code == 402 and exc.detail["code"] == "ADDON_REQUIRED"
-            assert exc.detail["state"] == "GRACE" and exc.detail["grace_ends_at"]
+        except AddonRequiredError as exc:
+            # Tranche 3: a FlowPilotError rendered as the ARCH-01 envelope.
+            assert exc.status_code == 402 and exc.code == "ADDON_REQUIRED"
+            assert exc.details["state"] == "GRACE" and exc.details["grace_ends_at"]
         else:
             raise AssertionError("create during grace was permitted")
     assert len(audits) == 1 and str(audits[0]["outcome"]).endswith("DENIED")
@@ -697,7 +696,10 @@ def db_gates() -> None:
 
     def head(db: Any) -> str:
         version = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "arch30_step1_gateway_lifecycle_addons", f"head is {version}"
+        assert version in (
+            "arch30_step1_gateway_lifecycle_addons",
+            "arch30_step2_lapsed_tier_repair",
+        ), f"head is {version}"
         nullable = db.execute(text(
             "SELECT is_nullable FROM information_schema.columns "
             "WHERE table_name='stripe_inbound_events' AND column_name='stripe_event_id'"

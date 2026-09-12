@@ -36,6 +36,7 @@ import WarehouseDestinationEditor from "@/components/organization/WarehouseDesti
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
 import { useAddonAccess } from "@/hooks/useAddonAccess";
+import { ApiError } from "@/services/api/errors";
 import {
   DATASET_HINTS,
   DATASET_LABELS,
@@ -91,6 +92,11 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 const errorMessage = (error: unknown): string => {
+  // ARCH-30 Tranche 3. The API client rejects with ApiError; the branch below
+  // this one never matched, so every refusal read "Something went wrong".
+  if (error instanceof ApiError) {
+    return error.message;
+  }
   const detail = (error as { response?: { data?: { detail?: unknown } } })
     ?.response?.data?.detail;
   if (typeof detail === "string") {

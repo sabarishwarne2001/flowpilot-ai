@@ -640,6 +640,10 @@ class Settings(BaseSettings):
     BILLING_ON_HOLD_GRACE_DAYS: int = 13
     # The tier an organization falls back to when its subscription ends.
     BILLING_LAPSED_TIER_KEY: str = "free"
+    # ARCH-30 Tranche 3. How Dodo bills a mid-cycle seat change. Dodo documents
+    # that the three "_immediately" modes charge now and move the renewal date;
+    # do_not_bill keeps the date and bills the new quantity at renewal.
+    BILLING_DODO_SEAT_PRORATION_MODE: str = "prorated_immediately"
 
     BILLING_DEFAULT_CURRENCY: str = "USD"
     BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None

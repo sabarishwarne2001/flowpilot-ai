@@ -85,7 +85,7 @@ export const Login: React.FC = () => {
     const requested = new URLSearchParams(location.search).get("redirect");
     return requested && isSafeRedirectPath(requested)
       ? requested
-      : ROUTES.WORKSPACES;
+      : `${ROUTES.WORKSPACES}?landing=1`;
   })();
 
   const [mode, setMode] = useState<SignInMode>("password");

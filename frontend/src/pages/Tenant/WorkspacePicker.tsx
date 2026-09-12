@@ -177,6 +177,19 @@ export const WorkspacePicker: React.FC = () => {
     return <Navigate to={ROUTES.ONBOARDING} replace />;
   }
 
+  // ARCH-30 Tranche 3 (B.1). Sign-in without a destination lands on the
+  // primary workspace dashboard: the one tenant resolution already selected
+  // (last used, else first). A person who opens /workspaces deliberately to
+  // switch still gets the picker, because only sign-in adds `landing=1`.
+  if (new URLSearchParams(location.search).get("landing") === "1" && state.status === "ready") {
+    return (
+      <Navigate
+        to={workspacePath(state.organization.organization_slug, state.workspace.slug)}
+        replace
+      />
+    );
+  }
+
   const organizations =
     state.status === "ready" || state.status === "no_workspace"
       ? state.organizations

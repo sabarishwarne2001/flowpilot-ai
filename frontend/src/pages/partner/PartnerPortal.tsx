@@ -23,6 +23,7 @@
  * percentage hides exactly the thing a partner needs to see.
  */
 
+import { formatTimestampDate } from "@/utils/displayTime";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -295,7 +296,7 @@ export default function PartnerPortal() {
                       {entry.organization_slug}
                     </td>
                     <td className="px-4 py-2 text-muted-foreground">
-                      {new Date(entry.effective_from).toLocaleDateString()}
+                      {formatTimestampDate(entry.effective_from)}
                     </td>
                     <td className="px-4 py-2">{entry.status}</td>
                   </tr>

@@ -157,7 +157,11 @@ export interface InvoiceReproductionResponse {
 
 export interface SubscriptionBrief {
   readonly id: string;
-  readonly stripe_subscription_id: string;
+  /** Null for subscriptions issued by a gateway other than Stripe. */
+  readonly stripe_subscription_id: string | null;
+  readonly gateway: string;
+  readonly gateway_subscription_id: string | null;
+  readonly grace_ends_at: string | null;
   readonly status: string;
   readonly quota_tier_key: string;
   readonly quota_tier_id: string;
@@ -189,6 +193,9 @@ export interface BillingAccessResponse {
   readonly data_retained: boolean;
   readonly dunning_steps_applied: readonly string[];
   readonly next_dunning_step: string | null;
+  /** ARCH-30 Tranche 3 (D-11). */
+  readonly subscription_status: string | null;
+  readonly grace_ends_at: string | null;
 }
 
 export interface CheckoutSessionRequest {

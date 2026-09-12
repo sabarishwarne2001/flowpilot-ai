@@ -336,6 +336,7 @@ async def get_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
 ) -> OrganizationContext:
     organization = organization_service.get_organization_or_raise(
         db, organization_id=organization_id
@@ -351,6 +352,12 @@ async def get_organization_context(
         raise OrganizationAccessDeniedError("Organization not found.")
 
     organization_service.assert_organization_operational(organization)
+
+    # ARCH-30 Tranche 3 (D-11). Read-only billing states refuse writes here,
+    # once, for every organization-scoped route.
+    from app.api.billing_write_gate import assert_billing_writes_allowed
+
+    assert_billing_writes_allowed(request, db, organization_id=organization.id)
 
     return OrganizationContext(
         user=current_user,
@@ -392,6 +399,12 @@ async def get_sso_compliant_organization_context(
 
     organization_service.assert_organization_operational(organization)
 
+    # ARCH-30 Tranche 3 (D-11). Read-only billing states refuse writes here,
+    # once, for every organization-scoped route.
+    from app.api.billing_write_gate import assert_billing_writes_allowed
+
+    assert_billing_writes_allowed(request, db, organization_id=organization.id)
+
     return OrganizationContext(
         user=current_user,
         organization=organization,
@@ -428,6 +441,7 @@ async def get_workspace_context(
     workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
 ) -> TenantContext:
     workspace = workspace_service.get_workspace_or_raise(
         db, workspace_id=workspace_id
@@ -445,6 +459,11 @@ async def get_workspace_context(
 
     assert access.organization_membership is not None
     assert access.effective_role is not None
+
+    # ARCH-30 Tranche 3 (D-11). Same gate for every workspace-scoped route.
+    from app.api.billing_write_gate import assert_billing_writes_allowed
+
+    assert_billing_writes_allowed(request, db, organization_id=workspace.organization_id)
 
     return TenantContext(
         user=current_user,

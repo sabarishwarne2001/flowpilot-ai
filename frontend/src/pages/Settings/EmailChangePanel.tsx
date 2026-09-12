@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Mail, ShieldAlert } from "lucide-react";
@@ -110,7 +111,7 @@ export const EmailChangePanel: React.FC<Props> = ({ currentEmail }) => {
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               We sent a link there. Open it to finish — the link expires{" "}
-              {new Date(pending.expiresAt).toLocaleString()}. Until you confirm,
+              {formatTimestamp(pending.expiresAt)}. Until you confirm,
               you keep signing in with {currentEmail}. Confirming signs you out
               everywhere, including here.
             </p>

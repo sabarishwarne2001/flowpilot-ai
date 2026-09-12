@@ -414,3 +414,43 @@ def notify_directory_email_changed(
         notification_type=NotificationType.SECURITY,
         priority=NotificationPriority.WARNING,
     )
+
+
+def notify_verified_domain_state(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    domain: str,
+    phase: str,
+    grace_expires_at=None,
+) -> int:
+    """ARCH-30 Tranche 3. A verified identity domain failed its DNS re-check."""
+    if phase == "GRACE":
+        until = (
+            grace_expires_at.strftime("%d %b %Y") + " (UTC)"
+            if grace_expires_at is not None
+            else "the end of the grace period"
+        )
+        title = f"Domain verification failing for {domain}"
+        message = (
+            f"We could not confirm the DNS record that verifies {domain}. Single "
+            f"sign-on and automatic provisioning keep working until {until}. "
+            "Restore the TXT record to keep them running."
+        )
+    else:
+        title = f"{domain} is no longer verified"
+        message = (
+            f"The DNS record for {domain} was not restored in time. New members "
+            "can no longer be provisioned from your identity provider for this "
+            "domain. Existing members keep their access. Re-verify the domain in "
+            "Identity settings to restore provisioning."
+        )
+    return emit_to_roles(
+        db,
+        organization_id=organization_id,
+        roles=SECURITY_ROLES,
+        title=title,
+        message=message,
+        notification_type=NotificationType.SECURITY,
+        priority=NotificationPriority.WARNING,
+    )

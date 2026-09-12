@@ -5,6 +5,7 @@ import { Clock, Loader2, Lock } from "lucide-react";
 import { createAddonCheckoutSession } from "@/services/api/entitlements";
 import { BUTTON_PRIMARY, HINT, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
 import type { AddonAccess } from "@/types/entitlements";
+import { formatTimestampDate } from "@/utils/displayTime";
 
 /**
  * ARCH-30 Tranche 2 (D-8, D-6) — what an organization sees in place of an
@@ -23,9 +24,7 @@ const formatPrice = (micros: number, currency: string): string =>
   }).format(micros / 1_000_000);
 
 const formatDay = (iso: string | null): string | null =>
-  iso
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso))
-    : null;
+  iso ? formatTimestampDate(iso) : null;
 
 const includedPhrase = (addon: AddonAccess): string =>
   addon.included_in.length > 0

@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Layers, Loader2 } from "lucide-react";
@@ -38,7 +39,7 @@ import {
  */
 
 const formatDate = (value: string | null | undefined): string =>
-  value ? new Date(value).toLocaleDateString() : "—";
+  value ? formatTimestampDate(value) : "—";
 
 const Field: React.FC<{
   readonly label: string;

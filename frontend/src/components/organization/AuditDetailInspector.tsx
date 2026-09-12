@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React from "react";
 import { Bot, Globe, Monitor, User, X } from "lucide-react";
 
@@ -79,7 +80,7 @@ export const AuditDetailInspector: React.FC<AuditDetailInspectorProps> = ({
               {entry.action}
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {new Date(entry.created_at).toLocaleString()} ·{" "}
+              {formatTimestamp(entry.created_at)} ·{" "}
               <span
                 className={succeeded ? "text-emerald-700" : "text-destructive"}
               >

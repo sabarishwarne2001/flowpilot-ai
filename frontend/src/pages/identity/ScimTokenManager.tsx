@@ -1,3 +1,4 @@
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -204,7 +205,7 @@ export const ScimTokenManager: React.FC = () => {
                     </td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {identity.last_synced_at
-                        ? new Date(identity.last_synced_at).toLocaleString()
+                        ? formatTimestamp(identity.last_synced_at)
                         : "—"}
                     </td>
                   </tr>
@@ -306,7 +307,7 @@ const ScimKeyRow: React.FC<ScimKeyRowProps> = ({
 
           <p className="mt-0.5 text-xs text-muted-foreground">
             {scimKey.last_used_at
-              ? `Last used ${new Date(scimKey.last_used_at).toLocaleString()}`
+              ? `Last used ${formatTimestamp(scimKey.last_used_at)}`
               : "Never used"}
             {scimKey.scopes.length > 0 && ` · ${scimKey.scopes.join(", ")}`}
           </p>
@@ -349,16 +350,14 @@ const ScimKeyRow: React.FC<ScimKeyRowProps> = ({
                 The previous secret still works
               </strong>{" "}
               until{" "}
-              {new Date(
-                scimKey.previous_secret_expires_at as string,
-              ).toLocaleString()}
+              {formatTimestamp(scimKey.previous_secret_expires_at as string,)}
               . Update your identity provider before then.
             </span>
           </p>
 
           <p className="mt-1.5 pl-5 text-[11px] text-amber-800/80">
             {scimKey.previous_last_used_at
-              ? `The old secret was last used ${new Date(scimKey.previous_last_used_at).toLocaleString()}. Once this stops advancing, your provider has moved over.`
+              ? `The old secret was last used ${formatTimestamp(scimKey.previous_last_used_at)}. Once this stops advancing, your provider has moved over.`
               : "The old secret has not been used since rotation — your provider may already be using the new one."}
           </p>
         </div>

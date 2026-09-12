@@ -25,6 +25,7 @@
  * rotated keys this morning.
  */
 
+import { formatTimestampDate } from "@/utils/displayTime";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -158,9 +159,7 @@ export default function MarketplaceCatalog() {
                       {installation.manifest_version}
                     </td>
                     <td className="px-4 py-2 text-muted-foreground">
-                      {new Date(
-                        installation.installed_at,
-                      ).toLocaleDateString()}
+                      {formatTimestampDate(installation.installed_at,)}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button

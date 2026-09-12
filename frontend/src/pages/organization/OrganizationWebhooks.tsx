@@ -1,3 +1,4 @@
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -162,7 +163,7 @@ const DeliveryLog: React.FC<{
                       {delivery.attempts === 1 ? "attempt" : "attempts"}
                       {delivery.last_response_status !== null &&
                         ` · HTTP ${delivery.last_response_status}`}
-                      {` · ${new Date(delivery.created_at).toLocaleString()}`}
+                      {` · ${formatTimestamp(delivery.created_at)}`}
                     </span>
                   </button>
 
@@ -211,7 +212,7 @@ const DeliveryLog: React.FC<{
                               ` · HTTP ${attempt.response_status}`}
                             {` · ${attempt.duration_ms}ms`}
                             {attempt.resolved_ip && ` · ${attempt.resolved_ip}`}
-                            {` · ${new Date(attempt.attempted_at).toLocaleString()}`}
+                            {` · ${formatTimestamp(attempt.attempted_at)}`}
                             {attempt.error && (
                               <p className="mt-0.5 text-destructive">
                                 {attempt.error}
@@ -461,7 +462,7 @@ export const OrganizationWebhooks: React.FC = () => {
                   {" "}
                   The previous secret keeps working until{" "}
                   <strong>
-                    {new Date(revealed.validUntil).toLocaleString()}
+                    {formatTimestamp(revealed.validUntil)}
                   </strong>
                   , so you can switch over without dropping events.
                 </>
@@ -638,7 +639,7 @@ export const OrganizationWebhooks: React.FC = () => {
                           {endpoint.event_types.length}{" "}
                           {endpoint.event_types.length === 1 ? "event" : "events"}
                           {endpoint.last_success_at &&
-                            ` · last delivered ${new Date(endpoint.last_success_at).toLocaleDateString()}`}
+                            ` · last delivered ${formatTimestampDate(endpoint.last_success_at)}`}
                           {endpoint.consecutive_failures > 0 &&
                             ` · ${endpoint.consecutive_failures} consecutive failures`}
                         </p>
@@ -722,7 +723,7 @@ export const OrganizationWebhooks: React.FC = () => {
                         <p className="mt-0.5 text-sm text-muted-foreground">
                           {endpoint.disabled_reason ?? "No reason recorded."}
                           {endpoint.disabled_at &&
-                            ` (${new Date(endpoint.disabled_at).toLocaleString()})`}
+                            ` (${formatTimestamp(endpoint.disabled_at)})`}
                           {endpoint.auto_disabled &&
                             " Nothing has been delivered here since. Fix the receiver, then re-enable."}
                         </p>
@@ -751,7 +752,7 @@ export const OrganizationWebhooks: React.FC = () => {
                       <p className="mt-2 text-xs text-muted-foreground">
                         Both the current and previous signing secrets are
                         accepted until{" "}
-                        {new Date(endpoint.rotation_overlap_until!).toLocaleString()}.
+                        {formatTimestamp(endpoint.rotation_overlap_until!)}.
                       </p>
                     )}
 

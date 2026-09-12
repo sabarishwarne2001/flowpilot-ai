@@ -1,3 +1,4 @@
+import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, ShieldAlert, UserMinus, Users } from "lucide-react";
@@ -236,7 +237,7 @@ export const OrganizationMembers: React.FC = () => {
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Removed
                         {member.deactivated_at
-                          ? ` ${new Date(member.deactivated_at).toLocaleDateString()}`
+                          ? ` ${formatTimestampDate(member.deactivated_at)}`
                           : ""}
                         {" — retained for attribution"}
                       </p>

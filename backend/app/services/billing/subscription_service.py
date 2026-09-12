@@ -28,6 +28,7 @@ from app.models.organization import Organization
 from app.models.price_book import PriceBook
 from app.models.quota_tier import QuotaTier
 from app.models.subscription import (
+    ENTITLED_SUBSCRIPTION_STATUSES,
     LIVE_SUBSCRIPTION_STATUSES,
     Subscription,
     SubscriptionStatus,
@@ -275,9 +276,10 @@ def upsert_from_stripe(
     # the organization pointer as well, so a plan change propagates to quota
     # by writing one row here rather than by anyone remembering to.
     if subscription is not None:
-        _propagate_tier_to_organization(
-            db, account=account, subscription=subscription
-        )
+        # ARCH-30 Tranche 3. Previously an unconditional propagation: a
+        # cancelled subscription re-pinned the organization to the tier it
+        # had stopped paying for.
+        apply_tier_for_status(db, account=account, subscription=subscription)
 
     logger.info(
         "subscription.reconciled",
@@ -395,6 +397,84 @@ def propagate_tier_to_organization(
     _propagate_tier_to_organization(db, account=account, subscription=subscription)
 
 
+TERMINAL_SUBSCRIPTION_STATUSES: frozenset[SubscriptionStatus] = frozenset(
+    {SubscriptionStatus.CANCELED, SubscriptionStatus.INCOMPLETE_EXPIRED}
+)
+
+
+def apply_tier_for_status(
+    db: Session, *, account: BillingAccount, subscription: Subscription
+) -> dict[str, Any]:
+    """ARCH-30 Tranche 3. What a subscription's status means for the tier pointer.
+
+    `resolve_tier` reads the LIVE subscription's tier, then falls back to
+    `organizations.quota_tier_id`. Propagation writes that pointer. Before this
+    function it was written on every reconcile regardless of status, so an
+    ended subscription left the organization on the paid tier indefinitely.
+
+        entitled (trialing, active, past_due)   pin the subscription's tier
+        terminal (canceled, incomplete_expired) release it to the lapsed tier,
+                                                but only if this subscription
+                                                is what pinned it and no other
+                                                subscription is live
+        anything else (unpaid, paused, ...)      leave the pointer alone
+
+    The "only if this subscription pinned it" test is the pointer still
+    equalling the subscription's tier. An operator who assigned a different
+    tier by hand after the cancellation is not overruled by a late webhook.
+    """
+    raw_status = subscription.status
+    # The ORM hands back the enum; `_coerce_status` validates Stripe's strings.
+    status = (
+        raw_status
+        if isinstance(raw_status, SubscriptionStatus)
+        else _coerce_status(str(raw_status))
+    )
+    if status in ENTITLED_SUBSCRIPTION_STATUSES:
+        _propagate_tier_to_organization(db, account=account, subscription=subscription)
+        return {"tier_action": "pinned"}
+    if status not in TERMINAL_SUBSCRIPTION_STATUSES:
+        return {"tier_action": "unchanged"}
+
+    other_live = live_subscription_for_organization(
+        db, organization_id=account.organization_id
+    )
+    if other_live is not None and other_live.id != subscription.id:
+        return {"tier_action": "another_subscription_is_live"}
+
+    organization = db.get(Organization, account.organization_id)
+    if organization is None or organization.quota_tier_id != subscription.quota_tier_id:
+        return {"tier_action": "not_pinned_by_this_subscription"}
+
+    from app.services import quota_service
+
+    lapsed_key = str(getattr(settings, "BILLING_LAPSED_TIER_KEY", "free"))
+    try:
+        tier = quota_service.assign_tier(
+            db, organization_id=account.organization_id, tier_key=lapsed_key
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "organization.lapsed_tier_unassignable",
+            extra={
+                "organization_id": str(account.organization_id),
+                "tier_key": lapsed_key,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
+        return {"tier_action": "lapse_failed", "error": f"{type(exc).__name__}: {exc}"}
+
+    logger.warning(
+        "organization.quota_tier_lapsed",
+        extra={
+            "organization_id": str(account.organization_id),
+            "from_tier": subscription.quota_tier_key,
+            "to_tier": tier.key,
+        },
+    )
+    return {"tier_action": "lapsed", "tier_key": tier.key}
+
+
 def _coerce_status(raw: str) -> SubscriptionStatus:
     try:
         return SubscriptionStatus(str(raw).strip().lower())
@@ -450,6 +530,7 @@ __all__ = [
     "get_by_stripe_id",
     "live_subscription_for_organization",
     "organization_id_for",
+    "apply_tier_for_status",
     "propagate_tier_to_organization",
     "record_seat_count",
     "resolve_pins_for_key",

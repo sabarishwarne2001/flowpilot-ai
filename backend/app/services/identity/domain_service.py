@@ -316,6 +316,12 @@ def recheck_domains(db, *, limit: int = 200) -> list[DomainCheckOutcome]:
                         resource_type="VERIFIED_DOMAIN", resource_id=row.id,
                         principal=principal, outcome="DENIED",
                         details={"domain": row.domain, "status": "GRACE"})
+            # ARCH-30 Tranche 3. The DNS proof failed; SSO and JIT stop when
+            # grace ends. An event nobody subscribes to is not a warning.
+            from app.services import organization_notification_service
+            organization_notification_service.notify_verified_domain_state(
+                db, organization_id=row.organization_id, domain=row.domain,
+                phase="GRACE", grace_expires_at=row.grace_expires_at)
         elif row.status == DomainStatus.GRACE and row.grace_expires_at \
                 and row.grace_expires_at <= now:
             row.status = DomainStatus.LAPSED
@@ -328,6 +334,10 @@ def recheck_domains(db, *, limit: int = 200) -> list[DomainCheckOutcome]:
                         principal=principal, outcome="DENIED",
                         details={"domain": row.domain, "status": "LAPSED",
                                  "effect": "jit_provisioning_blocked"})
+            from app.services import organization_notification_service
+            organization_notification_service.notify_verified_domain_state(
+                db, organization_id=row.organization_id, domain=row.domain,
+                phase="LAPSED", grace_expires_at=None)
 
         outcomes.append(DomainCheckOutcome(
             row.id, row.domain, previous, str(row.status), False, False))
