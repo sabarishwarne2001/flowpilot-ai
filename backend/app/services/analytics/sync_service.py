@@ -52,6 +52,16 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+# ARCH30-T4:clock-import — A1.
+from app.models.workspace import Workspace
+from app.services.analytics.clock import (
+    ClockError,
+    ScheduleClock,
+    UnknownTimezoneError,
+    describe_clock,
+    resolve_next_run,
+)
+
 from app.core.encryption import (
     DecryptionError,
     decrypt_secret,
@@ -96,6 +106,14 @@ class SyncServiceError(RuntimeError):
 
 class DestinationNotFoundError(SyncServiceError):
     pass
+
+
+# ARCH30-T4:workspace-clock-error — A1. Distinct from
+# ScheduleNotFoundError so the API can say which of the two ids in the
+# request was wrong; "not found" for a request naming two resources is
+# a support ticket.
+class WorkspaceClockNotFoundError(SyncServiceError):
+    """The workspace named as a clock is not in this organization."""
 
 
 class ScheduleNotFoundError(SyncServiceError):
@@ -431,6 +449,90 @@ def test_destination(
 # ---------------------------------------------------------------------------
 
 
+# ARCH30-T4:compute-next-run-tz — A1.
+def resolve_schedule_clock(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    clock_workspace_id: Optional[uuid.UUID],
+    local_hour: Optional[int],
+) -> Optional[ScheduleClock]:
+    """Build the clock a schedule runs on, or None for UTC.
+
+    The `organization_id` filter is not belt-and-braces. Without it a
+    tenant could point an export schedule at another tenant's workspace
+    by guessing a UUID and learn that workspace's timezone and name
+    from the schedule response — a small leak, and an ARCH-02 isolation
+    break regardless of size.
+    """
+    if clock_workspace_id is None and local_hour is None:
+        return None
+    if clock_workspace_id is None or local_hour is None:
+        raise SyncServiceError(
+            "clock_workspace_id and local_hour must be set together or "
+            "not at all."
+        )
+
+    workspace = db.execute(
+        select(Workspace)
+        .where(Workspace.id == clock_workspace_id)
+        .where(Workspace.organization_id == organization_id)
+    ).scalar_one_or_none()
+    if workspace is None:
+        raise WorkspaceClockNotFoundError(str(clock_workspace_id))
+
+    try:
+        return ScheduleClock(
+            timezone_key=workspace.timezone or "UTC",
+            local_hour=int(local_hour),
+            workspace_id=str(workspace.id),
+            workspace_name=workspace.workspace_name,
+        )
+    except UnknownTimezoneError as exc:
+        raise SyncServiceError(str(exc)) from exc
+    except ClockError as exc:
+        raise SyncServiceError(str(exc)) from exc
+
+
+def clock_for_schedule(
+    db: Session, schedule: ExportSchedule
+) -> Optional[ScheduleClock]:
+    """The clock for a persisted row, tolerating a vanished workspace.
+
+    Read paths and the dispatcher use this rather than
+    `resolve_schedule_clock` because they must not fail: a schedule
+    whose clock workspace was deleted in the microsecond before the
+    sweep read it falls back to `hour_utc` and keeps exporting. The
+    write paths, where somebody is waiting for a 400, do not tolerate
+    it.
+    """
+    if schedule.clock_workspace_id is None:
+        return None
+    try:
+        return resolve_schedule_clock(
+            db,
+            organization_id=schedule.organization_id,
+            clock_workspace_id=schedule.clock_workspace_id,
+            local_hour=schedule.local_hour,
+        )
+    except (WorkspaceClockNotFoundError, SyncServiceError):
+        logger.warning(
+            "analytics.schedule.clock_unresolved",
+            extra={
+                "schedule_id": str(schedule.id),
+                "clock_workspace_id": str(schedule.clock_workspace_id),
+            },
+        )
+        return None
+
+
+def describe_schedule_clock(
+    clock: Optional[ScheduleClock],
+) -> str:
+    """Server-owned console label. See clock.describe_clock."""
+    return describe_clock(clock)
+
+
 def compute_next_run(
     *,
     cadence: str,
@@ -438,43 +540,76 @@ def compute_next_run(
     day_of_week: Optional[int],
     day_of_month: Optional[int],
     after: Optional[datetime] = None,
+    clock: Optional[ScheduleClock] = None,
 ) -> datetime:
     """The next UTC instant this schedule should fire, strictly after `after`.
 
-    Hand-rolled rather than pulled from croniter, which is not pinned. The
-    cadence vocabulary is three values with one time-of-day each; a cron
-    parser would be a dependency bought to express `DAILY`.
+    ARCH-30 Tranche 4 (A1) moved the arithmetic into
+    `app.services.analytics.clock`, which is DST-aware and decides the
+    gap and fold cases explicitly. This wrapper stays because every
+    existing call site imports it by this name, and because the
+    translation from a `ClockError` to a `SyncServiceError` belongs on
+    the service side of the boundary, not in a module that has no
+    opinion about HTTP.
+
+    With `clock=None` the result is identical, instant for instant, to
+    the pre-Tranche-4 UTC implementation. `verify_arch30_tranche4`
+    asserts that over a full year rather than asserting it here.
     """
-    base = (after or _now()).astimezone(timezone.utc)
-    candidate = base.replace(
-        hour=hour_utc, minute=0, second=0, microsecond=0
+    try:
+        return resolve_next_run(
+            cadence=cadence,
+            hour_utc=hour_utc,
+            day_of_week=day_of_week,
+            day_of_month=day_of_month,
+            after=after or _now(),
+            clock=clock,
+        )
+    except ClockError as exc:
+        raise SyncServiceError(str(exc)) from exc
+
+
+def recompute_for_workspace_timezone_change(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    organization_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    """Re-derive `next_run_at` for every schedule this workspace clocks.
+
+    Called from `workspace_service.update_workspace_settings` when, and
+    only when, `timezone` actually changed. Without this, moving a
+    workspace from Asia/Kolkata to Europe/London leaves every schedule
+    it governs pointing at an instant computed under the old zone, and
+    the correction happens silently at the next successful run — one
+    bundle, at the wrong hour, with a lookback window that does not
+    cover what the tenant thinks it covers.
+
+    Returns the ids it moved so the caller can audit them. Flushes but
+    does not commit: this runs inside the workspace update's
+    transaction, and a timezone change that commits while the schedule
+    recomputation rolls back is the exact inconsistency it exists to
+    prevent.
+    """
+    stmt = (
+        select(ExportSchedule)
+        .where(ExportSchedule.clock_workspace_id == workspace_id)
+        .where(ExportSchedule.organization_id == organization_id)
     )
-
-    if cadence == "DAILY":
-        if candidate <= base:
-            candidate += timedelta(days=1)
-        return candidate
-
-    if cadence == "WEEKLY":
-        if day_of_week is None:
-            raise SyncServiceError("A WEEKLY schedule requires day_of_week.")
-        delta = (int(day_of_week) - candidate.weekday()) % 7
-        candidate += timedelta(days=delta)
-        if candidate <= base:
-            candidate += timedelta(days=7)
-        return candidate
-
-    if cadence == "MONTHLY":
-        if day_of_month is None:
-            raise SyncServiceError("A MONTHLY schedule requires day_of_month.")
-        candidate = candidate.replace(day=int(day_of_month))
-        if candidate <= base:
-            year = candidate.year + (1 if candidate.month == 12 else 0)
-            month = 1 if candidate.month == 12 else candidate.month + 1
-            candidate = candidate.replace(year=year, month=month)
-        return candidate
-
-    raise SyncServiceError(f"Unknown cadence {cadence!r}.")
+    moved: list[uuid.UUID] = []
+    for schedule in db.execute(stmt).scalars():
+        clock = clock_for_schedule(db, schedule)
+        schedule.next_run_at = compute_next_run(
+            cadence=schedule.cadence,
+            hour_utc=schedule.hour_utc,
+            day_of_week=schedule.day_of_week,
+            day_of_month=schedule.day_of_month,
+            clock=clock,
+        )
+        moved.append(schedule.id)
+    if moved:
+        db.flush()
+    return moved
 
 
 def list_schedules(
@@ -523,6 +658,9 @@ def create_schedule(
     cadence: str,
     hour_utc: int,
     day_of_week: Optional[int],
+    # ARCH30-T4:create-schedule-clock-params — A1.
+    clock_workspace_id: Optional[uuid.UUID] = None,
+    local_hour: Optional[int] = None,
     day_of_month: Optional[int],
     lookback_days: int,
     enabled: bool,
@@ -537,6 +675,16 @@ def create_schedule(
         db, organization_id=organization_id, destination_id=destination_id
     )
 
+    # ARCH30-T4:create-schedule-clock-body — A1. Resolved before the
+    # row is built so an unknown or cross-tenant workspace is a 400
+    # with nothing written, not a row plus a rollback.
+    clock = resolve_schedule_clock(
+        db,
+        organization_id=organization_id,
+        clock_workspace_id=clock_workspace_id,
+        local_hour=local_hour,
+    )
+
     schedule = ExportSchedule(
         organization_id=organization_id,
         destination_id=destination.id,
@@ -547,11 +695,14 @@ def create_schedule(
         day_of_month=day_of_month,
         lookback_days=lookback_days,
         enabled=enabled,
+        clock_workspace_id=clock_workspace_id,
+        local_hour=local_hour,
         next_run_at=compute_next_run(
             cadence=cadence,
             hour_utc=hour_utc,
             day_of_week=day_of_week,
             day_of_month=day_of_month,
+            clock=clock,
         ),
     )
     db.add(schedule)
@@ -586,6 +737,13 @@ def update_schedule(
     hour_utc: Optional[int] = None,
     day_of_week: Optional[int] = None,
     day_of_month: Optional[int] = None,
+    # ARCH30-T4:update-schedule-clock-params — A1. `clock_set` is the
+    # tri-state: None means "leave the clock alone", True means "apply
+    # the two values below", False means "go back to UTC". Without it,
+    # None-means-unchanged makes clearing a clock unexpressible.
+    clock_set: Optional[bool] = None,
+    clock_workspace_id: Optional[uuid.UUID] = None,
+    local_hour: Optional[int] = None,
     lookback_days: Optional[int] = None,
     enabled: Optional[bool] = None,
     reset_circuit: bool = False,
@@ -628,15 +786,41 @@ def update_schedule(
         schedule.circuit_opened_at = None
         changed["circuit_reset"] = True
 
+    # ARCH30-T4:update-schedule-clock-body — A1.
+    if clock_set is True:
+        resolve_schedule_clock(
+            db,
+            organization_id=organization_id,
+            clock_workspace_id=clock_workspace_id,
+            local_hour=local_hour,
+        )
+        schedule.clock_workspace_id = clock_workspace_id
+        schedule.local_hour = local_hour
+        changed["clock_workspace_id"] = str(clock_workspace_id)
+        changed["local_hour"] = local_hour
+    elif clock_set is False:
+        schedule.clock_workspace_id = None
+        schedule.local_hour = None
+        changed["clock_workspace_id"] = None
+        changed["local_hour"] = None
+
     if any(
         key in changed
-        for key in ("cadence", "hour_utc", "day_of_week", "day_of_month")
+        for key in (
+            "cadence",
+            "hour_utc",
+            "day_of_week",
+            "day_of_month",
+            "clock_workspace_id",
+            "local_hour",
+        )
     ):
         schedule.next_run_at = compute_next_run(
             cadence=schedule.cadence,
             hour_utc=schedule.hour_utc,
             day_of_week=schedule.day_of_week,
             day_of_month=schedule.day_of_month,
+            clock=clock_for_schedule(db, schedule),
         )
         changed["next_run_at"] = schedule.next_run_at.isoformat()
 
@@ -1080,6 +1264,12 @@ __all__ = [
     "ScheduleNotFoundError",
     "SyncServiceError",
     "compute_next_run",
+    # ARCH30-T4:sync-service-exports — A1.
+    "resolve_schedule_clock",
+    "clock_for_schedule",
+    "describe_schedule_clock",
+    "recompute_for_workspace_timezone_change",
+    "WorkspaceClockNotFoundError",
     "create_destination",
     "create_schedule",
     "delete_destination",

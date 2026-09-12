@@ -544,7 +544,13 @@ export const Workspace: React.FC = () => {
                 <option value="UTC">UTC</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                The workspace clock. Organization-wide warehouse exports still run on UTC.
+                {/* ARCH30-T4:ws-clock-hint — A1. The old copy said exports
+                    always run on UTC. That stopped being true in Tranche 4;
+                    a hint that lies is worse than no hint. */}
+                The workspace clock. Warehouse export schedules can be set to
+                follow it — daylight saving included — instead of UTC. Changing
+                this timezone moves every schedule that follows this workspace
+                to the new local hour.
               </p>
             </div>
 

@@ -63,6 +63,8 @@ export const KNOWLEDGE_ENDPOINTS = {
 
 export const PROFILE_ENDPOINTS = {
   profile: "/me/profile",
+  // ARCH30-T4:ts-detected-tz-endpoint — A3.
+  detectedTimezone: "/me/profile/detected-timezone",
   avatar: "/me/avatar",
   userAvatar: (userId: string): string => `/users/${seg(userId)}/avatar`,
 } as const;

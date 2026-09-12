@@ -127,8 +127,13 @@ def _client_context(request: Request) -> dict[str, Optional[str]]:
     }
 
 
+# ARCH30-T4:api-schedule-response-sig — A1. `db` is now required
+# because the clock label is resolved from the governing workspace.
 def _schedule_response(
-    schedule: ExportSchedule, *, destination_label: Optional[str] = None
+    schedule: ExportSchedule,
+    *,
+    db: Session,
+    destination_label: Optional[str] = None,
 ) -> ExportScheduleResponse:
     """Serialise a schedule with its derived dispatchability.
 
@@ -137,6 +142,8 @@ def _schedule_response(
     backend owns a threshold: a control the frontend enables and the server
     then refuses reads as a bug rather than as a policy.
     """
+    # ARCH30-T4:api-schedule-response-body — A1.
+    clock = sync_service.clock_for_schedule(db, schedule)
     return ExportScheduleResponse(
         id=schedule.id,
         organization_id=schedule.organization_id,
@@ -145,6 +152,10 @@ def _schedule_response(
         datasets=list(schedule.datasets or []),
         cadence=schedule.cadence,  # type: ignore[arg-type]
         hour_utc=schedule.hour_utc,
+        clock_workspace_id=schedule.clock_workspace_id,
+        local_hour=schedule.local_hour,
+        clock_timezone=clock.timezone_key if clock else None,
+        clock_label=sync_service.describe_schedule_clock(clock),
         day_of_week=schedule.day_of_week,
         day_of_month=schedule.day_of_month,
         lookback_days=schedule.lookback_days,
@@ -384,8 +395,11 @@ def list_schedules(
         )
     }
     return [
+        # ARCH30-T4:api-list-clock-db — A1.
         _schedule_response(
-            schedule, destination_label=labels.get(schedule.destination_id)
+            schedule,
+            db=db,
+            destination_label=labels.get(schedule.destination_id),
         )
         for schedule in sync_service.list_schedules(
             db, organization_id=organization_id
@@ -423,6 +437,9 @@ def create_schedule(
             hour_utc=payload.hour_utc,
             day_of_week=payload.day_of_week,
             day_of_month=payload.day_of_month,
+            # ARCH30-T4:api-create-clock — A1.
+            clock_workspace_id=payload.clock_workspace_id,
+            local_hour=payload.local_hour,
             lookback_days=payload.lookback_days,
             enabled=payload.enabled,
             actor_id=context.user.id,
@@ -441,6 +458,11 @@ def create_schedule(
                 "would race and write duplicate parts."
             ),
         ) from exc
+    # ARCH30-T4:api-create-clock-404 — A1. Named separately from
+    # Destination so a 404 says which of the two ids was wrong.
+    except sync_service.WorkspaceClockNotFoundError as exc:
+        db.rollback()
+        raise _not_found("Clock workspace") from exc
     except sync_service.SyncServiceError as exc:
         db.rollback()
         raise HTTPException(
@@ -448,7 +470,8 @@ def create_schedule(
         ) from exc
 
     db.refresh(schedule)
-    return _schedule_response(schedule)
+    # ARCH30-T4:api-return-clock-db — A1.
+    return _schedule_response(schedule, db=db)
 
 
 @router.patch(
@@ -481,6 +504,10 @@ def update_schedule(
             day_of_week=payload.day_of_week,
             day_of_month=payload.day_of_month,
             lookback_days=payload.lookback_days,
+            # ARCH30-T4:api-update-clock — A1.
+            clock_set=payload.clock_set,
+            clock_workspace_id=payload.clock_workspace_id,
+            local_hour=payload.local_hour,
             enabled=payload.enabled,
             reset_circuit=payload.reset_circuit,
             actor_id=context.user.id,
@@ -490,6 +517,10 @@ def update_schedule(
     except sync_service.ScheduleNotFoundError as exc:
         db.rollback()
         raise _not_found("Schedule") from exc
+    # ARCH30-T4:api-update-clock-404 — A1.
+    except sync_service.WorkspaceClockNotFoundError as exc:
+        db.rollback()
+        raise _not_found("Clock workspace") from exc
     except sync_service.SyncServiceError as exc:
         db.rollback()
         raise HTTPException(
@@ -497,7 +528,8 @@ def update_schedule(
         ) from exc
 
     db.refresh(schedule)
-    return _schedule_response(schedule)
+    # ARCH30-T4:api-return-clock-db-2 — A1.
+    return _schedule_response(schedule, db=db)
 
 
 @router.delete(

@@ -235,6 +235,20 @@ class ExportSchedule(Base, UUIDMixin, TimestampMixin):
         CheckConstraint(
             "hour_utc >= 0 AND hour_utc <= 23", name="hour_in_range"
         ),
+        # ARCH30-T4:schedule-clock-constraints — A1.
+        # Both-or-neither is the whole safety property of the optional
+        # clock: a row with a workspace and no local_hour would fall
+        # back to hour_utc while the console showed a workspace name,
+        # which is worse than either behaviour on its own.
+        CheckConstraint(
+            "(clock_workspace_id IS NULL) = (local_hour IS NULL)",
+            name="clock_both_or_neither",
+        ),
+        CheckConstraint(
+            "local_hour IS NULL OR "
+            "(local_hour >= 0 AND local_hour <= 23)",
+            name="local_hour_in_range",
+        ),
         CheckConstraint(
             "cadence <> 'WEEKLY' OR day_of_week IS NOT NULL",
             name="weekly_needs_day_of_week",
@@ -296,6 +310,22 @@ class ExportSchedule(Base, UUIDMixin, TimestampMixin):
     hour_utc: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default=text("2")
     )
+
+    # ARCH30-T4:schedule-clock-columns — A1. Optional, and optional
+    # is the point: `hour_utc` above stays NOT NULL and keeps its
+    # meaning, so an organization that never opts into a workspace
+    # clock sees no behaviour change at all. ON DELETE SET NULL plus
+    # the BEFORE UPDATE trigger from arch30_step3 clears the pair
+    # together, so deleting a workspace degrades a schedule to UTC
+    # rather than deleting it or violating the CHECK.
+    clock_workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    local_hour: Mapped[Optional[int]] = mapped_column(
+        SmallInteger, nullable=True
+    )
     day_of_week: Mapped[Optional[int]] = mapped_column(
         SmallInteger, nullable=True
     )
@@ -348,6 +378,17 @@ class ExportSchedule(Base, UUIDMixin, TimestampMixin):
             and not self.circuit_is_open
             and self.next_run_at is not None
         )
+
+    # ARCH30-T4:schedule-clock-property — A1.
+    @property
+    def uses_workspace_clock(self) -> bool:
+        """Whether this schedule fires on a workspace wall clock.
+
+        Reads only `clock_workspace_id` and not `local_hour`, because
+        the CHECK makes them equivalent and picking one keeps a
+        future reader from wondering which is authoritative.
+        """
+        return self.clock_workspace_id is not None
 
     def __repr__(self) -> str:  # pragma: no cover
         state = "enabled" if self.enabled else "disabled"

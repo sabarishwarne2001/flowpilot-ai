@@ -543,6 +543,13 @@ class ExportScheduleCreate(BaseModel):
     lookback_days: int = Field(default=1, ge=1, le=90)
     enabled: bool = True
 
+    # ARCH30-T4:schema-create-clock — A1. Optional pair. Supplying
+    # them makes `hour_utc` inert for this schedule; it stays required
+    # and populated so clearing the clock later has somewhere to fall
+    # back to without a second round trip.
+    clock_workspace_id: Optional[uuid.UUID] = None
+    local_hour: Optional[int] = Field(default=None, ge=0, le=23)
+
     @field_validator("datasets")
     @classmethod
     def _datasets_are_unique(cls, value: list[str]) -> list[str]:
@@ -565,6 +572,20 @@ class ExportScheduleCreate(BaseModel):
             raise ValueError("day_of_month is only meaningful for MONTHLY.")
         return self
 
+    # ARCH30-T4:schema-create-clock-validator — A1. The same
+    # both-or-neither rule the CHECK enforces, stated at the boundary
+    # so the caller gets 422 with a field name instead of 500 with an
+    # IntegrityError.
+    @model_validator(mode="after")
+    def _clock_is_both_or_neither(self) -> "ExportScheduleCreate":
+        if (self.clock_workspace_id is None) != (self.local_hour is None):
+            raise ValueError(
+                "clock_workspace_id and local_hour must be supplied "
+                "together, or neither: a workspace clock without an "
+                "hour has nothing to fire at."
+            )
+        return self
+
 
 class ExportScheduleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -576,6 +597,32 @@ class ExportScheduleUpdate(BaseModel):
     day_of_month: Optional[int] = Field(default=None, ge=1, le=28)
     lookback_days: Optional[int] = Field(default=None, ge=1, le=90)
     enabled: Optional[bool] = None
+
+    # ARCH30-T4:schema-update-clock — A1. `clock_set` exists because
+    # None-means-unchanged cannot express "remove the clock". None =
+    # leave alone, true = apply the pair below, false = back to UTC.
+    clock_set: Optional[bool] = None
+    clock_workspace_id: Optional[uuid.UUID] = None
+    local_hour: Optional[int] = Field(default=None, ge=0, le=23)
+
+    @model_validator(mode="after")
+    def _clock_set_is_coherent(self) -> "ExportScheduleUpdate":
+        if self.clock_set is True and (
+            self.clock_workspace_id is None or self.local_hour is None
+        ):
+            raise ValueError(
+                "clock_set=true requires both clock_workspace_id and "
+                "local_hour."
+            )
+        if self.clock_set is not True and (
+            self.clock_workspace_id is not None
+            or self.local_hour is not None
+        ):
+            raise ValueError(
+                "clock_workspace_id and local_hour are only read when "
+                "clock_set is true."
+            )
+        return self
 
     #: Explicit, and separate from `enabled`. Re-enabling a schedule and
     #: closing a tripped circuit are different decisions: the first says "I
@@ -599,6 +646,16 @@ class ExportScheduleResponse(BaseModel):
     day_of_month: Optional[int] = None
     lookback_days: int
     enabled: bool
+
+    # ARCH30-T4:schema-response-clock — A1. `clock_timezone` and
+    # `clock_label` are derived server-side and sent, the same rule
+    # `is_dispatchable` follows below: a console that computes "02:00
+    # UTC" from hour_utc while the server fires on IST is the class of
+    # disagreement ARCH-24 pushed server-side for good.
+    clock_workspace_id: Optional[uuid.UUID] = None
+    local_hour: Optional[int] = None
+    clock_timezone: Optional[str] = None
+    clock_label: str = "UTC"
 
     consecutive_failure_count: int
     circuit_opened_at: Optional[datetime] = None

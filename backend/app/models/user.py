@@ -161,6 +161,27 @@ class User(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
+    # ARCH30-T4:timezone-source-column — A3. `timezone` alone cannot
+    # distinguish "never chose" from "chose UTC", and browser
+    # detection must overwrite the first and never the second. This
+    # column is that distinction, recorded rather than inferred.
+    timezone_source: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="DEFAULT",
+        # A plain string, not text("'DEFAULT'"): this module imports
+        # Boolean, DateTime, ForeignKey and String from sqlalchemy and
+        # nothing else, and SQLAlchemy quotes a string server_default
+        # for a String column correctly. Widening the import for one
+        # literal is churn.
+        server_default="DEFAULT",
+        doc=(
+            "DEFAULT | DETECTED | EXPLICIT. Only a DEFAULT row may be "
+            "overwritten by first-login detection; EXPLICIT is a "
+            "deliberate human choice and is never touched."
+        ),
+    )
+
     locale: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

@@ -256,6 +256,11 @@ def update_workspace_settings(
                 f"A workspace with the identifier '{resolved_slug}' already exists in this organization."
             )
 
+    # ARCH30-T4:workspace-tz-recompute — A1. Captured before the
+    # update so "did the timezone actually change" is answerable. A
+    # PATCH that resends the same zone must not churn next_run_at.
+    previous_timezone = workspace.timezone
+
     try:
         updated = workspace_crud.update_workspace(
             db,
@@ -268,6 +273,21 @@ def update_workspace_settings(
             date_format=date_format,
         )
 
+        rescheduled: list[str] = []
+        if timezone is not None and timezone != previous_timezone:
+            from app.services.analytics import sync_service
+
+            rescheduled = [
+                str(schedule_id)
+                for schedule_id in (
+                    sync_service.recompute_for_workspace_timezone_change(
+                        db,
+                        workspace_id=updated.id,
+                        organization_id=updated.organization_id,
+                    )
+                )
+            ]
+
         audit_service.record(
             db,
             organization_id=workspace.organization_id,
@@ -279,6 +299,16 @@ def update_workspace_settings(
             details={
                 "workspace_name": updated.workspace_name,
                 "slug": updated.slug,
+                **(
+                    {
+                        "timezone_from": previous_timezone,
+                        "timezone_to": updated.timezone,
+                        "export_schedules_rescheduled": rescheduled,
+                    }
+                    if timezone is not None
+                    and timezone != previous_timezone
+                    else {}
+                ),
             },
         )
 

@@ -36,6 +36,69 @@ def get_user_profile(user: User) -> User:
     return user
 
 
+# ARCH30-T4:detect-timezone-service — A3.
+DETECTABLE_SOURCE = "DEFAULT"
+
+
+def adopt_detected_timezone(
+    db: Session,
+    *,
+    user: User,
+    detected_timezone: str,
+) -> tuple[User, bool]:
+    """Adopt the browser's IANA zone, but only over the untouched default.
+
+    Returns `(user, adopted)`. `adopted=False` is the normal outcome
+    for anybody who has ever opened profile settings, and the caller
+    returns 200 either way — a client that posts its zone on every
+    boot should not have to distinguish "you already chose" from an
+    error.
+
+    The guard is `timezone_source == "DEFAULT"`, never
+    `timezone == "UTC"`. Those are different populations and the
+    difference is the entire point of A3: somebody who deliberately
+    picked UTC — and on this platform that is a real choice, not a
+    fallback, because audit exports and warehouse bundles are read in
+    UTC — must never have it silently replaced by whatever zone the
+    laptop they are travelling with reports.
+
+    Writes an audit line through the same logger channel
+    `update_user_profile` uses. A profile field that changes without
+    the person acting is exactly the kind of change that has to be
+    explainable six months later.
+    """
+    if user.timezone_source != DETECTABLE_SOURCE:
+        return user, False
+
+    candidate = (detected_timezone or "").strip()
+    if not candidate or candidate == user.timezone:
+        return user, False
+
+    try:
+        updated = user_crud.update_user_profile(
+            db,
+            user=user,
+            timezone=candidate,
+            timezone_source="DETECTED",
+        )
+        commit_and_refresh(db, updated)
+        logger.info(
+            "AUDIT | USER_TIMEZONE_DETECTED | User: %s | Zone: %s",
+            user.id,
+            candidate,
+        )
+        return updated, True
+    except Exception as exc:
+        rollback_and_log_error(
+            db,
+            logger,
+            "Failed to adopt detected timezone for user %s: %s",
+            user.id,
+            str(exc),
+            exc=exc,
+        )
+
+
 def update_user_profile(
     db: Session,
     *,

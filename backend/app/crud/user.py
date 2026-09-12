@@ -37,6 +37,8 @@ def update_user_profile(
     display_name: str | None = None,
     timezone: str | None = None,
     locale: str | None = None,
+    # ARCH30-T4:crud-timezone-source-param — A3.
+    timezone_source: str | None = None,
 ) -> User:
     """
     Applies a partial update to a user's profile fields.
@@ -54,6 +56,15 @@ def update_user_profile(
         user.display_name = display_name
     if timezone is not None:
         user.timezone = timezone
+        # ARCH30-T4:crud-timezone-source — A3. Any timezone arriving
+        # through this function came from PATCH /me/profile, which is
+        # a person choosing. Detection does not come through here; it
+        # has its own function precisely so it cannot be mistaken for
+        # a choice.
+        if timezone_source is not None:
+            user.timezone_source = timezone_source
+        else:
+            user.timezone_source = "EXPLICIT"
     if locale is not None:
         user.locale = locale
     db.add(user)

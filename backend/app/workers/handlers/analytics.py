@@ -161,11 +161,17 @@ def handle_warehouse_push(payload: dict[str, Any]) -> dict[str, Any]:
                 )
                 enqueued.append(str(schedule.id))
 
+            # ARCH30-T4:dispatch-clock — A1. `clock_for_schedule`
+            # rather than `resolve_schedule_clock`: a sweep must not
+            # abort the remaining tenants because one workspace was
+            # deleted between the read and here. It logs and falls
+            # back to hour_utc.
             schedule.next_run_at = sync_service.compute_next_run(
                 cadence=schedule.cadence,
                 hour_utc=schedule.hour_utc,
                 day_of_week=schedule.day_of_week,
                 day_of_month=schedule.day_of_month,
+                clock=sync_service.clock_for_schedule(db, schedule),
             )
             db.flush([schedule])
 

@@ -27,7 +27,12 @@ from app.schemas.me import (
     OrganizationMembershipSummary,
 )
 from app.schemas.organization import OrganizationResponse
-from app.schemas.user import UserProfileResponse, UserProfileUpdate
+from app.schemas.user import (  # ARCH30-T4:detected-timezone-import
+    DetectedTimezoneRequest,
+    DetectedTimezoneResponse,
+    UserProfileResponse,
+    UserProfileUpdate,
+)
 from app.schemas.workspace import WorkspaceSummary
 from app.models.workspace import WorkspaceStatus
 from app.services import organization_service
@@ -214,4 +219,39 @@ async def update_my_profile(
         display_name=payload.display_name,
         timezone=payload.timezone,
         locale=payload.locale,
+    )
+
+
+# ARCH30-T4:detected-timezone-route — A3.
+@router.post(
+    "/me/profile/detected-timezone",
+    response_model=DetectedTimezoneResponse,
+    summary="Offer The Browser's Timezone",
+)
+async def offer_detected_timezone(
+    payload: DetectedTimezoneRequest,
+    db: deps.DbSession,
+    current_user: deps.CurrentUser,
+) -> Any:
+    """Fill in a timezone nobody has ever set.
+
+    Idempotent and safe to call on every boot: once the profile's
+    `timezone_source` leaves DEFAULT this returns `adopted=false` and
+    writes nothing. 200 in both cases — "you already have one" is not
+    a client error.
+
+    POST rather than PATCH /me/profile because the authorization rule
+    is different: PATCH lets the caller set any zone, this lets the
+    caller set one only over the untouched default. Two rules, two
+    endpoints.
+    """
+    user, adopted = user_service.adopt_detected_timezone(
+        db,
+        user=current_user,
+        detected_timezone=payload.timezone,
+    )
+    return DetectedTimezoneResponse(
+        adopted=adopted,
+        timezone=user.timezone,
+        timezone_source=user.timezone_source,
     )

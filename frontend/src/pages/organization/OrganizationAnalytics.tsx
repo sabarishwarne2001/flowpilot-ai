@@ -28,6 +28,8 @@ import {
   updateSchedule,
 } from "@/services/api/analytics";
 import { analyticsKeys } from "@/services/api/queryKeys";
+// ARCH30-T4:ts-schedule-form-clock-import — A1.
+import { getMyWorkspaces } from "@/services/api/me";
 import {
   buildCredential,
   CredentialFieldset,
@@ -475,6 +477,18 @@ const ScheduleForm: React.FC<{
   const [destinationId, setDestinationId] = useState("");
   const [datasets, setDatasets] = useState<ExportDataset[]>(["USAGE_ROLLUPS"]);
   const [cadence, setCadence] = useState<ScheduleCadence>("DAILY");
+  // ARCH30-T4:ts-schedule-form-clock-state — A1. "" is UTC; any
+  // other value is a workspace id, and the hour above is then read
+  // as that workspace's local wall clock.
+  const [clockWorkspaceId, setClockWorkspaceId] = useState("");
+  const { data: myWorkspaces } = useQuery({
+    queryKey: ["me", "workspaces", "clock"],
+    queryFn: getMyWorkspaces,
+    staleTime: 300_000,
+  });
+  const clockChoices = (myWorkspaces ?? []).filter(
+    (workspace) => workspace.organization_id === organizationId,
+  );
   const [hourUtc, setHourUtc] = useState(2);
   const [dayOfWeek, setDayOfWeek] = useState(0);
   const [dayOfMonth, setDayOfMonth] = useState(1);
@@ -488,6 +502,11 @@ const ScheduleForm: React.FC<{
         cadence,
         hour_utc: hourUtc,
         day_of_week: cadence === "WEEKLY" ? dayOfWeek : null,
+        // ARCH30-T4:ts-schedule-form-clock-payload — A1. Sent as a
+        // pair or not at all; the server rejects a half-set clock
+        // with 422 and the database rejects it with a CHECK.
+        clock_workspace_id: clockWorkspaceId || null,
+        local_hour: clockWorkspaceId ? hourUtc : null,
         day_of_month: cadence === "MONTHLY" ? dayOfMonth : null,
         lookback_days: lookbackDays,
         enabled: true,
@@ -550,9 +569,34 @@ const ScheduleForm: React.FC<{
           </select>
         </div>
 
+        {/* ARCH30-T4:ts-schedule-form-clock-control — A1. */}
+        <div>
+          <label className={LABEL} htmlFor="schedule-clock">
+            Clock
+          </label>
+          <select
+            id="schedule-clock"
+            className={INPUT}
+            value={clockWorkspaceId}
+            onChange={(event) => setClockWorkspaceId(event.target.value)}
+          >
+            <option value="">UTC</option>
+            {clockChoices.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.workspace_name}
+              </option>
+            ))}
+          </select>
+          <p className={HINT}>
+            A workspace clock follows that workspace’s timezone,
+            daylight saving included. Only workspaces you belong to are
+            listed here.
+          </p>
+        </div>
+
         <div>
           <label className={LABEL} htmlFor="schedule-hour">
-            Hour (UTC)
+            {clockWorkspaceId ? "Hour (workspace local)" : "Hour (UTC)"}
           </label>
           <input
             id="schedule-hour"
@@ -563,9 +607,15 @@ const ScheduleForm: React.FC<{
             value={hourUtc}
             onChange={(event) => setHourUtc(Number(event.target.value))}
           />
+          {/* ARCH30-T4:ts-schedule-form-clock-hint — A1. The old copy
+              said a local hour would fire twice in the repeated hour.
+              It no longer can: the clock resolver takes the first
+              occurrence of a folded hour and the closing instant of a
+              gap, so each cadence produces exactly one run. */}
           <p className={HINT}>
-            UTC, not local. A local hour moves twice a year and the run in the
-            repeated hour would fire twice.
+            {clockWorkspaceId
+              ? "Local to the workspace. Across a daylight-saving change this fires once: the first occurrence of a repeated hour, and the moment a skipped hour ends."
+              : "UTC, which never shifts. Pick a workspace clock above to schedule in local time instead."}
           </p>
         </div>
 

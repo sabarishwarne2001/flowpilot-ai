@@ -13,9 +13,18 @@ import PendingInvitationsBanner from "@/components/invitations/PendingInvitation
 import DunningBanner from "@/components/billing/DunningBanner";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
 import { useTenant } from "@/hooks/useTenant";
+// ARCH30-T4:ts-mount-tz-import — A3. Mounted on the layout every
+// authenticated route renders, because login is not the only way a
+// session begins.
+import { useTimezoneCapture } from "@/hooks/useTimezoneCapture";
 
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
+
+  // ARCH30-T4:ts-mount-tz-call — A3. No-op after the first session
+  // in which a timezone gets set; see the hook for why it never
+  // overwrites a chosen one.
+  useTimezoneCapture();
 
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const beginSignOut = useAuthStore((state) => state.beginSignOut);

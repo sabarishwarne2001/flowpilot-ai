@@ -246,6 +246,16 @@ export interface ExportSchedule {
   day_of_month: number | null;
   lookback_days: number;
   enabled: boolean;
+  /**
+   * ARCH30-T4:ts-schedule-clock — A1. When `clock_workspace_id` is
+   * set, `hour_utc` is inert and `local_hour` is the wall clock in
+   * `clock_timezone`. `clock_label` is computed by the backend; the
+   * console renders it and never assembles its own.
+   */
+  clock_workspace_id: string | null;
+  local_hour: number | null;
+  clock_timezone: string | null;
+  clock_label: string;
   consecutive_failure_count: number;
   circuit_opened_at: string | null;
   /** Computed by the backend. The console does not re-derive it. */
@@ -261,6 +271,9 @@ export interface ExportScheduleCreate {
   datasets: ExportDataset[];
   cadence: ScheduleCadence;
   hour_utc: number;
+  /** ARCH30-T4:ts-create-clock — A1. Both or neither. */
+  clock_workspace_id?: string | null;
+  local_hour?: number | null;
   day_of_week?: number | null;
   day_of_month?: number | null;
   lookback_days: number;
@@ -412,8 +425,15 @@ export const describeProbe = (destination: WarehouseDestination): string => {
   return destination.last_test_error ?? "Connection refused";
 };
 
+// ARCH30-T4:ts-describe-cadence — A1. Reads the server-sent label
+// rather than hard-coding "UTC", which was wrong the moment a
+// schedule could be governed by a workspace.
 export const describeCadence = (schedule: ExportSchedule): string => {
-  const at = `${String(schedule.hour_utc).padStart(2, "0")}:00 UTC`;
+  const hour =
+    schedule.local_hour !== null && schedule.local_hour !== undefined
+      ? schedule.local_hour
+      : schedule.hour_utc;
+  const at = `${String(hour).padStart(2, "0")}:00 ${schedule.clock_label}`;
   if (schedule.cadence === "DAILY") {
     return `Daily at ${at}`;
   }

@@ -111,6 +111,11 @@ class UserProfileResponse(BaseModel):
     display_name: str | None
     timezone: str
     locale: str
+    # ARCH30-T4:profile-response-source — A3. The console reads this
+    # to decide whether to offer its detected zone at all; without it
+    # the only way to ask is to POST and see what happens, which means
+    # a write on every page load.
+    timezone_source: str = "DEFAULT"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -118,6 +123,42 @@ class UserProfileResponse(BaseModel):
 # ============================================================================
 # Request Schemas
 # ============================================================================
+
+# ARCH30-T4:detected-timezone-schema — A3.
+class DetectedTimezoneRequest(BaseModel):
+    """The browser's reported IANA zone.
+
+    Deliberately a separate schema from `UserProfileUpdate` rather
+    than a flag on it. They are different acts with different rules —
+    one is a person choosing and always wins, the other is a machine
+    guessing and only fills a blank — and a shared schema would make
+    it one `if` away from a client being able to overwrite a chosen
+    timezone by setting a boolean.
+    """
+
+    timezone: str = Field(
+        max_length=100,
+        description="IANA zone from Intl.DateTimeFormat().resolvedOptions().",
+    )
+
+    @field_validator("timezone")
+    @classmethod
+    def _is_real_zone(cls, value: str) -> str:
+        candidate = (value or "").strip()
+        if not _is_valid_timezone(candidate):
+            raise ValueError(
+                f"{candidate!r} is not an IANA timezone key."
+            )
+        return candidate
+
+
+class DetectedTimezoneResponse(BaseModel):
+    """Whether the zone was taken, and what the profile now says."""
+
+    adopted: bool
+    timezone: str
+    timezone_source: str
+
 
 class UserProfileUpdate(BaseModel):
     """

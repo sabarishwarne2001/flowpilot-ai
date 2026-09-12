@@ -4,6 +4,18 @@ export interface UserProfile {
   readonly display_name: string | null;
   readonly timezone: string;
   readonly locale: string;
+  /**
+   * ARCH30-T4:ts-profile-tz-source — A3. DEFAULT | DETECTED |
+   * EXPLICIT. Only DEFAULT means "nobody has ever chosen", and only
+   * DEFAULT may be filled in from the browser.
+   */
+  readonly timezone_source: "DEFAULT" | "DETECTED" | "EXPLICIT";
+}
+
+export interface DetectedTimezoneResult {
+  readonly adopted: boolean;
+  readonly timezone: string;
+  readonly timezone_source: "DEFAULT" | "DETECTED" | "EXPLICIT";
 }
 
 export interface UserProfileUpdateRequest {
