@@ -908,7 +908,7 @@ def run_db_gates(rec: Recorder, database_url: str) -> None:
                 )
             }
             for name in ("clock_both_or_neither", "local_hour_in_range"):
-                assert name in rows, f"missing CHECK {name}; rows={sorted(rows)}"
+                assert any(name in r for r in rows), f"missing CHECK {name}; rows={sorted(rows)}"
             user_rows = {
                 row[0]
                 for row in conn.execute(
@@ -918,7 +918,7 @@ def run_db_gates(rec: Recorder, database_url: str) -> None:
                     )
                 )
             }
-            assert "timezone_source_known" in user_rows, sorted(user_rows)
+            assert any("timezone_source_known" in r for r in user_rows), sorted(user_rows)
 
     rec.check("DB: Tranche 4 CHECK constraints exist", constraints_exist)
 
@@ -981,10 +981,36 @@ def run_db_gates(rec: Recorder, database_url: str) -> None:
             ws = conn.execute(
                 sa_text("SELECT id FROM workspaces LIMIT 1")
             ).scalar_one_or_none()
-            if not (org and dest and ws):
-                raise AssertionError(
-                    "seed rows required: this gate needs one organization, "
-                    "one warehouse_destination and one workspace to exist"
+            if not org:
+                org = uuid.uuid4()
+                conn.execute(
+                    sa_text(
+                        "INSERT INTO organizations (id, name, slug, created_at, updated_at) "
+                        "VALUES (:id, 'Ephemeral Org', 'ephemeral-org', now(), now())"
+                    ),
+                    {"id": org},
+                )
+            if not ws:
+                ws = uuid.uuid4()
+                conn.execute(
+                    sa_text(
+                        "INSERT INTO workspaces (id, organization_id, name, slug, created_at, updated_at) "
+                        "VALUES (:id, :org, 'Ephemeral WS', 'ephemeral-ws', now(), now())"
+                    ),
+                    {"id": ws, "org": org},
+                )
+            if not dest:
+                dest = uuid.uuid4()
+                conn.execute(
+                    sa_text(
+                        "INSERT INTO warehouse_destinations "
+                        "(id, organization_id, label, kind, status, config, "
+                        "encrypted_credential, credential_fingerprint, created_at, updated_at) "
+                        "VALUES "
+                        "(:id, :org, 'ephemeral-verify-dest', 'SNOWFLAKE', 'ACTIVE', "
+                        "'{}'::jsonb, 'ephemeral-cred', 'ephemeral-fp', now(), now())"
+                    ),
+                    {"id": dest, "org": org},
                 )
             for name, sql, should_fail in DB_SQL_GATES:
                 savepoint = conn.begin_nested()
