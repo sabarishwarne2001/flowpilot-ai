@@ -336,6 +336,10 @@ class SeatPriceDisclosure:
 PRICE_SOURCE_BOOK: str = "PRICE_BOOK"
 PRICE_SOURCE_UNPRICED: str = "UNPRICED"
 PRORATION_SOURCE_STRIPE: str = "STRIPE_PREVIEW"
+# ARCH30-T4F:proration-source-dodo — A7. A separate value, not "PREVIEW".
+# The console shows the source next to the figure and a customer on a
+# Merchant-of-Record gateway is entitled to know which vendor quoted it.
+PRORATION_SOURCE_DODO: str = "DODO_PREVIEW"
 PRORATION_SOURCE_UNAVAILABLE: str = "UNAVAILABLE"
 
 
@@ -419,24 +423,64 @@ def seat_price_disclosure(
     period_start: Optional[datetime] = subscription.current_period_start
     period_end: Optional[datetime] = subscription.current_period_end
 
+    # ARCH30-T4F:dodo-proration-wiring — A7. Tranche 3 reported "unknown"
+    # for every Dodo subscription because only the Stripe adapter had a
+    # preview. Dodo does have one — POST /subscriptions/{id}/change-plan/
+    # preview — and every Indian customer on the Merchant-of-Record path
+    # was being shown a shrug where a number belonged.
+    gateway_name = str(subscription.gateway or "").upper()
     try:
-        if gateway is None and subscription.gateway != "STRIPE":
-            # ARCH-30 Tranche 3. Only the Stripe adapter offers a preview here;
-            # asking Stripe about a Dodo subscription would fail and be
-            # reported as Stripe being unreachable.
-            raise LookupError(f"no proration preview for {subscription.gateway}")
-        client = gateway or stripe_gateway.get_gateway()
-        preview = client.preview_seat_change(
-            subscription_id=subscription.stripe_subscription_id,
-            seats=after,
-            timeout_seconds=SEAT_PREVIEW_TIMEOUT_SECONDS,
-        )
-        proration = int(preview.proration_micros)
-        proration_source = PRORATION_SOURCE_STRIPE
-        if preview.period_start is not None:
-            period_start = preview.period_start
-        if preview.period_end is not None:
-            period_end = preview.period_end
+        if gateway_name == "DODO" and gateway is None:
+            from app.models.quota_tier import QuotaTier
+            from app.services.billing import dodo_gateway as _dodo
+
+            # Exactly the source `apply_seat_change` uses for the
+            # real write: QuotaTier.gateway_price_id, reached through
+            # the tier the subscription is pinned to. A preview that
+            # resolved the product any other way could quote a number
+            # for a different plan than the one the write would move
+            # the customer to, which is worse than quoting nothing.
+            tier = db.get(QuotaTier, subscription.quota_tier_id)
+            if tier is None or not tier.gateway_price_id:
+                raise LookupError(
+                    "tier has no gateway price id; nothing to preview"
+                )
+            dodo_preview = _dodo.get_dodo_gateway().preview_change_plan(
+                subscription_id=subscription.gateway_subscription_id,
+                product_id=tier.gateway_price_id,
+                quantity=after,
+                # The SAME mode the write will use. Previewing
+                # `prorated_immediately` and then writing whatever the
+                # setting says quotes a figure for an operation that
+                # never happens.
+                proration_mode=str(
+                    settings.BILLING_DODO_SEAT_PRORATION_MODE
+                ),
+            )
+            proration = int(dodo_preview.prorated_amount_micros)
+            proration_source = PRORATION_SOURCE_DODO
+            if dodo_preview.next_billing_date is not None:
+                # Dodo reports the end of the period the proration is
+                # measured against; the start stays as the subscription
+                # records it, since the preview does not restate it.
+                period_end = dodo_preview.next_billing_date
+        else:
+            if gateway is None and gateway_name != "STRIPE":
+                raise LookupError(
+                    f"no proration preview for {subscription.gateway}"
+                )
+            client = gateway or stripe_gateway.get_gateway()
+            preview = client.preview_seat_change(
+                subscription_id=subscription.stripe_subscription_id,
+                seats=after,
+                timeout_seconds=SEAT_PREVIEW_TIMEOUT_SECONDS,
+            )
+            proration = int(preview.proration_micros)
+            proration_source = PRORATION_SOURCE_STRIPE
+            if preview.period_start is not None:
+                period_start = preview.period_start
+            if preview.period_end is not None:
+                period_end = preview.period_end
     except Exception as exc:  # noqa: BLE001 — see docstring
         vendor = "Stripe" if subscription.gateway == "STRIPE" else str(subscription.gateway).title()
         reason = (
@@ -688,6 +732,8 @@ __all__ = [
     "PRICE_SOURCE_BOOK",
     "PRICE_SOURCE_UNPRICED",
     "PRORATION_SOURCE_STRIPE",
+    # ARCH30-T4F:proration-source-dodo-export — A7.
+    "PRORATION_SOURCE_DODO",
     "PRORATION_SOURCE_UNAVAILABLE",
     "SEAT_PREVIEW_TIMEOUT_SECONDS",
     "SeatPriceDisclosure",

@@ -5,7 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+# ARCH30-T4F:access-summary-typing — A5.
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -197,6 +198,36 @@ class BillingAccessResponse(BaseModel):
     # until ..." instead of saying nothing until the day writes stop.
     subscription_status: Optional[str] = None
     grace_ends_at: Optional[datetime] = None
+
+
+# ARCH30-T4F:access-summary-schema — A5.
+class BillingAccessSummaryResponse(BaseModel):
+    """What an ordinary member may know about the account's health.
+
+    Three fields, and the omissions are the design. No amounts, no
+    invoice ids, no dunning step history, no subscription status, no
+    gateway identifiers. A member needs to understand why an upload
+    was refused and roughly how long they have; none of the commercial
+    detail in `BillingAccessResponse` helps with that, and all of it
+    would be visible to every seat in the organization.
+
+    `state` is deliberately a three-value vocabulary of its own rather
+    than the internal access state passed through. The internal states
+    carry dunning semantics that would leak commercial position by
+    their names alone; RESTRICTED says what a member experiences.
+    """
+
+    state: Literal["ACTIVE", "GRACE", "RESTRICTED"]
+    is_read_only: bool = Field(
+        description="True when writes are refused. Reads and export "
+        "always continue."
+    )
+    grace_ends_at: Optional[datetime] = Field(
+        default=None,
+        description="When the grace window closes, if there is one. "
+        "Null in ACTIVE and in RESTRICTED, where it has already "
+        "closed.",
+    )
 
 
 class CheckoutSessionRequest(BaseModel):

@@ -7,6 +7,8 @@ import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import DunningBanner from "@/components/billing/DunningBanner";
+// ARCH30-T4F:ts-member-notice-import — A5.
+import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
 import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -106,9 +108,15 @@ export const OrganizationLayout: React.FC = () => {
           </div>
         </header>
 
+        {/* ARCH30-T4F:ts-member-notice-render ? A5. Mutually
+            exclusive: a billing-capable role gets the full banner
+            with the portal button, everybody else gets the summary
+            with no amounts and no actions they cannot take. */}
         {canSeeBilling ? (
           <DunningBanner organizationId={organizationId} canManageBilling />
-        ) : null}
+        ) : (
+          <MemberAccessNotice organizationId={organizationId} />
+        )}
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:p-6">
           <DisplayPreferencesBoundary>

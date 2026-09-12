@@ -13,12 +13,21 @@ from app.core.config import settings
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import OrganizationContext, RequireOrgOwner, RequireOrgRole, get_db
+# ARCH30-T4F:access-summary-deps-import — A5.
+from app.api.deps import (
+    OrganizationContext,
+    RequireOrgMember,
+    RequireOrgOwner,
+    RequireOrgRole,
+    get_db,
+)
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.organization import OrganizationRole
 from app.schemas.billing import SeatPriceBookResponse
 from app.schemas.invoice import (
     BillingAccessResponse,
+    # ARCH30-T4F:access-summary-schema-import — A5.
+    BillingAccessSummaryResponse,
     CheckoutSessionRequest,
     EphemeralSessionResponse,
     InvoiceDetailResponse,
@@ -266,6 +275,66 @@ def get_billing_access(
             else None
         ),
         grace_ends_at=live.grace_ends_at if live else None,
+    )
+
+
+# ARCH30-T4F:access-summary-route — A5.
+@router.get(
+    "/organizations/{organization_id}/billing/access-summary",
+    response_model=BillingAccessSummaryResponse,
+    summary="Whether this organization is read-only (any member)",
+)
+def get_billing_access_summary(
+    organization_id: uuid.UUID,
+    context: OrganizationContext = Depends(RequireOrgMember),
+    db: Session = Depends(get_db),
+) -> BillingAccessSummaryResponse:
+    """The member-readable half of `/billing/access`.
+
+    D-11 gave every write path a read-only gate and gave the console
+    exactly one way to explain it — `DunningBanner`, which reads
+    `/billing/access` and is therefore mounted only for OWNER, ADMIN and
+    BILLING. An ordinary member hit a refused upload with no explanation
+    anywhere on screen, because the three roles who could see the reason
+    were the three least likely to be uploading.
+
+    Org-scoped under `/organizations/{organization_id}/` rather than a
+    bare `/billing/access-summary`, matching every other billing route:
+    a member of several organizations must be able to ask about one of
+    them, and an endpoint that infers the tenant from the session is an
+    ARCH-02 isolation argument waiting to be lost.
+    """
+    state = dunning_service.access_state(
+        db, organization_id=context.organization_id
+    )
+    live = subscription_service.live_subscription_for_organization(
+        db, organization_id=context.organization_id
+    )
+
+    status_value = (
+        (live.status.value if hasattr(live.status, "value") else str(live.status))
+        if live
+        else None
+    )
+    grace_ends_at = live.grace_ends_at if live else None
+
+    if not state.writes_allowed:
+        # Already closed. Returning the expired date here would read as
+        # "you have until <date in the past>", which is worse than no
+        # date at all.
+        summary_state = "RESTRICTED"
+        exposed_grace = None
+    elif status_value == "past_due" and grace_ends_at is not None:
+        summary_state = "GRACE"
+        exposed_grace = grace_ends_at
+    else:
+        summary_state = "ACTIVE"
+        exposed_grace = None
+
+    return BillingAccessSummaryResponse(
+        state=summary_state,  # type: ignore[arg-type]
+        is_read_only=not state.writes_allowed,
+        grace_ends_at=exposed_grace,
     )
 
 

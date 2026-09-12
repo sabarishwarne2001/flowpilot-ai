@@ -170,6 +170,18 @@ interface DomainRowProps {
   readonly domain: CustomDomainDetail;
   readonly isOwner: boolean;
   readonly busy: boolean;
+  /**
+   * ARCH30-T4F:domainrow-maintain-prop — A4. The server's
+   * `can_maintain`, not a local derivation from the add-on state. The
+   * backend already refuses verify / reissue / set-primary /
+   * request-certificate in GRACE and LAPSED; before this, the console
+   * still offered all four, so the only way to discover the rule was
+   * to press a button and read a 402. Destructive and cleanup actions
+   * are deliberately NOT gated on this — a tenant who has stopped
+   * paying must always be able to stop serving and release a hostname.
+   */
+  readonly canMaintain: boolean;
+  readonly maintainReason: string;
   readonly onVerify: (id: string) => void;
   readonly onReissue: (id: string) => void;
   readonly onPrimary: (id: string, next: boolean) => void;
@@ -178,10 +190,13 @@ interface DomainRowProps {
   readonly onRelease: (id: string) => void;
 }
 
+// ARCH30-T4F:domainrow-maintain-destructure — A4.
 const DomainRow: React.FC<DomainRowProps> = ({
   domain,
   isOwner,
   busy,
+  canMaintain,
+  maintainReason,
   onVerify,
   onReissue,
   onPrimary,
@@ -238,10 +253,12 @@ const DomainRow: React.FC<DomainRowProps> = ({
 
     {isOwner ? (
       <div className="mt-3 flex flex-wrap gap-2">
+        {/* ARCH30-T4F:domainrow-gate-verify-reissue — A4 */}
         <button
           type="button"
           className={SECONDARY}
-          disabled={busy}
+          disabled={busy || !canMaintain}
+          title={canMaintain ? undefined : maintainReason}
           onClick={() => onVerify(domain.id)}
         >
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
@@ -250,7 +267,8 @@ const DomainRow: React.FC<DomainRowProps> = ({
         <button
           type="button"
           className={SECONDARY}
-          disabled={busy}
+          disabled={busy || !canMaintain}
+          title={canMaintain ? undefined : maintainReason}
           onClick={() => onReissue(domain.id)}
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -264,7 +282,13 @@ const DomainRow: React.FC<DomainRowProps> = ({
            * in @/types/branding: enabling this from status would show an
            * enabled button the API then refuses.
            */
-          disabled={busy || !domain.may_request_certificate}
+          /* ARCH30-T4F:domainrow-gate-certificate — A4. Two independent
+             reasons to refuse: the domain is not in a state where a
+             certificate can be issued, or the add-on no longer covers
+             maintenance. Both disable; the tooltip names whichever
+             applies. */
+          disabled={busy || !domain.may_request_certificate || !canMaintain}
+          title={canMaintain ? undefined : maintainReason}
           onClick={() => onCertificate(domain.id)}
         >
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
@@ -276,7 +300,9 @@ const DomainRow: React.FC<DomainRowProps> = ({
           <button
             type="button"
             className={SECONDARY}
-            disabled={busy}
+            /* ARCH30-T4F:domainrow-gate-primary — A4 */
+            disabled={busy || !canMaintain}
+            title={canMaintain ? undefined : maintainReason}
             onClick={() => onPrimary(domain.id, true)}
           >
             <Star className="h-3.5 w-3.5" aria-hidden />
@@ -413,6 +439,19 @@ const OrganizationBranding: React.FC = () => {
     !domainsQuery.isLoading &&
     domainCount === 0;
   const domainCanCreate = domainAddon.access?.can_create ?? false;
+  // ARCH30-T4F:domain-maintain-derivation — A4. `can_maintain` is a
+  // separate server flag from `can_create` and the split is the point:
+  // GRACE forbids creating new domains while still allowing the ones on
+  // file to be verified, and LAPSED forbids both. Deriving one from the
+  // other in the console would get GRACE wrong in one direction or the
+  // other. Defaults to `true` while the entitlement query is in flight,
+  // so a slow response does not flicker every control to disabled.
+  const domainCanMaintain = domainAddon.access?.can_maintain ?? true;
+  // ARCH30-T4F:domainrow-call-maintain — A4. Passed to every row.
+  const domainMaintainReason =
+    domainAddon.access?.state === "LAPSED"
+      ? "Custom domains have lapsed. You can still stop serving or release a hostname; verification and certificates need the add-on restored."
+      : "Custom domains are in a grace period. Verification, certificates and primary changes are paused until billing is resolved.";
 
   const brandingQuery = useQuery({
     queryKey: brandingKeys.branding(organizationId),
@@ -720,6 +759,8 @@ const OrganizationBranding: React.FC = () => {
                   domain={domain}
                   isOwner={isOwner}
                   busy={busy}
+                  canMaintain={domainCanMaintain}
+                  maintainReason={domainMaintainReason}
                   onVerify={(id) => verify.mutate(id)}
                   onReissue={(id) => reissue.mutate(id)}
                   onPrimary={(id, next) => primary.mutate({ id, next })}

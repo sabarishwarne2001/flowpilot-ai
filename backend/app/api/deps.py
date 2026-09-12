@@ -692,6 +692,28 @@ async def require_api_key(
             headers={"Retry-After": str(int(decision.reset_seconds))},
         )
 
+    # ARCH30-T4F:api-key-billing-gate — A6.
+    #
+    # The D-11 audit found the read-only gate wired into
+    # `get_organization_context`, `get_sso_compliant_organization_context`
+    # and `get_workspace_context` — and nowhere on the API-key path. A
+    # LAPSED organization could still POST /v1/query (which spends LLM
+    # and embedding quota) and POST /v1/workflows/{id}/trigger (which
+    # commits to the outbox) with a key minted while it was paying.
+    #
+    # Gated HERE, in the shared dependency, rather than route by route.
+    # `assert_billing_writes_allowed` already returns immediately for
+    # non-mutating methods, so reads are untouched, and every public API
+    # route that exists now or is added later is covered without anybody
+    # having to remember. `verify_arch30_tranche4_final --gates a6` walks
+    # the live route table and fails if a mutating API-key route ever
+    # resolves without passing through this dependency.
+    from app.api.billing_write_gate import assert_billing_writes_allowed
+
+    assert_billing_writes_allowed(
+        request, db, organization_id=organization.id
+    )
+
     return PublicApiPrincipal(
         api_key=key,
         membership=membership,

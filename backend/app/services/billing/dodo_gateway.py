@@ -166,6 +166,23 @@ class DodoObjectNotFoundError(DodoGatewayError):
     """The object an event names no longer exists at Dodo."""
 
 
+# ARCH30-T4F:dodo-preview-dataclass — A7.
+@dataclass(frozen=True)
+class DodoProrationPreview:
+    """What Dodo would charge immediately for a seat change.
+
+    `prorated_amount_micros` is already converted out of Dodo's minor
+    units. Deliberately not Optional: a preview that could not produce
+    a number raises instead, because a disclosure showing 0 when the
+    truth is unknown is a worse outcome than showing nothing.
+    """
+
+    prorated_amount_micros: int
+    currency: str
+    next_billing_date: Optional[datetime]
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class DodoSubscriptionSnapshot:
     """Authoritative Dodo subscription state, as of one fetch (D-9).
@@ -488,6 +505,107 @@ class DodoGateway:
             },
         )
         return self.fetch_subscription(subscription_id)
+
+    # ARCH30-T4F:dodo-preview-change-plan — A7.
+    def preview_change_plan(
+        self,
+        *,
+        subscription_id: str,
+        product_id: str,
+        quantity: int,
+        proration_mode: str = "prorated_immediately",
+    ) -> "DodoProrationPreview":
+        """`POST /subscriptions/{id}/change-plan/preview` — what it would cost.
+
+        Verified against Dodo's published OpenAPI (public v1.113.27,
+        `change_plan_preview_handler`) rather than guessed, because two
+        details here are the whole correctness of the number:
+
+        1. The request body is the SAME schema as the real change-plan
+           call (`UpdateSubscriptionPlanReq`), so `product_id` is
+           required even when only the quantity moves. A seat change
+           passes the product the subscription is already pinned to —
+           the same thing `set_subscription_seats` does, so the preview
+           and the write cannot disagree about what is being changed.
+
+        2. `immediate_charge.summary.total_amount` is an int32 in the
+           currency's SMALLEST unit (cents for USD, paise for INR, yen
+           for JPY). This codebase stores money in micros, so the
+           conversion is x10_000 — not x1_000_000. Getting that wrong
+           understates every disclosure by two orders of magnitude and
+           looks entirely plausible on screen.
+
+        `next_billing_date` comes from `new_plan`, which the OpenAPI
+        marks required on the response — it is the end of the period the
+        proration is measured against.
+
+        Raises rather than returning a sentinel. The caller
+        (`seat_service.seat_price_disclosure`) already catches
+        everything and reports an unknown proration, and "unknown" and
+        "zero" must never collapse into the same value on a price
+        disclosure.
+        """
+        if not subscription_id:
+            raise DodoGatewayError("No subscription id to preview.")
+        if not product_id:
+            raise DodoGatewayError(
+                "Dodo's change-plan preview requires the product id even "
+                "when only the quantity changes."
+            )
+        if int(quantity) < 1:
+            raise DodoGatewayError(
+                "Dodo subscriptions need at least one unit."
+            )
+        allowed = {
+            "prorated_immediately",
+            "full_immediately",
+            "difference_immediately",
+            "do_not_bill",
+        }
+        if proration_mode not in allowed:
+            raise DodoGatewayError(
+                f"Unknown Dodo proration mode {proration_mode!r}; expected "
+                f"one of {sorted(allowed)}."
+            )
+
+        raw = self._request(
+            "POST",
+            f"/subscriptions/{quote(str(subscription_id), safe='')}"
+            f"/change-plan/preview",
+            {
+                "product_id": product_id,
+                "quantity": int(quantity),
+                "proration_billing_mode": proration_mode,
+            },
+        )
+
+        charge = raw.get("immediate_charge") or {}
+        summary = charge.get("summary") or {}
+        if "total_amount" not in summary:
+            raise DodoGatewayError(
+                "Dodo preview returned no immediate_charge.summary."
+                "total_amount; refusing to report a proration of zero "
+                "for a response we did not understand."
+            )
+
+        try:
+            minor_units = int(summary["total_amount"])
+        except (TypeError, ValueError) as exc:
+            raise DodoGatewayError(
+                f"Dodo preview total_amount was not an integer: "
+                f"{summary.get('total_amount')!r}"
+            ) from exc
+
+        new_plan = raw.get("new_plan") or {}
+        return DodoProrationPreview(
+            # Smallest currency unit -> micros. See the docstring.
+            prorated_amount_micros=minor_units * 10_000,
+            currency=str(summary.get("currency") or "USD").upper(),
+            next_billing_date=_parse_instant(
+                new_plan.get("next_billing_date")
+            ),
+            raw=raw,
+        )
 
     # -- checkout ---------------------------------------------------------
 

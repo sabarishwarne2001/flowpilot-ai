@@ -222,6 +222,12 @@ export const billingKeys = {
     [...billingKeys.all(organizationId), "subscription"] as const,
   access: (organizationId: string) =>
     [...billingKeys.all(organizationId), "access"] as const,
+  // ARCH30-T4F:ts-access-summary-key — A5. A key of its own, not a
+  // variant of `access`: the two endpoints return different shapes and
+  // sharing a cache entry would let a member's summary satisfy an
+  // owner's query for the full payload.
+  accessSummary: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "access-summary"] as const,
   seatPriceBook: (organizationId: string, additionalSeats: number) =>
     [
       ...billingKeys.all(organizationId),

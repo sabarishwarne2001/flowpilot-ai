@@ -46,6 +46,9 @@ export const BILLING_ENDPOINTS = {
     `/organizations/${org(organizationId)}/billing/subscription`,
   access: (organizationId: string) =>
     `/organizations/${org(organizationId)}/billing/access`,
+  // ARCH30-T4F:ts-access-summary-endpoint — A5.
+  accessSummary: (organizationId: string) =>
+    `/organizations/${org(organizationId)}/billing/access-summary`,
   checkoutSession: (organizationId: string) =>
     `/organizations/${org(organizationId)}/billing/checkout-session`,
   portalSession: (organizationId: string) =>
@@ -100,6 +103,29 @@ export const getBillingAccess = async (
 ): Promise<BillingAccessResponse> => {
   const response = await apiClient.get<BillingAccessResponse>(
     BILLING_ENDPOINTS.access(organizationId),
+  );
+  return response.data;
+};
+
+/**
+ * ARCH30-T4F:ts-access-summary-call — A5. The member-readable summary.
+ *
+ * Three fields and no amounts. Callable by any member, which is the
+ * whole point: `getBillingAccess` above 403s for everyone outside
+ * OWNER / ADMIN / BILLING, which is why an ordinary member saw no
+ * explanation at all when the organization went read-only.
+ */
+export interface BillingAccessSummary {
+  readonly state: "ACTIVE" | "GRACE" | "RESTRICTED";
+  readonly is_read_only: boolean;
+  readonly grace_ends_at: string | null;
+}
+
+export const getBillingAccessSummary = async (
+  organizationId: string,
+): Promise<BillingAccessSummary> => {
+  const response = await apiClient.get<BillingAccessSummary>(
+    BILLING_ENDPOINTS.accessSummary(organizationId),
   );
   return response.data;
 };

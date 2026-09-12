@@ -469,10 +469,16 @@ const ScheduleRow: React.FC<{
   );
 };
 
+// ARCH30-T4F:scheduleform-cancreate-prop — A4. The backend calls
+// `addon_gate.require_addon(..., allow_grace=False)` on schedule
+// creation, so GRACE and LAPSED both refuse it. The console offered the
+// button anyway and the only way to find out was a 402.
 const ScheduleForm: React.FC<{
   organizationId: string;
   destinations: WarehouseDestination[];
-}> = ({ organizationId, destinations }) => {
+  canCreate: boolean;
+  createReason: string;
+}> = ({ organizationId, destinations, canCreate, createReason }) => {
   const queryClient = useQueryClient();
   const [destinationId, setDestinationId] = useState("");
   const [datasets, setDatasets] = useState<ExportDataset[]>(["USAGE_ROLLUPS"]);
@@ -712,7 +718,14 @@ const ScheduleForm: React.FC<{
       <button
         type="button"
         className={`${PRIMARY} mt-5`}
-        disabled={!destinationId || datasets.length === 0 || create.isPending}
+        /* ARCH30-T4F:scheduleform-cancreate-button — A4 */
+        disabled={
+          !canCreate ||
+          !destinationId ||
+          datasets.length === 0 ||
+          create.isPending
+        }
+        title={canCreate ? undefined : createReason}
         onClick={() => create.mutate()}
       >
         {create.isPending ? (
@@ -859,6 +872,13 @@ const OrganizationAnalytics: React.FC = () => {
   const warehouseAddon = useAddonAccess(organizationId, "addon.warehouse_sync");
   const warehouseLocked = warehouseAddon.access?.state === "NOT_GRANTED";
   const warehouseCanCreate = warehouseAddon.access?.can_create ?? false;
+  // ARCH30-T4F:warehouse-create-reason — A4.
+  const warehouseCreateReason =
+    warehouseAddon.access?.state === "LAPSED"
+      ? "Warehouse sync has lapsed. Existing schedules can still be paused or deleted; creating new ones needs the add-on restored."
+      : warehouseAddon.access?.state === "GRACE"
+        ? "Warehouse sync is in a grace period. Existing schedules keep running; new ones cannot be created until billing is resolved."
+        : "Warehouse sync is needed to create schedules.";
   const warehouseTab = tab !== "consumption";
 
   const destinations = useQuery({
@@ -989,9 +1009,12 @@ const OrganizationAnalytics: React.FC = () => {
 
       {!warehouseLocked && tab === "schedules" ? (
         <div className="space-y-4">
+          {/* ARCH30-T4F:scheduleform-cancreate-call — A4 */}
           <ScheduleForm
             organizationId={organizationId}
             destinations={destinations.data ?? []}
+            canCreate={warehouseCanCreate}
+            createReason={warehouseCreateReason}
           />
           <ManualTrigger
             organizationId={organizationId}

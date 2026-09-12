@@ -11,6 +11,8 @@ import { VerificationBanner } from "@/components/common/VerificationBanner";
 import IncomingOwnershipBanner from "@/components/organization/IncomingOwnershipBanner";
 import PendingInvitationsBanner from "@/components/invitations/PendingInvitationsBanner";
 import DunningBanner from "@/components/billing/DunningBanner";
+// ARCH30-T4F:ts-member-notice-import-dash — A5.
+import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
 import { useTenant } from "@/hooks/useTenant";
 // ARCH30-T4:ts-mount-tz-import — A3. Mounted on the layout every
@@ -83,6 +85,8 @@ export const DashboardLayout: React.FC = () => {
         <VerificationBanner />
         {billingOrganizationId ? (
           <DunningBanner organizationId={billingOrganizationId} canManageBilling />
+        ) : tenantState.status === "ready" ? (
+          <MemberAccessNotice organizationId={tenantState.organization.organization_id} />
         ) : null}
 
         <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">

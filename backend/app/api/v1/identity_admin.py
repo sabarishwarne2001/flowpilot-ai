@@ -20,6 +20,8 @@ from app.services.identity._integration import (
     utcnow, write_audit,
 )
 from app.services.identity.errors import IdentityError
+# ARCH30-T4F:security-emitters-import — A8.
+from app.services.identity import security_emitters
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +243,18 @@ def add_certificate(organization_id: str, config_id: str, payload: dict = Body(.
                 resource_type="IDP_CERTIFICATE", resource_id=cert.id,
                 principal=_principal(user),
                 details={"side": side, "fingerprint": cert.fingerprint_sha256})
+    # ARCH30-T4F:emit-idp-certificate — A8. The signing certificate is
+    # the trust anchor for every assertion this IdP sends; adding one
+    # is adding a key that can vouch for any identity in the tenant.
+    security_emitters.emit_quietly(
+        security_emitters.notify_idp_certificate_added,
+        db,
+        organization_id=organization_id,
+        config_name=config.display_name,
+        side=side,
+        fingerprint=cert.fingerprint_sha256,
+        actor=user,
+    )
     commit_and_refresh(db, cert)
     return {"id": str(cert.id), "fingerprint_sha256": cert.fingerprint_sha256}
 
@@ -316,6 +330,17 @@ def activate(organization_id: str, config_id: str,
     write_audit(db, organization_id=organization_id, action="UPDATED",
                 resource_type="ENTERPRISE_IDP_CONFIG", resource_id=config.id,
                 principal=_principal(user), details={"is_active": True})
+    # ARCH30-T4F:emit-idp-activated — A8. Activation decides who may
+    # become a member and with what role. An attacker who can activate
+    # their own IdP does not need to break a password.
+    security_emitters.emit_quietly(
+        security_emitters.notify_idp_config_activated,
+        db,
+        organization_id=organization_id,
+        display_name=config.display_name,
+        protocol=str(getattr(config.protocol, "value", config.protocol)),
+        actor=user,
+    )
     commit_and_refresh(db, config)
     return {"id": str(config.id), "is_active": True}
 
@@ -360,6 +385,16 @@ def create_scim_key(organization_id: str, payload: dict = Body(...),
                 resource_type="SCIM_API_KEY", resource_id=row.id,
                 principal=_principal(user),
                 details={"display_name": row.display_name})
+    # ARCH30-T4F:emit-scim-created — A8. An audit row is a record;
+    # this is the signal. A SCIM key outlives the account that minted
+    # it by design, so its creation must not be silent.
+    security_emitters.emit_quietly(
+        security_emitters.notify_scim_key_created,
+        db,
+        organization_id=organization_id,
+        display_name=row.display_name,
+        actor=user,
+    )
     db.commit()
     return {
         "id": str(row.id),
@@ -384,6 +419,15 @@ def rotate_scim_key(organization_id: str, key_id: str,
                 resource_type="SCIM_API_KEY", resource_id=row.id,
                 principal=_principal(user),
                 details={"overlap_until": str(row.previous_secret_expires_at)})
+    # ARCH30-T4F:emit-scim-rotated — A8.
+    security_emitters.emit_quietly(
+        security_emitters.notify_scim_key_rotated,
+        db,
+        organization_id=organization_id,
+        display_name=row.display_name,
+        overlap_until=row.previous_secret_expires_at,
+        actor=user,
+    )
     db.commit()
     return {"id": str(row.id), "token": plaintext,
             "previous_secret_expires_at": row.previous_secret_expires_at}
@@ -438,6 +482,20 @@ def update_policy(organization_id: str, payload: dict = Body(...),
             db, policy=policy, changes=payload, principal=_principal(user))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+    # ARCH30-T4F:emit-security-policy — A8. Field names, never values:
+    # "session timeout changed" is enough to make somebody go and look,
+    # while restating the new enforcement in a notification hands
+    # anyone who has already taken an inbox a map of what is enforced.
+    security_emitters.emit_quietly(
+        security_emitters.notify_security_policy_updated,
+        db,
+        organization_id=organization_id,
+        changed_fields=[
+            key for key, value in (payload or {}).items()
+            if value is not None
+        ],
+        actor=user,
+    )
     return get_policy(organization_id, membership=membership, db=db)
 
 
