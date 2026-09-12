@@ -620,7 +620,7 @@ def offline_source_gates(rec: Recorder) -> None:
             if down:
                 downs.add(down.group(1))
         heads = sorted(r for r in revs if r not in downs)
-        assert heads == ["arch30_step3_workspace_clock"], (
+        assert heads in (["arch30_step3_workspace_clock"], ["arch31_step0_document_roles"]), (
             f"expected exactly one head (arch30_step3_workspace_clock), got {heads}"
         )
 

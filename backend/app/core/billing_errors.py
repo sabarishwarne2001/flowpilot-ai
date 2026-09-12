@@ -43,10 +43,35 @@ class AddonRequiredError(BillingAccessError):
     code = "ADDON_REQUIRED"
 
 
+# ARCH31-S0:capability-required-error
+class CapabilityRequiredError(BillingAccessError):
+    """The operation needs a capability this tier does not include.
+
+    Distinct from `AddonRequiredError` because the remedy is
+    different, and the console says so. An add-on can be bought on
+    the current plan; a capability is bundled, so the only route to
+    it is a plan change. Returning ADDON_REQUIRED for a capability
+    would send the customer to a purchase flow that has nothing to
+    sell them.
+
+    Carries the same ARCH-01 envelope — `{code, message, details}` —
+    and the same 402, so `ApiError` handling on the frontend needs no
+    new branch.
+    """
+
+    code = "CAPABILITY_REQUIRED"
+
+
 class BillingReadOnlyError(BillingAccessError):
     """The organization is read-only until an unpaid subscription is settled (D-11)."""
 
     code = "BILLING_READ_ONLY"
 
 
-__all__ = ["AddonRequiredError", "BillingAccessError", "BillingReadOnlyError"]
+# ARCH31-S0:capability-required-export
+__all__ = [
+    "AddonRequiredError",
+    "BillingAccessError",
+    "BillingReadOnlyError",
+    "CapabilityRequiredError",
+]

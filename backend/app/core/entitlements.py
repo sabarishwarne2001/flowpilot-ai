@@ -89,6 +89,9 @@ from app.core.usage_events import TOTAL_COST_KEY, USAGE_EVENT_TYPES
 
 __all__ = [
     "ADDON_KEYS",
+    # ARCH31-S0:capability-reconciliation-export
+    "CAPABILITY_KEYS",
+    "RECONCILIATION_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -123,6 +126,19 @@ CUSTOM_DOMAIN_ADDON: str = "addon.custom_domain"
 #: ARCH-30 Tranche 2 (D-8). Scheduled exports into the tenant's warehouse.
 WAREHOUSE_SYNC_ADDON: str = "addon.warehouse_sync"
 
+#: ARCH31-S0:capability-reconciliation-key. Three-way procurement
+#: matching. A CAPABILITY, not an ADDON, and the distinction is
+#: load-bearing: add-ons are separately purchasable line items with a
+#: price, a halt effect and a grace ladder, and `ADDON_KEYS` is
+#: asserted equal to `entitlement_service`'s catalog at import.
+#: Capabilities are bundled into tiers and have no independent price,
+#: so adding this to ADDON_KEYS would fail that assertion at boot.
+RECONCILIATION_CAPABILITY: str = "capability.reconciliation"
+
+#: Every capability key. Disjoint from ADDON_KEYS by construction;
+#: verify_arch31_step0 asserts the two sets never intersect.
+CAPABILITY_KEYS: tuple[str, ...] = (RECONCILIATION_CAPABILITY,)
+
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
 #: at import, so a key cannot be registered without a price and a halt effect.
 ADDON_KEYS: tuple[str, ...] = (CUSTOM_DOMAIN_ADDON, WAREHOUSE_SYNC_ADDON)
@@ -148,6 +164,16 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
         description=(
             "Warehouse sync: register destinations and run scheduled exports. "
             "Bundled with Enterprise; purchasable on other plans."
+        ),
+    ),
+    # ARCH31-S0:capability-reconciliation-entitlement
+    Entitlement(
+        name=RECONCILIATION_CAPABILITY,
+        description=(
+            "Procurement three-way matching: reconcile purchase orders, "
+            "goods receipts and supplier invoices line by line, with "
+            "tolerance policies and evidence. Bundled into a tier, not "
+            "purchasable on its own."
         ),
     ),
 )
