@@ -148,6 +148,19 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
             "and export schedules after grace (ARCH-30 D-6)."
         ),
     ),
+    ScheduledJob(
+        job_type="procurement.score",
+        interval_seconds=300,
+        description=(
+            "Re-score procurement cases whose counterparts have since "
+            "arrived (ARCH-31). The sweep is what makes a late-arriving "
+            "goods receipt matter: nothing in a receipt's own arrival "
+            "path knows which invoices it might now complete, so "
+            "without this a Monday NOT_RECEIVED sits flagged forever "
+            "after Thursday's delivery resolves it. Cheap to repeat: "
+            "score_case writes nothing when the digest is unchanged."
+        ),
+    ),
 )
 
 

@@ -74,6 +74,8 @@ class AuditResourceType(str, PyEnum):
     PARTNER_AGREEMENT = "PARTNER_AGREEMENT"
     REV_SHARE_LEDGER = "REV_SHARE_LEDGER"
     MARKETPLACE_ITEM = "MARKETPLACE_ITEM"
+    PROCUREMENT_CASE = "PROCUREMENT_CASE"
+    PROCUREMENT_TOLERANCE_POLICY = "PROCUREMENT_TOLERANCE_POLICY"
 
 
 class AuditAction(str, PyEnum):
@@ -158,6 +160,15 @@ class AuditAction(str, PyEnum):
     REV_SHARE_SETTLED = "REV_SHARE_SETTLED"
     MANIFEST_PUBLISHED = "MANIFEST_PUBLISHED"
     MANIFEST_INSTALLED = "MANIFEST_INSTALLED"
+    # ARCH-31 — procurement three-way matching. The enum VALUES were
+    # added to PostgreSQL by arch31_step1_procurement_vocabulary;
+    # these are the Python members that may emit them. A member here
+    # without the ALTER TYPE fails on insert, and the ALTER TYPE
+    # without a member here is simply unreachable.
+    MATCH_APPROVED = "MATCH_APPROVED"
+    MATCH_DISPUTED = "MATCH_DISPUTED"
+    MATCH_RESCORED = "MATCH_RESCORED"
+    TOLERANCE_PUBLISHED = "TOLERANCE_PUBLISHED"
 
 
 _resource_type_pg = PgEnum(

@@ -74,6 +74,15 @@ const ExecutionTimeline = lazy(
 const VerificationReviewQueue = lazy(
   () => import("@/pages/Verification/VerificationReviewQueue"),
 );
+const ProcurementCaseQueue = lazy(
+  () => import("@/pages/procurement/CaseQueue"),
+);
+const ThreeWayComparison = lazy(
+  () => import("@/pages/procurement/ThreeWayComparison"),
+);
+const TolerancePolicyEditor = lazy(
+  () => import("@/pages/procurement/TolerancePolicyEditor"),
+);
 
 import { Login } from "@/pages/Auth/Login";
 import { SsoComplete } from "@/pages/Auth/SsoComplete";
@@ -373,6 +382,23 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.workspaceVerification}
                       element={<VerificationReviewQueue />}
+                    />
+                    {/* ARCH-31. The policies route is declared
+                        BEFORE the :caseId route: react-router would
+                        otherwise match "policies" as a case id and
+                        render the comparison grid against a case
+                        that does not exist. */}
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceProcurement}
+                      element={<ProcurementCaseQueue />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceProcurementPolicies}
+                      element={<TolerancePolicyEditor />}
+                    />
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceProcurementCase}
+                      element={<ThreeWayComparison />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.workspaceNotifications}

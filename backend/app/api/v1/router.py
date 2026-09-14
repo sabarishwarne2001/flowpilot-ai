@@ -24,6 +24,7 @@ from app.api.v1 import (
     marketplace,
     me,
     partner,
+    procurement,
     notifications,
     organization_email_settings,
     organization_notifications,
@@ -103,6 +104,7 @@ api_router.include_router(entitlements.router)  # ARCH-30 add-on entitlements (D
 # organization check.
 api_router.include_router(partner.router)
 api_router.include_router(marketplace.router)
+api_router.include_router(procurement.router)  # ARCH-31 three-way matching
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

@@ -104,6 +104,13 @@ export const ROUTE_PATTERNS = {
   workspaceAutomation: "automation",
   workspaceAutomationTimeline: "automation/timeline",
   workspaceVerification: "verification",
+  // ARCH-31. No RESERVED_ROUTE_SEGMENTS entry is needed: this is a
+  // child of the workspace shell, not a sibling of it, so
+  // parseTenantPath never sees "procurement" in the org or
+  // workspace position.
+  workspaceProcurement: "procurement",
+  workspaceProcurementCase: "procurement/:caseId",
+  workspaceProcurementPolicies: "procurement/policies",
   workspaceNotifications: "notifications",
   workspaceSettings: "settings",
 } as const;
@@ -195,6 +202,23 @@ export const automationPath = (
   orgSlug: string,
   workspaceSlug: string,
 ): string => `${workspacePath(orgSlug, workspaceSlug)}/automation`;
+
+export const procurementPath = (
+  orgSlug: string,
+  workspaceSlug: string,
+): string => `${workspacePath(orgSlug, workspaceSlug)}/procurement`;
+
+export const procurementCasePath = (
+  orgSlug: string,
+  workspaceSlug: string,
+  caseId: string,
+): string =>
+  `${procurementPath(orgSlug, workspaceSlug)}/${encodeURIComponent(caseId)}`;
+
+export const procurementPoliciesPath = (
+  orgSlug: string,
+  workspaceSlug: string,
+): string => `${procurementPath(orgSlug, workspaceSlug)}/policies`;
 
 export const automationTimelinePath = (
   orgSlug: string,

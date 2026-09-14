@@ -89,6 +89,23 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One authenticated request served by the public API gateway.",
     ),
+    # ARCH-31 §3.2 — one scored procurement case, keyed on
+    # input_digest so a re-score under a NEW policy bills (it is new
+    # work) and a sweep that finds nothing changed does not.
+    #
+    # Billable: this is the phase's unit of value. REQUEST rather
+    # than PAGE because the cost is the assignment, not the paper —
+    # a two-line invoice and a two-hundred-line invoice are one case
+    # each and the matcher's work between them differs by
+    # microseconds.
+    UsageEventType(
+        name="procurement.case",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One procurement case scored against a tolerance policy.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"

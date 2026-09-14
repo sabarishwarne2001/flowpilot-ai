@@ -56,13 +56,28 @@ def has_capability(db: Session, *, organization_id: Any, capability_key: str) ->
     tier = quota_service.resolve_tier(db, organization_id=organization_id)
     if tier is None:
         return False
-    limits = getattr(tier, "limits", None) or {}
-    if isinstance(limits, dict) and capability_key in limits:
-        return True
-    for row in getattr(tier, "entitlement_rows", None) or []:
-        if getattr(row, "entitlement_key", None) == capability_key:
-            return True
-    return False
+
+    # ARCH-31 Step 3 FIX. The first cut read `tier.limits` and
+    # `tier.entitlement_rows`. `resolve_tier` returns a
+    # `quota_service._TierSnapshot`, which has NEITHER attribute — it
+    # exposes `entries`, a tuple of `TierLimit`. Both getattr calls
+    # therefore returned their defaults and this function returned
+    # False for every organization on every tier, including tiers
+    # that bundle the capability.
+    #
+    # Nothing failed loudly: a 402 with remedy PLAN_UPGRADE is the
+    # NORMAL response for most customers, so a paying Enterprise
+    # tenant being told to upgrade looks exactly like the intended
+    # behaviour until they call support.
+    #
+    # `entitlement_service.tier_grants` had the correct shape all
+    # along — `any(entry.limit_key == key for entry in tier.entries)`
+    # — which is the reading used here. One source of truth for
+    # "does this tier grant X", not two that disagree.
+    return any(
+        getattr(entry, "limit_key", None) == capability_key
+        for entry in getattr(tier, "entries", ()) or ()
+    )
 
 
 def require_capability(

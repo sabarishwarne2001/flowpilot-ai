@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ARCH-31 Steps 1-2 verification — schema, matcher, digest, tolerances.
+"""ARCH-31 Steps 1-4 verification — schema, matcher, digest, tolerances.
 
     python verify_arch31.py
     python verify_arch31.py --mutate
@@ -556,16 +556,319 @@ def gates_matcher(rec: Recorder, mods: dict[str, Any]) -> None:
     rec.check("line_extraction parses no numbers of its own", no_second_parser)
 
 
+# ===========================================================================
+# Step 3 — wiring, registration and refusal shapes
+# ===========================================================================
+
+
+def gates_wiring(rec: Recorder) -> None:
+    handlers = _read(BACKEND / "app/workers/handlers/__init__.py")
+    profiles = _read(BACKEND / "app/workers/profiles.py")
+    scheduler = _read(BACKEND / "app/workers/scheduler.py")
+    routes = _read(BACKEND / "app/api/v1/procurement.py")
+    router = _read(BACKEND / "app/api/v1/router.py")
+    gate = _read(BACKEND / "app/api/capability_gate.py")
+    service = _read(BACKEND / "app/services/procurement_matching/case_service.py")
+    usage = _read(BACKEND / "app/core/usage_events.py")
+    webhooks = _read(BACKEND / "app/core/webhook_events.py")
+
+    def job_registered_in_all_three_places() -> None:
+        assert '"procurement.score": _procurement_score' in handlers, (
+            "procurement.score is not in the handler map"
+        )
+        assert "ARCH31_JOB_TYPES" in handlers and "| ARCH31_JOB_TYPES" in handlers, (
+            "the phase constant must join ALL_PHASE_JOB_TYPES, which "
+            "_assert_vocabulary_matches_registry() compares against the "
+            "handler table at import"
+        )
+        assert '"procurement.score",' in profiles, (
+            "procurement.score has a handler but no worker profile claims it. "
+            "assert_imports_match_profile() raises ProfileError at EVERY "
+            "worker's startup on an unclaimed handler, so this does not "
+            "merely stall the queue -- it stops the entire fleet booting."
+        )
+        # And specifically on LIGHT, not OCR or ENRICH.
+        light = profiles[profiles.index("LIGHT = WorkerProfile") : profiles.index("OCR = WorkerProfile")]
+        assert '"procurement.score",' in light, "it must be on the LIGHT profile"
+        assert 'job_type="procurement.score"' in scheduler, (
+            "nothing schedules the re-score sweep; a goods receipt that "
+            "arrives after its invoice would never re-open the case"
+        )
+
+    rec.check("procurement.score registered in handler map, LIGHT profile and scheduler", job_registered_in_all_three_places)
+
+    def every_route_is_capability_gated() -> None:
+        # Count route decorators and _gate calls. Reads as well as writes:
+        # gating only the writes lets a tenant without the capability read
+        # every variance the engine found, which is the product.
+        decorators = routes.count("@router.")
+        gated = routes.count("_gate(db, context,")
+        assert decorators >= 9, f"expected at least 9 routes, found {decorators}"
+        assert gated == decorators, (
+            f"{decorators} routes but only {gated} capability checks. A read "
+            f"route without the gate hands the product to a tenant who has "
+            f"not bought it."
+        )
+        assert "capability_key=CAPABILITY" in routes
+        assert "RECONCILIATION_CAPABILITY" in routes
+
+    rec.check("every procurement route is capability-gated, reads included", every_route_is_capability_gated)
+
+    def capability_gate_reads_the_right_attribute() -> None:
+        # The defect this gate exists for: the first cut read `tier.limits`
+        # and `tier.entitlement_rows`, neither of which exists on
+        # quota_service._TierSnapshot. has_capability returned False for
+        # every organization on every tier, and a 402 is the NORMAL response
+        # for most customers -- so a paying Enterprise tenant being told to
+        # upgrade looked exactly like correct behaviour.
+        assert 'getattr(tier, "limits"' not in gate, (
+            "_TierSnapshot has no `limits` attribute; reading it returns the "
+            "default and refuses every tenant"
+        )
+        assert 'getattr(tier, "entitlement_rows"' not in gate, (
+            "_TierSnapshot has no `entitlement_rows` attribute either"
+        )
+        assert 'limit_key' in gate and 'entries' in gate, (
+            "the check must read tier.entries[].limit_key, the same reading "
+            "entitlement_service.tier_grants uses"
+        )
+
+    rec.check("capability gate reads tier.entries, the attribute the snapshot has", capability_gate_reads_the_right_attribute)
+
+    def approve_refuses_without_override_reason() -> None:
+        assert "class OverrideReasonRequired" in service
+        assert "if red_lines and not reason:" in service, (
+            "the refusal must be conditional on red lines; requiring a "
+            "reason on a clean case makes the reason meaningless"
+        )
+        assert "HTTP_422_UNPROCESSABLE_ENTITY" in routes
+        assert '"code": "OVERRIDE_REASON_REQUIRED"' in routes, (
+            "the console branches on this code to reopen the override dialog; "
+            "a bare 422 with prose gives it nothing to branch on"
+        )
+        # The rule must be enforced in the service, not only the schema: a
+        # Pydantic required field cannot know whether THIS case has red
+        # lines, and a client driving the API directly would bypass the UI.
+        schemas = _read(BACKEND / "app/schemas/procurement.py")
+        assert "override_reason: Optional[str]" in schemas, (
+            "override_reason must be optional in the schema -- whether it is "
+            "required depends on database state the schema cannot see"
+        )
+
+    rec.check("approve refuses with a 422 OVERRIDE_REASON_REQUIRED when red lines exist", approve_refuses_without_override_reason)
+
+    def dispute_reason_floor() -> None:
+        assert "MINIMUM_DISPUTE_REASON = 10" in service
+        schemas = _read(BACKEND / "app/schemas/procurement.py")
+        assert "min_length=MINIMUM_DISPUTE_REASON" in schemas
+        assert "_not_only_whitespace" in schemas, (
+            "min_length alone accepts ten spaces"
+        )
+
+    rec.check("dispute requires ten characters of actual text", dispute_reason_floor)
+
+    def metered_once_per_digest() -> None:
+        assert 'USAGE_EVENT_PROCUREMENT_CASE = "procurement.case"' in service
+        assert 'idempotency_key=f"{USAGE_EVENT_PROCUREMENT_CASE}:{digest}"' in service, (
+            "metering must be keyed on the input_digest, not the case id. "
+            "Keying on the case id bills once per row and therefore once per "
+            "policy edit, which turns 'tighten your tolerance' into a charge."
+        )
+        assert 'name="procurement.case"' in usage, (
+            "procurement.case is not in USAGE_EVENT_TYPES; record_usage "
+            "raises UnknownUsageTypeError and every score fails"
+        )
+
+    rec.check("procurement.case is metered exactly once per input_digest", metered_once_per_digest)
+
+    def events_registered_and_public() -> None:
+        for event in ("procurement.completed", "procurement.approved", "procurement.disputed"):
+            assert f'"{event}"' in webhooks, f"{event} is not a publishable event type"
+        internal = _read(BACKEND / "app/core/automation_events.py")
+        for event in ("procurement.completed", "procurement.approved", "procurement.disputed"):
+            assert f'"{event}"' not in internal, (
+                f"{event} is in BOTH vocabularies; _assert_vocabularies_disjoint "
+                f"refuses to import"
+            )
+
+    rec.check("the three procurement events are PUBLIC and disjoint from the internal set", events_registered_and_public)
+
+    def router_mounted() -> None:
+        assert "procurement," in router, "the module is not imported"
+        assert "api_router.include_router(procurement.router)" in router, (
+            "the router is never mounted; every route 404s"
+        )
+
+    rec.check("the procurement router is imported and mounted", router_mounted)
+
+    def rescore_never_edits_a_resolved_case() -> None:
+        assert "CASE_STATUS_SUPERSEDED" in service
+        assert "existing.status = CASE_STATUS_SUPERSEDED" in service, (
+            "a re-score must supersede rather than update. Mutating an "
+            "APPROVED case retro-fits a person's signature onto figures they "
+            "never approved."
+        )
+        assert "if existing is not None and existing.input_digest == computed_digest:" in service, (
+            "an unchanged digest must write nothing at all, or the "
+            "five-minute sweep becomes a background write amplifier"
+        )
+        handler = _read(BACKEND / "app/workers/handlers/procurement.py")
+        assert 'ProcurementCase.status.in_(["APPROVED", "DISPUTED"])' in handler, (
+            "the sweep must exclude decided cases; a late goods receipt must "
+            "not silently supersede a signature"
+        )
+
+    rec.check("a re-score supersedes and never edits, and the sweep skips decided cases", rescore_never_edits_a_resolved_case)
+
+
+def _strip_ts_comments(source: str) -> str:
+    """Remove // and /* */ comments before scanning source for banned text.
+
+    Without this, both gates below fail on their own rationale: the
+    ThreeWayComparison header explains that refusals are read "through
+    ApiError's structured envelope, never error.response", and the lock card
+    explains that an add-on "card opens checkout" while a capability's does
+    not. A substring scan reads the explanation as the offence.
+
+    verify_arch31_step0.py records the same trap from ARCH-30: a gate grepped
+    for "price" and failed on the comment explaining why there is no price.
+    Assert behaviour, and where only text is available, assert it against the
+    text that actually executes.
+    """
+    out: list[str] = []
+    index = 0
+    length = len(source)
+    while index < length:
+        if source.startswith("//", index):
+            end = source.find("\n", index)
+            index = length if end == -1 else end
+        elif source.startswith("/*", index):
+            end = source.find("*/", index + 2)
+            index = length if end == -1 else end + 2
+        else:
+            out.append(source[index])
+            index += 1
+    return "".join(out)
+
+
+def gates_frontend(rec: Recorder) -> None:
+    root = ROOT / "frontend" / "src"
+
+    def screens_exist_and_are_routed() -> None:
+        for relpath in (
+            "pages/procurement/CaseQueue.tsx",
+            "pages/procurement/ThreeWayComparison.tsx",
+            "pages/procurement/TolerancePolicyEditor.tsx",
+            "components/procurement/CapabilityLockCard.tsx",
+            "services/api/procurement.ts",
+            "types/procurement.ts",
+            "hooks/useCapabilityAccess.ts",
+        ):
+            assert (root / relpath).exists(), f"missing {relpath}"
+        app = _read(root / "App.tsx")
+        for element in ("ProcurementCaseQueue", "ThreeWayComparison", "TolerancePolicyEditor"):
+            assert element in app, f"{element} is not routed in App.tsx"
+        # Route order: "policies" must be declared before ":caseId" or
+        # react-router matches it as a case id.
+        assert app.index("workspaceProcurementPolicies") < app.index(
+            "workspaceProcurementCase"
+        ), (
+            "the policies route must precede the :caseId route, or "
+            "/procurement/policies renders the comparison grid against a "
+            "case that does not exist"
+        )
+
+    rec.check("frontend: all three screens exist and are routed, policies before :caseId", screens_exist_and_are_routed)
+
+    def errors_read_apierror_not_response() -> None:
+        for relpath in (
+            "pages/procurement/ThreeWayComparison.tsx",
+            "pages/procurement/TolerancePolicyEditor.tsx",
+        ):
+            source = _strip_ts_comments(_read(root / relpath))
+            assert "error.response" not in source and ".response?.data" not in source, (
+                f"{relpath} reads error.response. The backend emits "
+                f"{{code, message, details}} and ApiError parses it; reading "
+                f"axios's own shape discards every domain message."
+            )
+            assert "ApiError" in source
+        grid = _strip_ts_comments(_read(root / "pages/procurement/ThreeWayComparison.tsx"))
+        assert 'error.is("OVERRIDE_REASON_REQUIRED")' in grid, (
+            "the grid must branch on the refusal code to reopen the dialog"
+        )
+
+    rec.check("frontend: refusals read ApiError codes, never error.response", errors_read_apierror_not_response)
+
+    def timestamps_and_keyboard() -> None:
+        for relpath in ("pages/procurement/CaseQueue.tsx", "pages/procurement/ThreeWayComparison.tsx"):
+            source = _read(root / relpath)
+            assert "formatTimestamp" in source, f"{relpath} must format through displayTime"
+            assert "toLocaleString()" not in source, (
+                f"{relpath} formats a timestamp directly, bypassing the "
+                f"workspace display preferences"
+            )
+        grid = _read(root / "pages/procurement/ThreeWayComparison.tsx")
+        for key in ('case "j":', 'case "k":', 'case "e":', 'case "a":', 'case "d":'):
+            assert key in grid, f"keyboard map is missing {key}"
+        assert 'if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))' in grid, (
+            "the keyboard handler must ignore typing in the reason box, or "
+            "typing 'a' in an override reason approves the case"
+        )
+
+    rec.check("frontend: timestamps go through displayTime and the keyboard map is complete", timestamps_and_keyboard)
+
+    def result_cells_carry_text_not_only_colour() -> None:
+        types = _read(root / "types/procurement.ts")
+        assert "outcomeLabel" in types and "outcomeTone" in types
+        assert "const exhaustive: never = line.outcome;" in types, (
+            "the label switch must be exhaustive, or a seventh outcome "
+            "renders as a blank cell in production"
+        )
+        grid = _read(root / "pages/procurement/ThreeWayComparison.tsx")
+        assert "outcomeLabel(line)" in grid, (
+            "the result cell must render prose. This is a screen people "
+            "authorise payments from; a reviewer with a colour-vision "
+            "deficiency reading amber-vs-red cells has no information."
+        )
+
+    rec.check("frontend: result cells carry text as well as colour", result_cells_carry_text_not_only_colour)
+
+    def lock_card_offers_no_purchase() -> None:
+        card = _strip_ts_comments(_read(root / "components/procurement/CapabilityLockCard.tsx"))
+        # Behavioural, not word-matching. The first cut banned the token
+        # "purchase" and failed on the product copy "purchase order" -- the
+        # card's own subject matter. What must be absent is the ACTION: a
+        # checkout call and a button to fire it.
+        for banned in ("createAddonCheckoutSession", "checkout", "Checkout"):
+            assert banned not in card, (
+                f"the lock card reaches for {banned!r}. A capability is "
+                f"bundled into a tier and has no standalone price; a "
+                f"checkout button sends the reader to a flow with nothing "
+                f"to sell them."
+            )
+        assert "<button" not in card, (
+            "the lock card renders a button. There is no self-serve action "
+            "for a capability -- the remedy is a plan change, which is why "
+            "capability_gate returns remedy=PLAN_UPGRADE with no price and "
+            "no purchase URL."
+        )
+        assert "plan" in card.lower(), (
+            "the card must name the remedy; 'you don't have this' with no "
+            "next step is a dead end"
+        )
+
+    rec.check("frontend: the capability lock card offers a plan change, not a purchase", lock_card_offers_no_purchase)
+
+
 def report_pending() -> None:
-    print("\n--- PENDING (Step 3 / Step 4, not yet implemented) ---")
-    for name in (
-        "approve refused with 422 when red lines exist and no override reason given",
-        "entitlement refusal envelope shape on every procurement route",
-        "procurement.score registered in handler map, worker profile and scheduler",
-        "usage event procurement.case metered once per input_digest",
-        "frontend: three-way grid, evidence viewer, keyboard map, lock card",
-    ):
-        print(f"  [PEND] {name}")
+    """Nothing is pending. Kept as a named function so its absence is visible.
+
+    Steps 3 and 4 activated all five gates this used to list. The function
+    stays rather than being deleted: a reader diffing this file against the
+    Steps 1-2 version should see the list emptied, not the reporting removed.
+    """
+    print("\n--- PENDING ---")
+    print("  (none — ARCH-31 Steps 1-4 are all gated)")
 
 
 # ===========================================================================
@@ -939,6 +1242,8 @@ def main() -> int:
         }
         gates_schema(offline)
         gates_matcher(offline, mods)
+        gates_wiring(offline)
+        gates_frontend(offline)
     except Exception:  # noqa: BLE001
         traceback.print_exc()
         return 2

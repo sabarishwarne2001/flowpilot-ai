@@ -47,6 +47,7 @@ ARCH26_JOB_TYPES: frozenset[str] = frozenset(
 ARCH27_JOB_TYPES: frozenset[str] = frozenset(
     {"partner.rev_share_compute", "partner.rev_share_seal"}
 )
+ARCH31_JOB_TYPES: frozenset[str] = frozenset({"procurement.score"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -70,6 +71,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH25_JOB_TYPES
     | ARCH26_JOB_TYPES
     | ARCH27_JOB_TYPES
+    | ARCH31_JOB_TYPES
 )
 
 
@@ -205,6 +207,11 @@ def _analytics_warehouse_push(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_warehouse_push(payload)
 
 
+def _procurement_score(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.procurement import handle_procurement_score
+    return handle_procurement_score(payload)
+
+
 def _partner_rev_share_compute(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.partner import handle_rev_share_compute
     from app.db.session import SessionLocal
@@ -255,6 +262,14 @@ _HANDLERS = {
     # that enqueues cleanly and never runs.
     "partner.rev_share_compute": _partner_rev_share_compute,
     "partner.rev_share_seal": _partner_rev_share_seal,
+    # ARCH-31. Also listed on the LIGHT profile in
+    # app/workers/profiles.py and in DEFAULT_SCHEDULE in
+    # app/workers/scheduler.py. A handler here with no profile there
+    # is a job that enqueues cleanly and never runs — and
+    # assert_imports_match_profile() raises ProfileError at every
+    # worker's startup on a handler no profile claims, so registering
+    # this without the profile entry stops the entire fleet booting.
+    "procurement.score": _procurement_score,
 }
 
 
@@ -313,6 +328,7 @@ __all__ = [
     "ARCH25_JOB_TYPES",
     "ARCH26_JOB_TYPES",
     "ARCH27_JOB_TYPES",
+    "ARCH31_JOB_TYPES",
     "ALL_PHASE_JOB_TYPES",
     "register_all",
 ]

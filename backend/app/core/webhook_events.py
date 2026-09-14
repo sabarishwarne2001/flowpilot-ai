@@ -35,6 +35,15 @@ WEBHOOK_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "document.processing",
         "document.completed",
         "document.failed",
+        # ARCH-31 procurement matching. PUBLIC rather than INTERNAL:
+        # a tenant's AP automation is the intended consumer — these
+        # say an invoice finished matching, was approved, or was
+        # disputed, and every one of those is a thing an external
+        # workflow should be able to react to. None of them names an
+        # internal cost, a seat count or a provider.
+        "procurement.completed",
+        "procurement.approved",
+        "procurement.disputed",
     }
 )
 

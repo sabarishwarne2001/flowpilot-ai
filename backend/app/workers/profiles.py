@@ -96,6 +96,19 @@ LIGHT = WorkerProfile(
             # entire fleet booting.
             "partner.rev_share_compute",
             "partner.rev_share_seal",
+            # ARCH-31 procurement scoring. Integer arithmetic, a
+            # Hungarian assignment over a matrix that is single-digit
+            # by single-digit on real documents, and a lexical cosine
+            # that imports nothing. The thin image is the right home,
+            # and `similarity.LexicalBackend` is the default precisely
+            # so that stays true — see similarity.py for why
+            # SentenceTransformers cannot run here.
+            #
+            # As with every entry above, this is not optional
+            # bookkeeping: assert_imports_match_profile() raises
+            # ProfileError at every worker's startup on a handler no
+            # profile claims.
+            "procurement.score",
         }
     ),
     allow_heavy=frozenset(),

@@ -391,6 +391,18 @@ export const marketplaceKeys = {
     [...marketplaceKeys.all(organizationId), "installations"] as const,
 };
 
+/** ARCH-31 — procurement matching. Workspace-scoped, like work items. */
+export const procurementKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "procurement"] as const,
+  cases: (workspaceId: string, filter: string, onlyExceptions: boolean) =>
+    [...procurementKeys.all(workspaceId), "cases", filter, onlyExceptions] as const,
+  case: (workspaceId: string, caseId: string) =>
+    [...procurementKeys.all(workspaceId), "case", caseId] as const,
+  policies: (workspaceId: string) =>
+    [...procurementKeys.all(workspaceId), "policies"] as const,
+};
+
 export const invalidatePartner = async (
   queryClient: QueryClient,
   partnerId: string,
