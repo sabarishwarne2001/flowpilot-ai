@@ -92,6 +92,8 @@ __all__ = [
     # ARCH31-S0:capability-reconciliation-export
     "CAPABILITY_KEYS",
     "RECONCILIATION_CAPABILITY",
+    # ARCH32-S1:capability-redaction-key
+    "REDACTION_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -135,9 +137,23 @@ WAREHOUSE_SYNC_ADDON: str = "addon.warehouse_sync"
 #: so adding this to ADDON_KEYS would fail that assertion at boot.
 RECONCILIATION_CAPABILITY: str = "capability.reconciliation"
 
+#: ARCH32-S1:capability-redaction-key. Zero-leakage geometric PII
+#: redaction. A CAPABILITY, not an ADDON, and the distinction is the
+#: same one ARCH-31 recorded above: add-ons are separately purchasable
+#: line items with a price, a halt effect and a grace ladder, and
+#: `ADDON_KEYS` is asserted equal to `entitlement_service`'s catalog at
+#: import. §8 of the roadmap bundles redaction as "Enterprise; add-on
+#: for Business", and the add-on half of that sentence is a PACKAGING
+#: decision made in a published tier version — not a second key here.
+#: Putting it in ADDON_KEYS would fail the catalog assertion at boot.
+REDACTION_CAPABILITY: str = "capability.redaction"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
-CAPABILITY_KEYS: tuple[str, ...] = (RECONCILIATION_CAPABILITY,)
+CAPABILITY_KEYS: tuple[str, ...] = (
+    RECONCILIATION_CAPABILITY,
+    REDACTION_CAPABILITY,
+)
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
 #: at import, so a key cannot be registered without a price and a halt effect.
@@ -174,6 +190,16 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "goods receipts and supplier invoices line by line, with "
             "tolerance policies and evidence. Bundled into a tier, not "
             "purchasable on its own."
+        ),
+    ),
+    # ARCH32-S1:capability-redaction-key
+    Entitlement(
+        name=REDACTION_CAPABILITY,
+        description=(
+            "Zero-leakage redaction: rebuild a document from redacted "
+            "pixels so removed content does not exist in the output, with "
+            "a leak-checked sanitized PDF and a manifest that carries no "
+            "redacted text. Bundled into a tier."
         ),
     ),
 )

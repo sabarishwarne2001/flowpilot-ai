@@ -33,6 +33,10 @@ CAPABILITY_REQUIRED_CODE = "CAPABILITY_REQUIRED"
 
 _DISPLAY_NAMES = {
     entitlements.RECONCILIATION_CAPABILITY: "Procurement matching",
+    # ARCH32-S1:capability-redaction-display. Without an entry here the 402
+    # body reads "capability.redaction is included on higher plans", which is
+    # a key name in front of a customer.
+    entitlements.REDACTION_CAPABILITY: "Document redaction",
 }
 
 

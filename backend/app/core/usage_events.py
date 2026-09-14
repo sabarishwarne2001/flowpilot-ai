@@ -106,6 +106,26 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One procurement case scored against a tolerance policy.",
     ),
+    # ARCH-32 §3.7 — one PAGE of redacted OUTPUT.
+    #
+    # PAGE rather than REQUEST, unlike procurement.case, because here the
+    # cost genuinely is the paper: a forty-page scan costs forty renders,
+    # forty burns and forty OCR passes, and a one-page letter costs one.
+    # Billing per job would price those identically and let a tenant put
+    # an entire archive through as one work item.
+    #
+    # Metered on the OUTPUT page count, not the source's. They are equal
+    # today and the phrasing matters anyway: the output is what was
+    # produced, and a source whose page count could not be read is a
+    # FAILED job that must bill nothing.
+    UsageEventType(
+        name="redaction.page",
+        unit=UsageUnit.PAGE,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One page of sanitized PDF produced by the redaction engine.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"

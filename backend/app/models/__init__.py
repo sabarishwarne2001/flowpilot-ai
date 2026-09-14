@@ -228,6 +228,17 @@ from app.models.procurement import (  # noqa: F401
     ProcurementCaseLine,
     ProcurementTolerancePolicy,
 )
+# ARCH-32 — zero-leakage geometric PII redaction.
+#
+# Imported here for the same reason every other mapped class is: the
+# declarative registry has to know about a table before anything can query it,
+# and a model that is only imported by the module that uses it produces a
+# `NoSuchTableError` at the first cross-module relationship rather than at
+# import.
+from app.models.redaction import (  # noqa: F401
+    RedactionJob,
+    RedactionRegion,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,
@@ -524,6 +535,9 @@ __all__ = [
     "ProcurementCase",
     "ProcurementCaseLine",
     "ProcurementTolerancePolicy",
+    # ARCH-32 — zero-leakage geometric PII redaction.
+    "RedactionJob",
+    "RedactionRegion",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.
     "MarketplaceInstallation",
     "MarketplaceItem",
