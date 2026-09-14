@@ -121,9 +121,37 @@ LIGHT = WorkerProfile(
 
 OCR = WorkerProfile(
     name="ocr",
-    job_types=frozenset({"document.extract"}),
+    job_types=frozenset(
+        {
+            "document.extract",
+            # ARCH-32 redaction. Rendering at 300 DPI through PDFium and
+            # holding a full-page uint8 array while it burns is the same
+            # class of work `document.extract` does, and it is what the
+            # heavy image exists to carry. On LIGHT, a forty-page scan
+            # would exhaust a worker that also serves notification
+            # delivery and billing reconciliation.
+            #
+            # `redaction.detect` is cheaper -- it reads text that is
+            # already extracted -- but it opens the PDF for page
+            # dimensions and 3.3 reserves re-running PaddleOCR geometry
+            # for pages the text layer did not cover. Splitting the two
+            # across profiles would mean a detect that cannot grow into
+            # that without migrating the queue.
+            #
+            # As with every entry in LIGHT above, this is not optional
+            # bookkeeping: assert_imports_match_profile() raises
+            # ProfileError at EVERY worker's startup on a handler no
+            # profile claims. Registering these in handlers/__init__.py
+            # without adding them here stops the entire fleet booting.
+            "redaction.detect",
+            "redaction.apply",
+        }
+    ),
     allow_heavy=frozenset({"paddleocr", "paddle"}),
-    description="Heavy image. Document text extraction only.",
+    description=(
+        "Heavy image. Document text extraction and ARCH-32 redaction "
+        "rendering."
+    ),
 )
 
 ENRICH = WorkerProfile(

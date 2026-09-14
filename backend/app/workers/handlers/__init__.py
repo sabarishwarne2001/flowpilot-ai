@@ -48,6 +48,9 @@ ARCH27_JOB_TYPES: frozenset[str] = frozenset(
     {"partner.rev_share_compute", "partner.rev_share_seal"}
 )
 ARCH31_JOB_TYPES: frozenset[str] = frozenset({"procurement.score"})
+ARCH32_JOB_TYPES: frozenset[str] = frozenset(
+    {"redaction.detect", "redaction.apply"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -72,6 +75,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH26_JOB_TYPES
     | ARCH27_JOB_TYPES
     | ARCH31_JOB_TYPES
+    | ARCH32_JOB_TYPES
 )
 
 
@@ -197,6 +201,16 @@ def _tls_renew_sweep(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_tls_renew_sweep(db, payload)
 
 
+def _redaction_detect(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.redaction import handle_redaction_detect
+    return handle_redaction_detect(payload)
+
+
+def _redaction_apply(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.redaction import handle_redaction_apply
+    return handle_redaction_apply(payload)
+
+
 def _analytics_export_sync(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.analytics import handle_export_sync
     return handle_export_sync(payload)
@@ -270,6 +284,17 @@ _HANDLERS = {
     # worker's startup on a handler no profile claims, so registering
     # this without the profile entry stops the entire fleet booting.
     "procurement.score": _procurement_score,
+    # ARCH-32. Also claimed by the OCR profile in
+    # app/workers/profiles.py. NOT in DEFAULT_SCHEDULE: neither job is
+    # recurring, and re-running an apply on a schedule would re-render
+    # and re-upload a document somebody may have cancelled. A handler
+    # here with no profile there is a job that enqueues cleanly and
+    # never runs -- and assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile
+    # claims, so registering these without the profile entry stops the
+    # entire fleet booting.
+    "redaction.detect": _redaction_detect,
+    "redaction.apply": _redaction_apply,
 }
 
 
@@ -329,6 +354,7 @@ __all__ = [
     "ARCH26_JOB_TYPES",
     "ARCH27_JOB_TYPES",
     "ARCH31_JOB_TYPES",
+    "ARCH32_JOB_TYPES",
     "ALL_PHASE_JOB_TYPES",
     "register_all",
 ]

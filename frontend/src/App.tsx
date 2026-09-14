@@ -74,6 +74,9 @@ const ExecutionTimeline = lazy(
 const VerificationReviewQueue = lazy(
   () => import("@/pages/Verification/VerificationReviewQueue"),
 );
+const RedactionStudio = lazy(
+  () => import("@/pages/redaction/RedactionStudio"),
+);
 const ProcurementCaseQueue = lazy(
   () => import("@/pages/procurement/CaseQueue"),
 );
@@ -388,6 +391,10 @@ export default function App() {
                         otherwise match "policies" as a case id and
                         render the comparison grid against a case
                         that does not exist. */}
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceRedaction}
+                      element={<RedactionStudio />}
+                    />
                     <Route
                       path={ROUTE_PATTERNS.workspaceProcurement}
                       element={<ProcurementCaseQueue />}

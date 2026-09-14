@@ -111,6 +111,7 @@ export const ROUTE_PATTERNS = {
   workspaceProcurement: "procurement",
   workspaceProcurementCase: "procurement/:caseId",
   workspaceProcurementPolicies: "procurement/policies",
+  workspaceRedaction: "redactions/:jobId",
   workspaceNotifications: "notifications",
   workspaceSettings: "settings",
 } as const;
