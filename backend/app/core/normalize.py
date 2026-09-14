@@ -720,18 +720,31 @@ _PACK_OF = re.compile(
 _QTY = re.compile(r"^([\d.,]+)\s*([A-Za-z]+)?\.?$")
 
 
-def _decimal_from(raw: str) -> Decimal:
+def _decimal_from(raw: str, *, currency_hint: str = "USD") -> Decimal:
     """Quantities use the same grouping rules as money, minus the currency.
 
     Re-uses `money_micros` deliberately rather than a second parser: a
     quantity written `1,234.500` must not be read one way on a PO and another
     on the invoice because two different functions read it.
+
+    ARCH-31 Step 2. `currency_hint` was hard-coded to "USD" here, which meant
+    a quantity carried the Western grouping convention no matter where the
+    document came from. On a German purchase order `1.000` units then read as
+    1 rather than 1000 — a 1000x error on the exact axis that decides
+    QUANTITY_VARIANCE, silent, and pointing at the supplier.
+
+    The default remains "USD" so that every existing caller and every ARCH-31
+    Step 0 gate keeps its current answer. The matcher passes the currency it
+    resolved for the document, so a EUR line reads `1.000` as a thousand and
+    an INR line reads it as one.
     """
-    parsed = money_micros(raw, currency_hint="USD")
+    parsed = money_micros(raw, currency_hint=currency_hint)
     return Decimal(parsed.micros) / MICROS
 
 
-def quantity(raw: Optional[str]) -> Quantity:
+def quantity(
+    raw: Optional[str], *, currency_hint: Optional[str] = None
+) -> Quantity:
     """Parse `12 pcs`, `3.5 kg`, `2 boxes of 10`, `1,200`, `10`.
 
     `2 boxes of 10` keeps the shape rather than flattening to 20. The matcher
@@ -744,6 +757,7 @@ def quantity(raw: Optional[str]) -> Quantity:
     if not text:
         raise NormalizationError("A quantity cannot be empty.")
     text = re.sub(r"\s+", " ", _ascii_fold(text))
+    hint = (currency_hint or "USD").strip().upper() or "USD"
 
     match = _PACK_OF.match(text)
     if match:
@@ -752,9 +766,9 @@ def quantity(raw: Optional[str]) -> Quantity:
         if unit is None and (outer_unit or inner_unit):
             unit = (inner_unit or outer_unit or "").upper()
         return Quantity(
-            value=_decimal_from(outer),
+            value=_decimal_from(outer, currency_hint=hint),
             unit=unit,
-            pack_size=_decimal_from(inner),
+            pack_size=_decimal_from(inner, currency_hint=hint),
         )
 
     match = _QTY.match(text)
@@ -765,7 +779,9 @@ def quantity(raw: Optional[str]) -> Quantity:
     unit: Optional[str] = None
     if unit_text:
         unit = _UNIT_ALIASES.get(unit_text.lower(), unit_text.upper())
-    return Quantity(value=_decimal_from(number), unit=unit)
+    return Quantity(
+        value=_decimal_from(number, currency_hint=hint), unit=unit
+    )
 
 
 # ===========================================================================

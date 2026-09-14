@@ -222,6 +222,12 @@ from app.models.byok import (
     TenantModelRoute,
     TenantProviderCredential,
 )
+from app.models.document_role import DocumentRole  # noqa: F401
+from app.models.procurement import (  # noqa: F401
+    ProcurementCase,
+    ProcurementCaseLine,
+    ProcurementTolerancePolicy,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,
@@ -509,6 +515,15 @@ __all__ = [
     "SENDABLE_SENDER_STATUSES",
     "COLOR_SCHEME_VALUES",
     "BRANDING_COLOR_TOKENS",
+    # ARCH-31 — procurement three-way matching.
+    #
+    # DocumentRole maps the table arch31_step0_document_roles created; Step 0
+    # shipped it without a mapped class because nothing read it yet.
+    # candidates.py is the first reader.
+    "DocumentRole",
+    "ProcurementCase",
+    "ProcurementCaseLine",
+    "ProcurementTolerancePolicy",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.
     "MarketplaceInstallation",
     "MarketplaceItem",

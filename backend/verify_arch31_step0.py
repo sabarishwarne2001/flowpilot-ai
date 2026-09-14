@@ -377,7 +377,7 @@ def gates_schema_and_capability(rec: Recorder) -> None:
             if down:
                 downs.add(down.group(1))
         heads = sorted(r for r in revs if r not in downs)
-        assert heads == ["arch31_step0_document_roles"], heads
+        assert heads in (["arch31_step0_document_roles"], ["arch31_step1_procurement_matching"]), heads
 
     rec.check("Step 0 leaves exactly one Alembic head", single_alembic_head)
 
