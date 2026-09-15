@@ -24,11 +24,34 @@ if TYPE_CHECKING:
     from app.models.automation import AutomationRule
 
 
+# ARCH33-S1:assertion-node-type. §4.3 adds ONE node type, and it has two
+# outgoing edges — `pass` and `triage` — rather than a condition's true and
+# false.
+#
+# The difference is not cosmetic. A condition's `false` edge means "the
+# answer was no". An assertion's `triage` edge means "the answer is not
+# trustworthy enough to act on", which is a different statement and needs a
+# different word in front of the person wiring the graph.
+#
+# These sets are declared literally rather than imported from
+# `app/services/assertions/vocabulary.py`, even though
+# `app/models/redaction.py` imports a service vocabulary that way. This
+# module sits under `graph_service` and `executor`, the hot path of the
+# automation engine, and an `app.services.*` import here would make every
+# automation import execute `app/services/__init__.py` — which eagerly
+# imports the LLM service, the retriever and the embedding service.
+# `verify_arch33.py` asserts these two sets equal the vocabulary's tuples,
+# so the drift the import would have prevented is prevented anyway.
 NODE_TYPES: frozenset[str] = frozenset(
-    {"trigger", "condition", "action", "branch", "join"}
+    {"trigger", "condition", "action", "branch", "join", "assertion"}
 )
 
-BRANCH_LABELS: frozenset[str] = frozenset({"default", "true", "false"})
+BRANCH_LABELS: frozenset[str] = frozenset(
+    {"default", "true", "false", "pass", "triage"}
+)
+
+#: The two an assertion node must have, and the only two it may have.
+ASSERTION_BRANCH_LABELS: frozenset[str] = frozenset({"pass", "triage"})
 
 GRAPH_VERSION_FLAT: int = 0
 GRAPH_VERSION_DAG: int = 1
@@ -39,7 +62,8 @@ class AutomationNode(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "node_type IN ('trigger', 'condition', 'action', 'branch', 'join')",
+            "node_type IN ('trigger', 'condition', 'action', 'branch', "
+            "'join', 'assertion')",
             name="ck_automation_nodes_type_known",
         ),
         CheckConstraint(
@@ -92,7 +116,7 @@ class AutomationEdge(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "branch IN ('default', 'true', 'false')",
+            "branch IN ('default', 'true', 'false', 'pass', 'triage')",
             name="ck_automation_edges_branch_known",
         ),
         CheckConstraint(
@@ -140,6 +164,8 @@ class AutomationEdge(Base, UUIDMixin, TimestampMixin):
 
 
 __all__ = [
+    # ARCH33-S1:assertion-node-type
+    "ASSERTION_BRANCH_LABELS",
     "BRANCH_LABELS",
     "GRAPH_VERSION_DAG",
     "GRAPH_VERSION_FLAT",

@@ -239,6 +239,19 @@ from app.models.redaction import (  # noqa: F401
     RedactionJob,
     RedactionRegion,
 )
+# ARCH-33 — semantic assertion automation.
+#
+# Imported here for the same reason every other mapped class is: the
+# declarative registry has to know about a table before anything can query it.
+# AssertionEvaluation in particular holds relationships to
+# DocumentVerification and AutomationNodeRun, and a model that is only
+# imported by the module that uses it produces a `NoSuchTableError` at the
+# first cross-module relationship rather than at import.
+from app.models.assertion import (  # noqa: F401
+    AssertionDefinition,
+    AssertionEvaluation,
+    AssertionRetrievalPhrase,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,
@@ -538,6 +551,10 @@ __all__ = [
     # ARCH-32 — zero-leakage geometric PII redaction.
     "RedactionJob",
     "RedactionRegion",
+    # ARCH-33 — semantic assertion automation with confidence triage.
+    "AssertionDefinition",
+    "AssertionEvaluation",
+    "AssertionRetrievalPhrase",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.
     "MarketplaceInstallation",
     "MarketplaceItem",

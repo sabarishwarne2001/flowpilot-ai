@@ -126,6 +126,33 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One page of sanitized PDF produced by the redaction engine.",
     ),
+    # ARCH-33 §4.7 — one assertion EVALUATION.
+    #
+    # REQUEST, like procurement.case and unlike redaction.page, because the
+    # cost here is the assignment rather than the paper: a two-page order
+    # form and a sixty-page master agreement are one retrieval, one parse
+    # and one routing decision each, and the engine's work between them
+    # differs by milliseconds.
+    #
+    # Metered on the EVALUATION, not on the definition and not on the
+    # execution. A rule that runs against a thousand documents is a
+    # thousand evaluations; a workflow with three assertion nodes is three
+    # evaluations per document. Both are the thing the customer is
+    # consuming, and neither is visible if the meter counts rules.
+    #
+    # LLM-mode evaluations emit this too. The evaluation happened, and it
+    # cost an allowance unit, whether a parser or a model answered it. The
+    # model's tokens are metered SEPARATELY through the existing
+    # llm.input_token / llm.output_token events on the tenant's own model
+    # route, which is how §4.7 adds no new cost category.
+    UsageEventType(
+        name="assertion.evaluation",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One assertion evaluated against one work item.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"

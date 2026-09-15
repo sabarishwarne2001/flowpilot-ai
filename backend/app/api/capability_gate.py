@@ -37,6 +37,10 @@ _DISPLAY_NAMES = {
     # body reads "capability.redaction is included on higher plans", which is
     # a key name in front of a customer.
     entitlements.REDACTION_CAPABILITY: "Document redaction",
+    # ARCH33-S1:capability-assertions-display. Without an entry here the 402
+    # body reads "capability.semantic_assertions is included on higher
+    # plans", which is a key name in front of a customer.
+    entitlements.SEMANTIC_ASSERTIONS_CAPABILITY: "Clause assertions",
 }
 
 

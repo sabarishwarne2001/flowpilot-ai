@@ -94,6 +94,8 @@ __all__ = [
     "RECONCILIATION_CAPABILITY",
     # ARCH32-S1:capability-redaction-key
     "REDACTION_CAPABILITY",
+    # ARCH33-S1:capability-assertions-key
+    "SEMANTIC_ASSERTIONS_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -148,11 +150,27 @@ RECONCILIATION_CAPABILITY: str = "capability.reconciliation"
 #: Putting it in ADDON_KEYS would fail the catalog assertion at boot.
 REDACTION_CAPABILITY: str = "capability.redaction"
 
+#: ARCH33-S1:capability-assertions-key. Semantic assertion automation
+#: with confidence triage. A CAPABILITY, not an ADDON, and the
+#: distinction is the same one ARCH-31 and ARCH-32 recorded above:
+#: add-ons are separately purchasable line items with a price, a halt
+#: effect and a grace ladder, and `ADDON_KEYS` is asserted equal to
+#: `entitlement_service`'s catalog at import. Putting this in
+#: ADDON_KEYS would fail that catalog assertion at boot.
+#:
+#: §4.7 is also specific that the LLM family runs "through the tenant's
+#: existing model route under existing metering and spend limits", so
+#: there is no second key here for the AI half. One capability gates
+#: the feature; the existing `llm.platform_key` entitlement and the
+#: existing token meters gate the inference.
+SEMANTIC_ASSERTIONS_CAPABILITY: str = "capability.semantic_assertions"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
     RECONCILIATION_CAPABILITY,
     REDACTION_CAPABILITY,
+    SEMANTIC_ASSERTIONS_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -200,6 +218,16 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "pixels so removed content does not exist in the output, with "
             "a leak-checked sanitized PDF and a manifest that carries no "
             "redacted text. Bundled into a tier."
+        ),
+    ),
+    # ARCH33-S1:capability-assertions-key
+    Entitlement(
+        name=SEMANTIC_ASSERTIONS_CAPABILITY,
+        description=(
+            "Semantic assertions: write a clause requirement as a workflow "
+            "step, have it compiled to a typed check, and route anything "
+            "uncertain or failing to review with the paragraph attached. "
+            "Bundled into a tier, not purchasable on its own."
         ),
     ),
 )

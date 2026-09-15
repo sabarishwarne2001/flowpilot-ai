@@ -1010,7 +1010,7 @@ def gates_db(rec: Recorder, database_url: str) -> None:
                 row[0]
                 for row in conn.execute(sa_text("SELECT version_num FROM alembic_version"))
             ]
-        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"]), heads
+        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"]), heads
 
     rec.check("DB: exactly one Alembic head, at Step 1", single_alembic_head)
 

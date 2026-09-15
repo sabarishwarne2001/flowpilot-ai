@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.automation import AutomationRule
 from app.models.automation_graph import (
+    ASSERTION_BRANCH_LABELS,
     BRANCH_LABELS,
     GRAPH_VERSION_DAG,
     GRAPH_VERSION_FLAT,
@@ -160,6 +161,26 @@ def _validate_shape(nodes: Sequence[NodeSpec], edges: Sequence[EdgeSpec]) -> Non
                 nodes=[node.node_key],
             )
 
+    # ARCH33-S1:assertion-edge-validation. An assertion node needs BOTH
+    # outcomes wired, for the same reason a branch node does and with a
+    # sharper consequence: an unwired `triage` edge means a document the
+    # engine was not confident about stops dead, no review is created, and
+    # the workflow reports success.
+    for node in nodes:
+        if node.node_type != "assertion":
+            continue
+        labels = {e.branch for e in edges if e.from_node_key == node.node_key}
+        missing = ASSERTION_BRANCH_LABELS - labels
+        if missing:
+            raise GraphValidationError(
+                f"Assertion node '{node.node_key}' has no "
+                f"{'/'.join(sorted(missing))} edge. Both outcomes must be "
+                "wired: documents that pass continue, and documents that are "
+                "uncertain or fail go to review. An unwired outcome ends the "
+                "execution silently.",
+                nodes=[node.node_key],
+            )
+
     for edge in edges:
         source = by_key[edge.from_node_key]
         if edge.branch in ("true", "false") and source.node_type != "branch":
@@ -169,10 +190,23 @@ def _validate_shape(nodes: Sequence[NodeSpec], edges: Sequence[EdgeSpec]) -> Non
                 "true/false outcomes.",
                 nodes=[edge.from_node_key],
             )
+        if edge.branch in ASSERTION_BRANCH_LABELS and source.node_type != "assertion":
+            raise GraphValidationError(
+                f"Edge from '{edge.from_node_key}' (a {source.node_type} node) "
+                f"is labelled '{edge.branch}', but only an assertion node has "
+                "pass/triage outcomes.",
+                nodes=[edge.from_node_key],
+            )
         if edge.branch == "default" and source.node_type == "branch":
             raise GraphValidationError(
                 f"Branch node '{edge.from_node_key}' has a 'default' edge. "
                 "A branch's out-edges must be labelled true or false.",
+                nodes=[edge.from_node_key],
+            )
+        if edge.branch == "default" and source.node_type == "assertion":
+            raise GraphValidationError(
+                f"Assertion node '{edge.from_node_key}' has a 'default' edge. "
+                "An assertion's out-edges must be labelled pass or triage.",
                 nodes=[edge.from_node_key],
             )
 
