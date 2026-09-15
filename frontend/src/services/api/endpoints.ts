@@ -442,6 +442,32 @@ export const MARKETPLACE_ENDPOINTS = {
     `/organizations/${org(organizationId)}/marketplace/installations/${seg(installationId)}`,
 } as const;
 
+/**
+ * ARCH33-S2:assertion-endpoints. Clause assertions, workspace-scoped.
+ *
+ * `phrases` is workspace-scoped on the wire and organization-scoped in the
+ * database, and that is deliberate rather than sloppy: §4.3 scopes the
+ * learned synonym table to the TENANT, and the route carries a workspace only
+ * so the same `RequireWorkspaceRole` dependency and the same capability gate
+ * apply to it as to everything else here.
+ */
+export const ASSERTION_ENDPOINTS = {
+  preview: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/preview`,
+  rule: (workspaceId: string, ruleId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/rules/${seg(ruleId)}`,
+  node: (workspaceId: string, ruleId: string, nodeKey: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/rules/${seg(ruleId)}/nodes/${seg(nodeKey)}`,
+  simulate: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/simulate`,
+  reviews: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/reviews`,
+  resolve: (workspaceId: string, evaluationId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/reviews/${seg(evaluationId)}/resolve`,
+  phrases: (workspaceId: string): string =>
+    `/workspaces/${seg(workspaceId)}/assertions/phrases`,
+} as const;
+
 /** ARCH-30 Tranche 2 (D-8) — add-on entitlements and add-on checkout. */
 export const ENTITLEMENT_ENDPOINTS = {
   entitlements: (organizationId: string): string =>

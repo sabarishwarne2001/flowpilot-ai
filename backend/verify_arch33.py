@@ -79,6 +79,26 @@ ROUTING = "app/services/assertions/routing.py"
 FAMILIES_PKG = "app/services/assertions/families/__init__.py"
 DURATION_BOUND = "app/services/assertions/families/duration_bound.py"
 
+RETRIEVE = "app/services/assertions/retrieve.py"
+EVALUATE = "app/services/assertions/evaluate.py"
+TRIAGE = "app/services/assertions/triage.py"
+NODE_EXECUTOR = "app/services/assertions/node_executor.py"
+DEFINITION_SERVICE = "app/services/assertions/definition_service.py"
+API_ROUTER_MODULE = "app/api/v1/assertions.py"
+API_ROUTER = "app/api/v1/router.py"
+EXECUTOR = "app/services/automation/executor.py"
+VERIFICATION_SERVICE = "app/services/document_verification_service.py"
+WORKER_HANDLERS = "app/workers/handlers/__init__.py"
+APPLY_FINAL = "apply_arch33_final.py"
+
+FE_TYPES = "src/types/assertions.ts"
+FE_API = "src/services/api/assertions.ts"
+FE_BLOCK = "src/components/assertions/ClauseAssertionBlock.tsx"
+FE_QUEUE = "src/pages/Assertions/AssertionReviewQueue.tsx"
+FE_LOCK = "src/components/assertions/AssertionLockCard.tsx"
+FE_QUERY_KEYS = "src/services/api/queryKeys.ts"
+FE_ENDPOINTS = "src/services/api/endpoints.ts"
+
 AUTOMATION_GRAPH = "app/models/automation_graph.py"
 GRAPH_SERVICE = "app/services/automation/graph_service.py"
 ENTITLEMENTS = "app/core/entitlements.py"
@@ -237,10 +257,12 @@ def bootstrap_pure_namespace(root: Path) -> None:
     for cached in [
         name
         for name in sys.modules
-        if name.startswith("app.services.assertions") or name == "app.core.normalize"
+        if name.startswith("app.services.assertions")
+        or name in ("app.core.normalize", "app.db.base")
+        or name.startswith("app.models.")
     ]:
         sys.modules.pop(cached, None)
-    for parent in ("app.services", "app.core", "app"):
+    for parent in ("app.models", "app.db", "app.services", "app.core", "app"):
         existing = sys.modules.get(parent)
         if existing is not None and getattr(existing, "_arch33_stub", False):
             sys.modules.pop(parent, None)
@@ -254,6 +276,15 @@ def bootstrap_pure_namespace(root: Path) -> None:
         ("app", root / "app"),
         ("app.core", root / "app" / "core"),
         ("app.services", root / "app" / "services"),
+        # `app.models` and `app.db` are stubbed for the same reason
+        # `app.services` is: the real `app/models/__init__.py` imports every
+        # mapped class in the application and reaches pydantic and the
+        # settings object through them. The impure ARCH-33 modules import
+        # `app.models.assertion` by its real dotted name, and a stubbed
+        # parent resolves that to the single file without running the
+        # package __init__.
+        ("app.db", root / "app" / "db"),
+        ("app.models", root / "app" / "models"),
     ):
         existing = sys.modules.get(dotted)
         if existing is not None and getattr(existing, "_arch33_stub", False):
@@ -1966,34 +1997,729 @@ def run_regressions(rec: Recorder, *, database_url: Optional[str]) -> None:
 
 
 # ===========================================================================
+# Tranche 2 — wiring
+# ===========================================================================
+
+
+def gates_wiring(rec: Recorder, *, root: Path = BACKEND) -> None:
+    """The four places ARCH-33 had to reach into, and the one it did not."""
+
+    def assertion_node_is_dispatched() -> None:
+        source = _strip_comments(_read(root / EXECUTOR))
+        assert 'node.node_type == "assertion"' in source, (
+            "executor.py does not dispatch the assertion node type. "
+            "`_execute_node` would fall through to its final "
+            "`raise ValueError(f\"Unknown node type\")`, every execution "
+            "containing a clause step would FAIL, and the documents would "
+            "stop with no review and no explanation. Run "
+            "apply_arch33_final.py."
+        )
+        assert "node_executor.execute(state, node=node)" in source
+        # The import must stay local: node_executor imports _record_node and
+        # _propagate_skip back out of executor, and a module-scope import
+        # would close the cycle at startup.
+        top = source.split("def run_execution", 1)[0]
+        assert "from app.services.assertions import node_executor" not in top, (
+            "executor.py imports node_executor at module scope. "
+            "node_executor imports _record_node and _propagate_skip back out "
+            "of executor, so this is a circular import that fails at boot."
+        )
+
+    rec.check("the assertion node is dispatched by the ARCH-13 executor", assertion_node_is_dispatched)
+
+    def node_runs_are_recorded() -> None:
+        source = _strip_comments(_read(root / NODE_EXECUTOR))
+        assert "_record_node(" in source, (
+            "the assertion node executor writes no automation_node_runs row. "
+            "Every other node type records one, and "
+            "assertion_evaluations.node_run_id is NOT NULL."
+        )
+        assert "AutomationNodeRunStatus.RUNNING" in source, (
+            "the node run is not written before the evaluation. "
+            "assertion_evaluations.node_run_id is a NOT NULL foreign key, so "
+            "there must be a row to point at before the evaluation is "
+            "inserted."
+        )
+        assert "_propagate_skip(state, node.node_key, taken=" in source, (
+            "the executor never marks the untaken edge. Both the pass and "
+            "the triage branch would run."
+        )
+
+    rec.check("assertion node runs are recorded in automation_node_runs", node_runs_are_recorded)
+
+    def resumption_reads_rather_than_re_evaluates() -> None:
+        source = _strip_comments(_read(root / NODE_EXECUTOR))
+        assert "_resolved_evaluation(" in source, (
+            "the node executor never looks for a reviewer's answer. The "
+            "re-run enqueued by a resolution would re-evaluate the document, "
+            "reach the same verdict, triage it again, and put the item the "
+            "reviewer just resolved back in their queue."
+        )
+        assert "reviewer_verdict == vocab.VERDICT_PASS" in source
+        assert "vocab.EDGE_PASS" in source and "vocab.EDGE_TRIAGE" in source
+        # Positional, not textual: the resolution lookup must happen BEFORE
+        # the first retrieval call in `execute`, or a resumption pays for a
+        # retrieval and an evaluation it is about to throw away.
+        body = source.split("def execute(", 1)[1]
+        lookup = body.find("_resolved_evaluation(")
+        retrieval = body.find("retrieve_module.retrieve(")
+        assert lookup != -1 and retrieval != -1
+        assert lookup < retrieval, (
+            "the resumption path retrieves before checking for a resolution."
+        )
+        assert "return True" in body[lookup:retrieval], (
+            "the resumption branch does not return, so a resolved assertion "
+            "falls through and is evaluated again."
+        )
+
+    rec.check("a resolved assertion resumes on the reviewer's edge without re-evaluating", resumption_reads_rather_than_re_evaluates)
+
+    def router_is_mounted_and_gated() -> None:
+        router_source = _strip_comments(_read(root / API_ROUTER))
+        assert "assertions" in router_source and "assertions.router" in router_source, (
+            "the assertions router is not mounted. Every endpoint returns "
+            "404 and the console has nothing to call. Run "
+            "apply_arch33_final.py."
+        )
+
+        api_source = _strip_comments(_read(root / API_ROUTER_MODULE))
+        # Every route, including the reads. Counted rather than spot-checked:
+        # a new endpoint added without a gate is the failure this catches.
+        routes = api_source.count("@router.")
+        gated = api_source.count("_gate(db, context,")
+        assert routes >= 7, f"expected at least 7 endpoints, found {routes}"
+        assert gated == routes, (
+            f"{routes} endpoints and {gated} capability checks. Every route "
+            "is gated by capability.semantic_assertions, INCLUDING the "
+            "reads: the review queue is a list of every clause finding on a "
+            "tenant's contracts, which IS the product."
+        )
+        assert "entitlements.SEMANTIC_ASSERTIONS_CAPABILITY" in api_source
+
+    rec.check("every assertions endpoint is capability-gated, reads included", router_is_mounted_and_gated)
+
+    def no_new_worker_job() -> None:
+        handlers = _strip_comments(_read(root / WORKER_HANDLERS))
+        assert '"assertion.' not in handlers, (
+            "a new assertion.* job type was registered. ARCH-33 runs inside "
+            "automation.execute, which is already in the handler map, "
+            "already on a profile and already scheduled. A second job type "
+            "would be a second path into the same executor and a second "
+            "place for the graph walk to diverge."
+        )
+        api_source = _strip_comments(_read(root / API_ROUTER_MODULE))
+        assert 'job_type="automation.execute"' in api_source, (
+            "resolving a review does not re-enqueue automation.execute, so "
+            "the execution never resumes on the reviewer's edge."
+        )
+
+    rec.check("ARCH-33 adds no worker job type and resumes through automation.execute", no_new_worker_job)
+
+    def arch13_resolver_skips_assertion_fields() -> None:
+        source = _strip_comments(_read(root / VERIFICATION_SERVICE))
+        assert "FIELD_PATH_PREFIX" in source, (
+            "document_verification_service.resolve still demands a value for "
+            "every disagreed field. An assertion field on a verification "
+            "would make it refuse with 'fields are still unresolved' for a "
+            "field the reviewer was never shown, and the extraction review "
+            "for that document could not be completed at all."
+        )
+        assert "not f.field_path.startswith(FIELD_PATH_PREFIX)" in source
+
+    rec.check("ARCH-13's resolver ignores assertion fields", arch13_resolver_skips_assertion_fields)
+
+    def final_patch_script_holds_the_sentinel_property() -> None:
+        module = _load(root, APPLY_FINAL, "_a33_apply_final")
+        for patch in module.PATCHES:
+            written = "".join(edit.replacement for edit in patch.edits)
+            assert patch.sentinel in written, (
+                f"{patch.relpath}: sentinel {patch.sentinel!r} is not a "
+                "substring of the text its own patch writes."
+            )
+            base = root if patch.root == "backend" else root.parent / "frontend"
+            path = base / patch.relpath
+            assert path.exists(), f"{patch.relpath} does not exist"
+            text = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+            if patch.sentinel in text:
+                continue
+            for edit in patch.edits:
+                found = text.count(edit.anchor)
+                assert found == edit.occurrences, (
+                    f"{patch.relpath}: anchor for {edit.description!r} "
+                    f"occurs {found} time(s), expected {edit.occurrences}."
+                )
+
+    rec.check("every apply_arch33_final sentinel is a substring of its replacement", final_patch_script_holds_the_sentinel_property)
+
+
+# ===========================================================================
+# Tranche 2 — retrieval
+# ===========================================================================
+
+
+def gates_retrieval(rec: Recorder, *, root: Path = BACKEND) -> None:
+    engines = _engines(root)
+    compiler = engines["compiler"]
+    vocab = engines["vocabulary"]
+
+    def query_is_built_from_contract_vocabulary() -> None:
+        retrieve = _load(root, RETRIEVE, "_a33_retrieve_pure")
+        plan = compiler.compile_sentence("Payment terms do not exceed Net 30").plan
+        query, phrases = retrieve.build_query(plan, learned=("days of the invoice date",))
+
+        # The seeds are how CONTRACTS word it, not how the rule does.
+        assert "payable within" in query, (
+            "the query does not carry the family's seed phrases. Searching "
+            "with the administrator's own sentence finds the definitions "
+            "section and misses the clause, and the only symptom is a slow "
+            "rise in the triage rate that looks like harder documents."
+        )
+        assert "days of the invoice date" in query, (
+            "tenant-learned phrases are not in the query, so §4.3's "
+            "self-healing teaches nothing that retrieval ever uses."
+        )
+        lowered = [phrase.casefold() for phrase in phrases]
+        assert len(lowered) == len(set(lowered)), (
+            "the query repeats a phrase. Seed and learned tables overlap by "
+            "design, and a duplicate doubles that phrase's weight in the "
+            "lexical arm."
+        )
+
+    rec.check("the retrieval query is contract vocabulary plus learned phrases", query_is_built_from_contract_vocabulary)
+
+    def llm_family_falls_back_to_the_sentence() -> None:
+        retrieve = _load(root, RETRIEVE, "_a33_retrieve_llm")
+        plan = compiler.compile_sentence("The vendor is a good partner").plan
+        assert plan.family == vocab.FAMILY_LLM
+        query, phrases = retrieve.build_query(plan)
+        assert query.strip(), (
+            "the llm family produced an empty query. It has no typed subject "
+            "to seed from — that is what made it fall through — so its only "
+            "signal is the administrator's own words."
+        )
+        assert "vendor" in query
+
+    rec.check("the llm family still produces a query from its own sentence", llm_family_falls_back_to_the_sentence)
+
+    def retrieval_is_restricted_to_the_work_item() -> None:
+        source = _strip_comments(_read(root / RETRIEVE))
+        assert "work_item_ids=[str(work_item_id)]" in source, (
+            "retrieval is not restricted to the work item. An assertion "
+            "answers a question about ONE document; a retriever reaching "
+            "across the workspace answers it with a paragraph from a "
+            "different supplier's contract, and the document then passes or "
+            "fails on evidence that is not in it."
+        )
+        assert "work_item_ids=None" not in source
+
+    rec.check("retrieval is restricted to this work item's chunks", retrieval_is_restricted_to_the_work_item)
+
+    def hits_credit_only_the_phrase_that_found_it() -> None:
+        source = _strip_comments(_read(root / RETRIEVE))
+        assert "def record_hits(" in source
+        evaluate = _load(root, EVALUATE, "_a33_eval_phrases")
+        matched = evaluate._matched_phrases(
+            "Invoices are payable within 30 days of receipt.",
+            ("payable within", "termination notice", "net 30"),
+        )
+        assert matched == ("payable within",), (
+            f"expected only the phrase present in the quote, got {matched}. "
+            "Crediting every phrase in the query on every successful "
+            "evaluation would make `hits` a count of evaluations and the "
+            "ordering meaningless."
+        )
+
+    rec.check("only phrases present in the quote are credited with a hit", hits_credit_only_the_phrase_that_found_it)
+
+    def the_pure_boundary_is_named() -> None:
+        source = _strip_comments(_read(root / RETRIEVE))
+        assert "def to_chunks(" in source, (
+            "there is no named conversion from ARCH-11 results to pure "
+            "Chunk values. The claim that everything downstream is gateable "
+            "offline then has no line to point at."
+        )
+
+    rec.check("the impure/pure boundary is one named function", the_pure_boundary_is_named)
+
+
+# ===========================================================================
+# Tranche 2 — the LLM path
+# ===========================================================================
+
+
+def gates_llm_path(rec: Recorder, *, root: Path = BACKEND) -> None:
+    engines = _engines(root)
+    compiler = engines["compiler"]
+    vocab = engines["vocabulary"]
+    evaluate = _load(root, EVALUATE, "_a33_evaluate")
+
+    plan = compiler.compile_sentence("The vendor is a good partner").plan
+    chunks = _chunks(
+        engines,
+        "5.2 Payment. The Customer shall pay each undisputed invoice within "
+        "thirty (30) days of receipt of a correct invoice.",
+    )
+
+    def the_prompt_demands_a_verbatim_quote() -> None:
+        prompt = evaluate.build_llm_prompt(plan, chunks)
+        lowered = prompt.lower()
+        assert "quote" in lowered
+        assert "character for character" in lowered, (
+            "the prompt does not demand a verbatim quote. quotecheck "
+            "normalises whitespace and nothing else, so a model that "
+            "paraphrases fails the check on every answer — including the "
+            "correct ones."
+        )
+        assert "undetermined" in lowered
+        assert "thirty (30) days" in prompt, (
+            "the retrieved text is not in the prompt, so the model is being "
+            "asked to quote from something it was never shown."
+        )
+
+    rec.check("the LLM prompt demands a verbatim quote from the excerpts", the_prompt_demands_a_verbatim_quote)
+
+    def a_grounded_answer_can_pass() -> None:
+        answer = evaluate.LLMAnswer(
+            verdict=vocab.VERDICT_PASS,
+            quote="The Customer shall pay each undisputed invoice within "
+            "thirty (30) days of receipt of a correct invoice.",
+            value="30 days",
+        )
+        result = evaluate.evaluate_llm_answer(plan, answer, chunks)
+        assert result.verdict == vocab.VERDICT_PASS, (
+            "a correctly-quoted answer was downgraded. A guard that fires on "
+            "correct answers gets turned off."
+        )
+        assert result.raw_score > Decimal("0")
+        assert result.extracted_value is not None
+
+    rec.check("an LLM answer whose quote IS in the chunks can pass", a_grounded_answer_can_pass)
+
+    def an_invented_quote_is_refused() -> None:
+        answer = evaluate.LLMAnswer(
+            verdict=vocab.VERDICT_PASS,
+            quote="The Customer shall pay each undisputed invoice within "
+            "sixty (60) days of receipt of a correct invoice.",
+            value="60 days",
+        )
+        result = evaluate.evaluate_llm_answer(plan, answer, chunks)
+        assert result.verdict == vocab.VERDICT_UNDETERMINED, (
+            "an answer quoting text that is NOT in the retrieved chunks kept "
+            "its PASS verdict. This is the most common way a model is wrong "
+            "about a document, and the quote check is the only thing that "
+            "can tell."
+        )
+        assert result.raw_score == Decimal("0.00000"), (
+            f"expected confidence 0, got {result.raw_score}. §4.3 is "
+            "specific: an answer whose quote is not found is treated as "
+            "confidence 0."
+        )
+        assert result.extracted_value is None
+
+        decision = engines["routing"].decide(
+            verdict=result.verdict,
+            raw_score=result.raw_score,
+            calibrated_probability=Decimal("0.99999"),
+            effective_threshold=Decimal("0.51"),
+        )
+        assert decision.routed_to == vocab.ROUTE_TRIAGE, (
+            "an ungrounded answer reached the pass edge even at the lowest "
+            "legal threshold and a near-certain probability. Never an "
+            "automatic pass."
+        )
+
+    rec.check("an LLM answer quoting absent text is forced to confidence 0 and TRIAGE", an_invented_quote_is_refused)
+
+    def a_missing_quote_is_refused() -> None:
+        for quote in ("", None, "the Supplier shall"):
+            answer = evaluate.LLMAnswer(
+                verdict=vocab.VERDICT_PASS, quote=quote or ""
+            )
+            result = evaluate.evaluate_llm_answer(plan, answer, chunks)
+            assert result.verdict == vocab.VERDICT_UNDETERMINED
+            assert result.raw_score == Decimal("0.00000")
+
+    rec.check("a missing or trivially short quote is refused too", a_missing_quote_is_refused)
+
+    def malformed_json_triages_rather_than_raises() -> None:
+        for raw in ("", "I think it passes.", "{broken", "```json\n{}\n```"):
+            answer = evaluate.parse_llm_answer(raw)
+            assert answer.verdict == vocab.VERDICT_UNDETERMINED, (
+                f"{raw!r} parsed to {answer.verdict}. A malformed response "
+                "must become UNDETERMINED with an empty quote, not an "
+                "exception: the same destination, with a row a reviewer can "
+                "open instead of a failed node run they cannot."
+            )
+
+    rec.check("a malformed model response triages instead of failing the node", malformed_json_triages_rather_than_raises)
+
+    def no_new_cost_category() -> None:
+        source = _strip_comments(_read(root / EVALUATE))
+        assert "llm_service.resolve_routing" in source, (
+            "the LLM family does not go through the tenant's existing model "
+            "route. §4.2 and §4.7 both require it: BYOK tenants pay their "
+            "own provider and platform-key tenants stay inside their tier's "
+            "caps."
+        )
+        triage_source = _strip_comments(_read(root / TRIAGE))
+        assert '"llm.input_token"' in triage_source and '"llm.output_token"' in triage_source, (
+            "LLM-mode evaluations do not emit the EXISTING token meters. "
+            "§4.7 adds no new cost category, and this is where that is "
+            "either true or not."
+        )
+        usage_source = _strip_comments(_read(root / USAGE_EVENTS))
+        for invented in ("assertion.llm", "assertion.token", "assertion.ai"):
+            assert invented not in usage_source, (
+                f"{invented} was registered as a usage event type. §4.7 "
+                "introduces exactly one meter, assertion.evaluation."
+            )
+
+    rec.check("the LLM family uses the existing route and the existing token meters", no_new_cost_category)
+
+
+# ===========================================================================
+# Tranche 2 — triage, metering and resolution
+# ===========================================================================
+
+
+def gates_triage(rec: Recorder, *, root: Path = BACKEND) -> None:
+    engines = _engines(root)
+    vocab = engines["vocabulary"]
+    source = _strip_comments(_read(root / TRIAGE))
+
+    def review_row_is_created_before_the_evaluation() -> None:
+        body = source.split("def record_evaluation(", 1)[1]
+        attach = body.find("_attach_review(")
+        insert = body.find("AssertionEvaluation(")
+        assert attach != -1 and insert != -1
+        assert attach < insert, (
+            "the evaluation row is written before the verification. "
+            "ck_ae_triage_has_review refuses a TRIAGE row with a null "
+            "verification_id, so this order fails at the first flush rather "
+            "than at the second — which is how 'the document stopped and "
+            "nobody was told' gets shipped."
+        )
+
+    rec.check("the review row exists before the evaluation that references it", review_row_is_created_before_the_evaluation)
+
+    def the_field_path_is_the_one_the_spec_names() -> None:
+        assert "vocab.field_path_for(definition.id)" in source, (
+            "the review field is not keyed assertion:{definition_id}. §4.5 "
+            "names that path, and it is how a reviewer's resolution is "
+            "routed back to the definition that asked for it."
+        )
+        assert "consensus_value=extracted_value" in source, (
+            "§4.5: the field's consensus_value is the extracted value."
+        )
+        assert "VerificationStatus.PENDING" in source
+
+    rec.check("triage writes a PENDING verification with field_path assertion:{id}", the_field_path_is_the_one_the_spec_names)
+
+    def the_open_verification_index_is_respected() -> None:
+        assert "_open_verification(" in source, (
+            "triage always CREATES a verification. "
+            "uq_document_verifications_open_work_item allows exactly one "
+            "open verification per work item, so a workflow with two "
+            "assertion nodes would raise IntegrityError inside a worker on "
+            "the second — after the first had already routed."
+        )
+
+    rec.check("triage attaches to an open verification rather than creating a second", the_open_verification_index_is_respected)
+
+    def metering_is_once_per_evaluation_on_the_digest() -> None:
+        assert "USAGE_EVENT_ASSERTION_EVALUATION" in source
+        assert "idempotency_key=(" in source or "idempotency_key=" in source
+        assert "{input_digest}" in source, (
+            "the meter is not keyed on the input digest. Keyed on the "
+            "evaluation id it would bill every re-run; keyed on the "
+            "definition it would bill once per rule."
+        )
+        assert source.count("record_usage(") == 2, (
+            "expected exactly two record_usage call sites: one for "
+            "assertion.evaluation and one loop for the existing token "
+            "meters."
+        )
+
+    rec.check("assertion.evaluation is metered once, keyed on the input digest", metering_is_once_per_evaluation_on_the_digest)
+
+    def the_label_is_engine_correctness_not_document_outcome() -> None:
+        assert "correct=(reviewer_verdict == verdict)" in source, (
+            "the calibration label compares the reviewer's verdict to PASS "
+            "rather than to the ENGINE's verdict. An engine that correctly "
+            "said FAIL would be recorded as an error, and the calibrator "
+            "would learn to distrust every rule that mostly catches "
+            "violations — which is every rule worth writing."
+        )
+
+    rec.check("a confirmed FAIL is labelled as the engine having been RIGHT", the_label_is_engine_correctness_not_document_outcome)
+
+    def a_resolution_never_touches_the_rule() -> None:
+        body = source.split("def resolve_assertion(", 1)[1]
+        for forbidden in (
+            "definition.sentence =",
+            "definition.plan =",
+            "definition.threshold =",
+            "definition.family =",
+        ):
+            assert forbidden not in body, (
+                f"resolve_assertion writes {forbidden.strip(' =')}. §4.3: "
+                "nothing rewrites the assertion's rule text; the rule stays "
+                "what the administrator wrote."
+            )
+        assert "evaluation.reviewer_verdict = reviewer_verdict" in body
+        assert "learn_phrases_from(" in body, (
+            "a 'Wrong paragraph' correction teaches retrieval nothing, so "
+            "the same clause is missed on the next document."
+        )
+
+    rec.check("a reviewer resolution labels and teaches, and never edits the rule", a_resolution_never_touches_the_rule)
+
+    def learned_phrases_are_worth_learning() -> None:
+        triage_module = _load(root, TRIAGE, "_a33_triage_pure")
+        candidates = triage_module._phrase_candidates(
+            "The Customer shall pay each undisputed invoice within thirty (30) "
+            "days of receipt of a correct invoice."
+        )
+        assert candidates, "no phrase candidates at all"
+        for phrase in candidates:
+            assert len(phrase) >= triage_module.MIN_LEARNED_PHRASE_CHARS
+            assert not any(char.isdigit() for char in phrase), (
+                f"{phrase!r} contains the contract's own numbers. A phrase "
+                "with numbers in it finds THIS contract and not the next "
+                "supplier's."
+            )
+        assert all(
+            len(phrase) <= vocab.MAX_PHRASE_LENGTH for phrase in candidates
+        ), "a candidate is longer than the phrase column"
+
+    rec.check("learned phrases exclude the contract's own numbers and fit the column", learned_phrases_are_worth_learning)
+
+    def resolving_twice_is_refused() -> None:
+        body = source.split("def resolve_assertion(", 1)[1]
+        assert "already resolved" in body, (
+            "an assertion can be resolved twice, overwriting the label "
+            "ARCH-35 has already learned from."
+        )
+        assert "vocab.ROUTE_TRIAGE" in body, (
+            "an evaluation that continued on the pass edge can be "
+            "'resolved', inventing a review that never happened."
+        )
+
+    rec.check("an already-resolved or never-triaged evaluation cannot be resolved", resolving_twice_is_refused)
+
+    def simulation_writes_nothing() -> None:
+        definition_source = _strip_comments(_read(root / DEFINITION_SERVICE))
+        body = definition_source.split("def simulate(", 1)[1]
+        for forbidden in ("db.add(", "record_evaluation(", "record_usage(", "db.commit("):
+            assert forbidden not in body, (
+                f"simulate() calls {forbidden}. §4.6's runner shows the "
+                "verdict 'without starting an execution'. A preview that "
+                "opened a review would put a document in a reviewer's queue "
+                "because an administrator was experimenting, and a preview "
+                "that metered would bill for it."
+            )
+        assert "retrieve.retrieve(" in body and "evaluate_module.evaluate(" in body, (
+            "simulate() does not run the real retrieval and the real "
+            "evaluator. A simulator that took a shortcut agrees with "
+            "production right up until it matters."
+        )
+
+    rec.check("\"Test on a document\" runs the real path and writes nothing", simulation_writes_nothing)
+
+    def the_plan_is_never_taken_from_the_client() -> None:
+        api_source = _strip_comments(_read(root / API_ROUTER_MODULE))
+        schema_source = _strip_comments(_read(root / "app/schemas/assertion.py"))
+        request_block = schema_source.split("class AssertionSaveRequest", 1)[1].split(
+            "class ", 1
+        )[0]
+        assert "plan" not in request_block, (
+            "AssertionSaveRequest accepts a plan. The compiled plan is what "
+            "every parser trusts, and a client that could post one could "
+            "post any one."
+        )
+        assert "definition_service.save(" in api_source
+
+    rec.check("the compiled plan is never accepted from the client", the_plan_is_never_taken_from_the_client)
+
+    def a_stored_plan_is_rehydrated_not_recompiled() -> None:
+        definition_source = _strip_comments(_read(root / DEFINITION_SERVICE))
+        body = definition_source.split("def plan_from_row(", 1)[1].split("\ndef ", 1)[0]
+        assert "compile_sentence" not in body, (
+            "plan_from_row re-compiles the sentence. A grammar fix shipped "
+            "on Tuesday would then change what a rule saved in January "
+            "means, without anybody editing it."
+        )
+        assert "AssertionPlan(" in body
+
+    rec.check("a saved rule is re-hydrated from its stored plan, never re-compiled", a_stored_plan_is_rehydrated_not_recompiled)
+
+
+# ===========================================================================
+# Tranche 2 — the console
+# ===========================================================================
+
+
+def gates_console(rec: Recorder, *, root: Path = BACKEND) -> None:
+    frontend = root.parent / "frontend"
+
+    def files_exist() -> None:
+        for relpath in (FE_TYPES, FE_API, FE_BLOCK, FE_QUEUE, FE_LOCK):
+            assert (frontend / relpath).exists(), f"missing {relpath}"
+
+    rec.check("every console file ARCH-33 ships is present", files_exist)
+
+    def the_builder_shows_the_compiled_form() -> None:
+        source = _read(frontend / FE_BLOCK)
+        assert "Understood as:" in source, (
+            "the rule builder does not render the compiled plan. §4.2: the "
+            "builder shows the compiled form before the rule can be saved."
+        )
+        assert "previewAssertion(" in source, (
+            "the compiled form is derived in the browser rather than fetched. "
+            "A second parser in TypeScript would drift from compiler.py "
+            "within a week, and the line the administrator reads would stop "
+            "being the check that runs."
+        )
+        assert "understood_as" in source
+
+    rec.check("the builder renders the SERVER's compiled plan", the_builder_shows_the_compiled_form)
+
+    def the_slider_shows_its_consequence() -> None:
+        source = _read(frontend / FE_BLOCK)
+        assert 'type="range"' in source
+        assert "consequence" in source, (
+            "the slider shows a bare percentage. §4.6 is explicit that under "
+            "it the console states the consequence at that setting — the "
+            "share of recent documents routed to review and the observed "
+            "error rate."
+        )
+        # Integer percent, converted exactly once at the API edge.
+        api = _read(frontend / FE_API)
+        assert "/ 100).toFixed(4)" in api, (
+            "the threshold is not converted to a fixed-precision Decimal "
+            "string. 0.95 has no exact binary float, and the slider would "
+            "eventually post 0.9499999999999999."
+        )
+
+    rec.check("the confidence slider states its consequence, not a bare percentage", the_slider_shows_its_consequence)
+
+    def the_llm_notice_requires_a_tick() -> None:
+        source = _read(frontend / FE_BLOCK)
+        assert "billed as assistant usage" in source, (
+            "the AI notice §4.6 specifies is not rendered."
+        )
+        assert 'type="checkbox"' in source and "acknowledged" in source
+        assert "blocked" in source, (
+            "the save button is not disabled until the tick is set. "
+            "ck_ad_llm_acknowledged would refuse the row anyway, but the "
+            "administrator would get a 400 instead of an explanation."
+        )
+
+    rec.check("the LLM notice carries a required confirmation tick", the_llm_notice_requires_a_tick)
+
+    def the_test_runner_exists() -> None:
+        source = _read(frontend / FE_BLOCK)
+        assert "Test on a document" in source
+        assert "simulateAssertion(" in source
+
+    rec.check("\"Test on a document\" is wired to the simulate endpoint", the_test_runner_exists)
+
+    def the_review_queue_has_three_actions() -> None:
+        source = _read(frontend / FE_QUEUE)
+        for label in ("It passes", "It fails", "Wrong paragraph"):
+            assert label in source, f"the review queue has no {label!r} action"
+        assert "correctedQuote" in source, (
+            "\"Wrong paragraph\" does not send the paragraph the reviewer "
+            "picked, so it teaches retrieval nothing."
+        )
+        assert "reviewerVerdict" in source or "verdict:" in source, (
+            "\"Wrong paragraph\" closes the item without a verdict. It is not "
+            "a third verdict: a reviewer who says the engine read the wrong "
+            "paragraph still knows whether the document passes, and an item "
+            "closed without one teaches ARCH-35 nothing and leaves the "
+            "execution with no edge to resume on."
+        )
+
+    rec.check("the review queue offers exactly the three §4.6 actions", the_review_queue_has_three_actions)
+
+    def the_queue_shows_the_sentence_and_the_paragraph() -> None:
+        source = _read(frontend / FE_QUEUE)
+        assert "item.sentence" in source, (
+            "the queue shows the compiled form rather than the "
+            "administrator's sentence. The person reading the contract is "
+            "checking the REQUIREMENT, and `payment_terms.days <= 30` is not "
+            "one."
+        )
+        assert "evidence" in source and "blockquote" in source, (
+            "the paragraph the verdict rests on is not shown. §4.1: 'and show "
+            "me the paragraph'."
+        )
+        assert "extracted_value" in source
+
+    rec.check("the queue shows the sentence, the value and the paragraph", the_queue_shows_the_sentence_and_the_paragraph)
+
+    def formatting_goes_through_the_shared_helpers() -> None:
+        queue = _read(frontend / FE_QUEUE)
+        assert "formatTimestamp" in queue and "utils/displayTime" in queue, (
+            "timestamps are rendered without utils/displayTime, so they "
+            "ignore the workspace's display preferences."
+        )
+        for relpath in (FE_QUEUE, FE_BLOCK):
+            source = _read(frontend / relpath)
+            assert "ApiError" in source, (
+                f"{relpath} does not handle ApiError, so a 402 from the "
+                "capability gate would surface as axios's own 'Request "
+                "failed with status code 402'."
+            )
+            assert "toLocaleString()" not in source
+
+    rec.check("timestamps use displayTime and errors use ApiError", formatting_goes_through_the_shared_helpers)
+
+    def the_lock_card_mirrors_the_others() -> None:
+        source = _read(frontend / FE_LOCK)
+        assert "canChangePlan" in source
+        assert "button" not in source.lower().split("export const")[1][:1200], (
+            "the lock card offers a button. A capability is bundled into a "
+            "tier, so the only route to it is a plan change, and a purchase "
+            "button would send the reader to a flow with nothing to sell "
+            "them — the same reasoning capability_gate.py gives for "
+            "returning remedy: PLAN_UPGRADE with no price."
+        )
+        queue = _read(frontend / FE_QUEUE)
+        assert "AssertionLockCard" in queue and "hasCapability" in queue
+
+    rec.check("the CapabilityLockCard mirror is rendered when the capability is absent", the_lock_card_mirrors_the_others)
+
+    def cache_keys_and_endpoints_are_registered() -> None:
+        keys = _read(frontend / FE_QUERY_KEYS)
+        assert "assertionKeys" in keys, (
+            "no assertion cache keys. Run apply_arch33_final.py."
+        )
+        assert "thresholdPercent" in keys, (
+            "the preview cache key ignores the threshold, so the 90% "
+            "consequence sentence would be served under a 99% slider."
+        )
+        endpoints = _read(frontend / FE_ENDPOINTS)
+        assert "ASSERTION_ENDPOINTS" in endpoints
+
+    rec.check("assertion query keys and endpoints are registered", cache_keys_and_endpoints_are_registered)
+
+
+# ===========================================================================
 # Pending work
 # ===========================================================================
 
 
 def report_pending() -> None:
-    print("\n--- ARCH-33 gates not yet written (Tranche 2 does not exist) ---")
-    for line in (
-        "retrieve.py: ARCH-11 hybrid retrieval restricted to the work item's "
-        "chunks, seeded with family phrases plus tenant-learned phrases",
-        "evaluate.py: the LLM family through the tenant's EXISTING model "
-        "route, under existing spend limits, emitting existing token events",
-        "triage.py: document_verifications (PENDING) plus one "
-        "document_verification_fields row with field_path "
-        "assertion:{definition_id} and consensus_value = the extracted value",
-        "reviewer resolution resumes the execution on the edge matching the "
-        "reviewer's verdict, and writes learned retrieval phrases back",
-        "the assertion node executor, recorded in automation_node_runs, "
-        "registered in the handler map, profiles.py and the scheduler",
-        "assertion.evaluation metered once per evaluation; LLM mode "
-        "additionally emitting llm.input_token / llm.output_token",
-        "every endpoint gated by capability.semantic_assertions, INCLUDING "
-        "the reads",
-        "Console: the Check-a-clause block, the Understood-as line, the "
-        "confidence slider with its consequence sentence, the LLM notice and "
-        "tick, Test on a document, the review queue's three actions, and the "
-        "CapabilityLockCard mirror",
-    ):
-        print(f"  [PENDING] {line}")
+    """Nothing is pending. ARCH-33 is complete across both tranches.
+
+    Kept as a function, and kept printing, because the shape of this harness
+    is what a reader checks when they want to know whether a phase is really
+    finished. A file that quietly deleted its own pending list would look
+    identical to one that never had anything on it.
+    """
+    print("\n--- ARCH-33 pending work ---")
+    print("  [NONE] Tranche 1 and Tranche 2 are both gated above.")
 
 
 # ===========================================================================
@@ -2024,6 +2750,11 @@ def main() -> int:
     gates_quotecheck(offline)
     gates_scoring(offline)
     gates_resumption(offline)
+    gates_wiring(offline)
+    gates_retrieval(offline)
+    gates_llm_path(offline)
+    gates_triage(offline)
+    gates_console(offline)
     offline.report("offline")
 
     failed = offline.failed

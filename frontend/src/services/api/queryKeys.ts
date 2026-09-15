@@ -391,6 +391,27 @@ export const marketplaceKeys = {
     [...marketplaceKeys.all(organizationId), "installations"] as const,
 };
 
+/**
+ * ARCH33-S2:assertion-query-keys. Clause assertions.
+ *
+ * `preview` carries the sentence AND the threshold, because the consequence
+ * line under the slider changes with both: the same sentence at 90% and at
+ * 99% predicts a different share of documents going to review, and a key that
+ * ignored the threshold would serve the 90% sentence under a 99% slider.
+ */
+export const assertionKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "assertions"] as const,
+  preview: (workspaceId: string, sentence: string, thresholdPercent: number) =>
+    [...assertionKeys.all(workspaceId), "preview", sentence, thresholdPercent] as const,
+  rule: (workspaceId: string, ruleId: string) =>
+    [...assertionKeys.all(workspaceId), "rule", ruleId] as const,
+  reviews: (workspaceId: string, workItemId?: string) =>
+    [...assertionKeys.all(workspaceId), "reviews", workItemId ?? "all"] as const,
+  phrases: (workspaceId: string, family?: string) =>
+    [...assertionKeys.all(workspaceId), "phrases", family ?? "all"] as const,
+};
+
 /** ARCH-31 — procurement matching. Workspace-scoped, like work items. */
 export const procurementKeys = {
   all: (workspaceId: string) =>

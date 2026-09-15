@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai_settings,
     api_keys,
+    assertions,
     assistant,
     assistant_stream,
     audit_logs,
@@ -110,6 +111,12 @@ api_router.include_router(procurement.router)  # ARCH-31 three-way matching
 # including the reads: the detection output is a map of where every
 # identifier in a tenant's corpus sits, which IS the product.
 api_router.include_router(redactions.router)
+# ARCH33-S2:assertions-router. ARCH-33 clause assertions. Every route in it is
+# capability-gated, including the reads: the review queue is a list of every
+# clause finding the engine produced on a tenant's contracts, which IS the
+# product. Gating only the writes would let a tenant read all of it and simply
+# not click resolve.
+api_router.include_router(assertions.router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

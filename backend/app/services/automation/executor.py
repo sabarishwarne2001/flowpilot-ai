@@ -386,6 +386,22 @@ def _execute_node(
         _record_node(state, node_key=node.node_key, node_type=node.node_type, status=AutomationNodeRunStatus.COMPLETED)
         return True
 
+    # ARCH33-S2:assertion-node-dispatch. Four lines here, and everything
+    # specific to an assertion in app/services/assertions/node_executor.py.
+    #
+    # This module is the hot path of the automation engine and is gated by
+    # ARCH-13's own suite; putting retrieval, evaluation and triage inside it
+    # would make every future change to a clause check a change to the module
+    # that runs every workflow in the product.
+    #
+    # The import is local on purpose: node_executor imports _record_node and
+    # _propagate_skip back out of this module, and a module-scope import here
+    # would close the cycle at startup.
+    if node.node_type == "assertion":
+        from app.services.assertions import node_executor
+
+        return node_executor.execute(state, node=node)
+
     if node.node_type == "action":
         action_type = str(config.get("action_type") or "").lower().strip()
         if action_type in ("llm.extract", "llm.classify"):

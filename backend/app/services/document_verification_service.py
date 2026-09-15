@@ -353,7 +353,28 @@ def resolve(
 
     from datetime import datetime, timezone
 
-    disagreed = {f.field_path: f for f in verification.fields if not f.agreed}
+    # ARCH33-S2:assertion-fields-are-not-ours. A verification can now carry
+    # `assertion:{definition_id}` fields written by ARCH-33's triage, and this
+    # resolver must not demand values for them.
+    #
+    # Resolving an extracted field means choosing its VALUE. Resolving an
+    # assertion means choosing which EDGE a paused execution takes, and the
+    # reviewer is asked a different question ("It passes" / "It fails") on a
+    # different screen. Left in, every assertion on a document would make this
+    # function refuse with "fields are still unresolved" for a field nobody
+    # was ever shown here — so the extraction review could not be completed at
+    # all.
+    #
+    # `app/services/assertions/triage.py` owns those rows, and both resolvers
+    # close the verification only once NOTHING on it is outstanding, so
+    # neither can release an execution the other was still waiting on.
+    from app.services.assertions.vocabulary import FIELD_PATH_PREFIX
+
+    disagreed = {
+        f.field_path: f
+        for f in verification.fields
+        if not f.agreed and not f.field_path.startswith(FIELD_PATH_PREFIX)
+    }
     unknown = sorted(set(chosen) - set(disagreed))
     if unknown:
         raise VerificationError(
