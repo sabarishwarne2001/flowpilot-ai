@@ -153,6 +153,34 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One assertion evaluated against one work item.",
     ),
+    # ARCH-34 §5.7 — one radar SWEEP.
+    #
+    # THE SWEEP, NEVER THE FINDING. §5.7 is explicit that the radar is
+    # "not metered per finding, because charging per anomaly found
+    # creates the wrong incentive", and it is right: a meter that counts
+    # findings pays the vendor more the noisier its detector is, and the
+    # person holding the bill is the one who has to dismiss each one.
+    #
+    # REQUEST, like procurement.case and unlike redaction.page, because
+    # the cost here is the assignment rather than the paper. A sweep is
+    # one comparison pass over a workspace's candidate set; a forty-page
+    # scan and a one-page letter cost the same 128-permutation MinHash
+    # comparison and the same pgvector probe. Metering per page would
+    # price a long contract as forty sweeps of work never done.
+    #
+    # Emitted only when the sweep CREATED OR REFRESHED a finding, keyed
+    # on the input digest. A re-run over unchanged inputs writes no row
+    # and emits nothing, so an idle nightly job on a settled workspace
+    # bills zero forever. That is the property that makes running it
+    # every night affordable to the customer as well as to us.
+    UsageEventType(
+        name="radar.sweep",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One anomaly radar sweep that produced or refreshed a finding.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"

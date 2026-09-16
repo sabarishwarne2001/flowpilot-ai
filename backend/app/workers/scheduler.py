@@ -105,6 +105,30 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         at_minute=30,
         description="Seal partner revenue-share periods (ARCH-27).",
     ),
+    # ARCH34-S2:anomaly-nightly-schedule. Price surge and contract drift
+    # are statistical: a series does not change between two documents
+    # arriving, so running them per document would recompute the same
+    # median dozens of times a day to reach the same answer. §5.3 puts
+    # them in a nightly batch for exactly that reason.
+    #
+    # 04:00 rather than midnight: ARCH-14's usage seal runs at 00:20 and
+    # the partner revenue-share pair at 03:00 and 03:30, and stacking a
+    # fourth sweep onto the same window would have four batch jobs
+    # competing for the LIGHT queue while the estate is otherwise idle.
+    #
+    # Duplicate detection is NOT here. The value of telling somebody an
+    # invoice is a duplicate collapses the moment it is paid, and payment
+    # runs happen the same day documents arrive, so that path is
+    # `anomaly.scan_document` at ingest. The nightly job re-sweeps
+    # anything the per-document scan missed — a worker that was down when
+    # a document finished ingestion leaves it never compared, and nothing
+    # in the NEXT document's arrival path knows to go back for it.
+    ScheduledJob(
+        job_type="anomaly.nightly",
+        interval_seconds=86_400,
+        at_hour=4,
+        description="Price surge, contract drift and duplicate catch-up (ARCH-34).",
+    ),
     ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,

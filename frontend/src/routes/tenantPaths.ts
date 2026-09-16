@@ -112,6 +112,11 @@ export const ROUTE_PATTERNS = {
   workspaceProcurementCase: "procurement/:caseId",
   workspaceProcurementPolicies: "procurement/policies",
   workspaceRedaction: "redactions/:jobId",
+  // ARCH34-S3:radar-path. The audit radar is workspace-scoped because a
+  // finding names two work items and work items are workspace-scoped; an
+  // organization-level route would have to fan out across workspaces the
+  // reader may not be a member of.
+  workspaceRadar: "radar",
   workspaceNotifications: "notifications",
   workspaceSettings: "settings",
 } as const;

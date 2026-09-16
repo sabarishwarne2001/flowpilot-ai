@@ -128,11 +128,11 @@ __all__ = [
     "MAX_EVIDENCE_ITEMS",
     "MAX_EVIDENCE_TEXT",
     "MAX_SHINGLE_SAMPLES",
-    "CAPABILITY_FORENSIC_RADAR",
+    "CAPABILITY_ANOMALY_RADAR",
     "USAGE_EVENT_RADAR_SWEEP",
     "OUTBOX_EVENT_ANOMALY_DETECTED",
-    "JOB_RADAR_FINGERPRINT",
-    "JOB_RADAR_SWEEP",
+    "JOB_ANOMALY_SCAN_DOCUMENT",
+    "JOB_ANOMALY_NIGHTLY",
     "EMBEDDING_DIMENSION",
 ]
 
@@ -476,7 +476,12 @@ MAX_SHINGLE_SAMPLES: int = 12
 #: literal and the reasoning; `verify_arch34.py` asserts the two agree.
 #: `ADDON_KEYS` is asserted equal to `entitlement_service`'s priced catalog at
 #: import, so registering this there would fail at boot.
-CAPABILITY_FORENSIC_RADAR: str = "capability.forensic_radar"
+#: ARCH34-S2:radar-vocabulary-names. The key is `capability.anomaly_radar`,
+#: which is what §5.7 names and what `app/core/entitlements.py` registers.
+#: Tranche 1 shipped `capability.forensic_radar` from the master prompt; the
+#: spec wins, because the key appears in a published tier version and a
+#: capability nobody's plan carries is a feature that is silently off.
+CAPABILITY_ANOMALY_RADAR: str = "capability.anomaly_radar"
 
 #: METERED ON THE SWEEP, NEVER ON THE FINDING.
 #:
@@ -506,8 +511,12 @@ OUTBOX_EVENT_ANOMALY_DETECTED: str = "anomaly.detected"
 #: in `app/workers/profiles.py` stops the entire fleet booting, because
 #: `assert_imports_match_profile()` raises `ProfileError` at every worker's
 #: startup on a handler no profile claims.
-JOB_RADAR_FINGERPRINT: str = "radar.fingerprint"
-JOB_RADAR_SWEEP: str = "radar.sweep"
+#: `radar.sweep` was BOTH a job type and the usage event name in Tranche 1.
+#: Renaming the jobs leaves it unambiguously the meter — a job type and a
+#: meter sharing one string is survivable and is exactly the collision that
+#: costs an hour the first time somebody greps for it.
+JOB_ANOMALY_SCAN_DOCUMENT: str = "anomaly.scan_document"
+JOB_ANOMALY_NIGHTLY: str = "anomaly.nightly"
 
 #: What `document_chunks.embedding` is declared with, copied from
 #: `arch11_step2_chunks_expand`. `verify_arch34.py` asserts this equals

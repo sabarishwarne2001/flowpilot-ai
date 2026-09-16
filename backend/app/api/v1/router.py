@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai_settings,
     api_keys,
+    anomalies,
     assertions,
     assistant,
     assistant_stream,
@@ -117,6 +118,11 @@ api_router.include_router(redactions.router)
 # product. Gating only the writes would let a tenant read all of it and simply
 # not click resolve.
 api_router.include_router(assertions.router)
+# ARCH34-S2:anomalies-router. ARCH-34 forensic audit radar. Every route in it
+# is capability-gated, INCLUDING the reads: gating only the writes would let a
+# tenant without the capability read every duplicate the engine found and
+# simply not act on them, which is the product.
+api_router.include_router(anomalies.router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)

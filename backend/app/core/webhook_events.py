@@ -44,6 +44,19 @@ WEBHOOK_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "procurement.completed",
         "procurement.approved",
         "procurement.disputed",
+        # ARCH34-S2:anomaly-detected-public. PUBLIC rather than INTERNAL,
+        # for the same reason the three above are: a tenant's AP
+        # automation is the intended consumer. §5.2 is explicit that the
+        # radar does not block payment itself — blocking is an ARCH-13
+        # rule a tenant chooses to write on top ("if a duplicate finding
+        # above 90% exists, send to review"), and a rule cannot fire on
+        # an event it cannot see.
+        #
+        # The payload names the finding and carries no evidence body.
+        # Evidence is quoted document text, and pushing it through a
+        # webhook would send contract language to whatever URL a tenant
+        # configured; the API serves it under the capability gate.
+        "anomaly.detected",
     }
 )
 

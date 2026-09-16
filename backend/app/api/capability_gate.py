@@ -41,6 +41,10 @@ _DISPLAY_NAMES = {
     # body reads "capability.semantic_assertions is included on higher
     # plans", which is a key name in front of a customer.
     entitlements.SEMANTIC_ASSERTIONS_CAPABILITY: "Clause assertions",
+    # ARCH34-S2:capability-anomaly-radar-display. Without an entry here the
+    # 402 body reads "capability.anomaly_radar is included on higher plans",
+    # which is a key name in front of a customer.
+    entitlements.ANOMALY_RADAR_CAPABILITY: "Forensic audit radar",
 }
 
 

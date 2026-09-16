@@ -252,6 +252,11 @@ from app.models.assertion import (  # noqa: F401
     AssertionEvaluation,
     AssertionRetrievalPhrase,
 )
+from app.models.radar import (  # noqa: F401
+    AnomalyFinding,
+    AnomalySuppression,
+    DocumentFingerprint,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,
@@ -555,6 +560,10 @@ __all__ = [
     "AssertionDefinition",
     "AssertionEvaluation",
     "AssertionRetrievalPhrase",
+    # ARCH-34 — cross-document anomaly and duplicate radar.
+    "AnomalyFinding",
+    "AnomalySuppression",
+    "DocumentFingerprint",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.
     "MarketplaceInstallation",
     "MarketplaceItem",

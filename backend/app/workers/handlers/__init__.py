@@ -51,6 +51,9 @@ ARCH31_JOB_TYPES: frozenset[str] = frozenset({"procurement.score"})
 ARCH32_JOB_TYPES: frozenset[str] = frozenset(
     {"redaction.detect", "redaction.apply"}
 )
+ARCH34_JOB_TYPES: frozenset[str] = frozenset(
+    {"anomaly.scan_document", "anomaly.nightly"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -76,6 +79,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH27_JOB_TYPES
     | ARCH31_JOB_TYPES
     | ARCH32_JOB_TYPES
+    | ARCH34_JOB_TYPES
 )
 
 
@@ -240,6 +244,24 @@ def _partner_rev_share_seal(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_rev_share_seal(db, payload)
 
 
+def _anomaly_scan_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.radar import handle_anomaly_scan_document
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        result = handle_anomaly_scan_document(db, payload)
+        db.commit()
+        return result
+
+
+def _anomaly_nightly(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.radar import handle_anomaly_nightly
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        # The nightly handler commits per workspace itself, so one tenant's
+        # malformed extraction cannot roll back another tenant's findings.
+        return handle_anomaly_nightly(db, payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -295,6 +317,15 @@ _HANDLERS = {
     # entire fleet booting.
     "redaction.detect": _redaction_detect,
     "redaction.apply": _redaction_apply,
+    # ARCH34-S2:radar-handlers. Both are also listed on the LIGHT profile
+    # in app/workers/profiles.py, and `anomaly.nightly` is in
+    # DEFAULT_SCHEDULE in app/workers/scheduler.py. A handler here with no
+    # profile there is a job that enqueues cleanly and never runs — and
+    # assert_imports_match_profile() raises ProfileError at every worker's
+    # startup on a handler no profile claims, so registering these without
+    # the profile entry stops the entire fleet booting.
+    "anomaly.scan_document": _anomaly_scan_document,
+    "anomaly.nightly": _anomaly_nightly,
 }
 
 
@@ -355,6 +386,7 @@ __all__ = [
     "ARCH27_JOB_TYPES",
     "ARCH31_JOB_TYPES",
     "ARCH32_JOB_TYPES",
+    "ARCH34_JOB_TYPES",
     "ALL_PHASE_JOB_TYPES",
     "register_all",
 ]

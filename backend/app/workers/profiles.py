@@ -109,6 +109,20 @@ LIGHT = WorkerProfile(
             # ProfileError at every worker's startup on a handler no
             # profile claims.
             "procurement.score",
+            # ARCH34-S2:radar-light-profile. ARCH-34 anomaly radar. The
+            # whole detector set is integer arithmetic, a fixed
+            # 128-permutation MinHash over hashlib, and dot products
+            # over vectors ARCH-11 already computed and stored. Nothing
+            # under app/services/radar/ imports SentenceTransformers,
+            # PaddleOCR or pypdfium; the drift detector reaches ARCH-33's
+            # family parsers, which are regular expressions over Decimal.
+            #
+            # As with every entry above, this is not optional
+            # bookkeeping: assert_imports_match_profile() raises
+            # ProfileError at every worker's startup on a handler no
+            # profile claims.
+            "anomaly.scan_document",
+            "anomaly.nightly",
         }
     ),
     allow_heavy=frozenset(),

@@ -96,6 +96,7 @@ __all__ = [
     "REDACTION_CAPABILITY",
     # ARCH33-S1:capability-assertions-key
     "SEMANTIC_ASSERTIONS_CAPABILITY",
+    "ANOMALY_RADAR_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -165,12 +166,29 @@ REDACTION_CAPABILITY: str = "capability.redaction"
 #: existing token meters gate the inference.
 SEMANTIC_ASSERTIONS_CAPABILITY: str = "capability.semantic_assertions"
 
+#: ARCH34-S2:capability-anomaly-radar-key. Cross-document anomaly and
+#: duplicate ingestion radar. A CAPABILITY, not an ADDON, and the
+#: distinction is the same one ARCH-31, ARCH-32 and ARCH-33 recorded
+#: above: add-ons are separately purchasable line items with a price, a
+#: halt effect and a grace ladder, and `ADDON_KEYS` is asserted equal to
+#: `entitlement_service`'s catalog at import. Putting this in ADDON_KEYS
+#: would fail that catalog assertion at boot.
+#:
+#: ONE KEY, NOT TWO. §5.7 gives Business duplicate detection through L2
+#: and Enterprise the full detector set including L3 and contract drift.
+#: That is a PACKAGING decision made in a published tier version and in
+#: `sweep.settings_for`, not a second entitlement key — a second key
+#: would mean a tenant could hold "radar" without "radar L3" and the
+#: console would have to render two lock states for one feature.
+ANOMALY_RADAR_CAPABILITY: str = "capability.anomaly_radar"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
     RECONCILIATION_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
+    ANOMALY_RADAR_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set

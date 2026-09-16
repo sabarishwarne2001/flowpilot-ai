@@ -74,6 +74,10 @@ const ExecutionTimeline = lazy(
 const VerificationReviewQueue = lazy(
   () => import("@/pages/Verification/VerificationReviewQueue"),
 );
+// ARCH34-S3:radar-route
+const ForensicAuditRadar = lazy(
+  () => import("@/pages/radar/ForensicAuditRadar"),
+);
 const RedactionStudio = lazy(
   () => import("@/pages/redaction/RedactionStudio"),
 );
@@ -394,6 +398,14 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.workspaceRedaction}
                       element={<RedactionStudio />}
+                    />
+                    {/* ARCH-34. The page takes no props: it resolves the
+                        workspace and the capability from the same two hooks
+                        every other capability-gated page uses, so the gate
+                        cannot be forgotten at a call site. */}
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceRadar}
+                      element={<ForensicAuditRadar />}
                     />
                     <Route
                       path={ROUTE_PATTERNS.workspaceProcurement}
