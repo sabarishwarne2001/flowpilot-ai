@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Bell, FileText } from "lucide-react";
 import { notificationApi } from "@/services/api/notification";
+import { useTenant } from "@/hooks/useTenant";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
@@ -17,6 +18,7 @@ import type { Notification } from "@/types/notification"; // Explicitly imported
  * High-fidelity, user-isolated Notifications list panel for FlowPilot AI.
  */
 export const Notifications: React.FC = () => {
+  const { state: tenantState } = useTenant();
   const workspaceId = useActiveWorkspaceId();
 
   // Query raw alerts data from PostgreSQL using the centralized Query context
@@ -149,10 +151,7 @@ export const Notifications: React.FC = () => {
                 {alert.work_item_id && (
                   <div className="flex-shrink-0 self-end md:self-center">
                     <Link
-                      to={ROUTES.WORK_ITEM_DETAILS.replace(
-                        ":id",
-                        alert.work_item_id
-                      )}
+                      to={tenantState.status === "ready" ? `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items/${alert.work_item_id}` : "#"}
                       className="inline-flex items-center px-3 py-1.5 border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-[11px] font-black tracking-wider uppercase rounded-lg transition-all focus:outline-none"
                       title="Inspect Associated Document Analytics"
                     >
