@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import {
   Sliders,
   Plus,
@@ -1125,6 +1126,13 @@ export const Automation: React.FC = () => {
                 Timeline trace logs mapping active condition comparisons and
                 execution states.
               </p>
+              {/* ARCH36-S1:timeline-link — the execution history had a route and no way in. */}
+              <Link
+                to="./timeline"
+                className="mt-2 inline-flex text-xs font-bold text-primary hover:underline"
+              >
+                Open full run history
+              </Link>
             </header>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar bg-muted/5">

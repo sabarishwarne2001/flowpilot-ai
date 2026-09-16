@@ -123,6 +123,11 @@ RESERVED_SLUGS: frozenset[str] = frozenset(
         "onboarding",
         "organization",
         "organizations",
+        # ARCH36-S1:reserved-partners — /partners is the ARCH-27 partner
+        # portal. Reserved together with the frontend's
+        # RESERVED_ROUTE_SEGMENTS; existing rows are checked by
+        # `verify_arch36.py --db`.
+        "partners",
         "plan",
         "plans",
         "profile",

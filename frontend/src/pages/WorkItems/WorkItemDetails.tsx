@@ -21,6 +21,7 @@ import { workItemKeys, keepPreviousWithinWorkspace } from "@/services/api/queryK
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import ChatPanel from "@/components/assistant/ChatPanel";
+import StartRedactionButton from "@/components/redaction/StartRedactionButton";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
@@ -179,6 +180,16 @@ export const WorkItemDetails: React.FC = () => {
           Back to Documents
         </Link>
 
+        {/* ARCH36-S1:redaction-entry-mount */}
+        <div className="flex items-center gap-2">
+        {workspaceId && (
+          <StartRedactionButton
+            workspaceId={workspaceId}
+            workItemId={workItem.id}
+            mimeType={workItem.file_type}
+            status={workItem.status}
+          />
+        )}
         {workItem.status === "FAILED" && (
           <button
             type="button"
@@ -190,6 +201,7 @@ export const WorkItemDetails: React.FC = () => {
             Retry Processing
           </button>
         )}
+        </div>
       </header>
 
       <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm dark:border-border/40">

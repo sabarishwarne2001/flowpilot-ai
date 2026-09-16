@@ -92,7 +92,16 @@ export const CaseQueue: React.FC = () => {
 
   return (
     <div className="space-y-4 p-6">
-      <h1 className={PAGE_TITLE}>Invoice matching</h1>
+      {/* ARCH36-S1:policies-link — the tolerance editor had a route and no way in. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className={PAGE_TITLE}>Invoice matching</h1>
+        <Link
+          to="./policies"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Tolerance policies
+        </Link>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((filter, index) => (

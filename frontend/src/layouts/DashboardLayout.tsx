@@ -19,6 +19,9 @@ import { useTenant } from "@/hooks/useTenant";
 // authenticated route renders, because login is not the only way a
 // session begins.
 import { useTimezoneCapture } from "@/hooks/useTimezoneCapture";
+// ARCH36-S1:command-palette-mount — Ctrl+K / ⌘K. Mounted here because this
+// layout only renders beneath TenantGuard, and the palette builds tenant paths.
+import CommandPalette from "@/components/layout/CommandPalette";
 
 export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -77,6 +80,7 @@ export const DashboardLayout: React.FC = () => {
       </div>
 
       <Sidebar onLogout={handleLogout} />
+      <CommandPalette />
 
       <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <Header />

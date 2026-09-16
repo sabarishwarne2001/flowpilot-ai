@@ -82,6 +82,10 @@ const VerificationReviewQueue = lazy(
 const ForensicAuditRadar = lazy(
   () => import("@/pages/radar/ForensicAuditRadar"),
 );
+// ARCH36-S1:assertions-route
+const AssertionReviewPage = lazy(
+  () => import("@/pages/Assertions/AssertionReviewPage"),
+);
 const RedactionStudio = lazy(
   () => import("@/pages/redaction/RedactionStudio"),
 );
@@ -400,6 +404,11 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.workspaceVerification}
                       element={<VerificationReviewQueue />}
+                    />
+                    {/* ARCH-36. ARCH-33's queue, routed for the first time. */}
+                    <Route
+                      path={ROUTE_PATTERNS.workspaceAssertions}
+                      element={<AssertionReviewPage />}
                     />
                     {/* ARCH-31. The policies route is declared
                         BEFORE the :caseId route: react-router would

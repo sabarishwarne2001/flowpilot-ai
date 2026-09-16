@@ -31,6 +31,10 @@ export const RESERVED_ROUTE_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "notifications",
   "onboarding",
   "organizations",
+  // ARCH-36. /partners is the ARCH-27 portal. Reserved here and in
+  // app/core/slugs.py together: a segment reserved only in the browser would
+  // strand an organization that the backend still lets take the slug.
+  "partners",
   "profile",
   "register",
   "settings",
@@ -121,6 +125,9 @@ export const ROUTE_PATTERNS = {
   // organization-level route would have to fan out across workspaces the
   // reader may not be a member of.
   workspaceRadar: "radar",
+  // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
+  // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
+  workspaceAssertions: "assertions",
   workspaceNotifications: "notifications",
   workspaceSettings: "settings",
 } as const;
@@ -237,6 +244,24 @@ export const automationTimelinePath = (
   orgSlug: string,
   workspaceSlug: string,
 ): string => `${automationPath(orgSlug, workspaceSlug)}/timeline`;
+
+// ARCH36-S1:tenant-paths — helpers for the workspace routes that had a pattern
+// and no helper. A link built by string concatenation in a page is a link
+// verify_arch36.py cannot see.
+export const radarPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/radar`;
+
+export const assertionsPath = (
+  orgSlug: string,
+  workspaceSlug: string,
+): string => `${workspacePath(orgSlug, workspaceSlug)}/assertions`;
+
+export const redactionPath = (
+  orgSlug: string,
+  workspaceSlug: string,
+  jobId: string,
+): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/redactions/${encodeURIComponent(jobId)}`;
 
 export const verificationPath = (
   orgSlug: string,
@@ -457,6 +482,21 @@ export const runTenantPathSelfCheck = (): string[] => {
     "the branding console is an organization route, not a tenant route",
     organizationBrandingPath("acme") === "/organizations/acme/branding" &&
       parseTenantPath("/organizations/acme/branding") === null,
+  );
+  // ARCH-36.
+  expect(
+    "the partner portal is NOT parsed as a tenant path",
+    partnerPortalPath() === "/partners" &&
+      parseTenantPath("/partners/book") === null,
+  );
+  expect(
+    "the redaction studio nests under the workspace and encodes the job id",
+    redactionPath("acme", "engineering", "job 1") ===
+      "/acme/engineering/redactions/job%201",
+  );
+  expect(
+    "the assertion review page nests under the workspace",
+    assertionsPath("acme", "engineering") === "/acme/engineering/assertions",
   );
   expect(
     "single-segment and root paths carry no tenant",

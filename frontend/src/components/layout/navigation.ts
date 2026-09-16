@@ -5,11 +5,17 @@ import {
   ClipboardCheck,
   CreditCard,
   FileText,
+  GitCompareArrows,
+  Handshake,
+  History,
   KeyRound,
   KeySquare,
   LayoutDashboard,
+  ListChecks,
   Mail,
   MessageSquare,
+  PlusSquare,
+  Radar,
   ScrollText,
   Gauge,
   Palette,
@@ -17,6 +23,7 @@ import {
   Shield,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Store,
   Sliders,
   Target,
@@ -25,9 +32,15 @@ import {
   Webhook,
 } from "lucide-react";
 
+import { CAPABILITY, type CapabilityKey } from "@/constants/capabilities";
 import {
+  ROUTE_PATTERNS,
+  assertionsPath,
   assistantPath,
   automationPath,
+  automationTimelinePath,
+  createWorkspacePath,
+  notificationsPath,
   organizationApiKeysPath,
   organizationAuditPath,
   organizationBillingPath,
@@ -45,12 +58,17 @@ import {
   organizationSettingsPath,
   organizationSLOsPath,
   organizationWebhooksPath,
+  partnerPortalPath,
   platformMarginsPath,
+  procurementPath,
+  procurementPoliciesPath,
+  radarPath,
   verificationPath,
   workItemsPath,
   workspaceDashboardPath,
   workspaceSettingsPath,
 } from "@/routes/tenantPaths";
+import type { WorkspaceRole } from "@/types/tenancy";
 
 export interface NavigationItem {
   readonly name: string;
@@ -58,41 +76,269 @@ export interface NavigationItem {
   readonly icon: LucideIcon;
 }
 
+/**
+ * ARCH36-S1:grouped-navigation — the workspace navigation model.
+ *
+ * WHY EVERY ENTRY NAMES ITS ROUTE PATTERN
+ * =======================================
+ *
+ * Five shipped pages (the audit radar, the matching queue, its tolerance
+ * policies, the execution history and the partner portal) had a route and no
+ * link. Each one was a page somebody built, registered in App.tsx and then
+ * never connected, and nothing noticed because nothing could: a link is a
+ * string, and a missing string is not a type error.
+ *
+ * `route` is typed as a key of ROUTE_PATTERNS, so a renamed pattern is a
+ * compile error here. verify_arch36.py reads these keys back and fails when a
+ * workspace pattern without a parameter has neither an entry below nor a
+ * written reason for having none.
+ *
+ * WHY LOCKED ENTRIES ARE SHOWN, NOT HIDDEN
+ * ========================================
+ *
+ * An entry with a `capability` renders with a lock when the organization's
+ * tier does not grant it, and still links to its page, which renders the
+ * existing lock card. Hiding it would make the upgrade invisible to the one
+ * reader it is aimed at. The lock is not a security control: every endpoint
+ * behind these pages refuses on the server through `capability_gate`.
+ *
+ * WHY THE GROUPS ARE DATA
+ * =======================
+ *
+ * The sidebar and the command palette both render from this function. A
+ * second list in the palette would drift from the first within a release.
+ */
+export type RoutePatternKey = keyof typeof ROUTE_PATTERNS;
+
+export type WorkspaceNavigationGroupKey =
+  | "workspace"
+  | "intelligence"
+  | "processing"
+  | "automation"
+  | "review"
+  | "configuration";
+
+export interface WorkspaceNavigationItem extends NavigationItem {
+  /** Stable identifier. Tests and the command palette key on it. */
+  readonly id: string;
+  readonly route: RoutePatternKey;
+  /** One line, shown in the command palette. */
+  readonly description: string;
+  readonly capability?: CapabilityKey;
+  /** Omitted means every workspace role. */
+  readonly minimumRole?: WorkspaceRole;
+  /**
+   * Match the path exactly. Needed where another entry's path extends this
+   * one: the dashboard is the workspace root, and the execution history
+   * lives under the workflows path.
+   */
+  readonly end?: boolean;
+  readonly keywords?: readonly string[];
+}
+
+export interface WorkspaceNavigationGroup {
+  readonly key: WorkspaceNavigationGroupKey;
+  readonly label: string;
+  readonly items: readonly WorkspaceNavigationItem[];
+}
+
+export const buildWorkspaceNavigationGroups = (
+  orgSlug: string,
+  workspaceSlug: string,
+): readonly WorkspaceNavigationGroup[] => [
+  {
+    key: "workspace",
+    label: "Workspace",
+    items: [
+      {
+        id: "overview",
+        name: "Overview",
+        route: "workspaceDashboard",
+        path: workspaceDashboardPath(orgSlug, workspaceSlug),
+        icon: LayoutDashboard,
+        description: "Workspace dashboard and processing health",
+        end: true,
+        keywords: ["home", "dashboard"],
+      },
+      {
+        id: "notifications",
+        name: "Notifications",
+        route: "workspaceNotifications",
+        path: notificationsPath(orgSlug, workspaceSlug),
+        icon: Bell,
+        description: "Every alert raised in this workspace",
+        keywords: ["alerts", "inbox"],
+      },
+    ],
+  },
+  {
+    key: "intelligence",
+    label: "Document intelligence",
+    items: [
+      {
+        id: "documents",
+        name: "Documents",
+        route: "workspaceWorkItems",
+        path: workItemsPath(orgSlug, workspaceSlug),
+        icon: FileText,
+        description: "Upload, search and inspect processed documents",
+        keywords: ["work items", "upload", "files", "ocr"],
+      },
+      {
+        id: "assistant",
+        name: "AI Assistant",
+        route: "workspaceAssistant",
+        path: assistantPath(orgSlug, workspaceSlug),
+        icon: MessageSquare,
+        description: "Ask questions across the workspace's documents",
+        keywords: ["chat", "rag", "ask"],
+      },
+    ],
+  },
+  {
+    key: "processing",
+    label: "Enterprise processing",
+    items: [
+      {
+        id: "procurement",
+        name: "Three-way matching",
+        route: "workspaceProcurement",
+        path: procurementPath(orgSlug, workspaceSlug),
+        icon: GitCompareArrows,
+        description: "Invoice, purchase order and receipt reconciliation cases",
+        capability: CAPABILITY.reconciliation,
+        keywords: ["procurement", "invoice matching", "po", "grn", "accounts payable"],
+      },
+      {
+        id: "radar",
+        name: "Forensic audit radar",
+        route: "workspaceRadar",
+        path: radarPath(orgSlug, workspaceSlug),
+        icon: Radar,
+        description: "Duplicate ingestion, price surges and contract drift",
+        capability: CAPABILITY.anomalyRadar,
+        keywords: ["anomaly", "duplicate", "fraud", "audit"],
+      },
+    ],
+  },
+  {
+    key: "automation",
+    label: "Automation",
+    items: [
+      {
+        id: "workflows",
+        name: "Workflows",
+        route: "workspaceAutomation",
+        path: automationPath(orgSlug, workspaceSlug),
+        icon: Sliders,
+        description: "Rules that run when documents change",
+        end: true,
+        keywords: ["automation", "rules", "triggers"],
+      },
+      {
+        id: "run-history",
+        name: "Run history",
+        route: "workspaceAutomationTimeline",
+        path: automationTimelinePath(orgSlug, workspaceSlug),
+        icon: History,
+        description: "Every workflow execution, grouped by correlation",
+        keywords: ["timeline", "executions", "logs", "suppressed"],
+      },
+    ],
+  },
+  {
+    key: "review",
+    label: "Human review",
+    items: [
+      {
+        id: "review-queue",
+        name: "Review queue",
+        route: "workspaceVerification",
+        path: verificationPath(orgSlug, workspaceSlug),
+        icon: ClipboardCheck,
+        description: "Extraction fields the models disagreed on",
+        keywords: ["verification", "hitl", "triage"],
+      },
+      {
+        id: "assertion-reviews",
+        name: "Clause assertions",
+        route: "workspaceAssertions",
+        path: assertionsPath(orgSlug, workspaceSlug),
+        icon: ListChecks,
+        description: "Requirement checks that need a reviewer's verdict",
+        capability: CAPABILITY.semanticAssertions,
+        keywords: ["assertions", "clauses", "contracts", "triage"],
+      },
+    ],
+  },
+  {
+    key: "configuration",
+    label: "Configuration",
+    items: [
+      {
+        id: "settings",
+        name: "Settings",
+        route: "workspaceSettings",
+        path: workspaceSettingsPath(orgSlug, workspaceSlug),
+        icon: Settings,
+        description: "Workspace, AI and document settings",
+        // Viewers cannot inspect settings tabs.
+        minimumRole: "CONTRIBUTOR",
+        keywords: ["preferences", "configuration", "email"],
+      },
+    ],
+  },
+];
+
+/**
+ * Destinations the command palette offers that do not earn a sidebar row:
+ * pages reached from inside another page in normal use.
+ */
+export const buildWorkspaceShortcutItems = (
+  orgSlug: string,
+  workspaceSlug: string,
+): readonly WorkspaceNavigationItem[] => [
+  {
+    id: "procurement-policies",
+    name: "Tolerance policies",
+    route: "workspaceProcurementPolicies",
+    path: procurementPoliciesPath(orgSlug, workspaceSlug),
+    icon: SlidersHorizontal,
+    description: "Price and quantity tolerances for three-way matching",
+    capability: CAPABILITY.reconciliation,
+    keywords: ["procurement", "tolerance", "policy"],
+  },
+];
+
+/** Flat list, kept for callers written before ARCH-36. */
 export const buildNavigationItems = (
   orgSlug: string,
   workspaceSlug: string,
-): readonly NavigationItem[] => [
-  {
-    name: "Overview",
-    path: workspaceDashboardPath(orgSlug, workspaceSlug),
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Documents",
-    path: workItemsPath(orgSlug, workspaceSlug),
-    icon: FileText,
-  },
-  {
-    name: "AI Assistant",
-    path: assistantPath(orgSlug, workspaceSlug),
-    icon: MessageSquare,
-  },
-  {
-    name: "Workflows",
-    path: automationPath(orgSlug, workspaceSlug),
-    icon: Sliders,
-  },
-  {
-    name: "Review queue",
-    path: verificationPath(orgSlug, workspaceSlug),
-    icon: ClipboardCheck,
-  },
-  {
-    name: "Settings",
-    path: workspaceSettingsPath(orgSlug, workspaceSlug),
-    icon: Settings,
-  },
-];
+): readonly WorkspaceNavigationItem[] =>
+  buildWorkspaceNavigationGroups(orgSlug, workspaceSlug).flatMap(
+    (group) => group.items,
+  );
+
+/** Organization-scoped destination the palette offers to every member. */
+export const buildCreateWorkspaceItem = (orgSlug: string): NavigationItem => ({
+  name: "Create workspace",
+  path: createWorkspacePath(orgSlug),
+  icon: PlusSquare,
+});
+
+/** ARCH-27 partner portal. Shown only to a partner member. */
+export const buildPartnerNavigationItems = (
+  isPartnerMember: boolean,
+): readonly NavigationItem[] =>
+  isPartnerMember
+    ? [
+        {
+          name: "Partner portal",
+          path: partnerPortalPath(),
+          icon: Handshake,
+        },
+      ]
+    : [];
 
 export const buildOrganizationNavigationItems = (
   orgSlug: string,
