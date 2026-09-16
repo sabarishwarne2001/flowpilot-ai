@@ -17,7 +17,7 @@
     "verify:contracts:ci": "node scripts/verify-api-contracts.mjs --schema ../openapi.json",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "clean": "rimraf dist",
-    "prepare": "husky install"
+    "prepare": "cd .. && husky || exit 0"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.20",
