@@ -412,6 +412,19 @@ export const assertionKeys = {
     [...assertionKeys.all(workspaceId), "phrases", family ?? "all"] as const,
 };
 
+/**
+ * ARCH35-S3:autonomy-keys. Organization-scoped: one calibrated model per
+ * (organization, decision type).
+ */
+export const autonomyKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "autonomy"] as const,
+  overview: (organizationId: string) =>
+    [...autonomyKeys.all(organizationId), "overview"] as const,
+  reliability: (organizationId: string, decisionType: string) =>
+    [...autonomyKeys.all(organizationId), "reliability", decisionType] as const,
+};
+
 /** ARCH-31 — procurement matching. Workspace-scoped, like work items. */
 export const procurementKeys = {
   all: (workspaceId: string) =>

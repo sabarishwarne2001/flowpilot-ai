@@ -97,6 +97,7 @@ __all__ = [
     # ARCH33-S1:capability-assertions-key
     "SEMANTIC_ASSERTIONS_CAPABILITY",
     "ANOMALY_RADAR_CAPABILITY",
+    "CALIBRATED_AUTONOMY_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -182,6 +183,14 @@ SEMANTIC_ASSERTIONS_CAPABILITY: str = "capability.semantic_assertions"
 #: console would have to render two lock states for one feature.
 ANOMALY_RADAR_CAPABILITY: str = "capability.anomaly_radar"
 
+#: ARCH35-S1:capability-calibrated-autonomy-key. Calibrated autonomy and
+#: conformal risk control. A CAPABILITY, not an ADDON, for the reason every
+#: phase since ARCH-31 records: ADDON_KEYS is asserted equal to
+#: entitlement_service's priced catalog at import. Not metered either:
+#: refitting is platform maintenance, and the value is the reviews a tenant
+#: no longer has to do. Tenants without it keep the fixed thresholds.
+CALIBRATED_AUTONOMY_CAPABILITY: str = "capability.calibrated_autonomy"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -189,6 +198,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
     ANOMALY_RADAR_CAPABILITY,
+    CALIBRATED_AUTONOMY_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -246,6 +256,26 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "step, have it compiled to a typed check, and route anything "
             "uncertain or failing to review with the paragraph attached. "
             "Bundled into a tier, not purchasable on its own."
+        ),
+    ),
+    # ARCH-34 defect, fixed by ARCH-35: the radar key was declared and put in
+    # CAPABILITY_KEYS but never registered here, so has_capability raised on
+    # every radar request and no tier version could carry the key.
+    Entitlement(
+        name=ANOMALY_RADAR_CAPABILITY,
+        description=(
+            "Forensic audit radar: duplicate documents, unit-price surges and "
+            "contract drift, each raised with the evidence side by side. "
+            "Bundled into a tier, not purchasable on its own."
+        ),
+    ),
+    # ARCH-35
+    Entitlement(
+        name=CALIBRATED_AUTONOMY_CAPABILITY,
+        description=(
+            "Calibrated autonomy: automatic approval decided by each tenant's "
+            "own reviewed outcomes, with a stated, measured bound on the error "
+            "rate of what is approved without a human. Bundled into a tier."
         ),
     ),
 )

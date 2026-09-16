@@ -129,6 +129,22 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         at_hour=4,
         description="Price surge, contract drift and duplicate catch-up (ARCH-34).",
     ),
+    # ARCH35-S1:calibration-schedule. Harvest hourly, so a newly entitled
+    # tenant waits at most an hour for its first fitted model. Refit and
+    # monitor nightly at 05:00, after ARCH-34's 04:00 sweep: the monitor also
+    # refreshes last_checked_at, and a model nobody checks for three days
+    # falls back to the cold start.
+    ScheduledJob(
+        job_type="calibration.harvest",
+        interval_seconds=3_600,
+        description="Harvest reviewer outcomes into calibration labels (ARCH-35).",
+    ),
+    ScheduledJob(
+        job_type="calibration.refit",
+        interval_seconds=86_400,
+        at_hour=5,
+        description="Refit calibration models and run drift monitoring (ARCH-35).",
+    ),
     ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,

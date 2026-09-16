@@ -54,6 +54,23 @@ export const VerificationReviewQueue: React.FC = () => {
 
   const detail = detailQuery.data ?? null;
 
+  // ARCH35-S3:review-all-fields. A verification calibrated autonomy held back
+  // asks about EVERY extracted field, and an audit sample was one the platform
+  // would have approved on its own. Assertion fields are never answered here:
+  // they are resolved in the clause review queue, and the server refuses a
+  // value for them on this endpoint.
+  const calibrationDetails = (detail?.details?.["calibration"] ?? null) as {
+    readonly review_all_fields?: boolean;
+    readonly audit_sample?: boolean;
+  } | null;
+  const reviewAll = Boolean(calibrationDetails?.review_all_fields);
+  const isAudit = Boolean(calibrationDetails?.audit_sample);
+  const isReviewable = useCallback(
+    (field: VerificationFieldResponse): boolean =>
+      !field.field_path.startsWith("assertion:") && (reviewAll || !field.agreed),
+    [reviewAll],
+  );
+
   const resolve = useMutation({
     mutationFn: (values: Record<string, unknown>) =>
       resolveVerification(workspaceId, active?.id as string, { values }),
@@ -73,12 +90,12 @@ export const VerificationReviewQueue: React.FC = () => {
     }
     const values: Record<string, unknown> = {};
     detail.fields.forEach((field) => {
-      if (!field.agreed) {
+      if (isReviewable(field)) {
         values[field.field_path] = field.consensus_value;
       }
     });
     resolve.mutate(values);
-  }, [detail, resolve]);
+  }, [detail, resolve, isReviewable]);
 
   const submitEdits = useCallback(() => {
     if (!detail || resolve.isPending) {
@@ -86,7 +103,7 @@ export const VerificationReviewQueue: React.FC = () => {
     }
     const values: Record<string, unknown> = {};
     detail.fields.forEach((field) => {
-      if (field.agreed) {
+      if (!isReviewable(field)) {
         return;
       }
       values[field.field_path] =
@@ -95,7 +112,7 @@ export const VerificationReviewQueue: React.FC = () => {
           : field.consensus_value;
     });
     resolve.mutate(values);
-  }, [detail, edits, resolve]);
+  }, [detail, edits, resolve, isReviewable]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -285,9 +302,17 @@ export const VerificationReviewQueue: React.FC = () => {
               </div>
             </header>
 
+            {reviewAll ? (
+              <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                {isAudit
+                  ? "Accuracy audit: this document would have been approved automatically. Confirm or correct every field — audits are how the error limit stays checkable."
+                  : "Held for review by calibrated autonomy. Confirm or correct every field, including the ones the agents agreed on."}
+              </p>
+            ) : null}
+
             <ul className="mt-3 space-y-3">
               {detail.fields
-                .filter((field) => !field.agreed)
+                .filter(isReviewable)
                 .map((field) => (
                   <FieldDiff
                     key={field.field_path}
@@ -304,7 +329,7 @@ export const VerificationReviewQueue: React.FC = () => {
                 ))}
             </ul>
 
-            {detail.fields.filter((f) => !f.agreed).length === 0 && (
+            {detail.fields.filter(isReviewable).length === 0 && (
               <p className="mt-3 text-sm text-muted-foreground">
                 Every field agreed. Nothing needs a decision here.
               </p>

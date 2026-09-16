@@ -82,6 +82,10 @@ export const ROUTE_PATTERNS = {
   // /organizations/:orgSlug/marketplace cannot be misread by parseTenantPath
   // as a workspace route. No new reserved segment is needed.
   organizationMarketplace: "marketplace",
+  // ARCH35-S3:autonomy-path. Organization-scoped: a calibrated model is fitted
+  // per (organization, decision type), across every workspace's reviews.
+  // "organizations" is already a reserved segment, so no new entry is needed.
+  organizationAutonomy: "autonomy",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
@@ -176,6 +180,9 @@ export const organizationBrandingPath = (orgSlug: string): string =>
 
 export const organizationMarketplacePath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/marketplace`;
+
+export const organizationAutonomyPath = (orgSlug: string): string =>
+  `${organizationPath(orgSlug)}/autonomy`;
 
 export const partnerPortalPath = (): string => "/partners";
 

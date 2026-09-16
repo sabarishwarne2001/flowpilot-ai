@@ -54,6 +54,9 @@ ARCH32_JOB_TYPES: frozenset[str] = frozenset(
 ARCH34_JOB_TYPES: frozenset[str] = frozenset(
     {"anomaly.scan_document", "anomaly.nightly"}
 )
+ARCH35_JOB_TYPES: frozenset[str] = frozenset(
+    {"calibration.harvest", "calibration.refit"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -80,6 +83,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH31_JOB_TYPES
     | ARCH32_JOB_TYPES
     | ARCH34_JOB_TYPES
+    | ARCH35_JOB_TYPES
 )
 
 
@@ -262,6 +266,22 @@ def _anomaly_nightly(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_anomaly_nightly(db, payload)
 
 
+def _calibration_harvest(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.calibration import handle_calibration_harvest
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        # Commits per organization itself: one tenant's failure must not roll
+        # back another tenant's labels.
+        return handle_calibration_harvest(db, payload)
+
+
+def _calibration_refit(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.calibration import handle_calibration_refit
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_calibration_refit(db, payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -326,6 +346,12 @@ _HANDLERS = {
     # the profile entry stops the entire fleet booting.
     "anomaly.scan_document": _anomaly_scan_document,
     "anomaly.nightly": _anomaly_nightly,
+    # ARCH35-S1:calibration-handlers. Both are also on the LIGHT profile in
+    # app/workers/profiles.py and in DEFAULT_SCHEDULE in
+    # app/workers/scheduler.py. assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "calibration.harvest": _calibration_harvest,
+    "calibration.refit": _calibration_refit,
 }
 
 
@@ -387,6 +413,7 @@ __all__ = [
     "ARCH31_JOB_TYPES",
     "ARCH32_JOB_TYPES",
     "ARCH34_JOB_TYPES",
+    "ARCH35_JOB_TYPES",
     "ALL_PHASE_JOB_TYPES",
     "register_all",
 ]

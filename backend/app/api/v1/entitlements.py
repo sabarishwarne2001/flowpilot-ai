@@ -89,8 +89,16 @@ def get_entitlements(
             )
         )
 
+    # ARCH35-S1:capabilities-resolved. Tier resolved once for the list.
+    from app.api import capability_gate
+
     return OrganizationEntitlementsResponse(
-        organization_id=organization_id, as_of=now, addons=addons
+        organization_id=organization_id,
+        as_of=now,
+        addons=addons,
+        capabilities=capability_gate.granted_capabilities(
+            db, organization_id=organization_id
+        ),
     )
 
 

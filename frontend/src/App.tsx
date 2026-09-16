@@ -56,6 +56,10 @@ const OrganizationAnalytics = lazy(
 const OrganizationBranding = lazy(
   () => import("@/pages/organization/OrganizationBranding"),
 );
+// ARCH35-S3:autonomy-route
+const AutonomySettings = lazy(
+  () => import("@/pages/autonomy/AutonomySettings"),
+);
 const MarketplaceCatalog = lazy(
   () => import("@/pages/marketplace/MarketplaceCatalog"),
 );
@@ -311,6 +315,13 @@ export default function App() {
                     <Route
                       path={ROUTE_PATTERNS.organizationMarketplace}
                       element={<MarketplaceCatalog />}
+                    />
+                    {/* ARCH-35. The page resolves the organization and the
+                        capability from the same hooks every gated page
+                        uses, so the gate cannot be forgotten at a call site. */}
+                    <Route
+                      path={ROUTE_PATTERNS.organizationAutonomy}
+                      element={<AutonomySettings />}
                     />
                   </Route>
                 </Route>

@@ -468,6 +468,18 @@ export const ASSERTION_ENDPOINTS = {
     `/workspaces/${seg(workspaceId)}/assertions/phrases`,
 } as const;
 
+/** ARCH35-S3:autonomy-endpoints — calibrated autonomy. */
+export const AUTONOMY_ENDPOINTS = {
+  overview: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/autonomy`,
+  settings: (organizationId: string, decisionType: string): string =>
+    `/organizations/${org(organizationId)}/autonomy/${seg(decisionType)}`,
+  reliability: (organizationId: string, decisionType: string): string =>
+    `/organizations/${org(organizationId)}/autonomy/${seg(decisionType)}/reliability`,
+  resume: (organizationId: string, decisionType: string): string =>
+    `/organizations/${org(organizationId)}/autonomy/${seg(decisionType)}/resume`,
+} as const;
+
 /** ARCH-30 Tranche 2 (D-8) — add-on entitlements and add-on checkout. */
 export const ENTITLEMENT_ENDPOINTS = {
   entitlements: (organizationId: string): string =>

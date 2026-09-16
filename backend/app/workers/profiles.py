@@ -123,6 +123,13 @@ LIGHT = WorkerProfile(
             # profile claims.
             "anomaly.scan_document",
             "anomaly.nightly",
+            # ARCH35-S1:calibration-light-profile. ARCH-35 calibration. A fit
+            # is at most 20,000 labels through scikit-learn's isotonic
+            # regression or a two-parameter Newton iteration, plus one SciPy
+            # quantile — milliseconds, and nothing under
+            # app/services/calibration/ imports a model, OCR or a PDF engine.
+            "calibration.harvest",
+            "calibration.refit",
         }
     ),
     allow_heavy=frozenset(),

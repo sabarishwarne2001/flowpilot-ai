@@ -32,6 +32,8 @@ export interface OrganizationEntitlements {
   readonly organization_id: string;
   readonly as_of: string;
   readonly addons: readonly AddonAccess[];
+  /** ARCH35-S3:capabilities-typed. Tier-bundled capability keys held. */
+  readonly capabilities: readonly string[];
 }
 
 /** The structured 402 body from `app/api/addon_gate.py`. */

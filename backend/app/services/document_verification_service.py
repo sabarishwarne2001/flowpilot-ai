@@ -272,7 +272,41 @@ def triage(
         "disagreed_fields": [f.field_path for f in consensus.fields if not f.agreed],
     }
 
-    if consensus.all_agreed and consensus.confidence >= threshold:
+    # ARCH35-S1:verification-calibrated-autonomy. With
+    # capability.calibrated_autonomy, `auto_approved` is decided by the
+    # tenant's calibrated model for `verification.document`: the calibrated
+    # probability against the conformal threshold, with suspension and audit
+    # sampling. Without it `decide_verification` returns None and the fixed
+    # threshold below applies, exactly as before.
+    #
+    # A verification held back by calibration is marked `review_all_fields`:
+    # the reviewer confirms EVERY field, because a document-level label is only
+    # evidence if every field on the document was looked at.
+    from app.services.calibration import apply as calibrated_autonomy
+
+    autonomy = calibrated_autonomy.decide_verification(
+        db, verification=verification, confidence=consensus.confidence
+    )
+    if autonomy is not None:
+        verification.details = {
+            **(verification.details or {}),
+            "calibration": {
+                **autonomy.as_details(),
+                "decision_type": "verification.document",
+                "review_all_fields": not autonomy.auto_allowed,
+            },
+        }
+        if autonomy.auto_allowed:
+            verification.status = (
+                VerificationStatus.AGREED
+                if consensus.all_agreed
+                else VerificationStatus.AUTO_APPROVED
+            )
+            verification.auto_approved = True
+        else:
+            verification.status = VerificationStatus.DISAGREED
+            verification.auto_approved = False
+    elif consensus.all_agreed and consensus.confidence >= threshold:
         verification.status = VerificationStatus.AGREED
         verification.auto_approved = True
     elif consensus.confidence >= threshold:
@@ -370,10 +404,18 @@ def resolve(
     # neither can release an execution the other was still waiting on.
     from app.services.assertions.vocabulary import FIELD_PATH_PREFIX
 
+    # ARCH-35. A verification calibrated autonomy held back asks the reviewer
+    # about EVERY extracted field, agreed or not; see `triage` above.
+    review_all = bool(
+        ((verification.details or {}).get("calibration") or {}).get(
+            "review_all_fields"
+        )
+    )
     disagreed = {
         f.field_path: f
         for f in verification.fields
-        if not f.agreed and not f.field_path.startswith(FIELD_PATH_PREFIX)
+        if (review_all or not f.agreed)
+        and not f.field_path.startswith(FIELD_PATH_PREFIX)
     }
     unknown = sorted(set(chosen) - set(disagreed))
     if unknown:

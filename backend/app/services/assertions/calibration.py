@@ -20,8 +20,24 @@ Everything a caller touches — `fit`, `calibrate`, `effective_threshold`,
 key, exactly as §4.4's DDL writes it, so ARCH-35 adds its own table and its
 own FK in its own migration and adopts every row this phase wrote.
 
-WHY ISOTONIC AND NOT PLATT
-==========================
+ARCH35-S1:estimator-replaced — WHAT ARCH-35 CHANGED BEHIND THIS INTERFACE
+===========================================================================
+
+`fit` now delegates to `app.services.calibration`: PLATT between 50 and 199
+labels, ISOTONIC (scikit-learn, `out_of_bounds='clip'`) from 200, the
+held-out ECE refusal, and nothing below 50 — exactly as before, an unfitted
+model and a None from `calibrate`. `calibrate` evaluates the stored map for
+its method. `effective_threshold` additionally honours a STORED model's
+conformal threshold and suspension, never lowering the administrator's own
+setting. Every caller of this module sees the same five names with the same
+signatures; the new `CalibrationModel` fields all have defaults.
+
+The section below is ARCH-33's original reasoning for choosing isotonic. It
+still holds from 200 labels up; below that, ARCH-35 uses Platt, because an
+isotonic map on eighty labels fits the noise (see `estimators.py`).
+
+WHY ISOTONIC AND NOT PLATT (ARCH-33)
+====================================
 
 Platt scaling fits a sigmoid: two parameters, well behaved on little data, and
 wrong in a specific way here. It assumes the relationship between score and
@@ -63,6 +79,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional, Sequence
 
 from app.services.assertions import vocabulary as vocab
+from app.services.calibration import estimators as _estimators
+from app.services.calibration import fit as _fitting
 
 __all__ = [
     "LabeledExample",
@@ -125,10 +143,21 @@ class CalibrationModel:
     model_id: Optional[str] = None
     engine_version: str = vocab.ENGINE_VERSION
     examples: tuple[LabeledExample, ...] = field(default_factory=tuple)
+    #: ARCH-35. Which estimator produced `parameters`: ISOTONIC or PLATT.
+    #: `points` stays populated for display (for Platt, a sampled curve).
+    method: str = "ISOTONIC"
+    #: The persisted map — `calibration_models.breakpoints`.
+    parameters: Any = field(default_factory=dict)
+    #: ARCH-35. Present only for a STORED model: its conformal threshold, its
+    #: audit rate and whether it is suspended. None for ARCH-33's per-call fit.
+    autonomy: Any = None
+    #: Why a fit over enough labels was refused, when it was.
+    rejected_reason: str = ""
 
     def as_details(self) -> dict[str, Any]:
         return {
             "family": self.family,
+            "method": self.method,
             "fitted": self.fitted,
             "label_count": self.label_count,
             "model_id": self.model_id,
@@ -148,7 +177,7 @@ def fit(
     family: str,
     model_id: Optional[str] = None,
 ) -> CalibrationModel:
-    """Pool-adjacent-violators isotonic fit. Deterministic, O(n log n).
+    """ARCH-35's estimator: Platt from 50 labels, isotonic from 200.
 
     Below `MIN_LABELS` this returns an UNFITTED model rather than a model
     fitted on too little. The difference is not cosmetic: an unfitted model
@@ -176,31 +205,40 @@ def fit(
             examples=ordered,
         )
 
-    # --- pool adjacent violators ------------------------------------------
+    # --- ARCH-35: the estimator behind the interface ------------------------
     #
-    # Each block holds (sum of labels, count, max score in the block). Blocks
-    # are merged left while the running mean would decrease, which is exactly
-    # the monotonicity constraint.
-    blocks: list[list[Decimal]] = []
-    for example in ordered:
-        label = Decimal("1") if example.correct else Decimal("0")
-        blocks.append([label, Decimal("1"), Decimal(str(example.raw_score))])
-        while len(blocks) > 1:
-            last = blocks[-1]
-            previous = blocks[-2]
-            if previous[0] / previous[1] <= last[0] / last[1]:
-                break
-            previous[0] += last[0]
-            previous[1] += last[1]
-            previous[2] = last[2]
-            blocks.pop()
+    # `fit_decision` selects the method by label count, fits on 80% of the
+    # examples, and refuses the fit when the held-out ECE is worse than the
+    # raw score's. A refused fit is an UNFITTED model: `calibrate` returns
+    # None and the evaluation goes to review, which is the same cold-start
+    # path as too few labels, enforced at the same three levels.
+    outcome = _fitting.fit_decision(
+        [
+            _fitting.Example(raw_score=float(e.raw_score), correct=bool(e.correct))
+            for e in ordered
+        ],
+        target_error_rate=0.05,
+    )
+    if not outcome.usable:
+        return CalibrationModel(
+            family=family,
+            points=(),
+            label_count=len(ordered),
+            fitted=False,
+            model_id=None,
+            examples=ordered,
+            method=outcome.method,
+            rejected_reason=outcome.rejected_reason,
+        )
 
     points = tuple(
         CalibrationPoint(
-            score=block[2].quantize(PROBABILITY_PLACES, rounding=ROUND_HALF_UP),
-            probability=_quantize(block[0] / block[1]),
+            score=Decimal(repr(score)).quantize(
+                PROBABILITY_PLACES, rounding=ROUND_HALF_UP
+            ),
+            probability=_quantize(Decimal(repr(probability))),
         )
-        for block in blocks
+        for score, probability in _estimators.sample_curve(outcome.fitted)
     )
 
     return CalibrationModel(
@@ -210,6 +248,8 @@ def fit(
         fitted=True,
         model_id=model_id,
         examples=ordered,
+        method=outcome.method,
+        parameters=dict(outcome.fitted.parameters),
     )
 
 
@@ -229,33 +269,25 @@ def calibrate(
 
     score = Decimal(str(raw))
 
-    # Below the first breakpoint: the lowest fitted probability. Above the
-    # last: the highest. Isotonic regression says nothing outside the range it
-    # saw, and extrapolating an increasing trend past the last observation is
-    # how a calibrator invents confidence it has no evidence for.
-    if score <= model.points[0].score:
-        return _quantize(model.points[0].probability)
-    if score >= model.points[-1].score:
-        return _quantize(model.points[-1].probability)
+    # ARCH-35: evaluate the persisted map for its method. Isotonic maps
+    # interpolate linearly between breakpoints and clip at both ends — they
+    # say nothing outside the range they saw, and extrapolating an increasing
+    # trend past the last observation is how a calibrator invents confidence.
+    # Platt maps are the fitted sigmoid with a non-negative slope.
+    if model.parameters:
+        value = _estimators.evaluate(model.method, model.parameters, score)
+        if value is None:
+            return None
+        return _quantize(Decimal(repr(value)))
 
-    previous = model.points[0]
-    for point in model.points[1:]:
-        if score <= point.score:
-            span = point.score - previous.score
-            if span <= 0:
-                return _quantize(point.probability)
-            # Linear interpolation between breakpoints. The fit itself is a
-            # step function; interpolating between steps keeps the output
-            # monotone and stops a one-unit change in the raw score from
-            # moving the probability by twenty points.
-            ratio = (score - previous.score) / span
-            value = previous.probability + ratio * (
-                point.probability - previous.probability
-            )
-            return _quantize(value)
-        previous = point
-
-    return _quantize(model.points[-1].probability)  # pragma: no cover
+    # A model built by hand from points alone (no stored parameters): the
+    # breakpoints ARE the isotonic map.
+    breakpoints = {
+        "x": [str(point.score) for point in model.points],
+        "y": [str(point.probability) for point in model.points],
+    }
+    value = _estimators.evaluate("ISOTONIC", breakpoints, score)
+    return _quantize(Decimal(repr(value)))
 
 
 def effective_threshold(
@@ -271,6 +303,15 @@ def effective_threshold(
     chosen = Decimal(str(configured))
     if model is None or not model.fitted:
         return max(chosen, Decimal(vocab.COLD_START_THRESHOLD))
+    terms = getattr(model, "autonomy", None)
+    if terms is not None:
+        # ARCH-35. A stored model that is paused, or whose error limit is not
+        # achievable, reviews everything: probabilities are clamped below 1,
+        # so a threshold of exactly 1 is never met. Otherwise the conformal
+        # threshold RAISES the administrator's setting and never lowers it.
+        if not terms.allows_automation:
+            return Decimal("1")
+        return max(chosen, Decimal(str(terms.threshold)))
     return chosen
 
 

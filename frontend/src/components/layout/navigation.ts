@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Store,
   Sliders,
+  Target,
   Scale,
   Users,
   Webhook,
@@ -33,6 +34,7 @@ import {
   organizationAnalyticsPath,
   organizationBrandingPath,
   organizationMarketplacePath,
+  organizationAutonomyPath,
   organizationBYOKPath,
   organizationCompliancePath,
   organizationDeveloperPath,
@@ -195,6 +197,14 @@ export const buildOrganizationNavigationItems = (
       name: "Partner marketplace",
       path: organizationMarketplacePath(orgSlug),
       icon: Store,
+    });
+    // ARCH35-S3:autonomy-nav. ADMIN reads why a decision type is paused and
+    // how accurate the platform has been; changing the error limit and
+    // resuming are OWNER-gated by RequireOrgOwner on the endpoints.
+    items.push({
+      name: "Calibrated autonomy",
+      path: organizationAutonomyPath(orgSlug),
+      icon: Target,
     });
   }
 

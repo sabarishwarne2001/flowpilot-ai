@@ -43,6 +43,13 @@ class OrganizationEntitlementsResponse(BaseModel):
     organization_id: uuid.UUID
     as_of: datetime
     addons: list[AddonAccessResponse]
+    # ARCH35-S1:capabilities-listed. `useCapabilityAccess` has always read this
+    # field; until ARCH-35 it did not exist, so every capability-gated page
+    # showed its lock card to entitled tenants too.
+    capabilities: list[str] = Field(
+        default_factory=list,
+        description="Tier-bundled capability keys this organization holds.",
+    )
 
 
 __all__ = ["AddonAccessResponse", "AddonState", "OrganizationEntitlementsResponse"]

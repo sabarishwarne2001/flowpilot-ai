@@ -314,12 +314,21 @@ class AssertionEvaluation(Base, UUIDMixin):
         Numeric(6, 5), nullable=True
     )
 
-    #: ARCH-35's model version, when there is one. No foreign key, by design:
-    #: the table it will reference does not exist yet, and ARCH-35 adds the
-    #: constraint in its own migration rather than ARCH-33 inventing a table
-    #: for a phase that has not been specified.
+    #: ARCH-35's model version, when there is one.
+    #:
+    #: ARCH35-S1:calibration-model-fk. ARCH-33 created this column bare and
+    #: nullable so ARCH-35 could attach the constraint in its own migration
+    #: (`arch35_step1_calibration`) without touching ARCH-33's table. SET NULL:
+    #: an evaluation is evidence of a decision and outlives the model version
+    #: that informed it.
     calibration_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey(
+            "calibration_models.id",
+            ondelete="SET NULL",
+            name="fk_ae_calibration_model",
+        ),
+        nullable=True,
     )
 
     routed_to: Mapped[str] = mapped_column(String(8), nullable=False)

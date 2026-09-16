@@ -257,6 +257,10 @@ from app.models.radar import (  # noqa: F401
     AnomalySuppression,
     DocumentFingerprint,
 )
+from app.models.calibration import (  # noqa: F401
+    CalibrationLabel,
+    CalibrationModelVersion,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,
@@ -564,6 +568,9 @@ __all__ = [
     "AnomalyFinding",
     "AnomalySuppression",
     "DocumentFingerprint",
+    # ARCH-35 — calibrated autonomy and conformal risk control.
+    "CalibrationLabel",
+    "CalibrationModelVersion",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.
     "MarketplaceInstallation",
     "MarketplaceItem",

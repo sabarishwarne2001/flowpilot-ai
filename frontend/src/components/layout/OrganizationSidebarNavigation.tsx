@@ -39,6 +39,8 @@ const SECTION_BY_ITEM: Readonly<Record<string, SectionName>> = {
   "Data governance & compliance": "Governance & security",
   "Enterprise identity": "Governance & security",
   "Audit log": "Governance & security",
+  // ARCH35-S3:autonomy-section
+  "Calibrated autonomy": "Governance & security",
 
   "Developer platform": "Platform & integrations",
   "Enterprise BYOK & models": "Platform & integrations",

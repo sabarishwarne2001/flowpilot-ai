@@ -190,6 +190,17 @@ def calibration_model_for(
     question `calibration_model_id` exists to answer. ARCH-35 replaces this
     with a stored, versioned model and inherits the same interface.
     """
+    # ARCH35-S1:stored-calibration-model. With capability.calibrated_autonomy
+    # the stored, versioned model in `calibration_models` is the only source:
+    # its id is what `calibration_model_id` now references. Without it this
+    # returns None and ARCH-33's per-call fit applies, exactly as before.
+    from app.services.calibration import apply as calibrated_autonomy
+
+    stored = calibrated_autonomy.assertion_model(
+        db, organization_id=organization_id, family=family
+    )
+    if stored is not None:
+        return stored
     return calibration.fit(
         labels_for(db, organization_id=organization_id, family=family),
         family=family,
@@ -426,6 +437,17 @@ def record_evaluation(
         effective_threshold=threshold,
     )
 
+    # ARCH-35. A stored model may still hold back a PASS route: a paused
+    # decision type, or an audit sample. `withhold_assertion` only ever turns
+    # PASS into TRIAGE; `routing.decide` stays the only route to `pass`.
+    from app.services.calibration import apply as calibrated_autonomy
+    from app.services.calibration.labels import assertion_sample_key
+
+    audit_key = assertion_sample_key(definition.id, work_item_id, node_run_id)
+    decision, audit_rate = calibrated_autonomy.withhold_assertion(
+        decision, model=model, sample_key=audit_key
+    )
+
     verification: Optional[DocumentVerification] = None
     created = False
     if decision.routed_to == vocab.ROUTE_TRIAGE:
@@ -442,6 +464,12 @@ def record_evaluation(
             ),
             evidence=evaluation_result.evidence,
         )
+        if audit_rate is not None:
+            # Recorded where the label harvester reads it, so the reviewer's
+            # answer is labelled as an audit and weighted 1/r.
+            calibrated_autonomy.record_assertion_audit(
+                verification, sample_key=audit_key, audit_rate=audit_rate
+            )
 
     evaluation = AssertionEvaluation(
         organization_id=definition.organization_id,

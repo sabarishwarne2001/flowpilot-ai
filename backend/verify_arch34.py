@@ -903,7 +903,13 @@ def gate_db() -> None:
         head = db.execute(
             sql("SELECT version_num FROM alembic_version")
         ).scalar_one_or_none()
-        check("alembic head is arch34_step1_radar", head == "arch34_step1_radar", str(head))
+        # ARCH35-S1:head-widened-34. ARCH-35 moves the head forward; this gate
+        # certifies that ARCH-34's schema is present at or after its own head.
+        check(
+            "alembic head is arch34_step1_radar or later",
+            head in ("arch34_step1_radar", "arch35_step1_calibration"),
+            str(head),
+        )
 
         cols = dict(
             db.execute(

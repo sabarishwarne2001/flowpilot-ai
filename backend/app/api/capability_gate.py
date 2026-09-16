@@ -45,6 +45,8 @@ _DISPLAY_NAMES = {
     # 402 body reads "capability.anomaly_radar is included on higher plans",
     # which is a key name in front of a customer.
     entitlements.ANOMALY_RADAR_CAPABILITY: "Forensic audit radar",
+    # ARCH35-S1:capability-calibrated-autonomy-display.
+    entitlements.CALIBRATED_AUTONOMY_CAPABILITY: "Calibrated autonomy",
 }
 
 
@@ -92,6 +94,25 @@ def has_capability(db: Session, *, organization_id: Any, capability_key: str) ->
     )
 
 
+def granted_capabilities(db: Session, *, organization_id: Any) -> list[str]:
+    """Every capability key the organization's tier carries, in key order.
+
+    Resolves the tier ONCE, through the same reading `has_capability` uses —
+    `tier.entries[].limit_key` — so the console's list and the request-path
+    gate cannot disagree.
+    """
+    from app.services import quota_service
+
+    tier = quota_service.resolve_tier(db, organization_id=organization_id)
+    if tier is None:
+        return []
+    held = {
+        getattr(entry, "limit_key", None)
+        for entry in getattr(tier, "entries", ()) or ()
+    }
+    return [key for key in entitlements.CAPABILITY_KEYS if key in held]
+
+
 def require_capability(
     db: Session, *, context: Any, capability_key: str, operation: str
 ) -> None:
@@ -131,4 +152,9 @@ def require_capability(
     )
 
 
-__all__ = ["CAPABILITY_REQUIRED_CODE", "has_capability", "require_capability"]
+__all__ = [
+    "CAPABILITY_REQUIRED_CODE",
+    "granted_capabilities",
+    "has_capability",
+    "require_capability",
+]

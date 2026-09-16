@@ -7,6 +7,7 @@ from app.api.v1 import (
     api_keys,
     anomalies,
     assertions,
+    autonomy,
     assistant,
     assistant_stream,
     audit_logs,
@@ -123,6 +124,10 @@ api_router.include_router(assertions.router)
 # tenant without the capability read every duplicate the engine found and
 # simply not act on them, which is the product.
 api_router.include_router(anomalies.router)
+# ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
+# capability-gated, including the reads: the reliability diagram is the
+# platform's measured accuracy on this tenant's documents, which is the product.
+api_router.include_router(autonomy.router)
 
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)
