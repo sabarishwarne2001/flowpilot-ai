@@ -44,7 +44,7 @@ export const AISettings: React.FC = () => {
     resolver: zodResolver(aiSettingsSchema),
     defaultValues: {
       provider: "GROQ",
-      model: "llama3.3-70b-versatile",
+      model: "openai/gpt-oss-20b",
       temperature: 0.7,
       max_output_tokens: 4096,
       top_p: 0.9,

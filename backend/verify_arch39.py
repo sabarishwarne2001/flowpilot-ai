@@ -1095,11 +1095,19 @@ def run_mutations(rec: Recorder) -> None:
 
 def run_regressions(rec: Recorder, *, db: bool) -> None:
     for script in REGRESSIONS:
+        # In backend/verify_arch39.py around line 1098-1103:
         def gate(script: str = script) -> None:
             command = [sys.executable, str(BACKEND / script)] + (["--db"] if db else [])
-            done = subprocess.run(command, cwd=str(BACKEND),
-                                  capture_output=True, text=True, timeout=3600)
-            lines = done.stdout.splitlines()
+            done = subprocess.run(
+                command,
+                cwd=str(BACKEND),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=3600,
+            )
+            lines = (done.stdout or "").splitlines()
             print(f"         ({script}) {lines[-1] if lines else ''}")
             assert done.returncode == 0, "\n".join(lines[-30:])
 
