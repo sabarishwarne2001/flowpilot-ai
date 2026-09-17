@@ -217,6 +217,8 @@ export interface SeatSyncRequest {
 
 export interface EphemeralSessionResponse {
   readonly url: string;
+  /** ARCH39-S1:ts-billing — "checkout" | "portal" | "assigned" (Free, no redirect). */
+  readonly kind?: string;
   readonly expires_at?: string | null;
 }
 
@@ -250,6 +252,8 @@ export interface PlanListResponse {
   readonly current_tier_key: string | null;
   readonly as_of: string;
   readonly plans: readonly PlanOption[];
+  readonly checkout_available?: boolean;
+  readonly checkout_unavailable_reason?: string | null;
 }
 
 export const microsToUnits = (micros: number): number => micros / 1_000_000;

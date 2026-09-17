@@ -26,6 +26,8 @@ interface ChatPanelProps {
   readonly conversationId?: string;
   readonly workItemId?: string;
   readonly className?: string;
+  /** ARCH39-S1:panel-draft — text to place in the composer; nonce re-applies it. */
+  readonly draft?: { readonly text: string; readonly nonce: number };
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -33,6 +35,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   conversationId,
   workItemId: _workItemId,
   className = "",
+  draft,
 }) => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
@@ -87,6 +90,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<MessageFormInput>({
     resolver: zodResolver(messageFormSchema),
@@ -95,6 +99,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       message: "",
     },
   });
+
+  useEffect(() => {
+    if (draft) {
+      setValue("message", draft.text, { shouldDirty: true });
+    }
+    // Re-applied per nonce, so choosing the same template twice works.
+  }, [draft?.nonce, setValue]);
 
   const handleCitationClick = useCallback((citation: SourceCitation): void => {
     setActiveCitation(citation);
@@ -159,6 +170,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       await queryClient.invalidateQueries({
         queryKey: assistantKeys.conversations(workspaceId),
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: assistantKeys.sessionsRoot(workspaceId),
       });
     } catch (err) {
       setLocalMessages((previous) =>

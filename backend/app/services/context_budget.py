@@ -242,9 +242,24 @@ class ContextBudgetService:
         ai_settings: Any,
         assemble,  # context_assembly_service.assemble
     ) -> BudgetedContext:
-        window_tokens = int(
+        configured_window = int(
             getattr(ai_settings, "context_window_tokens", 0)
             or settings.LLM_CONTEXT_WINDOW_TOKENS
+        )
+        # ARCH39-S1:request-ceiling — the provider's per-request limit, less
+        # the output the request reserves, is what decides acceptance.
+        from app.services import rag_guard
+
+        window_tokens = rag_guard.prompt_token_budget(
+            provider=str(
+                getattr(getattr(ai_settings, "provider", None), "value", "")
+                or getattr(ai_settings, "provider", "")
+            ),
+            model=str(getattr(ai_settings, "model", "") or ""),
+            context_window=configured_window,
+            max_output_tokens=int(getattr(ai_settings, "max_output_tokens", 0) or 0),
+            ceilings=settings.LLM_REQUEST_TOKEN_CEILINGS,
+            default_ceiling=settings.LLM_REQUEST_TOKEN_CEILING_DEFAULT,
         )
         budget = WindowBudget.allocate(
             window_tokens=window_tokens, system_prompt=system_prompt

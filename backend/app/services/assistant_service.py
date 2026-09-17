@@ -103,11 +103,18 @@ class AssistantService:
                     completion_tokens=0,
                     total_tokens=0,
                     estimated_cost=0.0,
+                    cost_source="unmetered",
                 )
             else:
                 ai_settings = self._get_ai_settings(
                     db=db,
                     workspace_id=conversation.workspace_id,
+                )
+                # ARCH39-S1:service-override
+                from app.services import conversation_service
+
+                ai_settings = conversation_service.apply_model_override(
+                    ai_settings, conversation
                 )
 
                 workspace = db.get(Workspace, conversation.workspace_id)
@@ -201,6 +208,21 @@ class AssistantService:
             if work_item is None:
                 raise ValueError("Associated document not found.")
             return [work_item]
+
+        if getattr(conversation, "scope_mode", None) == "SELECTED":
+            from app.services import conversation_service
+
+            selected = conversation_service.scope_item_ids(db, conversation=conversation)
+            if not selected:
+                return []
+            return list(
+                db.execute(
+                    select(WorkItem).where(
+                        WorkItem.workspace_id == conversation.workspace_id,
+                        WorkItem.id.in_(selected),
+                    )
+                ).scalars()
+            )
 
         return None
 

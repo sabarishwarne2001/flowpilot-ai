@@ -207,6 +207,9 @@ class PlanListResponse(BaseModel):
     current_tier_key: Optional[str] = None
     as_of: datetime
     plans: list[PlanOption]
+    # ARCH39-S1:plan-list — whether paid checkout can start here, and why not.
+    checkout_available: bool = True
+    checkout_unavailable_reason: Optional[str] = None
 
     model_config = ConfigDict(protected_namespaces=())
 

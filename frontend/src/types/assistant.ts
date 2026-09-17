@@ -221,6 +221,12 @@ export interface TokenUsage {
   readonly total_tokens: number;
 
   readonly estimated_cost: number;
+
+  /** ARCH39-S1:ts-token-usage — "price_book" | "unpriced" | "unmetered". */
+  readonly cost_source?: string | null;
+
+  /** True when the request was trimmed to fit the provider's limit. */
+  readonly context_trimmed?: boolean;
 }
 
 /**

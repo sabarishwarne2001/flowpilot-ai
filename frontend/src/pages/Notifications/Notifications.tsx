@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 import { formatDateTime } from "@/utils/formatters";
-import { ROUTES } from "@/constants/routes";
+import { workItemDetailsPath } from "@/routes/tenantPaths";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { notificationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import type { Notification } from "@/types/notification"; // Explicitly imported custom type
@@ -151,7 +151,16 @@ export const Notifications: React.FC = () => {
                 {alert.work_item_id && (
                   <div className="flex-shrink-0 self-end md:self-center">
                     <Link
-                      to={tenantState.status === "ready" ? `/${tenantState.organization.organization_slug}/${tenantState.workspace.slug}/work-items/${alert.work_item_id}` : "#"}
+                      // ARCH39-S1:notification-link — the tenant-scoped helper, not a hand-built string.
+                      to={
+                        tenantState.status === "ready"
+                          ? workItemDetailsPath(
+                              tenantState.organization.organization_slug,
+                              tenantState.workspace.slug,
+                              alert.work_item_id,
+                            )
+                          : "."
+                      }
                       className="inline-flex items-center px-3 py-1.5 border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-[11px] font-black tracking-wider uppercase rounded-lg transition-all focus:outline-none"
                       title="Inspect Associated Document Analytics"
                     >

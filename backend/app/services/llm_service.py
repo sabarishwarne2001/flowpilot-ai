@@ -813,6 +813,40 @@ class LLMService:
             intent_instructions=intent_instructions,
         )
 
+    def _fit_rag_prompt(
+        self,
+        *,
+        query: str,
+        context: str,
+        history: list[dict[str, str]],
+        ai_settings: AISettings,
+        token_budget: int,
+    ):
+        """ARCH-39. Build the RAG prompt inside `token_budget` tokens.
+
+        The template, instructions and question are fixed; context is fitted
+        first, then the most recent history turns that still fit.
+        """
+        from app.services import rag_guard
+
+        skeleton = self._build_rag_prompt(
+            query=query, context="", history=[], ai_settings=ai_settings
+        )
+        fitted = rag_guard.fit_prompt_parts(
+            fixed_text=skeleton,
+            context=context,
+            history=history,
+            token_budget=token_budget,
+            margin=settings.LLM_TOKEN_ESTIMATE_MARGIN,
+        )
+        prompt = self._build_rag_prompt(
+            query=query,
+            context=fitted.context,
+            history=fitted.history,
+            ai_settings=ai_settings,
+        )
+        return prompt, fitted
+
     def classify_document(
         self,
         text: str,
@@ -896,11 +930,7 @@ class LLMService:
         ai_settings: AISettings,
     ) -> tuple[str, TokenUsage]:
         from app.core.request_context import stage
-        from app.services import llm_metering
-
-        prompt = self._build_rag_prompt(
-            query=query, context=context, history=history, ai_settings=ai_settings
-        )
+        from app.services import llm_metering, rag_guard
 
         metered = (
             db is not None
@@ -916,6 +946,28 @@ class LLMService:
             ai_settings=ai_settings,
         )
 
+        # ARCH39-S1:synth-budget — this path had no budget: every earlier
+        # turn verbatim plus the full context, growing until a 413.
+        provider_name = str(getattr(effective_settings.provider, "value", effective_settings.provider))
+        model_name = str(effective_settings.model)
+        max_output = int(getattr(effective_settings, "max_output_tokens", 0) or 0)
+        budget = rag_guard.prompt_token_budget(
+            provider=provider_name,
+            model=model_name,
+            context_window=int(settings.LLM_CONTEXT_WINDOW_TOKENS),
+            max_output_tokens=max_output,
+            ceilings=settings.LLM_REQUEST_TOKEN_CEILINGS,
+            default_ceiling=settings.LLM_REQUEST_TOKEN_CEILING_DEFAULT,
+        )
+        prompt, fitted = self._fit_rag_prompt(
+            query=query,
+            context=context,
+            history=history,
+            ai_settings=effective_settings,
+            token_budget=budget,
+        )
+        trimmed = fitted.context_truncated or fitted.turns_dropped > 0
+
         reservation = None
         if metered:
             reservation = llm_metering.reserve(
@@ -928,19 +980,69 @@ class LLMService:
                 ai_settings=effective_settings,
             )
 
-        with stage("llm", provider=effective_settings.provider.value):
-            response, token_usage = self._execute_query(
-                prompt=prompt,
-                temperature=effective_settings.temperature,
-                ai_settings=effective_settings,
-                byok_client=byok_client,
-            )
+        attempt = 0
+        while True:
+            try:
+                with stage("llm", provider=effective_settings.provider.value):
+                    response, token_usage = self._execute_query(
+                        prompt=prompt,
+                        temperature=effective_settings.temperature,
+                        ai_settings=effective_settings,
+                        byok_client=byok_client,
+                    )
+                break
+            except Exception as exc:  # noqa: BLE001 — re-raised unless too large
+                too_large = rag_guard.classify_request_too_large(exc)
+                if too_large is None:
+                    raise
+                if too_large.limit:
+                    rag_guard.learned_ceilings.learn(provider_name, model_name, too_large.limit)
+                if attempt >= 1:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            "This question still exceeds the model's request limit "
+                            "after trimming the conversation. Start a new "
+                            "conversation or choose a model with a larger limit."
+                        ),
+                    ) from exc
+                attempt += 1
+                budget = rag_guard.shrunk_budget(
+                    budget, too_large, max_output_tokens=max_output
+                )
+                logger.warning(
+                    "llm.request_too_large_retry",
+                    extra={
+                        "provider": provider_name,
+                        "model": model_name,
+                        "limit": too_large.limit,
+                        "requested": too_large.requested,
+                        "retry_budget": budget,
+                    },
+                )
+                prompt, fitted = self._fit_rag_prompt(
+                    query=query,
+                    context=context,
+                    history=history,
+                    ai_settings=effective_settings,
+                    token_budget=budget,
+                )
+                trimmed = True
 
+        settlement = None
         if db is not None and reservation is not None:
             if credential_use is not None:
                 reservation.attach_credential_use(credential_use)
-            llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
+            settlement = llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
 
+        cost, cost_source = rag_guard.cost_from_settlement(settlement)
+        token_usage = token_usage.model_copy(
+            update={
+                "estimated_cost": cost,
+                "cost_source": cost_source,
+                "context_trimmed": trimmed,
+            }
+        )
         return response.strip(), token_usage
 
     def execute_prompt(

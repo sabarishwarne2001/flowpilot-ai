@@ -235,6 +235,14 @@ def settle_and_persist(
             )
             outcome.settled = True
             outcome.settlement = summary
+            # ARCH39-S1:settled-cost — the stored usage carries the price-book
+            # cost instead of the literal zero every adapter writes.
+            from app.services import rag_guard
+
+            settled_cost, cost_source = rag_guard.cost_from_settlement(summary)
+            resolved_usage = resolved_usage.model_copy(
+                update={"estimated_cost": settled_cost, "cost_source": cost_source}
+            )
 
             message = db.execute(
                 select(ConversationMessage).where(

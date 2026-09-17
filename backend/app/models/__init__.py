@@ -261,6 +261,11 @@ from app.models.calibration import (  # noqa: F401
     CalibrationLabel,
     CalibrationModelVersion,
 )
+# ARCH39-S1:models-registered
+from app.models.assistant_suite import (  # noqa: F401
+    ConversationScopeItem,
+    PromptTemplate,
+)
 from app.models.partner import (  # noqa: F401
     MarketplaceInstallation,
     MarketplaceItem,

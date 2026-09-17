@@ -9,6 +9,7 @@ from app.api.v1 import (
     assertions,
     autonomy,
     assistant,
+    assistant_sessions,
     assistant_stream,
     audit_logs,
     automation,
@@ -145,6 +146,8 @@ _SCOPED = (
     (dashboard.router,         "/dashboard",          "Dashboard"),
     (assistant.router,         "/assistant",          "AI Assistant"),
     (assistant_stream.router,  "/assistant",          "AI Assistant"),
+    # ARCH39-S1:sessions-router
+    (assistant_sessions.router, "/assistant",         "AI Assistant"),
     (automation.router,        "/automation",         "Automation"),
     (notifications.router,     "/notifications",      "Notifications"),
     (ai_settings.router,       "/ai-settings",        "AI Settings"),

@@ -746,8 +746,9 @@ def gates_db(rec: Recorder) -> None:
     try:
         def head() -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
-            assert value == EXPECTED_HEAD, (
-                f"alembic head is {value}; ARCH-36 has no migration and expects {EXPECTED_HEAD}"
+            # ARCH39-S1:head-widened-36. ARCH-36 added no migration; ARCH-39 does.
+            assert value in (EXPECTED_HEAD, "arch39_step1_conversations"), (
+                f"alembic head is {value}; expected {EXPECTED_HEAD} or later"
             )
 
         rec.check(f"DB: head is still {EXPECTED_HEAD}", head)

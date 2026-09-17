@@ -56,6 +56,7 @@ from app.services.billing.portal_service import (
     CheckoutConfigurationError,
     ReauthenticationRequiredError,
 )
+from app.services.billing.payment_gateway import GatewayNotConfiguredError
 
 logger = logging.getLogger("app.api.v1.billing")
 
@@ -140,7 +141,11 @@ def list_plans(
     current = quota_service.resolve_tier(
         db, organization_id=context.organization_id, at=moment
     )
-    current_key = current.key if current else None
+    # ARCH39-S1:current-plan — without a live subscription and without a tier
+    # version covering "now", the assigned tier is still the current plan.
+    current_key = (current.key if current else None) or portal_service.assigned_tier_key(
+        db, organization_id=context.organization_id
+    )
 
     tiers = quota_service.list_published_tiers(db, at=moment)
 
@@ -196,7 +201,10 @@ def list_plans(
             )
         )
 
+    not_ready = portal_service.gateway_readiness()
     return PlanListResponse(
+        checkout_available=not_ready is None,
+        checkout_unavailable_reason=not_ready,
         organization_id=context.organization_id,
         current_tier_key=current_key,
         as_of=moment,
@@ -443,6 +451,41 @@ def create_checkout_session(
     context: OrganizationContext = Depends(RequireOrgOwner),
     db: Session = Depends(get_db),
 ) -> EphemeralSessionResponse:
+    # ARCH39-S1:free-plan-endpoint — a zero-price tier is assigned here and
+    # never reaches a payment gateway.
+    if not payload.price_id and portal_service.is_free_tier(
+        db, quota_tier_key=payload.quota_tier_key
+    ):
+        try:
+            tier = portal_service.select_free_plan(
+                db,
+                organization_id=context.organization_id,
+                quota_tier_key=payload.quota_tier_key,
+            )
+        except portal_service.PaidSubscriptionActiveError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "PAID_SUBSCRIPTION_ACTIVE",
+                    "message": str(exc),
+                    "details": {},
+                },
+            ) from exc
+        audit_service.record(
+            db,
+            organization_id=context.organization_id,
+            actor_id=context.user_id,
+            resource_type=AuditResourceType.BILLING_ACCOUNT,
+            action=AuditAction.CHECKOUT_STARTED,
+            details={
+                "quota_tier_key": payload.quota_tier_key,
+                "mode": "free_plan_assigned",
+                "tier_version": tier.version,
+            },
+        )
+        db.commit()
+        return EphemeralSessionResponse(url="", kind="assigned", expires_at=None)
+
     try:
         session = portal_service.create_checkout_session(
             db,
@@ -456,6 +499,20 @@ def create_checkout_session(
     except CheckoutConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except (portal_service.CheckoutGatewayUnavailableError, GatewayNotConfiguredError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_NOT_CONFIGURED",
+                "message": (
+                    str(exc)
+                    if isinstance(exc, portal_service.CheckoutGatewayUnavailableError)
+                    else portal_service.gateway_readiness()
+                    or "Paid checkout is not configured in this environment."
+                ),
+                "details": {"gateway": getattr(exc, "gateway", None)},
+            },
         ) from exc
 
     audit_service.record(

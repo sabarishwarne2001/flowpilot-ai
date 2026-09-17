@@ -4,6 +4,7 @@ import { Bot, User, FileText } from "lucide-react";
 import { useOptionalTenant } from "@/routes/TenantContext";
 
 import type { ConversationMessage, SourceCitation } from "@/types/assistant";
+import { formatUsageCost } from "@/utils/usageCost";
 
 interface ChatBubbleProps {
   /**
@@ -313,9 +314,15 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
                       Estimated Cost
                     </span>
                     <span>
-                      ${message.token_usage.estimated_cost.toFixed(4)}
+                      {/* ARCH39-S1:bubble-cost */}
+                      {formatUsageCost(message.token_usage)}
                     </span>
                   </div>
+                  {message.token_usage.context_trimmed && (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Earlier turns or context were trimmed to fit the model&apos;s request limit.
+                    </p>
+                  )}
                 </div>
               )}
             </section>

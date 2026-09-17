@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Check, Loader2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Check, Info, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { createCheckoutSession, getPlans } from "@/services/api/billing";
-import { billingKeys } from "@/services/api/queryKeys";
+import { ApiError } from "@/services/api/client";
+import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
 import type { PlanOption } from "@/types/billing";
 import { describeEntitlement } from "@/types/planEntitlements";
@@ -16,6 +18,28 @@ interface PlanSelectorProps {
   readonly currentSeats: number;
 }
 
+const isFreePlan = (plan: PlanOption): boolean => plan.is_priced && plan.unit_amount === 0;
+
+/**
+ * Plan picker.
+ *
+ * ARCH39-S1:free-plan-selector — what ARCH-39 changed
+ * ===================================================
+ *
+ * Free is assigned, not bought. Choosing it calls the same endpoint, which
+ * now assigns the tier without touching a payment gateway and answers
+ * `kind: "assigned"`; this component refreshes in place instead of
+ * redirecting. With a live paid subscription the server refuses (409
+ * PAID_SUBSCRIPTION_ACTIVE) and the message says to cancel in the portal.
+ *
+ * When the deployment has no gateway credentials the plans response says so
+ * (`checkout_available: false`), paid plans explain why they cannot be
+ * bought, and Free still works.
+ *
+ * The current plan is badged from `current_tier_key`, which the server
+ * resolves from the live subscription or, without one, from the
+ * organization's assigned tier.
+ */
 export const PlanSelector: React.FC<PlanSelectorProps> = ({
   organizationId,
   organizationSlug,
@@ -23,16 +47,12 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   hasSubscription,
   currentSeats,
 }) => {
+  const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [seats, setSeats] = useState<number>(Math.max(currentSeats, 1));
   const [confirming, setConfirming] = useState(false);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: billingKeys.plans(organizationId),
     queryFn: () => getPlans(organizationId),
     enabled: Boolean(organizationId),
@@ -40,8 +60,12 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   });
 
   const plans = data?.plans ?? [];
+  const checkoutAvailable = data?.checkout_available !== false;
+  const currentKey = data?.current_tier_key ?? null;
+  const currentPlan = plans.find((plan) => plan.key === currentKey) ?? null;
+
   const selected = useMemo(
-    () => plans.find((p) => p.key === selectedKey) ?? null,
+    () => plans.find((plan) => plan.key === selectedKey) ?? null,
     [plans, selectedKey],
   );
 
@@ -56,10 +80,27 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         cancel_url: `${returnUrl}?outcome=cancelled`,
       });
     },
-    onSuccess: (session) => {
+    onSuccess: async (session, plan) => {
+      if (session.kind === "assigned") {
+        setSelectedKey(null);
+        setConfirming(false);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: billingKeys.all(organizationId) }),
+          queryClient.invalidateQueries({ queryKey: entitlementKeys.all(organizationId) }),
+        ]);
+        toast.success(`${plan.display_name} is now your plan.`);
+        return;
+      }
       window.location.assign(session.url);
     },
   });
+
+  const checkoutError =
+    checkout.error instanceof ApiError
+      ? checkout.error.message
+      : checkout.error
+        ? "The plan change couldn't be started. Please try again."
+        : null;
 
   if (!canManageBilling) {
     return null;
@@ -110,28 +151,57 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
     );
   }
 
+  const selectedIsFree = selected ? isFreePlan(selected) : false;
+  const selectedBlocked = selected !== null && !selectedIsFree && !checkoutAvailable;
+
   return (
     <section className="rounded-lg border border-border bg-card">
       <header className="border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-foreground">
-          {hasSubscription ? "Change plan" : "Choose a plan"}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            {hasSubscription ? "Change plan" : "Choose a plan"}
+          </h2>
+          {currentPlan ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+              <Check className="h-3 w-3" aria-hidden />
+              You&apos;re on {currentPlan.display_name}
+            </span>
+          ) : (
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+              No plan assigned yet
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {hasSubscription
-            ? "Switching plans starts a new checkout. Your current plan stays active until it completes."
-            : "Pick a plan to start your subscription."}
+            ? "Switching to a paid plan starts a new checkout; your current plan stays active until it completes. To move to Free, cancel in the billing portal."
+            : "Free starts immediately. Paid plans open a secure checkout."}
         </p>
+        {!checkoutAvailable && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden />
+            <span>
+              {data?.checkout_unavailable_reason ??
+                "Paid checkout is not available in this environment."}
+            </span>
+          </p>
+        )}
       </header>
 
       <ul className="divide-y divide-border">
         {plans.map((plan) => {
           const isSelected = plan.key === selectedKey;
+          const isCurrent = plan.is_current || plan.key === currentKey;
           return (
             <li key={plan.key}>
               <label
                 className={`flex cursor-pointer items-start gap-3 p-4 transition-colors ${
-                  isSelected ? "bg-muted/40" : "hover:bg-muted/20"
-                }`}
+                  isCurrent
+                    ? "bg-primary/5"
+                    : isSelected
+                      ? "bg-muted/40"
+                      : "hover:bg-muted/20"
+                } ${isCurrent ? "cursor-default" : ""}`}
               >
                 <input
                   type="radio"
@@ -141,8 +211,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   onChange={() => {
                     setSelectedKey(plan.key);
                     setConfirming(false);
+                    checkout.reset();
                   }}
-                  disabled={plan.is_current}
+                  disabled={isCurrent}
                   className="mt-1"
                 />
 
@@ -151,9 +222,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <span className="text-sm font-semibold text-foreground">
                       {plan.display_name}
                     </span>
-                    {plan.is_current && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                        <Check className="h-3 w-3" />
+                    {isCurrent && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                        <Check className="h-3 w-3" aria-hidden />
                         Current plan
                       </span>
                     )}
@@ -164,34 +235,13 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   </p>
 
                   {plan.notes && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {plan.notes}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{plan.notes}</p>
                   )}
 
-                  {/*
-                    ARCH-29 Tranche 2. Mapped through the display vocabulary
-                    rather than printed raw. `describeEntitlement` returns null
-                    for rows that should not appear at all — notably the `*`
-                    catch-all, which rendered as "*: Unlimited" above three
-                    explicit limits and contradicted them.
-
-                    Filtering happens BEFORE the slice, or hidden rows would
-                    consume slots in the visible five and a plan would appear
-                    to offer less than it does.
-                  */}
                   {(() => {
                     const lines = plan.entitlements
-                      .map((e) =>
-                        describeEntitlement(
-                          e.event_type,
-                          e.limit_quantity,
-                          e.period,
-                        ),
-                      )
-                      .filter((line): line is NonNullable<typeof line> =>
-                        line !== null,
-                      );
+                      .map((e) => describeEntitlement(e.event_type, e.limit_quantity, e.period))
+                      .filter((line): line is NonNullable<typeof line> => line !== null);
 
                     if (lines.length === 0) {
                       return null;
@@ -218,41 +268,55 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         })}
       </ul>
 
-      {selected && !selected.is_current && (
+      {selected && !(selected.is_current || selected.key === currentKey) && (
         <div className="space-y-3 border-t border-border bg-muted/10 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label htmlFor="seat-count" className="text-sm font-medium text-foreground">
-              Seats:
-            </label>
-            <input
-              id="seat-count"
-              type="number"
-              min={1}
-              max={10000}
-              value={seats}
-              onChange={(event) => {
-                const next = Number.parseInt(event.target.value, 10);
-                setSeats(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), 10000));
-                setConfirming(false);
-              }}
-              className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="text-xs text-muted-foreground">
-              You&apos;ll see the total on Stripe, before you pay.
-            </span>
-          </div>
+          {!selectedIsFree && (
+            <div className="flex flex-wrap items-center gap-3">
+              <label htmlFor="seat-count" className="text-sm font-medium text-foreground">
+                Seats:
+              </label>
+              <input
+                id="seat-count"
+                type="number"
+                min={1}
+                max={10000}
+                value={seats}
+                onChange={(event) => {
+                  const next = Number.parseInt(event.target.value, 10);
+                  setSeats(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), 10000));
+                  setConfirming(false);
+                }}
+                className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">
+                You&apos;ll see the total at checkout, before you pay.
+              </span>
+            </div>
+          )}
 
-          {checkout.isError && (
+          {checkoutError && (
             <p role="alert" className="text-sm text-destructive">
-              Checkout couldn&apos;t be started. Please check server logs and try again.
+              {checkoutError}
             </p>
           )}
 
-          {confirming ? (
+          {selectedBlocked ? (
+            <p className="text-sm text-muted-foreground">
+              This plan can&apos;t be purchased here until paid checkout is configured.
+            </p>
+          ) : confirming ? (
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <span className="text-sm text-foreground">
-                Continue to payment for <strong>{selected.display_name}</strong> ({seats}{" "}
-                {seats === 1 ? "seat" : "seats"})?
+                {selectedIsFree ? (
+                  <>
+                    Switch to <strong>{selected.display_name}</strong> now?
+                  </>
+                ) : (
+                  <>
+                    Continue to payment for <strong>{selected.display_name}</strong> ({seats}{" "}
+                    {seats === 1 ? "seat" : "seats"})?
+                  </>
+                )}
               </span>
               <button
                 type="button"
@@ -260,10 +324,8 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                 disabled={checkout.isPending}
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
               >
-                {checkout.isPending && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                )}
-                Continue to payment
+                {checkout.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {selectedIsFree ? "Switch to Free" : "Continue to payment"}
               </button>
               <button
                 type="button"
@@ -280,7 +342,11 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               onClick={() => setConfirming(true)}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              {hasSubscription ? "Change to this plan" : "Subscribe"}
+              {selectedIsFree
+                ? "Use this plan"
+                : hasSubscription
+                  ? "Change to this plan"
+                  : "Subscribe"}
             </button>
           )}
         </div>
@@ -290,22 +356,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 };
 
 /**
- * ARCH-29 Tranche 2.
- *
- * This function did not change much and that is the point: it was already
- * correct. It rendered "Contact us for pricing" because the backend hardcoded
- * `unit_amount=None` on every plan, `quota_tiers` had no price columns, and
- * there was genuinely nothing to show. The fix was upstream.
- *
- * What changed is that the fallback now means what it says. A tier reaches it
- * only by being deliberately unpriced — Enterprise, which is quoted — rather
- * than by the schema having nowhere to put a number. `is_priced` is the
- * server's explicit statement of which case this is, so the client no longer
- * infers sellability from a null.
- *
- * Zero is a price. `unit_amount === 0` on a Free tier must render "Free", not
- * fall through to "Contact us" — which is exactly what a truthiness test on
- * `unit_amount` would have done.
+ * ARCH-29 Tranche 2. Zero is a price: `unit_amount === 0` on a Free tier
+ * renders "Free", not "Contact us", which a truthiness test would do.
+ * `is_priced` is the server's statement of whether a tier is sellable.
  */
 function formatPrice(plan: PlanOption): string {
   if (!plan.is_priced || plan.unit_amount === null || plan.currency === null) {

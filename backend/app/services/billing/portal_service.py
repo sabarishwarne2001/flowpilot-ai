@@ -294,6 +294,11 @@ def create_checkout_session(
     # ARCH-30 Tranche 2 (D-10). `BILLING_GATEWAY="DODO"` previously changed
     # nothing here: this function called Stripe unconditionally.
     gateway_name = payment_gateway.active_gateway_name()
+    # ARCH39-S1:gateway-readiness — refuse with an explanation before a
+    # gateway call that can only fail.
+    not_ready = gateway_readiness(gateway_name)
+    if not_ready is not None:
+        raise CheckoutGatewayUnavailableError(not_ready, gateway=gateway_name)
     if gateway_name != "STRIPE":
         session = _gateway_checkout(
             db,
@@ -348,7 +353,125 @@ def billing_account_summary(
     return account_service.get_for_organization(db, organization_id=organization_id)
 
 
+# ============================================================================
+# ARCH39-S1:free-plan — Free is assigned, not purchased
+# ============================================================================
+
+
+class CheckoutGatewayUnavailableError(RuntimeError):
+    """Paid checkout cannot start in this deployment. Mapped to 503."""
+
+    def __init__(self, message: str, *, gateway: str) -> None:
+        super().__init__(message)
+        self.gateway = gateway
+
+
+class PaidSubscriptionActiveError(RuntimeError):
+    """Free was chosen while a paid subscription is live. Mapped to 409.
+
+    `quota_service.resolve_tier` prefers the live subscription's pinned tier
+    over `organizations.quota_tier_id`, so assigning Free here would be
+    silently ignored until the subscription ended. The honest answer is to
+    send the owner to the portal to cancel.
+    """
+
+
+_DEVELOPER_ENVIRONMENTS = frozenset({"development", "test", "local"})
+
+
+def gateway_readiness(gateway_name: Optional[str] = None) -> Optional[str]:
+    """None when paid checkout can start; otherwise the reason it cannot."""
+    name = (gateway_name or payment_gateway.active_gateway_name() or "").upper()
+    environment = str(getattr(settings, "ENVIRONMENT", "") or "").strip().lower()
+    developer = environment in _DEVELOPER_ENVIRONMENTS
+
+    key_setting = {"DODO": "DODO_API_KEY", "STRIPE": "STRIPE_SECRET_KEY"}.get(name)
+    if key_setting is None:
+        return None
+    secret = getattr(settings, key_setting, None)
+    value = secret.get_secret_value() if secret is not None else ""
+    if value:
+        return None
+    if developer:
+        return (
+            f"Paid checkout is not configured: {key_setting} is not set for the "
+            f"{name.title()} gateway. Add a test-mode key to backend/.env and "
+            "restart the API to try paid plans. Choosing the Free plan works "
+            "without it."
+        )
+    return "Paid checkout is temporarily unavailable. Please contact support."
+
+
+def is_free_tier(db: Session, *, quota_tier_key: str) -> bool:
+    tier = quota_service.published_tier_by_key(db, key=quota_tier_key)
+    return tier is not None and tier.unit_amount_micros == 0
+
+
+def assigned_tier_key(db: Session, *, organization_id: uuid.UUID) -> Optional[str]:
+    """The key of `organizations.quota_tier_id`, whatever version it names."""
+    from sqlalchemy import select
+
+    from app.models.organization import Organization
+    from app.models.quota_tier import QuotaTier
+
+    row = db.execute(
+        select(QuotaTier.key)
+        .join(Organization, Organization.quota_tier_id == QuotaTier.id)
+        .where(Organization.id == organization_id)
+    ).first()
+    return row[0] if row else None
+
+
+def select_free_plan(
+    db: Session, *, organization_id: uuid.UUID, quota_tier_key: str
+):
+    """Assign a zero-price tier. No gateway is called and nothing is billed."""
+    from sqlalchemy import select
+
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+
+    if not is_free_tier(db, quota_tier_key=quota_tier_key):
+        raise CheckoutConfigurationError(
+            f"Tier {quota_tier_key!r} is not a free tier and cannot be assigned "
+            "without checkout."
+        )
+
+    live = db.execute(
+        select(Subscription.id)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(
+            BillingAccount.organization_id == organization_id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+        )
+        .limit(1)
+    ).first()
+    if live is not None:
+        raise PaidSubscriptionActiveError(
+            "This organization has an active paid subscription. Cancel it in "
+            "the billing portal; the organization moves to Free when the paid "
+            "period ends."
+        )
+
+    tier = quota_service.assign_tier(
+        db, organization_id=organization_id, tier_key=quota_tier_key
+    )
+    logger.info(
+        "billing.free_plan_assigned",
+        extra={
+            "organization_id": str(organization_id),
+            "tier": f"{tier.key}/v{tier.version}",
+        },
+    )
+    return tier
+
+
 __all__ = [
+    "CheckoutGatewayUnavailableError",
+    "PaidSubscriptionActiveError",
+    "assigned_tier_key",
+    "gateway_readiness",
+    "is_free_tier",
+    "select_free_plan",
     "CheckoutConfigurationError",
     "EphemeralSession",
     "PortalError",

@@ -907,7 +907,8 @@ def gate_db() -> None:
         # certifies that ARCH-34's schema is present at or after its own head.
         check(
             "alembic head is arch34_step1_radar or later",
-            head in ("arch34_step1_radar", "arch35_step1_calibration"),
+            # ARCH39-S1:head-widened-34
+            head in ("arch34_step1_radar", "arch35_step1_calibration", "arch39_step1_conversations"),
             str(head),
         )
 

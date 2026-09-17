@@ -173,6 +173,21 @@ export const ASSISTANT_ENDPOINTS = {
     `${scoped(workspaceId)}/assistant/documents/${seg(workItemId)}/conversation`,
 } as const;
 
+// ARCH39-S1:session-endpoints
+export const ASSISTANT_SESSION_ENDPOINTS = {
+  sessions: (workspaceId: string): string => `${scoped(workspaceId)}/assistant/sessions`,
+  session: (workspaceId: string, conversationId: string): string =>
+    `${scoped(workspaceId)}/assistant/sessions/${seg(conversationId)}`,
+  scope: (workspaceId: string, conversationId: string): string =>
+    `${scoped(workspaceId)}/assistant/sessions/${seg(conversationId)}/scope`,
+  exportSession: (workspaceId: string, conversationId: string): string =>
+    `${scoped(workspaceId)}/assistant/sessions/${seg(conversationId)}/export`,
+  models: (workspaceId: string): string => `${scoped(workspaceId)}/assistant/models`,
+  templates: (workspaceId: string): string => `${scoped(workspaceId)}/assistant/prompt-templates`,
+  template: (workspaceId: string, templateId: string): string =>
+    `${scoped(workspaceId)}/assistant/prompt-templates/${seg(templateId)}`,
+} as const;
+
 export const DASHBOARD_ENDPOINTS = {
   overview: (workspaceId: string): string => `${scoped(workspaceId)}/dashboard/overview`,
 } as const;

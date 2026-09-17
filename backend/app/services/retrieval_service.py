@@ -19,6 +19,7 @@ from app.services.document_filter_service import document_filter_service
 from app.services.hybrid_search_service import hybrid_search_service
 from app.services.intent_service import intent_service
 from app.services.reranker_client import reranker_client
+from app.services import rag_guard
 
 logger = logging.getLogger("app.services.retrieval")
 
@@ -81,6 +82,20 @@ class RetrievalService:
             )
             details["status"] = merged_results[0].get("rerank_status") if merged_results else None
 
+        # ARCH39-S1:rerank-floor — confidence below is min-max normalised
+        # within the candidates, so without an absolute floor the least bad
+        # irrelevant passage still scores. Applied only when every candidate
+        # carries a raw cross-encoder score.
+        if settings.RAG_RERANK_FLOOR_ENABLED:
+            merged_results, below_floor = rag_guard.apply_rerank_floor(
+                merged_results, floor=settings.RAG_RERANK_ABSOLUTE_FLOOR
+            )
+            if below_floor:
+                logger.info(
+                    "retrieval.rerank_floor_dropped",
+                    extra={"dropped": below_floor, "kept": len(merged_results)},
+                )
+
         merged_results = self._estimate_retrieval_confidence(merged_results)
         merged_results = self._apply_metadata_prior(query=query, results=merged_results)
         merged_results = self._apply_document_prior(merged_results)
@@ -88,8 +103,20 @@ class RetrievalService:
         merged_results = document_filter_service.filter_documents(merged_results)
 
         document_count = len({str(result.get("metadata", {}).get("work_item_id")) for result in merged_results})
-        if document_count > 1 and self._should_balance_context(merged_results):
+        if (
+            document_count > 1
+            and self._should_balance_context(merged_results)
+            and not rag_guard.dominant_document(
+                merged_results, margin=settings.RAG_DOMINANCE_MARGIN
+            )
+        ):
             merged_results = self._balance_documents(merged_results)
+
+        merged_results = rag_guard.final_cut(
+            merged_results,
+            top_k=top_k,
+            final_results=settings.RERANK_FINAL_RESULTS,
+        )
 
         logger.info(
             "Hybrid retrieval pipeline completed with %d final chunk(s).",
@@ -150,7 +177,9 @@ class RetrievalService:
             overlap = len(query_words & filename_tokens)
 
             if overlap:
-                prior += min(overlap * 0.35, 1.00)
+                # ARCH-39. Was up to +1.0, the whole confidence range: a filename
+                # word could outrank the passage that answers the question.
+                prior += rag_guard.cap_prior(overlap * 0.35, cap=settings.RAG_FILENAME_PRIOR_MAX)
 
             result["retrieval_confidence"] = min(1.0, result.get("retrieval_confidence", 0.0) + prior)
             result["metadata_prior"] = prior

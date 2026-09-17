@@ -183,6 +183,23 @@ class Settings(BaseSettings):
 
     RAG_TOP_K: int = 5
     RAG_SIMILARITY_THRESHOLD: float = 0.20
+
+    # ---- ARCH39-S1:settings — request ceilings and retrieval guards --------
+    #: Largest single request (prompt + max_tokens) each provider accepts.
+    #: Keys: "provider" or "provider:model". Groq enforces a per-request
+    #: tokens-per-minute limit that is far below the model window on lower
+    #: tiers; set yours, e.g. LLM_REQUEST_TOKEN_CEILINGS='{"groq": 6000}'.
+    #: A limit named in a provider's 413 is learned at run time as well.
+    LLM_REQUEST_TOKEN_CEILINGS: dict[str, int] = {"groq": 12000}
+    LLM_REQUEST_TOKEN_CEILING_DEFAULT: int = 32_768
+    LLM_TOKEN_ESTIMATE_MARGIN: float = 0.15
+    #: Raw cross-encoder score (ms-marco-MiniLM-L-6-v2 logits) below which a
+    #: candidate is not evidence. Calibrate with evaluation/ before changing.
+    RAG_RERANK_FLOOR_ENABLED: bool = True
+    RAG_RERANK_ABSOLUTE_FLOOR: float = -5.0
+    RAG_FILENAME_PRIOR_MAX: float = 0.20
+    RAG_DOMINANCE_MARGIN: float = 0.25
+    ASSISTANT_SCOPE_MAX_DOCUMENTS: int = 20
     RAG_MAX_CONTEXT_LENGTH: int = 15000
     MAX_CONVERSATION_MESSAGES: int = 10
     MAX_CONVERSATION_TITLE_LENGTH: int = 150

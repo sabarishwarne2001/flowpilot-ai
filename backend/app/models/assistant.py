@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, Index, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, JSON, String, Index, text
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -82,6 +82,23 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
             "user_id",
             "updated_at",
         ),
+        # ARCH39-S1:conversation-model — mirrors arch39_step1_conversations.
+        CheckConstraint(
+            "scope_mode IN ('WORKSPACE', 'SELECTED', 'DOCUMENT')",
+            name="ck_conversations_scope_mode_known",
+        ),
+        CheckConstraint(
+            "(scope_mode = 'DOCUMENT') = (work_item_id IS NOT NULL)",
+            name="ck_conversations_scope_matches_document",
+        ),
+        Index(
+            "ix_conversations_session_list",
+            "workspace_id",
+            "user_id",
+            "archived_at",
+            "pinned_at",
+            "last_message_at",
+        ),
     )
 
     title: Mapped[str] = mapped_column(
@@ -107,6 +124,27 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
         ForeignKey("work_items.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
+    )
+
+    # ARCH-39. The ORM default derives DOCUMENT from work_item_id, so every
+    # existing create path satisfies ck_conversations_scope_matches_document
+    # without being edited.
+    scope_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        server_default="WORKSPACE",
+        default=lambda context: (
+            "DOCUMENT"
+            if context.get_current_parameters().get("work_item_id") is not None
+            else "WORKSPACE"
+        ),
+    )
+    pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    model_override: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    #: Maintained by trg_conversation_messages_last_at.
+    last_message_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     workspace: Mapped["Workspace"] = relationship("Workspace")

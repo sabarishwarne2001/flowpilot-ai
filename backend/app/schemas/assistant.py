@@ -82,6 +82,12 @@ class TokenUsage(BaseModel):
 
     estimated_cost: float
 
+    # ARCH39-S1:token-usage — where `estimated_cost` came from
+    # ("price_book", "unpriced", "unmetered"), and whether the request was
+    # trimmed to fit the provider's limit.
+    cost_source: str | None = None
+    context_trimmed: bool = False
+
 
 class ConversationMessageBase(BaseModel):
     """

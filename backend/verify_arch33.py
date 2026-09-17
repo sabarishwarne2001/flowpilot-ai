@@ -1586,10 +1586,15 @@ def gates_db(rec: Recorder, database_url: str) -> None:
 
     def node_type_check_accepts_assertion() -> None:
         with engine.connect() as conn:
+            # ARCH39-S1:gate-33-scoped. `%type_known%` also matches
+            # tenant_model_routes' task_type CHECK (ARCH-22), and `.scalar()`
+            # took whichever row Postgres returned first — so this gate passed
+            # or failed on physical row order. Scoped to its own table.
             body = conn.execute(
                 sa.text(
                     "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
-                    "WHERE conname LIKE '%type_known%'"
+                    "WHERE conrelid = 'automation_nodes'::regclass "
+                    "AND conname LIKE '%type_known%'"
                 )
             ).scalar()
             assert body and "assertion" in body, (

@@ -8,7 +8,7 @@ import logging
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, AsyncIterator, Optional
 
 from sqlalchemy.orm import Session
@@ -20,7 +20,13 @@ from app.core.redis_client import get_redis_client
 from app.core.request_context import context_fields, request_scope, stage
 from app.models.assistant import Conversation, FinishReason
 from app.schemas.assistant import TokenUsage
-from app.services import llm_metering, provenance_service, stream_session
+from app.services import (
+    conversation_service,
+    llm_metering,
+    provenance_service,
+    rag_guard,
+    stream_session,
+)
 from app.services.context_assembly_service import context_assembly_service
 from app.services.context_budget import context_budget_service
 from app.services.citation_service import citation_service
@@ -201,6 +207,14 @@ class StreamPlan:
     audit_log_id: Optional[uuid.UUID]
     passages_dropped_budget: int
     budget_warnings: list[str]
+    # ARCH39-S1:stream-plan — what a single shrink-and-retry needs.
+    query_text: str = ""
+    system_prompt: str = ""
+    history_full: list[dict[str, str]] = field(default_factory=list)
+    digest: str = ""
+    all_results: list[dict[str, Any]] = field(default_factory=list)
+    window_tokens: int = 0
+    context_trimmed: bool = False
 
 
 class ReplayUnavailableError(RuntimeError):
@@ -259,6 +273,7 @@ class AssistantStreamService:
         ai_settings = crud.get_ai_settings(db=db, workspace_id=workspace_id)
         if ai_settings is None:
             raise ValueError("AI settings have not been configured.")
+        ai_settings = conversation_service.apply_model_override(ai_settings, conversation)
 
         with stage("retrieval"):
             results = self._retrieve(
@@ -359,6 +374,12 @@ class AssistantStreamService:
             audit_log_id=audit_log_id,
             passages_dropped_budget=budgeted.chunks_dropped_for_budget,
             budget_warnings=budgeted.warnings,
+            query_text=query_text,
+            system_prompt=system_prompt,
+            history_full=list(history),
+            digest=budgeted.digest,
+            all_results=list(results),
+            window_tokens=int(budgeted.budget.window_tokens),
         )
 
     async def stream_answer(
@@ -401,16 +422,44 @@ class AssistantStreamService:
                     },
                 )
 
-                async for chunk in self._drain(plan):
-                    saw_any_chunk = True
-                    if chunk.usage is not None:
-                        usage = chunk.usage
-                    if chunk.text:
-                        safe = redactor.feed(chunk.text)
-                        if safe:
-                            yield emit("token", {"text": safe})
-                    if chunk.finish_reason == "length":
-                        finish = FinishReason.OUTPUT_CEILING.value
+                # ARCH39-S1:stream-retry — one smaller retry when the provider
+                # refuses the request size before any token was emitted.
+                attempt = 0
+                while True:
+                    try:
+                        async for chunk in self._drain(plan):
+                            saw_any_chunk = True
+                            if chunk.usage is not None:
+                                usage = chunk.usage
+                            if chunk.text:
+                                safe = redactor.feed(chunk.text)
+                                if safe:
+                                    yield emit("token", {"text": safe})
+                            if chunk.finish_reason == "length":
+                                finish = FinishReason.OUTPUT_CEILING.value
+                        break
+                    except (asyncio.CancelledError, SpendLimitExceededError):
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        too_large = (
+                            None
+                            if saw_any_chunk or attempt
+                            else rag_guard.classify_request_too_large(exc)
+                        )
+                        if too_large is None:
+                            raise
+                        attempt += 1
+                        plan = self._shrink_plan(plan, too_large)
+                        yield emit(
+                            "notice",
+                            {
+                                "code": "context_trimmed",
+                                "message": (
+                                    "The request was too large for the model; "
+                                    "retrying with less context."
+                                ),
+                            },
+                        )
 
                 tail = redactor.flush()
                 if tail:
@@ -440,6 +489,7 @@ class AssistantStreamService:
                         "finish_reason": finish,
                         "truncated": finish != FinishReason.COMPLETED.value,
                         "usage_estimated": usage is None,
+                        "context_trimmed": plan.context_trimmed,
                     },
                 )
 
@@ -665,11 +715,29 @@ class AssistantStreamService:
 
         def produce() -> None:
             try:
-                for chunk in provider_stream(
-                    prompt=plan.prompt,
-                    temperature=plan.ai_settings.temperature,
-                    ai_settings=plan.ai_settings,
-                ):
+                # ARCH39-S1:stream-open — ARCH-23 made `client` mandatory on
+                # provider_stream and this call never passed one, so every
+                # stream raised TypeError. open_stream resolves the client
+                # (platform key or the tenant's BYOK key) and wraps it in the
+                # provider breaker. The session is only needed to resolve it.
+                from app.db.session import SessionLocal
+                from app.services import llm_stream
+
+                session = SessionLocal()
+                try:
+                    opened = llm_stream.open_stream(
+                        session,
+                        organization_id=plan.organization_id,
+                        prompt=plan.prompt,
+                        temperature=plan.ai_settings.temperature,
+                        ai_settings=plan.ai_settings,
+                    )
+                finally:
+                    session.close()
+                attach = getattr(plan.reservation, "attach_credential_use", None)
+                if callable(attach):
+                    attach(opened.credential_use)
+                for chunk in opened.chunks:
                     if stop.is_set():
                         break
                     asyncio.run_coroutine_threadsafe(queue.put(chunk), loop).result()
@@ -700,6 +768,93 @@ class AssistantStreamService:
         finally:
             stop.set()
 
+    def _shrink_plan(self, plan: StreamPlan, too_large: Any) -> StreamPlan:
+        """ARCH-39. The same turn with a smaller window, resealed.
+
+        Pure recomputation from what `prepare` kept, except the provenance
+        seal: the retried request carries a different context, and the audit
+        record must describe what was actually sent.
+        """
+        from app.db.session import SessionLocal
+        from app.services.context_budget import WindowBudget, trim_results_to_budget
+        from app.services.fenced_context import fence
+        from app.services.llm_service import llm_service
+
+        provider = str(getattr(plan.ai_settings.provider, "value", plan.ai_settings.provider))
+        model = str(plan.ai_settings.model)
+        max_output = int(getattr(plan.ai_settings, "max_output_tokens", 0) or 0)
+        if getattr(too_large, "limit", None):
+            rag_guard.learned_ceilings.learn(provider, model, int(too_large.limit))
+
+        previous = plan.window_tokens or rag_guard.estimate_tokens(plan.prompt)
+        window = rag_guard.shrunk_budget(previous, too_large, max_output_tokens=max_output)
+        budget = WindowBudget.allocate(window_tokens=window, system_prompt=plan.system_prompt)
+
+        kept, dropped = trim_results_to_budget(
+            plan.all_results, token_budget=budget.context_tokens
+        )
+        assembled = context_assembly_service.assemble(
+            kept,
+            max_characters=int(budget.context_tokens * 3.5),
+            block_threshold=settings.CONTEXT_INJECTION_BLOCK_THRESHOLD,
+        )
+        fenced = fence(assembled, chunk_ids=[str(r.get("id") or "") for r in kept])
+        history, _ = rag_guard.fit_history(plan.history_full, token_budget=budget.history_tokens)
+        prompt = llm_service.build_streaming_prompt(
+            query=plan.query_text,
+            fenced=fenced,
+            history=history,
+            digest=plan.digest,
+            ai_settings=plan.ai_settings,
+        )
+
+        context_hash, audit_log_id = plan.context_hash, plan.audit_log_id
+        if not fenced.is_empty:
+            session = SessionLocal()
+            try:
+                context_hash, audit_log_id = provenance_service.seal_generation(
+                    session,
+                    organization_id=plan.organization_id,
+                    workspace_id=plan.workspace_id,
+                    conversation_id=plan.conversation.id,
+                    message_id=plan.message_id,
+                    fenced=fenced,
+                    query=plan.query_text,
+                    provider=provider,
+                    model=model,
+                    prompt_version=RAG_PROMPT_VERSION,
+                )
+                session.commit()
+            finally:
+                session.close()
+
+        retained = set(fenced.chunk_ids)
+        logger.warning(
+            "stream.request_too_large_retry",
+            extra={
+                "message_id": str(plan.message_id),
+                "provider": provider,
+                "model": model,
+                "limit": getattr(too_large, "limit", None),
+                "retry_window": window,
+            },
+        )
+        return replace(
+            plan,
+            prompt=prompt,
+            fenced=fenced,
+            results=[r for r in plan.all_results if str(r.get("id")) in retained],
+            context_hash=context_hash,
+            audit_log_id=audit_log_id,
+            passages_dropped_budget=plan.passages_dropped_budget + dropped,
+            budget_warnings=[
+                *plan.budget_warnings,
+                "context trimmed after the provider refused the request size",
+            ],
+            window_tokens=window,
+            context_trimmed=True,
+        )
+
     def _retrieve(
         self,
         *,
@@ -716,6 +871,13 @@ class AssistantStreamService:
             if work_item is None:
                 raise ValueError("Associated document not found.")
             work_item_ids_param = [str(work_item.id)]
+        else:
+            # ARCH39-S1:stream-scope — None (whole workspace) or the
+            # conversation's selected documents; an empty selection searches
+            # nothing rather than everything.
+            work_item_ids_param = conversation_service.retrieval_work_item_ids(
+                db, conversation=conversation
+            )
 
         results = retrieval_service.hybrid_search(
             workspace_id=workspace_id,

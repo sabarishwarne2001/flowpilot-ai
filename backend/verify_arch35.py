@@ -1342,7 +1342,11 @@ def gates_db(rec: Recorder) -> None:
 
     def head_and_tables() -> None:
         head = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
-        assert head == "arch35_step1_calibration", f"alembic head is {head}; run `alembic upgrade head`"
+        # ARCH39-S1:head-widened-35. ARCH-39 moves the head forward; ARCH-35's
+        # tables must be present at or after its own head.
+        assert head in ("arch35_step1_calibration", "arch39_step1_conversations"), (
+            f"alembic head is {head}; run `alembic upgrade head`"
+        )
         for table in ("calibration_labels", "calibration_models"):
             assert db.execute(sql("SELECT to_regclass(:t)"), {"t": table}).scalar() is not None
 

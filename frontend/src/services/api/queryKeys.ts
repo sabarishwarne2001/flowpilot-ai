@@ -33,6 +33,18 @@ export const assistantKeys = {
     [...assistantKeys.all(workspaceId), "history", conversationId] as const,
   documentConversation: (workspaceId: string, workItemId: string) =>
     [...assistantKeys.all(workspaceId), "document", workItemId] as const,
+  // ARCH39-S1:session-keys
+  sessionsRoot: (workspaceId: string) =>
+    [...assistantKeys.all(workspaceId), "sessions"] as const,
+  sessions: (
+    workspaceId: string,
+    filters: { readonly kind: string; readonly archived: boolean; readonly q: string },
+  ) => [...assistantKeys.all(workspaceId), "sessions", filters] as const,
+  scope: (workspaceId: string, conversationId: string) =>
+    [...assistantKeys.all(workspaceId), "scope", conversationId] as const,
+  models: (workspaceId: string) => [...assistantKeys.all(workspaceId), "models"] as const,
+  templates: (workspaceId: string) =>
+    [...assistantKeys.all(workspaceId), "prompt-templates"] as const,
 };
 
 export const automationKeys = {
