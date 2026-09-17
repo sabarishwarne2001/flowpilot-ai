@@ -197,6 +197,8 @@ export const AUTOMATION_ENDPOINTS = {
   rule: (workspaceId: string, ruleId: string): string =>
     `${scoped(workspaceId)}/automation/rules/${seg(ruleId)}`,
   logs: (workspaceId: string): string => `${scoped(workspaceId)}/automation/logs`,
+  // ARCH37-S2:catalog-endpoint. The flow builder's catalog.
+  catalog: (workspaceId: string): string => `${scoped(workspaceId)}/automation/catalog`,
 } as const;
 
 export const NOTIFICATION_ENDPOINTS = {

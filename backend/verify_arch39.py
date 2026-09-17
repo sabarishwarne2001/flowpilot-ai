@@ -787,7 +787,8 @@ def gates_db(rec: Recorder) -> None:
     try:
         def head() -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
-            assert value == HEAD, f"alembic head is {value}; run `alembic upgrade head`"
+            # ARCH37-S1:head-widened-39. ARCH-37 moves the head forward.
+            assert value in (HEAD, "arch37_step1_flow_builder"), f"alembic head is {value}; run `alembic upgrade head`"
 
         if not rec.check(f"DB: head is {HEAD}", head):
             return

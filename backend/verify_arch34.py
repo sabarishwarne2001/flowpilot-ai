@@ -908,7 +908,7 @@ def gate_db() -> None:
         check(
             "alembic head is arch34_step1_radar or later",
             # ARCH39-S1:head-widened-34
-            head in ("arch34_step1_radar", "arch35_step1_calibration", "arch39_step1_conversations"),
+            head in ("arch34_step1_radar", "arch35_step1_calibration", "arch39_step1_conversations", "arch37_step1_flow_builder"),  # ARCH37-S1:head-widened-34
             str(head),
         )
 

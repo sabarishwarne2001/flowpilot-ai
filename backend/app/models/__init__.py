@@ -10,6 +10,8 @@ from app.models.job import (
     TERMINAL_JOB_STATUSES,
 )
 from app.models.automation import AutomationRule, AutomationLog
+# ARCH37-S1:models-registered
+from app.models.automation_trigger import AutomationRuleTrigger
 from app.models.automation_execution import (
     AutomationExecution,
     AutomationExecutionStatus,
@@ -341,6 +343,7 @@ __all__ = [
     "CLAIMABLE_JOB_STATUSES",
     "TERMINAL_JOB_STATUSES",
     "AutomationRule",
+    "AutomationRuleTrigger",
     "AutomationLog",
     "Notification",
     "NotificationDelivery",

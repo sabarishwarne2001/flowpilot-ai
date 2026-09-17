@@ -443,7 +443,65 @@ def load_graph(db: Session, *, rule: AutomationRule) -> CompiledGraph:
     )
 
 
+def flatten_flow_rule(rule: AutomationRule, spec: dict[str, Any]) -> CompiledGraph:
+    """ARCH37-S1:flow-flatten. The step builder's shape as a graph.
+
+        trigger -> [conditions] -> then actions            (no "otherwise")
+        trigger -> branch -true-> then actions
+                          -false-> otherwise actions
+
+    Each action list is a chain, so a failed or held action stops the ones
+    after it and never the other branch.
+    """
+    groups = list(spec.get("condition_groups") or [])
+    groups_operator = spec.get("groups_operator") or "AND"
+    then_actions = list(getattr(rule, "actions", []) or [])
+    else_actions = list(spec.get("else_actions") or [])
+    has_conditions = any((g or {}).get("conditions") for g in groups if isinstance(g, dict))
+
+    nodes: list[NodeSpec] = [NodeSpec(node_key="trigger", node_type="trigger")]
+    edges: list[EdgeSpec] = []
+    condition_config = {"groups": groups, "groups_operator": groups_operator}
+
+    def chain(prefix: str, actions: list[Any], start: str, branch: str) -> None:
+        previous, label = start, branch
+        for index, action in enumerate(actions):
+            key = f"{prefix}_{index}"
+            nodes.append(
+                NodeSpec(
+                    node_key=key,
+                    node_type="action",
+                    config=dict(action) if isinstance(action, dict) else {"action": action},
+                )
+            )
+            edges.append(EdgeSpec(previous, key, label))
+            previous, label = key, "default"
+
+    if else_actions and has_conditions:
+        nodes.append(NodeSpec(node_key="decision", node_type="branch", config=condition_config))
+        edges.append(EdgeSpec("trigger", "decision"))
+        chain("action", then_actions, "decision", "true")
+        chain("else", else_actions, "decision", "false")
+    elif has_conditions:
+        nodes.append(NodeSpec(node_key="conditions", node_type="condition", config=condition_config))
+        edges.append(EdgeSpec("trigger", "conditions"))
+        chain("action", then_actions, "conditions", "default")
+    else:
+        chain("action", then_actions, "trigger", "default")
+
+    return CompiledGraph(
+        nodes=tuple(nodes),
+        edges=tuple(edges),
+        order=tuple(n.node_key for n in nodes),
+        trigger_key="trigger",
+    )
+
+
 def flatten_legacy_rule(rule: AutomationRule) -> CompiledGraph:
+    flow_spec = getattr(rule, "flow_spec", None)
+    if isinstance(flow_spec, dict):
+        return flatten_flow_rule(rule, flow_spec)
+
     nodes: list[NodeSpec] = [NodeSpec(node_key="trigger", node_type="trigger")]
     edges: list[EdgeSpec] = []
 
@@ -508,6 +566,7 @@ __all__ = [
     "NodeSpec",
     "compile_graph",
     "convert_rule_to_graph",
+    "flatten_flow_rule",
     "flatten_legacy_rule",
     "load_graph",
     "save_graph",

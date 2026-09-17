@@ -417,6 +417,22 @@ async def reprocess_work_item(
         idempotency_key=f"{document_intake_service.OCR_JOB_TYPE}:{work_item.id}:{uuid.uuid4().hex[:8]}",
         max_attempts=settings.OCR_JOB_MAX_ATTEMPTS,
     )
+    # ARCH37-S1:work-item-reprocessed
+    from app.services import outbox_service
+
+    outbox_service.emit_trigger(
+        db,
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        event_type="trigger.work_item.reprocessed",
+        resource_id=work_item.id,
+        payload={
+            "work_item_id": str(work_item.id),
+            "original_filename": work_item.original_filename,
+            "requested_by_user_id": str(context.user_id),
+        },
+        idempotency_key=f"trigger.work_item.reprocessed:{work_item.id}:{job.id}",
+    )
     db.commit()
 
     return {

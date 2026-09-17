@@ -344,12 +344,15 @@ def score_case(
         digest=computed_digest,
     )
 
-    outbox_service.emit(
+    # ARCH37-S1:procurement-twins. The twin names the invoice as its
+    # resource: the automation handler loads resource_id as a work item.
+    outbox_service.emit_public_with_twin(
         db,
         organization_id=organization_id,
         workspace_id=workspace_id,
         event_type=EVENT_COMPLETED,
         resource_id=case.id,
+        twin_resource_id=invoice_work_item_id,
         idempotency_key=f"{EVENT_COMPLETED}:{computed_digest}",
         payload={
             "case_id": str(case.id),
@@ -582,12 +585,13 @@ def approve_case(
             "red_outcomes": sorted({line.outcome for line in red_lines}),
         },
     )
-    outbox_service.emit(
+    outbox_service.emit_public_with_twin(
         db,
         organization_id=case.organization_id,
         workspace_id=workspace_id,
         event_type=EVENT_APPROVED,
         resource_id=case.id,
+        twin_resource_id=case.invoice_work_item_id,
         idempotency_key=f"{EVENT_APPROVED}:{case.id}",
         payload={
             "case_id": str(case.id),
@@ -637,12 +641,13 @@ def dispute_case(
             "policy_version": case.policy_version,
         },
     )
-    outbox_service.emit(
+    outbox_service.emit_public_with_twin(
         db,
         organization_id=case.organization_id,
         workspace_id=workspace_id,
         event_type=EVENT_DISPUTED,
         resource_id=case.id,
+        twin_resource_id=case.invoice_work_item_id,
         idempotency_key=f"{EVENT_DISPUTED}:{case.id}",
         payload={
             "case_id": str(case.id),

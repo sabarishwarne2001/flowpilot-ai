@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal, Union
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -54,6 +54,18 @@ class AutomationAction(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class AutomationConditionGroup(BaseModel):
+    """ARCH37-S1:condition-group-schema."""
+
+    logic_operator: Literal["AND", "OR"] = Field(default="AND")
+    conditions: list[AutomationCondition] = Field(default_factory=list, max_length=20)
+
+    @field_validator("logic_operator", mode="before")
+    @classmethod
+    def normalize_group_operator(cls, value: Any) -> Any:
+        return value.upper().strip() if isinstance(value, str) else value
+
+
 class AutomationRuleBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     priority: int = Field(default=100, ge=1)
@@ -85,7 +97,27 @@ class AutomationRuleBase(BaseModel):
 
 
 class AutomationRuleCreate(AutomationRuleBase):
-    pass
+    """A rule. Either the ARCH-13 shape (`event` + flat `conditions`) or the
+    ARCH-37 flow shape (`triggers` + `condition_groups`)."""
+
+    event: Optional[str] = Field(default=None, max_length=50)  # type: ignore[assignment]
+    triggers: Optional[list[str]] = Field(default=None, max_length=4)
+    condition_groups: Optional[list[AutomationConditionGroup]] = Field(default=None, max_length=10)
+    groups_operator: Literal["AND", "OR"] = Field(default="AND")
+    else_actions: list[AutomationAction] = Field(default_factory=list, max_length=10)
+    on_error: Literal["HALT", "CONTINUE"] = Field(default="HALT")
+
+    @model_validator(mode="after")
+    def validate_conditions_presence(self) -> "AutomationRuleCreate":  # type: ignore[override]
+        if self.triggers is not None:
+            if not self.triggers:
+                raise ValueError("Choose at least one trigger.")
+            return self
+        if not self.event:
+            raise ValueError("A rule needs `triggers` (or the legacy `event`).")
+        if not self.conditions:
+            raise ValueError("At least one trigger condition must be specified.")
+        return self
 
 
 class AutomationRuleUpdate(BaseModel):
@@ -96,14 +128,37 @@ class AutomationRuleUpdate(BaseModel):
     conditions: list[AutomationCondition] | None = None
     logic_operator: Literal["AND", "OR"] | None = None
     actions: list[AutomationAction] | None = Field(None, min_length=1)
+    # ARCH-37
+    triggers: list[str] | None = Field(None, min_length=1, max_length=4)
+    condition_groups: list[AutomationConditionGroup] | None = Field(None, max_length=10)
+    groups_operator: Literal["AND", "OR"] | None = None
+    else_actions: list[AutomationAction] | None = Field(None, max_length=10)
+    on_error: Literal["HALT", "CONTINUE"] | None = None
 
 
-class AutomationRuleResponse(AutomationRuleBase):
+class AutomationRuleResponse(BaseModel):
+    """ARCH37-S1:rule-response. Not derived from AutomationRuleBase: a flow
+    rule may have no flat conditions, and a response must never fail the
+    create-time validator."""
+
     id: uuid.UUID
     workspace_id: uuid.UUID
     created_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
+    name: str
+    priority: int
+    event: str
+    is_active: bool
+    conditions: list[dict[str, Any]] = Field(default_factory=list)
+    logic_operator: Literal["AND", "OR"] = "AND"
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    trigger_events: list[str] = Field(default_factory=list)
+    condition_groups: list[AutomationConditionGroup] = Field(default_factory=list)
+    groups_operator: Literal["AND", "OR"] = "AND"
+    else_actions: list[dict[str, Any]] = Field(default_factory=list)
+    is_flow: bool = False
 
     graph_version: int = Field(
         default=0,

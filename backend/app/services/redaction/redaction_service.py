@@ -749,6 +749,24 @@ def run_apply(db: Session, *, job_id: uuid.UUID) -> dict[str, Any]:
         job.status = JOB_STATUS_COMPLETED
         db.flush([job])
 
+        # ARCH37-S1:redaction-completed
+        from app.services import outbox_service
+
+        outbox_service.emit_trigger(
+            db,
+            organization_id=job.organization_id,
+            workspace_id=job.workspace_id,
+            event_type="trigger.redaction.completed",
+            resource_id=job.work_item_id,
+            payload={
+                "work_item_id": str(job.work_item_id),
+                "redaction_job_id": str(job.id),
+                "profile": job.profile_key,
+                "pages": document.page_count,
+            },
+            idempotency_key=f"trigger.redaction.completed:{job.id}",
+        )
+
         audit_service.record(
             db,
             organization_id=job.organization_id,

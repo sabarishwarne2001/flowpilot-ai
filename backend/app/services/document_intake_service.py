@@ -213,6 +213,26 @@ def ingest_validated(
             },
         )
 
+        # ARCH37-S1:work-item-created. No public event has ever been emitted
+        # for a new document, so this trigger is native.
+        from app.services import outbox_service
+
+        outbox_service.emit_trigger(
+            db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            event_type="trigger.work_item.created",
+            resource_id=work_item.id,
+            payload={
+                "work_item_id": str(work_item.id),
+                "original_filename": work_item.original_filename,
+                "mime_type": validated.mime_type,
+                "size_bytes": int(stored.size),
+                "page_count": validated.page_count,
+            },
+            idempotency_key=f"trigger.work_item.created:{work_item.id}",
+        )
+
     except Exception:
         try:
             driver.delete(stored.key)

@@ -23,11 +23,12 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { automationApi } from "@/services/api/automation";
-import { RuleForm } from "@/pages/Automation/RuleForm";
+// ARCH37-S2:flow-builder-wired. The step builder replaces RuleForm; labels come from the catalog.
+import { FlowBuilder } from "@/pages/Automation/FlowBuilder";
+import { actionLabel, fieldLabel, triggerLabel } from "@/components/automation/flow/flowModel";
 import { RuleTestDialog } from "@/pages/Automation/RuleTestDialog";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
-import { getFriendlyFieldName } from "@/constants/automationFields";
 import type { AutomationRule, AutomationLog, AutomationErrorPolicy } from "@/types/automation";
 import { formatCostMicros, formatDurationMs } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -108,6 +109,12 @@ export const Automation: React.FC = () => {
   // Search & Filters Panel states (Rule list)
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ENABLED" | "DISABLED">("ALL");
+  const { data: catalog } = useQuery({
+    queryKey: automationKeys.catalog(workspaceId ?? ""),
+    queryFn: () => automationApi.getAutomationCatalog(workspaceId ?? ""),
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+  });
   const [eventFilter, setEventFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<string>("PRIORITY_ASC");
 
@@ -310,7 +317,9 @@ export const Automation: React.FC = () => {
           ? rule.is_active
           : !rule.is_active;
       const matchesEvent =
-        eventFilter === "ALL" ? true : rule.event === eventFilter;
+        eventFilter === "ALL"
+          ? true
+          : (rule.triggers ?? []).includes(eventFilter) || rule.event === eventFilter;
       return matchesSearch && matchesStatus && matchesEvent;
     });
   }, [rules, searchQuery, statusFilter, eventFilter]);
@@ -685,13 +694,12 @@ export const Automation: React.FC = () => {
               </SelectTrigger>
 
               <SelectContent>
-                <SelectItem value="ALL">All Events</SelectItem>
-                <SelectItem value="WORK_ITEM_CREATED">Created</SelectItem>
-                <SelectItem value="WORK_ITEM_COMPLETED">Completed</SelectItem>
-                <SelectItem value="WORK_ITEM_FAILED">Failed</SelectItem>
-                <SelectItem value="WORK_ITEM_REPROCESSED">
-                  Reprocessed
-                </SelectItem>
+                <SelectItem value="ALL">All triggers</SelectItem>
+                {(catalog?.triggers ?? []).map((trigger) => (
+                  <SelectItem key={trigger.key} value={trigger.key}>
+                    {trigger.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -778,8 +786,16 @@ export const Automation: React.FC = () => {
                           Priority #{rule.priority}
                         </span>
                         <span className="text-[10px] bg-secondary text-secondary-foreground border border-border/40 px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
-                          Event: {rule.event.replace("WORK_ITEM_", "")}
+                          When:{" "}
+                          {(rule.triggers ?? []).length > 0
+                            ? (rule.triggers ?? []).map((key) => triggerLabel(catalog, key)).join(" or ")
+                            : "No trigger (paused)"}
                         </span>
+                        {(rule.else_actions ?? []).length > 0 && (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
+                            Has otherwise
+                          </span>
+                        )}
                         {rule.is_active ? (
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2.5 py-0.5 rounded-full font-bold select-none whitespace-nowrap">
                             Active
@@ -854,7 +870,7 @@ export const Automation: React.FC = () => {
                             )}
                             <div className="flex flex-wrap items-center gap-1.5 text-xs">
                               <span className="px-2 py-1 rounded-md bg-background border border-border/60 font-mono font-bold text-foreground truncate max-w-[150px]">
-                                {getFriendlyFieldName(cond.field)}
+                                {fieldLabel(catalog, cond.field)}
                               </span>
                               <span className="text-[10px] uppercase font-bold text-muted-foreground px-1">
                                 {OPERATOR_DISPLAY_MAP[cond.operator] ??
@@ -886,7 +902,7 @@ export const Automation: React.FC = () => {
                               className="px-2 py-1 rounded-md bg-background border border-border/60 text-emerald-600 dark:text-emerald-400 truncate max-w-[150px]"
                               title={act.config?.recipient as string}
                             >
-                              {act.action_type.replace("_", " ")}
+                              {actionLabel(catalog, act.action_type)}
 
                               {"recipient" in act.config &&
                                 typeof act.config.recipient === "string" && (
@@ -1331,7 +1347,7 @@ export const Automation: React.FC = () => {
         </div>
       </section>
 
-      <RuleForm
+      <FlowBuilder
         isOpen={isFormOpen}
         onClose={handleFormClose}
         onSaveSuccess={handleSaveSuccessCallback}

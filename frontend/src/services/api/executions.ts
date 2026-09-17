@@ -3,6 +3,7 @@
  */
 
 import apiClient from "@/services/api/client";
+import type { AutomationNodeRun } from "@/types/automationFlow";
 
 export type AutomationExecutionStatus =
   | "QUEUED"
@@ -76,7 +77,20 @@ export const EXECUTION_ENDPOINTS = {
     `/workspaces/${ws(workspaceId)}/automation/executions`,
   detail: (workspaceId: string, executionId: string) =>
     `/workspaces/${ws(workspaceId)}/automation/executions/${encodeURIComponent(executionId)}`,
+  // ARCH37-S2:node-runs-endpoint. What each node did, with action type, reference and duration.
+  nodes: (workspaceId: string, executionId: string) =>
+    `/workspaces/${ws(workspaceId)}/automation/executions/${encodeURIComponent(executionId)}/nodes`,
 } as const;
+
+export const listExecutionNodes = async (
+  workspaceId: string,
+  executionId: string,
+): Promise<readonly AutomationNodeRun[]> => {
+  const response = await apiClient.get<readonly AutomationNodeRun[]>(
+    EXECUTION_ENDPOINTS.nodes(workspaceId, executionId),
+  );
+  return response.data;
+};
 
 export const listExecutions = async (
   workspaceId: string,

@@ -104,6 +104,10 @@ EVENT_BY_STAGE: Mapping[PipelineStage, Optional[str]] = {
 }
 
 
+#: ARCH-37. Public pipeline events the flow builder can trigger on.
+TWINNED_EVENTS: frozenset[str] = frozenset({"document.completed", "document.failed"})
+
+
 class PipelineStateError(Exception):
     """Base class for state machine faults."""
 
@@ -213,15 +217,29 @@ def transition(
             if event_payload:
                 payload.update(event_payload)
 
-            outbox_service.emit(
-                db,
-                organization_id=organization_id,
-                workspace_id=work_item.workspace_id,
-                event_type=event_type,
-                resource_id=work_item.id,
-                payload=payload,
-                idempotency_key=idempotency_key,
-            )
+            # ARCH37-S1:document-twins. document.completed / document.failed
+            # carry an internal twin for the flow builder, in this transaction.
+            if event_type in TWINNED_EVENTS:
+                outbox_service.emit_public_with_twin(
+                    db,
+                    organization_id=organization_id,
+                    workspace_id=work_item.workspace_id,
+                    event_type=event_type,
+                    resource_id=work_item.id,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                    twin_resource_id=work_item.id,
+                )
+            else:
+                outbox_service.emit(
+                    db,
+                    organization_id=organization_id,
+                    workspace_id=work_item.workspace_id,
+                    event_type=event_type,
+                    resource_id=work_item.id,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                )
         else:
             logger.debug(
                 "pipeline.outbox_already_emitted",

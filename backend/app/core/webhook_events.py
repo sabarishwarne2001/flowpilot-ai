@@ -57,6 +57,12 @@ WEBHOOK_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         # webhook would send contract language to whatever URL a tenant
         # configured; the API serves it under the capability gate.
         "anomaly.detected",
+        # ARCH37-S1:workflow-triggered. The one event a customer endpoint
+        # receives because a tenant-authored rule chose that endpoint
+        # (`webhook.send`). Never fanned out from the outbox: the action writes
+        # the delivery row for the single endpoint the rule names, and the
+        # ARCH-09 delivery loop signs and retries it like any other.
+        "workflow.triggered",
     }
 )
 

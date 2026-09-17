@@ -34,11 +34,10 @@ class Outcome:
     TIMED_OUT = "TIMED_OUT"
 
 
-EVENT_TO_RULE_TRIGGER: dict[str, str] = {
-    "work_item.enriched": "WORK_ITEM_COMPLETED",
-    "work_item.field_changed": "WORK_ITEM_UPDATED",
-    "work_item.verification_completed": "WORK_ITEM_COMPLETED",
-}
+# ARCH37-S1:trigger-table. The three-entry EVENT_TO_RULE_TRIGGER dictionary is
+# gone. Rules are resolved from automation_rule_triggers, so a rule may listen
+# to several events and every event a rule can store is one the engine
+# receives (ck_automation_rule_triggers_event_known).
 
 
 def _model_caller(db: Session, execution: Any, rule: Any, ai_settings: Any):
@@ -74,13 +73,10 @@ def _model_caller(db: Session, execution: Any, rule: Any, ai_settings: Any):
 def _resolve_rules(
     db: Session, *, workspace_id: uuid.UUID, event_type: str
 ) -> list[AutomationRule]:
-    from app import crud
+    from app.services.automation import rule_triggers
 
-    trigger = EVENT_TO_RULE_TRIGGER.get(event_type)
-    if trigger is None:
-        return []
-    rules = crud.list_active_rules_for_event(
-        db, workspace_id=workspace_id, event=trigger
+    rules = rule_triggers.active_rules_for_event(
+        db, workspace_id=workspace_id, event_type=event_type
     )
     return sorted(
         rules,
@@ -134,13 +130,28 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
             if isinstance(event.payload, dict) and event.payload.get("work_item_id")
             else None
         )
+        # Scoped to the event's workspace: a resource id that is not a work
+        # item in this workspace loads nothing rather than a stranger's row.
         work_item = (
-            db.execute(select(WorkItem).where(WorkItem.id == work_item_id)).scalar_one_or_none()
+            db.execute(
+                select(WorkItem).where(
+                    WorkItem.id == work_item_id,
+                    WorkItem.workspace_id == workspace_id,
+                )
+            ).scalar_one_or_none()
             if work_item_id
             else None
         )
 
-        if work_item is not None and _verification_blocks(db, work_item_id=work_item.id):
+        from app.services.automation.triggers import REVIEW_EXEMPT_EVENT_TYPES
+
+        # ARCH37-S1:review-exempt. "Clause check held for review" announces a
+        # review; the review it announces must not suppress it.
+        if (
+            work_item is not None
+            and event.event_type not in REVIEW_EXEMPT_EVENT_TYPES
+            and _verification_blocks(db, work_item_id=work_item.id)
+        ):
             logger.info(
                 "automation.blocked_pending_verification",
                 extra={"work_item_id": str(work_item.id)},
@@ -392,4 +403,4 @@ def _emit_budget_exhausted(db: Session, *, execution: Any, event: OutboxEvent) -
     db.commit()
 
 
-__all__ = ["EVENT_TO_RULE_TRIGGER", "JOB_TYPE", "Outcome", "handle_automation_execute"]
+__all__ = ["JOB_TYPE", "Outcome", "handle_automation_execute"]

@@ -283,6 +283,11 @@ class AutomationNodeRun(Base, UUIDMixin, TimestampMixin):
             "output_digest IS NULL OR output_digest LIKE 'sha256:%'",
             name="ck_automation_node_runs_output_digest_prefixed",
         ),
+        # ARCH37-S1:node-run-facts
+        CheckConstraint(
+            "duration_ms IS NULL OR duration_ms >= 0",
+            name="ck_automation_node_runs_duration_non_negative",
+        ),
         UniqueConstraint(
             "execution_id",
             "sequence",
@@ -330,6 +335,12 @@ class AutomationNodeRun(Base, UUIDMixin, TimestampMixin):
     details: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
+
+    #: ARCH-37. What an action node did, the id of what it created (a webhook
+    #: delivery, a redaction job, a verification) and how long it took.
+    action_type: Mapped[Optional[str]] = mapped_column(String(48), nullable=True)
+    external_ref: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     execution: Mapped[AutomationExecution] = relationship(
         "AutomationExecution", back_populates="node_runs"

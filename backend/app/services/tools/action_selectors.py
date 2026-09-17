@@ -83,13 +83,15 @@ def select_mutation(
 
 
 def resolve_selector(action_type: str) -> Optional[str]:
-    """Which registered selector handles an action type."""
-    normalised = (action_type or "").strip().lower()
-    if normalised in ("email", "send_email", "webhook"):
-        return "automation.action_selector"
-    if normalised in ("set_field", "work_item.mutate"):
-        return "automation.mutation_selector"
-    return None
+    """Which registered selector handles an action type.
+
+    ARCH37-S1:selector-registry. Delegates to the action registry, which names
+    a selector per action and refuses to import without one. The two ARCH-13
+    selectors above stay registered for their direct callers.
+    """
+    from app.services.automation import actions as action_registry
+
+    return action_registry.selector_for(action_type)
 
 
 __all__ = [

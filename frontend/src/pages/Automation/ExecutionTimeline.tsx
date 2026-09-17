@@ -22,7 +22,8 @@ import type {
   AutomationExecution,
   AutomationExecutionStatus,
 } from "@/services/api/executions";
-import { workspaceScope } from "@/services/api/queryKeys";
+import { automationKeys, workspaceScope } from "@/services/api/queryKeys";
+import { listExecutionNodes } from "@/services/api/executions";
 import { formatMicros } from "@/types/billing";
 import { pollUnlessRefused } from "@/services/api/polling";
 
@@ -253,6 +254,7 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
   execution,
   isLast,
 }) => {
+  const [showNodes, setShowNodes] = useState(false);
   const presentation = EXECUTION_STATUS_PRESENTATION[execution.status] ?? {
     label: execution.status,
     tone: "muted" as const,
@@ -353,9 +355,63 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
               prior {priorExecutionId.slice(0, 8)}
             </span>
           )}
+          {execution.node_count > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowNodes((open) => !open)}
+              aria-expanded={showNodes}
+              className="font-semibold text-primary hover:underline"
+            >
+              {showNodes ? "Hide steps" : "Show steps"}
+            </button>
+          )}
         </div>
+
+        {showNodes && <NodeRuns executionId={execution.id} />}
       </div>
     </li>
+  );
+};
+
+/**
+ * ARCH37-S2:node-runs. What each node did — the action type, what it created (delivery,
+ * job, verification) and how long it took.
+ */
+const NodeRuns: React.FC<{ readonly executionId: string }> = ({ executionId }) => {
+  const workspace = useActiveWorkspace();
+  const workspaceId = workspace?.workspaceId ?? "";
+  const { data, isLoading, isError } = useQuery({
+    queryKey: automationKeys.executionNodes(workspaceId, executionId),
+    queryFn: () => listExecutionNodes(workspaceId, executionId),
+    enabled: Boolean(workspaceId),
+    staleTime: 30_000,
+  });
+  if (isLoading) {
+    return <p className="mt-2 text-[11px] text-muted-foreground">Loading steps…</p>;
+  }
+  if (isError || !data) {
+    return <p className="mt-2 text-[11px] text-destructive">Steps could not be loaded.</p>;
+  }
+  return (
+    <ol className="mt-2 space-y-1 rounded bg-background/60 p-2 text-[11px]">
+      {data.map((node) => (
+        <li key={node.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-mono text-muted-foreground">#{node.sequence}</span>
+          <span className="font-semibold">{node.action_type ?? node.node_type ?? node.node_key}</span>
+          <span className={node.status === "FAILED" ? "text-destructive" : "text-muted-foreground"}>
+            {node.status.toLowerCase()}
+          </span>
+          {node.duration_ms !== null && <span className="text-muted-foreground">{node.duration_ms}ms</span>}
+          {node.external_ref && (
+            <span className="font-mono text-muted-foreground break-all" title="Reference to what this step created">
+              ref {node.external_ref.slice(0, 12)}
+            </span>
+          )}
+          {node.outcome && <span className="text-muted-foreground break-words">— {node.outcome}</span>}
+          {node.error && <span className="w-full break-all font-mono text-destructive">{node.error}</span>}
+        </li>
+      ))}
+    </ol>
   );
 };
 

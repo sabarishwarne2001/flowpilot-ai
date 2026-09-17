@@ -70,6 +70,11 @@ class AutomationNode(Base, UUIDMixin, TimestampMixin):
             "jsonb_typeof(config) = 'object'",
             name="ck_automation_nodes_config_is_object",
         ),
+        # ARCH37-S1:action-has-type
+        CheckConstraint(
+            "node_type <> 'action' OR config ? 'action_type'",
+            name="ck_automation_nodes_action_has_type",
+        ),
         CheckConstraint(
             "topological_order >= 0",
             name="ck_automation_nodes_order_non_negative",

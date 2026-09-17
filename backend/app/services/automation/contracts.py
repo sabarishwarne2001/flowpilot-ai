@@ -154,6 +154,10 @@ class ActionNodeConfig:
     target_field: Optional[str] = None
     target_value: Optional[str] = None
     options: tuple[tuple[str, str], ...] = ()
+    #: ARCH37-S1:list-options. Lists of scalars the author wrote (roles,
+    #: datasets, field names). Before ARCH-37 they were dropped, because no
+    #: action took one.
+    list_options: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @classmethod
     def from_node_config(cls, config: Any) -> ActionNodeConfig:
@@ -165,10 +169,23 @@ class ActionNodeConfig:
             return str(value).strip() if isinstance(value, (str, int, float)) else None
 
         reserved = {"recipient", "target_field", "target_value", "action_type"}
+
+        def scalar(value: Any) -> str:
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            return str(value)
+
         options = tuple(
-            (str(k), str(v))
+            (str(k), scalar(v))
             for k, v in sorted(inner.items())
             if k not in reserved and isinstance(v, (str, int, float, bool))
+        )
+        list_options = tuple(
+            (str(k), tuple(scalar(item) for item in v))
+            for k, v in sorted(inner.items())
+            if k not in reserved
+            and isinstance(v, (list, tuple))
+            and all(isinstance(item, (str, int, float, bool)) for item in v)
         )
         return cls(
             action_type=str(raw.get("action_type") or inner.get("action_type") or "").strip().lower(),
@@ -176,12 +193,24 @@ class ActionNodeConfig:
             target_field=text("target_field"),
             target_value=text("target_value"),
             options=options,
+            list_options=list_options,
         )
+
+    def authored_parameters(self) -> dict[str, Any]:
+        """Everything the author wrote, keyed as the action's schema expects."""
+        values: dict[str, Any] = {k: v for k, v in self.options}
+        values.update({k: list(v) for k, v in self.list_options})
+        for name in ("recipient", "target_field", "target_value"):
+            value = getattr(self, name)
+            if value is not None:
+                values[name] = value
+        return values
 
     @property
     def authored_values(self) -> frozenset[str]:
         values = [self.recipient, self.target_field, self.target_value]
         values.extend(value for _, value in self.options)
+        values.extend(item for _, items in self.list_options for item in items)
         return frozenset(
             str(v).strip().lower() for v in values if v and str(v).strip()
         )
@@ -196,6 +225,19 @@ class ActionSpec:
     target_field: Optional[str] = None
     target_value: Optional[str] = None
     rationale: tuple[str, ...] = field(default_factory=tuple)
+    #: ARCH-37. The action's own configuration, copied from the author's
+    #: config by a selector and checked below like every other value.
+    parameters: tuple[tuple[str, str], ...] = ()
+    list_parameters: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    def parameter_dict(self) -> dict[str, Any]:
+        values: dict[str, Any] = {k: v for k, v in self.parameters}
+        values.update({k: list(v) for k, v in self.list_parameters})
+        for name in ("recipient", "target_field", "target_value"):
+            value = getattr(self, name)
+            if value is not None:
+                values.setdefault(name, value)
+        return values
 
     def assert_no_document_derived_values(
         self,
@@ -206,11 +248,18 @@ class ActionSpec:
         authored = config.authored_values
         derived = facts.document_derived_strings
 
-        for name, value in (
+        checked: list[tuple[str, Optional[str]]] = [
             ("recipient", self.recipient),
             ("target_field", self.target_field),
             ("target_value", self.target_value),
-        ):
+        ]
+        checked.extend((f"parameters.{k}", v) for k, v in self.parameters)
+        checked.extend(
+            (f"list_parameters.{k}", item)
+            for k, items in self.list_parameters
+            for item in items
+        )
+        for name, value in checked:
             if value is None:
                 continue
             normalised = str(value).strip().lower()

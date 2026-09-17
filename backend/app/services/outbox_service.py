@@ -233,6 +233,132 @@ def emit_internal(
     )
 
 
+# ---------------------------------------------------------------------------
+# ARCH37-S1:emit-twin. Flow-builder triggers.
+# ---------------------------------------------------------------------------
+
+AUTOMATION_JOB_TYPE: str = "automation.execute"
+
+
+def _ensure_automation_handler() -> None:
+    """`job_service.enqueue` refuses a job type with no registered handler.
+
+    The API and the worker register every handler at startup. A script or a
+    gate that drives a service directly may not have, and a trigger must not
+    fail the state change that caused it for that reason.
+    """
+    from app.services import job_service
+
+    if AUTOMATION_JOB_TYPE not in job_service.JOB_HANDLERS:
+        from app.workers.handlers import register_all
+
+        register_all()
+
+
+def emit_trigger(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    workspace_id: Optional[uuid.UUID],
+    event_type: str,
+    payload: Optional[dict[str, Any]] = None,
+    resource_id: Optional[uuid.UUID] = None,
+    idempotency_key: Optional[str] = None,
+    caused_by: Optional[OutboxEvent] = None,
+) -> Optional[OutboxEvent]:
+    """Write an INTERNAL trigger event and its `automation.execute` job.
+
+    Both rows go into the caller's transaction. Nothing relays INTERNAL events
+    to the engine (OUTBOX_INTERNAL_QUEUE has no claimer), so an event written
+    without its job is an event no rule ever sees.
+
+    Returns None when there is no workspace: rules are workspace-scoped, so an
+    organization-level change has no rule to run.
+    """
+    if workspace_id is None:
+        return None
+    if event_type not in INTERNAL_EVENT_TYPES:
+        raise UnknownEventTypeError(f"'{event_type}' is not an internal event type.")
+
+    from app.services import job_service
+
+    event = emit_internal(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        event_type=event_type,
+        payload=payload,
+        resource_id=resource_id,
+        caused_by=caused_by,
+        idempotency_key=idempotency_key,
+    )
+    _ensure_automation_handler()
+    job_service.enqueue(
+        db,
+        job_type=AUTOMATION_JOB_TYPE,
+        organization_id=organization_id,
+        payload={"outbox_event_id": str(event.id)},
+        idempotency_key=f"automation:execute:{event.id}",
+    )
+    return event
+
+
+def emit_public_with_twin(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    event_type: str,
+    payload: Optional[dict[str, Any]] = None,
+    workspace_id: Optional[uuid.UUID] = None,
+    resource_id: Optional[uuid.UUID] = None,
+    idempotency_key: Optional[str] = None,
+    caused_by: Optional[OutboxEvent] = None,
+    twin_resource_id: Optional[uuid.UUID] = None,
+    twin_payload: Optional[dict[str, Any]] = None,
+) -> tuple[OutboxEvent, Optional[OutboxEvent]]:
+    """Emit a PUBLIC event and its INTERNAL `trigger.` twin, in one transaction.
+
+    The public row is exactly what `emit` would have written. The twin carries
+    the same payload plus `twin_payload`, and its `resource_id` is the work
+    item the automation handler should load (`twin_resource_id`): procurement
+    and radar events name a case or a finding as their resource, and the
+    handler reads `resource_id` as a work item id.
+
+    `emit` flushes inside a savepoint and never commits, so a caller that rolls
+    back loses both rows together. `verify_arch37.py --db` proves it.
+    """
+    from app.core.automation_events import TRIGGER_TWIN_EVENT_TYPES, twin_of
+
+    public = emit(
+        db,
+        organization_id=organization_id,
+        event_type=event_type,
+        payload=payload,
+        workspace_id=workspace_id,
+        resource_id=resource_id,
+        idempotency_key=idempotency_key,
+        caused_by=caused_by,
+    )
+    twin_name = twin_of(event_type)
+    if twin_name not in TRIGGER_TWIN_EVENT_TYPES:
+        raise UnknownEventTypeError(f"'{event_type}' has no registered internal twin.")
+
+    merged = dict(payload or {})
+    merged.update(twin_payload or {})
+    merged["public_event_id"] = str(public.id)
+    twin = emit_trigger(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        event_type=twin_name,
+        payload=merged,
+        resource_id=twin_resource_id,
+        idempotency_key=(f"trigger:{idempotency_key}" if idempotency_key else None),
+        caused_by=caused_by,
+    )
+    return public, twin
+
+
 def emit_many(db: Session, events: Sequence[dict[str, Any]], *, require_active_transaction: bool = True) -> list[OutboxEvent]:
     prepared: list[OutboxEvent] = []
     _assert_in_transaction(db, required=require_active_transaction)

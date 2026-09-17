@@ -243,6 +243,9 @@ PLAN_SELECTOR_BASE_SHA256 = "757ae8788c8914c38a397fc0b26c9b909ad8a98571dbd226c5d
 
 NEW_BACKEND_FILES: dict[str, str] = {}
 NEW_FRONTEND_FILES: dict[str, str] = {}
+# ARCH37-S1:arch39-embed-synced. ChatSessionBar.tsx below carries the
+# model-dropdown styling committed after this script was first run, so
+# `--check` on an applied tree reports "already present" again.
 NEW_BACKEND_FILES['alembic/versions/arch39_step1_conversations.py'] = r'''"""ARCH-39 — Conversational AI Suite: session columns, scope items, templates.
 
 Revision ID: arch39_step1_conversations
@@ -2375,13 +2378,13 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
           value={selectedModel}
           disabled={models.isLoading || chooseModel.isPending}
           onChange={(event) => chooseModel.mutate(event.target.value)}
-          className="max-w-[12rem] bg-transparent text-xs font-semibold outline-none"
+          className="max-w-[14rem] bg-slate-900 text-slate-100 text-xs font-semibold outline-none cursor-pointer rounded px-1.5 py-0.5 border border-slate-700"
         >
-          <option value="">Default{defaultModel ? ` (${defaultModel})` : ""}</option>
+          <option value="" className="bg-slate-900 text-slate-100 py-1">Default{defaultModel ? ` (${defaultModel})` : ""}</option>
           {(models.data ?? [])
             .filter((option) => !option.is_workspace_default)
             .map((option) => (
-              <option key={option.model} value={option.model}>
+              <option key={option.model} value={option.model} className="bg-slate-900 text-slate-100 py-1">
                 {option.model}
               </option>
             ))}

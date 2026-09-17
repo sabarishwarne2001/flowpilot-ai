@@ -335,12 +335,14 @@ def emit_detected(
     language to whatever URL a tenant configured. The event names the finding;
     the API serves the evidence under the capability gate.
     """
-    outbox_service.emit(
+    # ARCH37-S1:anomaly-twin. The twin's resource is the subject document.
+    outbox_service.emit_public_with_twin(
         db,
         organization_id=finding.organization_id,
         workspace_id=finding.workspace_id,
         event_type=vocab.OUTBOX_EVENT_ANOMALY_DETECTED,
         resource_id=finding.id,
+        twin_resource_id=finding.subject_work_item_id,
         payload={
             "finding_id": str(finding.id),
             "kind": finding.kind,

@@ -50,11 +50,125 @@ class AutomationNodeRunResponse(BaseModel):
 
     id: uuid.UUID
     node_key: Optional[str] = None
+    node_type: Optional[str] = None
+    sequence: int = 0
     status: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     attempt: int = 0
     error: Optional[str] = None
+    # ARCH37-S1:node-run-response
+    action_type: Optional[str] = None
+    external_ref: Optional[str] = None
+    duration_ms: Optional[int] = None
+    outcome: Optional[str] = None
+
+
+# ==========================================================================
+# ARCH-37 flow builder
+# ==========================================================================
+
+
+def _flow_issues(exc: Exception) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=list(getattr(exc, "issues", [])) or [
+            {"loc": ["body"], "msg": str(exc), "type": "value_error"}
+        ],
+    )
+
+
+def _audit_rule(
+    db: Session,
+    *,
+    context: Any,
+    rule: AutomationRule,
+    action: Any,
+    details: dict[str, Any],
+) -> None:
+    from app.models.audit_log import AuditOutcome, AuditResourceType
+    from app.services import audit_service
+
+    audit_service.record(
+        db,
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        actor_id=context.user_id,
+        resource_type=AuditResourceType.AUTOMATION_RULE,
+        resource_id=rule.id,
+        action=action,
+        outcome=AuditOutcome.ALLOWED,
+        details={"rule_name": rule.name, **details},
+    )
+
+
+def _view(db: Session, rule: AutomationRule) -> dict[str, Any]:
+    from app.services.automation import flow_service, rule_triggers
+
+    events = rule_triggers.event_types_of(db, rule_ids=[rule.id]).get(rule.id, [])
+    return flow_service.rule_view(rule, events)
+
+
+@router.get(
+    "/catalog",
+    summary="Flow builder catalog",
+    response_description=(
+        "Triggers, actions, operators, template variables, observed document "
+        "fields and the resources actions may reference. The console renders "
+        "this and holds no trigger or action list of its own."
+    ),
+)
+async def get_catalog(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> dict[str, Any]:
+    from app.services.automation import catalog_service
+
+    return catalog_service.build(db, context=context)
+
+
+@router.get(
+    "/executions/{execution_id}/nodes",
+    response_model=list[AutomationNodeRunResponse],
+    summary="Node runs of one execution",
+)
+async def list_execution_nodes(
+    execution_id: uuid.UUID,
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> list[AutomationNodeRunResponse]:
+    from app.models.automation_execution import AutomationNodeRun
+
+    owned = db.execute(
+        select(AutomationExecution.id).where(
+            AutomationExecution.id == execution_id,
+            AutomationExecution.workspace_id == context.workspace_id,
+        )
+    ).scalar_one_or_none()
+    if owned is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found.")
+    rows = db.execute(
+        select(AutomationNodeRun)
+        .where(AutomationNodeRun.execution_id == execution_id)
+        .order_by(AutomationNodeRun.sequence.asc())
+    ).scalars().all()
+    return [
+        AutomationNodeRunResponse(
+            id=row.id,
+            node_key=row.node_key,
+            node_type=row.node_type,
+            sequence=row.sequence,
+            status=getattr(row.status, "value", str(row.status)),
+            started_at=row.started_at,
+            completed_at=row.completed_at,
+            error=row.error,
+            action_type=row.action_type,
+            external_ref=row.external_ref,
+            duration_ms=row.duration_ms,
+            outcome=(row.details or {}).get("outcome") if isinstance(row.details, dict) else None,
+        )
+        for row in rows
+    ]
 
 
 class AutomationExecutionResponse(BaseModel):
@@ -263,14 +377,41 @@ async def create_rule(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
 ) -> Any:
-    rule = crud.create_automation_rule(
-        db,
+    # ARCH37-S1:flow-create. Validated as a whole rule, stored with its
+    # trigger rows, audited, committed once.
+    from app.models.audit_log import AuditAction
+    from app.services.automation import catalog_service, flow_service, rule_triggers
+
+    authoring = catalog_service.authoring_for(db, context=context)
+    try:
+        normalised = flow_service.normalise(rule_in.model_dump(mode="json"), authoring)
+    except flow_service.FlowValidationError as exc:
+        raise _flow_issues(exc) from exc
+
+    rule = AutomationRule(
+        name=rule_in.name,
+        priority=rule_in.priority,
+        event=normalised.event,
+        conditions=normalised.conditions,
+        logic_operator=normalised.logic_operator,
+        actions=normalised.actions,
+        is_active=rule_in.is_active,
+        on_error=normalised.on_error,
+        flow_spec=normalised.flow_spec,
         workspace_id=context.workspace_id,
-        obj_in=rule_in,
         created_by_user_id=context.user_id,
     )
+    db.add(rule)
+    db.flush([rule])
+    rule_triggers.set_event_types(db, rule=rule, event_types=normalised.event_types)
+    _audit_rule(
+        db, context=context, rule=rule, action=AuditAction.CREATED,
+        details={"triggers": normalised.trigger_keys, "actions": [a["action_type"] for a in normalised.actions]},
+    )
+    db.commit()
+    db.refresh(rule)
     logger.info(f"User {context.user_id} created Automation Rule '{rule.name}' [ID: {rule.id}] in workspace {context.workspace_id}")
-    return rule
+    return _view(db, rule)
 
 
 @router.get(
@@ -285,8 +426,11 @@ async def list_rules(
     skip: int = Query(0, ge=0, description="The number of rules to skip for pagination."),
     limit: int = Query(100, ge=1, le=100, description="The maximum number of rules to return.")
 ) -> Any:
+    from app.services.automation import flow_service, rule_triggers
+
     rules = crud.list_automation_rules(db, workspace_id=context.workspace_id, skip=skip, limit=limit)
-    return rules
+    events = rule_triggers.event_types_of(db, rule_ids=[r.id for r in rules])
+    return [flow_service.rule_view(r, events.get(r.id, [])) for r in rules]
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +565,7 @@ async def get_rule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Automation rule not found or you do not have permission to access it."
         )
-    return rule
+    return _view(db, rule)
 
 
 @router.patch(
@@ -443,9 +587,62 @@ async def update_rule(
             detail="Automation rule not found or you do not have permission to access it."
         )
     
-    updated_rule = crud.update_automation_rule(db, db_obj=rule, obj_in=rule_in)
+    # ARCH37-S1:flow-update. A partial update is merged into the stored rule
+    # and the WHOLE result is validated, so a toggle cannot re-enable a rule
+    # whose actions the tenant's plan no longer includes... except that a
+    # pure enable/disable/rename is always allowed: turning a rule OFF must
+    # never be refused.
+    from app.models.audit_log import AuditAction
+    from app.services.automation import catalog_service, flow_service, rule_triggers
+
+    changes = rule_in.model_dump(exclude_unset=True, mode="json")
+    structural = set(changes) - {"is_active", "name", "priority"}
+    enabling = changes.get("is_active") is True and not rule.is_active
+
+    if structural or enabling:
+        events = rule_triggers.event_types_of(db, rule_ids=[rule.id]).get(rule.id, [])
+        merged = flow_service.payload_from_rule(rule, events)
+        flow_keys = {"triggers", "condition_groups", "groups_operator", "else_actions"}
+        if flow_keys & set(changes) and "triggers" not in merged:
+            # Upgrading an ARCH-13 rule to the flow shape.
+            merged = {
+                "triggers": changes.get("triggers") or [],
+                "condition_groups": [
+                    {"logic_operator": rule.logic_operator, "conditions": list(rule.conditions or [])}
+                ],
+                "actions": list(rule.actions or []),
+                "on_error": rule.on_error,
+            }
+        for key in ("event", "conditions", "logic_operator", "actions", "on_error", *flow_keys):
+            if key in changes and changes[key] is not None:
+                merged[key] = changes[key]
+        try:
+            normalised = flow_service.normalise(
+                merged, catalog_service.authoring_for(db, context=context)
+            )
+        except flow_service.FlowValidationError as exc:
+            raise _flow_issues(exc) from exc
+        if structural:
+            rule.event = normalised.event
+            rule.conditions = normalised.conditions
+            rule.logic_operator = normalised.logic_operator
+            rule.actions = normalised.actions
+            rule.on_error = normalised.on_error
+            rule.flow_spec = normalised.flow_spec
+            rule_triggers.set_event_types(db, rule=rule, event_types=normalised.event_types)
+
+    for key in ("name", "priority", "is_active"):
+        if key in changes and changes[key] is not None:
+            setattr(rule, key, changes[key])
+
+    action = AuditAction.UPDATED
+    if set(changes) == {"is_active"}:
+        action = AuditAction.ENABLED if changes["is_active"] else AuditAction.DISABLED
+    _audit_rule(db, context=context, rule=rule, action=action, details={"fields": sorted(changes)})
+    db.commit()
+    db.refresh(rule)
     logger.info(f"User {context.user_id} updated Automation Rule [ID: {rule_id}] inside workspace {context.workspace_id}")
-    return updated_rule
+    return _view(db, rule)
 
 
 @router.delete(
@@ -466,6 +663,9 @@ async def delete_rule(
             detail="Automation rule not found or you do not have permission to access it."
         )
     
+    from app.models.audit_log import AuditAction
+
+    _audit_rule(db, context=context, rule=rule, action=AuditAction.DELETED, details={})
     crud.delete_automation_rule(db, db_obj=rule)
     logger.info(f"User {context.user_id} deleted Automation Rule [ID: {rule_id}] in workspace {context.workspace_id}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

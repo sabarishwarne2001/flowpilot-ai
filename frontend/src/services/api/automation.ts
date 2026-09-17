@@ -7,6 +7,7 @@ import type {
   AutomationRuleUpdateRequest,
   AutomationRuleTestResponse,
 } from "@/types/automation";
+import type { FlowCatalog } from "@/types/automationFlow";
 
 export const createAutomationRule = async (
   workspaceId: string,
@@ -112,6 +113,17 @@ export const testAutomationRule = async (
   return response.data;
 };
 
+/** ARCH37-S2:catalog-api. Every trigger, action and resource the builder may offer. */
+export const getAutomationCatalog = async (
+  workspaceId: string,
+): Promise<FlowCatalog> => {
+  const response = await apiClient.get<FlowCatalog>(
+    AUTOMATION_ENDPOINTS.catalog(workspaceId),
+    { headers: { Accept: "application/json" } },
+  );
+  return response.data;
+};
+
 export const automationApi = {
   createAutomationRule,
   getAutomationRules,
@@ -120,6 +132,7 @@ export const automationApi = {
   deleteAutomationRule,
   getAutomationLogs,
   testAutomationRule,
+  getAutomationCatalog,
 };
 
 export default automationApi;

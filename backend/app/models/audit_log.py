@@ -75,6 +75,9 @@ class AuditResourceType(str, PyEnum):
     REV_SHARE_LEDGER = "REV_SHARE_LEDGER"
     MARKETPLACE_ITEM = "MARKETPLACE_ITEM"
     PROCUREMENT_CASE = "PROCUREMENT_CASE"
+    # ARCH37-S1:audit-automation-rule. Added to the PostgreSQL type by
+    # arch37_step0_flow_vocabulary.
+    AUTOMATION_RULE = "AUTOMATION_RULE"
     PROCUREMENT_TOLERANCE_POLICY = "PROCUREMENT_TOLERANCE_POLICY"
 
 

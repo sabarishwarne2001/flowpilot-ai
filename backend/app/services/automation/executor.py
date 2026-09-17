@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -151,17 +152,26 @@ class _WalkState:
 
 
 def _evaluate_condition_node(state: _WalkState, config: dict[str, Any]) -> bool:
-    from app.services.automation_service import _evaluate_rule_conditions
+    # ARCH37-S1:condition-groups. Grouped conditions, and `event.<key>` paths
+    # that read the trigger's payload. A flat ARCH-13 config evaluates exactly
+    # as before, except that an event field no longer needs a document.
+    from app.services.automation import conditions
 
-    if state.work_item is None:
-        return False
-
-    class _Adapter:
-        id = state.rule.id
-        conditions = config.get("conditions") or []
-        logic_operator = config.get("logic_operator", "AND")
-
-    return bool(_evaluate_rule_conditions(_Adapter(), state.work_item))
+    payload = getattr(state.trigger_event, "payload", None)
+    if state.work_item is None and "groups" not in config:
+        flat = config.get("conditions") or []
+        if not any(
+            str((c or {}).get("field", "")).startswith("event.") for c in flat
+            if isinstance(c, dict)
+        ):
+            return False
+    return bool(
+        conditions.evaluate_node_config(
+            config,
+            work_item=state.work_item,
+            event_payload=payload if isinstance(payload, dict) else None,
+        )
+    )
 
 
 def _tenant_scope_for(state: _WalkState) -> TenantScope:
@@ -193,6 +203,8 @@ def _run_action_node(
     node_config = ActionNodeConfig.from_node_config(config)
     from app.services.tools import action_selectors
 
+    # ARCH37-S1:registry-selector. Every registered action names its own R33
+    # selector; resolve_selector delegates to the registry.
     selector_name = action_selectors.resolve_selector(node_config.action_type)
     if selector_name is None:
         raise ValueError(
@@ -316,13 +328,16 @@ def run_execution(
             error = str(exc)
             break
         except Exception as exc:
-            _record_node(
-                state,
-                node_key=node_key,
-                node_type=node.node_type,
-                status=AutomationNodeRunStatus.FAILED,
-                error=f"{type(exc).__name__}: {exc}",
-            )
+            if isinstance(exc, _AlreadyRecorded):
+                exc = exc.original  # type: ignore[assignment]
+            else:
+                _record_node(
+                    state,
+                    node_key=node_key,
+                    node_type=node.node_type,
+                    status=AutomationNodeRunStatus.FAILED,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
             logger.warning("automation.node_failed", extra={"execution_id": str(execution.id), "error": str(exc)})
             if on_error == "HALT":
                 terminal = AutomationExecutionStatus.FAILED
@@ -407,15 +422,46 @@ def _execute_node(
         if action_type in ("llm.extract", "llm.classify"):
             return _run_llm_node(state, node=node, config=config, call_model=call_model)
 
-        outcome = _run_action_node(state, node_key=node.node_key, config=config, perform=perform)
+        from app.services.automation import actions as action_registry
+
+        canonical = action_registry.canonical(action_type)
+        started = time.perf_counter()
+        try:
+            outcome = _run_action_node(state, node_key=node.node_key, config=config, perform=perform)
+        except Exception as exc:
+            # Recorded here, with what was attempted and for how long, then
+            # re-raised for run_execution's on_error policy. The outer
+            # handler skips a second row for a node already recorded.
+            _record_node(
+                state,
+                node_key=node.node_key,
+                node_type=node.node_type,
+                status=AutomationNodeRunStatus.FAILED,
+                error=f"{type(exc).__name__}: {exc}",
+                details={"action_type": canonical},
+                action_type=canonical,
+                duration_ms=_elapsed_ms(started),
+            )
+            raise _AlreadyRecorded(exc) from exc
+        summary = str(outcome)
+        external_ref = getattr(outcome, "external_ref", None)
+        proceed = bool(getattr(outcome, "continue_downstream", True))
         _record_node(
             state,
             node_key=node.node_key,
             node_type=node.node_type,
             status=AutomationNodeRunStatus.COMPLETED,
-            details={"outcome": outcome, "action_type": action_type},
+            details={
+                "outcome": summary,
+                "action_type": canonical,
+                **({"continue_downstream": False} if not proceed else {}),
+                **(dict(getattr(outcome, "details", None) or {})),
+            },
+            action_type=canonical,
+            external_ref=external_ref,
+            duration_ms=_elapsed_ms(started),
         )
-        return True
+        return proceed
 
     raise ValueError(f"Unknown node type {node.node_type!r}")
 
@@ -517,6 +563,18 @@ def _propagate_skip(
                 _propagate_skip(state, candidate, taken=None)
 
 
+class _AlreadyRecorded(RuntimeError):
+    """A node failure whose node-run row is already written."""
+
+    def __init__(self, original: BaseException) -> None:
+        super().__init__(str(original))
+        self.original = original
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.perf_counter() - started) * 1000))
+
+
 def _record_node(
     state: _WalkState,
     *,
@@ -528,6 +586,9 @@ def _record_node(
     input_digest: Optional[str] = None,
     output_digest: Optional[str] = None,
     cost_micros: int = 0,
+    action_type: Optional[str] = None,
+    external_ref: Optional[str] = None,
+    duration_ms: Optional[int] = None,
 ) -> AutomationNodeRun:
     run = AutomationNodeRun(
         execution_id=state.execution.id,
@@ -542,6 +603,9 @@ def _record_node(
         cost_micros=cost_micros,
         error=error,
         details=details or {},
+        action_type=(action_type or None) and action_type[:48],
+        external_ref=(external_ref or None) and str(external_ref)[:128],
+        duration_ms=duration_ms,
     )
     state.sequence += 1
     state.db.add(run)
@@ -555,46 +619,21 @@ def _record_node(
 
 def _default_perform_action(
     state: _WalkState,
-) -> Callable[[ActionSpec, ActionNodeConfig], str]:
-    def _perform(spec: ActionSpec, config: ActionNodeConfig) -> str:
-        import asyncio
-        from app.services.automation_service import (
-            ActionFailure,
-            EMAIL_ACTION_TYPES,
-            _LazyEmailSettings,
-            _render_action_message,
-        )
-        from app.services.notification.dispatcher import notification_dispatcher
+) -> Callable[[ActionSpec, ActionNodeConfig], Any]:
+    # ARCH37-S1:registry-dispatch. A dictionary dispatch over the action
+    # registry. Every registered type has a schema, a selector and a perform
+    # function, asserted when the registry is imported.
+    from app.services.automation import actions as action_registry
 
-        if spec.action_type in EMAIL_ACTION_TYPES:
-            resolved = _LazyEmailSettings(
-                db=state.db, workspace_id=state.execution.workspace_id
-            ).require()
-            if not spec.recipient:
-                raise ActionFailure("Email action has no recipient configured.")
-            title, body = _render_action_message(rule=state.rule, work_item=state.work_item)
-            ok = asyncio.run(
-                notification_dispatcher.send(
-                    action_type=spec.action_type,
-                    settings=resolved,
-                    recipient=spec.recipient,
-                    title=title,
-                    body=body,
-                )
-            )
-            if not ok:
-                raise ActionFailure(f"Provider '{spec.action_type}' reported a delivery failure.")
-            return f"{spec.action_type} -> {spec.recipient}"
-
-        if spec.action_type in ("set_field", "work_item.mutate"):
-            return _perform_mutation(state, spec)
-
-        raise ActionFailure(f"Unsupported action type '{spec.action_type}'.")
+    def _perform(spec: ActionSpec, config: ActionNodeConfig) -> Any:
+        return action_registry.perform_action(state, spec)
 
     return _perform
 
 
 def _perform_mutation(state: _WalkState, spec: ActionSpec) -> str:
+    """Retained for callers that imported it. The registry's
+    `work_item.mutate` module is the live path."""
     from app.services import outbox_service
     from app.services.automation_service import ActionFailure
 

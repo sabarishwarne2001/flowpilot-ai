@@ -53,6 +53,10 @@ export const automationKeys = {
   rule: (workspaceId: string, ruleId: string) =>
     [...automationKeys.all(workspaceId), "rule", ruleId] as const,
   logs: (workspaceId: string) => [...automationKeys.all(workspaceId), "logs"] as const,
+  // ARCH37-S2:catalog-keys
+  catalog: (workspaceId: string) => [...automationKeys.all(workspaceId), "catalog"] as const,
+  executionNodes: (workspaceId: string, executionId: string) =>
+    [...automationKeys.all(workspaceId), "execution-nodes", executionId] as const,
 };
 
 export const notificationKeys = {

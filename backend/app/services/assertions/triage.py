@@ -491,6 +491,29 @@ def record_evaluation(
     db.add(evaluation)
     db.flush()
 
+    # ARCH37-S1:assertion-held. A held clause is a trigger. Emitted after the
+    # evaluation row exists, so the payload can name it.
+    if decision.routed_to == vocab.ROUTE_TRIAGE:
+        from app.services import outbox_service
+
+        outbox_service.emit_trigger(
+            db,
+            organization_id=definition.organization_id,
+            workspace_id=definition.workspace_id,
+            event_type="trigger.assertion.held",
+            resource_id=work_item_id,
+            payload={
+                "work_item_id": str(work_item_id),
+                "evaluation_id": str(evaluation.id),
+                "definition_id": str(definition.id),
+                "family": definition.family,
+                "verdict": evaluation_result.verdict,
+                "raw_score": str(evaluation_result.raw_score),
+                "verification_id": str(verification.id) if verification is not None else None,
+            },
+            idempotency_key=f"trigger.assertion.held:{evaluation.id}",
+        )
+
     if meter:
         meter_evaluation(
             db,

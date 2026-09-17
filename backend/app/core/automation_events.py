@@ -33,6 +33,42 @@ from typing import Final, FrozenSet
 
 from app.core.webhook_events import WEBHOOK_EVENT_TYPES
 
+#: ARCH37-S1:trigger-prefix. The namespace every flow-builder trigger lives in.
+TRIGGER_PREFIX: Final[str] = "trigger."
+
+#: Internal twins of public events. The public name is the part after the
+#: prefix; `_assert_twins_have_public_sources` proves each one exists.
+TRIGGER_TWIN_EVENT_TYPES: Final[tuple[str, ...]] = (
+    "trigger.document.completed",
+    "trigger.document.failed",
+    "trigger.procurement.completed",
+    "trigger.procurement.approved",
+    "trigger.procurement.disputed",
+    "trigger.anomaly.detected",
+)
+
+#: Internal trigger events with no public counterpart.
+#:
+#: `trigger.batch.completed` is reserved here (and in the database CHECK) so
+#: ARCH-38 needs no vocabulary migration. It is deliberately NOT in the trigger
+#: catalog until ARCH-38 ships an emitter: a trigger nothing emits is the
+#: defect ARCH-37 exists to remove, and `verify_arch37.py` fails on one.
+TRIGGER_NATIVE_EVENT_TYPES: Final[tuple[str, ...]] = (
+    "trigger.work_item.created",
+    "trigger.work_item.reprocessed",
+    "trigger.assertion.held",
+    "trigger.redaction.completed",
+    "trigger.batch.completed",
+)
+
+#: Internal events that existed before ARCH-37 and that rules may listen to.
+#: `automation_rule_triggers` accepts exactly these plus the `trigger.` names.
+LEGACY_RULE_EVENT_TYPES: Final[tuple[str, ...]] = (
+    "work_item.enriched",
+    "work_item.verification_completed",
+    "work_item.field_changed",
+)
+
 #: Visibility discriminator values. Mirrors the DB CHECK constraint.
 VISIBILITY_PUBLIC: Final[str] = "PUBLIC"
 VISIBILITY_INTERNAL: Final[str] = "INTERNAL"
@@ -91,6 +127,21 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "identity.jit_cap_reached",
         # Emitted when an enterprise IdP configuration is created or activated.
         "identity.idp_config_changed",
+
+        # --- ARCH37-S1:trigger-vocabulary ---
+        # The flow builder's trigger events. Every name lives under the
+        # reserved `trigger.` namespace, so none of them can ever be made
+        # PUBLIC (see INTERNAL_ONLY_PREFIXES below).
+        #
+        # Twins: written by `outbox_service.emit_public_with_twin` in the
+        # SAME transaction as the public event whose name follows the prefix.
+        # The public row goes to customer endpoints; the twin goes to the
+        # automation engine. ARCH-13 F1 keeps those two audiences apart, and a
+        # twin is how a public state change reaches a rule without breaking it.
+        *TRIGGER_TWIN_EVENT_TYPES,
+        # State changes with no public counterpart, emitted by
+        # `outbox_service.emit_trigger` where the state changes.
+        *TRIGGER_NATIVE_EVENT_TYPES,
     }
 )
 
@@ -102,6 +153,8 @@ INTERNAL_ONLY_PREFIXES: Final[tuple[str, ...]] = (
     "automation.",
     "billing.seat_",
     "identity.",
+    # ARCH37-S1:trigger-prefix
+    TRIGGER_PREFIX,
 )
 
 
@@ -137,6 +190,39 @@ def _assert_vocabularies_disjoint() -> None:
 _assert_vocabularies_disjoint()
 
 
+def twin_of(public_event_type: str) -> str:
+    """The internal twin name for a public event type."""
+    return f"{TRIGGER_PREFIX}{public_event_type}"
+
+
+def _assert_twins_have_public_sources() -> None:
+    """Every twin names a real public event, and every trigger is reserved."""
+    orphans = [
+        twin
+        for twin in TRIGGER_TWIN_EVENT_TYPES
+        if twin[len(TRIGGER_PREFIX):] not in WEBHOOK_EVENT_TYPES
+    ]
+    if orphans:
+        raise RuntimeError(
+            "ARCH-37 twin(s) with no public source event: "
+            f"{', '.join(orphans)}. A twin is written beside its public event; "
+            "one with no public event is never written."
+        )
+    misnamed = [
+        name
+        for name in (*TRIGGER_TWIN_EVENT_TYPES, *TRIGGER_NATIVE_EVENT_TYPES)
+        if not name.startswith(TRIGGER_PREFIX)
+    ]
+    if misnamed:
+        raise RuntimeError(
+            f"ARCH-37 trigger event(s) outside the {TRIGGER_PREFIX!r} namespace: "
+            f"{', '.join(misnamed)}."
+        )
+
+
+_assert_twins_have_public_sources()
+
+
 def is_internal(event_type: str) -> bool:
     return event_type in INTERNAL_EVENT_TYPES
 
@@ -161,6 +247,11 @@ def sorted_internal_event_types() -> list[str]:
 __all__ = [
     "INTERNAL_EVENT_TYPES",
     "INTERNAL_ONLY_PREFIXES",
+    "LEGACY_RULE_EVENT_TYPES",
+    "TRIGGER_NATIVE_EVENT_TYPES",
+    "TRIGGER_PREFIX",
+    "TRIGGER_TWIN_EVENT_TYPES",
+    "twin_of",
     "VISIBILITIES",
     "VISIBILITY_INTERNAL",
     "VISIBILITY_PUBLIC",

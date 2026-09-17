@@ -359,6 +359,19 @@ class AutomationService:
         rule: AutomationRule,
         work_item: WorkItem,
     ) -> dict[str, Any]:
+        # ARCH37-S1:dry-run. A flow rule, or any rule with an action other
+        # than email, is tested without side effects: conditions are
+        # evaluated and each action's config is validated, nothing runs.
+        # The ARCH-13 email-only path below still sends its labelled test.
+        if getattr(rule, "flow_spec", None) is not None or any(
+            str(_get_condition_attribute(a, "action_type") or "").lower().strip()
+            not in EMAIL_ACTION_TYPES
+            for a in (getattr(rule, "actions", []) or [])
+        ):
+            from app.services.automation import flow_service
+
+            return flow_service.dry_run(db, rule=rule, work_item=work_item)
+
         start_time = time.perf_counter()
         success, matched, notification_sent = True, False, False
         message = "Rule conditions were not satisfied."

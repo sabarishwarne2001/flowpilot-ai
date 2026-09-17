@@ -410,6 +410,13 @@ def resolve(
         ((verification.details or {}).get("calibration") or {}).get(
             "review_all_fields"
         )
+    ) or bool(
+        # ARCH37-S1:escalation-review-all. A rule's `review.escalate` asks
+        # the reviewer to confirm every field, under its own key so ARCH-35's
+        # label harvester never mistakes it for a calibration audit.
+        ((verification.details or {}).get("escalation") or {}).get(
+            "review_all_fields"
+        )
     )
     disagreed = {
         f.field_path: f

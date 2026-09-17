@@ -24,6 +24,7 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.automation_graph import AutomationNode
+    from app.models.automation_trigger import AutomationRuleTrigger
     from app.models.user import User
     from app.models.work_item import WorkItem
     from app.models.workspace import Workspace
@@ -49,6 +50,11 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         CheckConstraint(
             "budget_cost_micros IS NULL OR budget_cost_micros >= 0",
             name="ck_automation_rules_budget_non_negative",
+        ),
+        # ARCH37-S1:flow-spec
+        CheckConstraint(
+            "flow_spec IS NULL OR jsonb_typeof(flow_spec) = 'object'",
+            name="ck_automation_rules_flow_spec_is_object",
         ),
     )
 
@@ -124,6 +130,26 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     budget_cost_micros: Mapped[Union[int, None]] = mapped_column(
         BigInteger, nullable=True
     )
+
+    # ---- ARCH-37 ------------------------------------------------------
+    #: The step builder's document: condition groups, the operator between
+    #: them, and the "otherwise" actions. NULL for rules written before
+    #: ARCH-37, which `graph_service.flatten_legacy_rule` runs unchanged.
+    flow_spec: Mapped[Union[dict[str, Any], None]] = mapped_column(
+        JSONB, nullable=True
+    )
+
+    trigger_rows: Mapped[list["AutomationRuleTrigger"]] = relationship(
+        "AutomationRuleTrigger",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="AutomationRuleTrigger.event_type",
+    )
+
+    @property
+    def trigger_event_types(self) -> list[str]:
+        return [row.event_type for row in self.trigger_rows]
 
     workspace: Mapped[Workspace] = relationship("Workspace")
 

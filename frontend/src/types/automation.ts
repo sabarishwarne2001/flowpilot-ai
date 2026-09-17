@@ -1,12 +1,17 @@
 /**
  * Automation Engine Data Transfer Objects (DTOs) for FlowPilot AI.
+ *
+ * ARCH37-S2:catalog-vocabulary. Triggers and action types are catalog keys served by the API
+ * (see types/automationFlow.ts). No trigger or action vocabulary lives here.
  */
 
-export type AutomationEvent =
-  | "WORK_ITEM_CREATED"
-  | "WORK_ITEM_COMPLETED"
-  | "WORK_ITEM_FAILED"
-  | "WORK_ITEM_REPROCESSED";
+import type {
+  FlowActionEntry,
+  FlowConditionGroup,
+} from "@/types/automationFlow";
+
+/** The stored `event` column: a catalog key, or an ARCH-13 legacy value. */
+export type AutomationEvent = string;
 
 export type AutomationOperator =
   | "EQUALS"
@@ -28,7 +33,7 @@ export type AutomationOperator =
   | "ARRAY_CONTAINS_ANY"
   | "ARRAY_CONTAINS_ALL";
 
-export type AutomationActionType = "SEND_EMAIL";
+export type AutomationActionType = string;
 export type AutomationExecutionStatus = "SUCCESS" | "FAILED";
 export type AutomationLogicOperator = "AND" | "OR";
 
@@ -60,26 +65,38 @@ export interface AutomationRule {
   readonly updated_at: string;
   readonly graph_version?: number;
   readonly on_error?: AutomationErrorPolicy;
+  // ARCH-37
+  readonly triggers?: readonly string[];
+  readonly trigger_events?: readonly string[];
+  readonly condition_groups?: readonly FlowConditionGroup[];
+  readonly groups_operator?: AutomationLogicOperator;
+  readonly else_actions?: readonly FlowActionEntry[];
+  readonly is_flow?: boolean;
 }
 
+/** ARCH-37 flow shape. The server still accepts the ARCH-13 shape. */
 export interface AutomationRuleCreateRequest {
   readonly name: string;
   readonly priority: number;
-  readonly event: AutomationEvent;
-  readonly conditions: readonly AutomationCondition[];
-  readonly logic_operator: AutomationLogicOperator;
-  readonly actions: readonly AutomationAction[];
+  readonly triggers: readonly string[];
+  readonly condition_groups: readonly FlowConditionGroup[];
+  readonly groups_operator: AutomationLogicOperator;
+  readonly actions: readonly FlowActionEntry[];
+  readonly else_actions: readonly FlowActionEntry[];
+  readonly on_error: AutomationErrorPolicy;
   readonly is_active?: boolean;
 }
 
 export interface AutomationRuleUpdateRequest {
   readonly name?: string;
   readonly priority?: number;
-  readonly event?: AutomationEvent;
-  readonly conditions?: readonly AutomationCondition[];
-  readonly logic_operator?: AutomationLogicOperator;
-  readonly actions?: readonly AutomationAction[];
   readonly is_active?: boolean;
+  readonly triggers?: readonly string[];
+  readonly condition_groups?: readonly FlowConditionGroup[];
+  readonly groups_operator?: AutomationLogicOperator;
+  readonly actions?: readonly FlowActionEntry[];
+  readonly else_actions?: readonly FlowActionEntry[];
+  readonly on_error?: AutomationErrorPolicy;
 }
 
 export interface AutomationLog {
