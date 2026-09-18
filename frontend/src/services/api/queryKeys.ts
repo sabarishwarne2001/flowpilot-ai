@@ -16,6 +16,22 @@ export const workItemKeys = {
     [...workItemKeys.all(workspaceId), "detail", workItemId] as const,
 };
 
+// ARCH38-S2:ingestion-keys
+export const ingestionKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "ingestion"] as const,
+  batches: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "batches"] as const,
+  batch: (workspaceId: string, batchId: string) =>
+    [...ingestionKeys.batches(workspaceId), batchId] as const,
+  presets: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "presets"] as const,
+  tags: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "tags"] as const,
+  retentionHolds: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "retention-holds"] as const,
+};
+
 export const knowledgeKeys = {
   all: (workspaceId: string) => [...workspaceScope(workspaceId), "knowledge"] as const,
 };

@@ -16,8 +16,11 @@ WHAT IS DELIBERATELY ABSENT
 ===========================
 
 Organization-scoped identity and billing events: rules are workspace-scoped and
-those events carry no workspace. `trigger.batch.completed`: reserved in the
-vocabulary for ARCH-38, listed here only once ARCH-38 emits it.
+those events carry no workspace.
+
+ARCH-38 added `batch.completed`, whose event `trigger.batch.completed` ARCH-37
+reserved and left out of this catalog until an emitter existed. The emitter is
+`batch_service.finalize_if_done`.
 
 This module is pure. It imports no session, no model and no service, so the
 gates can load it on its own.
@@ -293,6 +296,32 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         # Starting a redaction from "a redaction finished" is a loop that only
         # a human approval step interrupts, once per document, forever.
         excluded_actions=("redaction.start",),
+    ),
+    # ARCH38-S1:batch-completed-trigger. Reserved by ARCH-37 in
+    # INTERNAL_EVENT_TYPES and in ck_outbox_events_visibility_vocabulary, and
+    # deliberately kept out of this catalog until something emitted it.
+    # `batch_service.finalize_if_done` is that something.
+    TriggerSpec(
+        key="batch.completed",
+        label="Batch finished",
+        category="Documents",
+        description=(
+            "Every file in an upload batch has finished, whether or not some "
+            "of them failed."
+        ),
+        event_types=("trigger.batch.completed",),
+        fields=(
+            TriggerField("total_items", "Files in batch", "number", "150"),
+            TriggerField("completed_items", "Processed", "number", "147"),
+            TriggerField("failed_items", "Failed", "number", "3"),
+            TriggerField("had_failures", "Any failures", "boolean", "true"),
+            TriggerField("source", "Dropped as", "string", "ARCHIVE"),
+        ),
+        # A batch is not one document, so there are no document fields to read
+        # and no document to mutate, redact or decide on. `flow_service`
+        # refuses document actions for a trigger with has_document=False, so
+        # this single flag is what keeps the builder honest.
+        has_document=False,
     ),
 )
 

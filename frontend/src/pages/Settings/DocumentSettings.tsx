@@ -18,6 +18,7 @@ import {
 import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import KnowledgeBaseReindex from "@/components/settings/KnowledgeBaseReindex";
+import PresetGallery from "@/components/settings/PresetGallery";
 
 export const DocumentSettings: React.FC = () => {
   const queryClient = useQueryClient();
@@ -298,6 +299,16 @@ export const DocumentSettings: React.FC = () => {
         </form>
 
         {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-destructive">Validation is active.</p>}
+      </div>
+
+      {/* ARCH38-S2:preset-gallery. The vertical packs live with the other
+          document settings: a pack decides what is extracted from a document
+          type, which is the same question the rest of this page answers. */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <PresetGallery
+          workspaceId={workspace.id}
+          canManage={canManageSettings}
+        />
       </div>
 
       {/* Reindex Knowledge Base Section */}

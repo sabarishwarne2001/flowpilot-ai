@@ -10,12 +10,18 @@ from typing import Optional
 from app.core.config import settings
 from app.core.storage.base import (
     DEFAULT_CHUNK_SIZE,
+    DEFAULT_PART_SIZE,
+    MAX_PART_NUMBER,
+    MAX_PART_SIZE,
+    MIN_PART_SIZE,
     InvalidStorageKeyError,
+    MultipartUpload,
     ObjectNotFoundError,
     StorageCapabilityError,
     StorageDriver,
     StorageError,
     StoredObject,
+    UploadedPart,
     sanitize_key,
 )
 from app.core.storage.keys import (
@@ -50,6 +56,13 @@ __all__ = [
     "get_storage_driver",
     "reset_storage_driver",
     "DEFAULT_CHUNK_SIZE",
+    # ARCH38-S1:storage-multipart
+    "DEFAULT_PART_SIZE",
+    "MIN_PART_SIZE",
+    "MAX_PART_SIZE",
+    "MAX_PART_NUMBER",
+    "MultipartUpload",
+    "UploadedPart",
 ]
 
 _driver: Optional[StorageDriver] = None

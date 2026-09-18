@@ -259,6 +259,17 @@ from app.models.radar import (  # noqa: F401
     AnomalySuppression,
     DocumentFingerprint,
 )
+# ARCH38-S1:models-ingestion. Registered here so Alembic --autogenerate sees
+# these tables; an unregistered model is a table autogenerate proposes to drop.
+from app.models.ingestion import (  # noqa: F401
+    DocumentSchemaPreset,
+    IngestionBatch,
+    IngestionBatchItem,
+    RetentionHold,
+    UploadSession,
+    WorkItemTag,
+    WorkspaceSchemaPreset,
+)
 from app.models.calibration import (  # noqa: F401
     CalibrationLabel,
     CalibrationModelVersion,
@@ -577,6 +588,14 @@ __all__ = [
     "AnomalySuppression",
     "DocumentFingerprint",
     # ARCH-35 — calibrated autonomy and conformal risk control.
+    # ARCH-38 — batch ingestion and universal document intelligence.
+    "DocumentSchemaPreset",
+    "IngestionBatch",
+    "IngestionBatchItem",
+    "RetentionHold",
+    "UploadSession",
+    "WorkItemTag",
+    "WorkspaceSchemaPreset",
     "CalibrationLabel",
     "CalibrationModelVersion",
     # ARCH-27 — partner marketplace, reseller tenancy and revenue share.

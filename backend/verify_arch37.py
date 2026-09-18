@@ -169,6 +169,11 @@ EMITTERS: dict[str, tuple[str, tuple[str, ...]]] = {
         "app/services/redaction/redaction_service.py",
         ("emit_trigger(", 'event_type="trigger.redaction.completed"'),
     ),
+    # ARCH38-S1:emitter-batch-completed.
+    "trigger.batch.completed": (
+        "app/services/ingestion/batch_service.py",
+        ("emit_trigger(", "event_type=BATCH_COMPLETED_EVENT"),
+    ),
     "trigger.document.completed": (
         "app/services/pipeline_state.py",
         ("emit_public_with_twin(", '"document.completed"', "TWINNED_EVENTS"),
@@ -442,10 +447,15 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             for twin in ae.TRIGGER_TWIN_EVENT_TYPES:
                 assert twin[len("trigger."):] in WEBHOOK_EVENT_TYPES, twin
             assert "trigger.batch.completed" in ae.INTERNAL_EVENT_TYPES, "ARCH-38's event is not reserved"
-            assert "trigger.batch.completed" not in triggers.CATALOG_EVENT_TYPES, (
-                "trigger.batch.completed is offered before anything emits it"
+            # ARCH38-S1:catalog-widened-37. ARCH-38 emits it from
+            # batch_service.finalize_if_done, so it belongs in the catalog now.
+            # The EMITTERS table below is what keeps that honest: a catalog
+            # entry with no emitter still fails V3.
+            assert "trigger.batch.completed" in triggers.CATALOG_EVENT_TYPES, (
+                "ARCH-38 emits trigger.batch.completed; it must be in the catalog"
             )
-            assert len(triggers.TRIGGERS) == 12 and len(triggers.CATALOG_EVENT_TYPES) == 13
+            # ARCH38-S1:catalog-counts-37. 12/13 before ARCH-38, 13/14 after.
+            assert len(triggers.TRIGGERS) == 13 and len(triggers.CATALOG_EVENT_TYPES) == 14
             assert "workflow.triggered" in WEBHOOK_EVENT_TYPES
             # The public events must fail as INTERNAL and twins as PUBLIC.
             from app.services import outbox_service
@@ -1124,7 +1134,10 @@ def gates_db(rec: Recorder, *, root: Path) -> None:
     try:
         def head() -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
-            assert value == HEAD, f"alembic head is {value}; run `alembic upgrade head`"
+            # ARCH38-S1:head-widened-37. ARCH-38 advances the head; this gate
+            # asserts that ARCH-37's migration is still applied, not that it is
+            # still the newest thing in the tree.
+            assert value in (HEAD, "arch38_step1_batches"), f"alembic head is {value}; run `alembic upgrade head`"
             names = set(db.execute(sql(
                 "SELECT conname FROM pg_constraint WHERE conname IN ("
                 "'ck_automation_rule_triggers_event_known','ck_automation_rules_flow_spec_is_object',"

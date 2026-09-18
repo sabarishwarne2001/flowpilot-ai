@@ -79,6 +79,12 @@ class AuditResourceType(str, PyEnum):
     # arch37_step0_flow_vocabulary.
     AUTOMATION_RULE = "AUTOMATION_RULE"
     PROCUREMENT_TOLERANCE_POLICY = "PROCUREMENT_TOLERANCE_POLICY"
+    # ARCH38-S1:audit-ingestion. Added to the PostgreSQL type by
+    # arch38_step0_batch_vocabulary; this enum must stay in step with it.
+    # verify_arch38.py gate D6 asserts both sides agree.
+    INGESTION_BATCH = "INGESTION_BATCH"
+    DOCUMENT_SCHEMA_PRESET = "DOCUMENT_SCHEMA_PRESET"
+    RETENTION_HOLD = "RETENTION_HOLD"
 
 
 class AuditAction(str, PyEnum):

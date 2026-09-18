@@ -379,7 +379,7 @@ def gates_schema_and_capability(rec: Recorder) -> None:
         heads = sorted(r for r in revs if r not in downs)
         # ARCH35-S1:head-widened-31s0
         # ARCH39-S1:head-widened-31s0
-        assert heads in (["arch31_step0_document_roles"], ["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"]), heads  # ARCH37-S1:head-widened-31s0
+        assert heads in (["arch31_step0_document_roles"], ["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"], ["arch38_step1_batches"]), heads  # ARCH37-S1:head-widened-31s0  ARCH38-S1:head-widened-31s0
 
     rec.check("Step 0 leaves exactly one Alembic head", single_alembic_head)
 

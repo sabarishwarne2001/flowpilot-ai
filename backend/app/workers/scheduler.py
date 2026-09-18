@@ -145,6 +145,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         at_hour=5,
         description="Refit calibration models and run drift monitoring (ARCH-35).",
     ),
+    # ARCH38-S1:ingestion-schedule. A browser that closed mid-upload leaves
+    # multipart parts in the bucket. Nothing else reclaims them, and MinIO
+    # charges for them exactly as it charges for objects.
+    ScheduledJob(
+        job_type="ingestion.sweep_sessions",
+        interval_seconds=3_600,
+        description="Abandon expired multipart upload sessions (ARCH-38).",
+    ),
     ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,

@@ -1012,7 +1012,7 @@ def gates_db(rec: Recorder, database_url: str) -> None:
             ]
         # ARCH35-S1:head-widened-31
         # ARCH39-S1:head-widened-31
-        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"]), heads  # ARCH37-S1:head-widened-31
+        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"], ["arch38_step1_batches"]), heads  # ARCH37-S1:head-widened-31  ARCH38-S1:head-widened-31
 
     rec.check("DB: exactly one Alembic head, at Step 1", single_alembic_head)
 

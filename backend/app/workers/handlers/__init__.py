@@ -57,6 +57,10 @@ ARCH34_JOB_TYPES: frozenset[str] = frozenset(
 ARCH35_JOB_TYPES: frozenset[str] = frozenset(
     {"calibration.harvest", "calibration.refit"}
 )
+# ARCH38-S1:ingestion-job-types.
+ARCH38_JOB_TYPES: frozenset[str] = frozenset(
+    {"batch.expand_archive", "work_items.bulk", "ingestion.sweep_sessions"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -84,6 +88,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH32_JOB_TYPES
     | ARCH34_JOB_TYPES
     | ARCH35_JOB_TYPES
+    | ARCH38_JOB_TYPES
 )
 
 
@@ -282,6 +287,21 @@ def _calibration_refit(payload: dict[str, Any]) -> dict[str, Any]:
         return handle_calibration_refit(db, payload)
 
 
+def _batch_expand_archive(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_batch_expand_archive
+    return handle_batch_expand_archive(payload)
+
+
+def _work_items_bulk(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_work_items_bulk
+    return handle_work_items_bulk(payload)
+
+
+def _ingestion_sweep_sessions(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_sweep_upload_sessions
+    return handle_sweep_upload_sessions(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -352,6 +372,15 @@ _HANDLERS = {
     # ProfileError at every worker's startup on a handler no profile claims.
     "calibration.harvest": _calibration_harvest,
     "calibration.refit": _calibration_refit,
+    # ARCH38-S1:ingestion-handlers. All three are also on the LIGHT profile in
+    # app/workers/profiles.py, and `ingestion.sweep_sessions` is in
+    # DEFAULT_SCHEDULE in app/workers/scheduler.py.
+    # assert_imports_match_profile() raises ProfileError at every worker's
+    # startup on a handler no profile claims, so registering these without the
+    # profile entry stops the entire fleet booting.
+    "batch.expand_archive": _batch_expand_archive,
+    "work_items.bulk": _work_items_bulk,
+    "ingestion.sweep_sessions": _ingestion_sweep_sessions,
 }
 
 

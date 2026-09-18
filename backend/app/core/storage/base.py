@@ -49,6 +49,40 @@ class StoredObject:
     multipart: bool = False
 
 
+# ARCH38-S1:storage-multipart. Resumable uploads need four operations the six
+# original methods cannot express: begin, send one part, finish, abandon.
+#
+# S3 fixes the floor: every part but the last must be at least 5 MiB, so a
+# smaller part size would make the protocol illegal on the real backend and
+# silently legal on the local one. The ceiling is this product's, not S3's --
+# a part is held whole in memory while it is hashed and forwarded.
+MIN_PART_SIZE = 5 * 1024 * 1024
+DEFAULT_PART_SIZE = 8 * 1024 * 1024
+MAX_PART_SIZE = 64 * 1024 * 1024
+
+#: S3's hard limit on parts per upload. At 8 MiB a session tops out near 80 GiB,
+#: far above any document this product accepts.
+MAX_PART_NUMBER = 10_000
+
+
+@dataclass(frozen=True)
+class MultipartUpload:
+    """A begun multipart upload."""
+
+    key: str
+    upload_id: str
+    part_size: int
+
+
+@dataclass(frozen=True)
+class UploadedPart:
+    """One part that the backend has acknowledged."""
+
+    part_number: int
+    etag: str
+    size: int
+
+
 def sanitize_key(key: str) -> str:
     """Validate a storage key and return it normalised."""
     if not isinstance(key, str):
@@ -203,6 +237,57 @@ class StorageDriver(ABC):
         for chunk in self.iter_chunks(key):
             digest.update(chunk)
         return digest.hexdigest()
+
+    # ---- ARCH-38 multipart, concrete and refusing by default -------------
+    #
+    # A driver that cannot do multipart raises rather than silently degrading
+    # to a single PUT: the caller's whole reason for being here is that the
+    # object is too large for one request.
+
+    def create_multipart(
+        self, key: str, mime_type: str, *, part_size: int = DEFAULT_PART_SIZE
+    ) -> MultipartUpload:
+        raise StorageCapabilityError(
+            f"{type(self).__name__} does not implement create_multipart()"
+        )
+
+    def upload_part(
+        self, key: str, upload_id: str, part_number: int, data: bytes
+    ) -> UploadedPart:
+        raise StorageCapabilityError(
+            f"{type(self).__name__} does not implement upload_part()"
+        )
+
+    def complete_multipart(
+        self, key: str, upload_id: str, parts: list[UploadedPart], mime_type: str
+    ) -> StoredObject:
+        raise StorageCapabilityError(
+            f"{type(self).__name__} does not implement complete_multipart()"
+        )
+
+    def abort_multipart(self, key: str, upload_id: str) -> None:
+        raise StorageCapabilityError(
+            f"{type(self).__name__} does not implement abort_multipart()"
+        )
+
+    @staticmethod
+    def validate_part_number(part_number: int) -> int:
+        if not isinstance(part_number, int) or isinstance(part_number, bool):
+            raise StorageError(f"Part number must be an int, got {part_number!r}")
+        if part_number < 1 or part_number > MAX_PART_NUMBER:
+            raise StorageError(
+                f"Part number {part_number} is outside 1..{MAX_PART_NUMBER}"
+            )
+        return part_number
+
+    @staticmethod
+    def validate_part_size(part_size: int) -> int:
+        if part_size < MIN_PART_SIZE or part_size > MAX_PART_SIZE:
+            raise StorageError(
+                f"Part size {part_size} is outside "
+                f"{MIN_PART_SIZE}..{MAX_PART_SIZE} bytes"
+            )
+        return part_size
 
     def presigned_get_url(self, key: str, *, expires_in: int = 900) -> Optional[str]:
         return None

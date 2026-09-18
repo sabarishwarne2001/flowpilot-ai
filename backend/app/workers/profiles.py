@@ -130,6 +130,22 @@ LIGHT = WorkerProfile(
             # app/services/calibration/ imports a model, OCR or a PDF engine.
             "calibration.harvest",
             "calibration.refit",
+            # ARCH38-S1:ingestion-light-profile. ARCH-38 batch ingestion.
+            # Expanding a zip is zipfile plus hashlib over bounded bytes; a
+            # bulk action is row updates and job enqueues; the sweeper aborts
+            # multipart uploads. Nothing under app/services/ingestion/ imports
+            # PaddleOCR, SentenceTransformers or a PDF engine -- each member
+            # is handed to document_intake_service, which enqueues
+            # `document.extract` for the OCR profile to claim.
+            #
+            # As with every entry above, this is not optional bookkeeping:
+            # assert_imports_match_profile() raises ProfileError at every
+            # worker's startup on a handler no profile claims, so registering
+            # these in handlers/__init__.py without adding them here stops the
+            # entire fleet booting.
+            "batch.expand_archive",
+            "work_items.bulk",
+            "ingestion.sweep_sessions",
         }
     ),
     allow_heavy=frozenset(),

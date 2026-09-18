@@ -1,27 +1,8 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { AlertTriangle, FileUp, Loader2, X } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, FileUp, X } from "lucide-react";
 
-import { uploadDocument } from "@/services/api/workItem";
 import { ApiError } from "@/services/api/errors";
-
-const resolveWorkItemId = (response: unknown): string | null => {
-  if (typeof response !== "object" || response === null) {
-    return null;
-  }
-
-  const record = response as Record<string, unknown>;
-
-  if (typeof record.id === "string") {
-    return record.id;
-  }
-
-  /* ARCH-0V: the `work_item` wrapper branch was removed. The upload
-     route is `@router.post("", response_model=WorkItemResponse)` in
-     app/api/v1/work_items.py and has always returned the flat object.
-     The branch below it was defending against a shape the server has
-     never sent, which is how a phantom field survives four phases. */
-  return null;
-};
+import { useUploadTrayStore } from "@/store/useUploadTrayStore";
 
 const DEFAULT_MAX_SIZE_MB = 25;
 
@@ -56,11 +37,35 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const enqueue = useUploadTrayStore((state) => state.enqueue);
+  const trayFiles = useUploadTrayStore((state) => state.files);
+
+  // ARCH38-S2:tray-handoff. The tray owns the upload now, so `onUploaded`
+  // fires from the tray's state rather than from a resolved POST. `notified`
+  // keeps it to once per file: the store updates on every progress tick.
+  const watching = useRef<Set<string>>(new Set());
+  const notified = useRef<Set<string>>(new Set());
+
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [rejections, setRejections] = useState<Rejection[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!onUploaded) {
+      return;
+    }
+    trayFiles.forEach((file) => {
+      if (
+        file.status === "done" &&
+        file.workItemId &&
+        watching.current.has(file.id) &&
+        !notified.current.has(file.id)
+      ) {
+        notified.current.add(file.id);
+        onUploaded(file.workItemId);
+      }
+    });
+  }, [onUploaded, trayFiles]);
 
   const dragDepth = useRef(0);
   const maxBytes = useMemo(() => maxSizeMb * 1024 * 1024, [maxSizeMb]);
@@ -84,7 +89,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
   );
 
   const handleFiles = useCallback(
-    async (files: FileList | null) => {
+    async (files: FileList | readonly File[] | null, relativePaths?: readonly string[]) => {
       if (!files || files.length === 0 || disabled) {
         return;
       }
@@ -95,7 +100,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
       const accepted: File[] = [];
       const refused: Rejection[] = [];
 
-      Array.from(files).forEach((file) => {
+      Array.from(files as ArrayLike<File>).forEach((file) => {
         const reason = validate(file);
         if (reason) {
           refused.push({ fileName: file.name, reason });
@@ -110,45 +115,93 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
         return;
       }
 
-      setUploading(true);
-      setProgress(0);
-
+      // ARCH38-S2:tray-handoff. Files go to the tray, which uploads three at a
+      // time with per-file state and its own failure isolation.
+      //
+      // What this replaces: a `for` loop whose `try` wrapped the WHOLE loop.
+      // The first failure jumped to the catch and silently abandoned every
+      // file after it -- a fifty-file drop could produce eleven documents and
+      // one generic message about none of them.
       try {
-        for (let index = 0; index < accepted.length; index += 1) {
-          const file = accepted[index];
-          if (!file) {
-            continue;
-          }
-
-          const result = await uploadDocument(workspaceId, file, (event) => {
-            if (event.total) {
-              const fileFraction = event.loaded / event.total;
-              const overall = (index + fileFraction) / accepted.length;
-              setProgress(Math.round(overall * 100));
-            }
-          });
-
-          const workItemId = resolveWorkItemId(result);
-          if (workItemId) {
-            onUploaded?.(workItemId);
-          }
-        }
-
-        setProgress(100);
+        const ids = await enqueue(workspaceId, accepted, relativePaths);
+        ids.forEach((id) => watching.current.add(id));
       } catch (error) {
         setFailure(
           error instanceof ApiError
             ? error.message
-            : "The upload didn't finish. Try again.",
+            : "The upload couldn't be started. Try again.",
         );
       } finally {
-        setUploading(false);
         if (inputRef.current) {
           inputRef.current.value = "";
         }
       }
     },
-    [disabled, onUploaded, validate, workspaceId],
+    [disabled, enqueue, validate, workspaceId],
+  );
+
+  /**
+   * ARCH38-S2:folder-drop. A dropped folder arrives as a DataTransferItem with
+   * a FileSystemEntry behind it; `dataTransfer.files` alone holds nothing for
+   * a directory. Walking the entry tree is the only way to accept a folder.
+   */
+  const collectEntries = useCallback(
+    async (items: DataTransferItemList): Promise<{ files: File[]; paths: string[] }> => {
+      const files: File[] = [];
+      const paths: string[] = [];
+
+      const readDirectory = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
+        new Promise((resolve) => {
+          reader.readEntries(
+            (entries) => resolve(entries),
+            () => resolve([]),
+          );
+        });
+
+      const walk = async (entry: FileSystemEntry, prefix: string): Promise<void> => {
+        if (entry.isFile) {
+          const fileEntry = entry as FileSystemFileEntry;
+          const file = await new Promise<File | null>((resolve) => {
+            fileEntry.file(
+              (value) => resolve(value),
+              () => resolve(null),
+            );
+          });
+          if (file) {
+            files.push(file);
+            paths.push(`${prefix}${file.name}`);
+          }
+          return;
+        }
+        if (entry.isDirectory) {
+          const reader = (entry as FileSystemDirectoryEntry).createReader();
+          // readEntries returns at most 100 at a time and signals the end with
+          // an empty batch, so one call is not enough for a real folder.
+          for (;;) {
+            const batch = await readDirectory(reader);
+            if (batch.length === 0) {
+              break;
+            }
+            for (const child of batch) {
+              await walk(child, `${prefix}${entry.name}/`);
+            }
+          }
+        }
+      };
+
+      const roots: FileSystemEntry[] = [];
+      for (let index = 0; index < items.length; index += 1) {
+        const entry = items[index]?.webkitGetAsEntry?.();
+        if (entry) {
+          roots.push(entry);
+        }
+      }
+      for (const root of roots) {
+        await walk(root, "");
+      }
+      return { files, paths };
+    },
+    [],
   );
 
   const onDrop = useCallback(
@@ -156,12 +209,23 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
       event.preventDefault();
       dragDepth.current = 0;
       setDragging(false);
+      const items = event.dataTransfer.items;
+      const supportsEntries =
+        items && items.length > 0 && typeof items[0]?.webkitGetAsEntry === "function";
+      if (supportsEntries) {
+        void collectEntries(items).then(({ files, paths }) => {
+          if (files.length > 0) {
+            void handleFiles(files, paths);
+          }
+        });
+        return;
+      }
       void handleFiles(event.dataTransfer.files);
     },
-    [handleFiles],
+    [collectEntries, handleFiles],
   );
 
-  const busy = uploading || disabled;
+  const busy = disabled;
 
   return (
     <div className={className}>
@@ -200,29 +264,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
           id="fp-upload-input"
         />
 
-        {uploading ? (
-          <div role="status" className="space-y-3">
-            <Loader2
-              className="mx-auto h-6 w-6 animate-spin text-muted-foreground"
-              aria-hidden="true"
-            />
-            <p className="text-sm text-muted-foreground">
-              Uploading… {progress}%
-            </p>
-            <div
-              className="mx-auto h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-valuenow={progress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="h-full bg-primary transition-[width] duration-200"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        ) : (
+        {
           <>
             <FileUp
               className="mx-auto h-6 w-6 text-muted-foreground"
@@ -244,7 +286,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
                 .join(", ")}
             </p>
           </>
-        )}
+        }
       </div>
 
       {rejections.length > 0 && (

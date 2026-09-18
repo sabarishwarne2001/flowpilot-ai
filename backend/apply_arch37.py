@@ -178,6 +178,25 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+#: ARCH38-S1:supersede-newfile. A later milestone may legitimately edit a file
+#: an earlier apply created. ARCH-38 patches
+#: `app/services/automation/triggers.py` to add the `batch.completed` entry,
+#: which makes that file differ from the text ARCH-37 wrote.
+#:
+#: Without this, `verify_arch37.py`'s "a second apply changes nothing" gate
+#: would fail on every tree that has ARCH-38 applied -- and the only ways to
+#: silence it would be to delete the gate or to forbid later milestones from
+#: touching the file, both worse than recording the supersession here.
+#:
+#: A file is superseded only when it carries a later milestone's sentinel.
+#: Arbitrary local edits still fail, which is the property the gate exists for.
+SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH38-S1:",)
+
+
+def _is_superseded(text: str) -> bool:
+    return any(sentinel in text for sentinel in SUPERSEDING_SENTINELS)
+
+
 @dataclass
 class Planned:
     path: Path
@@ -207,6 +226,10 @@ def plan(op: Operation) -> Planned:
             current, _, _ = _read(path)
             if current == op.content:
                 return Planned(path, op.relpath, None, False, "already present")
+            if _is_superseded(current):
+                return Planned(
+                    path, op.relpath, None, False, "superseded by a later milestone"
+                )
             raise PatchError(
                 f"{op.relpath}: exists with different content. ARCH-39 creates "
                 "this file; a different file at this path is not something "

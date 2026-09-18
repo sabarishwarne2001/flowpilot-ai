@@ -41,6 +41,7 @@ from app.api.v1 import (
     usage,
     verifications,
     warehouse_sync,
+    ingestion,
     work_items,
     workspaces,
 )
@@ -142,7 +143,20 @@ api_router.include_router(oidc_router)
 
 # Workspace-scoped
 _SCOPED = (
+    # ARCH38-S1:ingestion-routers. Bulk actions, tags and retention holds are
+    # work-item operations and share the /work-items prefix, so they are
+    # mounted BEFORE work_items.router.
+    #
+    # Order is load-bearing, not tidiness. work_items.router carries
+    # `GET /{work_item_id}`, and FastAPI matches in registration order: mounted
+    # second, `GET /work-items/tags` would be captured by that parameterised
+    # route and answered with a 422 for a malformed UUID. Literal segments must
+    # be registered ahead of the catch-all.
+    (ingestion.work_item_router, "/work-items",        "Work Items"),
     (work_items.router,        "/work-items",         "Work Items"),
+    (ingestion.session_router,  "/upload-sessions",    "Batch Ingestion"),
+    (ingestion.batch_router,    "/ingestion-batches",  "Batch Ingestion"),
+    (ingestion.preset_router,   "/document-presets",   "Document Presets"),
     (dashboard.router,         "/dashboard",          "Dashboard"),
     (assistant.router,         "/assistant",          "AI Assistant"),
     (assistant_stream.router,  "/assistant",          "AI Assistant"),

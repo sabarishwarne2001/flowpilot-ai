@@ -15,11 +15,14 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.storage.base import (
     DEFAULT_CHUNK_SIZE,
+    DEFAULT_PART_SIZE,
     InvalidStorageKeyError,
+    MultipartUpload,
     ObjectNotFoundError,
     StorageDriver,
     StorageError,
     StoredObject,
+    UploadedPart,
     _HashingReader,
     sanitize_key,
 )
@@ -342,6 +345,138 @@ class S3CompatibleStorageDriver(StorageDriver):
             raise StorageError(f"Failed to download {key!r}: {exc}") from exc
         destination.flush()
         return destination.tell()
+
+    # ---- ARCH-38 multipart -----------------------------------------------
+    #
+    # ARCH38-S1:storage-multipart-s3.
+    #
+    # Deliberately NOT presigned part URLs. ARCH-08 §B.11 closed that question:
+    # a presigned URL is an unauthenticated bearer capability, and files must
+    # not be reachable without passing the tenant guard. Parts therefore arrive
+    # at the API, which checks the workspace and the session before forwarding
+    # the bytes. The cost is one extra hop per part; the alternative is a URL
+    # that writes into a tenant's bucket prefix with no session behind it.
+    #
+    # sha256 is computed by the caller across the whole object, not here: S3
+    # returns an ETag that is an MD5 of MD5s for a multipart object and cannot
+    # be compared with a content hash.
+
+    def create_multipart(
+        self, key: str, mime_type: str, *, part_size: int = DEFAULT_PART_SIZE
+    ) -> MultipartUpload:
+        self.validate_part_size(part_size)
+        object_key = self._object_key(key)
+        params: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Key": object_key,
+            "ContentType": mime_type,
+        }
+        if self._sse:
+            params["ServerSideEncryption"] = self._sse
+        try:
+            response = self._client.create_multipart_upload(**params)
+        except (ClientError, BotoCoreError) as exc:
+            raise StorageError(
+                f"Failed to begin a multipart upload at {key!r}: {exc}"
+            ) from exc
+        return MultipartUpload(
+            key=sanitize_key(key),
+            upload_id=str(response["UploadId"]),
+            part_size=part_size,
+        )
+
+    def upload_part(
+        self, key: str, upload_id: str, part_number: int, data: bytes
+    ) -> UploadedPart:
+        self.validate_part_number(part_number)
+        object_key = self._object_key(key)
+        try:
+            response = self._client.upload_part(
+                Bucket=self._bucket,
+                Key=object_key,
+                UploadId=upload_id,
+                PartNumber=part_number,
+                Body=data,
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise StorageError(
+                f"Failed to upload part {part_number} of {key!r}: {exc}"
+            ) from exc
+        return UploadedPart(
+            part_number=part_number,
+            etag=str(response["ETag"]).strip('"'),
+            size=len(data),
+        )
+
+    def complete_multipart(
+        self, key: str, upload_id: str, parts: list[UploadedPart], mime_type: str
+    ) -> StoredObject:
+        object_key = self._object_key(key)
+        ordered = sorted(parts, key=lambda part: part.part_number)
+
+        etag_by_part: dict[int, str] = {}
+        size_by_part: dict[int, int] = {}
+        if any(not part.etag for part in ordered):
+            try:
+                res = self._client.list_parts(
+                    Bucket=self._bucket, Key=object_key, UploadId=upload_id
+                )
+                for p in res.get("Parts", []):
+                    num = int(p["PartNumber"])
+                    etag_by_part[num] = str(p["ETag"]).strip('"')
+                    size_by_part[num] = int(p.get("Size", 0))
+            except Exception:
+                pass
+
+        parts_payload = []
+        total_size = 0
+        for part in ordered:
+            etag = (part.etag or etag_by_part.get(part.part_number, "")).strip('"')
+            parts_payload.append({
+                "PartNumber": part.part_number,
+                "ETag": f'"{etag}"',
+            })
+            total_size += (
+                part.size if part.size > 0 else size_by_part.get(part.part_number, 0)
+            )
+
+        try:
+            self._client.complete_multipart_upload(
+                Bucket=self._bucket,
+                Key=object_key,
+                UploadId=upload_id,
+                MultipartUpload={"Parts": parts_payload},
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise StorageError(
+                f"Failed to complete the multipart upload at {key!r}: {exc}"
+            ) from exc
+        return StoredObject(
+            key=sanitize_key(key),
+            size=total_size,
+            checksum_sha256="",
+            mime_type=mime_type,
+            multipart=True,
+        )
+
+    def abort_multipart(self, key: str, upload_id: str) -> None:
+        object_key = self._object_key(key)
+        try:
+            self._client.abort_multipart_upload(
+                Bucket=self._bucket, Key=object_key, UploadId=upload_id
+            )
+        except ClientError as exc:
+            # An upload the backend has already forgotten is the state the
+            # caller wanted; anything else is a real fault.
+            if self._is_not_found(exc) or "NoSuchUpload" in str(exc):
+                return
+            raise StorageError(
+                f"Failed to abort the multipart upload at {key!r}: {exc}"
+            ) from exc
+        except BotoCoreError as exc:
+            raise StorageError(
+                f"Failed to abort the multipart upload at {key!r}: {exc}"
+            ) from exc
 
     def presigned_get_url(self, key: str, *, expires_in: int = 900) -> Optional[str]:
         object_key = self._object_key(key)

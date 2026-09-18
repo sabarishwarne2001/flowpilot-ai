@@ -21,6 +21,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useTimezoneCapture } from "@/hooks/useTimezoneCapture";
 // ARCH36-S1:command-palette-mount — Ctrl+K / ⌘K. Mounted here because this
 // layout only renders beneath TenantGuard, and the palette builds tenant paths.
+import UploadTray from "@/components/upload/UploadTray";
 import CommandPalette from "@/components/layout/CommandPalette";
 
 export const DashboardLayout: React.FC = () => {
@@ -81,6 +82,10 @@ export const DashboardLayout: React.FC = () => {
 
       <Sidebar onLogout={handleLogout} />
       <CommandPalette />
+      {/* ARCH38-S2:upload-tray. Mounted on the shell, not a page: the tray has
+          to survive navigation, and a page-owned tray dies at the first route
+          change while its uploads are still running. */}
+      <UploadTray />
 
       <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <Header />

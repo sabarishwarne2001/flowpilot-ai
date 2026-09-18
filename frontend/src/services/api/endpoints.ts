@@ -160,6 +160,35 @@ export const WORK_ITEM_ENDPOINTS = {
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}/reprocess`,
   remove: (workspaceId: string, workItemId: string): string =>
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}`,
+  // ARCH38-S2:ingestion-endpoints
+  bulk: (workspaceId: string): string => `${scoped(workspaceId)}/work-items/bulk`,
+  tags: (workspaceId: string): string => `${scoped(workspaceId)}/work-items/tags`,
+  retentionHolds: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/work-items/retention-holds`,
+  retentionHold: (workspaceId: string, holdId: string): string =>
+    `${scoped(workspaceId)}/work-items/retention-holds/${seg(holdId)}`,
+} as const;
+
+// ARCH38-S2:ingestion-endpoints. Resumable uploads, batches and preset packs.
+export const INGESTION_ENDPOINTS = {
+  sessions: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/upload-sessions`,
+  session: (workspaceId: string, sessionId: string): string =>
+    `${scoped(workspaceId)}/upload-sessions/${seg(sessionId)}`,
+  sessionPart: (workspaceId: string, sessionId: string, partNumber: number): string =>
+    `${scoped(workspaceId)}/upload-sessions/${seg(sessionId)}/parts/${partNumber}`,
+  sessionComplete: (workspaceId: string, sessionId: string): string =>
+    `${scoped(workspaceId)}/upload-sessions/${seg(sessionId)}/complete`,
+  batches: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/ingestion-batches`,
+  batch: (workspaceId: string, batchId: string): string =>
+    `${scoped(workspaceId)}/ingestion-batches/${seg(batchId)}`,
+  presets: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/document-presets`,
+  presetApply: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/document-presets/apply`,
+  presetEnabled: (workspaceId: string, presetId: string): string =>
+    `${scoped(workspaceId)}/document-presets/${seg(presetId)}/enabled`,
 } as const;
 
 export const ASSISTANT_ENDPOINTS = {
