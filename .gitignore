@@ -26,3 +26,6 @@ backend/.env.production.*
 
 # Local development runtime files
 .dev/
+
+# ARCH-40 apply backup
+**/.arch40_apply_backup/

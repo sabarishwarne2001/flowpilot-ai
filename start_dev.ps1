@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    FlowPilot AI — single-command local development launcher (Windows).
+    FlowPilot AI â€” single-command local development launcher (Windows).
 
 .DESCRIPTION
     Brings up the complete stack from a clean checkout:
@@ -123,7 +123,7 @@ function Stop-Tracked {
 }
 
 Write-Host ''
-Write-Host '  FlowPilot AI — local development launcher' -ForegroundColor White
+Write-Host '  FlowPilot AI â€” local development launcher' -ForegroundColor White
 Write-Host '  ----------------------------------------' -ForegroundColor DarkGray
 
 if ($Stop) {
@@ -285,10 +285,10 @@ try {
     if ($SkipMigrations) {
         Write-Warn2 'Skipped by request.'
     } else {
-        & $venvPython -m alembic upgrade head
-        if ($LASTEXITCODE -ne 0) { Fail-Hard 'alembic upgrade head failed.' }
-        $head = & $venvPython -m alembic current 2>&1 | Select-String -Pattern '\(head\)'
-        Write-Ok "Alembic at head: $($head -replace '.*\s([a-z0-9_]+)\s\(head\).*', '$1')"
+        & $venvPython -m alembic upgrade arch40_step2a_review_view_paths
+        if ($LASTEXITCODE -ne 0) { Fail-Hard 'alembic upgrade failed.' }
+        $currentRev = (& $venvPython -m alembic current 2>&1 | Out-String).Trim()
+        Write-Ok "Alembic at release head: arch40_step2a_review_view_paths"
     }
 } finally { Pop-Location }
 
