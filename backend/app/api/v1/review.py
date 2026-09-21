@@ -62,6 +62,50 @@ logger = logging.getLogger("app.api.v1.review")
 router = APIRouter(tags=["Review Hub"])
 
 
+def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
+    """ARCH40-S1:hub-capability-gate. The kinds this organization may see.
+
+    The source endpoints gate clause assertions on
+    capability.semantic_assertions (reads included — verify_arch33 insists)
+    and anomaly findings on capability.anomaly_radar. A hub that ignored
+    those would let an organization that lost a capability on a downgrade go
+    on reading and resolving exactly what the source screen now refuses.
+    Extraction review is core and always allowed.
+    """
+    from app.api import capability_gate
+    from app.core.entitlements import (
+        ANOMALY_RADAR_CAPABILITY,
+        SEMANTIC_ASSERTIONS_CAPABILITY,
+    )
+
+    granted = set(
+        capability_gate.granted_capabilities(db, organization_id=context.organization_id)
+    )
+    kinds = [vocab.KIND_EXTRACTION]
+    if SEMANTIC_ASSERTIONS_CAPABILITY in granted:
+        kinds.append(vocab.KIND_ASSERTION)
+    if ANOMALY_RADAR_CAPABILITY in granted:
+        kinds.append(vocab.KIND_ANOMALY)
+    return tuple(kinds)
+
+
+def _require_kind(db: Session, context: deps.TenantContext, kind: str) -> None:
+    """400 for a kind that does not exist, 403 for one the plan excludes."""
+    if kind not in vocab.KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{kind}' is not a review kind.",
+        )
+    if kind not in _allowed_kinds(db, context):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Your plan does not include {kind.lower()} review, so these "
+                "items cannot be opened or resolved here."
+            ),
+        )
+
+
 def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
     if body is None:
         return resolution.ResolvePayload()
@@ -92,6 +136,7 @@ def _as_response(item: projection.ReviewItem) -> ReviewItemResponse:
         assignee_email=item.assignee_email,
         under_retention_hold=item.under_retention_hold,
         tags=item.tags,
+        review_reason=item.review_reason,
     )
 
 
@@ -110,6 +155,7 @@ def list_reviews(
     kind: Annotated[Optional[list[str]], Query()] = None,
     severity: Annotated[Optional[list[str]], Query()] = None,
     review_status: str = Query(default=vocab.STATUS_OPEN, alias="status"),
+    reason: Annotated[Optional[list[str]], Query()] = None,
     work_item_id: Optional[uuid.UUID] = None,
     tag: Optional[str] = None,
     assignee_user_id: Optional[uuid.UUID] = None,
@@ -118,13 +164,30 @@ def list_reviews(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=vocab.DEFAULT_PAGE_SIZE, ge=1, le=vocab.MAX_PAGE_SIZE),
 ) -> ReviewQueueResponse:
+    allowed = _allowed_kinds(db, context)
+    requested = list(kind or allowed)
+    unknown = [k for k in requested if k not in vocab.KINDS]
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{unknown[0]}' is not a review kind.",
+        )
+    visible = [k for k in requested if k in allowed]
+    if not visible:
+        return ReviewQueueResponse(
+            items=[], total=0, page=page, page_size=page_size,
+            counts_by_kind={k: 0 for k in vocab.KINDS},
+            allowed_kinds=list(allowed),
+        )
+
     try:
         result = projection.query_reviews(
             db,
             workspace_id=context.workspace_id,
-            kinds=kind,
+            kinds=visible,
             severities=severity,
             status=review_status,
+            reasons=reason,
             work_item_id=work_item_id,
             tag=tag,
             assignee_user_id=assignee_user_id,
@@ -144,6 +207,7 @@ def list_reviews(
         page=result.page,
         page_size=result.page_size,
         counts_by_kind=result.counts_by_kind,
+        allowed_kinds=list(allowed),
     )
 
 
@@ -199,6 +263,7 @@ def bulk(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> ReviewBulkResponse:
+    _require_kind(db, context, body.kind)
     results: list[ReviewBulkItemResult] = []
     payload = _payload(body.payload)
 
@@ -315,11 +380,7 @@ def resolve_one(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> ReviewResolveResponse:
-    if kind not in vocab.KINDS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{kind}' is not a review kind.",
-        )
+    _require_kind(db, context, kind)
 
     try:
         outcome = resolution.resolve_scoped(
@@ -362,11 +423,7 @@ def assign_one(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> Response:
-    if kind not in vocab.KINDS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{kind}' is not a review kind.",
-        )
+    _require_kind(db, context, kind)
     try:
         resolution.assign(
             db,
@@ -400,11 +457,7 @@ def unassign_one(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> Response:
-    if kind not in vocab.KINDS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{kind}' is not a review kind.",
-        )
+    _require_kind(db, context, kind)
     resolution.clear_assignment(
         db, workspace_id=context.workspace_id, kind=kind, item_id=item_id
     )

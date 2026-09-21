@@ -18,6 +18,7 @@ import { SETTINGS_ENDPOINTS } from "./endpoints";
 
 import type {
     AISettings,
+    ResolvedAISettings,
     UpdateAISettingsRequest,
 } from "../../types/aiSettings";
 
@@ -78,6 +79,17 @@ export async function getAvailableProviders(
 ): Promise<AvailableProvidersResponse> {
     const response = await api.get<AvailableProvidersResponse>(
         SETTINGS_ENDPOINTS.aiSettingsProviders(workspaceId),
+    );
+
+    return response.data;
+}
+
+/** ARCH40-S2:ai-resolved-api. Read-only; see ResolvedAISettings. */
+export async function getResolvedAISettings(
+    workspaceId: string,
+): Promise<ResolvedAISettings> {
+    const response = await api.get<ResolvedAISettings>(
+        SETTINGS_ENDPOINTS.aiSettingsResolved(workspaceId),
     );
 
     return response.data;

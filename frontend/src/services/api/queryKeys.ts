@@ -87,6 +87,10 @@ export const settingsKeys = {
   aiModels: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-models"] as const,
   aiProviders: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-providers"] as const,
   email: (workspaceId: string) => [...settingsKeys.all(workspaceId), "email"] as const,
+  // ARCH40-S2:settings-keys
+  aiResolved: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-resolved"] as const,
+  emailResolution: (workspaceId: string) =>
+    [...settingsKeys.all(workspaceId), "email-resolution"] as const,
   document: (workspaceId: string) => [...settingsKeys.all(workspaceId), "document"] as const,
 };
 
@@ -323,6 +327,14 @@ export const verificationKeys = {
     [...verificationKeys.all(workspaceId), "list", status ?? "ALL"] as const,
   detail: (workspaceId: string, verificationId: string) =>
     [...verificationKeys.all(workspaceId), "detail", verificationId] as const,
+};
+
+/** ARCH40-S2:review-keys. Resolving anything invalidates `all`. */
+export const reviewKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "review"] as const,
+  queue: (workspaceId: string, filters: unknown) =>
+    [...reviewKeys.all(workspaceId), "queue", filters] as const,
+  assignees: (workspaceId: string) => [...reviewKeys.all(workspaceId), "assignees"] as const,
 };
 
 /**

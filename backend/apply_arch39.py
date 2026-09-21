@@ -169,7 +169,9 @@ def _sha256(text: str) -> str:
 #:
 #: A file is superseded only when it carries a later milestone's sentinel.
 #: Arbitrary local edits still fail, which is the property the gate exists for.
-SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH38-S1:",)
+#: ARCH40-S1:supersede-newfile. ARCH-40 edits files this apply created
+#: (verify scripts' head pins, the trigger catalog's gate counts).
+SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH38-S1:", "ARCH40-S1:")
 
 
 def _is_superseded(text: str) -> bool:

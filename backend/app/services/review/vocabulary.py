@@ -49,6 +49,33 @@ STATUS_RESOLVED: Final[str] = "RESOLVED"
 
 STATUSES: Final[tuple[str, ...]] = (STATUS_OPEN, STATUS_RESOLVED)
 
+#: ARCH40-S1:review-reasons. Why an item needs a human. The view computes it
+#: (arch40_step2a_review_view_paths); gate A6 asserts the two lists agree.
+REASON_DISAGREEMENT: Final[str] = "DISAGREEMENT"
+REASON_ESCALATION: Final[str] = "ESCALATION"
+REASON_CALIBRATION_HOLD: Final[str] = "CALIBRATION_HOLD"
+REASON_AUTONOMY_AUDIT: Final[str] = "AUTONOMY_AUDIT"
+REASON_PENDING_REVIEW: Final[str] = "PENDING_REVIEW"
+REASON_CLAUSE_TRIAGE: Final[str] = "CLAUSE_TRIAGE"
+REASON_ANOMALY: Final[str] = "ANOMALY"
+
+REASONS: Final[tuple[str, ...]] = (
+    REASON_DISAGREEMENT,
+    REASON_ESCALATION,
+    REASON_CALIBRATION_HOLD,
+    REASON_AUTONOMY_AUDIT,
+    REASON_PENDING_REVIEW,
+    REASON_CLAUSE_TRIAGE,
+    REASON_ANOMALY,
+)
+
+#: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
+#: documents calibrated autonomy held back and the ones it sampled.
+AUTONOMY_REASONS: Final[tuple[str, ...]] = (
+    REASON_AUTONOMY_AUDIT,
+    REASON_CALIBRATION_HOLD,
+)
+
 #: The view's name. Referenced by the projection and by three gates; a literal
 #: in each would be three chances to rename one and not the others.
 VIEW_NAME: Final[str] = "review_queue_items"
@@ -81,6 +108,8 @@ __all__ = [
     "KIND_EXTRACTION",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
+    "AUTONOMY_REASONS",
+    "REASONS",
     "SEVERITIES",
     "SEVERITY_CRITICAL",
     "SEVERITY_HIGH",

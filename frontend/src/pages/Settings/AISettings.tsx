@@ -1,36 +1,195 @@
-import React, { useEffect, useState } from "react";
+/**
+ * ARCH40-S2:ai-settings-page. What serves this workspace, and its defaults.
+ *
+ * Two halves, deliberately separate:
+ *
+ *   What runs (read-only)   the provider and model that actually serve
+ *                           extraction, where that decision came from, the
+ *                           price-book rate in force, BYOK and spend-limit
+ *                           state. From GET .../ai-settings/resolved.
+ *   Workspace defaults      the values this workspace falls back to when no
+ *                           organization routing rule applies.
+ *
+ * Before ARCH-40 the page showed only the second half and implied it was in
+ * force, so an administrator could set a model an organization routing rule
+ * silently overrode. It also offered five inputs nothing read: two cost
+ * fields (platform-owned since ARCH-14) and three version/tracking fields
+ * (dropped by arch40_step3). All five are gone.
+ */
+
+import React, { useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Cpu,
+  KeyRound,
+  Loader2,
+  PlugZap,
+  Route,
+  Wallet,
+} from "lucide-react";
 
 import {
   getAISettings,
-  updateAISettings,
-  getSupportedModels,
   getAvailableProviders,
+  getResolvedAISettings,
+  getSupportedModels,
   testAIConnection,
+  updateAISettings,
 } from "@/services/api/aiSettings";
-
 import { ApiError } from "@/services/api/client";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-
-import InfoTooltip from "@/components/common/InfoTooltip";
+import { settingsKeys } from "@/services/api/queryKeys";
 import { AI_FIELD_HELP } from "@/constants/aiFieldHelp";
-
-import {
-  aiSettingsSchema,
-  type AISettingsFormData,
-} from "@/schemas/aiSettings";
-
+import { aiSettingsSchema, type AISettingsFormData } from "@/schemas/aiSettings";
 import type { AIConnectionTestResponse } from "@/types/aiConnectionTest";
+import type { ResolvedAISettings } from "@/types/aiSettings";
 import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
+import { ADMINISTRATIVE_ROLES, canViewBilling } from "@/permissions/organizationPermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
+import { organizationBYOKPath, organizationBillingPath } from "@/routes/tenantPaths";
+
+const DEFAULTS: AISettingsFormData = {
+  provider: "GROQ",
+  model: "openai/gpt-oss-20b",
+  temperature: 0.7,
+  max_output_tokens: 4096,
+  top_p: 0.9,
+  frequency_penalty: 0,
+  presence_penalty: 0,
+  enable_streaming: true,
+};
+
+/** Micros to a display amount. Null stays "not priced", never "0". */
+const formatRate = (micros: number | null, currency: string | null): string => {
+  if (micros === null) {
+    return "Not priced";
+  }
+  const amount = micros / 1_000_000;
+  return `${currency ?? ""} ${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}`.trim();
+};
+
+const FieldLabel: React.FC<{ readonly htmlFor: string; readonly field: keyof typeof AI_FIELD_HELP }> = ({
+  htmlFor,
+  field,
+}) => {
+  const help = AI_FIELD_HELP[field];
+  return (
+    <label htmlFor={htmlFor} className="block">
+      <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{help.title}</span>
+      <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/80">{help.description}</span>
+    </label>
+  );
+};
+
+const ResolvedPanel: React.FC<{
+  readonly resolved: ResolvedAISettings | undefined;
+  readonly loading: boolean;
+  readonly orgSlug: string;
+  readonly showOrgLinks: boolean;
+  readonly showBilling: boolean;
+}> = ({ resolved, loading, orgSlug, showOrgLinks, showBilling }) => {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" /> Resolving what serves this workspace…
+      </div>
+    );
+  }
+  if (!resolved) {
+    return null;
+  }
+  const fromRule = resolved.resolution_origin === "route_rule";
+  return (
+    <section aria-labelledby="ai-resolved-title" className="rounded-xl border border-border bg-card">
+      <header className="border-b border-border/60 px-5 py-4">
+        <h2 id="ai-resolved-title" className="text-sm font-extrabold uppercase tracking-wider">What runs</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          The model that actually serves this workspace&apos;s extraction. Read-only: it reflects organization routing, keys and limits.
+        </p>
+      </header>
+      <dl className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+        <div className="rounded-lg border border-border/60 p-3">
+          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Cpu className="h-3.5 w-3.5" aria-hidden="true" /> Model
+          </dt>
+          <dd className="mt-1 font-mono text-sm">{resolved.resolved_provider} / {resolved.resolved_model}</dd>
+          <dd className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Route className="h-3 w-3" aria-hidden="true" />
+            {fromRule ? "Chosen by an organization routing rule" : "This workspace's default"}
+          </dd>
+        </div>
+        <div className="rounded-lg border border-border/60 p-3">
+          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Wallet className="h-3.5 w-3.5" aria-hidden="true" /> Price per 1M input tokens
+          </dt>
+          <dd className="mt-1 font-mono text-sm">
+            {formatRate(resolved.price_per_1m_input_micros, resolved.currency)}
+          </dd>
+          <dd className="mt-1 text-[11px] text-muted-foreground">
+            {resolved.price_book_version !== null ? `Price book v${resolved.price_book_version}` : "No price book in force"}
+            {resolved.price_is_fallback ? " · provider fallback rate" : ""}
+          </dd>
+        </div>
+        <div className="rounded-lg border border-border/60 p-3">
+          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" /> Provider key
+          </dt>
+          <dd className="mt-1 text-sm">
+            {resolved.uses_tenant_key
+              ? "Your organization's own key (BYOK)"
+              : resolved.byok_configured
+                ? "Platform key — a BYOK key exists but does not serve this task"
+                : "Platform key"}
+          </dd>
+          {showOrgLinks && (
+            <dd className="mt-1">
+              <Link to={organizationBYOKPath(orgSlug)} className="text-[11px] font-semibold text-primary hover:underline">
+                Manage keys and routing
+              </Link>
+            </dd>
+          )}
+        </div>
+        <div className="rounded-lg border border-border/60 p-3">
+          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Wallet className="h-3.5 w-3.5" aria-hidden="true" /> Spend limit
+          </dt>
+          <dd className="mt-1 text-sm">
+            {resolved.spend_limit_configured
+              ? `${formatRate(resolved.spend_limit_max_cost_micros, resolved.currency)} per ${(resolved.spend_limit_period ?? "period").toLowerCase()}${resolved.spend_limit_hard_stop ? " · hard stop" : " · alert only"}`
+              : "No limit configured"}
+          </dd>
+          {showBilling && (
+            <dd className="mt-1">
+              <Link to={organizationBillingPath(orgSlug)} className="text-[11px] font-semibold text-primary hover:underline">
+                Billing and limits
+              </Link>
+            </dd>
+          )}
+        </div>
+      </dl>
+      {resolved.warnings.length > 0 && (
+        <ul className="mx-5 mb-5 space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2" role="status">
+          {resolved.warnings.map((warning) => (
+            <li key={warning} className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {warning}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
 
 export const AISettings: React.FC = () => {
   const queryClient = useQueryClient();
-
-  // Effective workspace role, already resolved by TenantGuard.
-  const { workspace, workspaceRole } = useResolvedTenant();
+  const { workspace, workspaceRole, organization, organizationRole } = useResolvedTenant();
+  const workspaceId = workspace.id;
+  const canManage = canManageWorkspaceSettings(workspaceRole);
 
   const {
     register,
@@ -42,431 +201,227 @@ export const AISettings: React.FC = () => {
     formState: { errors, isDirty },
   } = useForm<AISettingsFormData>({
     resolver: zodResolver(aiSettingsSchema),
-    defaultValues: {
-      provider: "GROQ",
-      model: "openai/gpt-oss-20b",
-      temperature: 0.7,
-      max_output_tokens: 4096,
-      top_p: 0.9,
-      frequency_penalty: 0,
-      presence_penalty: 0,
-      input_cost_per_1k_tokens: 0,
-      output_cost_per_1k_tokens: 0,
-      system_prompt_version: "v1.2.0",
-      prompt_version: "v1.0.0",
-      enable_token_tracking: true,
-      enable_streaming: true,
-    },
+    defaultValues: DEFAULTS,
   });
 
-  const selectedProvider = useWatch({
-    control,
-    name: "provider",
+  const settingsQuery = useQuery({
+    queryKey: settingsKeys.ai(workspaceId),
+    queryFn: () => getAISettings(workspaceId),
   });
-
-  const { data: aiSettings, isLoading: isLoadingAISettings } = useQuery({
-    queryKey: ["ai-settings", workspace.id],
-    queryFn: () => getAISettings(workspace.id),
+  const resolvedQuery = useQuery({
+    queryKey: settingsKeys.aiResolved(workspaceId),
+    queryFn: () => getResolvedAISettings(workspaceId),
+    staleTime: 30_000,
   });
-
-  const { data: supportedModels, isLoading: isLoadingModels } = useQuery({
-    queryKey: ["supported-models", workspace.id],
-    queryFn: () => getSupportedModels(workspace.id),
+  const modelsQuery = useQuery({
+    queryKey: settingsKeys.aiModels(workspaceId),
+    queryFn: () => getSupportedModels(workspaceId),
+    staleTime: 300_000,
   });
-
-  const {
-    data: availableProviders,
-    isLoading: isLoadingProviders,
-  } = useQuery({
-    queryKey: ["available-providers", workspace.id],
-    queryFn: () => getAvailableProviders(workspace.id),
+  const providersQuery = useQuery({
+    queryKey: settingsKeys.aiProviders(workspaceId),
+    queryFn: () => getAvailableProviders(workspaceId),
+    staleTime: 300_000,
   });
-
-  const canManageSettings = canManageWorkspaceSettings(workspaceRole);
-
-  const [connectionResult, setConnectionResult] =
-    useState<AIConnectionTestResponse | null>(null);
 
   useEffect(() => {
-    if (!aiSettings) {
+    const data = settingsQuery.data;
+    if (!data) {
       return;
     }
-
     reset({
-      provider: aiSettings.provider,
-      model: aiSettings.model,
-      temperature: aiSettings.temperature,
-      max_output_tokens: aiSettings.max_output_tokens,
-      top_p: aiSettings.top_p,
-      frequency_penalty: aiSettings.frequency_penalty,
-      presence_penalty: aiSettings.presence_penalty,
-      input_cost_per_1k_tokens: aiSettings.input_cost_per_1k_tokens,
-      output_cost_per_1k_tokens: aiSettings.output_cost_per_1k_tokens,
-      system_prompt_version: aiSettings.system_prompt_version,
-      prompt_version: aiSettings.prompt_version,
-      enable_token_tracking: aiSettings.enable_token_tracking,
-      enable_streaming: aiSettings.enable_streaming,
+      provider: data.provider,
+      model: data.model,
+      temperature: data.temperature,
+      max_output_tokens: data.max_output_tokens,
+      top_p: data.top_p,
+      frequency_penalty: data.frequency_penalty,
+      presence_penalty: data.presence_penalty,
+      enable_streaming: data.enable_streaming,
     });
-  }, [aiSettings, reset]);
+  }, [settingsQuery.data, reset]);
 
-  // Automatically switch model to a valid one if provider changes
+  const provider = useWatch({ control, name: "provider" });
+  const models = useMemo<readonly string[]>(
+    () => modelsQuery.data?.[provider] ?? [],
+    [modelsQuery.data, provider],
+  );
+  const providers = providersQuery.data?.providers ?? ["GROQ", "GEMINI"];
+
   useEffect(() => {
-    if (!selectedProvider || !supportedModels) {return;}
-
-    const availableModels =
-      supportedModels[selectedProvider as keyof typeof supportedModels] ?? [];
-    const currentModel = getValues("model");
-
-    if (availableModels.length > 0 && !availableModels.includes(currentModel)) {
-      setValue("model", availableModels[0]!);
+    const current = getValues("model");
+    const first = models[0];
+    if (models.length > 0 && first !== undefined && !models.includes(current)) {
+      setValue("model", first, { shouldDirty: true });
     }
-  }, [selectedProvider, supportedModels, getValues, setValue]);
+  }, [models, getValues, setValue]);
 
-  const { mutateAsync: saveAISettings, isPending: isSaving } = useMutation({
-    mutationFn: (data: AISettingsFormData) => updateAISettings(workspace.id, data),
-    onSuccess: async () => {
-      toast.success("AI settings saved successfully.");
-      await queryClient.invalidateQueries({ queryKey: ["ai-settings"] });
+  const save = useMutation({
+    mutationFn: (values: AISettingsFormData) => updateAISettings(workspaceId, values),
+    onSuccess: async (saved) => {
+      toast.success("Workspace AI defaults saved.");
+      reset({
+        provider: saved.provider,
+        model: saved.model,
+        temperature: saved.temperature,
+        max_output_tokens: saved.max_output_tokens,
+        top_p: saved.top_p,
+        frequency_penalty: saved.frequency_penalty,
+        presence_penalty: saved.presence_penalty,
+        enable_streaming: saved.enable_streaming,
+      });
+      await queryClient.invalidateQueries({ queryKey: settingsKeys.all(workspaceId) });
     },
     onError: (error: unknown) => {
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-        return;
-      }
-      toast.error("Failed to save AI settings.");
+      toast.error(error instanceof ApiError ? error.message : "The AI defaults could not be saved.");
     },
   });
 
-  const { mutateAsync: testConnection, isPending: isTestingConnection } =
-    useMutation({
-      mutationFn: (data: AISettingsFormData) => testAIConnection(workspace.id, data),
-    });
+  const test = useMutation<AIConnectionTestResponse, unknown, AISettingsFormData>({
+    mutationFn: (values) => testAIConnection(workspaceId, values),
+    onError: (error: unknown) => {
+      toast.error(error instanceof ApiError ? error.message : "The connection test failed.");
+    },
+  });
 
-  const onSubmit = async (data: AISettingsFormData): Promise<void> => {
-    await saveAISettings(data);
-  };
+  const orgSlug = organization.organization_slug;
+  const isOrgAdmin = ADMINISTRATIVE_ROLES.has(organizationRole);
+  const disabled = !canManage || save.isPending;
 
-  const handleTestConnection = async () => {
-    try {
-      const result = await testConnection(getValues());
-      setConnectionResult(result);
-      toast.success("Connection successful.");
-    } catch (error) {
-      setConnectionResult(null);
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-        return;
-      }
-      toast.error("Connection test failed.");
-    }
-  };
+  const numberField = (
+    name: "temperature" | "top_p" | "max_output_tokens" | "frequency_penalty" | "presence_penalty",
+    step: string,
+  ): React.ReactNode => (
+    <div className="space-y-1.5">
+      <FieldLabel htmlFor={`ai-${name}`} field={name} />
+      <input
+        id={`ai-${name}`}
+        type="number"
+        step={step}
+        disabled={disabled}
+        {...register(name, { valueAsNumber: true })}
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+        aria-invalid={Boolean(errors[name])}
+      />
+      {errors[name] && <p className="text-xs text-destructive">{errors[name]?.message}</p>}
+    </div>
+  );
 
-  const renderLabel = (key: keyof typeof AI_FIELD_HELP, label: string) => {
-    const help = AI_FIELD_HELP[key]!;
-
+  if (settingsQuery.isLoading) {
     return (
-      <div className="flex items-center">
-        <span>{label}</span>
-        <InfoTooltip
-          title={help.title}
-          description={help.description}
-          recommended={help.recommended}
-        />
-      </div>
-    );
-  };
-
-  if (
-    isLoadingAISettings ||
-    isLoadingModels ||
-    isLoadingProviders
-  ) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="space-y-6 animate-pulse">
-          <div className="h-8 w-56 rounded bg-muted" />
-          <div className="h-4 w-80 rounded bg-muted" />
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <div className="h-3 w-24 rounded bg-muted" />
-              <div className="h-10 rounded bg-muted" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-3 w-24 rounded bg-muted" />
-              <div className="h-10 rounded bg-muted" />
-            </div>
-          </div>
-        </div>
+      <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading AI settings…
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">AI Settings</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Configure the default AI provider and model used throughout FlowPilot AI.
-        </p>
+      <ResolvedPanel
+        resolved={resolvedQuery.data}
+        loading={resolvedQuery.isLoading}
+        orgSlug={orgSlug}
+        showOrgLinks={isOrgAdmin}
+        showBilling={canViewBilling(organizationRole)}
+      />
 
-        <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">
-          <h3 className="text-sm font-semibold text-blue-300">Advanced AI Parameters</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            These settings control how the AI model behaves. The default values are optimized for most business workflows.
+      <form
+        onSubmit={handleSubmit((values) => save.mutate(values))}
+        className="rounded-xl border border-border bg-card"
+        aria-labelledby="ai-defaults-title"
+      >
+        <header className="border-b border-border/60 px-5 py-4">
+          <h2 id="ai-defaults-title" className="text-sm font-extrabold uppercase tracking-wider">Workspace defaults</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used when no organization routing rule applies.
+            {!canManage && " You can view these; a workspace admin can change them."}
           </p>
-        </div>
+        </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="provider" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {renderLabel("provider", "Provider")}
-            </label>
+        <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <FieldLabel htmlFor="ai-provider" field="provider" />
             <select
-              id="provider"
-              disabled={!canManageSettings}
+              id="ai-provider"
+              disabled={disabled}
               {...register("provider")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-60"
             >
-              {availableProviders?.providers.map((provider: string) => (
-                <option key={provider} value={provider}>
-                  {provider === "GROQ" ? "Groq" : provider === "GEMINI" ? "Google Gemini" : provider}
-                </option>
+              {providers.map((value) => (
+                <option key={value} value={value}>{value}</option>
               ))}
             </select>
-            {errors.provider && <p className="text-xs text-destructive">{errors.provider.message}</p>}
           </div>
-
-          <div className="space-y-2">
-            <label htmlFor="model" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {renderLabel("model", "Model")}
-            </label>
+          <div className="space-y-1.5">
+            <FieldLabel htmlFor="ai-model" field="model" />
             <select
-              id="model"
-              disabled={!canManageSettings}
+              id="ai-model"
+              disabled={disabled || models.length === 0}
               {...register("model")}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm disabled:opacity-60"
             >
-              {(supportedModels?.[selectedProvider as keyof typeof supportedModels] ?? []).map((model: string) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
+              {models.length === 0 && <option value={getValues("model")}>{getValues("model")}</option>}
+              {models.map((value) => (
+                <option key={value} value={value}>{value}</option>
               ))}
             </select>
             {errors.model && <p className="text-xs text-destructive">{errors.model.message}</p>}
           </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="temperature" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("temperature", "Temperature")}
-              </label>
-              <input
-                id="temperature"
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                disabled={!canManageSettings}
-                {...register("temperature", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.temperature && <p className="text-xs text-destructive">{errors.temperature.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="top_p" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("top_p", "Top P")}
-              </label>
-              <input
-                id="top_p"
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                disabled={!canManageSettings}
-                {...register("top_p", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.top_p && <p className="text-xs text-destructive">{errors.top_p.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="max_output_tokens" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("max_output_tokens", "Max Output Tokens")}
-              </label>
-              <input
-                id="max_output_tokens"
-                type="number"
-                disabled={!canManageSettings}
-                {...register("max_output_tokens", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.max_output_tokens && <p className="text-xs text-destructive">{errors.max_output_tokens.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="frequency_penalty" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("frequency_penalty", "Frequency Penalty")}
-              </label>
-              <input
-                id="frequency_penalty"
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                disabled={!canManageSettings}
-                {...register("frequency_penalty", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.frequency_penalty && <p className="text-xs text-destructive">{errors.frequency_penalty.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="presence_penalty" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("presence_penalty", "Presence Penalty")}
-              </label>
-              <input
-                id="presence_penalty"
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                disabled={!canManageSettings}
-                {...register("presence_penalty", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.presence_penalty && <p className="text-xs text-destructive">{errors.presence_penalty.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="input_cost_per_1k_tokens" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("input_cost_per_1k_tokens", "Input Cost per 1K Tokens")}
-              </label>
-              <input
-                id="input_cost_per_1k_tokens"
-                type="number"
-                step="0.000001"
-                min="0"
-                disabled={!canManageSettings}
-                {...register("input_cost_per_1k_tokens", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.input_cost_per_1k_tokens && <p className="text-xs text-destructive">{errors.input_cost_per_1k_tokens.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="output_cost_per_1k_tokens" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("output_cost_per_1k_tokens", "Output Cost per 1K Tokens")}
-              </label>
-              <input
-                id="output_cost_per_1k_tokens"
-                type="number"
-                step="0.000001"
-                min="0"
-                disabled={!canManageSettings}
-                {...register("output_cost_per_1k_tokens", { valueAsNumber: true })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.output_cost_per_1k_tokens && <p className="text-xs text-destructive">{errors.output_cost_per_1k_tokens.message}</p>}
-            </div>
+          {numberField("temperature", "0.05")}
+          {numberField("top_p", "0.05")}
+          {numberField("max_output_tokens", "1")}
+          {numberField("frequency_penalty", "0.1")}
+          {numberField("presence_penalty", "0.1")}
+          <div className="flex items-start gap-3 rounded-lg border border-border/60 p-3">
+            <input
+              id="ai-enable_streaming"
+              type="checkbox"
+              disabled={disabled}
+              {...register("enable_streaming")}
+              className="mt-1 h-4 w-4 accent-primary"
+            />
+            <FieldLabel htmlFor="ai-enable_streaming" field="enable_streaming" />
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="system_prompt_version" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("system_prompt_version", "System Prompt Version")}
-              </label>
-              <input
-                id="system_prompt_version"
-                type="text"
-                disabled={!canManageSettings}
-                {...register("system_prompt_version")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.system_prompt_version && <p className="text-xs text-destructive">{errors.system_prompt_version.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="prompt_version" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("prompt_version", "Prompt Version")}
-              </label>
-              <input
-                id="prompt_version"
-                type="text"
-                disabled={!canManageSettings}
-                {...register("prompt_version")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.prompt_version && <p className="text-xs text-destructive">{errors.prompt_version.message}</p>}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border border-border p-4">
-              <div>
-                <h3 className="font-medium">{renderLabel("enable_token_tracking", "Enable Token Tracking")}</h3>
-                <p className="text-sm text-muted-foreground mt-1">Track token usage for requests.</p>
-              </div>
-              <input
-                type="checkbox"
-                disabled={!canManageSettings}
-                {...register("enable_token_tracking")}
-                className="h-5 w-5 disabled:opacity-50"
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-border p-4">
-              <div>
-                <h3 className="font-medium">{renderLabel("enable_streaming", "Enable Streaming")}</h3>
-                <p className="text-sm text-muted-foreground mt-1">Stream model responses when supported.</p>
-              </div>
-              <input
-                type="checkbox"
-                disabled={!canManageSettings}
-                {...register("enable_streaming")}
-                className="h-5 w-5 disabled:opacity-50"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3">
-            {canManageSettings && (
-              <button
-                type="button"
-                onClick={handleTestConnection}
-                disabled={isTestingConnection}
-                className="rounded-lg border border-border px-5 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-              >
-                {isTestingConnection ? "Testing..." : "Test Connection"}
-              </button>
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-5 py-4">
+          <div className="min-h-[1.25rem] text-xs" aria-live="polite">
+            {test.isPending && (
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Testing…
+              </span>
             )}
-
+            {test.data && (
+              <span
+                className={`inline-flex items-center gap-1.5 font-semibold ${
+                  test.data.success ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+                }`}
+              >
+                {test.data.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                {test.data.success ? "Connected" : "Failed"} · {test.data.provider}/{test.data.model} ·{" "}
+                {Math.round(test.data.latency_ms)} ms
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!canManage || test.isPending}
+              onClick={handleSubmit((values) => test.mutate(values))}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+            >
+              <PlugZap className="h-4 w-4" /> Test connection
+            </button>
             <button
               type="submit"
-              disabled={!isDirty || isSaving || !canManageSettings}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={disabled || !isDirty}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {isSaving ? "Saving..." : "Save AI Settings"}
+              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save defaults
             </button>
           </div>
-        </form>
-
-        {connectionResult && (
-          <div className="mt-6 rounded-lg border border-green-700/40 bg-green-950/20 p-4">
-            <h3 className="font-semibold text-green-400">Connection Successful</h3>
-            <div className="mt-3 space-y-2 text-sm">
-              <p><strong>Provider:</strong> {connectionResult.provider}</p>
-              <p><strong>Model:</strong> {connectionResult.model}</p>
-              <p><strong>Latency:</strong> {connectionResult.latency_ms.toFixed(2)} ms</p>
-              <p><strong>Response:</strong> {connectionResult.response}</p>
-              <p><strong>Total Tokens:</strong> {connectionResult.token_usage.total_tokens}</p>
-              <p><strong>Estimated Cost:</strong> ${connectionResult.token_usage.estimated_cost}</p>
-            </div>
-          </div>
-        )}
-
-        {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-destructive">Validation is active.</p>}
-      </div>
+        </footer>
+      </form>
     </div>
   );
 };

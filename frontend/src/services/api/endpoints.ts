@@ -148,6 +148,10 @@ export const SETTINGS_ENDPOINTS = {
   aiSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/test`,
   emailSettings: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings`,
   emailSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings/test`,
+  // ARCH40-S2:settings-endpoints. Read-only resolved views.
+  aiSettingsResolved: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/resolved`,
+  emailSettingsResolution: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/email-settings/resolution`,
   documentSettings: (workspaceId: string): string => `${scoped(workspaceId)}/document-settings/`,
 } as const;
 
@@ -532,4 +536,18 @@ export const ENTITLEMENT_ENDPOINTS = {
     `/organizations/${org(organizationId)}/entitlements`,
   addonCheckout: (organizationId: string, addonKey: string): string =>
     `/organizations/${org(organizationId)}/billing/addons/${seg(addonKey)}/checkout-session`,
+} as const;
+
+/**
+ * ARCH40-S2:review-endpoints. The unified review hub. Its own `/review` prefix,
+ * so no literal segment here can race `/work-items/{id}` (ARCH-38 gate B4).
+ */
+export const REVIEW_ENDPOINTS = {
+  queue: (workspaceId: string): string => `${scoped(workspaceId)}/review`,
+  assignees: (workspaceId: string): string => `${scoped(workspaceId)}/review/assignees`,
+  bulk: (workspaceId: string): string => `${scoped(workspaceId)}/review/bulk`,
+  resolve: (workspaceId: string, kind: string, itemId: string): string =>
+    `${scoped(workspaceId)}/review/${seg(kind)}/${seg(itemId)}/resolve`,
+  assign: (workspaceId: string, kind: string, itemId: string): string =>
+    `${scoped(workspaceId)}/review/${seg(kind)}/${seg(itemId)}/assign`,
 } as const;

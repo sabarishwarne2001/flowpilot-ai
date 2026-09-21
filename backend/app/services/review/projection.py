@@ -79,6 +79,8 @@ class ReviewItem:
     assignee_email: Optional[str]
     under_retention_hold: bool
     tags: list[str] = field(default_factory=list)
+    #: ARCH40-S1:review-reason-field. Why the item needs a human.
+    review_reason: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -98,6 +100,7 @@ class ReviewItem:
             "assignee_email": self.assignee_email,
             "under_retention_hold": self.under_retention_hold,
             "tags": list(self.tags),
+            "review_reason": self.review_reason,
         }
 
 
@@ -122,6 +125,7 @@ def _validate(
     kinds: Optional[Sequence[str]],
     severities: Optional[Sequence[str]],
     status: str,
+    reasons: Optional[Sequence[str]] = None,
 ) -> None:
     for kind in kinds or ():
         if kind not in vocab.KINDS:
@@ -134,6 +138,12 @@ def _validate(
             raise ReviewQueryError(
                 f"'{severity}' is not a severity. Expected one of: "
                 f"{', '.join(vocab.SEVERITIES)}."
+            )
+    for reason in reasons or ():
+        if reason not in vocab.REASONS:
+            raise ReviewQueryError(
+                f"'{reason}' is not a review reason. Expected one of: "
+                f"{', '.join(vocab.REASONS)}."
             )
     if status not in vocab.STATUSES:
         raise ReviewQueryError(
@@ -161,6 +171,7 @@ def _queue_cte(workspace_id: uuid.UUID):
         column("status", String),
         column("resolved_at"),
         column("resolved_by_user_id"),
+        column("review_reason", String),
     )
     # ARCH40-S1:hub-workspace-predicate. Removing this is mutant M3 and gate
     # B2; it is the only thing standing between one tenant's queue and
@@ -179,6 +190,7 @@ def query_reviews(
     kinds: Optional[Sequence[str]] = None,
     severities: Optional[Sequence[str]] = None,
     status: str = vocab.STATUS_OPEN,
+    reasons: Optional[Sequence[str]] = None,
     work_item_id: Optional[uuid.UUID] = None,
     tag: Optional[str] = None,
     assignee_user_id: Optional[uuid.UUID] = None,
@@ -188,7 +200,7 @@ def query_reviews(
     page_size: int = vocab.DEFAULT_PAGE_SIZE,
 ) -> ReviewPage:
     """One page of the queue, plus the per-kind counts for its header."""
-    _validate(kinds=kinds, severities=severities, status=status)
+    _validate(kinds=kinds, severities=severities, status=status, reasons=reasons)
 
     page = max(1, int(page))
     page_size = max(1, min(int(page_size), vocab.MAX_PAGE_SIZE))
@@ -235,6 +247,7 @@ def query_reviews(
             scoped.c.status,
             scoped.c.resolved_at,
             scoped.c.resolved_by_user_id,
+            scoped.c.review_reason,
             WorkItem.original_filename.label("document_name"),
             assignment.c.a_user_id.label("assignee_user_id"),
             User.email.label("assignee_email"),
@@ -258,6 +271,8 @@ def query_reviews(
         stmt = stmt.where(scoped.c.kind.in_(list(kinds)))
     if severities:
         stmt = stmt.where(scoped.c.severity.in_(list(severities)))
+    if reasons:
+        stmt = stmt.where(scoped.c.review_reason.in_(list(reasons)))
     if work_item_id is not None:
         stmt = stmt.where(scoped.c.work_item_id == work_item_id)
     if assignee_user_id is not None:
@@ -341,6 +356,7 @@ def query_reviews(
             assignee_email=row.assignee_email,
             under_retention_hold=bool(row.under_retention_hold),
             tags=sorted(tags_by_work_item.get(row.work_item_id, [])),
+            review_reason=str(row.review_reason or ""),
         )
         for row in rows
     ]
@@ -392,6 +408,7 @@ def load_item(
         assignee_email=None,
         under_retention_hold=False,
         tags=[],
+        review_reason=str(row.review_reason or ""),
     )
 
 

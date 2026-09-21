@@ -19,7 +19,25 @@ import type {
 } from "@/types/verification";
 import { formatMicros } from "@/types/billing";
 
-export const VerificationReviewQueue: React.FC = () => {
+/**
+ * ARCH40-S2:workbench-focus. The field-level extraction workbench.
+ *
+ * Standalone it lists DISAGREED verifications, as it always has. With
+ * `focusVerificationId` it opens exactly one verification — any status the
+ * review hub can show, including calibration holds and rule escalations that
+ * are PENDING rather than DISAGREED — and calls `onResolved` when a reviewer
+ * clears it. The unified review hub mounts it that way for EXTRACTION items,
+ * so there is one field-diff UI in the product, not two.
+ */
+export interface VerificationReviewQueueProps {
+  readonly focusVerificationId?: string;
+  readonly onResolved?: () => void;
+}
+
+export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = ({
+  focusVerificationId,
+  onResolved,
+}) => {
   const workspace = useActiveWorkspace();
   const workspaceId = workspace?.workspaceId ?? "";
   const queryClient = useQueryClient();
@@ -34,25 +52,32 @@ export const VerificationReviewQueue: React.FC = () => {
     queryKey: verificationKeys.list(workspaceId, "DISAGREED"),
     queryFn: () =>
       listVerifications(workspaceId, { status: "DISAGREED", limit: 100 }),
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(workspaceId) && !focusVerificationId,
     staleTime: 15_000,
   });
 
-  const items = useMemo<VerificationSummaryResponse[]>(
+  const listed = useMemo<VerificationSummaryResponse[]>(
     () => listQuery.data ?? [],
     [listQuery.data],
   );
 
-  const active = items[cursor] ?? null;
+  const activeId = focusVerificationId ?? listed[cursor]?.id ?? "";
 
   const detailQuery = useQuery({
-    queryKey: verificationKeys.detail(workspaceId, active?.id ?? ""),
-    queryFn: () => getVerification(workspaceId, active?.id as string),
-    enabled: Boolean(workspaceId && active?.id),
+    queryKey: verificationKeys.detail(workspaceId, activeId),
+    queryFn: () => getVerification(workspaceId, activeId),
+    enabled: Boolean(workspaceId && activeId),
     staleTime: 30_000,
   });
 
   const detail = detailQuery.data ?? null;
+
+  const items = useMemo<VerificationSummaryResponse[]>(
+    () => (focusVerificationId ? (detail ? [detail] : []) : listed),
+    [focusVerificationId, detail, listed],
+  );
+
+  const active = items[cursor] ?? null;
 
   // ARCH35-S3:review-all-fields. A verification calibrated autonomy held back
   // asks about EVERY extracted field, and an audit sample was one the platform
@@ -63,7 +88,16 @@ export const VerificationReviewQueue: React.FC = () => {
     readonly review_all_fields?: boolean;
     readonly audit_sample?: boolean;
   } | null;
-  const reviewAll = Boolean(calibrationDetails?.review_all_fields);
+  // ARCH40-S2:escalation-review-all. ARCH-37's `review.escalate` marks
+  // `escalation.review_all_fields`, which the backend's resolve honours. Every
+  // escalated field is stored agreed, so without this the workbench showed
+  // an escalated document with nothing to review.
+  const escalationDetails = (detail?.details?.["escalation"] ?? null) as {
+    readonly review_all_fields?: boolean;
+  } | null;
+  const reviewAll =
+    Boolean(calibrationDetails?.review_all_fields) ||
+    Boolean(escalationDetails?.review_all_fields);
   const isAudit = Boolean(calibrationDetails?.audit_sample);
   const isReviewable = useCallback(
     (field: VerificationFieldResponse): boolean =>
@@ -77,6 +111,7 @@ export const VerificationReviewQueue: React.FC = () => {
     onSuccess: async () => {
       setEditing(false);
       setEdits({});
+      onResolved?.();
       await queryClient.invalidateQueries({
         queryKey: verificationKeys.all(workspaceId),
       });
@@ -175,7 +210,7 @@ export const VerificationReviewQueue: React.FC = () => {
     node?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  if (listQuery.isLoading) {
+  if (focusVerificationId ? detailQuery.isLoading : listQuery.isLoading) {
     return (
       <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />

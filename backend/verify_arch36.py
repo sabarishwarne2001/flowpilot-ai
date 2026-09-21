@@ -747,7 +747,7 @@ def gates_db(rec: Recorder) -> None:
         def head() -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH39-S1:head-widened-36. ARCH-36 added no migration; ARCH-39 does.
-            assert value in (EXPECTED_HEAD, "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches"), (  # ARCH37-S1:head-widened-36  ARCH38-S1:head-widened-36
+            assert value in (EXPECTED_HEAD, "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings"), (  # ARCH37-S1:head-widened-36  ARCH38-S1:head-widened-36  ARCH40-S1:head-widened-36
                 f"alembic head is {value}; expected {EXPECTED_HEAD} or later"
             )
 

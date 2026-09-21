@@ -169,6 +169,12 @@ EMITTERS: dict[str, tuple[str, tuple[str, ...]]] = {
         "app/services/redaction/redaction_service.py",
         ("emit_trigger(", 'event_type="trigger.redaction.completed"'),
     ),
+    # ARCH40-S1:emitter-review-cleared. Emitted by the one resolution path
+    # every review screen shares, so a rule on it fires once per decision.
+    "trigger.review.cleared": (
+        "app/services/review/resolution.py",
+        ("emit_trigger(", "event_type=REVIEW_CLEARED_EVENT"),
+    ),
     # ARCH38-S1:emitter-batch-completed.
     "trigger.batch.completed": (
         "app/services/ingestion/batch_service.py",
@@ -455,7 +461,10 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
                 "ARCH-38 emits trigger.batch.completed; it must be in the catalog"
             )
             # ARCH38-S1:catalog-counts-37. 12/13 before ARCH-38, 13/14 after.
-            assert len(triggers.TRIGGERS) == 13 and len(triggers.CATALOG_EVENT_TYPES) == 14
+            # ARCH40-S1:catalog-counts-37. 13/14 after ARCH-38; ARCH-40 adds
+            # review.cleared, so 14/15. Both are accepted so this gate states
+            # what each milestone left, not only the newest.
+            assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((13, 14), (14, 15))
             assert "workflow.triggered" in WEBHOOK_EVENT_TYPES
             # The public events must fail as INTERNAL and twins as PUBLIC.
             from app.services import outbox_service
@@ -475,15 +484,27 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             from app.core.webhook_events import WEBHOOK_EVENT_TYPES
 
             m = _load_file(root / "alembic/versions/arch37_step1_flow_builder.py", "gate37_m1")
-            assert set(m.INTERNAL_AFTER) == set(ae.INTERNAL_EVENT_TYPES), (
+            # ARCH40-S1:vocabulary-widened-37. ARCH-40 adds exactly one internal
+            # event, and its own vocabulary migration (arch40_step0) rebuilds the
+            # CHECK to admit it. The live set may exceed ARCH-37's pinned one by
+            # that event and nothing else; any other difference still fails.
+            later = set()
+            step0_40 = root / "alembic/versions/arch40_step0_review_vocabulary.py"
+            if step0_40.exists():
+                later = {_load_file(step0_40, "gate37_m40").REVIEW_CLEARED_EVENT}
+            difference = set(m.INTERNAL_AFTER) ^ set(ae.INTERNAL_EVENT_TYPES)
+            assert difference <= later and later <= set(ae.INTERNAL_EVENT_TYPES) | set(m.INTERNAL_AFTER), (
                 "the visibility CHECK the migration writes differs from INTERNAL_EVENT_TYPES: "
-                f"{sorted(set(m.INTERNAL_AFTER) ^ set(ae.INTERNAL_EVENT_TYPES))}"
+                f"{sorted(difference - later)}"
             )
             assert set(m.PUBLIC_AFTER) == set(WEBHOOK_EVENT_TYPES), (
                 f"webhook CHECKs differ from the vocabulary: {sorted(set(m.PUBLIC_AFTER) ^ set(WEBHOOK_EVENT_TYPES))}"
             )
             assert set(m.LEGACY_RULE_EVENTS) == set(ae.LEGACY_RULE_EVENT_TYPES)
-            assert set(m.TRIGGER_EVENTS) == set(ae.TRIGGER_TWIN_EVENT_TYPES) | set(ae.TRIGGER_NATIVE_EVENT_TYPES)
+            # ARCH40-S1:vocabulary-widened-37 (triggers). Same rule: only the
+            # event arch40_step0 reserves may be added beyond ARCH-37's pin.
+            live_triggers = set(ae.TRIGGER_TWIN_EVENT_TYPES) | set(ae.TRIGGER_NATIVE_EVENT_TYPES)
+            assert (set(m.TRIGGER_EVENTS) ^ live_triggers) <= later, sorted((set(m.TRIGGER_EVENTS) ^ live_triggers) - later)
             assert m.down_revision == STEP0 and m.revision == HEAD
             s0 = _load_file(root / "alembic/versions/arch37_step0_flow_vocabulary.py", "gate37_m0")
             assert s0.down_revision == PREVIOUS_HEAD and "AUTOMATION_RULE" in s0.NEW_RESOURCE_TYPES
@@ -1137,7 +1158,7 @@ def gates_db(rec: Recorder, *, root: Path) -> None:
             # ARCH38-S1:head-widened-37. ARCH-38 advances the head; this gate
             # asserts that ARCH-37's migration is still applied, not that it is
             # still the newest thing in the tree.
-            assert value in (HEAD, "arch38_step1_batches"), f"alembic head is {value}; run `alembic upgrade head`"
+            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37
             names = set(db.execute(sql(
                 "SELECT conname FROM pg_constraint WHERE conname IN ("
                 "'ck_automation_rule_triggers_event_known','ck_automation_rules_flow_spec_is_object',"

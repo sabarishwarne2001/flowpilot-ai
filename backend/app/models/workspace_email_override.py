@@ -1,5 +1,7 @@
 """ARCH-40 — the workspace email override. One owner for workspace-level mail.
 
+ARCH40-S1:email-override-model.
+
 WHAT THIS REPLACES
 ==================
 

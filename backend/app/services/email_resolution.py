@@ -272,6 +272,15 @@ def resolve_email_identity(
     if override is not None and organization_for_lookup is None:
         # The composite FK guarantees this matches the workspace's owner.
         organization_for_lookup = override.organization_id
+    if organization_for_lookup is None and workspace_id is not None:
+        # ARCH40-S1:resolver-derives-org. D-1 was callers omitting
+        # organization_id. Deriving it here makes that omission harmless for
+        # every caller, present and future, instead of fixed at two sites.
+        from app.models.workspace import Workspace
+
+        organization_for_lookup = db.execute(
+            select(Workspace.organization_id).where(Workspace.id == workspace_id)
+        ).scalar_one_or_none()
 
     organization_config: Optional[SMTPConfig] = None
     if organization_for_lookup is not None:

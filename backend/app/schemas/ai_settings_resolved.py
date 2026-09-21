@@ -1,4 +1,7 @@
-"""ARCH-40 — the read-only resolved view of a workspace's AI configuration."""
+"""ARCH-40 — the read-only resolved view of a workspace's AI configuration.
+
+ARCH40-S1:ai-resolved-schema.
+"""
 
 from __future__ import annotations
 

@@ -201,28 +201,52 @@ def _evaluate_rule_conditions(rule: Any, work_item: WorkItem) -> bool:
     return any(matched_results) if logic_operator == "OR" else all(matched_results)
 
 
+from app.core.smtp import SMTPConfig  # noqa: E402  ARCH40-S1
+
 @dataclass
 class _LazyEmailSettings:
+    """The relay an automation email leaves through.
+
+    ARCH40-S1:automation-email-resolver. Before ARCH-40 this read the
+    workspace `email_settings` row directly, so ARCH-37's `email.send` action
+    ignored the workspace override, the organization tier and a verified
+    branding domain — the one mail path that never went through the resolver.
+    It now asks `email_resolution.resolve_email_identity`, like every other
+    sender, and `verify_arch40.py` gate A5 fails on any runtime reader of the
+    old table.
+
+    Behaviour change, stated: a workspace with no override and no organization
+    settings now sends automation mail through the platform relay, exactly as
+    its notifications already did, instead of failing the action with "No
+    email settings configured". An organization that wants automation mail to
+    stop sets a spend or rule policy, not a missing SMTP row.
+    """
+
     db: Session
     workspace_id: uuid.UUID
     _resolved: bool = field(default=False, init=False)
-    _settings: Optional[EmailSettings] = field(default=None, init=False)
+    _settings: Optional["SMTPConfig"] = field(default=None, init=False)
     _reason: Optional[str] = field(default=None, init=False)
 
     def _resolve(self) -> None:
         if self._resolved:
             return
         self._resolved = True
-        resolved = crud.get_email_settings(self.db, workspace_id=self.workspace_id)
-        if resolved is None:
-            self._reason = "No email settings configured."
-            return
-        if not resolved.is_enabled:
-            self._reason = "Email delivery is disabled."
-            return
-        self._settings = resolved
+        from app.services.email_resolution import MessageKind, resolve_email_identity
 
-    def require(self) -> EmailSettings:
+        try:
+            identity = resolve_email_identity(
+                self.db,
+                organization_id=None,
+                workspace_id=self.workspace_id,
+                message_kind=MessageKind.WORKSPACE,
+            )
+        except Exception as exc:  # an unconfigured platform relay
+            self._reason = f"No email relay could be resolved: {exc}"
+            return
+        self._settings = identity.smtp
+
+    def require(self) -> "SMTPConfig":
         self._resolve()
         if self._settings is None:
             raise ActionFailure(self._reason or "Email settings unavailable.")

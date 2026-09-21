@@ -1,7 +1,7 @@
 """ARCH-40 Step 3 — CONTRACT: drop the three dead ai_settings columns.
 
 Revision ID: arch40_step3_contract_ai_settings
-Revises: arch40_step2_settings_backfill
+Revises: arch40_step2a_review_view_paths
 
 THIS MIGRATION IS LOSSY AND DOES NOT RUN BY DEFAULT
 ===================================================
@@ -18,9 +18,9 @@ makes the expand/backfill/contract split real rather than decorative: steps 1
 and 2 ship in one deploy, this one ships in the next, and between them the
 columns exist, hold NULL, and have no reader.
 
-`run_arch40.ps1` runs `alembic upgrade arch40_step2_settings_backfill` in its
+`run_arch40.ps1` runs `alembic upgrade arch40_step2a_review_view_paths` in its
 normal path and offers `-Contract` for this step, which is why the certified
-head for the ARCH-40 release is step 2 and not step 3.
+head for the ARCH-40 release is step 2a and not step 3.
 
 WHAT IS LOST
 ============
@@ -48,7 +48,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "arch40_step3_contract_ai_settings"
-down_revision = "arch40_step2_settings_backfill"
+down_revision = "arch40_step2a_review_view_paths"
 branch_labels = None
 depends_on = None
 

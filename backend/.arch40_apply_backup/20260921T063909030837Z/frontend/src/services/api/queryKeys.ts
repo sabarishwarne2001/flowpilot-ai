@@ -1,0 +1,477 @@
+/**
+ * Query key factories for FlowPilot AI.
+ */
+
+import type { QueryClient } from "@tanstack/react-query";
+import type { WorkItemQueryFilters } from "@/types/workItem";
+
+export const workspaceScope = (workspaceId: string) =>
+  ["ws", workspaceId] as const;
+
+export const workItemKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "work-items"] as const,
+  list: (workspaceId: string, filters: WorkItemQueryFilters) =>
+    [...workItemKeys.all(workspaceId), "list", filters] as const,
+  detail: (workspaceId: string, workItemId: string) =>
+    [...workItemKeys.all(workspaceId), "detail", workItemId] as const,
+};
+
+// ARCH38-S2:ingestion-keys
+export const ingestionKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "ingestion"] as const,
+  batches: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "batches"] as const,
+  batch: (workspaceId: string, batchId: string) =>
+    [...ingestionKeys.batches(workspaceId), batchId] as const,
+  presets: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "presets"] as const,
+  tags: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "tags"] as const,
+  retentionHolds: (workspaceId: string) =>
+    [...ingestionKeys.all(workspaceId), "retention-holds"] as const,
+};
+
+export const knowledgeKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "knowledge"] as const,
+};
+
+export const dashboardKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "dashboard"] as const,
+  overview: (workspaceId: string) => [...dashboardKeys.all(workspaceId), "overview"] as const,
+};
+
+export const assistantKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "assistant"] as const,
+  conversations: (workspaceId: string) =>
+    [...assistantKeys.all(workspaceId), "conversations"] as const,
+  history: (workspaceId: string, conversationId: string) =>
+    [...assistantKeys.all(workspaceId), "history", conversationId] as const,
+  documentConversation: (workspaceId: string, workItemId: string) =>
+    [...assistantKeys.all(workspaceId), "document", workItemId] as const,
+  // ARCH39-S1:session-keys
+  sessionsRoot: (workspaceId: string) =>
+    [...assistantKeys.all(workspaceId), "sessions"] as const,
+  sessions: (
+    workspaceId: string,
+    filters: { readonly kind: string; readonly archived: boolean; readonly q: string },
+  ) => [...assistantKeys.all(workspaceId), "sessions", filters] as const,
+  scope: (workspaceId: string, conversationId: string) =>
+    [...assistantKeys.all(workspaceId), "scope", conversationId] as const,
+  models: (workspaceId: string) => [...assistantKeys.all(workspaceId), "models"] as const,
+  templates: (workspaceId: string) =>
+    [...assistantKeys.all(workspaceId), "prompt-templates"] as const,
+};
+
+export const automationKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "automation"] as const,
+  rules: (workspaceId: string) => [...automationKeys.all(workspaceId), "rules"] as const,
+  rule: (workspaceId: string, ruleId: string) =>
+    [...automationKeys.all(workspaceId), "rule", ruleId] as const,
+  logs: (workspaceId: string) => [...automationKeys.all(workspaceId), "logs"] as const,
+  // ARCH37-S2:catalog-keys
+  catalog: (workspaceId: string) => [...automationKeys.all(workspaceId), "catalog"] as const,
+  executionNodes: (workspaceId: string, executionId: string) =>
+    [...automationKeys.all(workspaceId), "execution-nodes", executionId] as const,
+};
+
+export const notificationKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "notifications"] as const,
+  list: (workspaceId: string, unreadOnly = false) =>
+    [...notificationKeys.all(workspaceId), "list", unreadOnly] as const,
+};
+
+export const settingsKeys = {
+  all: (workspaceId: string) => [...workspaceScope(workspaceId), "settings"] as const,
+  ai: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai"] as const,
+  aiModels: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-models"] as const,
+  aiProviders: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-providers"] as const,
+  email: (workspaceId: string) => [...settingsKeys.all(workspaceId), "email"] as const,
+  document: (workspaceId: string) => [...settingsKeys.all(workspaceId), "document"] as const,
+};
+
+export const profileKeys = {
+  all: ["profile"] as const,
+  me: () => [...profileKeys.all, "me"] as const,
+  avatar: (userId: string) => [...profileKeys.all, "avatar", userId] as const,
+};
+
+export const meInvitationKeys = {
+  all: ["me-invitations"] as const,
+  list: () => [...meInvitationKeys.all, "list"] as const,
+};
+
+export const organizationScope = (organizationId: string) =>
+  ["org", organizationId] as const;
+
+export const organizationKeys = {
+  all: (organizationId: string) => organizationScope(organizationId),
+  members: (organizationId: string, includeInactive: boolean) =>
+    [...organizationScope(organizationId), "members", { includeInactive }] as const,
+};
+
+export const orgEmailKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "email-settings"] as const,
+  settings: (organizationId: string) =>
+    [...orgEmailKeys.all(organizationId), "settings"] as const,
+};
+
+export const orgNotificationKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "notifications"] as const,
+  list: (organizationId: string, isRead?: boolean) =>
+    [...orgNotificationKeys.all(organizationId), { isRead }] as const,
+};
+
+export const sloKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "slos"] as const,
+  summary: (organizationId: string, period: string) =>
+    [...sloKeys.all(organizationId), "summary", period] as const,
+};
+
+export const complianceKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "compliance"] as const,
+  overview: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "overview"] as const,
+  residency: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "residency"] as const,
+  retention: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "retention"] as const,
+  erasures: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "erasures"] as const,
+  erasurePreview: (organizationId: string, subjectUserId: string) =>
+    [
+      ...complianceKeys.all(organizationId),
+      "erasure-preview",
+      subjectUserId,
+    ] as const,
+  exports: (organizationId: string) =>
+    [...complianceKeys.all(organizationId), "exports"] as const,
+};
+
+export const developerKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "developer"] as const,
+  overview: (organizationId: string, windowDays: number) =>
+    [...developerKeys.all(organizationId), "overview", windowDays] as const,
+  tiers: (organizationId: string) =>
+    [...developerKeys.all(organizationId), "tiers"] as const,
+  metrics: (organizationId: string, keyId: string, windowDays: number) =>
+    [...developerKeys.all(organizationId), "metrics", keyId, windowDays] as const,
+  explorer: (organizationId: string, workspaceId?: string) =>
+    [
+      ...developerKeys.all(organizationId),
+      "explorer",
+      workspaceId ?? "none",
+    ] as const,
+};
+
+export const byokKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "byok"] as const,
+  overview: (organizationId: string, windowDays: number) =>
+    [...byokKeys.all(organizationId), "overview", windowDays] as const,
+  providers: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "providers"] as const,
+  credentials: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "credentials"] as const,
+  routes: (organizationId: string) =>
+    [...byokKeys.all(organizationId), "routes"] as const,
+  savings: (organizationId: string, windowDays: number) =>
+    [...byokKeys.all(organizationId), "savings", windowDays] as const,
+};
+
+export const brandingKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "branding"] as const,
+  domains: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "domains"] as const,
+  domain: (organizationId: string, domainId: string) =>
+    [...brandingKeys.domains(organizationId), domainId] as const,
+  branding: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "tokens"] as const,
+  sender: (organizationId: string) =>
+    [...brandingKeys.all(organizationId), "sender"] as const,
+  // Not organization-scoped, because the manifest is not addressed by
+  // organization: it is resolved from the Host header. Scoping it would
+  // suggest a per-tenant cache key the request does not actually have.
+  manifest: ["branding", "manifest"] as const,
+};
+
+export const analyticsKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "analytics"] as const,
+  destinations: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "destinations"] as const,
+  destination: (organizationId: string, destinationId: string) =>
+    [...analyticsKeys.destinations(organizationId), destinationId] as const,
+  schedules: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "schedules"] as const,
+  runs: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "runs"] as const,
+  consumption: (organizationId: string, windowDays: number) =>
+    [...analyticsKeys.all(organizationId), "consumption", windowDays] as const,
+  datasets: (organizationId: string) =>
+    [...analyticsKeys.all(organizationId), "datasets"] as const,
+};
+
+export const sessionKeys = {
+  all: ["sessions"] as const,
+  list: () => [...sessionKeys.all, "list"] as const,
+};
+
+export const apiKeyKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "api-keys"] as const,
+  list: (organizationId: string) =>
+    [...apiKeyKeys.all(organizationId), "list"] as const,
+};
+
+export const webhookKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "webhooks"] as const,
+  endpoints: (organizationId: string) =>
+    [...webhookKeys.all(organizationId), "endpoints"] as const,
+  deliveries: (organizationId: string, endpointId: string, status?: string) =>
+    [...webhookKeys.all(organizationId), "deliveries", endpointId, { status }] as const,
+  attempts: (organizationId: string, deliveryId: string) =>
+    [...webhookKeys.all(organizationId), "attempts", deliveryId] as const,
+};
+
+export const ownershipKeys = {
+  mine: ["ownership-transfers", "mine"] as const,
+};
+
+export const billingKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "billing"] as const,
+  plans: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "plans"] as const,
+  subscription: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "subscription"] as const,
+  access: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "access"] as const,
+  // ARCH30-T4F:ts-access-summary-key — A5. A key of its own, not a
+  // variant of `access`: the two endpoints return different shapes and
+  // sharing a cache entry would let a member's summary satisfy an
+  // owner's query for the full payload.
+  accessSummary: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "access-summary"] as const,
+  seatPriceBook: (organizationId: string, additionalSeats: number) =>
+    [
+      ...billingKeys.all(organizationId),
+      "price-book",
+      "seat",
+      additionalSeats,
+    ] as const,
+  invoices: (organizationId: string) =>
+    [...billingKeys.all(organizationId), "invoices"] as const,
+  invoice: (organizationId: string, invoiceId: string) =>
+    [...billingKeys.all(organizationId), "invoice", invoiceId] as const,
+  invoiceReproduction: (organizationId: string, invoiceId: string) =>
+    [...billingKeys.all(organizationId), "invoice", invoiceId, "reproduction"] as const,
+};
+
+/** ARCH-30 Tranche 2 (D-8). One key: every lock card reads the same response. */
+export const entitlementKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "entitlements"] as const,
+};
+
+export const usageKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "usage"] as const,
+  summary: (organizationId: string, period: string) =>
+    [...usageKeys.all(organizationId), "summary", period] as const,
+  series: (organizationId: string, from: string, granularity: string) =>
+    [...usageKeys.all(organizationId), "series", from, granularity] as const,
+  limits: (organizationId: string) =>
+    [...usageKeys.all(organizationId), "limits"] as const,
+};
+
+export const identityKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "identity"] as const,
+  domains: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "domains"] as const,
+  idpConfigs: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "idp-configs"] as const,
+  scimKeys: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "scim-keys"] as const,
+  securityPolicy: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "security-policy"] as const,
+  directory: (organizationId: string) =>
+    [...identityKeys.all(organizationId), "directory"] as const,
+};
+
+export const auditKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "audit"] as const,
+  list: (organizationId: string, filters: Record<string, unknown>) =>
+    [...auditKeys.all(organizationId), "list", filters] as const,
+  detail: (organizationId: string, auditLogId: string) =>
+    [...auditKeys.all(organizationId), "detail", auditLogId] as const,
+};
+
+export const verificationKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "verifications"] as const,
+  list: (workspaceId: string, status: string | undefined) =>
+    [...verificationKeys.all(workspaceId), "list", status ?? "ALL"] as const,
+  detail: (workspaceId: string, verificationId: string) =>
+    [...verificationKeys.all(workspaceId), "detail", verificationId] as const,
+};
+
+/**
+ * ARCH-18 — platform COGS.
+ *
+ * Rooted at ["platform","cogs"], deliberately NOT under organizationScope.
+ * These queries are cross-tenant, so filing them under an organization would
+ * mean `invalidateOrganization` wiped a cache that has nothing to do with
+ * that organization — and, worse, that switching organizations appeared to
+ * change platform-wide numbers.
+ */
+export const cogsKeys = {
+  all: () => ["platform", "cogs"] as const,
+  marginSummary: (window: string) =>
+    [...cogsKeys.all(), "margins", "summary", window] as const,
+  tenantEconomics: (window: string, order: string) =>
+    [...cogsKeys.all(), "margins", "tenants", window, order] as const,
+  providerCosts: (window: string) =>
+    [...cogsKeys.all(), "margins", "providers", window] as const,
+  rateCard: () => [...cogsKeys.all(), "rate-card"] as const,
+  supplierInvoices: (provider?: string) =>
+    [...cogsKeys.all(), "supplier-invoices", provider ?? "ALL"] as const,
+  reconciliations: (supplierInvoiceId: string) =>
+    [...cogsKeys.all(), "reconciliations", supplierInvoiceId] as const,
+};
+
+export const invalidateCogs = async (
+  queryClient: QueryClient,
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: cogsKeys.all() });
+};
+
+export const invalidateOrganization = async (
+  queryClient: QueryClient,
+  organizationId: string,
+): Promise<void> => {
+  await queryClient.invalidateQueries({
+    queryKey: organizationScope(organizationId),
+  });
+};
+
+export const invalidateWorkspace = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: workspaceScope(workspaceId) });
+};
+
+export const keepPreviousWithinWorkspace =
+  <TData,>(workspaceId: string) =>
+  (
+    previousData: TData | undefined,
+    previousQuery: any,
+  ): TData | undefined => {
+    const previousWorkspaceId = previousQuery?.queryKey?.[1];
+    return previousWorkspaceId === workspaceId ? previousData : undefined;
+  };
+
+/**
+ * ARCH-27 — partner portal query keys.
+ *
+ * Rooted at "partner" and NOT under organizationScope: invalidating an
+ * organization must not blow away a partner's book-wide ledger, and switching
+ * tenant must not refetch it. They are different subjects.
+ */
+export const partnerKeys = {
+  root: () => ["partner"] as const,
+  mine: () => [...partnerKeys.root(), "mine"] as const,
+  all: (partnerId: string) => [...partnerKeys.root(), partnerId] as const,
+  detail: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "detail"] as const,
+  members: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "members"] as const,
+  book: (partnerId: string) => [...partnerKeys.all(partnerId), "book"] as const,
+  signingKeys: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "signing-keys"] as const,
+  agreements: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "agreements"] as const,
+  payouts: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "payouts"] as const,
+  statement: (partnerId: string, periodId: string) =>
+    [...partnerKeys.payouts(partnerId), periodId] as const,
+  economics: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "economics"] as const,
+  catalog: (partnerId: string) =>
+    [...partnerKeys.all(partnerId), "catalog"] as const,
+};
+
+/** ARCH-27 — the tenant marketplace. Organization-scoped, unlike partnerKeys. */
+export const marketplaceKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "marketplace"] as const,
+  catalog: (organizationId: string) =>
+    [...marketplaceKeys.all(organizationId), "catalog"] as const,
+  manifest: (organizationId: string, manifestId: string) =>
+    [...marketplaceKeys.all(organizationId), "manifest", manifestId] as const,
+  installations: (organizationId: string) =>
+    [...marketplaceKeys.all(organizationId), "installations"] as const,
+};
+
+/**
+ * ARCH33-S2:assertion-query-keys. Clause assertions.
+ *
+ * `preview` carries the sentence AND the threshold, because the consequence
+ * line under the slider changes with both: the same sentence at 90% and at
+ * 99% predicts a different share of documents going to review, and a key that
+ * ignored the threshold would serve the 90% sentence under a 99% slider.
+ */
+export const assertionKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "assertions"] as const,
+  preview: (workspaceId: string, sentence: string, thresholdPercent: number) =>
+    [...assertionKeys.all(workspaceId), "preview", sentence, thresholdPercent] as const,
+  rule: (workspaceId: string, ruleId: string) =>
+    [...assertionKeys.all(workspaceId), "rule", ruleId] as const,
+  reviews: (workspaceId: string, workItemId?: string) =>
+    [...assertionKeys.all(workspaceId), "reviews", workItemId ?? "all"] as const,
+  phrases: (workspaceId: string, family?: string) =>
+    [...assertionKeys.all(workspaceId), "phrases", family ?? "all"] as const,
+};
+
+/**
+ * ARCH35-S3:autonomy-keys. Organization-scoped: one calibrated model per
+ * (organization, decision type).
+ */
+export const autonomyKeys = {
+  all: (organizationId: string) =>
+    [...organizationScope(organizationId), "autonomy"] as const,
+  overview: (organizationId: string) =>
+    [...autonomyKeys.all(organizationId), "overview"] as const,
+  reliability: (organizationId: string, decisionType: string) =>
+    [...autonomyKeys.all(organizationId), "reliability", decisionType] as const,
+};
+
+/** ARCH-31 — procurement matching. Workspace-scoped, like work items. */
+export const procurementKeys = {
+  all: (workspaceId: string) =>
+    [...workspaceScope(workspaceId), "procurement"] as const,
+  cases: (workspaceId: string, filter: string, onlyExceptions: boolean) =>
+    [...procurementKeys.all(workspaceId), "cases", filter, onlyExceptions] as const,
+  case: (workspaceId: string, caseId: string) =>
+    [...procurementKeys.all(workspaceId), "case", caseId] as const,
+  policies: (workspaceId: string) =>
+    [...procurementKeys.all(workspaceId), "policies"] as const,
+};
+
+export const invalidatePartner = async (
+  queryClient: QueryClient,
+  partnerId: string,
+): Promise<void> => {
+  await queryClient.invalidateQueries({ queryKey: partnerKeys.all(partnerId) });
+};

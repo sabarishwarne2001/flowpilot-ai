@@ -31,6 +31,9 @@ class ReviewItemResponse(BaseModel):
     #: exists: the document cannot be deleted or exported while it stands.
     under_retention_hold: bool = False
     tags: list[str] = Field(default_factory=list)
+    #: ARCH40-S1:review-reason-wire. DISAGREEMENT, ESCALATION,
+    #: CALIBRATION_HOLD, AUTONOMY_AUDIT, PENDING_REVIEW, CLAUSE_TRIAGE, ANOMALY.
+    review_reason: str = ""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -44,6 +47,10 @@ class ReviewQueueResponse(BaseModel):
     #: set as `total` — not over the whole workspace, which would make the
     #: header disagree with the list the moment a filter was applied.
     counts_by_kind: dict[str, int]
+    #: ARCH40-S1:hub-allowed-kinds. What this organization's plan lets it see.
+    #: The console draws tabs from this, so a gated kind is absent rather than
+    #: shown empty.
+    allowed_kinds: list[str] = Field(default_factory=list)
 
 
 class ReviewResolveRequest(BaseModel):

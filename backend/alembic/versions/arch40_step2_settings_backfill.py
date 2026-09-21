@@ -3,6 +3,8 @@
 Revision ID: arch40_step2_settings_backfill
 Revises: arch40_step1_settings_review
 
+ARCH40-S1:backfill. The release boundary between expand and contract.
+
 This is the middle of the expand/backfill/contract sequence, and the release
 boundary. After this migration the application reads neither
 `email_settings` nor the three dead `ai_settings` columns. Step 3 drops the

@@ -144,6 +144,22 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+#: ARCH40-S1:supersede-newfile. The mechanism apply_arch37.py and
+#: apply_arch39.py gained in ARCH-38, added here for ARCH-40. ARCH-40 edits
+#: files this apply created -- verify_arch38.py's head pin, and the
+#: SUPERSEDING_SENTINELS tuple of the apply_arch37.py / apply_arch39.py this
+#: script carries -- so without it this script's "a second apply changes
+#: nothing" gate fails on every tree with ARCH-40 applied.
+#:
+#: A file is superseded only when it carries a later milestone's sentinel.
+#: Arbitrary local edits still fail, which is the property the gate exists for.
+SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH40-S1:",)
+
+
+def _is_superseded(text: str) -> bool:
+    return any(sentinel in text for sentinel in SUPERSEDING_SENTINELS)
+
+
 @dataclass
 class Planned:
     path: Path
@@ -161,6 +177,10 @@ def plan(op: Operation) -> Planned:
             current, _, _ = _read(path)
             if current == op.content:
                 return Planned(path, op.relpath, None, False, "already present")
+            if _is_superseded(current):
+                return Planned(
+                    path, op.relpath, None, False, "superseded by a later milestone"
+                )
             raise PatchError(
                 f"{op.relpath}: exists with different content. ARCH-38 creates "
                 "this file; a different file at this path is not something "

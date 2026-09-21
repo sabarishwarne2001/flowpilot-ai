@@ -75,8 +75,11 @@ const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
-const VerificationReviewQueue = lazy(
-  () => import("@/pages/Verification/VerificationReviewQueue"),
+// ARCH40-S2:review-hub-route. The unified review hub replaces the
+// extraction-only queue on this route; the queue lives on inside the hub as
+// its field-level workbench.
+const ReviewHub = lazy(
+  () => import("@/pages/Verification/ReviewHub"),
 );
 // ARCH34-S3:radar-route
 const ForensicAuditRadar = lazy(
@@ -403,7 +406,7 @@ export default function App() {
                     />
                     <Route
                       path={ROUTE_PATTERNS.workspaceVerification}
-                      element={<VerificationReviewQueue />}
+                      element={<ReviewHub />}
                     />
                     {/* ARCH-36. ARCH-33's queue, routed for the first time. */}
                     <Route
