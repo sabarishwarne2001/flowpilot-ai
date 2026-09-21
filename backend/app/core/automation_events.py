@@ -59,6 +59,15 @@ TRIGGER_NATIVE_EVENT_TYPES: Final[tuple[str, ...]] = (
     "trigger.assertion.held",
     "trigger.redaction.completed",
     "trigger.batch.completed",
+    # ARCH40-S1:review-cleared-event. Unlike `trigger.batch.completed`, which
+    # ARCH-37 reserved ahead of its emitter, this one is new to the CHECK:
+    # arch40_step0_review_vocabulary rebuilds
+    # ck_outbox_events_visibility_vocabulary to admit it.
+    #
+    # Its emitter is `review.resolution._emit_cleared`, reached from every
+    # resolution path — the hub and all three source endpoints — so a rule on
+    # it fires once per human decision regardless of which screen made it.
+    "trigger.review.cleared",
 )
 
 #: Internal events that existed before ARCH-37 and that rules may listen to.

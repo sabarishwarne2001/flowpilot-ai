@@ -323,6 +323,27 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         # this single flag is what keeps the builder honest.
         has_document=False,
     ),
+    # ARCH40-S1:trigger-review-cleared. 14 triggers over 15 events.
+    TriggerSpec(
+        key="review.cleared",
+        label="Review resolved",
+        category="Human review",
+        description=(
+            "A person resolved an item in the review hub — an extraction "
+            "disagreement, a clause assertion or an anomaly finding."
+        ),
+        event_types=("trigger.review.cleared",),
+        fields=(
+            TriggerField("review_kind", "Review type", "string", "EXTRACTION"),
+            TriggerField("severity", "Severity", "string", "HIGH"),
+            TriggerField("resolution", "Outcome", "string", "REVIEWED"),
+            TriggerField("work_item_id", "Document", "string", "a UUID"),
+        ),
+        # An anomaly finding always names a subject work item, and both other
+        # kinds are per-document, so every event this trigger sees carries a
+        # document to read, redact or route.
+        has_document=True,
+    ),
 )
 
 TRIGGERS_BY_KEY: Final[Mapping[str, TriggerSpec]] = {spec.key: spec for spec in TRIGGERS}

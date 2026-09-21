@@ -180,9 +180,8 @@ def create_workspace_in_organization(
                 top_p=1.0,
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
-                system_prompt_version="v1",
-                prompt_version="v1",
-                enable_token_tracking=True,
+                # ARCH40-S1:workspace-defaults. The three dead columns are no
+                # longer written; arch40_step3 drops them.
                 enable_streaming=True,
             )
         )

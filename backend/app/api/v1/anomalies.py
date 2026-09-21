@@ -372,6 +372,44 @@ def get_anomaly(
 # ===========================================================================
 
 
+
+def _record_review_audit(
+    db: Session,
+    *,
+    context: TenantContext,
+    workspace_id: uuid.UUID,
+    finding: AnomalyFinding,
+    resolution: str,
+) -> None:
+    """The canonical REVIEW_ITEM row, identical to the hub's.
+
+    ARCH40-S1:anomaly-review-audit. Built from the same fields
+    `review.resolution._audit` uses, in the same order, so gate B5's row
+    comparison is an equality check rather than a subset check.
+    """
+    from app.models.audit_log import AuditResourceType as _ART
+    from app.services.radar import vocabulary as _radar_vocab
+
+    severity = str(finding.severity)
+    audit_service.record(
+        db,
+        organization_id=context.organization_id,
+        workspace_id=workspace_id,
+        actor_id=context.user_id,
+        resource_type=_ART.REVIEW_ITEM,
+        resource_id=finding.id,
+        action=AuditAction.UPDATED,
+        outcome=AuditOutcome.ALLOWED,
+        details={
+            "review_kind": "ANOMALY",
+            "review_item_id": str(finding.id),
+            "work_item_id": str(finding.subject_work_item_id),
+            "severity": severity if severity in _radar_vocab.SEVERITIES else severity,
+            "resolution": resolution,
+        },
+    )
+
+
 @router.post(
     "/workspaces/{workspace_id}/anomalies/{finding_id}/confirm",
     response_model=AnomalyFindingDetail,
@@ -398,10 +436,39 @@ def confirm_anomaly(
             ),
         )
 
-    finding.status = vocab.STATUS_CONFIRMED
-    finding.resolved_by_user_id = context.user_id
-    finding.resolved_at = datetime.now(timezone.utc)
-    finding.resolution_note = (body.note or "").strip() or None
+    # ARCH40-S1:anomaly-confirm-delegates. The transition moves to the shared
+    # review resolution service so the hub and this endpoint cannot diverge.
+    # The WORK_ITEM audit row below is deliberately untouched: verify_arch34
+    # asserts it, and removing a passing gate's subject to tidy up is how a
+    # regression ships. The REVIEW_ITEM row the shared service adds sits
+    # alongside it, on both paths.
+    from app.services.review import resolution as review_resolution
+
+    try:
+        review_resolution.resolve_anomaly_transition(
+            db,
+            finding=finding,
+            actor_user_id=context.user_id,
+            organization_id=context.organization_id,
+            workspace_id=workspace_id,
+            payload=review_resolution.ResolvePayload(
+                anomaly_verdict=review_resolution.ANOMALY_VERDICT_CONFIRM,
+                note=body.note,
+            ),
+        )
+    except review_resolution.ReviewResolutionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+
+    _record_review_audit(
+        db,
+        context=context,
+        workspace_id=workspace_id,
+        finding=finding,
+        resolution=vocab.STATUS_CONFIRMED,
+    )
 
     audit_service.record(
         db,
@@ -453,45 +520,39 @@ def dismiss_anomaly(
             detail=f"This finding was already {finding.status.lower()}.",
         )
 
-    finding.status = vocab.STATUS_DISMISSED
-    finding.resolved_by_user_id = context.user_id
-    finding.resolved_at = datetime.now(timezone.utc)
-    finding.resolution_note = body.reason
+    # ARCH40-S1:anomaly-dismiss-delegates. See confirm_anomaly above.
+    from app.services.review import resolution as review_resolution
 
-    # The suppression, scoped to the layer that fired. A reviewer dismissing a
-    # weak L3 guess has not agreed to never hear about a byte-identical
-    # re-upload of the same pair.
+    # The suppression is written by the shared service, scoped to the layer
+    # that fired, for the reason the pre-ARCH-40 comment here gave: a reviewer
+    # dismissing a weak L3 guess has not agreed to never hear about a
+    # byte-identical re-upload of the same pair.
     try:
-        if finding.counterpart_work_item_id is not None:
-            suppressions_module.suppress_pair(
-                db,
-                organization_id=context.organization_id,
-                workspace_id=workspace_id,
-                layer=finding.layer,
-                item_a_id=finding.subject_work_item_id,
-                item_b_id=finding.counterpart_work_item_id,
-                reason=body.reason,
-                created_by_user_id=context.user_id,
+        review_resolution.resolve_anomaly_transition(
+            db,
+            finding=finding,
+            actor_user_id=context.user_id,
+            organization_id=context.organization_id,
+            workspace_id=workspace_id,
+            payload=review_resolution.ResolvePayload(
+                anomaly_verdict=review_resolution.ANOMALY_VERDICT_DISMISS,
+                note=body.reason,
                 ttl_days=body.ttl_days,
-            )
-        else:
-            metrics = finding.metrics or {}
-            suppressions_module.suppress_series(
-                db,
-                organization_id=context.organization_id,
-                workspace_id=workspace_id,
-                item_a_id=finding.subject_work_item_id,
-                vendor_key=str(metrics.get("vendor_key") or ""),
-                sku=metrics.get("sku"),
-                reason=body.reason,
-                created_by_user_id=context.user_id,
-                ttl_days=body.ttl_days,
-            )
-    except ValueError as exc:
+            ),
+        )
+    except review_resolution.ReviewResolutionError as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
+
+    _record_review_audit(
+        db,
+        context=context,
+        workspace_id=workspace_id,
+        finding=finding,
+        resolution=vocab.STATUS_DISMISSED,
+    )
 
     audit_service.record(
         db,

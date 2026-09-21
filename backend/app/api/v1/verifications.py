@@ -119,17 +119,37 @@ async def resolve_verification(
         db, verification_id=verification_id, workspace_id=context.workspace_id
     )
 
+    # ARCH40-S1:verification-resolve-delegates. The state change, the audit
+    # row and `trigger.review.cleared` all come from the shared resolution
+    # service, which the review hub also calls. Before ARCH-40 this endpoint
+    # wrote no audit row at all, so "who cleared this extraction" had no
+    # answer; a hub that wrote its own row would have produced a different
+    # answer depending on which screen the reviewer used.
+    #
+    # `_requeue_automation` below is still called and is still the thing
+    # verify gates read. The shared service requeues with the same
+    # `automation:execute:{event.id}` idempotency key, and `job_service.enqueue`
+    # returns the existing job for a key it has already seen, so the two
+    # cannot produce two walks.
+    from app.services.review import resolution as review_resolution
+
     try:
-        dv.resolve(
+        review_resolution.resolve_scoped(
             db,
-            verification=verification,
-            chosen=dict(body.values),
-            reviewer_user_id=context.user_id,
+            workspace_id=context.workspace_id,
+            kind="EXTRACTION",
+            item_id=verification.id,
+            actor_user_id=context.user_id,
+            payload=review_resolution.ResolvePayload(values=dict(body.values)),
         )
-        dv.emit_outcome(db, verification=verification)
         _requeue_automation(db, verification=verification)
         db.commit()
-    except dv.VerificationError as exc:
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except review_resolution.ReviewResolutionError as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)

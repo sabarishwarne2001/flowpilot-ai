@@ -79,24 +79,22 @@ class AISettings(Base, UUIDMixin, TimestampMixin):
     # ARCH-14 finding B1: input_cost_per_1k_tokens and output_cost_per_1k_tokens
     # were dropped in arch14_step8_contract_ai_settings_costs. Prices are now
     # platform-owned and resolved from pricing_service.
-
-    system_prompt_version: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        default="v1",
-    )
-
-    prompt_version: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        default="v1",
-    )
-
-    enable_token_tracking: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-    )
+    #
+    # ARCH40-S1:ai-settings-contract. system_prompt_version, prompt_version and
+    # enable_token_tracking are gone the same way. All three were written by
+    # two constructors (workspace_service.create and the enrich handler),
+    # echoed back by the schema, rendered by the settings form, and read by
+    # nothing — `prompt_version` on the provenance envelope is a different
+    # value entirely, sourced from RAG_PROMPT_VERSION.
+    #
+    # arch40_step1 relaxes them to nullable, arch40_step2 archives and nulls
+    # them, and arch40_step3 drops them under an explicit authorisation. This
+    # model stops naming them at step 1, which is what makes step 3 safe.
+    #
+    # enable_streaming had no reader either. It survives because ARCH-40 gives
+    # it one: `ai_settings_resolution.resolve` reports it and the console shows
+    # it. Dropping a column the product is about to start honouring would be
+    # the wrong direction.
 
     enable_streaming: Mapped[bool] = mapped_column(
         Boolean,

@@ -409,16 +409,36 @@ def resolve_review(
             status_code=status.HTTP_404_NOT_FOUND, detail="Review item not found."
         )
 
+    # ARCH40-S1:assertion-resolve-delegates. Same reasoning as
+    # app/api/v1/verifications.py: the transition, the REVIEW_ITEM audit row
+    # and `trigger.review.cleared` come from the one service the review hub
+    # also calls, so a clause resolved here and a clause resolved in the hub
+    # leave identical histories.
+    #
+    # `_resume_execution` stays and is still called. It is what
+    # verify_arch33's "resolving a review re-enqueues automation.execute" gate
+    # reads, and the shared service's requeue uses the same idempotency key,
+    # so the second enqueue returns the first job rather than adding one.
+    from app.services.review import resolution as review_resolution
+
     try:
-        triage_service.resolve_assertion(
+        review_resolution.resolve_scoped(
             db,
-            evaluation=evaluation,
-            reviewer_verdict=payload.reviewer_verdict,
-            reviewer_user_id=context.user_id,
-            corrected_quote=payload.corrected_quote,
-            corrected_value=payload.corrected_value,
+            workspace_id=workspace_id,
+            kind="ASSERTION",
+            item_id=evaluation.id,
+            actor_user_id=context.user_id,
+            payload=review_resolution.ResolvePayload(
+                reviewer_verdict=payload.reviewer_verdict,
+                corrected_quote=payload.corrected_quote,
+                corrected_value=payload.corrected_value,
+            ),
         )
-    except ValueError as exc:
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except review_resolution.ReviewResolutionError as exc:
         raise _bad_request(exc) from exc
 
     _resume_execution(db, evaluation=evaluation)

@@ -1,15 +1,32 @@
 """
 SMTP Connection Configuration Utilities for FlowPilot AI.
+
+ARCH40-S1:smtp-delegates. `resolve_smtp_config` is now a thin read-through onto
+`app.services.email_resolution.resolve_email_identity`, which is the single
+answer to "what sender, reply-to and template does this email use?".
+
+Two defects are fixed by that delegation, both of them silent before ARCH-40:
+
+  * Every production caller passed `workspace_id` and let `organization_id`
+    default to None, so the organization tier of the old ladder was never
+    reached. `organization_email_settings` had a table, a service and a
+    settings page, and no effect on any email the product sent.
+  * `tenant_branding.sender_domain` was consulted by the branding console and
+    by nothing in the mail path, so a verified sender domain changed nothing.
+
+This function is kept rather than deleted because `outbox_dispatcher` and
+`notification_service` both want an `SMTPConfig` and nothing more. Callers who
+need the reply-to, the template namespace or the explanation trail call
+`resolve_email_identity` directly.
 """
 
 from __future__ import annotations
 
 import uuid
+
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.encryption import decrypt_password
-from app.crud.email_settings import get_email_settings
 from app.models.email_settings import EmailEncryption
 
 
@@ -33,30 +50,22 @@ def resolve_smtp_config(
     workspace_id: uuid.UUID | None,
     organization_id: uuid.UUID | None = None,
 ) -> SMTPConfig:
-    if workspace_id:
-        workspace_settings = get_email_settings(db, workspace_id=workspace_id)
-        if workspace_settings and workspace_settings.is_enabled:
-            password = decrypt_password(workspace_settings.encrypted_password)
-            return SMTPConfig(
-                smtp_host=workspace_settings.smtp_host,
-                smtp_port=workspace_settings.smtp_port,
-                smtp_username=workspace_settings.smtp_username,
-                smtp_password=password,
-                sender_name=workspace_settings.sender_name,
-                encryption=workspace_settings.encryption,
-            )
+    """The relay this workspace's mail leaves through.
 
-    if organization_id:
-        from app.services.organization_email_settings_service import (
-            resolve_organization_smtp_config,
-        )
+    `organization_id` stays optional for source compatibility, but the
+    resolver no longer needs it when a workspace override exists: the
+    override row carries `organization_id`, guaranteed coherent by the
+    composite foreign key onto `workspaces (id, organization_id)`, so the
+    organization tier is reachable even from a caller that only knows the
+    workspace. That is what makes the old defect unrepeatable rather than
+    merely fixed at two call sites.
+    """
+    from app.services.email_resolution import MessageKind, resolve_email_identity
 
-        organization_config = resolve_organization_smtp_config(
-            db, organization_id=organization_id
-        )
-        if organization_config is not None:
-            return organization_config
-
-    from app.core.platform_email import platform_smtp_config
-
-    return platform_smtp_config()
+    identity = resolve_email_identity(
+        db,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        message_kind=MessageKind.WORKSPACE,
+    )
+    return identity.smtp

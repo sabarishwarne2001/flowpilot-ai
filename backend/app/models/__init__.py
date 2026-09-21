@@ -261,6 +261,8 @@ from app.models.radar import (  # noqa: F401
 )
 # ARCH38-S1:models-ingestion. Registered here so Alembic --autogenerate sees
 # these tables; an unregistered model is a table autogenerate proposes to drop.
+from app.models.review import ReviewAssignment  # ARCH40-S1:models-import
+from app.models.workspace_email_override import WorkspaceEmailOverride
 from app.models.ingestion import (  # noqa: F401
     DocumentSchemaPreset,
     IngestionBatch,
@@ -611,6 +613,13 @@ __all__ = [
     "PartnerRevShareAgreement",
     "PartnerRevShareLedger",
     "PartnerSigningKey",
+    # ARCH40-S1:models-registered. Both tables must be imported before
+    # `Base.metadata` is used, or the composite foreign keys onto
+    # `workspaces (id, organization_id)` and
+    # `workspace_members (user_id, workspace_id)` resolve against a metadata
+    # that does not yet contain their targets.
+    "ReviewAssignment",
+    "WorkspaceEmailOverride",
     "RevShareBasisClass",
     "PAYABLE_BASIS_CLASSES",
     "REV_SHARE_BASIS_CLASS_VALUES",

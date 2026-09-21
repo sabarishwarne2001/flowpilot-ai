@@ -325,7 +325,15 @@ async def _send_email(
     if not delivery.target:
         raise ValueError("email delivery has no target address")
 
-    smtp = resolve_smtp_config(db, workspace_id=delivery.workspace_id)
+    # ARCH40-S1:dispatcher-org-tier. `organization_id` was omitted here and in
+    # notification_service, so the organization email settings tier was
+    # unreachable from every email the product actually sent. Passing it makes
+    # the ladder in `email_resolution` real rather than notional.
+    smtp = resolve_smtp_config(
+        db,
+        workspace_id=delivery.workspace_id,
+        organization_id=getattr(delivery, "organization_id", None),
+    )
     return await notification_dispatcher.send(
         action_type="email",
         settings=smtp,

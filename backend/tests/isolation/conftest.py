@@ -55,9 +55,7 @@ def make_workspace(db, organization, slug):
         presence_penalty=0.0,
         input_cost_per_1k_tokens=0.0,
         output_cost_per_1k_tokens=0.0,
-        system_prompt_version="v1",
-        prompt_version="v1",
-        enable_token_tracking=True,
+        # ARCH40-S1:test-fixture-contract. Dropped by arch40_step3.
         enable_streaming=True,
     )
     doc = DocumentSettings(

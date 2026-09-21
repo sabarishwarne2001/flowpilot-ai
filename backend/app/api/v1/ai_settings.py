@@ -13,6 +13,8 @@ from app.core.ai_models import AI_MODELS
 from app.schemas.ai_connection_test import AIConnectionTestResponse
 from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdate
 from app.schemas.available_providers import AvailableProvidersResponse
+from app.schemas.ai_settings_resolved import ResolvedAISettingsResponse
+from app.services import ai_settings_resolution
 from app.services.ai_settings_service import ai_settings_service
 
 logger = logging.getLogger("app.api.v1.ai_settings")
@@ -69,6 +71,47 @@ async def upsert_ai_settings(
     )
 
     return settings_obj
+
+
+@router.get(
+    "/resolved",
+    response_model=ResolvedAISettingsResponse,
+    summary="What actually serves this workspace, and what it costs",
+    response_description=(
+        "Read-only. The routed provider and model, where that decision came "
+        "from, the price-book rate in force, BYOK and spend-limit state."
+    ),
+)
+async def get_resolved_ai_settings(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> ResolvedAISettingsResponse:
+    """ARCH40-S1:ai-settings-resolved.
+
+    A workspace administrator could set `model` and have no way to learn that
+    an organization routing rule sent extraction somewhere else — the console
+    showed the value that lost. This endpoint shows the one that won, names
+    the owner, and says so in `warnings` when the two differ.
+
+    Nothing here is writable. `tenant_model_routes` owns routing for a routed
+    task and `ai_settings` owns the workspace default; that layering is
+    ARCH-22's and ARCH-40 does not change it. What changes is that the console
+    stops implying the loser is in force.
+    """
+    settings_obj = crud.get_ai_settings(db, workspace_id=context.workspace_id)
+    if settings_obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI settings not configured.",
+        )
+
+    resolved = ai_settings_resolution.resolve(
+        db,
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        ai_settings=settings_obj,
+    )
+    return ResolvedAISettingsResponse(**resolved.as_dict())
 
 
 @router.get(

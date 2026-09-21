@@ -364,9 +364,7 @@ def _ensure_workspace_defaults(db: Session, *, workspace_id: uuid.UUID):
             top_p=1.0,
             frequency_penalty=0.0,
             presence_penalty=0.0,
-            system_prompt_version="v1",
-            prompt_version="v1",
-            enable_token_tracking=True,
+            # ARCH40-S1:enrich-defaults. See app/models/ai_settings.py.
             enable_streaming=True,
             updated_by_user_id=None,
         ),

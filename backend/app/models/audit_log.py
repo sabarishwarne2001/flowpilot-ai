@@ -85,6 +85,17 @@ class AuditResourceType(str, PyEnum):
     INGESTION_BATCH = "INGESTION_BATCH"
     DOCUMENT_SCHEMA_PRESET = "DOCUMENT_SCHEMA_PRESET"
     RETENTION_HOLD = "RETENTION_HOLD"
+    # ARCH40-S1:audit-review. Added to the PostgreSQL type by
+    # arch40_step0_review_vocabulary; this enum must stay in step with it.
+    # verify_arch40.py gate D2 asserts both sides agree.
+    #
+    # REVIEW_ITEM is the resolution row, written by
+    # `review.resolution.resolve_item` and by nothing else, so the hub and the
+    # three source endpoints produce one audit shape rather than four.
+    REVIEW_ITEM = "REVIEW_ITEM"
+    REVIEW_ASSIGNMENT = "REVIEW_ASSIGNMENT"
+    AI_SETTINGS = "AI_SETTINGS"
+    WORKSPACE_EMAIL_OVERRIDE = "WORKSPACE_EMAIL_OVERRIDE"
 
 
 class AuditAction(str, PyEnum):

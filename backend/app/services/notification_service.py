@@ -97,7 +97,12 @@ class NotificationService:
             try:
                 if settings is None:
                     from app.core.smtp import resolve_smtp_config
-                    settings = resolve_smtp_config(db, workspace_id=workspace_id)
+                    # ARCH40-S1:notification-org-tier. See outbox_dispatcher.
+                    settings = resolve_smtp_config(
+                        db,
+                        workspace_id=workspace_id,
+                        organization_id=getattr(user, "organization_id", None),
+                    )
 
                 success = await self.dispatcher.send(
                     action_type="email",

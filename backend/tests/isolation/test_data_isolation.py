@@ -103,9 +103,7 @@ def test_settings_are_independent_per_workspace(
             "presence_penalty": 0.0,
             "input_cost_per_1k_tokens": 0.0,
             "output_cost_per_1k_tokens": 0.0,
-            "system_prompt_version": "v1",
-            "prompt_version": "v1",
-            "enable_token_tracking": True,
+            # ARCH40-S1:test-payload-contract.
             "enable_streaming": True
         },
     )

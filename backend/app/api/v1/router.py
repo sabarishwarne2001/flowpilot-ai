@@ -39,6 +39,7 @@ from app.api.v1 import (
     tenant_branding,
     upload,
     usage,
+    review,  # ARCH40-S1:review-import
     verifications,
     warehouse_sync,
     ingestion,
@@ -170,6 +171,13 @@ _SCOPED = (
     (upload.router,            "/upload",             "Upload"),
     (usage.workspace_router,   "/usage",              "Usage"),
     (verifications.router,     "/verifications",      "Verifications"),
+    # ARCH40-S1:review-router. Its own prefix, deliberately. `/work-items`
+    # carries `GET /{work_item_id}` and FastAPI matches in registration order,
+    # so a literal segment there has to be mounted ahead of the catch-all
+    # (ARCH-38's ingestion.work_item_router, pinned by gate B4 and mutant M8).
+    # A `/review` prefix has no catch-all to race with, so nothing here is
+    # order-dependent.
+    (review.router,            "/review",             "Review Hub"),
 )
 
 for _router, _suffix, _tag in _SCOPED:

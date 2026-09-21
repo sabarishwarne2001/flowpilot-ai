@@ -22,9 +22,10 @@ class AISettingsBase(BaseModel):
     top_p: float
     frequency_penalty: float
     presence_penalty: float
-    system_prompt_version: str
-    prompt_version: str
-    enable_token_tracking: bool
+    # ARCH40-S1:ai-settings-schema. The three dead fields are gone from the
+    # wire, which is what stops the console re-introducing them: gate F1
+    # asserts the form submits no field the backend schema lacks, checked
+    # against the generated OpenAPI types.
     enable_streaming: bool
 
 
