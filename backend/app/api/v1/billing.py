@@ -573,6 +573,12 @@ def create_portal_session(
             detail=str(exc),
             headers={"WWW-Authenticate": 'Bearer error="reauth_required"'},
         ) from exc
+    except portal_service.PortalGatewayMismatchError as exc:
+        # HARDENING-FINAL:billing-B
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except portal_service.CheckoutGatewayUnavailableError as exc:
+        # HARDENING-FINAL:billing-B. Same readiness answer checkout gives.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except account_service.BillingAccountNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

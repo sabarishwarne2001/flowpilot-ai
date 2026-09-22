@@ -1,11 +1,12 @@
 import { lazy, Suspense } from "react";
 import {
-  BrowserRouter,
   Navigate,
   Route,
   Routes,
   useParams,
   useSearchParams,
+  RouterProvider,
+  createBrowserRouter,
 } from "react-router-dom";
 import { Toaster } from "sonner";
 
@@ -149,6 +150,320 @@ const AssistantCanvasRoute = () => {
   );
 };
 
+/**
+ * HARDENING-FINAL:nav-guard. The route tree, served by a data router so
+ * `useBlocker` works: unsaved settings forms can now stop in-app navigation
+ * (sidebar, links), not only reloads. The nested <Routes> below are unchanged;
+ * they run as descendant routes of the single catch-all data route.
+ */
+function AppRoutes() {
+  return (
+    <SessionBootstrap>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          {/* Public routes */}
+          <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
+          <Route
+            path={ROUTES.FORGOT_PASSWORD}
+            element={<ForgotPassword />}
+          />
+          <Route
+            path={ROUTES.RESET_PASSWORD}
+            element={<ResetPassword />}
+          />
+          <Route
+            path={ROUTES.INVITATION_ACCEPT}
+            element={<InvitationAcceptPage />}
+          />
+          <Route
+            path="/confirm-email-change"
+            element={<ConfirmEmailChange />}
+          />
+
+          {/* Public auth pages */}
+          <Route
+            element={
+              <PublicRoute>
+                <AuthLayout />
+              </PublicRoute>
+            }
+          >
+            <Route
+              path={ROUTES.LOGIN}
+              element={<Login />}
+            />
+            <Route
+              path={ROUTES.REGISTER}
+              element={<Register />}
+            />
+          </Route>
+
+          {/*
+            ARCH-30 Tranche 1 (T4-F4). Federated login completion.
+
+            Outside PublicRoute AND outside PrivateRoute, deliberately.
+            PrivateRoute redirects a browser with no persisted session to
+            /login before the refresh cookie is ever exchanged, which is
+            the loop this route exists to break. PublicRoute redirects a
+            browser WITH a persisted session straight to the dashboard,
+            skipping the exchange and keeping the previous user's profile
+            in the store. Under AuthLayout so a tenant host shows its own
+            branding while the exchange runs.
+          */}
+          <Route element={<AuthLayout />}>
+            <Route
+              path={ROUTES.SSO_COMPLETE}
+              element={<SsoComplete />}
+            />
+          </Route>
+
+          {/* Authenticated, tenant-independent */}
+          <Route element={<PrivateRoute />}>
+            <Route
+              path={ROUTES.ONBOARDING}
+              element={<CreateOrganizationPage />}
+            />
+            <Route
+              path={ROUTES.NEW_ORGANIZATION}
+              element={<CreateOrganizationPage />}
+            />
+            <Route
+              path={ROUTES.WORKSPACES}
+              element={<WorkspacePicker />}
+            />
+            <Route
+              path={ROUTES.NO_ACCESS}
+              element={<NoAccess />}
+            />
+            <Route
+              path={ROUTE_PATTERNS.organizationNewWorkspace}
+              element={<CreateWorkspacePage />}
+            />
+
+            {/* Organization-scoped routes */}
+            <Route
+              path={ROUTE_PATTERNS.organizationShell}
+              element={<OrganizationGuard />}
+            >
+              <Route element={<OrganizationLayout />}>
+                <Route
+                  index
+                  element={
+                    <Navigate to={ROUTE_PATTERNS.organizationSettings} replace />
+                  }
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationSettings}
+                  element={<OrganizationGeneral />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationMembers}
+                  element={<OrganizationMembers />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationApiKeys}
+                  element={<OrganizationApiKeys />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationWebhooks}
+                  element={<OrganizationWebhooks />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationEmail}
+                  element={<OrganizationEmailSettings />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationNotifications}
+                  element={<OrganizationNotifications />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationBilling}
+                  element={<BillingHub />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationBillingReturn}
+                  element={<CheckoutReturn />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationIdentity}
+                  element={<IdentityAdminHub />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationAudit}
+                  element={<AuditExplorer />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationSLOs}
+                  element={<OrganizationSLOs />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationCompliance}
+                  element={<OrganizationCompliance />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationDeveloper}
+                  element={<OrganizationDeveloperPortal />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationBYOK}
+                  element={<OrganizationBYOK />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationAnalytics}
+                  element={<OrganizationAnalytics />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationBranding}
+                  element={<OrganizationBranding />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.organizationMarketplace}
+                  element={<MarketplaceCatalog />}
+                />
+                {/* ARCH-35. The page resolves the organization and the
+                    capability from the same hooks every gated page
+                    uses, so the gate cannot be forgotten at a call site. */}
+                <Route
+                  path={ROUTE_PATTERNS.organizationAutonomy}
+                  element={<AutonomySettings />}
+                />
+              </Route>
+            </Route>
+
+            <Route
+              path={ROUTE_PATTERNS.platformShell}
+              element={<SuperAdminGuard />}
+            >
+              {/*
+                ARCH-29 Tranche 1. A pathless layout route, so the guard
+                stays a guard and the chrome stays chrome. Every future
+                platform page mounts inside PlatformLayout and inherits the
+                cross-tenant scope band and the exit; a page added as a
+                sibling of this element would ship without both.
+              */}
+              <Route element={<PlatformLayout />}>
+                <Route
+                  path={ROUTE_PATTERNS.platformMargins}
+                  element={<AdminMarginsHub />}
+                />
+              </Route>
+            </Route>
+
+            <Route
+              path={ROUTE_PATTERNS.partnerPortalShell}
+              element={<PartnerPortal />}
+            />
+
+            {/* Legacy redirects */}
+            <Route path="/" element={<LegacyRouteRedirect />} />
+            <Route path="/work-items/*" element={<LegacyRouteRedirect />} />
+            <Route path="/assistant/*" element={<LegacyRouteRedirect />} />
+            <Route path="/automation/*" element={<LegacyRouteRedirect />} />
+            <Route
+              path="/notifications/*"
+              element={<LegacyRouteRedirect />}
+            />
+            <Route path="/settings/*" element={<LegacyRouteRedirect />} />
+            <Route path="/profile/*" element={<LegacyRouteRedirect />} />
+            <Route path="/account/*" element={<LegacyRouteRedirect />} />
+
+            {/* Workspace-scoped shell */}
+            <Route
+              path={ROUTE_PATTERNS.workspaceShell}
+              element={<TenantGuard />}
+            >
+              <Route element={<DashboardLayout />}>
+                <Route
+                  index
+                  element={<Dashboard />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceWorkItems}
+                  element={<WorkItems />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceWorkItemDetails}
+                  element={<WorkItemDetails />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceAssistant}
+                  element={<Assistant />}
+                />
+                <Route
+                  path={`${ROUTE_PATTERNS.workspaceAssistant}/c/:conversationId`}
+                  element={<AssistantCanvasRoute />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceAutomation}
+                  element={<Automation />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceAutomationTimeline}
+                  element={<ExecutionTimeline />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceVerification}
+                  element={<ReviewHub />}
+                />
+                {/* ARCH-36. ARCH-33's queue, routed for the first time. */}
+                <Route
+                  path={ROUTE_PATTERNS.workspaceAssertions}
+                  element={<AssertionReviewPage />}
+                />
+                {/* ARCH-31. The policies route is declared
+                    BEFORE the :caseId route: react-router would
+                    otherwise match "policies" as a case id and
+                    render the comparison grid against a case
+                    that does not exist. */}
+                <Route
+                  path={ROUTE_PATTERNS.workspaceRedaction}
+                  element={<RedactionStudio />}
+                />
+                {/* ARCH-34. The page takes no props: it resolves the
+                    workspace and the capability from the same two hooks
+                    every other capability-gated page uses, so the gate
+                    cannot be forgotten at a call site. */}
+                <Route
+                  path={ROUTE_PATTERNS.workspaceRadar}
+                  element={<ForensicAuditRadar />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceProcurement}
+                  element={<ProcurementCaseQueue />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceProcurementPolicies}
+                  element={<TolerancePolicyEditor />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceProcurementCase}
+                  element={<ThreeWayComparison />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceNotifications}
+                  element={<Notifications />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceSettings}
+                  element={<Settings />}
+                />
+              </Route>
+            </Route>
+          </Route>
+
+          {/* 404 */}
+          <Route
+            path={ROUTES.NOT_FOUND}
+            element={<NotFound />}
+          />
+        </Routes>
+      </Suspense>
+    </SessionBootstrap>
+  );
+}
+
+const router = createBrowserRouter([{ path: "*", element: <AppRoutes /> }]);
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -160,309 +475,7 @@ export default function App() {
       />
       <StepUpReauthModal />
 
-      <BrowserRouter>
-        <SessionBootstrap>
-          <Suspense fallback={<LoadingScreen />}>
-            <Routes>
-              {/* Public routes */}
-              <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
-              <Route
-                path={ROUTES.FORGOT_PASSWORD}
-                element={<ForgotPassword />}
-              />
-              <Route
-                path={ROUTES.RESET_PASSWORD}
-                element={<ResetPassword />}
-              />
-              <Route
-                path={ROUTES.INVITATION_ACCEPT}
-                element={<InvitationAcceptPage />}
-              />
-              <Route
-                path="/confirm-email-change"
-                element={<ConfirmEmailChange />}
-              />
-
-              {/* Public auth pages */}
-              <Route
-                element={
-                  <PublicRoute>
-                    <AuthLayout />
-                  </PublicRoute>
-                }
-              >
-                <Route
-                  path={ROUTES.LOGIN}
-                  element={<Login />}
-                />
-                <Route
-                  path={ROUTES.REGISTER}
-                  element={<Register />}
-                />
-              </Route>
-
-              {/*
-                ARCH-30 Tranche 1 (T4-F4). Federated login completion.
-
-                Outside PublicRoute AND outside PrivateRoute, deliberately.
-                PrivateRoute redirects a browser with no persisted session to
-                /login before the refresh cookie is ever exchanged, which is
-                the loop this route exists to break. PublicRoute redirects a
-                browser WITH a persisted session straight to the dashboard,
-                skipping the exchange and keeping the previous user's profile
-                in the store. Under AuthLayout so a tenant host shows its own
-                branding while the exchange runs.
-              */}
-              <Route element={<AuthLayout />}>
-                <Route
-                  path={ROUTES.SSO_COMPLETE}
-                  element={<SsoComplete />}
-                />
-              </Route>
-
-              {/* Authenticated, tenant-independent */}
-              <Route element={<PrivateRoute />}>
-                <Route
-                  path={ROUTES.ONBOARDING}
-                  element={<CreateOrganizationPage />}
-                />
-                <Route
-                  path={ROUTES.NEW_ORGANIZATION}
-                  element={<CreateOrganizationPage />}
-                />
-                <Route
-                  path={ROUTES.WORKSPACES}
-                  element={<WorkspacePicker />}
-                />
-                <Route
-                  path={ROUTES.NO_ACCESS}
-                  element={<NoAccess />}
-                />
-                <Route
-                  path={ROUTE_PATTERNS.organizationNewWorkspace}
-                  element={<CreateWorkspacePage />}
-                />
-
-                {/* Organization-scoped routes */}
-                <Route
-                  path={ROUTE_PATTERNS.organizationShell}
-                  element={<OrganizationGuard />}
-                >
-                  <Route element={<OrganizationLayout />}>
-                    <Route
-                      index
-                      element={
-                        <Navigate to={ROUTE_PATTERNS.organizationSettings} replace />
-                      }
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationSettings}
-                      element={<OrganizationGeneral />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationMembers}
-                      element={<OrganizationMembers />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationApiKeys}
-                      element={<OrganizationApiKeys />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationWebhooks}
-                      element={<OrganizationWebhooks />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationEmail}
-                      element={<OrganizationEmailSettings />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationNotifications}
-                      element={<OrganizationNotifications />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationBilling}
-                      element={<BillingHub />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationBillingReturn}
-                      element={<CheckoutReturn />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationIdentity}
-                      element={<IdentityAdminHub />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationAudit}
-                      element={<AuditExplorer />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationSLOs}
-                      element={<OrganizationSLOs />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationCompliance}
-                      element={<OrganizationCompliance />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationDeveloper}
-                      element={<OrganizationDeveloperPortal />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationBYOK}
-                      element={<OrganizationBYOK />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationAnalytics}
-                      element={<OrganizationAnalytics />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationBranding}
-                      element={<OrganizationBranding />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.organizationMarketplace}
-                      element={<MarketplaceCatalog />}
-                    />
-                    {/* ARCH-35. The page resolves the organization and the
-                        capability from the same hooks every gated page
-                        uses, so the gate cannot be forgotten at a call site. */}
-                    <Route
-                      path={ROUTE_PATTERNS.organizationAutonomy}
-                      element={<AutonomySettings />}
-                    />
-                  </Route>
-                </Route>
-
-                <Route
-                  path={ROUTE_PATTERNS.platformShell}
-                  element={<SuperAdminGuard />}
-                >
-                  {/*
-                    ARCH-29 Tranche 1. A pathless layout route, so the guard
-                    stays a guard and the chrome stays chrome. Every future
-                    platform page mounts inside PlatformLayout and inherits the
-                    cross-tenant scope band and the exit; a page added as a
-                    sibling of this element would ship without both.
-                  */}
-                  <Route element={<PlatformLayout />}>
-                    <Route
-                      path={ROUTE_PATTERNS.platformMargins}
-                      element={<AdminMarginsHub />}
-                    />
-                  </Route>
-                </Route>
-
-                <Route
-                  path={ROUTE_PATTERNS.partnerPortalShell}
-                  element={<PartnerPortal />}
-                />
-
-                {/* Legacy redirects */}
-                <Route path="/" element={<LegacyRouteRedirect />} />
-                <Route path="/work-items/*" element={<LegacyRouteRedirect />} />
-                <Route path="/assistant/*" element={<LegacyRouteRedirect />} />
-                <Route path="/automation/*" element={<LegacyRouteRedirect />} />
-                <Route
-                  path="/notifications/*"
-                  element={<LegacyRouteRedirect />}
-                />
-                <Route path="/settings/*" element={<LegacyRouteRedirect />} />
-                <Route path="/profile/*" element={<LegacyRouteRedirect />} />
-                <Route path="/account/*" element={<LegacyRouteRedirect />} />
-
-                {/* Workspace-scoped shell */}
-                <Route
-                  path={ROUTE_PATTERNS.workspaceShell}
-                  element={<TenantGuard />}
-                >
-                  <Route element={<DashboardLayout />}>
-                    <Route
-                      index
-                      element={<Dashboard />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceWorkItems}
-                      element={<WorkItems />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceWorkItemDetails}
-                      element={<WorkItemDetails />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceAssistant}
-                      element={<Assistant />}
-                    />
-                    <Route
-                      path={`${ROUTE_PATTERNS.workspaceAssistant}/c/:conversationId`}
-                      element={<AssistantCanvasRoute />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceAutomation}
-                      element={<Automation />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceAutomationTimeline}
-                      element={<ExecutionTimeline />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceVerification}
-                      element={<ReviewHub />}
-                    />
-                    {/* ARCH-36. ARCH-33's queue, routed for the first time. */}
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceAssertions}
-                      element={<AssertionReviewPage />}
-                    />
-                    {/* ARCH-31. The policies route is declared
-                        BEFORE the :caseId route: react-router would
-                        otherwise match "policies" as a case id and
-                        render the comparison grid against a case
-                        that does not exist. */}
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceRedaction}
-                      element={<RedactionStudio />}
-                    />
-                    {/* ARCH-34. The page takes no props: it resolves the
-                        workspace and the capability from the same two hooks
-                        every other capability-gated page uses, so the gate
-                        cannot be forgotten at a call site. */}
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceRadar}
-                      element={<ForensicAuditRadar />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceProcurement}
-                      element={<ProcurementCaseQueue />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceProcurementPolicies}
-                      element={<TolerancePolicyEditor />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceProcurementCase}
-                      element={<ThreeWayComparison />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceNotifications}
-                      element={<Notifications />}
-                    />
-                    <Route
-                      path={ROUTE_PATTERNS.workspaceSettings}
-                      element={<Settings />}
-                    />
-                  </Route>
-                </Route>
-              </Route>
-
-              {/* 404 */}
-              <Route
-                path={ROUTES.NOT_FOUND}
-                element={<NotFound />}
-              />
-            </Routes>
-          </Suspense>
-        </SessionBootstrap>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ErrorBoundary>
   );
 }

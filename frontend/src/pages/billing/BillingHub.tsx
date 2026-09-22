@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 
@@ -14,6 +14,7 @@ import {
 } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { useSessionGuardStore } from "@/store/useSessionGuardStore";
 
 const BILLING_ROLES = new Set(["OWNER", "BILLING"]);
 
@@ -32,13 +33,40 @@ export const BillingHub: React.FC = () => {
     staleTime: 30_000,
   });
 
+  // HARDENING-FINAL:billing-A. A stale session answers the portal request
+  // with a step-up challenge. The client interceptor opens the password
+  // modal but registers no replay, so the mutation failed, the red banner
+  // showed alongside the modal, and confirming the password did nothing.
+  // Now the challenge carries a replay of this request, the banner waits,
+  // and a successful confirmation re-opens the portal by itself.
+  const replayRef = useRef<() => void>(() => undefined);
+  const [awaitingReauth, setAwaitingReauth] = useState(false);
+  const stepUpPending = useSessionGuardStore((state) => state.stepUp !== null);
+  useEffect(() => {
+    if (!stepUpPending) {
+      setAwaitingReauth(false);
+    }
+  }, [stepUpPending]);
   const portal = useMutation({
     mutationFn: () =>
       createPortalSession(organizationId, { return_url: window.location.href }),
     onSuccess: (session) => {
       window.location.assign(session.url);
     },
+    onError: () => {
+      const guard = useSessionGuardStore.getState();
+      if (guard.stepUp !== null) {
+        setAwaitingReauth(true);
+        useSessionGuardStore.setState({
+          stepUp: { ...guard.stepUp, retry: () => replayRef.current() },
+        });
+      }
+    },
   });
+  replayRef.current = () => {
+    setAwaitingReauth(false);
+    portal.mutate();
+  };
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -70,7 +98,7 @@ export const BillingHub: React.FC = () => {
           )}
         </header>
 
-        {portal.isError && (
+        {portal.isError && !awaitingReauth && !stepUpPending && (
           <p role="alert" className="text-sm text-destructive">
             The billing portal couldn&apos;t be opened. If you were asked to
             confirm your password, try again.

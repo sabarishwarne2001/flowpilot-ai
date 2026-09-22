@@ -207,6 +207,30 @@ def create_portal_session(
         db, organization_id=organization_id
     )
 
+    # HARDENING-FINAL:billing-B. The portal followed `account.gateway` (the
+    # vendor that created the customer), so an organization created while the
+    # deployment used Stripe kept opening billing.stripe.com after the
+    # operator switched BILLING_GATEWAY to DODO — with no sign anything was
+    # off. The portal now follows the configured gateway strictly:
+    #   * the configured gateway must be ready (DODO_API_KEY etc.), else a
+    #     clean 503 naming what is missing — the same check checkout makes;
+    #   * an account held at a different vendor is a 409 that says so, unless
+    #     the operator opts in to legacy routing for a planned migration
+    #     (BILLING_PORTAL_ALLOW_LEGACY_GATEWAY=true).
+    active = str(payment_gateway.active_gateway_name() or "").upper()
+    held_at = str(account.gateway or "").upper()
+    not_ready = gateway_readiness(active)
+    if not_ready:
+        raise CheckoutGatewayUnavailableError(not_ready, gateway=active)
+    if held_at != active and not getattr(settings, "BILLING_PORTAL_ALLOW_LEGACY_GATEWAY", False):
+        raise PortalGatewayMismatchError(
+            f"This organization's billing account is held at {held_at.title()}, but "
+            f"this deployment bills through {active.title()}. Its payment methods "
+            f"cannot be managed from {active.title()} until the account is moved. "
+            "Ask your administrator to migrate the billing account (or, during a "
+            "planned migration, set BILLING_PORTAL_ALLOW_LEGACY_GATEWAY=true)."
+        )
+
     if account.gateway != "STRIPE":
         # ARCH-30 Tranche 2 (D-10). The portal belongs to whichever vendor
         # holds the customer, not to whichever gateway is configured today.
@@ -377,6 +401,10 @@ class PaidSubscriptionActiveError(RuntimeError):
 
 
 _DEVELOPER_ENVIRONMENTS = frozenset({"development", "test", "local"})
+
+
+class PortalGatewayMismatchError(Exception):
+    """HARDENING-FINAL:billing-B. The billing account lives at another vendor."""
 
 
 def gateway_readiness(gateway_name: Optional[str] = None) -> Optional[str]:

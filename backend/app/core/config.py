@@ -483,6 +483,9 @@ class Settings(BaseSettings):
     # live job before the sweep fails it. Longer than the slowest legitimate
     # OCR run plus retry backoff.
     PIPELINE_STUCK_AFTER_MINUTES: int = 90
+    # HARDENING-FINAL:billing-B. Off: the customer portal follows
+    # BILLING_GATEWAY strictly. On only during a planned gateway migration.
+    BILLING_PORTAL_ALLOW_LEGACY_GATEWAY: bool = False
     LLM_MAX_ATTEMPTS: int = 3
     LLM_BACKOFF_BASE_SECONDS: float = 0.5
     LLM_BACKOFF_CAP_SECONDS: float = 4.0
