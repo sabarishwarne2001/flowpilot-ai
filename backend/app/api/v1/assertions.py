@@ -55,7 +55,7 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -550,3 +550,120 @@ def list_learned_phrases(
 
 
 __all__ = ["router"]
+
+
+# ===========================================================================
+# HARDENING-T3:D21 — clause checks authored from the console
+# ===========================================================================
+
+from pydantic import BaseModel as _BaseModel, Field as _Field  # noqa: E402
+
+
+class ClauseCheckCreate(_BaseModel):
+    name: str = _Field(min_length=1, max_length=120)
+
+
+class ClauseCheckUpdate(_BaseModel):
+    is_active: bool
+
+
+class ClauseCheckResponse(_BaseModel):
+    rule_id: uuid.UUID
+    name: str
+    is_active: bool
+    node_key: str
+    definition: Optional[AssertionDefinitionResponse] = None
+
+
+def _clause_payload(check) -> ClauseCheckResponse:  # type: ignore[no-untyped-def]
+    return ClauseCheckResponse(
+        rule_id=check.rule.id,
+        name=check.rule.name,
+        is_active=bool(check.rule.is_active),
+        node_key=check.node.node_key,
+        definition=_definition_payload(check.definition) if check.definition is not None else None,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/assertions/clause-checks",
+    response_model=list[ClauseCheckResponse],
+    summary="List clause checks",
+)
+def list_clause_checks(
+    db: Session = Depends(get_db),
+    context: TenantContext = Depends(RequireViewer),
+) -> Any:
+    from app.services.assertions import clause_check_service as svc
+
+    _gate(db, context, "assertion.clause_check.list")
+    return [_clause_payload(c) for c in svc.list_for_workspace(db, workspace_id=context.workspace_id)]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/assertions/clause-checks",
+    response_model=ClauseCheckResponse,
+    status_code=201,
+    summary="Create a clause check",
+)
+def create_clause_check(
+    payload: ClauseCheckCreate,
+    db: Session = Depends(get_db),
+    context: TenantContext = Depends(RequireAdmin),
+) -> Any:
+    from app.services.assertions import clause_check_service as svc
+
+    _gate(db, context, "assertion.clause_check.create")
+    try:
+        check = svc.create(db, workspace_id=context.workspace_id, created_by_user_id=context.user_id, name=payload.name)
+    except svc.ClauseCheckError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return _clause_payload(check)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/assertions/clause-checks/{rule_id}",
+    response_model=ClauseCheckResponse,
+    summary="Turn a clause check on or off",
+)
+def update_clause_check(
+    rule_id: uuid.UUID,
+    payload: ClauseCheckUpdate,
+    db: Session = Depends(get_db),
+    context: TenantContext = Depends(RequireAdmin),
+) -> Any:
+    from app.services.assertions import clause_check_service as svc
+
+    _gate(db, context, "assertion.clause_check.update")
+    try:
+        check = svc.set_active(db, workspace_id=context.workspace_id, rule_id=rule_id, is_active=payload.is_active)
+    except svc.ClauseCheckError as exc:
+        status_code = 404 if "does not exist" in str(exc) else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    db.commit()
+    return _clause_payload(check)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/assertions/clause-checks/{rule_id}",
+    status_code=204,
+    response_model=None,
+    response_class=Response,
+    summary="Delete a clause check",
+)
+def delete_clause_check(
+    rule_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: TenantContext = Depends(RequireAdmin),
+) -> Response:
+    from app.services.assertions import clause_check_service as svc
+
+    _gate(db, context, "assertion.clause_check.delete")
+    try:
+        svc.delete(db, workspace_id=context.workspace_id, rule_id=rule_id)
+    except svc.ClauseCheckError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    db.commit()
+    return Response(status_code=204)
+

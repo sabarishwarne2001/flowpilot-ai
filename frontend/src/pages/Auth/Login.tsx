@@ -40,7 +40,8 @@ import { useAuthStore } from "@/store/useAuthStore";
  *      already filled in.
  */
 
-type SignInMode = "password" | "sso";
+// HARDENING-T3: "identify" is the email-first step (see handleIdentifySubmit).
+type SignInMode = "identify" | "password" | "sso";
 
 const INPUT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-10 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -88,7 +89,7 @@ export const Login: React.FC = () => {
       : `${ROUTES.WORKSPACES}?landing=1`;
   })();
 
-  const [mode, setMode] = useState<SignInMode>("password");
+  const [mode, setMode] = useState<SignInMode>("identify");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +151,42 @@ export const Login: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // HARDENING-T3: email-first sign-in. Discovery runs once, on Continue —
+  // never per keystroke — so it discloses nothing the explicit SSO button did
+  // not already: an SSO-bound domain goes to its IdP, anything else (or a
+  // discovery failure) continues to the password step with the email filled.
+  const handleIdentifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) {
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    const domain = emailDomain(email);
+    if (!domain) {
+      setError("Enter your full email address, for example alex@acme.com.");
+      return;
+    }
+    setIsLoading(true);
+    let leavingPage = false;
+    try {
+      const discovery = await discoverSso(domain);
+      if (discovery.sso_enabled) {
+        leavingPage = true;
+        window.location.assign(ssoStartHref(domain, redirectTo));
+        return;
+      }
+      setMode("password");
+    } catch {
+      setNotice("We couldn't check single sign-on for that address. Sign in with your password.");
+      setMode("password");
+    } finally {
+      if (!leavingPage) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -252,6 +289,30 @@ export const Login: React.FC = () => {
       </div>
     </div>
   );
+
+  if (mode === "identify") {
+    return (
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="flex flex-col space-y-2 text-center select-none">
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+          <p className="text-sm text-muted-foreground">
+            Enter your email. We&apos;ll send you to single sign-on if your company uses it.
+          </p>
+        </div>
+        <form onSubmit={handleIdentifySubmit} className="space-y-4">
+          {feedback}
+          {emailField}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          >
+            {isLoading ? "Checking…" : "Continue"}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   if (mode === "sso") {
     return (

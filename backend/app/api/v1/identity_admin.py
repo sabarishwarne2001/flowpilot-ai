@@ -60,7 +60,7 @@ def list_domains(organization_id: str,
     return [{
         "id": str(r.id),
         "domain": r.domain,
-        "status": str(r.status),
+        "status": getattr(r.status, "value", r.status),
         "is_sso_binding": r.is_sso_binding,
         "expected_txt_record": domain_service.expected_record(r.challenge_token),
         "challenge_expires_at": r.challenge_expires_at,
@@ -84,7 +84,7 @@ def claim_domain(organization_id: str, payload: dict = Body(...),
     return {
         "id": str(row.id),
         "domain": row.domain,
-        "status": str(row.status),
+        "status": getattr(row.status, "value", row.status),
         "expected_txt_record": domain_service.expected_record(row.challenge_token),
         "instructions": (
             f"Publish a TXT record at {row.domain} (or _flowpilot.{row.domain}) "
@@ -107,7 +107,7 @@ def verify_domain(organization_id: str, domain_id: str,
                                            principal=_principal(user))
     except IdentityError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
-    return {"id": str(row.id), "domain": row.domain, "status": str(row.status),
+    return {"id": str(row.id), "domain": row.domain, "status": getattr(row.status, "value", row.status),
             "first_verified_at": row.first_verified_at}
 
 
@@ -137,7 +137,7 @@ def list_configs(organization_id: str,
               .filter(EnterpriseIdpConfig.organization_id == organization_id).all())
     return [{
         "id": str(r.id),
-        "protocol": str(r.protocol),
+        "protocol": getattr(r.protocol, "value", r.protocol),
         "display_name": r.display_name,
         "is_active": r.is_active,
         "idp_entity_id": r.idp_entity_id,

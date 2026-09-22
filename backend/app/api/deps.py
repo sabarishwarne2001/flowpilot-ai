@@ -298,7 +298,7 @@ def _assert_sso_compliance(
     role_str = (
         membership.role.value
         if hasattr(membership.role, "value")
-        else str(membership.role)
+        else getattr(membership.role, "value", membership.role)
     )
 
     if not session_policy_service.sso_required_for(policy, org_role=role_str):

@@ -278,7 +278,7 @@ def get_billing_access(
             position.next_step.value if position.next_step else None
         ),
         subscription_status=(
-            (live.status.value if hasattr(live.status, "value") else str(live.status))
+            (live.status.value if hasattr(live.status, "value") else getattr(live.status, "value", live.status))
             if live
             else None
         ),
@@ -320,7 +320,7 @@ def get_billing_access_summary(
     )
 
     status_value = (
-        (live.status.value if hasattr(live.status, "value") else str(live.status))
+        (live.status.value if hasattr(live.status, "value") else getattr(live.status, "value", live.status))
         if live
         else None
     )

@@ -158,7 +158,7 @@ async def list_execution_nodes(
             node_key=row.node_key,
             node_type=row.node_type,
             sequence=row.sequence,
-            status=getattr(row.status, "value", str(row.status)),
+            status=getattr(row.status, "value", getattr(row.status, "value", row.status)),
             started_at=row.started_at,
             completed_at=row.completed_at,
             error=row.error,
@@ -223,7 +223,7 @@ def _execution_view(row: AutomationExecution) -> AutomationExecutionResponse:
         duration_ms = max(int(delta.total_seconds() * 1000), 0)
 
     status_value = (
-        row.status.value if hasattr(row.status, "value") else str(row.status)
+        row.status.value if hasattr(row.status, "value") else getattr(row.status, "value", row.status)
     )
 
     rule_name: Optional[str] = None

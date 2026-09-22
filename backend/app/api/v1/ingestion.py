@@ -221,7 +221,13 @@ async def complete_upload_session(
             len(payload),
             declared_mime=session.mime_type,
             original_filename=session.filename,
-            allowed_mimes=settings.ALLOWED_MIME_TYPES,
+            # ARCH40-S2:d13-session-enforcement (hardening tier 3). Upload
+            # sessions obey the workspace file-type setting, which can only
+            # narrow the platform list. This sentinel marks the file as
+            # superseded for apply_arch38.py's idempotency check.
+            allowed_mimes=file_validation_service.workspace_allowed_mimes(
+                db, context.workspace_id, settings.ALLOWED_MIME_TYPES
+            ),
             max_pages=settings.MAX_DOCUMENT_PAGES,
             scrub_metadata=settings.SCRUB_UPLOAD_METADATA,
         )

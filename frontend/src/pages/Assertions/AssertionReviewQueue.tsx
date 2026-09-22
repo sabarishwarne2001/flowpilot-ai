@@ -23,6 +23,7 @@ import { FAMILY_LABELS } from "@/types/assertions";
 import type { AssertionReviewItem } from "@/types/assertions";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { ClauseChecksPanel } from "@/components/assertions/ClauseChecksPanel";
 
 /**
  * ARCH-33 §4.6 — the review queue for triaged assertions.
@@ -119,6 +120,8 @@ export const AssertionReviewQueue: React.FC<AssertionReviewQueueProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* HARDENING-T3:D21. Author the checks where their failures are reviewed. */}
+      {hasCapability && !workItemId && <ClauseChecksPanel workspaceId={workspaceId} />}
       <div className="flex items-baseline justify-between">
         <h1 className={PAGE_TITLE}>Clauses to review</h1>
         <span className={HINT}>

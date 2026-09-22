@@ -129,7 +129,12 @@ def handle_batch_expand_archive(payload: dict[str, Any]) -> dict[str, Any]:
                 len(entry.data),
                 declared_mime=entry.mime_type,
                 original_filename=entry.name,
-                allowed_mimes=settings.ALLOWED_MIME_TYPES,
+                # ARCH40-S2:d13-batch-enforcement (hardening tier 3). Every
+                # member of a batch archive obeys the workspace file-type
+                # setting, exactly as a single upload does.
+                allowed_mimes=file_validation_service.workspace_allowed_mimes(
+                    db, workspace_id, settings.ALLOWED_MIME_TYPES
+                ),
                 max_pages=settings.MAX_DOCUMENT_PAGES,
                 scrub_metadata=settings.SCRUB_UPLOAD_METADATA,
             )

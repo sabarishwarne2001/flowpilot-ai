@@ -153,7 +153,9 @@ def _sha256(text: str) -> str:
 #:
 #: A file is superseded only when it carries a later milestone's sentinel.
 #: Arbitrary local edits still fail, which is the property the gate exists for.
-SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH40-S1:",)
+#: ARCH40-S2 (hardening tier 3): D13 file-type enforcement edits
+#: app/api/v1/ingestion.py and app/workers/handlers/ingestion.py.
+SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH40-S1:", "ARCH40-S2:")
 
 
 def _is_superseded(text: str) -> bool:
