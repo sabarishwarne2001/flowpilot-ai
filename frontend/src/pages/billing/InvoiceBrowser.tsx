@@ -16,6 +16,8 @@ import {
 } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
 import { formatMicros, parseQuantity } from "@/types/billing";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 export interface InvoiceBrowserProps {
   readonly organizationId: string;
@@ -32,6 +34,17 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
     enabled: Boolean(organizationId),
     staleTime: 5 * 60 * 1000,
   });
+
+  // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
+  if (listQuery.isError) {
+    return (
+      <ErrorState
+        title="Invoices could not be loaded"
+        description={errorMessage(listQuery.error, "The server did not return invoices. Check your connection and try again.")}
+        onRetry={() => void listQuery.refetch()}
+      />
+    );
+  }
 
   if (listQuery.isLoading) {
     return (

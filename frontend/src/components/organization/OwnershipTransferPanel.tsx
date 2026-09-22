@@ -10,6 +10,7 @@ import {
 } from "@/services/api/ownership";
 import { ownershipKeys } from "@/services/api/queryKeys";
 import type { OrganizationMember } from "@/types/tenancy";
+import { errorMessage } from "@/services/api/errors";
 
 interface Props {
   readonly organizationId: string;
@@ -18,9 +19,7 @@ interface Props {
 }
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  return typeof detail === "string" ? detail : fallback;
+  return errorMessage(error, fallback);
 }
 
 export const OwnershipTransferPanel: React.FC<Props> = ({

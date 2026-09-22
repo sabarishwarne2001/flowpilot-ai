@@ -1,4 +1,4 @@
-﻿"""ARCH-21 §4.4 — the public gateway's request and response contracts."""
+"""ARCH-21 §4.4 — the public gateway's request and response contracts."""
 
 from __future__ import annotations
 

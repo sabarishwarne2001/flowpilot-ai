@@ -1,4 +1,4 @@
-﻿"""ARCH-14 Step 2 — the rollup engine."""
+"""ARCH-14 Step 2 — the rollup engine."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Request and response schemas for the ARCH-04 invitation lifecycle.
 
 Two grant shapes exist deliberately (§D7.5): WorkspaceGrantResponse carries a

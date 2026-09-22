@@ -19,6 +19,8 @@ import {
 import type { CaseStatus, CaseSummary } from "@/types/procurement";
 import { statusTone } from "@/types/procurement";
 import { formatTimestamp } from "@/utils/displayTime";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const RECONCILIATION_CAPABILITY = "capability.reconciliation";
 
@@ -129,7 +131,13 @@ export const CaseQueue: React.FC = () => {
         </label>
       </div>
 
-      {query.isLoading ? (
+      {query.isError ? (
+        <ErrorState
+          title="Cases could not be loaded"
+          description={errorMessage(query.error, "The server did not return cases. Check your connection and try again.")}
+          onRetry={() => void query.refetch()}
+        />
+      ) : query.isLoading ? (
         <p className={HINT}>Loading cases…</p>
       ) : cases.length === 0 ? (
         <section className={`${SURFACE} p-6`}>

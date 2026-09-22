@@ -160,6 +160,12 @@
   @apply bg-muted-foreground/40;
 }
 
+/* HARDENING-T1:D8. Chromium 121+ ignores every ::-webkit-scrollbar rule once
+   the standard scrollbar-width/scrollbar-color properties are set, and this
+   rule set scrollbar-width on every element — so the custom thumb above never
+   rendered and users saw the OS default. scrollbar-color gives Chromium and
+   Firefox the themed thumb; the webkit rules above still serve Safari. */
 * {
   scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
 }

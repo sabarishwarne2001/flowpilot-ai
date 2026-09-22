@@ -180,6 +180,12 @@ def _sweep_targets(db: Any, *, workspace_id: Optional[uuid.UUID]) -> list[Docume
     return list(db.execute(statement).scalars().all())
 
 
+def _reconciliation_enabled(db: Any, organization_id: uuid.UUID) -> bool:
+    from app.services.post_enrichment import _reconciliation_enabled as check
+
+    return check(db, organization_id)
+
+
 def handle_procurement_score(payload: dict[str, Any]) -> dict[str, Any]:
     """Score one document set, or sweep a workspace, or sweep everything."""
     payload = payload or {}
@@ -217,9 +223,32 @@ def handle_procurement_score(payload: dict[str, Any]) -> dict[str, Any]:
         forced_receipt = payload.get("receipt_work_item_id")
         actor = payload.get("actor_id")
 
+        # HARDENING-T1:D18. With roles now written for every tenant, the
+        # five-minute sweep would otherwise score (and meter) invoices for
+        # organizations whose plan lacks reconciliation.
+        entitled: dict[uuid.UUID, bool] = {}
+
         for role_row in targets:
+            org_id = role_row.organization_id
+            if org_id not in entitled:
+                entitled[org_id] = _reconciliation_enabled(db, org_id)
+            if not entitled[org_id]:
+                skipped.append(
+                    {
+                        "work_item_id": str(role_row.work_item_id),
+                        "skipped": "capability_absent",
+                    }
+                )
+                continue
             try:
-                with db.begin():
+                # HARDENING-T1:D30. Was `with db.begin():`. Reading the role
+                # rows above autobegins the session's transaction, so
+                # SQLAlchemy 2.0 refused every begin() with "A transaction is
+                # already begun" and every invoice was recorded as skipped:
+                # the handler had never scored anything. A savepoint per
+                # invoice keeps the one-bad-document-does-not-stop-the-sweep
+                # property; the commit makes each case durable on its own.
+                with db.begin_nested():
                     result = _score_one(
                         db,
                         role_row=role_row,
@@ -231,6 +260,7 @@ def handle_procurement_score(payload: dict[str, Any]) -> dict[str, Any]:
                             uuid.UUID(str(forced_receipt)) if forced_receipt else None
                         ),
                     )
+                db.commit()
                 if result.get("skipped"):
                     skipped.append(result)
                 else:

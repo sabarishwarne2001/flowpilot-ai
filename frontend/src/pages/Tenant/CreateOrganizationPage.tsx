@@ -27,6 +27,7 @@ import {
   checkOrganizationSlug,
   createOrganization,
 } from "@/services/api/organization";
+import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const useDebouncedValue = <T,>(value: T, delayMs: number): T => {
@@ -49,6 +50,19 @@ export const CreateOrganizationPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   const userId = useAuthStore((store) => store.user?.id ?? null);
+  const beginSignOut = useAuthStore((store) => store.beginSignOut);
+  const clearAuth = useAuthStore((store) => store.clearAuth);
+  // Same sequence as DashboardLayout.handleLogout: flag first, revoke, then
+  // clear locally even if the network call fails.
+  const handleSignOut = async (): Promise<void> => {
+    beginSignOut();
+    try {
+      await authApi.logoutRequest();
+    } finally {
+      clearAuth();
+      navigate(ROUTES.LOGIN, { replace: true });
+    }
+  };
   const { state } = useTenant();
 
   const [slugTouched, setSlugTouched] = useState(false);
@@ -307,6 +321,30 @@ export const CreateOrganizationPage: React.FC = () => {
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {busy ? "Creating..." : "Create organization"}
           </button>
+          {/* HARDENING-T1:D5. `/organizations/new` had no way back and
+              `/onboarding` no way out: a user had to use the browser. */}
+          <div className="flex items-center justify-between pt-1 text-xs font-semibold">
+            {isAdditionalOrganization ? (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                disabled={busy}
+                className="text-muted-foreground transition hover:text-foreground disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            ) : (
+              <span />
+            )}
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={busy}
+              className="text-muted-foreground transition hover:text-foreground disabled:opacity-60"
+            >
+              Sign out
+            </button>
+          </div>
         </form>
       </div>
     </div>

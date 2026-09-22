@@ -1,4 +1,4 @@
-﻿"""S6 — ONE registry for routes that bypass authentication and rate limiting."""
+"""S6 — ONE registry for routes that bypass authentication and rate limiting."""
 
 from __future__ import annotations
 

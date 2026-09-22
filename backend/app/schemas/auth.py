@@ -1,4 +1,4 @@
-﻿"""
+"""
 Data validation and serialization schemas (Pydantic v2) for FlowPilot AI.
 
 Enforces parameter boundaries on user registration and login parameters, 

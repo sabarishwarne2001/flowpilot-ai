@@ -184,15 +184,44 @@ def build_fingerprint(
                 UploadedFile.id == work_item.uploaded_file_id
             )
         ).scalar_one_or_none() or ""
+    if not checksum:
+        # HARDENING-T1:D19. A work item with no uploaded file row (created
+        # before ARCH-10 intake, or by an importer) produced an empty hash,
+        # which `ck_df_sha256_lowercase_hex` refuses — so the scan crashed and
+        # retried until DEAD. Hash the extracted text instead: identical
+        # content still collides, which is what the exact layer is for.
+        import hashlib
+
+        checksum = hashlib.sha256(
+            (work_item.extracted_text or "").encode("utf-8")
+        ).hexdigest()
 
     entities = work_item.extracted_entities or {}
     shingle_text, line_count = shingle_text_for(work_item)
 
+    # HARDENING-T1:D19. Vendor and document number come from the
+    # normalised `document_roles` row when there is one. Raw entities
+    # rarely carry keys literally named `vendor_key` / `document_number`,
+    # so the vendor+number layer read None for real extractions.
+    from app.models.document_role import DocumentRole
+
+    role_row = db.execute(
+        select(DocumentRole.vendor_key, DocumentRole.document_number).where(
+            DocumentRole.work_item_id == work_item.id
+        )
+    ).one_or_none()
+    vendor_key = (role_row.vendor_key if role_row else None) or _text(
+        entities.get("vendor_key")
+    )
+    document_number = (role_row.document_number if role_row else None) or _text(
+        entities.get("document_number")
+    )
+
     return fp.build(
         work_item_id=str(work_item.id),
         content_sha256_hex=checksum,
-        vendor_key=_text(entities.get("vendor_key")),
-        document_number=_text(entities.get("document_number")),
+        vendor_key=vendor_key,
+        document_number=document_number,
         shingle_text=shingle_text,
         chunks=tuple(
             fp.ChunkVector(

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Automation Rules API router endpoints for FlowPilot AI.
 """
 

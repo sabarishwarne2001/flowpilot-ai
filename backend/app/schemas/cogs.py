@@ -1,4 +1,4 @@
-﻿"""ARCH-18 — COGS, margin and supplier reconciliation DTOs."""
+"""ARCH-18 — COGS, margin and supplier reconciliation DTOs."""
 
 from __future__ import annotations
 

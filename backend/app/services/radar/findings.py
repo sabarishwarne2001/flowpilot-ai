@@ -284,10 +284,13 @@ def upsert(
             db,
             organization_id=draft.organization_id,
             actor_id=actor_id,
-            resource_type=AuditResourceType.WORK_ITEM,
+            # HARDENING-T1:D31. Was AuditResourceType.WORK_ITEM / AuditOutcome.SUCCESS,
+            # neither of which exists; every call raised AttributeError. Documents
+            # are audited as UPLOADED_FILE keyed by work item id, as ocr.py does.
+            resource_type=AuditResourceType.UPLOADED_FILE,
             resource_id=draft.subject_work_item_id,
             action=AuditAction.CREATED,
-            outcome=AuditOutcome.SUCCESS,
+            outcome=AuditOutcome.ALLOWED,
             details={
                 "anomaly_finding_id": str(finding.id),
                 "kind": draft.kind,

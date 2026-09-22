@@ -58,6 +58,7 @@ import {
   type SupplierInvoice,
   type TenantEconomicsEntry,
 } from "@/types/cogs";
+import { errorMessage } from "@/services/api/errors";
 
 const WINDOWS: readonly { readonly days: number; readonly label: string }[] = [
   { days: 7, label: "Last 7 days" },
@@ -432,8 +433,7 @@ export const AdminMarginsHub: React.FC = () => {
       // surfacing verbatim rather than as "something went wrong": the
       // operator's next action depends on whether they should wait or force.
       const message =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Reconciliation failed.";
+        errorMessage(err, "Reconciliation failed.");
       setError(message);
     },
   });

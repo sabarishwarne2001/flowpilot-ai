@@ -47,7 +47,6 @@ export interface ExtractedEntities {
 export interface WorkItemResponse {
   readonly id: string;
   readonly original_filename: string;
-  readonly stored_filename: string;
   readonly file_type: string;
   readonly file_size: number;
   readonly status: WorkItemStatus;

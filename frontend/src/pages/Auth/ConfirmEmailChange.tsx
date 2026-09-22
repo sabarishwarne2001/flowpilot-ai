@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { confirmEmailChange } from "@/services/api/emailChange";
 import { useAuthStore } from "@/store/useAuthStore";
+import { errorMessage } from "@/services/api/errors";
 
 export const ConfirmEmailChange: React.FC = () => {
   const clearAuth = useAuthStore((state) => state.clearAuth);
@@ -38,13 +39,7 @@ export const ConfirmEmailChange: React.FC = () => {
         clearAuth();
       })
       .catch((error: unknown) => {
-        const detail = (error as { response?: { data?: { detail?: unknown } } })
-          ?.response?.data?.detail;
-        setMessage(
-          typeof detail === "string"
-            ? detail
-            : "This confirmation link is invalid or has expired. Request a new email change from your profile settings.",
-        );
+        setMessage(errorMessage(error, "This confirmation link is invalid or has expired. Request a new email change from your profile settings."));
         setState("failed");
       });
   }, [clearAuth]);

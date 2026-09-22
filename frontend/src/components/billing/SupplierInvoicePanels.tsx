@@ -19,6 +19,7 @@ import {
   type CostBasisMethod,
   type SupplierInvoice,
 } from "@/types/cogs";
+import { errorMessage } from "@/services/api/errors";
 
 /**
  * ARCH-29 Slice 2 — supplier invoice ingest and reconciliation history.
@@ -69,15 +70,7 @@ const COST_BASIS_LABEL: Record<CostBasisMethod, string> = {
 };
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (Array.isArray(detail) && detail[0]?.msg) {
-    return String(detail[0].msg);
-  }
-  return fallback;
+  return errorMessage(error, fallback);
 }
 
 const formatDateTime = (value: string): string =>

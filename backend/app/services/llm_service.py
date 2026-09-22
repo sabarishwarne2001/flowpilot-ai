@@ -297,7 +297,14 @@ class LLMService:
             from groq import Groq
 
             logger.info("Initializing Groq client.")
-            self._groq_client = Groq(api_key=settings.GROQ_API_KEY.get_secret_value())
+            # HARDENING-T1:llm-deadline. The per-socket timeout. Without it a
+            # stalled platform call held a worker for the SDK default (minutes);
+            # llm_resilience's deadline is only checked BETWEEN attempts. BYOK
+            # clients (provider_clients._build_groq) already set this.
+            self._groq_client = Groq(
+                api_key=settings.GROQ_API_KEY.get_secret_value(),
+                timeout=float(settings.LLM_REQUEST_DEADLINE_SECONDS),
+            )
         return self._groq_client
 
     @property
@@ -308,8 +315,15 @@ class LLMService:
             from google import genai
 
             logger.info("Initializing platform Gemini client.")
+            from google.genai import types as genai_types
+
+            # HARDENING-T1:llm-deadline. Same reasoning as the Groq client;
+            # HttpOptions.timeout is in milliseconds.
             self._gemini_client = genai.Client(
-                api_key=settings.GEMINI_API_KEY.get_secret_value()
+                api_key=settings.GEMINI_API_KEY.get_secret_value(),
+                http_options=genai_types.HttpOptions(
+                    timeout=int(float(settings.LLM_REQUEST_DEADLINE_SECONDS) * 1000)
+                ),
             )
         return self._gemini_client
 
@@ -582,7 +596,14 @@ class LLMService:
         temperature: float,
         ai_settings: AISettings,
         byok_client: Any | None = None,
+        allow_failover: bool = True,
+        deadline_seconds: float | None = None,
+        max_attempts: int | None = None,
     ) -> tuple[str, TokenUsage]:
+        # HARDENING-T1:D1. `allow_failover=False` exists for the AI settings
+        # connection test: a test that silently failed over would report the
+        # fallback provider's success as the configured provider's. Every
+        # other caller keeps the defaults and behaves exactly as before.
         configured = self._validate_provider(ai_settings=ai_settings)
 
         def call(provider: str) -> tuple[str, TokenUsage]:
@@ -627,7 +648,11 @@ class LLMService:
             outcome = llm_resilience.execute(
                 call,
                 provider=configured,
-                fallback_provider=settings.LLM_FALLBACK_PROVIDER,
+                fallback_provider=(
+                    settings.LLM_FALLBACK_PROVIDER if allow_failover else None
+                ),
+                deadline_seconds=deadline_seconds,
+                max_attempts=max_attempts,
             )
         except LLMPermanentError as exc:
             raise HTTPException(

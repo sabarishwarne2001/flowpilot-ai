@@ -43,6 +43,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { marketplaceApi } from "@/services/api/partner";
 import { marketplaceKeys } from "@/services/api/queryKeys";
 import type { ManifestNode, MarketplaceItem } from "@/types/partner";
+import { errorMessage } from "@/services/api/errors";
 
 const NODE_TONE: Record<ManifestNode["node_type"], string> = {
   trigger: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -107,8 +108,7 @@ export default function MarketplaceCatalog() {
     },
     onError: (error: unknown) => {
       const detail =
-        (error as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Installation failed.";
+        errorMessage(error, "Installation failed.");
       toast.error(detail);
     },
   });

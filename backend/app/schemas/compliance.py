@@ -1,4 +1,4 @@
-﻿"""ARCH-20 — data governance, residency and compliance DTOs."""
+"""ARCH-20 — data governance, residency and compliance DTOs."""
 
 from __future__ import annotations
 

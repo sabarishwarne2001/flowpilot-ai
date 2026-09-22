@@ -309,6 +309,14 @@ def resolve_anomaly_transition(
             "made it."
         )
 
+    # HARDENING-T1:D33. The actor and time are stamped BEFORE any status
+    # change. They were set at the end, after `suppress_pair` /
+    # `suppress_series`, whose db.flush() wrote the DISMISSED status with no
+    # resolver — which `ck_af_resolution_has_actor` refuses. Every dismissal
+    # of a finding with a counterpart (every duplicate) failed with 500, on
+    # the anomaly page and in the Review Hub alike.
+    finding.resolved_by_user_id = actor_user_id
+    finding.resolved_at = datetime.now(timezone.utc)
     if verdict == ANOMALY_VERDICT_CONFIRM:
         finding.status = radar_vocab.STATUS_CONFIRMED
         finding.resolution_note = (payload.note or "").strip() or None
@@ -348,8 +356,6 @@ def resolve_anomaly_transition(
                 ttl_days=payload.ttl_days,
             )
 
-    finding.resolved_by_user_id = actor_user_id
-    finding.resolved_at = datetime.now(timezone.utc)
     return str(finding.status)
 
 

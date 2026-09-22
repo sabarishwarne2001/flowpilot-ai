@@ -88,6 +88,8 @@ def platform_smtp_config() -> SMTPConfig:
     )
 
     return SMTPConfig(
+        # HARDENING-T1:D23. Operator-configured; exempt from tenant host checks.
+        trusted=True,
         smtp_host=app_settings.PLATFORM_SMTP_HOST,
         smtp_port=app_settings.PLATFORM_SMTP_PORT,
         smtp_username=app_settings.PLATFORM_SMTP_USERNAME,

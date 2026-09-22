@@ -40,6 +40,12 @@ class SMTPConfig(BaseModel):
 
     from_email: str | None = None
 
+    #: HARDENING-T1:D23. True only for the platform relay, whose host comes
+    #: from the server environment. Every tenant-supplied configuration is
+    #: untrusted: its host is resolved, checked against private/loopback/
+    #: metadata ranges, and the connection is pinned to the checked address.
+    trusted: bool = False
+
     @property
     def sender_address(self) -> str:
         return self.from_email or self.smtp_username

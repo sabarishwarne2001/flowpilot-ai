@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ownership transfer orchestration for FlowPilot AI (ARCH-05 Step 6, ARCH-06 Step 9, ARCH-07 Step 3).
 
 ARCH-07 Step 3: Converted AUDIT log sites to structured audit_service.record().

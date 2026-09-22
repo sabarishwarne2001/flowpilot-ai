@@ -151,7 +151,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
       {open && (
         <div
           role="listbox"
-          className="absolute left-3 right-3 z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-card p-1.5 shadow-lg"
+          className="absolute left-3 right-3 z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-xl ring-1 ring-black/5 dark:ring-white/10"
         >
           {switchableOrganizations.map((org) => (
             <div key={org.organization_id} className="mb-1 last:mb-0">

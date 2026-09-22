@@ -31,11 +31,6 @@ class WorkItemBase(BaseModel):
         max_length=255, 
         description="Original uploaded human-readable filename."
     )
-    stored_filename: str = Field(
-        ..., 
-        max_length=255, 
-        description="Unique system collision-safe stored filename."
-    )
     file_type: str = Field(
         ..., 
         max_length=100, 
@@ -53,7 +48,15 @@ class WorkItemCreate(WorkItemBase):
     """
     Validation schema used to initiate a new Work Item within the tracking system.
     """
-    pass
+    # HARDENING-T1:D4. The storage key lives on the create schema only. It
+    # was on WorkItemBase, so every response — list and detail — sent the
+    # MinIO object key (`<workspace>/documents/<uuid>.pdf`) to the browser.
+    # Downloads are proxied by the API; no client ever needed the key.
+    stored_filename: str = Field(
+        ...,
+        max_length=255,
+        description="Unique system collision-safe stored filename.",
+    )
 
 
 class WorkItemUpdate(BaseModel):

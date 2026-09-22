@@ -1,4 +1,4 @@
-﻿"""Idempotent insert helper with SAVEPOINT isolation (SEAM-I-3)."""
+"""Idempotent insert helper with SAVEPOINT isolation (SEAM-I-3)."""
 
 from __future__ import annotations
 

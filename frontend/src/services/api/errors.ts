@@ -206,3 +206,28 @@ export const parseErrorEnvelope = (
     details: {},
   };
 };
+
+/**
+ * HARDENING-T1:D11 — the one way UI code turns a failed request into text.
+ *
+ * The axios interceptor in `client.ts` rejects every failed request with an
+ * `ApiError`. That object has `status`, `code`, `detail` and `details`, and no
+ * `.response`. Eighteen components read `error.response?.data?.detail`, which
+ * is always undefined, so every server-authored message ("That address is
+ * already associated with another account.", "Unknown timezone ...") was
+ * replaced by a generic fallback. ESLint now forbids that shape.
+ *
+ * 5xx responses fall back to the caller's wording (their bodies are not
+ * written for end users), except 503, whose body says what to do next.
+ */
+export function errorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiError)) {
+    return fallback;
+  }
+  const status = error.status ?? 0;
+  if (status >= 500 && status !== 503) {
+    return fallback;
+  }
+  const text = (error.detail ?? error.message ?? "").trim();
+  return text.length > 0 ? text : fallback;
+}

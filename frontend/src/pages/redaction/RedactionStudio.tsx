@@ -35,6 +35,8 @@ import {
   precisionTitle,
 } from "@/types/redaction";
 import { formatTimestamp } from "@/utils/displayTime";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const CAPABILITY_KEY = "capability.redaction";
 const PREVIEW_DPI = 110;
@@ -334,6 +336,17 @@ const RedactionStudio: React.FC = () => {
       </div>
     );
   }
+  // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
+  if (jobQuery.isError) {
+    return (
+      <ErrorState
+        title="The redaction job could not be loaded"
+        description={errorMessage(jobQuery.error, "The server did not return the redaction job. Check your connection and try again.")}
+        onRetry={() => void jobQuery.refetch()}
+      />
+    );
+  }
+
   if (jobQuery.isLoading || !job || !workspaceId) {
     return <Centered><Loader2 className="h-5 w-5 animate-spin" aria-hidden /></Centered>;
   }

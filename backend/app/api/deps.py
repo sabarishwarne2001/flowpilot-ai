@@ -1,4 +1,4 @@
-﻿"""Dependencies Module for FlowPilot AI."""
+"""Dependencies Module for FlowPilot AI."""
 
 import logging
 import re

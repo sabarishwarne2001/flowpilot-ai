@@ -1,4 +1,4 @@
-﻿"""
+"""
 ARCH-25 — the on-demand TLS authorization endpoint Caddy asks before issuing.
 
 WHY THIS FILE EXISTS

@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2, ScanSearch, ShieldCheck } from "lucide-react";
 import { previewErasure } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
 import { totalDestroyed } from "@/types/compliance";
+import { errorMessage as apiErrorMessage } from "@/services/api/errors";
 
 const TABLE_LABELS: Readonly<Record<string, string>> = {
   work_items: "Documents",
@@ -21,18 +22,8 @@ const labelFor = (table: string): string =>
   TABLE_LABELS[table] ??
   table.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
-const errorMessage = (error: unknown): string => {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: string };
-    return first?.msg ?? "The preview was rejected.";
-  }
-  return "The preview could not be run. Check the subject user ID and try again.";
-};
+const errorMessage = (error: unknown): string =>
+  apiErrorMessage(error, "The preview could not be run. Check the subject user ID and try again.");
 
 export interface ErasureImpactPreviewProps {
   readonly organizationId: string;

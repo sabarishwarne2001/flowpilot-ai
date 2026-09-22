@@ -12,7 +12,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
-from app.services.identity._integration import get_settings, safe_get, utcnow
+from app.services.identity._integration import (
+    get_settings,
+    safe_get,
+    safe_post_form,
+    utcnow,
+)
 from app.services.identity.errors import AssertionRejected, IdpConfigError
 
 logger = logging.getLogger(__name__)
@@ -69,7 +74,29 @@ def fetch_discovery(discovery_url: str) -> dict:
         if required not in doc:
             raise IdpConfigError(
                 f"discovery document is missing {required!r}")
+    validate_endpoints(doc)
     return doc
+
+
+def validate_endpoints(doc: dict) -> None:
+    """HARDENING-T1:D24. Every endpoint the server will call is https and
+    resolves to a public address. Checked when the configuration is saved;
+    the SSRF-safe client checks again, pinned, on every call."""
+    from urllib.parse import urlsplit
+
+    from app.core.ssrf_client import SSRFClientError, resolve_and_validate
+
+    for key in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+        value = str(doc.get(key) or "")
+        parts = urlsplit(value)
+        if parts.scheme != "https" or not parts.hostname:
+            raise IdpConfigError(f"{key} must be an https URL, got {value[:120]!r}")
+        if key == "authorization_endpoint":
+            continue  # visited by the user's browser, never by the server
+        try:
+            resolve_and_validate(parts.hostname, parts.port or 443)
+        except SSRFClientError as exc:
+            raise IdpConfigError(f"{key} is not reachable from FlowPilot: {exc}") from exc
 
 
 def fetch_jwks(jwks_uri: str) -> dict:
@@ -137,26 +164,29 @@ def exchange_code(*, token_endpoint: str, client_id: str, client_secret: str,
                   code: str, redirect_uri: str, code_verifier: str) -> dict:
     settings = get_settings()
     timeout = float(getattr(settings, "OIDC_DISCOVERY_TIMEOUT_S", 10))
-    import httpx
-
-    response = httpx.post(
-        token_endpoint,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code_verifier": code_verifier,
-        },
-        headers={"Accept": "application/json"},
-        timeout=timeout,
-    )
-    if response.status_code >= 400:
+    try:
+        status_code, body = safe_post_form(
+            token_endpoint,
+            form={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code_verifier": code_verifier,
+            },
+            timeout=timeout,
+        )
+    except Exception as exc:  # noqa: BLE001 - SSRF refusal, DNS, TLS, timeout
+        raise AssertionRejected(
+            "REJECTED_UNKNOWN", f"token endpoint unreachable: {type(exc).__name__}: {exc}"
+        ) from exc
+    text = body.decode("utf-8", "replace")
+    if status_code >= 400:
         raise AssertionRejected(
             "REJECTED_UNKNOWN",
-            f"token endpoint returned {response.status_code}: {response.text[:200]}")
-    return response.json()
+            f"token endpoint returned {status_code}: {text[:200]}")
+    return json.loads(text)
 
 
 def validate_id_token(*, id_token: str, jwks_key: dict, issuer: str,

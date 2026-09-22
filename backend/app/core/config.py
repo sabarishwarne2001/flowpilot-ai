@@ -469,6 +469,20 @@ class Settings(BaseSettings):
     CONTEXT_INJECTION_BLOCK_THRESHOLD: int = 3
     LLM_METERING_ENABLED: bool = True
     LLM_REQUEST_DEADLINE_SECONDS: float = 25.0
+    # HARDENING-T1:D1. Short and single-attempt: a connection test that
+    # takes the full extraction deadline reads to an admin as a hang.
+    AI_CONNECTION_TEST_DEADLINE_SECONDS: float = 20.0
+    # HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private,
+    # loopback, link-local, CGNAT or metadata addresses. An enterprise that
+    # self-hosts FlowPilot next to an internal relay lists that relay here
+    # (hostnames or CIDRs). Tenants cannot set this; only the operator can.
+    SMTP_PRIVATE_HOST_ALLOWLIST: list[str] = []
+    # Development only: local catchers (Mailpit, MailHog) run on localhost.
+    SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT: bool = True
+    # HARDENING-T1:D25. How long a document may sit in a working stage with no
+    # live job before the sweep fails it. Longer than the slowest legitimate
+    # OCR run plus retry backoff.
+    PIPELINE_STUCK_AFTER_MINUTES: int = 90
     LLM_MAX_ATTEMPTS: int = 3
     LLM_BACKOFF_BASE_SECONDS: float = 0.5
     LLM_BACKOFF_CAP_SECONDS: float = 4.0
@@ -635,7 +649,10 @@ class Settings(BaseSettings):
 
     DODO_API_KEY: SecretStr | None = None
     DODO_WEBHOOK_SECRET: SecretStr | None = None
-    DODO_API_BASE: str = "https://live.dodopayments.com"
+    # HARDENING-T1:D16. Empty means "derive from DODO_LIVEMODE". The default
+    # was the live host while DODO_LIVEMODE defaulted to false, so a test key
+    # was sent to the live API (401) with nothing saying why.
+    DODO_API_BASE: str = ""
     DODO_TIMEOUT_SECONDS: float = 20.0
     # 30 minutes. Must exceed Dodo's early retry intervals (immediate, 5s, 5m,
     # 30m) so a legitimate late delivery still verifies, without leaving a
@@ -891,6 +908,28 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [part.strip() for part in raw.split(",") if part.strip()]
+
+    @model_validator(mode="after")
+    def _align_dodo_mode_and_host(self) -> "Settings":
+        """HARDENING-T1:D16. DODO_API_BASE follows DODO_LIVEMODE unless set,
+        and an explicit host that contradicts the mode is refused."""
+        live_host, test_host = "https://live.dodopayments.com", "https://test.dodopayments.com"
+        base = (self.DODO_API_BASE or "").strip().rstrip("/")
+        if not base:
+            self.DODO_API_BASE = live_host if self.DODO_LIVEMODE else test_host
+            return self
+        if base == live_host and not self.DODO_LIVEMODE:
+            raise ValueError(
+                "DODO_API_BASE is the live host but DODO_LIVEMODE is false. "
+                "Unset DODO_API_BASE to follow DODO_LIVEMODE, or set DODO_LIVEMODE=true."
+            )
+        if base == test_host and self.DODO_LIVEMODE:
+            raise ValueError(
+                "DODO_API_BASE is the test host but DODO_LIVEMODE is true. "
+                "Live traffic would be sent to Dodo's test environment."
+            )
+        self.DODO_API_BASE = base
+        return self
 
     @model_validator(mode="after")
     def _assert_stripe_mode_matches_key(self) -> "Settings":

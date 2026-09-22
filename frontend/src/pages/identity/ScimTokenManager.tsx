@@ -24,6 +24,8 @@ import { apiOrigin } from "@/services/api/client";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { ScimKeyIssued, ScimKeyRead } from "@/types/identity";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 export const ScimTokenManager: React.FC = () => {
   const { organizationId, organizationRole } = useResolvedOrganization();
@@ -137,7 +139,13 @@ export const ScimTokenManager: React.FC = () => {
         )}
       </div>
 
-      {keysQuery.isLoading ? (
+      {keysQuery.isError ? (
+        <ErrorState
+          title="Directory tokens could not be loaded"
+          description={errorMessage(keysQuery.error, "The server did not return directory tokens. Check your connection and try again.")}
+          onRetry={() => void keysQuery.refetch()}
+        />
+      ) : keysQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading tokens…</p>
       ) : keys.length === 0 ? (
         <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">

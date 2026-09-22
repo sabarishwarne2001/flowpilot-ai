@@ -393,13 +393,24 @@ export const AISettings: React.FC = () => {
             )}
             {test.data && (
               <span
-                className={`inline-flex items-center gap-1.5 font-semibold ${
+                className={`inline-flex max-w-xl items-start gap-1.5 ${
                   test.data.success ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                 }`}
               >
-                {test.data.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                {test.data.success ? "Connected" : "Failed"} · {test.data.provider}/{test.data.model} ·{" "}
-                {Math.round(test.data.latency_ms)} ms
+                {test.data.success ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                )}
+                <span>
+                  <span className="font-semibold">
+                    {test.data.success ? "Connected" : "Failed"} · {test.data.provider}/{test.data.model}
+                    {test.data.latency_ms !== null ? ` · ${Math.round(test.data.latency_ms)} ms` : ""}
+                    {test.data.resolution_origin === "route_rule" ? " · via routing rule" : ""}
+                    {test.data.credential_source === "TENANT" ? " · your key" : ""}
+                  </span>
+                  <span className="block font-normal text-muted-foreground">{test.data.message}</span>
+                </span>
               </span>
             )}
           </div>

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Business orchestration service for FlowPilot AI notifications.
 """
 

@@ -97,9 +97,15 @@ def _acquire_slot(key: str, limit: int) -> bool:
         return True  # fail open — see the module docstring
 
     try:
-        current = client.incr(key)
-        if current == 1:
-            client.expire(key, SLOT_TTL_SECONDS)
+        # HARDENING-T1:D27. INCR and EXPIRE in one MULTI/EXEC. Separately,
+        # a process that died between them left a counter with no TTL, and
+        # the slot it held stayed taken until someone deleted the key.
+        # Refreshing the TTL on every acquire is harmless: the window is a
+        # safety net for crashed streams, not the release mechanism.
+        pipe = client.pipeline(transaction=True)
+        pipe.incr(key)
+        pipe.expire(key, SLOT_TTL_SECONDS)
+        current, _ = pipe.execute()
         if current > limit:
             # Roll back our own increment immediately; the refusal must not
             # keep the counter pinned above the ceiling for the TTL.

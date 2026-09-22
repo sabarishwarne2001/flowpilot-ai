@@ -21,6 +21,8 @@ import {
 import { formatTimestamp } from "@/utils/displayTime";
 import { FAMILY_LABELS } from "@/types/assertions";
 import type { AssertionReviewItem } from "@/types/assertions";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 /**
  * ARCH-33 §4.6 — the review queue for triaged assertions.
@@ -126,7 +128,13 @@ export const AssertionReviewQueue: React.FC<AssertionReviewQueueProps> = ({
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      {reviews.isLoading ? (
+      {reviews.isError ? (
+        <ErrorState
+          title="Clause reviews could not be loaded"
+          description={errorMessage(reviews.error, "The server did not return clause reviews. Check your connection and try again.")}
+          onRetry={() => void reviews.refetch()}
+        />
+      ) : reviews.isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading the queue…

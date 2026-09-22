@@ -215,14 +215,37 @@ async def list_workspace_members(
         db, workspace=context.workspace
     )
     granted_user_ids = {grant.user_id for grant in grants}
-
-    items: list[WorkspaceMemberResponse] = [
-        _serialize_grant(grant) for grant in grants
-    ]
-
     org_members = organization_members_crud.list_organization_members(
         db, organization_id=context.organization_id, statuses=ACTIVE_ONLY
     )
+    # HARDENING-T1:D12. An organization OWNER or ADMIN is workspace ADMIN
+    # whatever their stored grant says (resolve_effective_workspace_role), and
+    # the organization creator always has such a grant. Serialized as a plain
+    # grant, that row rendered as an editable dropdown whose changes were saved
+    # and changed nothing. It is now reported as what it is: ADMIN, inherited.
+    org_admin_roles = {
+        member.user_id: member.role
+        for member in org_members
+        if member.role in (OrganizationRole.OWNER, OrganizationRole.ADMIN)
+    }
+    items: list[WorkspaceMemberResponse] = []
+    for grant in grants:
+        inherited = org_admin_roles.get(grant.user_id)
+        if inherited is None:
+            items.append(_serialize_grant(grant))
+            continue
+        items.append(
+            WorkspaceMemberResponse(
+                id=grant.id,
+                workspace_id=grant.workspace_id,
+                user=UserSummary.model_validate(grant.user),
+                role=WorkspaceRole.ADMIN,
+                status=grant.status,
+                is_derived=True,
+                organization_role=inherited,
+                created_at=grant.created_at,
+            )
+        )
     for member in org_members:
         if member.user_id in granted_user_ids:
             continue

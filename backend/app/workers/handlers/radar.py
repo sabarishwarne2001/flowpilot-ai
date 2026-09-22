@@ -125,7 +125,9 @@ def handle_anomaly_scan_document(db: Any, payload: dict[str, Any]) -> dict[str, 
         input_digest=digest,
     )
 
-    logger.info("radar.scan_document", extra=outcome.as_payload())
+    # HARDENING-T1:D34. Nested under one key: the payload has a `created`
+    # count, which collides with LogRecord.created and raised KeyError.
+    logger.info("radar.scan_document", extra={"radar_outcome": outcome.as_payload()})
     return {"status": "OK", **outcome.as_payload()}
 
 

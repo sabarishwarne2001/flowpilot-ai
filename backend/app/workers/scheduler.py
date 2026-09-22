@@ -153,6 +153,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         interval_seconds=3_600,
         description="Abandon expired multipart upload sessions (ARCH-38).",
     ),
+    # HARDENING-T1:D25. Documents stranded in a working stage with no live
+    # job are failed with PROCESSING_STALLED, so the UI stops spinning and
+    # the "Document failed" trigger fires.
+    ScheduledJob(
+        job_type="pipeline.sweep_stuck",
+        interval_seconds=600,
+        description="Fail documents stuck in processing with no live job (hardening D25).",
+    ),
     ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,

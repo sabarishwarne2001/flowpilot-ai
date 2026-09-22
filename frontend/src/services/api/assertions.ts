@@ -109,7 +109,7 @@ export const listAssertionReviews = async (
   } = {},
 ): Promise<AssertionReviewItem[]> => {
   const params = new URLSearchParams();
-  if (options.workItemId) params.set("work_item_id", options.workItemId);
+  if (options.workItemId) {params.set("work_item_id", options.workItemId);}
   params.set("limit", String(options.limit ?? 50));
 
   const { data } = await apiClient.get<AssertionReviewItem[]>(

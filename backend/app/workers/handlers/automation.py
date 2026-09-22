@@ -1,4 +1,4 @@
-﻿"""ARCH-13 Step 13.5 — the `automation.execute` job handler.
+"""ARCH-13 Step 13.5 — the `automation.execute` job handler.
 
 LIGHT profile: SQL plus action dispatch. The LLM actions run through the
 existing metering path and do not need a heavy image.

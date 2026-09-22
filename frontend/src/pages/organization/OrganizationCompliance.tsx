@@ -39,6 +39,7 @@ import {
   type ErasedSubject,
   type RetentionPolicy,
 } from "@/types/compliance";
+import { errorMessage as apiErrorMessage } from "@/services/api/errors";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -50,18 +51,8 @@ const INPUT =
 const formatDate = (value: string | null): string =>
   value ? formatTimestamp(value) : "—";
 
-const errorMessage = (error: unknown): string => {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: string };
-    return first?.msg ?? "The request was rejected.";
-  }
-  return "Something went wrong. Please try again.";
-};
+const errorMessage = (error: unknown): string =>
+  apiErrorMessage(error, "Something went wrong. Please try again.");
 
 // ---------------------------------------------------------------------------
 // Residency

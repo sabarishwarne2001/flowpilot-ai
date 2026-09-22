@@ -7,6 +7,7 @@ import { usageKeys } from "@/services/api/queryKeys";
 import { SPEND_LIMIT_KEYS } from "@/types/usage";
 import type { SpendLimit, SpendLimitPeriod } from "@/types/usage";
 import type { UsageLimit } from "@/types/billing";
+import { errorMessage } from "@/services/api/errors";
 
 interface Props {
   readonly organizationId: string;
@@ -26,11 +27,7 @@ const KEY_LABEL: Readonly<Record<string, string>> = {
 const MICROS_PER_UNIT = 1_000_000;
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {return detail;}
-  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
-  return fallback;
+  return errorMessage(error, fallback);
 }
 
 export const SpendLimitForm: React.FC<Props> = ({

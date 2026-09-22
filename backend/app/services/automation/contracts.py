@@ -1,4 +1,4 @@
-﻿"""ARCH-13 Step 13.6: the typed values that cross the R33 boundary."""
+"""ARCH-13 Step 13.6: the typed values that cross the R33 boundary."""
 
 from __future__ import annotations
 

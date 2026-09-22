@@ -29,9 +29,9 @@ export const listAnomalies = async (
   filters: AnomalyFilters = {},
 ): Promise<AnomalyFeed> => {
   const params: Record<string, string> = {};
-  if (filters.kind !== undefined) params["kind"] = filters.kind;
-  if (filters.severity !== undefined) params["severity"] = filters.severity;
-  if (filters.status !== undefined) params["status"] = filters.status;
+  if (filters.kind !== undefined) {params["kind"] = filters.kind;}
+  if (filters.severity !== undefined) {params["severity"] = filters.severity;}
+  if (filters.status !== undefined) {params["status"] = filters.status;}
 
   const { data } = await apiClient.get<AnomalyFeed>(base(workspaceId), { params });
   return data;

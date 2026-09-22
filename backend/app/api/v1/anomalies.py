@@ -438,10 +438,11 @@ def confirm_anomaly(
 
     # ARCH40-S1:anomaly-confirm-delegates. The transition moves to the shared
     # review resolution service so the hub and this endpoint cannot diverge.
-    # The WORK_ITEM audit row below is deliberately untouched: verify_arch34
-    # asserts it, and removing a passing gate's subject to tidy up is how a
-    # regression ships. The REVIEW_ITEM row the shared service adds sits
-    # alongside it, on both paths.
+    # HARDENING-T1:D31. The document audit row below used
+    # AuditResourceType.WORK_ITEM and AuditOutcome.SUCCESS, neither of which
+    # exists, so this endpoint raised AttributeError on every call. No gate
+    # asserted that text (this comment claimed verify_arch34 did; it does
+    # not). The REVIEW_ITEM row the shared service adds sits alongside it.
     from app.services.review import resolution as review_resolution
 
     try:
@@ -474,10 +475,10 @@ def confirm_anomaly(
         db,
         organization_id=context.organization_id,
         actor_id=context.user_id,
-        resource_type=AuditResourceType.WORK_ITEM,
+        resource_type=AuditResourceType.UPLOADED_FILE,  # HARDENING-T1:D31
         resource_id=finding.subject_work_item_id,
         action=AuditAction.UPDATED,
-        outcome=AuditOutcome.SUCCESS,
+        outcome=AuditOutcome.ALLOWED,
         details={
             "anomaly_finding_id": str(finding.id),
             "status": vocab.STATUS_CONFIRMED,
@@ -558,10 +559,10 @@ def dismiss_anomaly(
         db,
         organization_id=context.organization_id,
         actor_id=context.user_id,
-        resource_type=AuditResourceType.WORK_ITEM,
+        resource_type=AuditResourceType.UPLOADED_FILE,  # HARDENING-T1:D31
         resource_id=finding.subject_work_item_id,
         action=AuditAction.UPDATED,
-        outcome=AuditOutcome.SUCCESS,
+        outcome=AuditOutcome.ALLOWED,
         details={
             "anomaly_finding_id": str(finding.id),
             "status": vocab.STATUS_DISMISSED,

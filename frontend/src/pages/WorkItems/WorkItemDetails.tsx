@@ -248,19 +248,35 @@ export const WorkItemDetails: React.FC = () => {
                 <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Last Updated</dt>
                 <dd className="mt-1 text-sm font-semibold">{formatDateTime(workItem.updated_at)}</dd>
               </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Stored Filename</dt>
-                <dd className="mt-1 break-all text-xs font-medium text-muted-foreground" title={workItem.stored_filename}>
-                  {workItem.stored_filename}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Work Item ID</dt>
-                <dd className="mt-1 break-all font-mono text-xs text-muted-foreground" title={workItem.id}>
-                  {workItem.id}
-                </dd>
-              </div>
             </dl>
+            {/* HARDENING-T1:D4. Identifiers belong in a support drawer, not the
+                primary card. The storage key is no longer sent at all. */}
+            <details className="group mt-5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+              <summary className="cursor-pointer select-none font-semibold text-muted-foreground hover:text-foreground">
+                Technical details
+              </summary>
+              <dl className="mt-2 space-y-2">
+                <div>
+                  <dt className="font-bold uppercase tracking-wide text-muted-foreground">Reference ID</dt>
+                  <dd className="mt-1 flex items-center gap-2">
+                    <code className="break-all font-mono text-muted-foreground">{workItem.id}</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard
+                          ?.writeText(workItem.id)
+                          .then(() => toast.success("Reference ID copied."))
+                          .catch(() => toast.error("Copy failed; select the ID instead."));
+                      }}
+                      className="shrink-0 rounded border border-border px-1.5 py-0.5 font-semibold hover:bg-muted"
+                    >
+                      Copy
+                    </button>
+                  </dd>
+                </div>
+                <p className="text-muted-foreground">Quote this ID when contacting support.</p>
+              </dl>
+            </details>
           </section>
         </aside>
 

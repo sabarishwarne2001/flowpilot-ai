@@ -46,6 +46,8 @@ import {
   type PayoutPeriod,
   type RevShareLedgerLine,
 } from "@/types/partner";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 type Tab = "book" | "ledger" | "payouts";
 
@@ -162,6 +164,17 @@ export default function PartnerPortal() {
     }
     return formatBps(economics.zero_byok_revenue_share_bps);
   }, [economics]);
+
+  // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
+  if (partnersQuery.isError) {
+    return (
+      <ErrorState
+        title="Partner accounts could not be loaded"
+        description={errorMessage(partnersQuery.error, "The server did not return partner accounts. Check your connection and try again.")}
+        onRetry={() => void partnersQuery.refetch()}
+      />
+    );
+  }
 
   if (partnersQuery.isLoading) {
     return <LoadingScreen />;

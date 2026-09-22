@@ -172,6 +172,25 @@ services:
     command: ["python", "-m", "app.worker", "--loop", "jobs", "--profile", "light"]
     restart: unless-stopped
 
+  # HARDENING-T1:D15. Without this service nothing enqueues recurring jobs in
+  # this stack: no usage rollups (billing shows zero), no dunning, no
+  # sweeps. docker-compose.prod.yml has always had it; this file did not.
+  # Exactly one replica: the scheduler is the single source of cadence.
+  worker-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: flowpilot-worker-scheduler
+    environment:
+      <<: *app-env
+      SERVICE_ROLE: worker-light
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker", "--loop", "scheduler"]
+    restart: unless-stopped
+
   worker-stripe:
     build:
       context: .

@@ -18,6 +18,7 @@ import { useIsPartnerMember } from "@/hooks/useIsPartnerMember";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { useIsSuperAdmin } from "@/routes/SuperAdminGuard";
+import { SideTooltip } from "@/components/layout/SideTooltip";
 
 interface SidebarNavigationProps {
   readonly collapsed: boolean;
@@ -133,7 +134,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   const renderItem = (item: RenderableItem) => {
     const label = item.locked ? `${item.name} (not included in your plan)` : item.name;
 
-    return (
+    const link = (
       <NavLink
         key={item.path}
         to={item.path}
@@ -182,28 +183,12 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
                 data-testid="nav-lock"
               />
             )}
-            <span
-              className="
-                pointer-events-none
-                absolute left-16 z-50
-                whitespace-nowrap
-                rounded-md
-                border border-border
-                bg-card
-                px-2.5 py-1.5
-                text-xs font-semibold
-                opacity-0
-                shadow-lg
-                transition-opacity
-                group-hover:opacity-100
-              "
-            >
-              {label}
-            </span>
           </>
         )}
       </NavLink>
     );
+    // HARDENING-T1:D7. Collapsed labels render in a portal (see SideTooltip).
+    return collapsed ? <SideTooltip label={label}>{link}</SideTooltip> : link;
   };
 
   const renderGroupLabel = (label: string, first: boolean) =>

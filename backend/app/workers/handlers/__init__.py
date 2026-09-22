@@ -61,6 +61,8 @@ ARCH35_JOB_TYPES: frozenset[str] = frozenset(
 ARCH38_JOB_TYPES: frozenset[str] = frozenset(
     {"batch.expand_archive", "work_items.bulk", "ingestion.sweep_sessions"}
 )
+#: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
+HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -89,6 +91,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH34_JOB_TYPES
     | ARCH35_JOB_TYPES
     | ARCH38_JOB_TYPES
+    | HARDENING_JOB_TYPES
 )
 
 
@@ -297,6 +300,11 @@ def _work_items_bulk(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_work_items_bulk(payload)
 
 
+def _pipeline_sweep_stuck(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.dead_letter import handle_pipeline_sweep_stuck
+    return handle_pipeline_sweep_stuck(payload)
+
+
 def _ingestion_sweep_sessions(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.ingestion import handle_sweep_upload_sessions
     return handle_sweep_upload_sessions(payload)
@@ -381,6 +389,7 @@ _HANDLERS = {
     "batch.expand_archive": _batch_expand_archive,
     "work_items.bulk": _work_items_bulk,
     "ingestion.sweep_sessions": _ingestion_sweep_sessions,
+    "pipeline.sweep_stuck": _pipeline_sweep_stuck,
 }
 
 

@@ -12,6 +12,8 @@ import type { AuditExportFormat, AuditLogQuery, AuditLogRead } from "@/services/
 import AuditDetailInspector from "@/components/organization/AuditDetailInspector";
 import { auditKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const PAGE_SIZE = 50;
 
@@ -180,7 +182,13 @@ export const AuditExplorer: React.FC = () => {
         )}
       </div>
 
-      {query.isLoading ? (
+      {query.isError ? (
+        <ErrorState
+          title="Audit records could not be loaded"
+          description={errorMessage(query.error, "The server did not return audit records. Check your connection and try again.")}
+          onRetry={() => void query.refetch()}
+        />
+      ) : query.isLoading ? (
         <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading entries…

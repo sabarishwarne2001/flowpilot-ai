@@ -1,4 +1,4 @@
-﻿"""ARCH-10 Step 7 / ARCH-11.5 Step 1b — the `document.enrich` job handler with LLM metering."""
+"""ARCH-10 Step 7 / ARCH-11.5 Step 1b — the `document.enrich` job handler with LLM metering."""
 
 from __future__ import annotations
 
@@ -488,8 +488,17 @@ def handle_document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
         raise
 
     _emit_enriched(target, stats)
+    # HARDENING-T1:D18/D19/D20. Tell the downstream engines. Never raises.
+    from app.services.post_enrichment import dispatch as _dispatch_engines
+
+    engines = _dispatch_engines(
+        work_item_id=target.work_item_id,
+        organization_id=target.organization_id,
+        workspace_id=target.workspace_id,
+        job_id=target.job_id,
+    )
     _run_side_effects(target)
-    return {"outcome": Outcome.COMPLETED, **stats}
+    return {"outcome": Outcome.COMPLETED, **stats, "engines": engines.get("enqueued", [])}
 
 
 __all__ = ["Outcome", "handle_document_enrich"]

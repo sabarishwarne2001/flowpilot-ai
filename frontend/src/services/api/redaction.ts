@@ -53,7 +53,7 @@ export const pagePreviewUrl = (
 ): string => {
   const params = new URLSearchParams();
   params.set("dpi", String(options.dpi ?? 110));
-  if (options.burn) params.set("burn", "true");
+  if (options.burn) {params.set("burn", "true");}
   return `${base(workspaceId)}/${encodeURIComponent(jobId)}/pages/${pageNumber}.png?${params.toString()}`;
 };
 

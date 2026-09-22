@@ -28,7 +28,6 @@ FS_ALLOWLIST = {
     "app/main.py",
     "app/services/ocr_service.py",
     "app/services/ocr/pdf_text_layer.py",
-    "app/services/knowledge_base_service.py",
     "app/utils/file_utils.py",
     "app/utils.py",
 }

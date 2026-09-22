@@ -5040,11 +5040,26 @@ export interface components {
             provider: string;
             /** Model */
             model: string;
+            /** Message */
+            message: string;
+            /** Error Code */
+            error_code?: ("PROVIDER_UNSUPPORTED" | "PLATFORM_KEY_MISSING" | "CREDENTIAL_UNAVAILABLE" | "PROVIDER_REJECTED" | "PROVIDER_UNAVAILABLE" | "UNEXPECTED") | null;
             /** Latency Ms */
-            latency_ms: number;
+            latency_ms?: number | null;
             /** Response */
-            response: string;
-            token_usage: components["schemas"]["TokenUsage"];
+            response?: string | null;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /**
+             * Credential Source
+             * @default PLATFORM
+             * @enum {string}
+             */
+            credential_source: "TENANT" | "PLATFORM";
+            /**
+             * Resolution Origin
+             * @default ai_settings_default
+             */
+            resolution_origin: string;
         };
         /**
          * AIProvider
@@ -12937,11 +12952,6 @@ export interface components {
              * @description Original uploaded human-readable filename.
              */
             original_filename: string;
-            /**
-             * Stored Filename
-             * @description Unique system collision-safe stored filename.
-             */
-            stored_filename: string;
             /**
              * File Type
              * @description MIME-type format identifier of the uploaded document.

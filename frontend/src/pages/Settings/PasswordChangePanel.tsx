@@ -4,6 +4,7 @@ import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
 
 import { changePasswordRequest } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
+import { errorMessage } from "@/services/api/errors";
 
 /**
  * ARCH-29 Slice 2 — password change.
@@ -40,15 +41,7 @@ interface PasswordChangePanelProps {
 }
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (Array.isArray(detail) && detail[0]?.msg) {
-    return String(detail[0].msg);
-  }
-  return fallback;
+  return errorMessage(error, fallback);
 }
 
 export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({

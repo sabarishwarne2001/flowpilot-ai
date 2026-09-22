@@ -1,4 +1,4 @@
-﻿"""Centralized API v1 routing gateway for FlowPilot AI."""
+"""Centralized API v1 routing gateway for FlowPilot AI."""
 
 from fastapi import APIRouter
 

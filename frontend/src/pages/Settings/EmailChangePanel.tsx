@@ -7,17 +7,14 @@ import {
   cancelEmailChange,
   requestEmailChange,
 } from "@/services/api/emailChange";
+import { errorMessage } from "@/services/api/errors";
 
 interface Props {
   readonly currentEmail: string;
 }
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {return detail;}
-  if (Array.isArray(detail) && detail[0]?.msg) {return String(detail[0].msg);}
-  return fallback;
+  return errorMessage(error, fallback);
 }
 
 export const EmailChangePanel: React.FC<Props> = ({ currentEmail }) => {

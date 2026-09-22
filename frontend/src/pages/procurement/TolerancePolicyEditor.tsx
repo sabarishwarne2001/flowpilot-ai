@@ -23,6 +23,8 @@ import {
   SURFACE,
 } from "@/components/ui/primitives";
 import { formatTimestamp } from "@/utils/displayTime";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const RECONCILIATION_CAPABILITY = "capability.reconciliation";
 
@@ -116,6 +118,17 @@ export const TolerancePolicyEditor: React.FC = () => {
       <span className={HINT}>{hint}</span>
     </label>
   );
+
+  // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
+  if (policiesQuery.isError) {
+    return (
+      <ErrorState
+        title="Tolerance policies could not be loaded"
+        description={errorMessage(policiesQuery.error, "The server did not return tolerance policies. Check your connection and try again.")}
+        onRetry={() => void policiesQuery.refetch()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4 p-6">

@@ -20,13 +20,10 @@ import {
   AVATAR_MIN_DIMENSION,
 } from "@/types/profile";
 import { bumpAvatarVersion } from "@/store/useAvatarVersionStore";
+import { errorMessage } from "@/services/api/errors";
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") { return detail; }
-  if (Array.isArray(detail) && detail[0]?.msg) { return String(detail[0].msg); }
-  return fallback;
+  return errorMessage(error, fallback);
 }
 
 function readDimensions(file: File): Promise<{ w: number; h: number } | null> {

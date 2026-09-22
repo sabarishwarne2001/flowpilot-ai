@@ -31,11 +31,10 @@ import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { canManageMembers } from "@/permissions/organizationPermissions";
 import { WEBHOOK_EVENT_TYPES } from "@/types/webhook";
 import type { WebhookEndpoint } from "@/types/webhook";
+import { errorMessage } from "@/services/api/errors";
 
 function detailOf(error: unknown, fallback: string): string {
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  return typeof detail === "string" ? detail : fallback;
+  return errorMessage(error, fallback);
 }
 
 function statusTone(status: string): string {

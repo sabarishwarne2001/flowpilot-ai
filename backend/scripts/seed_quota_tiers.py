@@ -65,6 +65,35 @@ ADDON_WAREHOUSE_SYNC = {
     "overage_policy": "REFUSE",
 }
 
+# HARDENING-T1:D29. The premium capabilities, bundled per the approved
+# packaging (ROADMAP-ARCH31-TO-ARCH35 §1 and §8). Before this, no seeded tier
+# carried any `capability.*` entry, and `capability_gate.has_capability` is
+# true only when one exists — so three-way matching, the audit radar,
+# redaction, clause checks and calibrated autonomy answered 402 "included on
+# higher plans" for every organization on every plan, Enterprise included.
+#
+# Packaging decisions this encodes (change a line, publish a new version):
+#   Business   reconciliation, anomaly_radar (the handler caps Business to
+#              duplicate detection L0-L2; see radar/sweep.settings_for)
+#   Enterprise all five
+# Redaction for Business is sold as an add-on in the roadmap; there is no
+# add-on key for it yet, so it is Enterprise-only here.
+def _capability(key: str) -> dict:
+    return {"limit_key": key, "max_cost_micros": 0, "overage_policy": "REFUSE"}
+
+
+BUSINESS_CAPABILITIES = [
+    _capability("capability.reconciliation"),
+    _capability("capability.anomaly_radar"),
+]
+ENTERPRISE_CAPABILITIES = [
+    _capability("capability.reconciliation"),
+    _capability("capability.anomaly_radar"),
+    _capability("capability.redaction"),
+    _capability("capability.semantic_assertions"),
+    _capability("capability.calibrated_autonomy"),
+]
+
 # ARCH-29 Tranche 2. Commercial terms, per BUSINESS-BLUEPRINT.md §3.
 #
 # `gateway_price_id` is read from the environment rather than written here: the
@@ -203,6 +232,7 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
             PLATFORM_KEY,
+            *BUSINESS_CAPABILITIES,
         ],
     },
     "enterprise": {
@@ -243,6 +273,7 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             PLATFORM_KEY,
             ADDON_CUSTOM_DOMAIN,
             ADDON_WAREHOUSE_SYNC,
+            *ENTERPRISE_CAPABILITIES,
         ],
     },
 }

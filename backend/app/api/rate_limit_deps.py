@@ -1,4 +1,4 @@
-﻿"""FastAPI rate limiting dependencies (ARCH-08 §6.7, §11.4)."""
+"""FastAPI rate limiting dependencies (ARCH-08 §6.7, §11.4)."""
 
 from typing import Optional
 from fastapi import Depends, Request, Response

@@ -1,4 +1,4 @@
-﻿"""User avatar upload, validation and storage."""
+"""User avatar upload, validation and storage."""
 
 from __future__ import annotations
 

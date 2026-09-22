@@ -337,8 +337,9 @@ def run_jobs_loop(
                         "jobs.handler_failed",
                         extra={"job_id": str(job_id), "job_type": job_type},
                     )
+                    died = attempts >= max_attempts
                     with SessionLocal() as db:
-                        if attempts >= max_attempts:
+                        if died:
                             mark_job_dead(db, job_id, error=f"{type(exc).__name__}: {exc}")
                         else:
                             mark_job_failed(
@@ -348,6 +349,16 @@ def run_jobs_loop(
                                 error=f"{type(exc).__name__}: {exc}",
                             )
                         db.commit()
+                    if died:
+                        # HARDENING-T1:D25. A dead document job fails its
+                        # document instead of leaving it processing forever.
+                        from app.workers.dead_letter import on_job_dead
+
+                        on_job_dead(
+                            job_type=job_type,
+                            payload=dict(payload or {}),
+                            error=f"{type(exc).__name__}: {str(exc)[:300]}",
+                        )
                     continue
 
                 with SessionLocal() as db:

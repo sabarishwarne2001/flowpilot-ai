@@ -89,8 +89,8 @@ const SEVERITY_STYLES: Readonly<Record<AnomalySeverity, string>> = {
 };
 
 const KindIcon: React.FC<{ readonly kind: AnomalyKind }> = ({ kind }) => {
-  if (kind === "PRICE_SURGE") return <TrendingUp className="h-4 w-4" aria-hidden />;
-  if (kind === "CONTRACT_DRIFT") return <Scale className="h-4 w-4" aria-hidden />;
+  if (kind === "PRICE_SURGE") {return <TrendingUp className="h-4 w-4" aria-hidden />;}
+  if (kind === "CONTRACT_DRIFT") {return <Scale className="h-4 w-4" aria-hidden />;}
   return <FileWarning className="h-4 w-4" aria-hidden />;
 };
 
@@ -295,7 +295,7 @@ const EvidenceBlock: React.FC<{ readonly item: AnomalyEvidence }> = ({ item }) =
 
   // price_series is rendered by the chart; anything unrecognised degrades to a
   // labelled block rather than disappearing.
-  if (item.kind === "price_series") return null;
+  if (item.kind === "price_series") {return null;}
 
   return (
     <div className={`${SURFACE_INSET} space-y-2 p-3`}>

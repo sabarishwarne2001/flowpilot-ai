@@ -506,9 +506,14 @@ def approve_and_enqueue_apply(
         workspace_id=job.workspace_id,
         resource_type=AuditResourceType.UPLOADED_FILE,
         resource_id=job.work_item_id,
-        action=AuditAction.APPROVED,
+        # HARDENING-T1:D32. Was AuditAction.APPROVED, which exists neither in
+        # Python nor in the audit_action database enum, so approving a
+        # redaction always raised and no redaction could ever be applied.
+        # UPDATED with the decision in details needs no enum migration.
+        action=AuditAction.UPDATED,
         outcome=AuditOutcome.ALLOWED,
         details={
+            "decision": "APPROVED",
             "redaction_job_id": str(job.id),
             "regions_enabled": len(enabled),
             "regions_disabled": len(job.regions) - len(enabled),

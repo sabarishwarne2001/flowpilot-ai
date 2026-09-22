@@ -283,7 +283,13 @@ class DodoGateway:
         self._api_base = (
             api_base
             or getattr(settings, "DODO_API_BASE", None)
-            or "https://live.dodopayments.com"
+            # HARDENING-T1:D16. Settings derive the host from DODO_LIVEMODE;
+            # this last-resort default must agree with that, not assume live.
+            or (
+                "https://live.dodopayments.com"
+                if getattr(settings, "DODO_LIVEMODE", False)
+                else "https://test.dodopayments.com"
+            )
         ).rstrip("/")
         self._timeout = (
             timeout_seconds

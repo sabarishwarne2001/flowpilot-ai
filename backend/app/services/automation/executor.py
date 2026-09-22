@@ -1,4 +1,4 @@
-﻿"""ARCH-13 Step 13.5 — the execution engine."""
+"""ARCH-13 Step 13.5 — the execution engine."""
 
 from __future__ import annotations
 

@@ -146,6 +146,8 @@ LIGHT = WorkerProfile(
             "batch.expand_archive",
             "work_items.bulk",
             "ingestion.sweep_sessions",
+            # HARDENING-T1:D25. Queries only; no heavy imports.
+            "pipeline.sweep_stuck",
         }
     ),
     allow_heavy=frozenset(),

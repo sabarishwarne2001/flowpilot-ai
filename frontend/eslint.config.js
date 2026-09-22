@@ -103,6 +103,25 @@ export default [
     },
   },
   {
+    // HARDENING-T1:D11. UI code must not read the axios response body: the
+    // interceptor in services/api/client.ts rejects with ApiError, which has
+    // no `.response`, so such reads are always undefined and silently replace
+    // the server's message with a fallback. Use `errorMessage(err, fallback)`.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/services/api/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "MemberExpression[property.name='data'][object.type='MemberExpression'][object.property.name='response']",
+          message:
+            "ApiError has no `.response`. Use errorMessage(err, fallback) from @/services/api/errors.",
+        },
+      ],
+    },
+  },
+  {
     files: ["scripts/**/*.mjs"],
     languageOptions: {
       ecmaVersion: "latest",

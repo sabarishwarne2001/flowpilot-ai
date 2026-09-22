@@ -246,10 +246,47 @@ def decrypt_secret(ciphertext: bytes | str) -> str:
 # ==========================================================================
 
 def safe_get(url: str, *, timeout: float, max_bytes: int = 1_048_576) -> bytes:
+    """GET through the SSRF-safe client; raise on any non-2xx.
+
+    HARDENING-T1:D28. This called `client.get(...)`, a method
+    `SSRFSafeHTTPClient` has never had, so every OIDC discovery and JWKS
+    fetch raised AttributeError and OIDC SSO could not be configured.
+    """
     from app.core.ssrf_client import SSRFSafeHTTPClient
-    client = SSRFSafeHTTPClient()
-    resp = client.get(url, timeout=timeout, max_response_bytes=max_bytes)
+
+    client = SSRFSafeHTTPClient(total_timeout=timeout, max_response_bytes=max_bytes)
+    resp = client.request("GET", url, headers={"Accept": "application/json"})
+    if not 200 <= resp.status_code < 300:
+        raise RuntimeError(f"{url} returned HTTP {resp.status_code}")
     return resp.body
+
+
+def safe_post_form(
+    url: str, *, form: dict[str, str], timeout: float, max_bytes: int = 262_144
+) -> tuple[int, bytes]:
+    """POST an application/x-www-form-urlencoded body through the SSRF-safe client.
+
+    HARDENING-T1:D24. The OIDC token exchange posted with plain httpx to a
+    token_endpoint copied from a tenant-supplied discovery document, so a
+    tenant admin could make the server POST to an internal address. The
+    SSRF-safe client refuses non-https, private and metadata addresses and
+    pins the connection to the address it checked.
+    """
+    from urllib.parse import urlencode
+
+    from app.core.ssrf_client import SSRFSafeHTTPClient
+
+    client = SSRFSafeHTTPClient(total_timeout=timeout, max_response_bytes=max_bytes)
+    resp = client.request(
+        "POST",
+        url,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body=urlencode(form).encode("utf-8"),
+    )
+    return resp.status_code, resp.body
 
 
 # ==========================================================================

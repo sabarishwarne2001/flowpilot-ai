@@ -371,7 +371,21 @@ def create_erasure(
 ) -> ErasureResultResponse:
     _assert_scope(context, organization_id)
 
-    subject = db.get(User, payload.subject_user_id)
+    # HARDENING-T1:D17. Membership first, existence never. This used
+    # `db.get(User, ...)`, so a user in ANY organization passed this check and
+    # reached the email comparison below, whose 400 told an owner that the id
+    # exists somewhere on the platform. The service enforces membership too;
+    # this makes the route's two refusals indistinguishable for non-members.
+    from app.models.organization import OrganizationMember
+
+    subject = db.execute(
+        select(User)
+        .join(OrganizationMember, OrganizationMember.user_id == User.id)
+        .where(
+            User.id == payload.subject_user_id,
+            OrganizationMember.organization_id == organization_id,
+        )
+    ).scalar_one_or_none()
     if subject is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

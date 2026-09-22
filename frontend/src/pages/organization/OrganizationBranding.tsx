@@ -36,7 +36,7 @@ import { brandingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
 import { useAddonAccess } from "@/hooks/useAddonAccess";
-import { ApiError } from "@/services/api/errors";
+import { errorMessage as apiErrorMessage } from "@/services/api/errors";
 import { addonRequiredDetail } from "@/services/api/entitlements";
 import {
   CERTIFICATE_STATUS_LABELS,
@@ -74,23 +74,8 @@ type ColorKey = (typeof COLOR_FIELDS)[number]["key"];
 
 const SCHEMES: readonly ColorScheme[] = ["SYSTEM", "LIGHT", "DARK"];
 
-const errorMessage = (error: unknown): string => {
-  // ARCH-30 Tranche 3. The API client rejects with ApiError; the branch below
-  // this one never matched, so every refusal read "Something went wrong".
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  const detail = (error as { response?: { data?: { detail?: unknown } } })
-    ?.response?.data?.detail;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: string };
-    return first?.msg ?? "The request was rejected.";
-  }
-  return "Something went wrong. Please try again.";
-};
+const errorMessage = (error: unknown): string =>
+  apiErrorMessage(error, "Something went wrong. Please try again.");
 
 const CopyButton: React.FC<{ value: string; label: string }> = ({
   value,

@@ -1,4 +1,4 @@
-﻿"""Automation Rules Evaluation and Matching Service for FlowPilot AI."""
+"""Automation Rules Evaluation and Matching Service for FlowPilot AI."""
 
 from __future__ import annotations
 
