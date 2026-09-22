@@ -86,15 +86,15 @@ def _resolve_sso_binding(db, domain: str) -> EnterpriseIdpConfig | None:
     `uq_verified_domains_org_domain` is `(organization_id, domain)`, not
     `(domain)`. Two organizations can each verify `acme.com` — after a domain
     changes hands, or when the owner publishes both TXT records — and each can
-    mark it as an SSO binding. Nothing in the schema prevents it, so this
-    function must not assume it away.
+    mark it as an SSO binding.
 
-    The structural fix is a partial unique index on `verified_domains(domain)
-    WHERE is_sso_binding`. That is a migration and belongs with the inherited
-    `idp_entity_id` `.one_or_none()` defect in the ACS, which is the same class
-    one table over. Until then, ambiguity is REFUSED and logged at ERROR on
-    both endpoints. Refusing blocks a login; routing arbitrarily hands a user's
-    credentials page to another tenant's IdP.
+    HARDENING-T2:D10. The schema DOES prevent two SSO bindings for one domain:
+    `uq_domain_sso_binding ON verified_domains (domain) WHERE is_sso_binding`
+    has existed since arch16_step1 (this comment previously called it a
+    pending migration). The refusal below is therefore defence in depth, kept
+    because the status filter joins across tables: ambiguity is REFUSED and
+    logged at ERROR on both endpoints. Refusing blocks a login; routing
+    arbitrarily hands a user's credentials page to another tenant's IdP.
 
     WHY THE STATUS FILTER
     =====================

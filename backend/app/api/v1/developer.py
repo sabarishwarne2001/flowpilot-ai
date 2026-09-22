@@ -315,14 +315,29 @@ def issue_key(
     _assert_scope(context, organization_id)
     _assert_human_admin(request)
 
-    key, token = api_key_service.issue_api_key(
-        db,
-        organization_id=organization_id,
-        actor=context.membership,
-        name=payload.name,
-        scopes=[scope.value for scope in payload.scopes],
-        expires_at=payload.expires_at,
-    )
+    # HARDENING-T2:D35. `uq_api_keys_organization_id_name_active` makes an
+    # active key's name unique per organization, and the violation escaped as
+    # an unhandled IntegrityError (HTTP 500, a generic toast in the console).
+    # The same answer is now a 409 that says what to change.
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        key, token = api_key_service.issue_api_key(
+            db,
+            organization_id=organization_id,
+            actor=context.membership,
+            name=payload.name,
+            scopes=[scope.value for scope in payload.scopes],
+            expires_at=payload.expires_at,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        if "uq_api_keys_organization_id_name_active" in str(exc.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"An active key named {payload.name!r} already exists. Choose another name or revoke that key first.",
+            ) from exc
+        raise
 
     try:
         developer_portal_service.assign_tier(

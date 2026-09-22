@@ -23,6 +23,12 @@ export interface DocumentSettings {
 
   created_at: string;
   updated_at: string;
+  /** HARDENING-T2:D13 — platform facts the pipeline actually uses (read-only). */
+  readonly platform_embedding_model?: string;
+  readonly platform_embedding_dimension?: number;
+  readonly platform_ocr_language?: string;
+  /** Extensions the platform accepts; the workspace may narrow, never widen. */
+  readonly supported_file_types?: string[];
 }
 
 export type UpdateDocumentSettings =

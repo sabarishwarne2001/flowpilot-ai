@@ -83,6 +83,53 @@ logger = logging.getLogger("app.services.invitation_mail")
 RenderedMessage = tuple[str, str, str]
 
 
+
+def _send_as_organization(
+    *,
+    organization_id: uuid.UUID,
+    recipient: str,
+    subject: str,
+    html_body: str,
+    text_body: str,
+    reply_to: str | None,
+) -> tuple[bool, str]:
+    """HARDENING-T2:D22. Invitations climb the TRANSACTIONAL ladder.
+
+    `MessageKind.TRANSACTIONAL` was declared in email_resolution for exactly
+    this mail and nothing used it: invitations always left through the
+    platform relay under the platform's name, so an organization's custom SMTP
+    and verified branding sender never applied to the first email its
+    invitees ever receive. The resolver picks transport (organization settings,
+    else platform) and identity (verified branding domain, else organization
+    sender, else platform) and always returns a usable answer; an unconfigured
+    platform relay still raises PlatformEmailNotConfigured, handled by _send.
+    """
+    from app.db.session import SessionLocal
+    from app.services.email_resolution import MessageKind, resolve_email_identity
+    from app.services.email_service import email_service
+
+    with SessionLocal() as db:
+        identity = resolve_email_identity(
+            db, organization_id=organization_id, message_kind=MessageKind.TRANSACTIONAL
+        )
+    config = identity.smtp.model_copy(
+        update={"from_email": identity.from_address, "sender_name": identity.sender_name}
+    )
+    logger.info(
+        "INVITATION_MAIL_IDENTITY | organization=%s | transport=%s | identity=%s",
+        organization_id,
+        identity.transport_layer,
+        identity.identity_layer,
+    )
+    return email_service.send_html_email(
+        settings=config,
+        recipient=recipient,
+        subject=subject,
+        html_body=html_body,
+        text_body=text_body,
+        reply_to=reply_to or identity.reply_to,
+    )
+
 def _send(
     *,
     event: str,
@@ -90,6 +137,7 @@ def _send(
     render: Callable[[], RenderedMessage],
     invitation_id: uuid.UUID | None = None,
     reply_to: str | None = None,
+    organization_id: uuid.UUID | None = None,
 ) -> bool:
     try:
         subject, html_body, text_body = render()
@@ -102,13 +150,23 @@ def _send(
         return False
 
     try:
-        delivered, detail = send_platform_email(
-            recipient=recipient,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
-            reply_to=reply_to,
-        )
+        if organization_id is not None:
+            delivered, detail = _send_as_organization(
+                organization_id=organization_id,
+                recipient=recipient,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                reply_to=reply_to,
+            )
+        else:
+            delivered, detail = send_platform_email(
+                recipient=recipient,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                reply_to=reply_to,
+            )
     except PlatformEmailNotConfigured as exc:
         logger.error(
             "INVITATION_MAIL_UNCONFIGURED | event=%s | invitation=%s | %s",
@@ -146,6 +204,7 @@ def _send(
 
 def send_invitation(
     *,
+    organization_id: uuid.UUID | None = None,
     invited_email: str,
     organization_name: str,
     inviter_email: str,
@@ -157,6 +216,7 @@ def send_invitation(
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_ISSUED",
         recipient=invited_email,
         invitation_id=invitation_id,
@@ -177,6 +237,7 @@ def send_invitation(
 
 def send_invitation_revoked(
     *,
+    organization_id: uuid.UUID | None = None,
     invited_email: str,
     organization_name: str,
     inviter_email: str,
@@ -184,6 +245,7 @@ def send_invitation_revoked(
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_REVOKED",
         recipient=invited_email,
         invitation_id=invitation_id,
@@ -199,6 +261,7 @@ def send_invitation_revoked(
 
 def send_invitation_accepted(
     *,
+    organization_id: uuid.UUID | None = None,
     inviter_email: str,
     invited_email: str,
     invited_display: str | None = None,
@@ -210,6 +273,7 @@ def send_invitation_accepted(
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_ACCEPTED",
         recipient=inviter_email,
         invitation_id=invitation_id,
@@ -228,6 +292,7 @@ def send_invitation_accepted(
 
 def send_invitation_rejected(
     *,
+    organization_id: uuid.UUID | None = None,
     inviter_email: str,
     invited_email: str,
     organization_name: str,
@@ -235,6 +300,7 @@ def send_invitation_rejected(
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_REJECTED",
         recipient=inviter_email,
         invitation_id=invitation_id,
@@ -249,6 +315,7 @@ def send_invitation_rejected(
 
 def send_invitation_seat_blocked(
     *,
+    organization_id: uuid.UUID | None = None,
     inviter_email: str,
     invited_email: str,
     organization_name: str,
@@ -257,6 +324,7 @@ def send_invitation_seat_blocked(
     invitation_id: uuid.UUID | None = None,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_SEAT_BLOCKED",
         recipient=inviter_email,
         invitation_id=invitation_id,
@@ -272,11 +340,13 @@ def send_invitation_seat_blocked(
 
 def send_invitation_expiry_digest(
     *,
+    organization_id: uuid.UUID | None = None,
     inviter_email: str,
     lines: Sequence[ExpiredInvitationLine],
     invitations_url: str,
 ) -> bool:
     return _send(
+        organization_id=organization_id,
         event="INVITATION_EXPIRY_DIGEST",
         recipient=inviter_email,
         render=lambda: render_invitation_expiry_digest(

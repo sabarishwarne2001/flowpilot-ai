@@ -491,3 +491,81 @@ def validate_spooled(
         except Exception:
             pass
         raise
+
+
+# HARDENING-T2:D13. The workspace "Allowed file types" setting (stored as
+# comma-separated extensions) was a free-text field nothing enforced: every
+# upload path passed the platform list straight through. The mapping below is
+# the one vocabulary the settings schema validates against and the upload
+# paths enforce with. A workspace can only NARROW the platform list.
+EXTENSION_MIME_TYPES: dict[str, str] = {
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+    "webp": "image/webp",
+    "gif": "image/gif",
+    "bmp": "image/bmp",
+}
+
+
+def supported_extensions(platform_mimes: Iterable[str]) -> list[str]:
+    """Extensions whose MIME type the platform accepts, in a stable order."""
+    allowed = {m.split(";")[0].strip().lower() for m in platform_mimes}
+    return [ext for ext, mime in EXTENSION_MIME_TYPES.items() if mime in allowed]
+
+
+def parse_extensions(raw: str | None) -> list[str]:
+    parts = [p.strip().lower().lstrip(".") for p in (raw or "").split(",")]
+    seen: list[str] = []
+    for part in parts:
+        if part and part not in seen:
+            seen.append(part)
+    return seen
+
+
+#: The column default every existing workspace row carries. It was never
+#: enforced, so reading it literally on upgrade would suddenly reject TIFF,
+#: WEBP, GIF and BMP uploads that work today. Until an admin saves an explicit
+#: choice, it means "everything the platform accepts". (A deliberate choice of
+#: exactly these four types is indistinguishable from the default; the
+#: console states this.)
+LEGACY_DEFAULT_FILE_TYPES: tuple[str, ...] = ("pdf", "png", "jpg", "jpeg")
+
+
+def effective_extensions(raw: str | None, platform_mimes: Iterable[str]) -> list[str]:
+    """The extensions a workspace setting actually permits."""
+    supported = supported_extensions(platform_mimes)
+    chosen = parse_extensions(raw)
+    if not chosen or tuple(chosen) == LEGACY_DEFAULT_FILE_TYPES:
+        return supported
+    narrowed = [e for e in supported if e in chosen]
+    return narrowed or supported
+
+
+def workspace_allowed_mimes(db, workspace_id, platform_mimes: Iterable[str]) -> list[str]:
+    """The platform MIME list narrowed by the workspace's extension setting.
+
+    An empty or unreadable setting falls back to the platform list; a setting
+    can never add a type the platform does not accept.
+    """
+    platform = [m.split(";")[0].strip().lower() for m in platform_mimes]
+    try:
+        from app import crud
+
+        settings_row = crud.get_document_settings(db, workspace_id=workspace_id)
+        extensions = effective_extensions(
+            getattr(settings_row, "allowed_file_types", None), platform
+        )
+    except Exception:  # noqa: BLE001 - never block uploads on a settings read
+        return platform
+    wanted = {EXTENSION_MIME_TYPES[e] for e in extensions if e in EXTENSION_MIME_TYPES}
+    # `image/jpg` is not a registered type, but browsers and the platform list
+    # both use it; a workspace that allows JPEG allows either spelling.
+    if "image/jpeg" in wanted:
+        wanted.add("image/jpg")
+    narrowed = [m for m in platform if m in wanted]
+    return narrowed or platform
+

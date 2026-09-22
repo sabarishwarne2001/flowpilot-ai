@@ -124,8 +124,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Accepts both Argon2id and bcrypt hashes; passlib selects the handler from
     the hash prefix. Callers that can persist an upgrade should prefer
     verify_and_upgrade_password.
+
+    HARDENING-T2:D35b. An unrecognised or empty hash (an SSO-provisioned
+    account, a placeholder) is "does not match", never an exception: passlib
+    raised UnknownHashError, which surfaced as HTTP 500 from every
+    password-confirmed action (ownership transfer, email change, reauth).
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    if not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):  # passlib.exc.UnknownHashError is a ValueError
+        return False
 
 
 def verify_and_upgrade_password(

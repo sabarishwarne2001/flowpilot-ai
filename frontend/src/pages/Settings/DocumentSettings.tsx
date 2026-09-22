@@ -19,6 +19,7 @@ import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import KnowledgeBaseReindex from "@/components/settings/KnowledgeBaseReindex";
 import PresetGallery from "@/components/settings/PresetGallery";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export const DocumentSettings: React.FC = () => {
   const queryClient = useQueryClient();
@@ -28,6 +29,8 @@ export const DocumentSettings: React.FC = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isDirty },
   } = useForm<DocumentSettingsFormData>({
     resolver: zodResolver(documentSettingsSchema),
@@ -45,6 +48,7 @@ export const DocumentSettings: React.FC = () => {
     },
   });
 
+  useUnsavedChangesGuard(isDirty);
   const { data: documentSettings, isLoading: isLoadingDocumentSettings } =
     useQuery({
       queryKey: ["document-settings", workspace.id],
@@ -173,34 +177,34 @@ export const DocumentSettings: React.FC = () => {
               {errors.chunk_overlap && <p className="text-xs text-destructive">{errors.chunk_overlap.message}</p>}
             </div>
 
+            {/* HARDENING-T2:D13. The embedding model is platform-wide (and pinned by a
+                database constraint); OCR runs with one process-wide language. Both were
+                free-text inputs nothing read. They are shown as the facts they are. */}
             <div className="space-y-2">
-              <label htmlFor="embedding_model" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("embedding_model", "Embedding Model")}
-              </label>
-              <input
-                id="embedding_model"
-                type="text"
-                disabled={!canManageSettings}
-                placeholder="sentence-transformers/all-MiniLM-L6-v2"
-                {...register("embedding_model")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.embedding_model && <p className="text-xs text-destructive">{errors.embedding_model.message}</p>}
+              </span>
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                <span className="font-mono">
+                  {documentSettings?.platform_embedding_model ?? "sentence-transformers/all-MiniLM-L6-v2"}
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Platform-managed · {documentSettings?.platform_embedding_dimension ?? 384}-dimension vectors. Changing it
+                  would require re-indexing every document, so it is not a workspace setting.
+                </span>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="ocr_language" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("ocr_language", "OCR Language")}
-              </label>
-              <input
-                id="ocr_language"
-                type="text"
-                disabled={!canManageSettings}
-                placeholder="eng"
-                {...register("ocr_language")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              {errors.ocr_language && <p className="text-xs text-destructive">{errors.ocr_language.message}</p>}
+              </span>
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                <span className="font-mono">{documentSettings?.platform_ocr_language ?? "en"}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Set for the OCR service as a whole by your administrator.
+                </span>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -217,18 +221,46 @@ export const DocumentSettings: React.FC = () => {
               {errors.max_upload_size && <p className="text-xs text-destructive">{errors.max_upload_size.message}</p>}
             </div>
 
+            {/* HARDENING-T2:D13. Chips over the platform's accepted types; the upload paths
+                now enforce this list, and it can only narrow what the platform accepts. */}
             <div className="space-y-2">
-              <label htmlFor="allowed_file_types" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("allowed_file_types", "Allowed File Types")}
-              </label>
-              <input
-                id="allowed_file_types"
-                type="text"
-                disabled={!canManageSettings}
-                placeholder="pdf,png,jpg,jpeg"
-                {...register("allowed_file_types")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              />
+              </span>
+              <div role="group" aria-label="Allowed file types" className="flex flex-wrap gap-1.5">
+                {(documentSettings?.supported_file_types ?? ["pdf", "png", "jpg", "jpeg"]).map((ext) => {
+                  const current = (watch("allowed_file_types") || "")
+                    .split(",")
+                    .map((part) => part.trim().toLowerCase())
+                    .filter(Boolean);
+                  const selected = current.includes(ext);
+                  const toggle = () => {
+                    const next = selected ? current.filter((e) => e !== ext) : [...current, ext];
+                    if (next.length === 0) {
+                      toast.error("Allow at least one file type.");
+                      return;
+                    }
+                    setValue("allowed_file_types", next.join(","), { shouldDirty: true, shouldValidate: true });
+                  };
+                  return (
+                    <button
+                      key={ext}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={!canManageSettings}
+                      onClick={toggle}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase transition disabled:opacity-50 ${
+                        selected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {ext}
+                    </button>
+                  );
+                })}
+              </div>
+              <input type="hidden" {...register("allowed_file_types")} />
               {errors.allowed_file_types && <p className="text-xs text-destructive">{errors.allowed_file_types.message}</p>}
             </div>
           </div>

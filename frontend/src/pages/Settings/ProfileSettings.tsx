@@ -21,6 +21,8 @@ import {
 } from "@/types/profile";
 import { bumpAvatarVersion } from "@/store/useAvatarVersionStore";
 import { errorMessage } from "@/services/api/errors";
+import { LOCALES, TimezoneField, isKnownTimezone } from "@/components/forms/TimezoneField";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 function detailOf(error: unknown, fallback: string): string {
   return errorMessage(error, fallback);
@@ -50,6 +52,7 @@ export const ProfileSettings: React.FC = () => {
   const [timezone, setTimezone] = useState("");
   const [locale, setLocale] = useState("");
   const [dirty, setDirty] = useState(false);
+  useUnsavedChangesGuard(dirty);
 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -300,16 +303,13 @@ export const ProfileSettings: React.FC = () => {
             <label htmlFor="profile-tz" className="text-sm font-semibold text-foreground">
               Display timezone
             </label>
-            <input
+            <TimezoneField
               id="profile-tz"
               value={timezone}
-              onChange={(event) => {
-                setTimezone(event.target.value);
+              onChange={(value) => {
+                setTimezone(value);
                 setDirty(true);
               }}
-              maxLength={100}
-              placeholder="America/New_York"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground focus:border-primary focus:outline-none"
             />
             <p className="mt-1 text-xs text-muted-foreground">
               Timestamps are shown to you in this timezone. Schedules follow the workspace
@@ -331,17 +331,25 @@ export const ProfileSettings: React.FC = () => {
             <label htmlFor="profile-locale" className="text-sm font-semibold text-foreground">
               Locale
             </label>
-            <input
+            <select
               id="profile-locale"
               value={locale}
               onChange={(event) => {
                 setLocale(event.target.value);
                 setDirty(true);
               }}
-              maxLength={20}
-              placeholder="en-US"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground focus:border-primary focus:outline-none"
-            />
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
+              <option value="">Browser default</option>
+              {LOCALES.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label} · {entry.value}
+                </option>
+              ))}
+              {locale && !LOCALES.some((entry) => entry.value === locale) && (
+                <option value={locale}>{locale}</option>
+              )}
+            </select>
             <p className="mt-1 text-xs text-muted-foreground">
               Used for formatting dates and numbers.
             </p>
@@ -352,7 +360,7 @@ export const ProfileSettings: React.FC = () => {
           <button
             type="button"
             onClick={() => save.mutate()}
-            disabled={save.isPending || !dirty}
+            disabled={save.isPending || !dirty || !isKnownTimezone(timezone)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

@@ -3,7 +3,7 @@ from datetime import datetime
 from uuid import UUID
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import computed_field, BaseModel, ConfigDict, Field, field_validator
 
 
 class DocumentSettingsBase(BaseModel):
@@ -104,6 +104,30 @@ class DocumentSettingsUpdate(BaseModel):
     max_upload_size: int | None = Field(default=None, ge=1, le=500)
     allowed_file_types: str | None = Field(default=None, max_length=255)
     duplicate_detection: bool | None = None
+
+    @field_validator("allowed_file_types")
+    @classmethod
+    def _file_types_supported(cls, value: str | None) -> str | None:
+        """HARDENING-T2:D13. Only extensions the platform accepts; never empty."""
+        if value is None:
+            return None
+        from app.core.config import settings
+        from app.services.file_validation_service import (
+            parse_extensions,
+            supported_extensions,
+        )
+
+        chosen = parse_extensions(value)
+        supported = supported_extensions(settings.ALLOWED_MIME_TYPES)
+        unknown = [e for e in chosen if e not in supported]
+        if unknown:
+            raise ValueError(
+                f"Unsupported file type(s): {', '.join(unknown)}. "
+                f"Choose from: {', '.join(supported)}."
+            )
+        if not chosen:
+            raise ValueError("Allow at least one file type.")
+        return ",".join(chosen)
     automatic_classification: bool | None = None
     automatic_summarization: bool | None = None
     automatic_entity_extraction: bool | None = None
@@ -134,3 +158,46 @@ class DocumentSettingsResponse(DocumentSettingsBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("allowed_file_types", mode="after")
+    @classmethod
+    def _report_effective_types(cls, value: str) -> str:
+        """HARDENING-T2:D13. Report what uploads actually enforce, so the
+        console's chips and the upload paths can never disagree."""
+        from app.core.config import settings
+        from app.services.file_validation_service import effective_extensions
+
+        return ",".join(effective_extensions(value, settings.ALLOWED_MIME_TYPES))
+
+    # HARDENING-T2:D13. What actually serves this workspace. The stored
+    # embedding_model / ocr_language columns are not read by the pipeline
+    # (the embedding model is platform-wide and pinned; OCR runs with one
+    # process-wide language), so the console shows these instead of inputs.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def platform_embedding_model(self) -> str:
+        from app.core.config import settings
+
+        return f"sentence-transformers/{settings.EMBEDDING_MODEL_NAME}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def platform_embedding_dimension(self) -> int:
+        from app.models.document_chunk import EMBEDDING_DIMENSION
+
+        return int(EMBEDDING_DIMENSION)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def platform_ocr_language(self) -> str:
+        from app.core.config import settings
+
+        return str(settings.OCR_LANGUAGE)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def supported_file_types(self) -> list[str]:
+        from app.core.config import settings
+        from app.services.file_validation_service import supported_extensions
+
+        return supported_extensions(settings.ALLOWED_MIME_TYPES)

@@ -158,7 +158,7 @@ export const OrganizationGeneral: React.FC = () => {
   /* --- Archive ---------------------------------------------------------- */
 
   const { mutate: archive, isPending: isArchiving } = useMutation({
-    mutationFn: () => archiveOrganization(organizationId),
+    mutationFn: () => archiveOrganization(organizationId, typedSlug.trim()),
     onSuccess: () => {
       toast.success(`${organization.organization_name} has been archived.`);
       // Every cached query in the app is now describing an organization the

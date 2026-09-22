@@ -44,6 +44,7 @@ import { marketplaceApi } from "@/services/api/partner";
 import { marketplaceKeys } from "@/services/api/queryKeys";
 import type { ManifestNode, MarketplaceItem } from "@/types/partner";
 import { errorMessage } from "@/services/api/errors";
+import { ErrorState } from "@/components/common/ErrorState";
 
 const NODE_TONE: Record<ManifestNode["node_type"], string> = {
   trigger: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -183,7 +184,13 @@ export default function MarketplaceCatalog() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-foreground">Available</h2>
-        {catalogQuery.isLoading ? (
+        {catalogQuery.isError ? (
+          <ErrorState
+            title="The catalogue could not be loaded"
+            description={errorMessage(catalogQuery.error, "The server did not return the catalogue. Check your connection and try again.")}
+            onRetry={() => void catalogQuery.refetch()}
+          />
+        ) : catalogQuery.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…
           </div>

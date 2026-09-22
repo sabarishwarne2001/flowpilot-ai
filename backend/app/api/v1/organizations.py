@@ -18,7 +18,8 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, Field
+from fastapi import HTTPException, APIRouter, Depends, Query, status
 
 from app.api import deps
 from app.core.exceptions import InvalidSlugError, ReservedSlugError
@@ -159,6 +160,12 @@ async def update_organization(
     )
 
 
+class OrganizationArchiveRequest(BaseModel):
+    """HARDENING-T2: the typed confirmation the console already asks for."""
+
+    confirm_slug: str = Field(min_length=1, max_length=100)
+
+
 @router.post(
     "/organizations/{organization_id}/archive",
     response_model=OrganizationResponse,
@@ -166,6 +173,7 @@ async def update_organization(
 )
 async def archive_organization(
     db: deps.DbSession,
+    payload: OrganizationArchiveRequest,
     context=Depends(deps.RequireOrgOwner),
 ) -> Any:
     """
@@ -176,6 +184,16 @@ async def archive_organization(
     retention window, and naming it accurately keeps that guarantee visible in
     the API surface.
     """
+    # HARDENING-T2:console-general. The console makes the owner type the slug;
+    # the API enforced nothing beyond "is an owner", so any authenticated
+    # owner request (a script, a replayed call) archived the organization —
+    # deactivating every member's access and every API key — with an empty
+    # body. The typed confirmation is now required server-side too.
+    if payload.confirm_slug.strip() != context.organization.slug:
+        raise HTTPException(
+            status_code=422,
+            detail="Type the organization's slug exactly to confirm archiving.",
+        )
     return organization_service.archive_organization(
         db,
         organization=context.organization,

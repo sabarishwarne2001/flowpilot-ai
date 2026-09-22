@@ -72,6 +72,7 @@ async def create_invitation(
 
     background_tasks.add_task(
         invitation_mail.send_invitation,
+        organization_id=context.organization_id,
         invited_email=issued.invitation.email,
         organization_name=issued.organization_name,
         inviter_email=issued.inviter_email,
@@ -106,6 +107,7 @@ async def resend_invitation(
 
     background_tasks.add_task(
         invitation_mail.send_invitation,
+        organization_id=context.organization_id,
         invited_email=issued.invitation.email,
         organization_name=issued.organization_name,
         inviter_email=issued.inviter_email,
@@ -141,6 +143,7 @@ async def revoke_invitation(
 
     background_tasks.add_task(
         invitation_mail.send_invitation_revoked,
+        organization_id=context.organization_id,
         invited_email=result.invited_email,
         organization_name=result.organization_name,
         inviter_email=result.inviter_email,
@@ -234,6 +237,7 @@ async def accept_invitation(
         members_url = build_organization_members_link(accepted.organization_slug)
         background_tasks.add_task(
             invitation_mail.send_invitation_accepted,
+            organization_id=accepted.organization_id,
             inviter_email=accepted.inviter_email,
             invited_email=accepted.invited_email,
             invited_display=accepted.invited_display,

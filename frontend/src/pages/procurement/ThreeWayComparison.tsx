@@ -22,6 +22,8 @@ import {
 import type { CaseLine, EvidencePointer } from "@/types/procurement";
 import { RED_OUTCOMES, outcomeLabel, outcomeTone } from "@/types/procurement";
 import { formatTimestamp } from "@/utils/displayTime";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const RECONCILIATION_CAPABILITY = "capability.reconciliation";
 const MINIMUM_DISPUTE_REASON = 10;
@@ -225,6 +227,17 @@ export const ThreeWayComparison: React.FC = () => {
       <div className="p-6">
         <CapabilityLockCard canChangePlan={workspace?.role === "ADMIN"} />
       </div>
+    );
+  }
+
+  // HARDENING-T2:D26. A failed request rendered as a blank or permanent spinner.
+  if (caseQuery.isError) {
+    return (
+      <ErrorState
+        title="This case could not be loaded"
+        description={errorMessage(caseQuery.error, "The server did not return this case. Check your connection and try again.")}
+        onRetry={() => void caseQuery.refetch()}
+      />
     );
   }
 

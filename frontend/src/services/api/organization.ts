@@ -118,10 +118,12 @@ export const updateOrganization = async (
  */
 export const archiveOrganization = async (
   organizationId: string,
+  confirmSlug: string,
 ): Promise<Organization> => {
+  // HARDENING-T2: the server now requires the typed slug as well.
   const response = await apiClient.post<Organization>(
     ORGANIZATION_ENDPOINTS.archive(organizationId),
-    null,
+    { confirm_slug: confirmSlug },
     { headers: { Accept: "application/json" } },
   );
   return response.data;

@@ -52,6 +52,10 @@ import { canManageWorkspaceSettings } from "@/permissions/workspacePermissions";
 import { ADMINISTRATIVE_ROLES, canViewBilling } from "@/permissions/organizationPermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { organizationBYOKPath, organizationBillingPath } from "@/routes/tenantPaths";
+import { InfoTooltip } from "@/components/forms/InfoTooltip";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { ErrorState } from "@/components/common/ErrorState";
+import { errorMessage } from "@/services/api/errors";
 
 const DEFAULTS: AISettingsFormData = {
   provider: "GROQ",
@@ -79,10 +83,14 @@ const FieldLabel: React.FC<{ readonly htmlFor: string; readonly field: keyof typ
 }) => {
   const help = AI_FIELD_HELP[field];
   return (
-    <label htmlFor={htmlFor} className="block">
-      <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{help.title}</span>
-      <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/80">{help.description}</span>
-    </label>
+    // HARDENING-T2:Phase3. The same (i) affordance as the other settings forms,
+    // instead of a paragraph under every label.
+    <span className="flex items-center gap-1.5">
+      <label htmlFor={htmlFor} className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+        {help.title}
+      </label>
+      <InfoTooltip label={help.title}>{help.description}</InfoTooltip>
+    </span>
   );
 };
 
@@ -203,6 +211,7 @@ export const AISettings: React.FC = () => {
     resolver: zodResolver(aiSettingsSchema),
     defaultValues: DEFAULTS,
   });
+  useUnsavedChangesGuard(isDirty);
 
   const settingsQuery = useQuery({
     queryKey: settingsKeys.ai(workspaceId),
@@ -306,6 +315,17 @@ export const AISettings: React.FC = () => {
       {errors[name] && <p className="text-xs text-destructive">{errors[name]?.message}</p>}
     </div>
   );
+
+  // HARDENING-T2:D26. A failed request rendered as a blank or permanent spinner.
+  if (settingsQuery.isError) {
+    return (
+      <ErrorState
+        title="The AI settings could not be loaded"
+        description={errorMessage(settingsQuery.error, "The server did not return the AI settings. Check your connection and try again.")}
+        onRetry={() => void settingsQuery.refetch()}
+      />
+    );
+  }
 
   if (settingsQuery.isLoading) {
     return (

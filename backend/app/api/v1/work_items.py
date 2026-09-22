@@ -104,7 +104,10 @@ async def upload_document(
             total_size,
             declared_mime=file.content_type,
             original_filename=filename,
-            allowed_mimes=settings.ALLOWED_MIME_TYPES,
+            # HARDENING-T2:D13. The workspace setting narrows the platform list.
+            allowed_mimes=file_validation_service.workspace_allowed_mimes(
+                db, context.workspace_id, settings.ALLOWED_MIME_TYPES
+            ),
             max_pages=settings.MAX_DOCUMENT_PAGES,
             scrub_metadata=settings.SCRUB_UPLOAD_METADATA,
         )

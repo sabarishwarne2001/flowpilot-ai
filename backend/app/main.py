@@ -254,3 +254,25 @@ app.include_router(billing_v1.router, prefix=settings.API_V1_STR)
 
 # ARCH-16 SCIM 2.0 root mount
 app.include_router(scim_v1.router)
+
+# HARDENING-T2:console-config. A deployment without EMAIL_ENCRYPTION_KEYS made
+# every save that stores a secret (webhook signing secrets, tenant SMTP
+# passwords, BYOK keys) fail as a bare 500. It is a configuration problem the
+# operator can fix, so it answers 503 and names the setting.
+from app.core.encryption import EncryptionNotConfiguredError  # noqa: E402
+
+
+@app.exception_handler(EncryptionNotConfiguredError)
+async def _encryption_not_configured(request, exc):  # type: ignore[no-untyped-def]
+    from fastapi.responses import JSONResponse
+
+    logger_ = __import__("logging").getLogger("app.main")
+    logger_.error("encryption.not_configured", extra={"path": request.url.path})
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Secrets cannot be stored: the server has no encryption keys configured "
+                      "(EMAIL_ENCRYPTION_KEYS). Ask your administrator to set it.",
+            "code": "ENCRYPTION_NOT_CONFIGURED",
+        },
+    )

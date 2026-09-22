@@ -46,6 +46,8 @@ import type {
   WorkspaceMember,
   WorkspaceRole,
 } from "@/types/tenancy";
+import { InfoTooltip } from "@/components/forms/InfoTooltip";
+import { LegalHoldsPanel } from "@/components/compliance/LegalHoldsPanel";
 
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
@@ -523,9 +525,11 @@ export const Workspace: React.FC = () => {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
-              <label htmlFor="timezone" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Scheduling timezone
-              </label>
+              <span className="flex items-center gap-1.5">
+                <label htmlFor="timezone" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Scheduling timezone</label>
+                {/* HARDENING-T2:D14. Say which engine this setting configures. */}
+                <InfoTooltip label="Scheduling timezone">Sets the clock for analytics warehouse sync windows. The timestamps you see follow your own profile timezone, not this one.</InfoTooltip>
+              </span>
               <select
                 id="timezone"
                 disabled={!canEditWorkspace}
@@ -567,9 +571,11 @@ export const Workspace: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="currency" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Currency
-              </label>
+              <span className="flex items-center gap-1.5">
+                <label htmlFor="currency" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Currency</label>
+                {/* HARDENING-T2:D14. Say which engine this setting configures. */}
+                <InfoTooltip label="Currency">Used by three-way matching when an invoice, purchase order or receipt does not state its currency. It does not change how amounts are displayed.</InfoTooltip>
+              </span>
               <select
                 id="currency"
                 disabled={!canEditWorkspace}
@@ -590,9 +596,11 @@ export const Workspace: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="date_format" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Date Format
-              </label>
+              <span className="flex items-center gap-1.5">
+                <label htmlFor="date_format" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Date Format</label>
+                {/* HARDENING-T2:D14. Say which engine this setting configures. */}
+                <InfoTooltip label="Date Format">Tells three-way matching how to read ambiguous dates on your documents (is 03/04/2026 March or April?). It does not change how dates are displayed.</InfoTooltip>
+              </span>
               <select
                 id="date_format"
                 disabled={!canEditWorkspace}
@@ -933,6 +941,11 @@ export const Workspace: React.FC = () => {
           }}
         />
       )}
+
+      {/* HARDENING-T2:D9. Legal holds had routes and no screen. */}
+      <div className="mt-8">
+        <LegalHoldsPanel workspaceId={workspaceId} canManage={canManageTeam} />
+      </div>
     </div>
   );
 };

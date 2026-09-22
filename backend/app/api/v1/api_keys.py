@@ -56,14 +56,27 @@ def create_api_key(
 ) -> Any:
     _assert_human_admin(request, context)
 
-    key, token = api_key_service.issue_api_key(
-        db,
-        organization_id=context.organization_id,
-        actor=context.membership,
-        name=payload.name,
-        scopes=[s.value for s in payload.scopes],
-        expires_at=payload.expires_at,
-    )
+    # HARDENING-T2:D35. Duplicate active key names were an unhandled
+    # IntegrityError (HTTP 500); they are now a 409 with a fix-it message.
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        key, token = api_key_service.issue_api_key(
+            db,
+            organization_id=context.organization_id,
+            actor=context.membership,
+            name=payload.name,
+            scopes=[s.value for s in payload.scopes],
+            expires_at=payload.expires_at,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        if "uq_api_keys_organization_id_name_active" in str(exc.orig):
+            raise HTTPException(
+                status_code=409,
+                detail="An active key with this name already exists. Choose another name or revoke that key first.",
+            ) from exc
+        raise
     db.commit()
     db.refresh(key)
 
