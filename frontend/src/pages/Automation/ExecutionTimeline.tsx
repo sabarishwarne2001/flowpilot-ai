@@ -27,6 +27,35 @@ import { listExecutionNodes } from "@/services/api/executions";
 import { formatMicros } from "@/types/billing";
 import { pollUnlessRefused } from "@/services/api/polling";
 
+/**
+ * ARCH41-S1:adaptive-timeline-poll. The timeline polled every 30 seconds, so a
+ * reviewer who fired a test event watched a RUNNING row for up to half a
+ * minute and concluded the engine was stuck. Poll quickly while anything is
+ * in flight, slowly when nothing is, and not at all once the server has
+ * refused (plan, permission) — `pollUnlessRefused` still decides that.
+ */
+const LIVE_POLL_MS = 2_000;
+const IDLE_POLL_MS = 30_000;
+const IN_FLIGHT: ReadonlySet<AutomationExecutionStatus> = new Set<AutomationExecutionStatus>([
+  "QUEUED",
+  "RUNNING",
+]);
+
+const timelinePollInterval = (query: {
+  readonly state: {
+    readonly error: unknown;
+    readonly data?: { readonly items?: readonly AutomationExecution[] } | undefined;
+  };
+}): number | false => {
+  if (pollUnlessRefused(IDLE_POLL_MS)(query) === false) {
+    return false;
+  }
+  const items = query.state.data?.items ?? [];
+  return items.some((execution) => IN_FLIGHT.has(execution.status))
+    ? LIVE_POLL_MS
+    : IDLE_POLL_MS;
+};
+
 const TONE_CLASSES: Record<string, string> = {
   ok: "border-emerald-500/40 bg-emerald-500/5",
   warn: "border-amber-500/50 bg-amber-500/10",
@@ -75,7 +104,7 @@ export const ExecutionTimeline: React.FC = () => {
       }),
     enabled: Boolean(workspaceId),
     staleTime: 15_000,
-    refetchInterval: pollUnlessRefused(30_000),
+    refetchInterval: timelinePollInterval,
   });
 
   const chains = useMemo(() => {

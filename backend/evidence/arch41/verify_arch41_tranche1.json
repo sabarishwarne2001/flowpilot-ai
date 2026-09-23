@@ -1,0 +1,378 @@
+{
+  "milestone": "ARCH-41",
+  "tranche": 1,
+  "automation_catalog": {
+    "triggers": [
+      {
+        "key": "document.created",
+        "events": [
+          "trigger.work_item.created"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "document.ready",
+        "events": [
+          "work_item.enriched",
+          "work_item.verification_completed"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "document.completed",
+        "events": [
+          "trigger.document.completed"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "document.failed",
+        "events": [
+          "trigger.document.failed"
+        ],
+        "capability": null,
+        "excluded_actions": [
+          "redaction.start",
+          "work_item.mutate",
+          "autonomy.decide"
+        ]
+      },
+      {
+        "key": "document.reprocessed",
+        "events": [
+          "trigger.work_item.reprocessed"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "document.field_changed",
+        "events": [
+          "work_item.field_changed"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "procurement.completed",
+        "events": [
+          "trigger.procurement.completed"
+        ],
+        "capability": "capability.reconciliation",
+        "excluded_actions": []
+      },
+      {
+        "key": "procurement.approved",
+        "events": [
+          "trigger.procurement.approved"
+        ],
+        "capability": "capability.reconciliation",
+        "excluded_actions": []
+      },
+      {
+        "key": "procurement.disputed",
+        "events": [
+          "trigger.procurement.disputed"
+        ],
+        "capability": "capability.reconciliation",
+        "excluded_actions": []
+      },
+      {
+        "key": "anomaly.detected",
+        "events": [
+          "trigger.anomaly.detected"
+        ],
+        "capability": "capability.anomaly_radar",
+        "excluded_actions": []
+      },
+      {
+        "key": "assertion.held",
+        "events": [
+          "trigger.assertion.held"
+        ],
+        "capability": "capability.semantic_assertions",
+        "excluded_actions": [
+          "work_item.mutate",
+          "autonomy.decide"
+        ]
+      },
+      {
+        "key": "redaction.completed",
+        "events": [
+          "trigger.redaction.completed"
+        ],
+        "capability": "capability.redaction",
+        "excluded_actions": [
+          "redaction.start"
+        ]
+      },
+      {
+        "key": "batch.completed",
+        "events": [
+          "trigger.batch.completed"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      },
+      {
+        "key": "review.cleared",
+        "events": [
+          "trigger.review.cleared"
+        ],
+        "capability": null,
+        "excluded_actions": []
+      }
+    ],
+    "events": [
+      "trigger.anomaly.detected",
+      "trigger.assertion.held",
+      "trigger.batch.completed",
+      "trigger.document.completed",
+      "trigger.document.failed",
+      "trigger.procurement.approved",
+      "trigger.procurement.completed",
+      "trigger.procurement.disputed",
+      "trigger.redaction.completed",
+      "trigger.review.cleared",
+      "trigger.work_item.created",
+      "trigger.work_item.reprocessed",
+      "work_item.enriched",
+      "work_item.field_changed",
+      "work_item.verification_completed"
+    ],
+    "commercial_actions": [
+      "webhook.send",
+      "redaction.start",
+      "review.escalate",
+      "warehouse.export",
+      "notify.role",
+      "autonomy.decide",
+      "email.send"
+    ],
+    "emitters": {
+      "trigger.anomaly.detected": [
+        "app/services/radar/findings.py:342"
+      ],
+      "trigger.assertion.held": [
+        "app/services/assertions/triage.py:503",
+        "app/services/review/resolution.py:271"
+      ],
+      "trigger.batch.completed": [
+        "app/services/ingestion/batch_service.py:45"
+      ],
+      "trigger.document.completed": [
+        "app/services/pipeline_state.py:223"
+      ],
+      "trigger.document.failed": [
+        "app/services/pipeline_state.py:223"
+      ],
+      "trigger.procurement.approved": [
+        "app/services/procurement_matching/case_service.py:588"
+      ],
+      "trigger.procurement.completed": [
+        "app/services/procurement_matching/case_service.py:349"
+      ],
+      "trigger.procurement.disputed": [
+        "app/services/procurement_matching/case_service.py:644"
+      ],
+      "trigger.redaction.completed": [
+        "app/services/redaction/redaction_service.py:764",
+        "app/services/automation/actions/redaction_start.py:57"
+      ],
+      "trigger.review.cleared": [
+        "app/services/review/resolution.py:81"
+      ],
+      "trigger.work_item.created": [
+        "app/services/document_intake_service.py:224"
+      ],
+      "trigger.work_item.reprocessed": [
+        "app/api/v1/work_items.py:430",
+        "app/services/ingestion/bulk_service.py:270"
+      ],
+      "work_item.enriched": [
+        "app/services/assertions/clause_check_service.py:41",
+        "app/workers/handlers/enrich.py:279"
+      ],
+      "work_item.field_changed": [
+        "app/services/public_api_service.py:604",
+        "app/services/automation/executor.py:657",
+        "app/services/automation/actions/work_item_mutate.py:76"
+      ],
+      "work_item.verification_completed": [
+        "app/services/document_verification_service.py:354",
+        "app/api/v1/verifications.py:178",
+        "app/services/review/resolution.py:223"
+      ]
+    }
+  },
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "A1 preview hook: API client, abort, revoke, no cache",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "A2 studio: authorized preview, back links, on-click downloads",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "B1 14 triggers / 15 events / 7 actions consistent; every event emitted",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "B2 timeline knows every backend execution status",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "B3 timeline polls live while anything is in flight",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "C1 backup encryption: round trip and six tamper cases",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "C2 retention keeps exactly 7 daily + 4 weekly",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "C3 one snapshot, no credential in argv, drill scoped to scratch DBs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "C4 dispatchable, scheduled, git-ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-41 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M1 preview <img> back on the raw URL",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M2 hook stops revoking object URLs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M3 hook stops aborting superseded renders",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M4 hook grows a module-level cache",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M5 back link removed from the header",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M6 dead # download link reintroduced",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M7 burned preview loses its revision",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M8 timeline back to a fixed 30 s poll",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M9 frontend forgets an execution status",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M10 a trigger event loses its emitter",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M10b a twin's public constant drifts off the catalog",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M11 a trigger excludes an unregistered action",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M12 nonce ignores the final-chunk flag",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M13 header no longer authenticated",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M14 retention keeps ten weeks of dailies",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M15 dump no longer shares the counting snapshot",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M16 credentials leak into argv",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M17 drill will drop any database",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M18 backups not git-ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "tsc -b && vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "eslint --max-warnings=0 on the changed files",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "verify_arch40.py --regression",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "verify_hardening_final.py",
+      "outcome": "PASS"
+    }
+  ]
+}

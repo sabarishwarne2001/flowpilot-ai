@@ -29,3 +29,13 @@ backend/.env.production.*
 
 # ARCH-40 apply backup
 **/.arch40_apply_backup/
+
+# ARCH41-S1:gitignore. ARCH-41 apply backups, and the encrypted database
+# backups the backup floor writes. Encrypted or not, a database backup has no
+# place in a public repository (see ARCH-0V finding B-1 above).
+**/.arch41_apply_backup/
+.flowpilot_backups/
+**/.flowpilot_backups/
+*.fpbk
+*.fpbk.partial
+

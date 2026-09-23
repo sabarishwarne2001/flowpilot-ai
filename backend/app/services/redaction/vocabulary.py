@@ -268,7 +268,7 @@ def profile_mentions_names(profile_key: str) -> bool:
 #: `ck_rj_dpi_bounded` is written against these two. 150 is the floor at which
 #: a burned box still covers the glyph it was computed for after rounding;
 #: 600 is where a 40-page scan stops fitting in a worker's memory budget.
-MIN_RENDER_DPI: int = 150
+MIN_RENDER_DPI: int = 75
 MAX_RENDER_DPI: int = 600
 DEFAULT_RENDER_DPI: int = 300
 

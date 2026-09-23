@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Eye, Loader2, Square } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Eye, Loader2, Square } from "lucide-react";
 
 import RedactionLockCard from "@/components/redaction/RedactionLockCard";
 import {
@@ -16,6 +16,9 @@ import {
   SURFACE_INSET,
 } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
+// ARCH41-S1:studio-authorized-preview. See the hook for why this is not
+// useAuthenticatedImage.
+import { useAuthorizedBlobUrl } from "@/hooks/useAuthorizedBlobUrl";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import {
   addRegion,
@@ -35,6 +38,7 @@ import {
   precisionTitle,
 } from "@/types/redaction";
 import { formatTimestamp } from "@/utils/displayTime";
+import { workItemDetailsPath, workItemsPath } from "@/routes/tenantPaths";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
 
@@ -76,7 +80,11 @@ const NUDGE_COARSE = 10;
  * they are inverses. Every other function in this file works in points.
  */
 const RedactionStudio: React.FC = () => {
-  const { jobId = "" } = useParams<{ jobId: string }>();
+  const {
+    jobId = "",
+    orgSlug = "",
+    workspaceSlug = "",
+  } = useParams<{ jobId: string; orgSlug: string; workspaceSlug: string }>();
   const workspace = useActiveWorkspace();
   const workspaceId = workspace?.workspaceId ?? "";
   const organizationId = workspace?.organizationId ?? "";
@@ -118,10 +126,22 @@ const RedactionStudio: React.FC = () => {
   );
   const editable = job?.status === "REVIEW";
 
-  const bundleQuery = useQuery({
-    queryKey: redactionKeys.bundle(workspaceId ?? "", jobId),
-    queryFn: () => getBundle(workspaceId as string, jobId),
-    enabled: Boolean(workspaceId && jobId) && job?.status === "COMPLETED",
+  // ARCH41-S1:bundle-on-click. The bundle carries presigned URLs that expire
+  // after 15 minutes, and a cached query would hand out a dead link to a
+  // reviewer who left the tab open. Mint them at the moment of the click.
+  const downloadMutation = useMutation({
+    mutationFn: async (which: "document" | "manifest") => {
+      const bundle = await getBundle(workspaceId as string, jobId);
+      const url = which === "document" ? bundle.document_url : bundle.manifest_url;
+      if (!url) {
+        throw new Error("The redacted file is not available yet.");
+      }
+      return url;
+    },
+    onSuccess: (url) => {
+      window.location.assign(url);
+    },
+    onError: (caught: unknown) => report(caught),
   });
 
   const invalidate = useCallback(() => {
@@ -197,6 +217,46 @@ const RedactionStudio: React.FC = () => {
   );
 
   const [size, setSize] = useState<PageSize | null>(null);
+
+  // ARCH41-S1:studio-authorized-preview.
+  //
+  // The burned preview for a page has the same URL before and after a region
+  // is toggled, so `rev` carries a digest of what is being burned. It changes
+  // exactly when the result would. The server ignores the parameter.
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const burnRevision = useMemo(
+    () =>
+      regionDigest(
+        regions
+          .filter((r) => r.page_number === page && r.enabled)
+          .map((r) => `${r.id}:${r.x0},${r.y0},${r.x1},${r.y1}`)
+          .sort()
+          .join("|"),
+      ),
+    [regions, page],
+  );
+  const previewPath = useMemo(() => {
+    if (!workspaceId || !jobId || !capability.granted || !jobQuery.data) {
+      return null;
+    }
+    const base = pagePreviewUrl(workspaceId, jobId, page, {
+      dpi: PREVIEW_DPI,
+      burn: showBurned,
+    });
+    const revision = showBurned ? `&rev=${burnRevision}` : "";
+    const attempt = previewAttempt > 0 ? `&attempt=${previewAttempt}` : "";
+    return `${base}${revision}${attempt}`;
+  }, [
+    workspaceId,
+    jobId,
+    capability.granted,
+    jobQuery.data,
+    page,
+    showBurned,
+    burnRevision,
+    previewAttempt,
+  ]);
+  const preview = useAuthorizedBlobUrl(previewPath);
 
   const toPoints = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -331,7 +391,8 @@ const RedactionStudio: React.FC = () => {
   }
   if (!capability.granted) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="mx-auto max-w-2xl space-y-3 p-6">
+        <BackLink to={backTarget(orgSlug, workspaceSlug, null)} label="Back to documents" />
         <RedactionLockCard canChangePlan={Boolean(canManageBilling)} />
       </div>
     );
@@ -339,11 +400,14 @@ const RedactionStudio: React.FC = () => {
   // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
   if (jobQuery.isError) {
     return (
+      <div className="space-y-3 p-4">
+        <BackLink to={backTarget(orgSlug, workspaceSlug, null)} label="Back to documents" />
       <ErrorState
         title="The redaction job could not be loaded"
         description={errorMessage(jobQuery.error, "The server did not return the redaction job. Check your connection and try again.")}
         onRetry={() => void jobQuery.refetch()}
       />
+      </div>
     );
   }
 
@@ -357,7 +421,16 @@ const RedactionStudio: React.FC = () => {
   return (
     <div className="space-y-4 p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className={PAGE_TITLE}>Redact document</h1>
+        <div className="flex flex-wrap items-baseline gap-3">
+          {/* ARCH41-S1:studio-back-link. The only way out used to be the
+              browser's back button, which after a draw-and-apply session can
+              land somewhere other than the document. */}
+          <BackLink
+            to={backTarget(orgSlug, workspaceSlug, job.work_item_id)}
+            label="Back to document"
+          />
+          <h1 className={PAGE_TITLE}>Redact document</h1>
+        </div>
         <p className={HINT}>
           {PROFILE_LABELS[job.profile_key] ?? job.profile_key} ·{" "}
           {job.render_dpi} DPI · started {formatTimestamp(job.created_at)}
@@ -405,20 +478,22 @@ const RedactionStudio: React.FC = () => {
             SHA-256 {job.output_sha256}
           </p>
           <div className="flex gap-2 pt-1">
-            <a
+            <button
+              type="button"
               className={BUTTON_PRIMARY}
-              href={bundleQuery.data?.document_url ?? "#"}
-              aria-disabled={!bundleQuery.data?.document_url}
+              onClick={() => downloadMutation.mutate("document")}
+              disabled={downloadMutation.isPending}
             >
               Download redacted PDF
-            </a>
-            <a
+            </button>
+            <button
+              type="button"
               className={BUTTON_SECONDARY}
-              href={bundleQuery.data?.manifest_url ?? "#"}
-              aria-disabled={!bundleQuery.data?.manifest_url}
+              onClick={() => downloadMutation.mutate("manifest")}
+              disabled={downloadMutation.isPending}
             >
               Download manifest
-            </a>
+            </button>
           </div>
         </section>
       ) : null}
@@ -473,23 +548,40 @@ const RedactionStudio: React.FC = () => {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           >
-            <img
-              // `burn` routes through the apply job's own rasterizer, so what
-              // is on screen is what will be in the file.
-              src={pagePreviewUrl(workspaceId, jobId, page, {
-                dpi: PREVIEW_DPI,
-                burn: showBurned,
-              })}
-              alt={`Page ${page}`}
-              className="w-full rounded border border-border"
-              onLoad={(event) => {
-                const img = event.currentTarget;
-                setSize({
-                  widthPt: (img.naturalWidth / PREVIEW_DPI) * POINTS_PER_INCH,
-                  heightPt: (img.naturalHeight / PREVIEW_DPI) * POINTS_PER_INCH,
-                });
-              }}
-            />
+            {preview.url ? (
+              <img
+                // `burn` routes through the apply job's own rasterizer, so
+                // what is on screen is what will be in the file. The bytes
+                // come through the API client (ARCH41-S1): a bare src carried
+                // neither the session nor the API origin.
+                src={preview.url}
+                alt={`Page ${page}`}
+                className={`w-full rounded border border-border ${
+                  preview.status === "loading" ? "opacity-60" : ""
+                }`}
+                onLoad={(event) => {
+                  const img = event.currentTarget;
+                  setSize({
+                    widthPt: (img.naturalWidth / PREVIEW_DPI) * POINTS_PER_INCH,
+                    heightPt: (img.naturalHeight / PREVIEW_DPI) * POINTS_PER_INCH,
+                  });
+                }}
+              />
+            ) : (
+              <div
+                className="flex aspect-[1/1.294] w-full items-center justify-center rounded border border-border"
+                aria-busy={preview.status === "loading"}
+              >
+                {preview.status === "error" ? null : (
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                )}
+              </div>
+            )}
+            {preview.status === "loading" && preview.url ? (
+              <span className="pointer-events-none absolute right-2 top-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading page" />
+              </span>
+            ) : null}
 
             {!showBurned && size
               ? pageRegions
@@ -518,6 +610,20 @@ const RedactionStudio: React.FC = () => {
               />
             ) : null}
           </div>
+
+          {preview.status === "error" ? (
+            <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" aria-hidden />
+              <span>{preview.error}</span>
+              <button
+                type="button"
+                className={BUTTON_GHOST}
+                onClick={() => setPreviewAttempt((n) => n + 1)}
+              >
+                Try again
+              </button>
+            </p>
+          ) : null}
 
           {editable ? (
             <p className={HINT}>
@@ -649,6 +755,42 @@ interface PageSize {
   readonly widthPt: number;
   readonly heightPt: number;
 }
+
+/** ARCH41-S1:studio-back-link. */
+const BackLink: React.FC<{ readonly to: string; readonly label: string }> = ({ to, label }) => (
+  <Link to={to} className={`${BUTTON_GHOST} inline-flex items-center gap-1`}>
+    <ArrowLeft className="h-4 w-4" aria-hidden />
+    {label}
+  </Link>
+);
+
+/**
+ * The document the job was started from, or the document list when the job
+ * itself could not be read. Falls back to the root only if the route carried
+ * no slugs, which the tenant router never produces.
+ */
+const backTarget = (
+  orgSlug: string,
+  workspaceSlug: string,
+  workItemId: string | null,
+): string => {
+  if (!orgSlug || !workspaceSlug) {
+    return "/";
+  }
+  return workItemId
+    ? workItemDetailsPath(orgSlug, workspaceSlug, workItemId)
+    : workItemsPath(orgSlug, workspaceSlug);
+};
+
+/** FNV-1a, 32-bit, hex. A cache key, not a security boundary. */
+const regionDigest = (text: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+};
 
 const Centered: React.FC<{ readonly children: React.ReactNode }> = ({ children }) => (
   <div className="flex h-64 items-center justify-center">{children}</div>
