@@ -625,3 +625,14 @@ __all__ = [
     "REV_SHARE_BASIS_CLASS_VALUES",
     "SETTLED_PERIOD_STATUSES",
 ]
+
+# ARCH41-S2:models-registry
+from app.models.extraction_memory import (  # noqa: E402,F401
+    ExtractionAnchorRule,
+    ExtractionExemplar,
+    ExtractionMemoryApplication,
+    ExtractionMemorySettings,
+    ExtractionMemoryTrial,
+    ExtractionTemplate,
+    ExtractionTemplateMember,
+)

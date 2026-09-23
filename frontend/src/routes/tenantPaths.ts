@@ -125,6 +125,9 @@ export const ROUTE_PATTERNS = {
   // organization-level route would have to fan out across workspaces the
   // reader may not be a member of.
   workspaceRadar: "radar",
+  // ARCH41-S3:extraction-memory-path. Workspace-scoped: layouts, exemplars
+  // and trials all belong to one workspace.
+  workspaceExtractionMemory: "extraction-memory",
   // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
   // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
   workspaceAssertions: "assertions",
@@ -250,6 +253,9 @@ export const automationTimelinePath = (
 // verify_arch36.py cannot see.
 export const radarPath = (orgSlug: string, workspaceSlug: string): string =>
   `${workspacePath(orgSlug, workspaceSlug)}/radar`;
+
+export const extractionMemoryPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/extraction-memory`;
 
 export const assertionsPath = (
   orgSlug: string,

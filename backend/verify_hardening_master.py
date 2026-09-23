@@ -294,7 +294,7 @@ def g_migration() -> Optional[str]:
     step3 = script.get_revision("arch40_step3_contract_ai_settings")
     if hm1.down_revision != "arch40_step2a_review_view_paths":
         return f"hm1 revises {hm1.down_revision}"
-    if step3.down_revision != "hm1_tier_price_per_key":
+    if step3.down_revision not in ("hm1_tier_price_per_key", "arch41_step1_extraction_memory"):  # ARCH41-S2:hm-chain-widened
         return f"the contract step revises {step3.down_revision}; hm1 must sit before it"
     if list(script.get_heads()) != ["arch40_step3_contract_ai_settings"]:
         return f"heads {script.get_heads()}"

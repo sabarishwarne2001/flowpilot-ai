@@ -215,6 +215,7 @@ def render_pages(
     dpi: int,
     pages: Optional[Sequence[int]] = None,
     grayscale: bool = True,
+    min_dpi: int = MIN_RENDER_DPI,
 ) -> list[RenderedPage]:
     """Render the source to pixel arrays. `pages` is 1-based, None means all.
 
@@ -223,10 +224,12 @@ def render_pages(
     view would hand the caller memory that pdfium has already released, which
     fails as corrupted pixels rather than as a crash.
     """
-    if not MIN_RENDER_DPI <= dpi <= MAX_RENDER_DPI:
+    # ARCH41-S2:preview-dpi-floor. Output rendering keeps the 150 DPI floor;
+    # only the studio preview passes min_dpi=MIN_PREVIEW_DPI.
+    if not min_dpi <= dpi <= MAX_RENDER_DPI:
         raise RasterizeError(
             f"dpi {dpi} outside the supported range "
-            f"{MIN_RENDER_DPI}-{MAX_RENDER_DPI}"
+            f"{min_dpi}-{MAX_RENDER_DPI}"
         )
     if not pdf_bytes:
         raise RasterizeError("empty source document")

@@ -48,7 +48,9 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "arch40_step3_contract_ai_settings"
-down_revision = "hm1_tier_price_per_key"
+# ARCH41-S2:contract-reparented. ARCH-41's expand-only migration now sits
+# before the contract step, as hm1 did; one file head is preserved.
+down_revision = "arch41_step1_extraction_memory"
 branch_labels = None
 depends_on = None
 

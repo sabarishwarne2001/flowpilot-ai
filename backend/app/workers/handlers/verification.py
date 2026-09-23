@@ -131,6 +131,14 @@ def handle_document_verify(payload: dict[str, Any]) -> dict[str, Any]:
             "document_classification", "Other"
         )
         base_prompt = _base_prompt_for(classification)
+        # ARCH41-S2:memory-verification. The agents see the same learned
+        # examples the primary extraction saw; agents that did not would
+        # out-vote it, and consensus would undo what memory taught.
+        from app.services.extraction_memory import prompt as memory_prompt
+
+        memory_context = memory_prompt.context_for_verification(db, work_item=work_item)
+        if memory_context:
+            base_prompt = f"{memory_context}\n\n{base_prompt}"
 
         verification = DocumentVerification(
             work_item_id=work_item.id,

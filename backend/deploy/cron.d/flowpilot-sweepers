@@ -11,4 +11,6 @@ MAILTO=""
 # case statement, not by any job handler. Retention and erasure
 # enforcement has therefore never executed on a deployed host.
 53 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --apply
+# ARCH41-S2:cron-extraction-memory
+29 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep extraction_memory --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

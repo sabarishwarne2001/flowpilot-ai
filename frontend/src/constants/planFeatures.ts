@@ -20,6 +20,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.reconciliation]: "Autonomous three-way reconciliation",
   [CAPABILITY.anomalyRadar]: "Forensic anomaly & duplicate radar",
   [CAPABILITY.customEmail]: "Custom email overrides",
+  // ARCH41-S3:plan-feature-label
+  [CAPABILITY.extractionMemory]: "Extraction memory (learns from reviewed corrections)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",

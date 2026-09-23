@@ -316,6 +316,33 @@ def triage(
         verification.status = VerificationStatus.DISAGREED
         verification.auto_approved = False
 
+    # ARCH41-S2:memory-autonomy-hold. A document on an extraction-memory
+    # trial, or extracted with memory on a layout activated since the
+    # tenant's calibration model was fitted, goes to review. See
+    # app/services/extraction_memory/trials.py for why each hold exists.
+    # Reported under its own key so ARCH-35's label harvester never mistakes
+    # it for a calibration audit. A fault here never holds a document.
+    if verification.auto_approved:
+        try:
+            from app.services.extraction_memory import trials as memory_trials
+
+            hold = memory_trials.autonomy_hold(
+                db,
+                work_item_id=work_item.id,
+                organization_id=verification.organization_id,
+                calibrated=autonomy is not None,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("verification.memory_hold_unreadable")
+            hold = None
+        if hold is not None:
+            verification.status = VerificationStatus.DISAGREED
+            verification.auto_approved = False
+            verification.details = {
+                **(verification.details or {}),
+                "extraction_memory": {"review_all_fields": True, "reason": hold},
+            }
+
     if verification.auto_approved:
         work_item.extracted_entities = {
             **(work_item.extracted_entities or {}),
@@ -417,6 +444,12 @@ def resolve(
         ((verification.details or {}).get("escalation") or {}).get(
             "review_all_fields"
         )
+    ) or bool(
+        # ARCH41-S2:memory-review-all. A memory hold asks for every field, so
+        # the document's correction rate is measured on the whole document.
+        ((verification.details or {}).get("extraction_memory") or {}).get(
+            "review_all_fields"
+        )
     )
     disagreed = {
         f.field_path: f
@@ -458,6 +491,12 @@ def resolve(
     verification.reviewed_at = datetime.now(timezone.utc)
     verification.auto_approved = False
     db.flush()
+
+    # ARCH41-S2:memory-harvest. The reviewer's values become extraction
+    # memory for this layout. Isolated in a savepoint; never fails a review.
+    from app.services.extraction_memory import harvest as memory_harvest
+
+    memory_harvest.on_review_resolved(db, verification=verification, work_item=work_item)
 
     logger.info(
         "verification.resolved",

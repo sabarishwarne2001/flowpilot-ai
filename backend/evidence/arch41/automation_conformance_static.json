@@ -176,7 +176,7 @@
       "app/services/procurement_matching/case_service.py:644"
     ],
     "trigger.redaction.completed": [
-      "app/services/redaction/redaction_service.py:764",
+      "app/services/redaction/redaction_service.py:765",
       "app/services/automation/actions/redaction_start.py:57"
     ],
     "trigger.review.cleared": [
@@ -191,7 +191,7 @@
     ],
     "work_item.enriched": [
       "app/services/assertions/clause_check_service.py:41",
-      "app/workers/handlers/enrich.py:279"
+      "app/workers/handlers/enrich.py:291"
     ],
     "work_item.field_changed": [
       "app/services/public_api_service.py:604",
@@ -199,7 +199,7 @@
       "app/services/automation/actions/work_item_mutate.py:76"
     ],
     "work_item.verification_completed": [
-      "app/services/document_verification_service.py:354",
+      "app/services/document_verification_service.py:381",
       "app/api/v1/verifications.py:178",
       "app/services/review/resolution.py:223"
     ]

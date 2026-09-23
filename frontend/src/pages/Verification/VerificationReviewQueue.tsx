@@ -95,9 +95,15 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   const escalationDetails = (detail?.details?.["escalation"] ?? null) as {
     readonly review_all_fields?: boolean;
   } | null;
+  // ARCH41-S3:memory-review-all. An extraction-memory hold (trial or
+  // recalibration) asks for every field; the backend's resolve honours it.
+  const memoryDetails = (detail?.details?.["extraction_memory"] ?? null) as {
+    readonly review_all_fields?: boolean;
+  } | null;
   const reviewAll =
     Boolean(calibrationDetails?.review_all_fields) ||
-    Boolean(escalationDetails?.review_all_fields);
+    Boolean(escalationDetails?.review_all_fields) ||
+    Boolean(memoryDetails?.review_all_fields);
   const isAudit = Boolean(calibrationDetails?.audit_sample);
   const isReviewable = useCallback(
     (field: VerificationFieldResponse): boolean =>

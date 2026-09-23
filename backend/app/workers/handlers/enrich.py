@@ -238,10 +238,22 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
 
     entities = None
     if enrichment["entities"]:
+        # ARCH41-S2:memory-enrich. Learned examples of this document's layout,
+        # or None. Never raises: a memory fault costs the improvement, not the
+        # document.
+        from app.services.extraction_memory import prompt as memory_prompt
+
+        memory_context = memory_prompt.context_for_extraction(
+            db, work_item=work_item, text=full_text, document_type=str(document_class)
+        )
         entities = _guarded(
             "entities",
             lambda: llm_service.extract_entities(
-                full_text, document_class, ai_settings=ai_settings, **metering_kwargs
+                full_text,
+                document_class,
+                ai_settings=ai_settings,
+                memory_context=memory_context,
+                **metering_kwargs,
             ),
         )
     entities = entities or {}

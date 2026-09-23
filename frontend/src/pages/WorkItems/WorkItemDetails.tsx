@@ -22,6 +22,8 @@ import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import ChatPanel from "@/components/assistant/ChatPanel";
 import StartRedactionButton from "@/components/redaction/StartRedactionButton";
+// ARCH41-S3:provenance-import
+import ExtractionMemoryProvenance from "@/components/extractionMemory/ExtractionMemoryProvenance";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
@@ -328,6 +330,7 @@ export const WorkItemDetails: React.FC = () => {
                     <h2 className="text-lg font-bold">Extracted Entities</h2>
                     <p className="mt-1 text-sm text-muted-foreground">Structured data extracted from the document.</p>
                   </div>
+                  <ExtractionMemoryProvenance workItemId={workItem.id} />
                   <div className="overflow-auto rounded-lg border border-border/40 bg-muted/10 p-5">
                     {workItem.extracted_entities ? (
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">

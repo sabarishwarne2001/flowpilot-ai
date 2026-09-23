@@ -1,6 +1,7 @@
 ﻿import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Brain,
   Bell,
   ClipboardCheck,
   CreditCard,
@@ -39,6 +40,7 @@ import {
   assistantPath,
   automationPath,
   automationTimelinePath,
+  extractionMemoryPath,
   createWorkspacePath,
   notificationsPath,
   organizationApiKeysPath,
@@ -197,6 +199,17 @@ export const buildWorkspaceNavigationGroups = (
         icon: MessageSquare,
         description: "Ask questions across the workspace's documents",
         keywords: ["chat", "rag", "ask"],
+      },
+      // ARCH41-S3:nav-extraction-memory
+      {
+        id: "extraction-memory",
+        name: "Extraction memory",
+        route: "workspaceExtractionMemory",
+        path: extractionMemoryPath(orgSlug, workspaceSlug),
+        icon: Brain,
+        description: "Layouts learned from reviewed corrections, proven by trial",
+        capability: CAPABILITY.extractionMemory,
+        keywords: ["learning", "corrections", "templates", "accuracy", "memory"],
       },
     ],
   },

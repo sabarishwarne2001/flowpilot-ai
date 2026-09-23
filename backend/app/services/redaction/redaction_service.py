@@ -70,6 +70,7 @@ from app.services.redaction.vocabulary import (
     JOB_STATUS_FAILED,
     JOB_STATUS_REVIEW,
     MAX_RENDER_DPI,
+    MIN_PREVIEW_DPI,
     MIN_RENDER_DPI,
     PRECISION_MANUAL,
     profile_detectors,
@@ -540,11 +541,11 @@ def render_source_page_png(
     """
     from app.services.redaction.rasterize import Box, burn_page, render_pages
 
-    if not MIN_RENDER_DPI // 2 <= dpi <= MAX_RENDER_DPI:
+    if not MIN_PREVIEW_DPI <= dpi <= MAX_RENDER_DPI:  # ARCH41-S2:preview-dpi-floor
         raise InvalidJobState(f"Preview dpi {dpi} is out of range.")
 
     data = _load_source(db, job)
-    pages = render_pages(data, dpi=dpi, pages=[page_number], grayscale=False)
+    pages = render_pages(data, dpi=dpi, pages=[page_number], grayscale=False, min_dpi=MIN_PREVIEW_DPI)
     if not pages:
         raise JobNotFound(f"Page {page_number} does not exist in this document.")
     page = pages[0]

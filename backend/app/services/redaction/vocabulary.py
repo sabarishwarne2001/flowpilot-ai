@@ -80,6 +80,7 @@ __all__ = [
     "profile_detectors",
     "profile_mentions_names",
     "MIN_RENDER_DPI",
+    "MIN_PREVIEW_DPI",
     "MAX_RENDER_DPI",
     "DEFAULT_RENDER_DPI",
     "BOX_PADDING_POINTS",
@@ -268,7 +269,13 @@ def profile_mentions_names(profile_key: str) -> bool:
 #: `ck_rj_dpi_bounded` is written against these two. 150 is the floor at which
 #: a burned box still covers the glyph it was computed for after rounding;
 #: 600 is where a 40-page scan stops fitting in a worker's memory budget.
-MIN_RENDER_DPI: int = 75
+MIN_RENDER_DPI: int = 150
+#: ARCH41-S2:preview-dpi-floor. The studio PREVIEW renders at 110 DPI; the
+#: burned OUTPUT never goes below MIN_RENDER_DPI (the redaction_jobs CHECK and
+#: the OCR text layer both depend on it). Lowering MIN_RENDER_DPI to 75 made
+#: the preview work but let the API accept a job render_dpi the database then
+#: refused with a 500; the two floors are now separate constants.
+MIN_PREVIEW_DPI: int = MIN_RENDER_DPI // 2
 MAX_RENDER_DPI: int = 600
 DEFAULT_RENDER_DPI: int = 300
 

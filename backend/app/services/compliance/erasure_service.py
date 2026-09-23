@@ -281,6 +281,13 @@ def _destroy_documents(
         item.extracted_text = None
         item.summary = None
         item.extracted_entities = None
+        # ARCH41-S2:erasure-memory. Exemplars are this document's reviewed
+        # values; erasing the document's content erases them too.
+        from sqlalchemy import delete as _delete
+
+        from app.models.extraction_memory import ExtractionExemplar as _Exemplar
+
+        db.execute(_delete(_Exemplar).where(_Exemplar.work_item_id == item.id))
         item.extraction_metadata = None
         item.original_filename = PLACEHOLDER_FILENAME
         db.add(item)

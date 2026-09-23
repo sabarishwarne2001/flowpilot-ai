@@ -87,6 +87,10 @@ const ReviewHub = lazy(
 const ForensicAuditRadar = lazy(
   () => import("@/pages/radar/ForensicAuditRadar"),
 );
+// ARCH41-S3:extraction-memory-route
+const ExtractionMemory = lazy(
+  () => import("@/pages/extractionMemory/ExtractionMemory"),
+);
 // ARCH36-S1:assertions-route
 const AssertionReviewPage = lazy(
   () => import("@/pages/Assertions/AssertionReviewPage"),
@@ -427,6 +431,10 @@ function AppRoutes() {
                 <Route
                   path={ROUTE_PATTERNS.workspaceRadar}
                   element={<ForensicAuditRadar />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.workspaceExtractionMemory}
+                  element={<ExtractionMemory />}
                 />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}

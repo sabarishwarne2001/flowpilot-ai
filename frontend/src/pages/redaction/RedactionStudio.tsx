@@ -50,6 +50,9 @@ const POINTS_PER_INCH = 72;
 const NUDGE = 1;
 const NUDGE_COARSE = 10;
 
+/** ARCH41-S3:draw-min-size. The smallest box, in screen pixels, a drag may commit. */
+const MIN_BOX_PX = 8;
+
 /**
  * ARCH-32 §3.6 — the Redaction Studio.
  *
@@ -277,15 +280,33 @@ const RedactionStudio: React.FC = () => {
 
   // --- drawing ------------------------------------------------------------
 
+  // ARCH41-S3:draw-hardening. Four faults made "Draw a box" unreliable:
+  //   * capture was set on event.target, which is the <img> or a region
+  //     button, not the surface that owns the drag, so a fast move outside
+  //     the page dropped it;
+  //   * existing region buttons took the pointer, so starting or crossing a
+  //     box selected it instead of drawing;
+  //   * the minimum size was four PDF points, which at the preview's scale is
+  //     smaller than a click, so clicks became invisible regions;
+  //   * there was no way to abandon a drag.
+  // Capture now lives on the surface, regions ignore the pointer while
+  // drawing, a box must be at least MIN_BOX_PX on screen in both directions,
+  // and Escape cancels a drag (or leaves drawing mode when none is active).
+  const cancelDrag = useCallback(() => {
+    dragStart.current = null;
+    setDraft(null);
+  }, []);
+
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!drawing || !editable) {
+    if (!drawing || !editable || event.button !== 0) {
       return;
     }
     const point = toPoints(event.clientX, event.clientY);
     if (!point) {
       return;
     }
-    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = point;
     setDraft({ x0: point.x, y0: point.y, x1: point.x, y1: point.y });
   };
@@ -307,13 +328,23 @@ const RedactionStudio: React.FC = () => {
     });
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     const rect = draft;
     dragStart.current = null;
-    // Below about four points square the drag was a click, not a rectangle.
-    // Committing it would put an invisible region in the list that the
-    // reviewer cannot find to delete.
-    if (rect && rect.x1 - rect.x0 > 4 && rect.y1 - rect.y0 > 4) {
+    const node = surfaceRef.current;
+    if (!rect || !node || !size) {
+      setDraft(null);
+      return;
+    }
+    const box = node.getBoundingClientRect();
+    const widthPx = ((rect.x1 - rect.x0) / size.widthPt) * box.width;
+    const heightPx = ((rect.y1 - rect.y0) / size.heightPt) * box.height;
+    // A drag smaller than MIN_BOX_PX on screen was a click. Committing it would
+    // put an invisible region in the list that the reviewer cannot find.
+    if (widthPx >= MIN_BOX_PX && heightPx >= MIN_BOX_PX) {
       addMutation.mutate(rect);
     } else {
       setDraft(null);
@@ -383,6 +414,27 @@ const RedactionStudio: React.FC = () => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [editable, selectedId, regions, nudge]);
+
+  // ARCH41-S3:draw-escape. Escape abandons the drag in progress; pressed with
+  // no drag in progress it leaves drawing mode.
+  useEffect(() => {
+    if (!drawing) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      if (dragStart.current) {
+        cancelDrag();
+      } else {
+        setDrawing(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawing, cancelDrag]);
 
   // --- render -------------------------------------------------------------
 
@@ -543,10 +595,16 @@ const RedactionStudio: React.FC = () => {
 
           <div
             ref={surfaceRef}
-            className={`relative select-none ${drawing ? "cursor-crosshair" : ""}`}
+            className={`relative select-none ${drawing ? "cursor-crosshair touch-none" : ""}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={cancelDrag}
+            onLostPointerCapture={() => {
+              if (dragStart.current) {
+                cancelDrag();
+              }
+            }}
           >
             {preview.url ? (
               <img
@@ -593,7 +651,7 @@ const RedactionStudio: React.FC = () => {
                       aria-label={`${DETECTOR_LABELS[region.detector] ?? region.detector} on page ${region.page_number}`}
                       aria-pressed={selectedId === region.id}
                       onClick={() => setSelectedId(region.id)}
-                      className={`absolute border-2 ${
+                      className={`absolute border-2 ${drawing ? "pointer-events-none" : ""} ${
                         selectedId === region.id
                           ? "border-primary bg-primary/40"
                           : "border-foreground/70 bg-foreground/25"

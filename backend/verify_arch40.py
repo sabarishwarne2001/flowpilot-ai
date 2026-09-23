@@ -398,7 +398,7 @@ def offline(rec: Recorder) -> None:
             d = re.search(r'^down_revision\s*(?::[^=]+)?=\s*(.+)$', text, re.M)
             if r:
                 revs[r.group(1)] = d.group(1).strip() if d else None
-        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), (STEP3, "hm1_tier_price_per_key")]  # HM-S1:chain-widened
+        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), ("arch41_step1_extraction_memory", "hm1_tier_price_per_key"), (STEP3, "arch41_step1_extraction_memory")]  # HM-S1:chain-widened  ARCH41-S2:chain-widened
         for rev, down in chain:
             assert rev in revs, f"{rev} missing"
             assert f'"{down}"' in (revs[rev] or "") or f"'{down}'" in (revs[rev] or ""), f"{rev} revises {revs[rev]}, expected {down}"
@@ -842,7 +842,7 @@ def _database_gates(rec: Recorder, sa: Any, conn: Any, session: Any) -> None:
     head = q("SELECT version_num FROM alembic_version").scalar_one()
 
     def d1() -> None:
-        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened
+        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key", "arch41_step1_extraction_memory"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened  ARCH41-S2:head-widened-40
 
     if not rec.check("D1 head is the ARCH-40 release head (or the contract head)", d1):
         return

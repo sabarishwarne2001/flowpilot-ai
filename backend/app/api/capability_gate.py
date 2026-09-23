@@ -54,6 +54,8 @@ _DISPLAY_NAMES = {
     entitlements.CUSTOM_EMAIL_CAPABILITY: "Custom email",
     entitlements.ENTERPRISE_IDENTITY_CAPABILITY: "Enterprise single sign-on and SCIM",
     entitlements.PRIORITY_SLO_CAPABILITY: "The priority 99.9% SLO",
+    # ARCH41-S2:capability-display
+    entitlements.EXTRACTION_MEMORY_CAPABILITY: "Extraction memory",
 }
 
 

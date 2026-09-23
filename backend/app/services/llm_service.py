@@ -794,11 +794,17 @@ class LLMService:
     def _build_classification_prompt(self, text: str) -> str:
         return CLASSIFICATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
 
-    def _build_entity_prompt(self, *, text: str, document_classification: str) -> str:
-        return ENTITY_EXTRACTION_PROMPT_TEMPLATE.format(
+    def _build_entity_prompt(
+        self, *, text: str, document_classification: str, memory_context: str | None = None
+    ) -> str:
+        prompt = ENTITY_EXTRACTION_PROMPT_TEMPLATE.format(
             document_classification=document_classification,
             text=self._truncate_document(text),
         )
+        # ARCH41-S2:memory-prompt. The fenced extraction-memory block goes
+        # BEFORE the instructions and the document, so the document stays the
+        # last thing the model reads. It is empty unless memory applies.
+        return f"{memory_context}\n\n{prompt}" if memory_context else prompt
 
     def _build_summary_prompt(self, text: str) -> str:
         return SUMMARIZATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
@@ -900,6 +906,7 @@ class LLMService:
         document_classification: str,
         *,
         ai_settings: AISettings,
+        memory_context: str | None = None,
         db: Session | None = None,
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
@@ -908,7 +915,9 @@ class LLMService:
         response, _ = self._enrichment_call(
             operation="entities",
             prompt=self._build_entity_prompt(
-                text=text, document_classification=document_classification
+                text=text,
+                document_classification=document_classification,
+                memory_context=memory_context,
             ),
             temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
             ai_settings=ai_settings,

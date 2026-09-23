@@ -789,7 +789,7 @@ def gates_db(rec: Recorder) -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH37-S1:head-widened-39. ARCH-37 moves the head forward.
             # ARCH38-S1:head-widened-39
-            assert value in (HEAD, "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-39  # HM-S1:head-widened
+            assert value in (HEAD, "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-39  # HM-S1:head-widened  ARCH41-S2:head-widened-39
 
         if not rec.check(f"DB: head is {HEAD}", head):
             return

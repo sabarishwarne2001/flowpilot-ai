@@ -105,6 +105,7 @@ __all__ = [
     "CUSTOM_EMAIL_CAPABILITY",
     "ENTERPRISE_IDENTITY_CAPABILITY",
     "PRIORITY_SLO_CAPABILITY",
+    "EXTRACTION_MEMORY_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -227,6 +228,13 @@ ENTERPRISE_IDENTITY_CAPABILITY: str = "capability.enterprise_identity"
 #: row in the tier version the customer bought, not a sentence on a web page.
 PRIORITY_SLO_CAPABILITY: str = "capability.priority_slo"
 
+#: ARCH41-S2:capability-extraction-memory. Extraction memory: reviewed
+#: corrections become per-layout examples and proven anchor rules that make
+#: the next extraction of the same layout better. A CAPABILITY, not an ADDON,
+#: for the reason every phase since ARCH-31 records. Not metered: the prompt
+#: tokens it adds are already metered as llm.input_token.
+EXTRACTION_MEMORY_CAPABILITY: str = "capability.extraction_memory"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -241,6 +249,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     CUSTOM_EMAIL_CAPABILITY,
     ENTERPRISE_IDENTITY_CAPABILITY,
     PRIORITY_SLO_CAPABILITY,
+    EXTRACTION_MEMORY_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -344,6 +353,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
     Entitlement(
         name=PRIORITY_SLO_CAPABILITY,
         description="Priority 99.9% service-level commitment. Declarative; gates no endpoint.",
+    ),
+    # ARCH41-S2:capability-extraction-memory-entitlement
+    Entitlement(
+        name=EXTRACTION_MEMORY_CAPABILITY,
+        description=(
+            "Extraction memory: learn from reviewed corrections per document "
+            "layout, prove the improvement in a randomized trial, and apply it "
+            "to the next extraction. Bundled into a tier."
+        ),
     ),
 )
 

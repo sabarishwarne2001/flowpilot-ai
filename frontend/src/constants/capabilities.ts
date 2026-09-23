@@ -27,6 +27,8 @@ export const CAPABILITY = {
   customEmail: "capability.custom_email",
   enterpriseIdentity: "capability.enterprise_identity",
   prioritySlo: "capability.priority_slo",
+  // ARCH41-S3:capability-constant
+  extractionMemory: "capability.extraction_memory",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

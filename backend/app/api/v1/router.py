@@ -6,6 +6,7 @@ from app.api.v1 import (
     ai_settings,
     api_keys,
     anomalies,
+    extraction_memory,
     assertions,
     autonomy,
     assistant,
@@ -127,6 +128,9 @@ api_router.include_router(assertions.router)
 # tenant without the capability read every duplicate the engine found and
 # simply not act on them, which is the product.
 api_router.include_router(anomalies.router)
+
+# ARCH41-S3:extraction-memory-router. Every route but /potential is capability-gated.
+api_router.include_router(extraction_memory.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.
