@@ -1,6 +1,6 @@
 ﻿import React, { useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, Lock, LogOut } from "lucide-react";
 
 import { buildOrganizationNavigationItems } from "./navigation";
 import type { NavigationItem } from "./navigation";
@@ -10,6 +10,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Avatar } from "@/components/common/Avatar";
 import { useTenantStore } from "@/store/useTenantStore";
 import { ROUTES } from "@/constants/routes";
+import { useUpgradePrompt } from "@/hooks/useUpgradePrompt";
 
 interface OrganizationSidebarNavigationProps {
   readonly onNavigate?: () => void;
@@ -93,6 +94,8 @@ const OrganizationSidebarNavigation: React.FC<
   );
 
   const sections = useMemo(() => groupItems(items), [items]);
+  // HM-S1:org-sidebar-locks
+  const upgrade = useUpgradePrompt(organizationId, orgSlug, String(organizationRole));
 
   const returnTarget = useMemo(() => {
     const reachable = organization.workspaces ?? [];
@@ -154,25 +157,53 @@ const OrganizationSidebarNavigation: React.FC<
               {section.name}
             </p>
             <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    `group relative flex h-9 items-center rounded-lg px-3 text-sm transition-all ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    }`
-                  }
-                >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="ml-3 min-w-0 truncate font-medium">
-                    {item.name}
-                  </span>
-                </NavLink>
-              ))}
+              {section.items.map((item) => {
+                const locked = upgrade.isLocked(item.capability);
+                const content = (
+                  <>
+                    <item.icon className="h-4 w-4 flex-shrink-0" />
+                    <span className="ml-3 min-w-0 flex-1 truncate text-left font-medium">
+                      {item.name}
+                    </span>
+                    {item.capability !== undefined ? (
+                      <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
+                        {locked ? (
+                          <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden data-testid="nav-lock" />
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </>
+                );
+                return locked && item.capability ? (
+                  <button
+                    key={item.path}
+                    type="button"
+                    onClick={() => upgrade.prompt(item.capability as string, item.name)}
+                    aria-label={`${item.name} (not included in your plan)`}
+                    aria-haspopup="dialog"
+                    title="Not included in your plan"
+                    data-testid="nav-locked-row"
+                    className="group relative flex h-9 w-full items-center rounded-lg px-3 text-sm text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={onNavigate}
+                    className={({ isActive }) =>
+                      `group relative flex h-9 items-center rounded-lg px-3 text-sm transition-all ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`
+                    }
+                  >
+                    {content}
+                  </NavLink>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -183,6 +214,7 @@ const OrganizationSidebarNavigation: React.FC<
             surfaces.
           </p>
         )}
+        {upgrade.dialog}
       </nav>
 
       {onLogout ? (

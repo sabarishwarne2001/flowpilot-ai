@@ -50,6 +50,13 @@ class OrganizationEntitlementsResponse(BaseModel):
         default_factory=list,
         description="Tier-bundled capability keys this organization holds.",
     )
+    # HM-S1:capability-plans. Which plans on sale include each capability, so
+    # the console's upgrade dialog names them without a second copy of the
+    # packaging table.
+    capability_plans: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Capability key -> display names of the published plans that include it.",
+    )
 
 
 __all__ = ["AddonAccessResponse", "AddonState", "OrganizationEntitlementsResponse"]

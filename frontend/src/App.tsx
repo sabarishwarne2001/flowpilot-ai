@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { UnsavedChangesDialogHost } from "@/components/common/UnsavedChangesDialogHost";
 import {
   Navigate,
   Route,
@@ -474,6 +475,7 @@ export default function App() {
         duration={4000}
       />
       <StepUpReauthModal />
+      <UnsavedChangesDialogHost />
 
       <RouterProvider router={router} />
     </ErrorBoundary>

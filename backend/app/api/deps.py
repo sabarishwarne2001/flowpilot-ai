@@ -96,6 +96,20 @@ async def get_current_user(
             raise credentials_exception
         key, membership = res
         user = membership.user
+        # HM-S1:api-key-capability-gate. A key authenticates only while the
+        # organization's plan includes the developer API. 402, not 401: the
+        # key is genuine, the plan does not include what it is for.
+        from app.api.capability_gate import require_capability_for_organization
+        from app.core.entitlements import DEVELOPER_API_CAPABILITY
+
+        require_capability_for_organization(
+            db,
+            organization_id=key.organization_id,
+            actor_id=user.id,
+            capability_key=DEVELOPER_API_CAPABILITY,
+            operation="api_key.authenticate",
+            audit=False,
+        )
 
         principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=user.id)
         set_current_principal(principal)
@@ -665,6 +679,20 @@ async def require_api_key(
     organization = crud.get_organization_by_id(db, organization_id=key.organization_id)
     if organization is None:
         raise _gateway_unauthorized("Could not validate credentials")
+
+    # HM-S1:public-api-capability-gate. Same rule as the console path in
+    # get_current_user: the public API is part of the developer API.
+    from app.api.capability_gate import require_capability_for_organization
+    from app.core.entitlements import DEVELOPER_API_CAPABILITY
+
+    require_capability_for_organization(
+        db,
+        organization_id=key.organization_id,
+        actor_id=membership.user_id,
+        capability_key=DEVELOPER_API_CAPABILITY,
+        operation="public_api.authenticate",
+        audit=False,
+    )
 
     principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=membership.user_id)
     set_current_principal(principal)

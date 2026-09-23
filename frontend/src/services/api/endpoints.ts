@@ -475,6 +475,11 @@ export const PARTNER_ENDPOINTS = {
   catalog: (partnerId: string): string => `/partners/${seg(partnerId)}/catalog`,
   manifests: (partnerId: string, itemId: string): string =>
     `/partners/${seg(partnerId)}/catalog/${seg(itemId)}/manifests`,
+  // HM-S1:partner-console
+  catalogItem: (partnerId: string, itemId: string): string =>
+    `/partners/${seg(partnerId)}/catalog/${seg(itemId)}`,
+  manifestDigest: (partnerId: string): string =>
+    `/partners/${seg(partnerId)}/catalog/manifest-digest`,
 } as const;
 
 /**

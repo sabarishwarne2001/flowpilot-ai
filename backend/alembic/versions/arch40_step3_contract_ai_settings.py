@@ -1,7 +1,7 @@
 """ARCH-40 Step 3 — CONTRACT: drop the three dead ai_settings columns.
 
 Revision ID: arch40_step3_contract_ai_settings
-Revises: arch40_step2a_review_view_paths
+Revises: hm1_tier_price_per_key (HARDENING-MASTER inserted it after arch40_step2a_review_view_paths)
 
 THIS MIGRATION IS LOSSY AND DOES NOT RUN BY DEFAULT
 ===================================================
@@ -48,7 +48,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "arch40_step3_contract_ai_settings"
-down_revision = "arch40_step2a_review_view_paths"
+down_revision = "hm1_tier_price_per_key"
 branch_labels = None
 depends_on = None
 

@@ -9,6 +9,8 @@ import {
 } from "@/services/api/organizationEmail";
 import { orgEmailKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
 import { canManageMembers } from "@/permissions/organizationPermissions";
 import type {
   EmailEncryption,
@@ -146,6 +148,7 @@ export const OrganizationEmailSettings: React.FC = () => {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        <PlanLockBanner capability={CAPABILITY.customEmail} feature="Custom email" />
         <header>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
             <Mail className="h-5 w-5" />

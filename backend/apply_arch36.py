@@ -178,6 +178,12 @@ def plan(op: Operation) -> Planned:
             current, _, _ = _read(path)
             if current == op.content:
                 return Planned(path, op.relpath, None, False, "already present")
+            # HM-S1:superseded. HARDENING-MASTER extends files ARCH-36 created
+            # (the capability list gained six keys). Such a file carries the
+            # HM-S1 sentinel and counts as applied, as ARCH-38/40 files do for
+            # apply_arch37/38/39 through SUPERSEDING_SENTINELS.
+            if "HM-S1:" in current:
+                return Planned(path, op.relpath, None, False, "already present (superseded by HARDENING-MASTER)")
             raise PatchError(
                 f"{op.relpath}: exists with different content. ARCH-36 creates "
                 "this file; a different file at this path is not something "

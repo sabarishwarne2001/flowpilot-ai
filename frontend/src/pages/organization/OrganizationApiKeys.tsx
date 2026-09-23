@@ -20,6 +20,8 @@ import {
 } from "@/services/api/apiKeys";
 import { apiKeyKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
 import { canManageMembers } from "@/permissions/organizationPermissions";
 import { API_KEY_SCOPES } from "@/types/apiKey";
 import type { ApiKeyRead, ApiKeyScope } from "@/types/apiKey";
@@ -343,6 +345,7 @@ export const OrganizationApiKeys: React.FC = () => {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        <PlanLockBanner capability={CAPABILITY.developerApi} feature="The developer API" />
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-foreground">API keys</h1>

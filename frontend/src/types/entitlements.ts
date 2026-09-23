@@ -34,6 +34,8 @@ export interface OrganizationEntitlements {
   readonly addons: readonly AddonAccess[];
   /** ARCH35-S3:capabilities-typed. Tier-bundled capability keys held. */
   readonly capabilities: readonly string[];
+  /** HM-S1: capability key -> display names of the published plans that include it. */
+  readonly capability_plans?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** The structured 402 body from `app/api/addon_gate.py`. */

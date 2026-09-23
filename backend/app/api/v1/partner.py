@@ -49,6 +49,8 @@ from app.core.client_ip import client_ip
 from app.models.partner import (
     MarketplaceItem,
     MarketplaceManifest,
+    MarketplaceSignature,
+    PartnerSigningKey,
     Partner,
     PartnerPayoutPeriod,
     PartnerRevShareAgreement,
@@ -56,9 +58,12 @@ from app.models.partner import (
 from app.models.user import User
 from app.schemas.partner import (
     BookOfBusinessEntry,
+    ManifestDigestRequest,
+    ManifestDigestResponse,
     ManifestResponse,
     ManifestSubmission,
     MarketplaceItemCreate,
+    MarketplaceItemUpdate,
     MarketplaceItemResponse,
     OrganizationAssignmentCreate,
     PartnerCreate,
@@ -862,4 +867,156 @@ def publish_manifest(
                 "signing_key_status": None,
             }
         ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# HM-S1:partner-console — manifest management for the partner admin console
+# ---------------------------------------------------------------------------
+
+
+def _owned_item(db: Session, *, partner_id: uuid.UUID, item_id: uuid.UUID) -> MarketplaceItem:
+    item = db.get(MarketplaceItem, item_id)
+    if item is None or item.partner_id != partner_id:
+        # 404 for another partner's item: its existence is not ours to confirm.
+        raise HTTPException(status_code=404, detail="Catalog item not found.")
+    return item
+
+
+def _latest_published(db: Session, item_id: uuid.UUID) -> Optional[MarketplaceManifest]:
+    return db.execute(
+        select(MarketplaceManifest)
+        .where(
+            MarketplaceManifest.item_id == item_id,
+            MarketplaceManifest.status == "PUBLISHED",
+        )
+        .order_by(MarketplaceManifest.published_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+@router.post("/{partner_id}/catalog/manifest-digest", response_model=ManifestDigestResponse)
+def preview_manifest_digest(
+    partner_id: uuid.UUID,
+    payload: ManifestDigestRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """The canonical digest a signature must cover. Writes nothing."""
+    _partner_ctx(
+        db, partner_id=partner_id, user=current_user, allowed_roles=ROLES_MANAGING_CATALOG
+    )
+    digest = marketplace_service.manifest_digest(payload.nodes, payload.edges)
+    return {
+        "content_digest": digest,
+        "signing_input": digest,
+        "node_count": len(payload.nodes),
+        "edge_count": len(payload.edges),
+    }
+
+
+@router.get("/{partner_id}/catalog/{item_id}/manifests", response_model=list[ManifestResponse])
+def list_item_manifests(
+    partner_id: uuid.UUID,
+    item_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Every manifest version of one item, newest first, with its signatures."""
+    _partner_ctx(db, partner_id=partner_id, user=current_user, allowed_roles=ROLES_READING)
+    _owned_item(db, partner_id=partner_id, item_id=item_id)
+    manifests = list(
+        db.execute(
+            select(MarketplaceManifest)
+            .where(MarketplaceManifest.item_id == item_id)
+            .order_by(MarketplaceManifest.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    ids = [m.id for m in manifests]
+    rows = (
+        db.execute(
+            select(MarketplaceSignature, PartnerSigningKey)
+            .join(PartnerSigningKey, PartnerSigningKey.id == MarketplaceSignature.signing_key_id)
+            .where(MarketplaceSignature.manifest_id.in_(ids))
+        ).all()
+        if ids
+        else []
+    )
+    by_manifest: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for signature, key in rows:
+        by_manifest.setdefault(signature.manifest_id, []).append(
+            {
+                "id": signature.id,
+                "algorithm": signature.algorithm,
+                "signed_digest": signature.signed_digest,
+                "verified_at": signature.verified_at,
+                "signing_key_fingerprint": key.fingerprint,
+                "signing_key_status": key.status,
+            }
+        )
+    return [
+        {
+            "id": m.id,
+            "item_id": m.item_id,
+            "version": m.version,
+            "status": m.status,
+            "content_digest": m.content_digest,
+            "node_count": m.node_count,
+            "edge_count": m.edge_count,
+            "published_at": m.published_at,
+            "signatures": by_manifest.get(m.id, []),
+        }
+        for m in manifests
+    ]
+
+
+@router.patch("/{partner_id}/catalog/{item_id}", response_model=MarketplaceItemResponse)
+def update_catalog_item(
+    partner_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: MarketplaceItemUpdate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Rename, recategorise, change visibility, or move an item through its lifecycle.
+
+    PUBLISHED needs a published, signed manifest: an item listed with nothing
+    installable behind it is a dead entry in every tenant's catalog.
+    """
+    partner = _partner_ctx(
+        db, partner_id=partner_id, user=current_user, allowed_roles=ROLES_MANAGING_CATALOG
+    )
+    item = _owned_item(db, partner_id=partner_id, item_id=item_id)
+    changes = payload.model_dump(exclude_unset=True)
+    latest = _latest_published(db, item.id)
+    if changes.get("status") == "PUBLISHED" and latest is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Publish a signed manifest for this item before listing it.",
+        )
+    for field, value in changes.items():
+        if value is not None:
+            setattr(item, field, value)
+    db.commit()
+    db.refresh(item)
+    logger.info(
+        "partner.catalog_item_updated",
+        extra={"partner_id": str(partner_id), "item_id": str(item.id), "fields": sorted(changes)},
+    )
+    return {
+        "id": item.id,
+        "partner_id": item.partner_id,
+        "partner_name": partner.name,
+        "slug": item.slug,
+        "name": item.name,
+        "summary": item.summary,
+        "category": item.category,
+        "status": item.status,
+        "visibility": item.visibility,
+        "latest_version": latest.version if latest else None,
+        "latest_manifest_id": latest.id if latest else None,
+        "installed": False,
+        "created_at": item.created_at,
     }

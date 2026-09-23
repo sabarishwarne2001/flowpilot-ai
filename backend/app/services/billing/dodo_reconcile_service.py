@@ -170,9 +170,13 @@ def _tier_key_for(db: Session, snapshot: DodoSubscriptionSnapshot) -> str:
     if declared:
         return str(declared).strip()
     if snapshot.product_id:
-        # `uq_quota_tiers_gateway_price_id` makes this at most one row.
+        # HM-S1: a gateway price identifies a PLAN, and every version of that
+        # plan may carry it (migration hm1_tier_price_per_key); the trigger it
+        # installs keeps one price on one key, so DISTINCT is at most one row.
         key = db.execute(
-            select(QuotaTier.key).where(QuotaTier.gateway_price_id == snapshot.product_id)
+            select(QuotaTier.key)
+            .where(QuotaTier.gateway_price_id == snapshot.product_id)
+            .distinct()
         ).scalar_one_or_none()
         if key:
             return str(key)

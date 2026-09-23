@@ -24,6 +24,8 @@ from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus
 from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt
 from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus
 from app.services import circuit_breaker, webhook_service
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.core import entitlements as _ent
 
 router = APIRouter(
     prefix="/organizations/{organization_id}/webhooks", tags=["webhooks"]
@@ -256,6 +258,7 @@ def create_endpoint(
     db: DbSession,
 ) -> EndpointCreated:
     """Register an endpoint. Returns the plaintext secret exactly once."""
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.create")
     try:
         endpoint, secret = webhook_service.register_endpoint(
             db,
@@ -318,6 +321,7 @@ def update_endpoint(
     context: OrgAdminCtx,
     db: DbSession,
 ) -> EndpointOut:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.update")
     endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
 
     if body.url is not None and body.url != endpoint.url:
@@ -380,6 +384,7 @@ def rotate_secret(
     db: DbSession,
     overlap_days: int = Query(webhook_service.SECRET_OVERLAP_DAYS, ge=0, le=30),
 ) -> RotateSecretOut:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.rotate_secret")
     endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
     secret = webhook_service.rotate_secret(db, endpoint, overlap_days=overlap_days)
     db.commit()
@@ -469,6 +474,7 @@ def redeliver(
     context: OrgAdminCtx,
     db: DbSession,
 ) -> DeliveryOut:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.delivery.redeliver")
     delivery = _get_delivery(db, context.organization_id, delivery_id)
 
     if delivery.status is WebhookDeliveryStatus.CLAIMED:

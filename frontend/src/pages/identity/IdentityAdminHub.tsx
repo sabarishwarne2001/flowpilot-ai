@@ -13,6 +13,8 @@ import {
 } from "@/services/api/identity";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
 
 type Tab = "domains" | "sso" | "jit" | "scim" | "security" | "audit";
 
@@ -50,6 +52,7 @@ export const IdentityAdminHub: React.FC = () => {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-5xl p-4 sm:p-6">
+        <PlanLockBanner capability={CAPABILITY.enterpriseIdentity} feature="Enterprise SSO and SCIM" />
         <header>
           <h1 className="text-xl font-semibold">Enterprise identity</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">

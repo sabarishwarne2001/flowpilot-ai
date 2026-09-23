@@ -673,4 +673,35 @@ __all__ = [
     "RevShareLedgerLine",
     "SigningKeyCreate",
     "SigningKeyRevoke",
+    "ManifestDigestRequest",
+    "ManifestDigestResponse",
 ]
+
+
+# ===========================================================================
+# HM-S1:partner-console — manifest digest preview
+# ===========================================================================
+
+
+class ManifestDigestRequest(BaseModel):
+    """The DAG half of a `ManifestSubmission`, without a signature.
+
+    The partner console needs the canonical digest BEFORE the partner signs:
+    the signature covers the digest, and the private key never reaches this
+    platform, so the partner signs offline and pastes the result back.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nodes: list[ManifestNodeSubmission] = Field(..., min_length=1, max_length=MAX_MANIFEST_NODES)
+    edges: list[ManifestEdgeSubmission] = Field(default_factory=list, max_length=MAX_MANIFEST_EDGES)
+
+
+class ManifestDigestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content_digest: str
+    #: Exactly the bytes to sign (the ASCII of `content_digest`).
+    signing_input: str
+    node_count: int
+    edge_count: int

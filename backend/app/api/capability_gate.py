@@ -47,6 +47,13 @@ _DISPLAY_NAMES = {
     entitlements.ANOMALY_RADAR_CAPABILITY: "Forensic audit radar",
     # ARCH35-S1:capability-calibrated-autonomy-display.
     entitlements.CALIBRATED_AUTONOMY_CAPABILITY: "Calibrated autonomy",
+    # HM-S1:capability-display-names
+    entitlements.DEVELOPER_API_CAPABILITY: "The developer API",
+    entitlements.OUTGOING_WEBHOOKS_CAPABILITY: "Outgoing webhooks",
+    entitlements.CUSTOM_BRANDING_CAPABILITY: "Custom branding",
+    entitlements.CUSTOM_EMAIL_CAPABILITY: "Custom email",
+    entitlements.ENTERPRISE_IDENTITY_CAPABILITY: "Enterprise single sign-on and SCIM",
+    entitlements.PRIORITY_SLO_CAPABILITY: "The priority 99.9% SLO",
 }
 
 
@@ -113,29 +120,69 @@ def granted_capabilities(db: Session, *, organization_id: Any) -> list[str]:
     return [key for key in entitlements.CAPABILITY_KEYS if key in held]
 
 
+def plans_including(db: Session) -> dict[str, list[str]]:
+    """HM-S1. Display names of the plans on sale that carry each capability.
+
+    Read from the same published tiers the plan cards render, so the upgrade
+    dialog's "included on Business and Enterprise" cannot disagree with them.
+    """
+    from app.services import quota_service
+
+    result: dict[str, list[str]] = {key: [] for key in entitlements.CAPABILITY_KEYS}
+    for tier in quota_service.list_published_tiers(db):
+        held = {getattr(entry, "limit_key", None) for entry in tier.entries}
+        for key in entitlements.CAPABILITY_KEYS:
+            if key in held and tier.display_name not in result[key]:
+                result[key].append(tier.display_name)
+    return result
+
+
 def require_capability(
     db: Session, *, context: Any, capability_key: str, operation: str
 ) -> None:
     """Raise `CapabilityRequiredError` unless the tier carries the capability."""
-    if has_capability(
-        db, organization_id=context.organization_id, capability_key=capability_key
-    ):
+    require_capability_for_organization(
+        db,
+        organization_id=context.organization_id,
+        actor_id=getattr(context, "user_id", None),
+        capability_key=capability_key,
+        operation=operation,
+    )
+
+
+def require_capability_for_organization(
+    db: Session,
+    *,
+    organization_id: Any,
+    actor_id: Any,
+    capability_key: str,
+    operation: str,
+    audit: bool = True,
+) -> None:
+    """HM-S1. The same refusal for callers that hold no request context.
+
+    `audit=False` is for the API-key authentication path: a refused key is
+    refused on every request it makes, and one audit row per request would let
+    a script fill the audit log.
+    """
+    if has_capability(db, organization_id=organization_id, capability_key=capability_key):
         return
 
     display = _DISPLAY_NAMES.get(capability_key, capability_key)
 
-    audit_service.record_independently(
-        organization_id=context.organization_id,
-        actor_id=getattr(context, "user_id", None),
-        resource_type=AuditResourceType.ORGANIZATION,
-        action=AuditAction.ACCESSED,
-        outcome=AuditOutcome.DENIED,
-        details={
-            "reason": "capability_required",
-            "capability_key": capability_key,
-            "operation": operation,
-        },
-    )
+    if audit:
+        audit_service.record_independently(
+            organization_id=organization_id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.ORGANIZATION,
+            action=AuditAction.ACCESSED,
+            outcome=AuditOutcome.DENIED,
+            details={
+                "reason": "capability_required",
+                "capability_key": capability_key,
+                "operation": operation,
+            },
+        )
 
     raise CapabilityRequiredError(
         f"{display} is included on higher plans. Upgrade your plan to use it.",
@@ -156,5 +203,7 @@ __all__ = [
     "CAPABILITY_REQUIRED_CODE",
     "granted_capabilities",
     "has_capability",
+    "plans_including",
     "require_capability",
+    "require_capability_for_organization",
 ]

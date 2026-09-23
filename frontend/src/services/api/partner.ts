@@ -32,8 +32,14 @@ import type {
   ComputePayoutRequest,
   Installation,
   InstallManifestRequest,
+  CreateCatalogItemRequest,
+  Manifest,
   ManifestDetail,
+  ManifestDigest,
+  ManifestGraph,
   MarketplaceItem,
+  PublishManifestRequest,
+  UpdateCatalogItemRequest,
   Partner,
   PartnerEconomics,
   PartnerMember,
@@ -174,6 +180,60 @@ export const partnerApi = {
   listCatalog: async (partnerId: string): Promise<MarketplaceItem[]> => {
     const { data } = await apiClient.get<MarketplaceItem[]>(
       PARTNER_ENDPOINTS.catalog(partnerId),
+    );
+    return data;
+  },
+
+  // HM-S1:partner-console
+  createCatalogItem: async (
+    partnerId: string,
+    payload: CreateCatalogItemRequest,
+  ): Promise<MarketplaceItem> => {
+    const { data } = await apiClient.post<MarketplaceItem>(
+      PARTNER_ENDPOINTS.catalog(partnerId),
+      payload,
+    );
+    return data;
+  },
+
+  updateCatalogItem: async (
+    partnerId: string,
+    itemId: string,
+    payload: UpdateCatalogItemRequest,
+  ): Promise<MarketplaceItem> => {
+    const { data } = await apiClient.patch<MarketplaceItem>(
+      PARTNER_ENDPOINTS.catalogItem(partnerId, itemId),
+      payload,
+    );
+    return data;
+  },
+
+  listManifests: async (partnerId: string, itemId: string): Promise<Manifest[]> => {
+    const { data } = await apiClient.get<Manifest[]>(
+      PARTNER_ENDPOINTS.manifests(partnerId, itemId),
+    );
+    return data;
+  },
+
+  previewManifestDigest: async (
+    partnerId: string,
+    payload: ManifestGraph,
+  ): Promise<ManifestDigest> => {
+    const { data } = await apiClient.post<ManifestDigest>(
+      PARTNER_ENDPOINTS.manifestDigest(partnerId),
+      payload,
+    );
+    return data;
+  },
+
+  publishManifest: async (
+    partnerId: string,
+    itemId: string,
+    payload: PublishManifestRequest,
+  ): Promise<Manifest> => {
+    const { data } = await apiClient.post<Manifest>(
+      PARTNER_ENDPOINTS.manifests(partnerId, itemId),
+      payload,
     );
     return data;
   },

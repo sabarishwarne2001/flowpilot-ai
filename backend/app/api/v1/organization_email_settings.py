@@ -25,6 +25,8 @@ from app.schemas.organization_email_settings import (
 )
 from app.services import organization_email_settings_service as org_smtp
 from app.services.email_service import email_service
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.core import entitlements as _ent
 
 logger = logging.getLogger("app.api.v1.organization_email_settings")
 
@@ -80,6 +82,7 @@ async def update_organization_email_settings(
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
 ) -> Any:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_EMAIL_CAPABILITY, operation="email.organization_smtp.update")
     try:
         row = org_smtp.set_settings(
             db,

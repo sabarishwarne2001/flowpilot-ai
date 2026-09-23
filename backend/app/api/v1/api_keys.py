@@ -28,6 +28,8 @@ from app.schemas.api_key import (
     ApiKeyRotateRequest,
 )
 from app.services import api_key_service, audit_service
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.core import entitlements as _ent
 
 logger = logging.getLogger("app.api.v1.api_keys")
 
@@ -54,6 +56,7 @@ def create_api_key(
     request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.DEVELOPER_API_CAPABILITY, operation="api_key.create")
     _assert_human_admin(request, context)
 
     # HARDENING-T2:D35. Duplicate active key names were an unhandled
@@ -137,6 +140,7 @@ def rotate_api_key(
     request: Request,
     context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
 ) -> Any:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.DEVELOPER_API_CAPABILITY, operation="api_key.rotate")
     _assert_human_admin(request, context)
     try:
         key, new_token = api_key_service.rotate_api_key(

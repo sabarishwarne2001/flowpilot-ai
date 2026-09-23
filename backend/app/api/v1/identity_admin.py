@@ -22,6 +22,9 @@ from app.services.identity._integration import (
 from app.services.identity.errors import IdentityError
 # ARCH30-T4F:security-emitters-import — A8.
 from app.services.identity import security_emitters
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.models.identity import JitProvisioningMode  # HM-S1:idp-jit-default
+from app.core import entitlements as _ent
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +78,7 @@ def list_domains(organization_id: str,
 def claim_domain(organization_id: str, payload: dict = Body(...),
                  membership=Depends(deps.RequireOrgOwner),
                  db=Depends(deps.get_db), user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.domain.claim")
     try:
         row = domain_service.claim_domain(
             db, organization_id=organization_id,
@@ -115,6 +119,7 @@ def verify_domain(organization_id: str, domain_id: str,
 def bind_sso(organization_id: str, domain_id: str,
              membership=Depends(deps.RequireOrgOwner),
              db=Depends(deps.get_db), user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.domain.bind_sso")
     row = db.get(VerifiedDomain, domain_id)
     if row is None or str(row.organization_id) != str(organization_id):
         raise HTTPException(404, "Domain not found.")
@@ -157,6 +162,7 @@ def create_config(organization_id: str, payload: dict = Body(...),
                   membership=Depends(deps.RequireOrgOwner),
                   db=Depends(deps.get_db),
                   user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.idp_config.create")
     domain_row = db.get(VerifiedDomain, payload.get("verified_domain_id"))
     if domain_row is None or str(domain_row.organization_id) != str(organization_id):
         raise HTTPException(404, "Verified domain not found.")
@@ -168,15 +174,37 @@ def create_config(organization_id: str, payload: dict = Body(...),
     if protocol not in ("SAML2", "OIDC"):
         raise HTTPException(422, "protocol must be SAML2 or OIDC.")
 
+    # HM-S1:idp-jit-default. The connection builder creates a configuration
+    # without a JIT policy (that is set afterwards, in the JIT panel). The old
+    # default was CAPPED with no cap, which violates ck_idp_capped_has_cap and
+    # surfaced as a 500 on every console-created connection. With no policy
+    # supplied the connection now starts INVITE_ONLY — nobody is provisioned
+    # by sign-in until an administrator chooses to allow it — and an explicit
+    # CAPPED without a usable cap is a 422 that says what is missing.
+    jit_cap = payload.get("jit_seat_cap")
+    jit_mode = str(
+        payload.get("jit_provisioning_mode")
+        or ("CAPPED" if jit_cap is not None else "INVITE_ONLY")
+    ).upper()
+    if jit_mode not in {m.value for m in JitProvisioningMode}:
+        raise HTTPException(
+            422, "jit_provisioning_mode must be OPEN, CAPPED or INVITE_ONLY.")
+    if jit_mode == "CAPPED" and (
+            isinstance(jit_cap, bool) or not isinstance(jit_cap, int) or jit_cap < 1):
+        raise HTTPException(
+            422,
+            "Capped just-in-time provisioning needs jit_seat_cap: the most "
+            "seats sign-in may create (1 or more). Or choose INVITE_ONLY.")
+
     config = EnterpriseIdpConfig(
         organization_id=organization_id,
         verified_domain_id=domain_row.id,
         protocol=IdpProtocol(protocol),
         display_name=str(payload.get("display_name") or protocol),
         is_active=False,
-        jit_provisioning_mode=payload.get("jit_provisioning_mode", "CAPPED"),
+        jit_provisioning_mode=jit_mode,
         jit_default_org_role=payload.get("jit_default_org_role", "MEMBER"),
-        jit_seat_cap=payload.get("jit_seat_cap"),
+        jit_seat_cap=jit_cap,
         created_by_user_id=getattr(user, "id", None),
     )
 
@@ -222,6 +250,7 @@ def add_certificate(organization_id: str, config_id: str, payload: dict = Body(.
                     membership=Depends(deps.RequireOrgOwner),
                     db=Depends(deps.get_db),
                     user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.certificate.add")
     config = db.get(EnterpriseIdpConfig, config_id)
     if config is None or str(config.organization_id) != str(organization_id):
         raise HTTPException(404, "Configuration not found.")
@@ -264,6 +293,7 @@ def add_role_mapping(organization_id: str, config_id: str, payload: dict = Body(
                      membership=Depends(deps.RequireOrgOwner),
                      db=Depends(deps.get_db),
                      user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.role_mapping.add")
     config = db.get(EnterpriseIdpConfig, config_id)
     if config is None or str(config.organization_id) != str(organization_id):
         raise HTTPException(404, "Configuration not found.")
@@ -292,6 +322,7 @@ def add_role_mapping(organization_id: str, config_id: str, payload: dict = Body(
 def dry_run_mapping(organization_id: str, config_id: str, payload: dict = Body(...),
                     membership=Depends(deps.RequireOrgAdmin),
                     db=Depends(deps.get_db)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.idp_config.dry_run")
     config = db.get(EnterpriseIdpConfig, config_id)
     if config is None or str(config.organization_id) != str(organization_id):
         raise HTTPException(404, "Configuration not found.")
@@ -312,6 +343,7 @@ def dry_run_mapping(organization_id: str, config_id: str, payload: dict = Body(.
 def activate(organization_id: str, config_id: str,
              membership=Depends(deps.RequireOrgOwner),
              db=Depends(deps.get_db), user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.idp_config.activate")
     config = db.get(EnterpriseIdpConfig, config_id)
     if config is None or str(config.organization_id) != str(organization_id):
         raise HTTPException(404, "Configuration not found.")
@@ -373,6 +405,7 @@ def create_scim_key(organization_id: str, payload: dict = Body(...),
                     membership=Depends(deps.RequireOrgOwner),
                     db=Depends(deps.get_db),
                     user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.scim_key.create")
     config = db.get(EnterpriseIdpConfig, payload.get("idp_config_id"))
     if config is None or str(config.organization_id) != str(organization_id):
         raise HTTPException(404, "Configuration not found.")
@@ -411,6 +444,7 @@ def rotate_scim_key(organization_id: str, key_id: str,
                     membership=Depends(deps.RequireOrgOwner),
                     db=Depends(deps.get_db),
                     user=Depends(deps.get_current_active_user)):
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.scim_key.rotate")
     row = db.get(ScimApiKey, key_id)
     if row is None or str(row.organization_id) != str(organization_id):
         raise HTTPException(404, "Key not found.")

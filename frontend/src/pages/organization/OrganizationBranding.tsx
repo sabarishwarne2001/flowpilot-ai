@@ -34,6 +34,8 @@ import {
 } from "@/services/api/branding";
 import { brandingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
 import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
 import { useAddonAccess } from "@/hooks/useAddonAccess";
 import { errorMessage as apiErrorMessage } from "@/services/api/errors";
@@ -655,6 +657,7 @@ const OrganizationBranding: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PlanLockBanner capability={CAPABILITY.customBranding} feature="Custom branding" />
       <header>
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <Palette className="h-5 w-5 text-muted-foreground" aria-hidden />

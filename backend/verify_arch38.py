@@ -822,7 +822,7 @@ def gates_db(rec: Recorder) -> None:
             head = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH40-S1:head-widened-38. ARCH-40 advances the head; this gate
             # asserts ARCH-38's schema is applied, not that it is the newest.
-            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings"), f"alembic head is {head}; run `alembic upgrade head`"
+            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key"), f"alembic head is {head}; run `alembic upgrade head`"  # HM-S1:head-widened
             present = set(
                 db.execute(
                     text("SELECT tablename FROM pg_tables WHERE schemaname='public'")

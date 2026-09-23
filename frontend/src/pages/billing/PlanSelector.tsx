@@ -9,6 +9,13 @@ import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
 import type { PlanOption } from "@/types/billing";
 import { describeEntitlement } from "@/types/planEntitlements";
+import {
+  CORE_FEATURES,
+  PLAN_FEATURE_LABELS,
+  PLAN_FEATURE_ORDER,
+  TIER_RANK,
+  isPlanFeatureKey,
+} from "@/constants/planFeatures";
 
 interface PlanSelectorProps {
   readonly organizationId: string;
@@ -189,7 +196,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
       </header>
 
       <ul className="divide-y divide-border">
-        {plans.map((plan) => {
+        {plans.map((plan, index) => {
           const isSelected = plan.key === selectedKey;
           const isCurrent = plan.is_current || plan.key === currentKey;
           return (
@@ -238,29 +245,26 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <p className="mt-1 text-xs text-muted-foreground">{plan.notes}</p>
                   )}
 
-                  {(() => {
-                    const lines = plan.entitlements
-                      .map((e) => describeEntitlement(e.event_type, e.limit_quantity, e.period))
-                      .filter((line): line is NonNullable<typeof line> => line !== null);
+                  <PlanFeatureList plan={plan} previous={index > 0 ? (plans[index - 1] ?? null) : null} />
 
-                    if (lines.length === 0) {
-                      return null;
-                    }
-
-                    return (
-                      <ul className="mt-2 space-y-1">
-                        {lines.slice(0, 5).map((line) => (
-                          <li
-                            key={line.key}
-                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                          >
-                            <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
-                            <span>{line.text}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  })()}
+                  {!isCurrent && plan.is_priced && !isFreePlan(plan) ? (
+                    <button
+                      type="button"
+                      data-testid={`plan-cta-${plan.key}`}
+                      disabled={!checkoutAvailable}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setSelectedKey(plan.key);
+                        setConfirming(true);
+                        checkout.reset();
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      {(TIER_RANK[plan.key] ?? 0) > (TIER_RANK[currentKey ?? "free"] ?? 0)
+                        ? `Upgrade to ${plan.display_name}`
+                        : `Switch to ${plan.display_name}`}
+                    </button>
+                  ) : null}
                 </div>
               </label>
             </li>
@@ -356,13 +360,72 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 };
 
 /**
- * ARCH-29 Tranche 2. Zero is a price: `unit_amount === 0` on a Free tier
- * renders "Free", not "Contact us", which a truthiness test would do.
- * `is_priced` is the server's statement of whether a tier is sellable.
+ * HM-S1:plan-features — what a plan adds over the one below it.
+ *
+ * Read from the plan's own published entitlements: a `capability.*` or
+ * `addon.*` row on the tier IS the grant, so the card lists exactly what the
+ * request path will allow. Quantities (pages, tokens, storage) follow in a
+ * quieter list.
+ */
+const featuresOf = (plan: PlanOption): ReadonlySet<string> =>
+  new Set(plan.entitlements.map((entry) => entry.event_type).filter(isPlanFeatureKey));
+
+const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: PlanOption | null }> = ({
+  plan,
+  previous,
+}) => {
+  const own = featuresOf(plan);
+  const inherited = previous ? featuresOf(previous) : new Set<string>();
+  const added = PLAN_FEATURE_ORDER.filter((key) => own.has(key) && !inherited.has(key));
+  const meters = plan.entitlements
+    .filter((entry) => !isPlanFeatureKey(entry.event_type))
+    .map((entry) => describeEntitlement(entry.event_type, entry.limit_quantity, entry.period))
+    .filter((line): line is NonNullable<typeof line> => line !== null);
+
+  return (
+    <div className="mt-2 space-y-2">
+      <ul className="space-y-1" aria-label={`${plan.display_name} features`}>
+        {previous === null ? (
+          CORE_FEATURES.map((text) => (
+            <li key={text} className="flex items-start gap-1.5 text-xs text-foreground">
+              <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary" aria-hidden />
+              <span>{text}</span>
+            </li>
+          ))
+        ) : (
+          <li className="text-xs font-medium text-foreground">
+            Everything in {previous.display_name}, plus:
+          </li>
+        )}
+        {added.map((key) => (
+          <li key={key} data-feature={key} className="flex items-start gap-1.5 text-xs text-foreground">
+            <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary" aria-hidden />
+            <span>{PLAN_FEATURE_LABELS[key]}</span>
+          </li>
+        ))}
+      </ul>
+      {meters.length > 0 ? (
+        <ul className="space-y-0.5" aria-label={`${plan.display_name} allowances`}>
+          {meters.slice(0, 6).map((line) => (
+            <li key={line.key} className="text-[11px] text-muted-foreground">
+              {line.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+};
+
+/**
+ * ARCH-29 Tranche 2 / HM-S1. Zero is a price: `unit_amount === 0` renders
+ * "Free", which a truthiness test would get wrong. Every plan on sale carries
+ * a published price, Enterprise included; a tier without one is a deployment
+ * that has not configured its gateway product yet, and says exactly that.
  */
 function formatPrice(plan: PlanOption): string {
   if (!plan.is_priced || plan.unit_amount === null || plan.currency === null) {
-    return "Contact us for pricing";
+    return "Price not configured yet";
   }
 
   if (plan.unit_amount === 0) {

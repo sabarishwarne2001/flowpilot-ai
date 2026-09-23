@@ -75,6 +75,8 @@ from app.schemas.tenant_branding import (
 )
 from app.services.branding import branding_service
 from app.services.branding.errors import CrossTenantAssetError
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.core import entitlements as _ent
 
 logger = logging.getLogger("app.api.v1.tenant_branding")
 
@@ -188,6 +190,7 @@ def update_branding(
     below, which are the only paths that can prove the stored object belongs
     to this tenant before the reference is written.
     """
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_BRANDING_CAPABILITY, operation="branding.update")
     _assert_scope(context, organization_id)
     branding = branding_service.get_or_create_branding(
         db, organization_id=organization_id
@@ -246,6 +249,7 @@ def upload_logo(
     db: Session = Depends(get_db),
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> Any:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_BRANDING_CAPABILITY, operation="branding.logo.upload")
     return _upload_asset(
         kind=branding_service.ASSET_LOGO,
         organization_id=organization_id,
@@ -264,6 +268,7 @@ def upload_favicon(
     db: Session = Depends(get_db),
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> Any:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_BRANDING_CAPABILITY, operation="branding.favicon.upload")
     return _upload_asset(
         kind=branding_service.ASSET_FAVICON,
         organization_id=organization_id,
@@ -355,6 +360,7 @@ def set_sender_domain(
     not authorise us gets the message filed as spam or rejected outright, and
     the tenant would blame the platform for mail their own DNS refused.
     """
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_EMAIL_CAPABILITY, operation="email.sender_domain.update")
     _assert_scope(context, organization_id)
     branding = branding_service.get_or_create_branding(
         db, organization_id=organization_id

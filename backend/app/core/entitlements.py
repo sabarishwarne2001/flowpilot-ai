@@ -98,6 +98,13 @@ __all__ = [
     "SEMANTIC_ASSERTIONS_CAPABILITY",
     "ANOMALY_RADAR_CAPABILITY",
     "CALIBRATED_AUTONOMY_CAPABILITY",
+    # HM-S1:capability-keys-export
+    "DEVELOPER_API_CAPABILITY",
+    "OUTGOING_WEBHOOKS_CAPABILITY",
+    "CUSTOM_BRANDING_CAPABILITY",
+    "CUSTOM_EMAIL_CAPABILITY",
+    "ENTERPRISE_IDENTITY_CAPABILITY",
+    "PRIORITY_SLO_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -191,6 +198,35 @@ ANOMALY_RADAR_CAPABILITY: str = "capability.anomaly_radar"
 #: no longer has to do. Tenants without it keep the fixed thresholds.
 CALIBRATED_AUTONOMY_CAPABILITY: str = "capability.calibrated_autonomy"
 
+#: HM-S1:capability-developer-api. Programmatic access: issuing and rotating
+#: FlowPilot API keys, and authenticating any request with one. Enforced at
+#: the key-management routes AND in `deps` where a key authenticates, so a key
+#: minted before a downgrade stops working rather than outliving the plan.
+DEVELOPER_API_CAPABILITY: str = "capability.developer_api"
+
+#: HM-S1:capability-outgoing-webhooks. Registering and changing outgoing
+#: webhook endpoints, rotating their secrets and redelivering events.
+OUTGOING_WEBHOOKS_CAPABILITY: str = "capability.outgoing_webhooks"
+
+#: HM-S1:capability-custom-branding. Brand colours, logo and favicon. Vanity
+#: hostnames are the `addon.custom_domain` grant, bundled into the same tiers.
+CUSTOM_BRANDING_CAPABILITY: str = "capability.custom_branding"
+
+#: HM-S1:capability-custom-email. Organization SMTP, workspace email overrides
+#: and a custom From: domain.
+CUSTOM_EMAIL_CAPABILITY: str = "capability.custom_email"
+
+#: HM-S1:capability-enterprise-identity. SAML/OIDC single sign-on and SCIM
+#: directory sync CONFIGURATION. Sign-in through an already-active identity
+#: provider is never refused on plan grounds: a downgrade must not lock a
+#: tenant's users out of their own data.
+ENTERPRISE_IDENTITY_CAPABILITY: str = "capability.enterprise_identity"
+
+#: HM-S1:capability-priority-slo. The priority 99.9% service-level commitment.
+#: Declarative: it gates no endpoint; it is carried so that the promise is a
+#: row in the tier version the customer bought, not a sentence on a web page.
+PRIORITY_SLO_CAPABILITY: str = "capability.priority_slo"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -199,6 +235,12 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     SEMANTIC_ASSERTIONS_CAPABILITY,
     ANOMALY_RADAR_CAPABILITY,
     CALIBRATED_AUTONOMY_CAPABILITY,
+    DEVELOPER_API_CAPABILITY,
+    OUTGOING_WEBHOOKS_CAPABILITY,
+    CUSTOM_BRANDING_CAPABILITY,
+    CUSTOM_EMAIL_CAPABILITY,
+    ENTERPRISE_IDENTITY_CAPABILITY,
+    PRIORITY_SLO_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -277,6 +319,31 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "own reviewed outcomes, with a stated, measured bound on the error "
             "rate of what is approved without a human. Bundled into a tier."
         ),
+    ),
+    # HM-S1:capability-entitlements
+    Entitlement(
+        name=DEVELOPER_API_CAPABILITY,
+        description="Developer API: issue and rotate API keys and call FlowPilot programmatically.",
+    ),
+    Entitlement(
+        name=OUTGOING_WEBHOOKS_CAPABILITY,
+        description="Outgoing webhooks: signed event delivery to endpoints the tenant registers.",
+    ),
+    Entitlement(
+        name=CUSTOM_BRANDING_CAPABILITY,
+        description="Custom branding: the tenant's colours, logo and favicon across the console.",
+    ),
+    Entitlement(
+        name=CUSTOM_EMAIL_CAPABILITY,
+        description="Custom email: organization SMTP, workspace overrides and a custom sender domain.",
+    ),
+    Entitlement(
+        name=ENTERPRISE_IDENTITY_CAPABILITY,
+        description="Enterprise identity: SAML/OIDC single sign-on and SCIM directory sync configuration.",
+    ),
+    Entitlement(
+        name=PRIORITY_SLO_CAPABILITY,
+        description="Priority 99.9% service-level commitment. Declarative; gates no endpoint.",
     ),
 )
 

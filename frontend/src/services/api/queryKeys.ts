@@ -421,6 +421,9 @@ export const partnerKeys = {
     [...partnerKeys.all(partnerId), "economics"] as const,
   catalog: (partnerId: string) =>
     [...partnerKeys.all(partnerId), "catalog"] as const,
+  // HM-S1:partner-console
+  manifests: (partnerId: string, itemId: string) =>
+    [...partnerKeys.catalog(partnerId), itemId, "manifests"] as const,
 };
 
 /** ARCH-27 — the tenant marketplace. Organization-scoped, unlike partnerKeys. */

@@ -336,3 +336,45 @@ export const BASIS_CLASS_LABEL: Readonly<
     hint: "Supplier cost for this revenue is unknown or partial, so margin is only an upper bound. Nothing is paid on an upper bound.",
   },
 };
+
+
+// ---------------------------------------------------------------------------
+// HM-S1:partner-console — catalog and manifest management
+// ---------------------------------------------------------------------------
+
+export interface CreateCatalogItemRequest {
+  readonly slug: string;
+  readonly name: string;
+  readonly summary?: string;
+  readonly category?: string;
+  readonly visibility?: MarketplaceVisibility;
+}
+
+export interface UpdateCatalogItemRequest {
+  readonly name?: string;
+  readonly summary?: string;
+  readonly category?: string;
+  readonly status?: MarketplaceItemStatus;
+  readonly visibility?: MarketplaceVisibility;
+}
+
+export interface ManifestGraph {
+  readonly nodes: readonly ManifestNode[];
+  readonly edges: readonly ManifestEdge[];
+}
+
+export interface PublishManifestRequest extends ManifestGraph {
+  readonly version: string;
+  /** The partner's own key id (SigningKey.key_id), not the row id. */
+  readonly signing_key_id: string;
+  /** Base64 signature over `ManifestDigest.signing_input`. */
+  readonly signature: string;
+}
+
+export interface ManifestDigest {
+  readonly content_digest: string;
+  /** Exactly what to sign: the ASCII of the digest. */
+  readonly signing_input: string;
+  readonly node_count: number;
+  readonly edge_count: number;
+}

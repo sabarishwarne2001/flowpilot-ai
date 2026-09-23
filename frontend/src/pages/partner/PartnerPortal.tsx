@@ -31,12 +31,14 @@ import {
   Building2,
   CheckCircle2,
   FileText,
+  KeyRound,
   Loader2,
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
 
 import { LoadingScreen } from "@/components/common/LoadingScreen";
+import { PartnerManifestConsole } from "@/pages/partner/PartnerManifestConsole";
 import { partnerApi } from "@/services/api/partner";
 import { partnerKeys } from "@/services/api/queryKeys";
 import {
@@ -49,7 +51,7 @@ import {
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
 
-type Tab = "book" | "ledger" | "payouts";
+type Tab = "book" | "ledger" | "payouts" | "manifests";
 
 const TONE_CLASS: Record<string, string> = {
   slate: "bg-muted/60 text-foreground ring-border",
@@ -204,7 +206,7 @@ export default function PartnerPortal() {
           {partner?.name}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Book of business, revenue share and payout statements.
+          Book of business, revenue share, payout statements and signed workflow manifests.
         </p>
       </header>
 
@@ -261,6 +263,7 @@ export default function PartnerPortal() {
             ["book", "Book of business", Building2],
             ["ledger", "Rev-share ledger", TrendingUp],
             ["payouts", "Payout statements", FileText],
+            ["manifests", "Workflow manifests", KeyRound],
           ] as const
         ).map(([key, label, Icon]) => (
           <button
@@ -493,6 +496,8 @@ export default function PartnerPortal() {
           )}
         </section>
       ) : null}
+
+      {tab === "manifests" ? <PartnerManifestConsole partnerId={partnerId} /> : null}
     </div>
   );
 }

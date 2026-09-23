@@ -99,6 +99,7 @@ def get_entitlements(
         capabilities=capability_gate.granted_capabilities(
             db, organization_id=organization_id
         ),
+        capability_plans=capability_gate.plans_including(db),
     )
 
 

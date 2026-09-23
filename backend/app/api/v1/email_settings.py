@@ -58,6 +58,8 @@ from app.schemas.email_settings import (
     WorkspaceEmailOverrideUpdate,
 )
 from app.services.email_resolution import MessageKind, resolve_email_identity
+from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
+from app.core import entitlements as _ent
 
 logger = logging.getLogger("app.api.v1.email_settings")
 
@@ -100,6 +102,7 @@ async def upsert_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> WorkspaceEmailOverrideResponse:
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_EMAIL_CAPABILITY, operation="email.workspace_override.update")
     row = _load(db, workspace_id=context.workspace_id)
     if row is None:
         row = WorkspaceEmailOverride(

@@ -19,6 +19,7 @@ import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { useIsSuperAdmin } from "@/routes/SuperAdminGuard";
 import { SideTooltip } from "@/components/layout/SideTooltip";
+import { useUpgradePrompt } from "@/hooks/useUpgradePrompt";
 
 interface SidebarNavigationProps {
   readonly collapsed: boolean;
@@ -28,6 +29,8 @@ interface SidebarNavigationProps {
 interface RenderableItem extends NavigationItem {
   readonly end?: boolean;
   readonly locked?: boolean;
+  /** HM-S1: the row can be locked, so its lock slot is always reserved. */
+  readonly gated?: boolean;
 }
 
 /**
@@ -77,6 +80,11 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
   const workspaceSlug = workspace.slug;
 
   const capabilities = useGrantedCapabilities(organization.organization_id);
+  const upgrade = useUpgradePrompt(
+    organization.organization_id,
+    orgSlug,
+    String(organizationRole ?? ""),
+  );
   const isPartnerMember = useIsPartnerMember();
   const isSuperAdmin = useIsSuperAdmin();
 
@@ -98,6 +106,8 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
               path: item.path,
               icon: item.icon,
               end: item.end === true,
+              ...(item.capability !== undefined ? { capability: item.capability } : {}),
+              gated: item.capability !== undefined,
               locked:
                 item.capability !== undefined &&
                 !capabilities.isLoading &&
@@ -133,62 +143,76 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
 
   const renderItem = (item: RenderableItem) => {
     const label = item.locked ? `${item.name} (not included in your plan)` : item.name;
+    const shape = collapsed ? "h-11 w-11 p-0" : "h-10 w-full px-3";
+    const idle = "text-muted-foreground hover:bg-muted/50 hover:text-foreground";
 
-    const link = (
-      <NavLink
-        key={item.path}
-        to={item.path}
-        onClick={onNavigate}
-        end={item.end === true}
-        title={collapsed ? label : item.locked ? "Not included in your plan" : undefined}
-        aria-label={label}
-        className={({ isActive }) =>
-          `
-            group relative
-            flex items-center
-            justify-center
-            rounded-lg
-            ${collapsed ? "h-11 w-11 p-0" : "h-10 px-3"}
-            text-sm font-medium
-            transition-all
-            ${
-              isActive
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-            }
-          `
-        }
-      >
+    // HM-S1:lock-slot. A gated row always reserves the lock's width, and the
+    // lock only appears once entitlements have loaded, so nothing reflows and
+    // nothing flickers when the answer arrives.
+    const content = (
+      <>
         <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden />
-
         {!collapsed ? (
           <>
-            <span className="ml-3 min-w-0 flex-1 truncate whitespace-nowrap font-semibold">
+            <span className="ml-3 min-w-0 flex-1 truncate whitespace-nowrap text-left font-semibold">
               {item.name}
             </span>
-            {item.locked && (
-              <Lock
-                className="ml-2 h-3.5 w-3.5 flex-shrink-0 opacity-70"
-                aria-hidden
-                data-testid="nav-lock"
-              />
-            )}
+            {item.gated ? (
+              <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
+                {item.locked && (
+                  <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden data-testid="nav-lock" />
+                )}
+              </span>
+            ) : null}
           </>
-        ) : (
-          <>
-            {item.locked && (
-              <Lock
-                className="absolute bottom-1 right-1 h-3 w-3 opacity-70"
-                aria-hidden
-                data-testid="nav-lock"
-              />
-            )}
-          </>
+        ) : null}
+        {collapsed && item.locked && (
+          <Lock className="absolute bottom-1 right-1 h-3 w-3 opacity-70" aria-hidden data-testid="nav-lock" />
         )}
-      </NavLink>
+      </>
     );
+
+    // HM-S1:locked-row-opens-upgrade. A locked row is a button that opens the
+    // upgrade dialog; it does not navigate to a page whose writes would 402.
+    const control =
+      item.locked && item.capability ? (
+        <button
+          key={item.path}
+          type="button"
+          onClick={() => upgrade.prompt(item.capability as string, item.name)}
+          title={collapsed ? label : "Not included in your plan"}
+          aria-label={label}
+          aria-haspopup="dialog"
+          data-testid="nav-locked-row"
+          className={`group relative flex items-center justify-center rounded-lg ${shape} text-sm font-medium transition-all ${idle}`}
+        >
+          {content}
+        </button>
+      ) : (
+        <NavLink
+          key={item.path}
+          to={item.path}
+          onClick={onNavigate}
+          end={item.end === true}
+          title={collapsed ? label : undefined}
+          aria-label={label}
+          className={({ isActive }) =>
+            `group relative flex items-center justify-center rounded-lg ${shape} text-sm font-medium transition-all ${
+              isActive ? "bg-primary text-primary-foreground shadow-sm" : idle
+            }`
+          }
+        >
+          {content}
+        </NavLink>
+      );
     // HARDENING-T1:D7. Collapsed labels render in a portal (see SideTooltip).
-    return collapsed ? <SideTooltip label={label}>{link}</SideTooltip> : link;
+    return collapsed ? (
+      <SideTooltip key={item.path} label={label}>
+        {control}
+      </SideTooltip>
+    ) : (
+      control
+    );
   };
 
   const renderGroupLabel = (label: string, first: boolean) =>
@@ -253,7 +277,13 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
               {organization.organization_name}
             </p>
           )}
-          {organizationItems.map((item) => renderItem(item))}
+          {organizationItems.map((item) =>
+            renderItem({
+              ...item,
+              gated: item.capability !== undefined,
+              locked: upgrade.isLocked(item.capability),
+            }),
+          )}
         </div>
       )}
 
@@ -278,6 +308,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
           {platformItems.map((item) => renderItem(item))}
         </div>
       )}
+      {upgrade.dialog}
     </nav>
   );
 };

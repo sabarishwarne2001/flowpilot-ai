@@ -74,6 +74,11 @@ export interface NavigationItem {
   readonly name: string;
   readonly path: string;
   readonly icon: LucideIcon;
+  /**
+   * HM-S1:org-nav-capability. The capability whose writes the page needs.
+   * Absent from the plan, the row shows a lock and opens the upgrade dialog.
+   */
+  readonly capability?: CapabilityKey;
 }
 
 /**
@@ -372,6 +377,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Transactional email",
       path: organizationEmailPath(orgSlug),
+      capability: CAPABILITY.customEmail,
       icon: Mail,
     });
   }
@@ -401,6 +407,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Developer platform",
       path: organizationDeveloperPath(orgSlug),
+      capability: CAPABILITY.developerApi,
       icon: TerminalSquare,
     });
     // ARCH-22. ADMIN sees the console; every write behind it is OWNER-gated
@@ -420,6 +427,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Branding & custom domains",
       path: organizationBrandingPath(orgSlug),
+      capability: CAPABILITY.customBranding,
       icon: Palette,
     });
     // ARCH-26. ADMIN sees the console because reading which warehouses the
@@ -450,6 +458,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Calibrated autonomy",
       path: organizationAutonomyPath(orgSlug),
+      capability: CAPABILITY.calibratedAutonomy,
       icon: Target,
     });
   }
@@ -466,16 +475,19 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "API keys",
       path: organizationApiKeysPath(orgSlug),
+      capability: CAPABILITY.developerApi,
       icon: KeyRound,
     });
     items.push({
       name: "Webhooks",
       path: organizationWebhooksPath(orgSlug),
+      capability: CAPABILITY.outgoingWebhooks,
       icon: Webhook,
     });
     items.push({
       name: "Enterprise identity",
       path: organizationIdentityPath(orgSlug),
+      capability: CAPABILITY.enterpriseIdentity,
       icon: ShieldCheck,
     });
     items.push({

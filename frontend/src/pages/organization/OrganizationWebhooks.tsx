@@ -28,6 +28,8 @@ import {
 } from "@/services/api/webhooks";
 import { webhookKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
 import { canManageMembers } from "@/permissions/organizationPermissions";
 import { WEBHOOK_EVENT_TYPES } from "@/types/webhook";
 import type { WebhookEndpoint } from "@/types/webhook";
@@ -409,6 +411,7 @@ export const OrganizationWebhooks: React.FC = () => {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+        <PlanLockBanner capability={CAPABILITY.outgoingWebhooks} feature="Outgoing webhooks" />
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Webhooks</h1>
