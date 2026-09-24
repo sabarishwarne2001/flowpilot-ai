@@ -7,7 +7,8 @@
  * two field lists so they cannot drift.
  */
 
-export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY";
+// ARCH42-S2:review-kind-merge
+export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY" | "MERGE";
 export type ReviewSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type ReviewStatus = "OPEN" | "RESOLVED";
 
@@ -19,9 +20,10 @@ export type ReviewReason =
   | "AUTONOMY_AUDIT"
   | "PENDING_REVIEW"
   | "CLAUSE_TRIAGE"
-  | "ANOMALY";
+  | "ANOMALY"
+  | "ENTITY_MERGE";
 
-export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY"];
+export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY", "MERGE"];
 export const REVIEW_SEVERITIES: readonly ReviewSeverity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 /** The "Autonomy audits" tab: ARCH-35 holds and accuracy-audit samples. */
@@ -31,6 +33,7 @@ export const KIND_LABELS: Readonly<Record<ReviewKind, string>> = {
   EXTRACTION: "Extraction",
   ASSERTION: "Clause",
   ANOMALY: "Anomaly",
+  MERGE: "Entity merge",
 };
 
 export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
@@ -41,6 +44,7 @@ export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
   PENDING_REVIEW: "Awaiting review",
   CLAUSE_TRIAGE: "Below clause threshold",
   ANOMALY: "Radar finding",
+  ENTITY_MERGE: "Possible duplicate record",
 };
 
 export interface ReviewItem {
@@ -86,6 +90,7 @@ export interface ReviewQueueFilters {
 
 export type AssertionVerdict = "PASS" | "FAIL" | "UNDETERMINED";
 export type AnomalyVerdict = "CONFIRM" | "DISMISS";
+export type MergeVerdict = "MERGE" | "SEPARATE";
 
 export interface ReviewResolveRequest {
   readonly values?: Readonly<Record<string, unknown>>;
@@ -94,6 +99,7 @@ export interface ReviewResolveRequest {
   readonly anomaly_verdict?: AnomalyVerdict;
   readonly note?: string;
   readonly ttl_days?: number;
+  readonly merge_verdict?: MergeVerdict;
 }
 
 export interface ReviewResolveResponse {

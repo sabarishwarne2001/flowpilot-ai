@@ -61,6 +61,8 @@ ARCH35_JOB_TYPES: frozenset[str] = frozenset(
 ARCH38_JOB_TYPES: frozenset[str] = frozenset(
     {"batch.expand_archive", "work_items.bulk", "ingestion.sweep_sessions"}
 )
+# ARCH42-S1:entity-job-types.
+ARCH42_JOB_TYPES: frozenset[str] = frozenset({"entities.resolve_document"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -91,6 +93,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH34_JOB_TYPES
     | ARCH35_JOB_TYPES
     | ARCH38_JOB_TYPES
+    | ARCH42_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -310,6 +313,11 @@ def _ingestion_sweep_sessions(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_sweep_upload_sessions(payload)
 
 
+def _entities_resolve_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.entities import handle_entities_resolve_document
+    return handle_entities_resolve_document(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -390,6 +398,10 @@ _HANDLERS = {
     "work_items.bulk": _work_items_bulk,
     "ingestion.sweep_sessions": _ingestion_sweep_sessions,
     "pipeline.sweep_stuck": _pipeline_sweep_stuck,
+    # ARCH42-S1:entity-handler. Also on the LIGHT profile in
+    # app/workers/profiles.py; assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "entities.resolve_document": _entities_resolve_document,
 }
 
 

@@ -56,6 +56,8 @@ _DISPLAY_NAMES = {
     entitlements.PRIORITY_SLO_CAPABILITY: "The priority 99.9% SLO",
     # ARCH41-S2:capability-display
     entitlements.EXTRACTION_MEMORY_CAPABILITY: "Extraction memory",
+    # ARCH42-S1:capability-display
+    entitlements.ENTITY_GRAPH_CAPABILITY: "The entity graph",
 }
 
 

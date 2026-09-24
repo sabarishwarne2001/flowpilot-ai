@@ -795,12 +795,24 @@ class LLMService:
         return CLASSIFICATION_PROMPT_TEMPLATE.format(text=self._truncate_document(text))
 
     def _build_entity_prompt(
-        self, *, text: str, document_classification: str, memory_context: str | None = None
+        self,
+        *,
+        text: str,
+        document_classification: str,
+        memory_context: str | None = None,
+        preset_context: str | None = None,
     ) -> str:
         prompt = ENTITY_EXTRACTION_PROMPT_TEMPLATE.format(
             document_classification=document_classification,
             text=self._truncate_document(text),
         )
+        # ARCH42-S1:preset-prompt. An enabled ARCH-38 preset's fields, as
+        # extra keys, just before the output instruction. None for a
+        # workspace with no enabled preset: its prompt is unchanged.
+        if preset_context:
+            prompt = prompt.replace(
+                "Return ONLY valid JSON.", f"{preset_context}\n\nReturn ONLY valid JSON.", 1
+            )
         # ARCH41-S2:memory-prompt. The fenced extraction-memory block goes
         # BEFORE the instructions and the document, so the document stays the
         # last thing the model reads. It is empty unless memory applies.
@@ -907,6 +919,7 @@ class LLMService:
         *,
         ai_settings: AISettings,
         memory_context: str | None = None,
+        preset_context: str | None = None,
         db: Session | None = None,
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
@@ -918,6 +931,7 @@ class LLMService:
                 text=text,
                 document_classification=document_classification,
                 memory_context=memory_context,
+                preset_context=preset_context,
             ),
             temperature=settings.LLM_ENTITY_EXTRACTION_TEMPERATURE,
             ai_settings=ai_settings,

@@ -29,6 +29,8 @@ export const CAPABILITY = {
   prioritySlo: "capability.priority_slo",
   // ARCH41-S3:capability-constant
   extractionMemory: "capability.extraction_memory",
+  // ARCH42-S2:capability-constant
+  entityGraph: "capability.entity_graph",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

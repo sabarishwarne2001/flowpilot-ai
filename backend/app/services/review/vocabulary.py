@@ -13,12 +13,15 @@ from app.models.review import (
     REVIEW_KIND_ANOMALY,
     REVIEW_KIND_ASSERTION,
     REVIEW_KIND_EXTRACTION,
+    REVIEW_KIND_MERGE,
     REVIEW_KINDS,
 )
 
 KIND_EXTRACTION: Final[str] = REVIEW_KIND_EXTRACTION
 KIND_ASSERTION: Final[str] = REVIEW_KIND_ASSERTION
 KIND_ANOMALY: Final[str] = REVIEW_KIND_ANOMALY
+#: ARCH42-S1:review-kind-merge
+KIND_MERGE: Final[str] = REVIEW_KIND_MERGE
 
 KINDS: Final[tuple[str, ...]] = REVIEW_KINDS
 
@@ -58,6 +61,8 @@ REASON_AUTONOMY_AUDIT: Final[str] = "AUTONOMY_AUDIT"
 REASON_PENDING_REVIEW: Final[str] = "PENDING_REVIEW"
 REASON_CLAUSE_TRIAGE: Final[str] = "CLAUSE_TRIAGE"
 REASON_ANOMALY: Final[str] = "ANOMALY"
+#: ARCH42-S1:review-reason-merge. arch42_step1_entity_graph's view produces it.
+REASON_ENTITY_MERGE: Final[str] = "ENTITY_MERGE"
 
 REASONS: Final[tuple[str, ...]] = (
     REASON_DISAGREEMENT,
@@ -67,6 +72,7 @@ REASONS: Final[tuple[str, ...]] = (
     REASON_PENDING_REVIEW,
     REASON_CLAUSE_TRIAGE,
     REASON_ANOMALY,
+    REASON_ENTITY_MERGE,
 )
 
 #: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
@@ -106,6 +112,7 @@ __all__ = [
     "KIND_ANOMALY",
     "KIND_ASSERTION",
     "KIND_EXTRACTION",
+    "KIND_MERGE",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
     "AUTONOMY_REASONS",

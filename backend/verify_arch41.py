@@ -872,7 +872,10 @@ def check_migration_chain() -> None:
         if r:
             revs[r.group(1)] = d.group(1).strip() if d else ""
     assert revs.get(A41) == f'"{HM1}"', f"{A41} revises {revs.get(A41)}, expected {HM1}"
-    assert revs.get(STEP3) == f'"{A41}"', f"the contract step revises {revs.get(STEP3)}, expected {A41}"
+    # ARCH42-S1:chain-widened-41. ARCH-42 sits between ARCH-41 and the contract step.
+    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"'), f"the contract step revises {revs.get(STEP3)}, expected {A41} or arch42"
+    if revs.get(STEP3) == '"arch42_step1_entity_graph"':
+        assert revs.get("arch42_step1_entity_graph") == f'"{A41}"', "arch42 must revise arch41"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -1421,7 +1424,7 @@ def t23_db(rec: "Recorder", evidence: dict, mutate: bool) -> None:
             current = [r[0] for r in conn.execute(text("SELECT version_num FROM alembic_version"))]
             tables = {r[0] for r in conn.execute(text(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
-        assert current in ([A41], [STEP3]), f"alembic current is {current}; run run_arch41.ps1"
+        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41
         missing = [t_ for t_ in MEMORY_TABLES if t_ not in tables]
         assert not missing, f"tables missing: {missing}"
 

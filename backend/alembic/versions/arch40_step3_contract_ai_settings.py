@@ -50,7 +50,9 @@ from alembic import op
 revision = "arch40_step3_contract_ai_settings"
 # ARCH41-S2:contract-reparented. ARCH-41's expand-only migration now sits
 # before the contract step, as hm1 did; one file head is preserved.
-down_revision = "arch41_step1_extraction_memory"
+# ARCH42-S1:contract-reparented. ARCH-42's expand-only migration sits between
+# ARCH-41 and the contract step in the same way.
+down_revision = "arch42_step1_entity_graph"
 branch_labels = None
 depends_on = None
 

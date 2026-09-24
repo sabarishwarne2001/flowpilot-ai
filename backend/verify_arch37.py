@@ -1158,7 +1158,7 @@ def gates_db(rec: Recorder, *, root: Path) -> None:
             # ARCH38-S1:head-widened-37. ARCH-38 advances the head; this gate
             # asserts that ARCH-37's migration is still applied, not that it is
             # still the newest thing in the tree.
-            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37
+            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37  ARCH42-S1:head-widened-37
             names = set(db.execute(sql(
                 "SELECT conname FROM pg_constraint WHERE conname IN ("
                 "'ck_automation_rule_triggers_event_known','ck_automation_rules_flow_spec_is_object',"

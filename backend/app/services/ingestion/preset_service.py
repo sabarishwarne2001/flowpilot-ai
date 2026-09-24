@@ -131,6 +131,14 @@ def validate_preset_schema(schema: Any) -> dict[str, Any]:
             "SCHEMA_REQUIRED_UNKNOWN",
             f"'required' names fields that are not defined: {missing}.",
         )
+    # ARCH42-S1:preset-entity-annotations. An x-entity block the resolver
+    # could not act on is refused here, not discovered at resolution time.
+    from app.services.entities.annotations import AnnotationError, validate_schema_annotations
+
+    try:
+        validate_schema_annotations(schema)
+    except AnnotationError as exc:
+        raise PresetError(exc.code, exc.message) from exc
     return schema
 
 

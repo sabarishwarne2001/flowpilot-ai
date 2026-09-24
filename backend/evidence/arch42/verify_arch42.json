@@ -1,0 +1,352 @@
+{
+  "milestone": "ARCH-42",
+  "at": "2026-09-24T06:31:48.968410+00:00",
+  "em_synthetic": {
+    "pairs": 4003,
+    "true_pairs": 270,
+    "iterations": 216,
+    "lambda": 0.06693,
+    "auto_precision": 1.0,
+    "auto_recall": 0.437,
+    "band_precision": 0.8618,
+    "band_recall": 0.8778,
+    "prior_band_precision": 0.8434,
+    "prior_band_recall": 0.8778
+  },
+  "graph_e2e": [
+    {
+      "step": "G1 invoices: three spellings of one vendor -> one record; GSTIN's PAN links the third; account masked; edges",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G2 people: CVs joined by email; Aadhaar from the card's text stored as HMAC + last four only",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G3 conflict guard: same name, different PAN -> MERGE review (HIGH, ENTITY_MERGE); SEPARATE sticks through the sweep",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G4 idempotent: an unchanged document resolves to nothing new; a corrected field re-resolves alone",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G5 bill of lading: shipment, container and parties with SHIPPED / CONSIGNED_TO / CONTAINS in the graph API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G6 reversible merge/unmerge/split, audited; guard on manual merge; FK refuses cross-workspace; schema refuses plaintext",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G7 no plaintext identifier in any entity table, audit row or outbox event",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G8 sweep: no stranger merged on adversarial data; EM FITTED on realistic data, 0 false merges; rotation keeps lookups; re-key; Aadhaar unrekeyable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G9 ARCH-20 erasure: the subject's documents leave zero identifiers; the subject's own email erases their record",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G10 HTTP: 402 without the plan on reads, writes and chips; /potential 200; search by PAN via HMAC; 360; erase",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G11 post-enrichment enqueues resolution only with the plan; only an ENABLED preset reaches the prompt",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "G12 review hub: MERGE visible only with the plan; an open conflict listed as ENTITY_MERGE",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "em_database": {
+    "pairs": 160,
+    "iterations": 29,
+    "version": 1,
+    "merged": 28,
+    "proposed": 5,
+    "true_merges": 28,
+    "false_merges": 0,
+    "adversarial": {
+      "true_merges": 30,
+      "false_merges": 0,
+      "fitted": false,
+      "refused": [
+        "name: agreement is not evidence of a match"
+      ]
+    }
+  },
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "E1 capability.entity_graph: entitlement, 402 name, Business+Enterprise only, console lock, GATED_PAGES",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E2 migration: six tables, named constraints, arch41 -> arch42 -> contract, one head, 11 presets annotated",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E3 identifiers: GSTIN/IBAN/Aadhaar/ISO 6346 checksums, masks, detectors, name normalisation",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E4 EM converges monotonically; auto precision >= 0.98, band P/R >= 0.80/0.85; the conflict guard is a rule",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E5 x-entity extraction: presets, built-ins, GSTIN->PAN, Aadhaar from text only, edges, validation",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E6 preset_service refuses an invalid x-entity annotation",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E7 extraction prompt unchanged without an enabled preset; preset fields before the output rule",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E8 wiring: job + LIGHT profile, post-enrichment dispatch, erasure, review hub MERGE, router, sweep G14",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E9 every API route gated except /potential; roles; static routes before /{entity_id}",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "E10 console: list+lock, Entity 360, canvas explorer (no dependency), chips, hub MERGE, routes, type parity",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-42 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D1 database at arch42 with six tables, MERGE in the hub CHECK, 11 presets annotated, pgvector >= 0.8",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G1 invoices: three spellings of one vendor -> one record; GSTIN's PAN links the third; account masked; edges",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G2 people: CVs joined by email; Aadhaar from the card's text stored as HMAC + last four only",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G3 conflict guard: same name, different PAN -> MERGE review (HIGH, ENTITY_MERGE); SEPARATE sticks through the sweep",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G4 idempotent: an unchanged document resolves to nothing new; a corrected field re-resolves alone",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G5 bill of lading: shipment, container and parties with SHIPPED / CONSIGNED_TO / CONTAINS in the graph API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G6 reversible merge/unmerge/split, audited; guard on manual merge; FK refuses cross-workspace; schema refuses plaintext",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G7 no plaintext identifier in any entity table, audit row or outbox event",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G8 sweep: no stranger merged on adversarial data; EM FITTED on realistic data, 0 false merges; rotation keeps lookups; re-key; Aadhaar unrekeyable",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G9 ARCH-20 erasure: the subject's documents leave zero identifiers; the subject's own email erases their record",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G10 HTTP: 402 without the plan on reads, writes and chips; /potential 200; search by PAN via HMAC; 360; erase",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G11 post-enrichment enqueues resolution only with the plan; only an ENABLED preset reaches the prompt",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "G12 review hub: MERGE visible only with the plan; an open conflict listed as ENTITY_MERGE",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD1 identifier blocking returns nothing (G1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD2 conflict guard silenced (G3 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD3 the API's capability gate removed (G10 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD4 Aadhaar value kept (G2 must catch: the schema refuses it)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD5 erasure leaves identifiers (G9 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD6 hub cannot resolve MERGE (G3 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD7 GSTIN no longer contributes its PAN (G1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD8 u learned by EM instead of fixed from random pairs; plausibility off (G8 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M1 capability dropped from the Business tier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M2 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M3 hard-identifier uniqueness removed from the migration",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M4 contract step left on arch41 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M5 GSTIN check character ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M6 Aadhaar Verhoeff digit ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M7 plausibility check disabled (a label-swapped fit would be stored)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M8 conflict guard bypassed in decide()",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M9 GSTIN no longer derives its PAN",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M10 Aadhaar detector not consulted",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M11 an API route loses its capability gate",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M12 erasure hook removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M13 hub shows MERGE without the capability",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M14 sweep not scheduled (G14)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M15 entity chips removed from Work Item details",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M16 graph explorer pulls in a library",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M17 console type drifts from the API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "tsc -b && vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "eslint --max-warnings=0 on every ARCH-42 console file",
+      "outcome": "PASS"
+    }
+  ]
+}

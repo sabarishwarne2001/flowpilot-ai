@@ -162,7 +162,7 @@
       ],
       "trigger.assertion.held": [
         "app/services/assertions/triage.py:503",
-        "app/services/review/resolution.py:271"
+        "app/services/review/resolution.py:273"
       ],
       "trigger.batch.completed": [
         "app/services/ingestion/batch_service.py:45"
@@ -198,7 +198,7 @@
       ],
       "work_item.enriched": [
         "app/services/assertions/clause_check_service.py:41",
-        "app/workers/handlers/enrich.py:291"
+        "app/workers/handlers/enrich.py:300"
       ],
       "work_item.field_changed": [
         "app/services/public_api_service.py:604",
@@ -208,7 +208,7 @@
       "work_item.verification_completed": [
         "app/services/document_verification_service.py:381",
         "app/api/v1/verifications.py:178",
-        "app/services/review/resolution.py:223"
+        "app/services/review/resolution.py:225"
       ]
     }
   },
@@ -271,7 +271,7 @@
     {
       "layer": "offline",
       "gate": "E2 migration: 7 tables, named constraints, hm1 -> arch41 -> contract, one head",
-      "outcome": "PASS"
+      "outcome": "FAIL  the contract step revises \"arch42_step1_entity_graph\", expected arch41_step1_extraction_memory"
     },
     {
       "layer": "offline",
@@ -314,199 +314,14 @@
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M1 preview <img> back on the raw URL",
-      "outcome": "PASS"
+      "layer": "db",
+      "gate": "D1 backup -> verify -> restore drill -> exact counts; mismatch caught; source never dropped",
+      "outcome": "ERROR _arch41_floor_real.BackupError: pg_dump was not found. Install the PostgreSQL client tools matching the server's major version and put them on PATH, or set PG_BIN to their directory (e.g. C:\\Program Files\\PostgreSQL\\16\\bin)."
     },
     {
-      "layer": "mutation",
-      "gate": "M2 hook stops revoking object URLs",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M3 hook stops aborting superseded renders",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M4 hook grows a module-level cache",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M5 back link removed from the header",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M6 dead # download link reintroduced",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M7 burned preview loses its revision",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M8 timeline back to a fixed 30 s poll",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M9 frontend forgets an execution status",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M10 a trigger event loses its emitter",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M10b a twin's public constant drifts off the catalog",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M11 a trigger excludes an unregistered action",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M12 nonce ignores the final-chunk flag",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M13 header no longer authenticated",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M14 retention keeps ten weeks of dailies",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M15 dump no longer shares the counting snapshot",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M16 credentials leak into argv",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M17 drill will drop any database",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M18 backups not git-ignored",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM1 Business loses the capability",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM2 frontend constant dropped",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM3 key never registered as an Entitlement",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM4 Mann-Whitney without tie correction",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM5 trials ignore non-inferiority",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM6 promotion bound loosened to 0.5",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM7 fence markers no longer stripped",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM8 control arm receives memory",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM9 harvest hook removed",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM10 enrichment stops passing memory",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM11 erasure leaves exemplars behind",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM12 a read route loses its gate",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM13 capture back on event.target",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM14 regions take the pointer while drawing",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM16 output floor lowered to 75 again",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MM15 click-sized boxes committed",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "tsc -b && vite build",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "eslint --max-warnings=0 on every ARCH-41 console file",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "regression",
-      "gate": "verify_arch40.py --db --regression (chains 38 -> 37 -> 39 -> 36 -> 35 -> 34 -> 33 -> 32 -> 31)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "regression",
-      "gate": "verify_hardening_final.py",
-      "outcome": "PASS"
+      "layer": "db",
+      "gate": "D2 database at arch41_step1_extraction_memory with all seven tables",
+      "outcome": "FAIL  alembic current is ['arch42_step1_entity_graph']; run run_arch41.ps1"
     }
   ]
 }

@@ -1,0 +1,478 @@
+{
+  "organization_id": "26c0671a-2a15-455a-861c-8aacd57839c2",
+  "workspace_id": "efd84e30-5b6c-43e5-8576-2315591f9934",
+  "triggers": [
+    {
+      "trigger": "document.created",
+      "event": "trigger.work_item.created",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "document.ready",
+      "event": "work_item.enriched",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "document.completed",
+      "event": "trigger.document.completed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "document.failed",
+      "event": "trigger.document.failed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "document.reprocessed",
+      "event": "trigger.work_item.reprocessed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "document.field_changed",
+      "event": "work_item.field_changed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "procurement.completed",
+      "event": "trigger.procurement.completed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "procurement.approved",
+      "event": "trigger.procurement.approved",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "procurement.disputed",
+      "event": "trigger.procurement.disputed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "anomaly.detected",
+      "event": "trigger.anomaly.detected",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "assertion.held",
+      "event": "trigger.assertion.held",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "redaction.completed",
+      "event": "trigger.redaction.completed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "batch.completed",
+      "event": "trigger.batch.completed",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "trigger": "review.cleared",
+      "event": "trigger.review.cleared",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "action": "webhook.send",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "webhook queued for endpoint 3545d388-df89-4005-946c-0d050f6d617b",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "redaction.start",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "redaction started (all_identifiers); awaiting review",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "review.escalate",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "sent to review (2 fields)",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "warehouse.export",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "export queued to arch41 capture",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "notify.role",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "notified 1 person",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "autonomy.decide",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "held by calibrated autonomy; later actions skipped",
+          "error": null
+        }
+      ]
+    },
+    {
+      "action": "email.send",
+      "authored": 201,
+      "status": "COMPLETED",
+      "in_timeline": true,
+      "nodes": [
+        {
+          "key": "trigger",
+          "status": "COMPLETED",
+          "outcome": null,
+          "error": null
+        },
+        {
+          "key": "action_0",
+          "status": "COMPLETED",
+          "outcome": "email -> ops@flowpilot-conformance.com",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "refusals": [
+    {
+      "trigger": "procurement.completed",
+      "status": 422
+    },
+    {
+      "trigger": "procurement.approved",
+      "status": 422
+    },
+    {
+      "trigger": "procurement.disputed",
+      "status": 422
+    },
+    {
+      "trigger": "anomaly.detected",
+      "status": 422
+    },
+    {
+      "trigger": "assertion.held",
+      "status": 422
+    },
+    {
+      "trigger": "redaction.completed",
+      "status": 422
+    },
+    {
+      "action": "redaction.start",
+      "status": 422
+    },
+    {
+      "action": "autonomy.decide",
+      "status": 422
+    }
+  ],
+  "email_captured": 1,
+  "problems": []
+}

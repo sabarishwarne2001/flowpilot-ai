@@ -24,6 +24,8 @@ import ChatPanel from "@/components/assistant/ChatPanel";
 import StartRedactionButton from "@/components/redaction/StartRedactionButton";
 // ARCH41-S3:provenance-import
 import ExtractionMemoryProvenance from "@/components/extractionMemory/ExtractionMemoryProvenance";
+// ARCH42-S2:entity-chips
+import EntityChips from "@/components/entities/EntityChips";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
@@ -331,6 +333,7 @@ export const WorkItemDetails: React.FC = () => {
                     <p className="mt-1 text-sm text-muted-foreground">Structured data extracted from the document.</p>
                   </div>
                   <ExtractionMemoryProvenance workItemId={workItem.id} />
+                  <EntityChips workItemId={workItem.id} />
                   <div className="overflow-auto rounded-lg border border-border/40 bg-muted/10 p-5">
                     {workItem.extracted_entities ? (
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">

@@ -34,6 +34,8 @@ backend/.env.production.*
 # backups the backup floor writes. Encrypted or not, a database backup has no
 # place in a public repository (see ARCH-0V finding B-1 above).
 **/.arch41_apply_backup/
+# ARCH42-S1:gitignore. ARCH-42 apply backups.
+**/.arch42_apply_backup/
 .flowpilot_backups/
 **/.flowpilot_backups/
 *.fpbk

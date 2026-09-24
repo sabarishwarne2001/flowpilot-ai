@@ -82,6 +82,51 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
     );
   }
 
+  // ARCH42-S2:resolve-merge. Two records that may be one party. Merging is
+  // reversible from Entity 360; "different" is remembered so the nightly
+  // sweep never proposes the pair again.
+  if (item.kind === "MERGE") {
+    const conflict = item.headline.includes("conflicting identifiers");
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        {conflict ? (
+          <p className="text-xs text-muted-foreground">
+            The two records hold different values of an identifier a party has only one of (for example two PANs). They were
+            kept apart until a person decides.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            The names and details are similar, but not similar enough to link without a person
+            {item.confidence !== null ? ` (${Math.round(item.confidence * 100)}% match)` : ""}.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ merge_verdict: "MERGE" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Same record — merge
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ merge_verdict: "SEPARATE" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            Different — keep separate
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (item.kind === "ANOMALY") {
     const dismissReady = reason.trim().length >= MIN_DISMISS_REASON;
     const send = (value: AnomalyVerdict): void => {

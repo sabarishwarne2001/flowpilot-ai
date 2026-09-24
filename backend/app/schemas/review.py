@@ -63,6 +63,18 @@ class ReviewResolveRequest(BaseModel):
     anomaly_verdict: Optional[str] = None
     note: Optional[str] = None
     ttl_days: Optional[int] = Field(default=None, ge=1, le=3650)
+    #: ARCH42-S1:merge-verdict. MERGE reviews: MERGE or SEPARATE.
+    merge_verdict: Optional[str] = None
+
+    @field_validator("merge_verdict")
+    @classmethod
+    def _known_merge_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("MERGE", "SEPARATE"):
+            raise ValueError("merge_verdict must be one of: MERGE, SEPARATE")
+        return upper
 
     @field_validator("anomaly_verdict")
     @classmethod

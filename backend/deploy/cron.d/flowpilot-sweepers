@@ -13,4 +13,6 @@ MAILTO=""
 53 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --apply
 # ARCH41-S2:cron-extraction-memory
 29 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep extraction_memory --apply
+# ARCH42-S1:cron-entities
+47 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep entities --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

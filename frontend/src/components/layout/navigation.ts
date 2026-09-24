@@ -2,6 +2,7 @@
 import {
   BarChart3,
   Brain,
+  Network,
   Bell,
   ClipboardCheck,
   CreditCard,
@@ -41,6 +42,7 @@ import {
   automationPath,
   automationTimelinePath,
   extractionMemoryPath,
+  entitiesPath,
   createWorkspacePath,
   notificationsPath,
   organizationApiKeysPath,
@@ -210,6 +212,17 @@ export const buildWorkspaceNavigationGroups = (
         description: "Layouts learned from reviewed corrections, proven by trial",
         capability: CAPABILITY.extractionMemory,
         keywords: ["learning", "corrections", "templates", "accuracy", "memory"],
+      },
+      // ARCH42-S2:nav-entities
+      {
+        id: "entities",
+        name: "Entity graph",
+        route: "workspaceEntities",
+        path: entitiesPath(orgSlug, workspaceSlug),
+        icon: Network,
+        description: "Every vendor, customer, person and shipment across documents, linked",
+        capability: CAPABILITY.entityGraph,
+        keywords: ["entities", "vendors", "customers", "people", "graph", "360", "duplicates"],
       },
     ],
   },

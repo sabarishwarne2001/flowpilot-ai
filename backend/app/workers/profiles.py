@@ -148,6 +148,10 @@ LIGHT = WorkerProfile(
             "ingestion.sweep_sessions",
             # HARDENING-T1:D25. Queries only; no heavy imports.
             "pipeline.sweep_stuck",
+            # ARCH42-S1:entity-light-profile. Entity resolution: string
+            # similarity, indexed lookups and EM arithmetic. Nothing under
+            # app/services/entities/ imports a model, OCR or a PDF engine.
+            "entities.resolve_document",
         }
     ),
     allow_heavy=frozenset(),

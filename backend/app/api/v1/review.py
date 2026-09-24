@@ -86,6 +86,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
         kinds.append(vocab.KIND_ASSERTION)
     if ANOMALY_RADAR_CAPABILITY in granted:
         kinds.append(vocab.KIND_ANOMALY)
+    # ARCH42-S1:hub-merge-gate. Merge proposals are the entity graph's, and
+    # every entity route is gated on capability.entity_graph.
+    from app.core.entitlements import ENTITY_GRAPH_CAPABILITY
+
+    if ENTITY_GRAPH_CAPABILITY in granted:
+        kinds.append(vocab.KIND_MERGE)
     return tuple(kinds)
 
 
@@ -117,6 +123,7 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         anomaly_verdict=body.anomaly_verdict,
         note=body.note,
         ttl_days=body.ttl_days,
+        merge_verdict=body.merge_verdict,  # ARCH42-S1:merge-verdict
     )
 
 

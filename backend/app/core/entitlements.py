@@ -106,6 +106,7 @@ __all__ = [
     "ENTERPRISE_IDENTITY_CAPABILITY",
     "PRIORITY_SLO_CAPABILITY",
     "EXTRACTION_MEMORY_CAPABILITY",
+    "ENTITY_GRAPH_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -235,6 +236,13 @@ PRIORITY_SLO_CAPABILITY: str = "capability.priority_slo"
 #: tokens it adds are already metered as llm.input_token.
 EXTRACTION_MEMORY_CAPABILITY: str = "capability.extraction_memory"
 
+#: ARCH42-S1:capability-entity-graph. Entity resolution and the document
+#: knowledge graph: one canonical record per person, organization, address,
+#: account, asset or shipment across every document. A CAPABILITY, not an
+#: ADDON, for the reason every phase since ARCH-31 records. Not metered:
+#: resolution makes no LLM call and runs on the LIGHT worker profile.
+ENTITY_GRAPH_CAPABILITY: str = "capability.entity_graph"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -250,6 +258,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     ENTERPRISE_IDENTITY_CAPABILITY,
     PRIORITY_SLO_CAPABILITY,
     EXTRACTION_MEMORY_CAPABILITY,
+    ENTITY_GRAPH_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -361,6 +370,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Extraction memory: learn from reviewed corrections per document "
             "layout, prove the improvement in a randomized trial, and apply it "
             "to the next extraction. Bundled into a tier."
+        ),
+    ),
+    # ARCH42-S1:capability-entity-graph-entitlement
+    Entitlement(
+        name=ENTITY_GRAPH_CAPABILITY,
+        description=(
+            "Entity resolution and the document knowledge graph: canonical "
+            "people, organizations, addresses, accounts, assets and shipments "
+            "across every document, with relationships. Bundled into a tier."
         ),
     ),
 )

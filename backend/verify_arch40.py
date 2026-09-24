@@ -330,6 +330,14 @@ def offline(rec: Recorder) -> None:
 
         step2a = _load(VERSIONS / f"{STEP2A}.py", "arch40_step2a_probe")
         view = step2a.REVIEW_QUEUE_VIEW_V2
+        # ARCH42-S1:a6-widened. ARCH-42 rebuilt the view as ARCH-40's text plus a
+        # MERGE arm and added ENTITY_MERGE; the hub is compared with the newest.
+        latest = VERSIONS / "arch42_step1_entity_graph.py"
+        if latest.exists():
+            step42 = _load(latest, "arch42_step1_probe")
+            assert step2a.REVIEW_QUEUE_VIEW_V2.rstrip() in step42.review_queue_view_v3(), "ARCH-42 altered an ARCH-40 arm"
+            view = step42.review_queue_view_v3()
+            step2a = SimpleNamespace(REVIEW_REASONS=step42.REVIEW_REASONS)
         assert tuple(REVIEW_KINDS) == vocab.KINDS
         view_kinds = set(re.findall(r"'(\w+)'::varchar\(16\)", view))
         assert view_kinds == set(vocab.KINDS), f"view kinds {view_kinds}"
@@ -398,7 +406,7 @@ def offline(rec: Recorder) -> None:
             d = re.search(r'^down_revision\s*(?::[^=]+)?=\s*(.+)$', text, re.M)
             if r:
                 revs[r.group(1)] = d.group(1).strip() if d else None
-        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), ("arch41_step1_extraction_memory", "hm1_tier_price_per_key"), (STEP3, "arch41_step1_extraction_memory")]  # HM-S1:chain-widened  ARCH41-S2:chain-widened
+        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), ("arch41_step1_extraction_memory", "hm1_tier_price_per_key"), ("arch42_step1_entity_graph", "arch41_step1_extraction_memory"), (STEP3, "arch42_step1_entity_graph")]  # HM-S1:chain-widened  ARCH41-S2:chain-widened  ARCH42-S1:chain-widened
         for rev, down in chain:
             assert rev in revs, f"{rev} missing"
             assert f'"{down}"' in (revs[rev] or "") or f"'{down}'" in (revs[rev] or ""), f"{rev} revises {revs[rev]}, expected {down}"
@@ -842,7 +850,7 @@ def _database_gates(rec: Recorder, sa: Any, conn: Any, session: Any) -> None:
     head = q("SELECT version_num FROM alembic_version").scalar_one()
 
     def d1() -> None:
-        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key", "arch41_step1_extraction_memory"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened  ARCH41-S2:head-widened-40
+        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened  ARCH41-S2:head-widened-40  ARCH42-S1:head-widened-40
 
     if not rec.check("D1 head is the ARCH-40 release head (or the contract head)", d1):
         return
@@ -1068,7 +1076,10 @@ def _database_gates(rec: Recorder, sa: Any, conn: Any, session: Any) -> None:
                 "ANOMALY": q("SELECT count(*) FROM anomaly_findings WHERE workspace_id = :w AND status = 'OPEN'",
                              w=WS1).scalar_one(),
             }
-            assert body["counts_by_kind"] == tables, f"{body['counts_by_kind']} vs tables {tables}"
+            # ARCH42-S1:h1-widened. The hub counts ARCH-42's MERGE kind too; this
+            # organization holds no entity graph, so it must count zero.
+            assert {k: c for k, c in body["counts_by_kind"].items() if k in tables} == tables and \
+                body["counts_by_kind"].get("MERGE", 0) == 0, f"{body['counts_by_kind']} vs tables {tables}"
             assert body["allowed_kinds"] == ["EXTRACTION", "ASSERTION", "ANOMALY"]
             assert str(af_other) not in {i["item_id"] for i in items}
             audits = client.get(base, params=[("reason", "AUTONOMY_AUDIT"), ("reason", "CALIBRATION_HOLD")]).json()

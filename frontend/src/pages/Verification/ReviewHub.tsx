@@ -79,6 +79,8 @@ const TABS: readonly TabConfig[] = [
   { id: "EXTRACTION", label: "Extraction", kind: "EXTRACTION" },
   { id: "ASSERTION", label: "Clause assertions", kind: "ASSERTION" },
   { id: "ANOMALY", label: "Anomalies", kind: "ANOMALY" },
+  // ARCH42-S2:hub-merge-tab
+  { id: "MERGE", label: "Entity merges", kind: "MERGE" },
   { id: "AUTONOMY", label: "Autonomy audits", kind: "EXTRACTION" },
   { id: "HISTORY", label: "History" },
 ];

@@ -155,7 +155,7 @@
     ],
     "trigger.assertion.held": [
       "app/services/assertions/triage.py:503",
-      "app/services/review/resolution.py:271"
+      "app/services/review/resolution.py:273"
     ],
     "trigger.batch.completed": [
       "app/services/ingestion/batch_service.py:45"
@@ -191,7 +191,7 @@
     ],
     "work_item.enriched": [
       "app/services/assertions/clause_check_service.py:41",
-      "app/workers/handlers/enrich.py:291"
+      "app/workers/handlers/enrich.py:300"
     ],
     "work_item.field_changed": [
       "app/services/public_api_service.py:604",
@@ -201,7 +201,7 @@
     "work_item.verification_completed": [
       "app/services/document_verification_service.py:381",
       "app/api/v1/verifications.py:178",
-      "app/services/review/resolution.py:223"
+      "app/services/review/resolution.py:225"
     ]
   }
 }

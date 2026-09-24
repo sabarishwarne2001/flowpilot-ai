@@ -246,6 +246,14 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         memory_context = memory_prompt.context_for_extraction(
             db, work_item=work_item, text=full_text, document_type=str(document_class)
         )
+        # ARCH42-S1:preset-enrich. The fields of an ARCH-38 preset ENABLED in
+        # this workspace whose classifier hints appear in the text, or None.
+        # Never raises. See app/services/entities/presets.py.
+        from app.services.entities import presets as entity_presets
+
+        preset_context = entity_presets.prompt_context(
+            db, workspace_id=work_item.workspace_id, text=full_text
+        )
         entities = _guarded(
             "entities",
             lambda: llm_service.extract_entities(
@@ -253,6 +261,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
                 document_class,
                 ai_settings=ai_settings,
                 memory_context=memory_context,
+                preset_context=preset_context,
                 **metering_kwargs,
             ),
         )

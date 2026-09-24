@@ -11,7 +11,7 @@ TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory> [args...]" >&2
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities> [args...]" >&2
     exit 64
 fi
 
@@ -30,6 +30,9 @@ case "${NAME}" in
     # ARCH41-S2:sweep-extraction-memory. Nightly: merge layouts, learn and
     # promote rules, start and judge trials, withdraw what drifted.
     extraction_memory) SCRIPT="scripts/sweep_extraction_memory.py" ; HEARTBEAT="${HEARTBEAT_UUID_EXTRACTION_MEMORY:-}" ;;
+    # ARCH42-S1:sweep-entities. Nightly: re-key, catch up, fit EM, re-resolve,
+    # tidy. See app/services/entities/sweep.py.
+    entities) SCRIPT="scripts/sweep_entities.py" ; HEARTBEAT="${HEARTBEAT_UUID_ENTITIES:-}" ;;
     *)
         echo "unknown sweeper: ${NAME}" >&2
         exit 64

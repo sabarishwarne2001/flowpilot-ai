@@ -103,6 +103,8 @@ class ResolvePayload:
     anomaly_verdict: Optional[str] = None
     note: Optional[str] = None
     ttl_days: Optional[int] = None
+    #: ARCH42-S1:merge-verdict. MERGE -- MERGE or SEPARATE.
+    merge_verdict: Optional[str] = None
 
 
 @dataclass
@@ -424,10 +426,57 @@ def _requeue_automation(
     )
 
 
+def _resolve_merge(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH42-S1:resolve-merge. A person decides whether two records are one.
+
+    MERGE points the newer record at the older (reversible from Entity 360),
+    overriding the conflict guard: the guard exists to ask exactly this
+    person. SEPARATE is remembered, so no nightly sweep proposes the pair
+    again. Either way the mention that raised the question is CONFIRMED.
+    """
+    from app.models.entity_graph import EntityMention, EntityMergeCandidate
+    from app.services.entities import graph
+    from app.services.entities import vocabulary as ev
+
+    verdict = (payload.merge_verdict or "").strip().upper()
+    if verdict not in ev.MERGE_VERDICTS:
+        raise ReviewResolutionError("A merge review needs merge_verdict: MERGE or SEPARATE.")
+    candidate = db.execute(
+        select(EntityMergeCandidate).where(
+            EntityMergeCandidate.id == item.item_id,
+            EntityMergeCandidate.workspace_id == item.workspace_id,
+        )
+    ).scalar_one_or_none()
+    if candidate is None:
+        raise ReviewResolutionError("This merge proposal no longer exists.")
+    if candidate.status != ev.CANDIDATE_OPEN:
+        raise ReviewResolutionError("This merge proposal has already been decided.")
+    if verdict == ev.VERDICT_MERGE:
+        left = graph.root_of(db, candidate.left_entity_id)
+        right = graph.root_of(db, candidate.right_entity_id)
+        loser, winner = (left, right) if left.created_at >= right.created_at else (right, left)
+        graph.merge(db, loser_id=loser.id, winner_id=winner.id, actor_user_id=actor_user_id,
+                    reason=ev.MERGE_REASON_REVIEW, allow_conflict=True)
+        candidate.status = ev.CANDIDATE_MERGED
+    else:
+        candidate.status = ev.CANDIDATE_SEPARATE
+    candidate.resolved_at = graph.now()
+    candidate.resolved_by_user_id = actor_user_id
+    if candidate.mention_id is not None:
+        mention = db.get(EntityMention, candidate.mention_id)
+        if mention is not None and mention.decision == ev.DECISION_REVIEW:
+            mention.decision, mention.decided_by_user_id = ev.DECISION_CONFIRMED, actor_user_id
+    db.flush()
+    return verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
     vocab.KIND_ANOMALY: _resolve_anomaly,
+    vocab.KIND_MERGE: _resolve_merge,  # ARCH42-S1:resolve-merge
 }
 
 

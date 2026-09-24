@@ -52,6 +52,11 @@ DEV = ["addon.custom_domain", "capability.custom_branding", "capability.develope
 BUS = DEV + ["addon.warehouse_sync", "capability.anomaly_radar", "capability.custom_email", "capability.reconciliation"]
 ENT = BUS + ["capability.calibrated_autonomy", "capability.enterprise_identity", "capability.priority_slo",
              "capability.redaction", "capability.semantic_assertions"]
+# ARCH42-S1:matrix-widened. The directive grows with the roadmap: ARCH-41 packaged
+# capability.extraction_memory and ARCH-42 capability.entity_graph into Business and
+# Enterprise. (ARCH-41 did not widen this gate, so it failed from ARCH-41 on.)
+BUS = BUS + ["capability.extraction_memory", "capability.entity_graph"]
+ENT = ENT + ["capability.extraction_memory", "capability.entity_graph"]
 EXPECTED_MATRIX = {"free": [], "developer": sorted(DEV), "business": sorted(BUS), "enterprise": sorted(ENT)}
 EXPECTED_PRICES = {"free": 0, "developer": 49_000_000, "business": 299_000_000, "enterprise": 799_000_000}
 NEW_CAPABILITIES = ("capability.developer_api", "capability.outgoing_webhooks", "capability.custom_branding",
@@ -294,7 +299,7 @@ def g_migration() -> Optional[str]:
     step3 = script.get_revision("arch40_step3_contract_ai_settings")
     if hm1.down_revision != "arch40_step2a_review_view_paths":
         return f"hm1 revises {hm1.down_revision}"
-    if step3.down_revision not in ("hm1_tier_price_per_key", "arch41_step1_extraction_memory"):  # ARCH41-S2:hm-chain-widened
+    if step3.down_revision not in ("hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"):  # ARCH41-S2:hm-chain-widened  ARCH42-S1:hm-chain-widened
         return f"the contract step revises {step3.down_revision}; hm1 must sit before it"
     if list(script.get_heads()) != ["arch40_step3_contract_ai_settings"]:
         return f"heads {script.get_heads()}"

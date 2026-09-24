@@ -156,6 +156,20 @@ def dispatch_in_session(
         )
         enqueued.append("document.verify")
 
+    # ARCH42-S1:entity-dispatch. The incremental half of entity resolution,
+    # on the heels of `work_item.enriched`; the nightly sweep is the other.
+    from app.services.entities import gate as entity_gate
+
+    if entity_gate.capability_held(db, organization_id):
+        job_service.enqueue(
+            db,
+            job_type="entities.resolve_document",
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"entities.resolve_document:{work_item_id}:{marker}",
+        )
+        enqueued.append("entities.resolve_document")
+
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued}
 
 

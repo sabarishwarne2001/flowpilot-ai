@@ -87,6 +87,9 @@ const ReviewHub = lazy(
 const ForensicAuditRadar = lazy(
   () => import("@/pages/radar/ForensicAuditRadar"),
 );
+// ARCH42-S2:entity-routes
+const Entities = lazy(() => import("@/pages/entities/Entities"));
+const Entity360 = lazy(() => import("@/pages/entities/Entity360"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -436,6 +439,8 @@ function AppRoutes() {
                   path={ROUTE_PATTERNS.workspaceExtractionMemory}
                   element={<ExtractionMemory />}
                 />
+                <Route path={ROUTE_PATTERNS.workspaceEntities} element={<Entities />} />
+                <Route path={ROUTE_PATTERNS.workspaceEntity} element={<Entity360 />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

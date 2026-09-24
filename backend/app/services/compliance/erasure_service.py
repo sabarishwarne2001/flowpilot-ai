@@ -294,6 +294,11 @@ def _destroy_documents(
 
     counts["work_items"] = len(work_items)
     counts["document_chunks"] = int(chunk_rows)
+    # ARCH42-S1:erasure-entities. The documents' entity mentions, the edges
+    # they evidenced, and every identifier and record only they supported.
+    from app.services.entities import erasure as _entity_erasure
+
+    counts["entity_mentions"] = _entity_erasure.erase_for_work_items(db, work_item_ids)["mentions"]
 
 
 def _destroy_conversations(
@@ -467,6 +472,13 @@ def erase_subject(
         workspace_ids=workspace_ids,
         counts=counts,
     )
+    # ARCH42-S1:erasure-subject-entity. The record holding the subject's own
+    # email (matched by HMAC; the value is never stored) is the subject.
+    from app.services.entities import erasure as _entity_erasure
+
+    counts["entity_records"] = _entity_erasure.erase_by_identifier(
+        db, workspace_ids=workspace_ids, kind="EMAIL", raw_value=subject.email
+    )["entities"]
     _destroy_credentials(db, subject_id=subject.id, now=now, counts=counts)
     _release_files(
         db,

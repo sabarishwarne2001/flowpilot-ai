@@ -128,6 +128,9 @@ export const ROUTE_PATTERNS = {
   // ARCH41-S3:extraction-memory-path. Workspace-scoped: layouts, exemplars
   // and trials all belong to one workspace.
   workspaceExtractionMemory: "extraction-memory",
+  // ARCH42-S2:entity-paths. Workspace-scoped: records belong to one workspace.
+  workspaceEntities: "entities",
+  workspaceEntity: "entities/:entityId",
   // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
   // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
   workspaceAssertions: "assertions",
@@ -256,6 +259,13 @@ export const radarPath = (orgSlug: string, workspaceSlug: string): string =>
 
 export const extractionMemoryPath = (orgSlug: string, workspaceSlug: string): string =>
   `${workspacePath(orgSlug, workspaceSlug)}/extraction-memory`;
+
+// ARCH42-S2:entity-path-helpers
+export const entitiesPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/entities`;
+
+export const entityPath = (orgSlug: string, workspaceSlug: string, entityId: string): string =>
+  `${entitiesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(entityId)}`;
 
 export const assertionsPath = (
   orgSlug: string,

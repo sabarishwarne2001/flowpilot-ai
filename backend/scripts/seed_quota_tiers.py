@@ -81,7 +81,8 @@ ADDON_WAREHOUSE_SYNC = {
 #   Developer   + developer API keys, outgoing webhooks, custom branding and
 #                 vanity domains (the custom-domain add-on, bundled)
 #   Business    + three-way reconciliation, the forensic radar, custom email,
-#                 extraction memory (ARCH41-S2:tier-business)
+#                 extraction memory (ARCH41-S2:tier-business),
+#                 the entity graph (ARCH42-S1:tier-business)
 #                 and analytics warehouse egress (the warehouse add-on, bundled)
 #   Enterprise  + calibrated autonomy, zero-leakage redaction, clause
 #                 assertions, SAML/SCIM enterprise identity, priority 99.9% SLO
@@ -103,6 +104,7 @@ BUSINESS_CAPABILITIES = [
     _capability("capability.anomaly_radar"),
     _capability("capability.custom_email"),
     _capability("capability.extraction_memory"),
+    _capability("capability.entity_graph"),  # ARCH42-S1:tier-business
 ]
 BUSINESS_FEATURES = [*DEVELOPER_FEATURES, *BUSINESS_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 ENTERPRISE_CAPABILITIES = [
@@ -115,6 +117,7 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.enterprise_identity"),
     _capability("capability.priority_slo"),
     _capability("capability.extraction_memory"),  # ARCH41-S2:tier-enterprise
+    _capability("capability.entity_graph"),  # ARCH42-S1:tier-enterprise
 ]
 ENTERPRISE_FEATURES = [*DEVELOPER_FEATURES, *ENTERPRISE_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 

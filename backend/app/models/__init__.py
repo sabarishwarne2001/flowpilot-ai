@@ -636,3 +636,13 @@ from app.models.extraction_memory import (  # noqa: E402,F401
     ExtractionTemplate,
     ExtractionTemplateMember,
 )
+
+# ARCH42-S1:models-registry
+from app.models.entity_graph import (  # noqa: E402,F401
+    Entity,
+    EntityEdge,
+    EntityIdentifier,
+    EntityMatchModel,
+    EntityMention,
+    EntityMergeCandidate,
+)

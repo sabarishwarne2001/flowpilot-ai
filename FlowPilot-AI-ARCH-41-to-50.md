@@ -1,8 +1,9 @@
 <!-- ARCH41-S3:docs -->
+<!-- ARCH42-S1:docs -->
 # FlowPilot AI — Master Roadmap, ARCH-41 through ARCH-50
 
-**Status:** ARCH-41 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md`). ARCH-42 to ARCH-50 specified here.
-**Alembic after ARCH-41:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch41_step1_extraction_memory`.
+**Status:** ARCH-41 and ARCH-42 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md`, `ARCH-42-FINAL-CERTIFICATION.md`). ARCH-43 to ARCH-50 specified here.
+**Alembic after ARCH-42:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch42_step1_entity_graph → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch42_step1_entity_graph`.
 **Constraint held throughout:** no new recurring external cost. FastAPI, PostgreSQL 16 + pgvector ≥ 0.8, Redis, MinIO, PaddleOCR, SentenceTransformers, SciPy, scikit-learn, pikepdf, pypdfium2, camelot (already in requirements), React 19, Vite, Tailwind.
 
 This document adopts the harmonized ten-milestone plan (governance and intelligence engines fused with the commercial pillars: packet splitting, table extraction, N-way corroboration, real-time collaboration), with four adjustments recorded in §2.
@@ -14,7 +15,7 @@ This document adopts the harmonized ten-milestone plan (governance and intellige
 | # | Milestone | Capability key | Tier | Depends on |
 |---|---|---|---|---|
 | 41 | Operational Seams, Automation Conformance & **Extraction Memory** — DONE | `capability.extraction_memory` | Business+ | — |
-| 42 | Entity Resolution & Document Knowledge Graph | `capability.entity_graph` | Business+ | 41 |
+| 42 | Entity Resolution & Document Knowledge Graph — DONE | `capability.entity_graph` | Business+ | 41 |
 | 43 | Universal Packet Dicer & Case Intelligence (+ per-tenant fair queuing) | `capability.case_intelligence` | Business+ | 42 |
 | 44 | Complex Table & Hierarchical Grid Extractor | `capability.table_intelligence` | Business+ | 41 |
 | 45 | Universal Document Corroborator & Discrepancy Matrix | `capability.universal_corroborator` | Enterprise | 42, 44 |
@@ -51,7 +52,11 @@ This document adopts the harmonized ten-milestone plan (governance and intellige
 
 Redaction Studio authenticated previews, back navigation and a hardened drawing canvas; the live automation conformance matrix (14 triggers and 7 actions, authored through HTTP, emitted through the real outbox, executed by the real handler, read back through the timeline routes); an encrypted backup floor with a weekly restore drill; and Extraction Memory — reviewed corrections harvested into encrypted per-layout exemplars and Wilson-bounded anchor rules, applied only after a randomized trial proves fewer corrections (one-sided Mann–Whitney U, per-field non-inferiority), with conformal autonomy held until recalibration. Details and evidence: `ARCH-41-FINAL-CERTIFICATION.md`.
 
-### ARCH-42 — Entity Resolution & Document Knowledge Graph (`capability.entity_graph`, Business+)
+### ARCH-42 — Entity Resolution & Document Knowledge Graph (`capability.entity_graph`, Business+) — delivered
+
+**As built (see `ARCH-42-FINAL-CERTIFICATION.md`).** Six tables, not five: `entity_merge_candidates` is the review hub's MERGE source (a guard refusal found by the nightly sweep is a pair of records, not a mention). ARCH-38 presets now reach the extraction prompt when ENABLED (before ARCH-42 enabling a preset changed nothing); a built-in annotation map covers the generic prompt's keys. Name vectors are hashed character/token n-grams (the LIGHT worker profile forbids SentenceTransformers). Identifier HMACs are looked up under every configured key and re-keyed nightly. PAN uniqueness is per entity kind (a proprietor's GSTIN embeds their own PAN); a GSTIN contributes its PAN as a derived identifier. The conflict guard asks the model about everything EXCEPT the exclusive identifiers. The Aadhaar/PAN card preset still extracts no number; numbers are read from the text with their checksums and stored as HMAC + last four.
+
+**Original specification:**
 
 **Objective.** One canonical record per person, organization, address, account, asset or shipment across every document, with the relationships between them.
 **Why it sells.** "Show me every document and obligation tied to Vendor X or Patient Y" — the question buyers ask in the first demo; it is also the join key ARCH-43, 45, 46 and 47 need.
@@ -110,6 +115,6 @@ One egress gate for every outbound client with tenant allowlists and a deploymen
 
 ---
 
-## 5. ARCH-42 handoff
+## 5. Handoffs
 
-The self-contained prompt for a fresh chat is in `ARCH-42-HANDOFF-PROMPT.md`.
+ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-43 is in `ARCH-43-HANDOFF-PROMPT.md`.
