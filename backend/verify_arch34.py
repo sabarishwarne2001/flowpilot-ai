@@ -908,7 +908,7 @@ def gate_db() -> None:
         check(
             "alembic head is arch34_step1_radar or later",
             # ARCH39-S1:head-widened-34
-            head in ("arch34_step1_radar", "arch35_step1_calibration", "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"),  # ARCH37-S1:head-widened-34  ARCH38-S1:head-widened-34  ARCH40-S1:head-widened-34  # HM-S1:head-widened  ARCH41-S2:head-widened-34  ARCH42-S1:head-widened-34
+            head in ("arch34_step1_radar", "arch35_step1_calibration", "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence"),  # ARCH37-S1:head-widened-34  ARCH38-S1:head-widened-34  ARCH40-S1:head-widened-34  # HM-S1:head-widened  ARCH41-S2:head-widened-34  ARCH42-S1:head-widened-34  ARCH43-S1:head-widened-34
             str(head),
         )
 

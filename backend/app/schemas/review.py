@@ -76,6 +76,21 @@ class ReviewResolveRequest(BaseModel):
             raise ValueError("merge_verdict must be one of: MERGE, SEPARATE")
         return upper
 
+    #: ARCH43-S1:split-verdict. SPLIT reviews: APPROVE (optionally with the
+    #: corrected first page of every document after the first) or REJECT.
+    split_verdict: Optional[str] = None
+    split_boundaries: Optional[list[int]] = None
+
+    @field_validator("split_verdict")
+    @classmethod
+    def _known_split_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("APPROVE", "REJECT"):
+            raise ValueError("split_verdict must be one of: APPROVE, REJECT")
+        return upper
+
     @field_validator("anomaly_verdict")
     @classmethod
     def _known_anomaly_verdict(cls, value: Optional[str]) -> Optional[str]:

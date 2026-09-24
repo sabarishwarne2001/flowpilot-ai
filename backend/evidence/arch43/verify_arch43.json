@@ -1,0 +1,193 @@
+{
+  "milestone": "ARCH-43",
+  "at": "2026-09-24T16:30:01.194586+00:00",
+  "boundary_model": {
+    "training_rows": 6309,
+    "held_out": {
+      "precision": 0.9754,
+      "recall": 0.8982,
+      "f1": 0.9352,
+      "boundaries": 1149,
+      "packets": 150
+    },
+    "page_number_baseline": {
+      "precision": 0.9984,
+      "recall": 0.5561,
+      "f1": 0.7144,
+      "boundaries": 1149,
+      "packets": 150
+    }
+  },
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "T1 capability.case_intelligence: entitlement, 402 name, Business+Enterprise only, console, GATED_PAGES, hardening matrix",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2 migration: 8 tables, exclusion/range/lineage/immutability/token constraints, arch42 -> arch43 -> contract, one head, hub view v4",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T3 weighted fair claiming is the default in claim_jobs and the production loop",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T4 boundary model: shipped = scikit-learn fit; held-out P>=0.95, R>=0.88, F1 beats page-number baseline by 0.15",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T5 page classifier: ARCH-38 hints verbatim; types from ARCH-31 roles and presets",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T6 planner: blank/separator never start a document; invalid boundaries refused; plans cover every page",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T7 consistency DSL: EQUAL/FUZZY_EQUAL/DATE_ORDER/WITHIN_DAYS/SUM_EQUALS pass, fail, missing, error; bad rules refused",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T8 triggers: 17 over 18 events; packet.split/case.completed/case.inconsistent gated, emitted, in the conformance matrix",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T9 wiring: jobs+profiles, dispatch, hub SPLIT, routers, lineage guard, live mentions, public route, sweep G14",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T10 API: every workspace route gated with roles; templates admin-only; public upload token-only",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T11 console: locked pages, split review (authorized thumbnails, draggable boundaries), board, detail, public page, type parity",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-43 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M1 capability dropped from the Business tier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M2 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M3 exclusion constraint removed (segments could overlap)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M4 contract step left on arch42 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M5 published templates made mutable (trigger dropped)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M19 claim returns to UPDATE ... IN (LIMIT subquery) (can over-claim)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M6 fair claiming off by default",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M7 page-number signals ignored (held-out recall must fall below the floor)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M8 a blank page may start a document",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M9 SUM_EQUALS tolerance check inverted",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M10 FUZZY_EQUAL threshold ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M11 hub shows SPLIT without the capability",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M12 the pikepdf job moved onto the LIGHT profile",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M13 children OCR'd a second time",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M14 case sweep not scheduled (G14)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M15 a case route loses its capability gate",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M16 the conformance matrix still expects 14 triggers",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M17 split review fetches thumbnails without the session hook",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "M18 console case type drifts from the API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "tsc -b && vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "eslint --max-warnings=0 on every ARCH-43 console file",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "verify_arch42.py --db",
+      "outcome": "PASS"
+    }
+  ]
+}

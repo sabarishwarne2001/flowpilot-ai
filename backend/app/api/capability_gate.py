@@ -58,6 +58,8 @@ _DISPLAY_NAMES = {
     entitlements.EXTRACTION_MEMORY_CAPABILITY: "Extraction memory",
     # ARCH42-S1:capability-display
     entitlements.ENTITY_GRAPH_CAPABILITY: "The entity graph",
+    # ARCH43-S1:capability-display
+    entitlements.CASE_INTELLIGENCE_CAPABILITY: "Case intelligence and the packet dicer",
 }
 
 

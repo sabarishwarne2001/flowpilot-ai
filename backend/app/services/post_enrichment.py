@@ -170,6 +170,39 @@ def dispatch_in_session(
         )
         enqueued.append("entities.resolve_document")
 
+    # ARCH43-S1:packet-dispatch. A multi-page PDF that is not itself a child
+    # of a split is scored for document boundaries (LIGHT profile), for
+    # organizations whose plan carries capability.case_intelligence.
+    from app.services.packets import gate as packet_gate
+    from app.services.packets import vocabulary as packet_vocab
+
+    if (
+        work_item.parent_work_item_id is None
+        and (work_item.page_count or 0) >= packet_vocab.MIN_PAGES_AUTO
+        and (work_item.file_type or "").split(";")[0].strip().lower() == packet_vocab.PDF_MIME
+        and packet_gate.capability_held(db, organization_id)
+    ):
+        job_service.enqueue(
+            db,
+            job_type=packet_vocab.JOB_DETECT,
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"{packet_vocab.JOB_DETECT}:{work_item_id}:{marker}",
+        )
+        enqueued.append(packet_vocab.JOB_DETECT)
+
+    # ARCH43-S1:case-dispatch. Every enriched document is offered to the
+    # workspace's published case templates (entity- or batch-anchored).
+    if packet_gate.capability_held(db, organization_id):
+        job_service.enqueue(
+            db,
+            job_type="cases.assemble_document",
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"cases.assemble_document:{work_item_id}:{marker}",
+        )
+        enqueued.append("cases.assemble_document")
+
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued}
 
 

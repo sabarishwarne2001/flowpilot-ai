@@ -92,6 +92,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
 
     if ENTITY_GRAPH_CAPABILITY in granted:
         kinds.append(vocab.KIND_MERGE)
+    # ARCH43-S1:hub-split-gate. Split plans are the packet dicer's, and every
+    # packet route is gated on capability.case_intelligence.
+    from app.core.entitlements import CASE_INTELLIGENCE_CAPABILITY
+
+    if CASE_INTELLIGENCE_CAPABILITY in granted:
+        kinds.append(vocab.KIND_SPLIT)
     return tuple(kinds)
 
 
@@ -124,6 +130,8 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         note=body.note,
         ttl_days=body.ttl_days,
         merge_verdict=body.merge_verdict,  # ARCH42-S1:merge-verdict
+        split_verdict=body.split_verdict,  # ARCH43-S1:split-verdict
+        split_boundaries=body.split_boundaries,
     )
 
 

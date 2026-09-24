@@ -2,7 +2,8 @@
 <!-- ARCH42-S1:docs -->
 # FlowPilot AI — Master Roadmap, ARCH-41 through ARCH-50
 
-**Status:** ARCH-41 and ARCH-42 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md`, `ARCH-42-FINAL-CERTIFICATION.md`). ARCH-43 to ARCH-50 specified here.
+<!-- ARCH43-S1:roadmap-status -->
+**Status:** ARCH-41, ARCH-42 and ARCH-43 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md`, `ARCH-42-FINAL-CERTIFICATION.md`, `ARCH-43-FINAL-CERTIFICATION.md`). ARCH-44 to ARCH-50 specified here.
 **Alembic after ARCH-42:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch42_step1_entity_graph → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch42_step1_entity_graph`.
 **Constraint held throughout:** no new recurring external cost. FastAPI, PostgreSQL 16 + pgvector ≥ 0.8, Redis, MinIO, PaddleOCR, SentenceTransformers, SciPy, scikit-learn, pikepdf, pypdfium2, camelot (already in requirements), React 19, Vite, Tailwind.
 
@@ -65,7 +66,7 @@ Redaction Studio authenticated previews, back navigation and a hardened drawing 
 **Frontend.** Entities list; Entity 360 (documents timeline, identifiers, relationships, obligations placeholder); graph explorer (canvas force layout, no new dependency); a `MERGE` review kind in the ARCH-40 hub; entity chips on Work Item details.
 **Gates.** EM convergence and precision/recall floors on a labelled synthetic set; no plaintext identifier in any table; cross-workspace merge refused by FK; erasure leaves zero identifiers; conflict guard routes to review; mutations on normalisation, blocking, the guard and the capability gate; `--db` end to end with HTTP 402/200.
 
-### ARCH-43 — Universal Packet Dicer & Case Intelligence (`capability.case_intelligence`, Business+)
+### ARCH-43 — Universal Packet Dicer & Case Intelligence (`capability.case_intelligence`, Business+) — delivered
 
 **Objective.** Split 100+ page scanned bundles into child documents with lineage, then assemble documents into cases with completeness and cross-document consistency checks.
 **Why it sells.** Chaotic scanned bundles are the first intake problem every enterprise has.
@@ -73,6 +74,7 @@ Redaction Studio authenticated previews, back navigation and a hardened drawing 
 **Data.** `packet_splits`, `packet_split_segments` (page range CHECKs, no overlaps via exclusion constraint), `case_templates` (immutable once published), `cases`, `case_documents`, `case_rule_results`, `document_requests`, `tenant_queue_weights`.
 **Frontend.** Split review (page thumbnails with draggable boundaries, using ARCH-41's authorized blob hook), case board, case detail checklist and consistency matrix.
 **Gates.** Boundary precision/recall on synthetic packets; lineage integrity; token single use; fairness bound under a 10,000-job flood; new triggers `packet.split`, `case.completed`, `case.inconsistent` in the ARCH-41 live conformance matrix.
+**As built.** One migration, `arch43_step1_case_intelligence` (the contract step re-parented onto it). Fair claiming is the default for every worker loop; the build also found and fixed a pre-existing over-claim in `claim_eligible_rows` (an `UPDATE … IN (LIMIT subquery)` could claim more than the batch). Split plans are a fifth review-hub kind, SPLIT. Children reuse the parent's per-page OCR, so a split is never OCR'd or billed twice. The recipient upload is the first ARCH-4x public route (`PUBLIC_ROUTES`). Held-out boundary quality: precision 0.975, recall 0.898 (page-number heuristic F1 0.714).
 
 ### ARCH-44 — Complex Table & Hierarchical Grid Extractor (`capability.table_intelligence`, Business+)
 
@@ -117,4 +119,4 @@ One egress gate for every outbound client with tenant allowlists and a deploymen
 
 ## 5. Handoffs
 
-ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-43 is in `ARCH-43-HANDOFF-PROMPT.md`.
+ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md` and ARCH-43 from `ARCH-43-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-44 is in `ARCH-44-HANDOFF-PROMPT.md`.

@@ -127,6 +127,44 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
     );
   }
 
+  // ARCH43-S2:resolve-split. A scanned packet the model proposes to divide.
+  // Nothing is cut until a person approves; "keep as one" leaves the upload
+  // exactly as it was. Page-level correction happens on the split review
+  // screen, which sends corrected boundaries with the approval.
+  if (item.kind === "SPLIT") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          Approving creates one document per part, each linked back to the original pages. The original upload is kept.
+          {item.confidence !== null ? ` Least certain boundary: ${Math.round(item.confidence * 100)}%.` : ""}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ split_verdict: "APPROVE" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Approve split
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ split_verdict: "REJECT" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            Keep as one document
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (item.kind === "ANOMALY") {
     const dismissReady = reason.trim().length >= MIN_DISMISS_REASON;
     const send = (value: AnomalyVerdict): void => {

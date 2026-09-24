@@ -251,11 +251,15 @@ def run() -> dict[str, Any]:
     return report
 
 
+EXPECTED_TRIGGERS = 17  # ARCH43-S1:conformance-17 (14 through ARCH-42)
+
+
 def problems(report: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    if len(report["triggers"]) != 14:
-        out.append(f"{len(report['triggers'])} triggers exercised, expected 14")
-    if len({r['event'] for r in report['triggers']}) < 14:
+    # ARCH43-S1:conformance-17. ARCH-43 adds packet.split, case.completed and case.inconsistent.
+    if len(report["triggers"]) != EXPECTED_TRIGGERS:
+        out.append(f"{len(report['triggers'])} triggers exercised, expected {EXPECTED_TRIGGERS}")
+    if len({r['event'] for r in report['triggers']}) < EXPECTED_TRIGGERS:
         out.append("triggers did not each fire a distinct event")
     for row in report["triggers"] + report["actions"]:
         name = row.get("trigger") or row.get("action")

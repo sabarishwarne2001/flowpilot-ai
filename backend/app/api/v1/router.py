@@ -8,6 +8,9 @@ from app.api.v1 import (
     anomalies,
     extraction_memory,
     entities,
+    packet_splits,
+    cases,
+    public_document_requests,
     assertions,
     autonomy,
     assistant,
@@ -135,6 +138,13 @@ api_router.include_router(extraction_memory.router)
 
 # ARCH42-S1:entities-router. Every route but /potential is capability-gated.
 api_router.include_router(entities.router)
+
+# ARCH43-S1:packets-router. Every route is gated on capability.case_intelligence.
+api_router.include_router(packet_splits.router)
+# ARCH43-S1:cases-router. Workspace routes gated on capability.case_intelligence;
+# the public upload is authorised by its single-use token (PUBLIC_ROUTES).
+api_router.include_router(cases.router)
+api_router.include_router(public_document_requests.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.

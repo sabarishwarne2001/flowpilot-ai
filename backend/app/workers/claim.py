@@ -208,6 +208,86 @@ def _rank_eligible_ids(
     return [row.id for row in db.execute(eligible_stmt).all()]
 
 
+#: ARCH43-S1:fair-claim. Weighted per-organization fair claiming (roadmap
+#: adjustment 2). The packet dicer is the first feature that turns one upload
+#: into a hundred jobs; before this, `run_jobs_loop` claimed strictly by
+#: (available_at, seq), so one tenant's 400-page bundle queued every other
+#: tenant's OCR behind it.
+#:
+#: Each eligible job gets a VIRTUAL TIME: (jobs of its organization already
+#: in flight in this pool + its rank among its organization's waiting jobs)
+#: divided by the organization's weight (tenant_queue_weights, default 1).
+#: A batch takes the smallest virtual times. Within one organization the
+#: order stays (available_at, seq), so nothing is reordered inside a tenant;
+#: across tenants, service is shared in proportion to weight, and an
+#: organization with work already running yields to one without. A row's
+#: optional max_inflight caps an organization outright. Jobs with no
+#: organization (platform housekeeping) form one tenant of weight 1.
+FAIR_DEFAULT_WEIGHT: float = 1.0
+_NO_ORG = "00000000-0000-0000-0000-000000000000"
+
+
+def _rank_fair_ids(
+    db: Session,
+    spec: QueueSpec,
+    *,
+    batch_size: int,
+    type_filter: Any = None,
+) -> list[Any]:
+    from sqlalchemy import Float, and_, cast, literal, or_
+    from sqlalchemy.dialects.postgresql import UUID as PgUUID
+
+    from app.models.packets import TenantQueueWeight
+
+    table = spec.table
+    weights = TenantQueueWeight.__table__
+    no_org = literal(_NO_ORG, PgUUID(as_uuid=False))
+    org_key = func.coalesce(table.c[spec.org_column], cast(no_org, PgUUID(as_uuid=True)))
+    typed = type_filter if type_filter is not None else sa_true()
+
+    inflight = (
+        select(org_key.label("org_key"), func.count().label("n"))
+        .where(typed, spec.row_predicate, table.c.status == spec.claimed_value)
+        .group_by(org_key)
+        .subquery()
+    )
+    ranked = (
+        select(
+            table.c.id,
+            table.c.available_at,
+            table.c.seq,
+            org_key.label("org_key"),
+            func.row_number()
+            .over(partition_by=org_key, order_by=(table.c.available_at, table.c.seq))
+            .label("rn"),
+        )
+        .where(
+            typed,
+            spec.row_predicate,
+            table.c.status.in_(spec.claimable_values),
+            table.c.available_at <= func.now(),
+        )
+        .subquery()
+    )
+    running = func.coalesce(inflight.c.n, 0)
+    weight = cast(func.coalesce(weights.c.weight, FAIR_DEFAULT_WEIGHT), Float)
+    virtual_time = (cast(running + ranked.c.rn, Float) / weight).label("vt")
+    stmt = (
+        select(ranked.c.id)
+        .select_from(
+            ranked.outerjoin(weights, weights.c.organization_id == ranked.c.org_key)
+            .outerjoin(inflight, inflight.c.org_key == ranked.c.org_key)
+        )
+        .where(
+            ranked.c.rn <= batch_size,
+            or_(weights.c.max_inflight.is_(None), running + ranked.c.rn <= weights.c.max_inflight),
+        )
+        .order_by(virtual_time.asc(), ranked.c.available_at.asc(), ranked.c.seq.asc())
+        .limit(batch_size)
+    )
+    return [row.id for row in db.execute(stmt).all()]
+
+
 def claim_eligible_rows(
     db: Session,
     spec: QueueSpec,
@@ -217,6 +297,7 @@ def claim_eligible_rows(
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     per_org_cap: Optional[int] = None,
     job_types: Optional[Sequence[str]] = None,
+    fair: bool = False,
 ) -> list[Any]:
     worker = worker_id or worker_identity()
     table = spec.table
@@ -235,7 +316,17 @@ def claim_eligible_rows(
     else:
         type_filter = sa_true()
 
-    if per_org_cap is not None:
+    if fair and per_org_cap is None:
+        # ARCH43-S1:fair-claim-path
+        if spec.org_column is None:
+            raise ValueError(
+                f"queue {spec.name!r} declares no tenancy column; fair claiming is not meaningful."
+            )
+        eligible_ids = _rank_fair_ids(db, spec, batch_size=batch_size, type_filter=type_filter)
+        if not eligible_ids:
+            return []
+        id_filter = table.c.id.in_(eligible_ids)
+    elif per_org_cap is not None:
         if spec.org_column is None:
             raise ValueError(
                 f"queue {spec.name!r} declares no tenancy column; per_org_cap is not meaningful."
@@ -267,9 +358,17 @@ def claim_eligible_rows(
         .with_for_update(skip_locked=True)
     )
 
+    # ARCH43-S1:claim-bounded. Lock the candidate ids FIRST, then update exactly
+    # those. `UPDATE ... WHERE id IN (SELECT ... LIMIT n FOR UPDATE SKIP LOCKED)`
+    # lets the planner rescan the limited subquery, and the pre-ARCH-43 FIFO
+    # path was seen claiming 32 rows for batch_size=20 (verify_arch43 F1). The
+    # row locks taken here are held to commit, so the semantics are unchanged.
+    locked_ids = list(db.execute(candidates).scalars())
+    if not locked_ids:
+        return []
     stmt = (
         update(table)
-        .where(table.c.id.in_(candidates))
+        .where(table.c.id.in_(locked_ids))
         .values(
             status=spec.claimed_value,
             claimed_at=now,
@@ -573,7 +672,12 @@ def claim_jobs(
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     per_org_cap: Optional[int] = None,
     job_types: Optional[Sequence[str]] = None,
+    fair: bool = True,
 ) -> list[Job]:
+    """Claim jobs. ARCH43-S1:fair-default. Weighted fair across organizations
+    by default (every worker loop calls this); `fair=False` restores the old
+    global (available_at, seq) order, and an explicit per_org_cap keeps the
+    ARCH-10 hard-cap path."""
     return claim_eligible_rows(
         db,
         JOBS_QUEUE,
@@ -582,6 +686,7 @@ def claim_jobs(
         lease_seconds=lease_seconds,
         per_org_cap=per_org_cap,
         job_types=job_types,
+        fair=fair,
     )
 
 

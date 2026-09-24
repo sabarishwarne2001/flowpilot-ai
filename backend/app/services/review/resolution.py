@@ -105,6 +105,10 @@ class ResolvePayload:
     ttl_days: Optional[int] = None
     #: ARCH42-S1:merge-verdict. MERGE -- MERGE or SEPARATE.
     merge_verdict: Optional[str] = None
+    #: ARCH43-S1:split-verdict. SPLIT -- APPROVE (optionally with corrected
+    #: boundaries: the first page of every document after the first) or REJECT.
+    split_verdict: Optional[str] = None
+    split_boundaries: Optional[list[int]] = None
 
 
 @dataclass
@@ -472,11 +476,45 @@ def _resolve_merge(
     return verdict
 
 
+def _resolve_split(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH43-S1:resolve-split. A person decides how a scanned packet divides.
+
+    APPROVE (with the reviewer's corrected boundaries, if given) enqueues the
+    split; REJECT keeps the packet as one document. Nothing is cut until a
+    person has approved the plan.
+    """
+    from app.models.packets import PacketSplit
+    from app.services.packets import service as packet_service
+    from app.services.packets import vocabulary as pv
+
+    verdict = (payload.split_verdict or "").strip().upper()
+    if verdict not in pv.SPLIT_VERDICTS:
+        raise ReviewResolutionError("A split review needs split_verdict: APPROVE or REJECT.")
+    split = db.execute(
+        select(PacketSplit).where(PacketSplit.id == item.item_id, PacketSplit.workspace_id == item.workspace_id)
+    ).scalar_one_or_none()
+    if split is None:
+        raise ReviewResolutionError("This split plan no longer exists.")
+    if split.status != pv.STATUS_PROPOSED:
+        raise ReviewResolutionError("This split plan has already been decided.")
+    try:
+        if verdict == pv.VERDICT_APPROVE:
+            packet_service.approve(db, split=split, actor_user_id=actor_user_id, boundaries=payload.split_boundaries)
+        else:
+            packet_service.reject(db, split=split, actor_user_id=actor_user_id)
+    except packet_service.PacketError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return f"{verdict} (corrected)" if payload.split_boundaries is not None and verdict == pv.VERDICT_APPROVE else verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
     vocab.KIND_ANOMALY: _resolve_anomaly,
     vocab.KIND_MERGE: _resolve_merge,  # ARCH42-S1:resolve-merge
+    vocab.KIND_SPLIT: _resolve_split,  # ARCH43-S1:resolve-split
 }
 
 

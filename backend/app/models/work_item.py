@@ -131,6 +131,15 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     
+    # --- ARCH43-S1:lineage. A child of a packet split names its parent and
+    # the parent's pages it came from; the composite FK onto (id, workspace_id)
+    # lives in arch43_step1_case_intelligence.
+    parent_work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
+    )
+    parent_page_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    parent_page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # --- Scope: the workspace owns this document -------------------------
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

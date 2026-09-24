@@ -15,4 +15,6 @@ MAILTO=""
 29 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep extraction_memory --apply
 # ARCH42-S1:cron-entities
 47 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep entities --apply
+# ARCH43-S1:cron-cases
+17 5 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep cases --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

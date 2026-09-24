@@ -596,7 +596,8 @@ def gates_offline(rec: Recorder, *, root: Path, only: Optional[set[str]]) -> Non
             # own counts stay acceptable: this gate asserts what ARCH-38 added
             # is present, not that nothing was added after it.
             counts = (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))
-            assert counts in ((13, 14), (14, 15)), counts
+            # ARCH43-S1:catalog-widened-38. ARCH-43 adds three triggers over three events.
+            assert counts in ((13, 14), (14, 15), (17, 18)), counts
             spec = triggers.TRIGGERS_BY_KEY["batch.completed"]
             assert spec.has_document is False, (
                 "a batch is not one document; has_document=True would offer "
@@ -822,7 +823,7 @@ def gates_db(rec: Recorder) -> None:
             head = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH40-S1:head-widened-38. ARCH-40 advances the head; this gate
             # asserts ARCH-38's schema is applied, not that it is the newest.
-            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"), f"alembic head is {head}; run `alembic upgrade head`"  # HM-S1:head-widened  ARCH41-S2:head-widened-38  ARCH42-S1:head-widened-38
+            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence"), f"alembic head is {head}; run `alembic upgrade head`"  # HM-S1:head-widened  ARCH41-S2:head-widened-38  ARCH42-S1:head-widened-38  ARCH43-S1:head-widened-38
             present = set(
                 db.execute(
                     text("SELECT tablename FROM pg_tables WHERE schemaname='public'")

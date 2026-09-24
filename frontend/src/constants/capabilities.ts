@@ -31,6 +31,8 @@ export const CAPABILITY = {
   extractionMemory: "capability.extraction_memory",
   // ARCH42-S2:capability-constant
   entityGraph: "capability.entity_graph",
+  // ARCH43-S2:capability-constant
+  caseIntelligence: "capability.case_intelligence",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

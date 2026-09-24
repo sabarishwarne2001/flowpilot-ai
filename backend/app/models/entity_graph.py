@@ -106,6 +106,10 @@ class EntityMention(Base):
     match_probability: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 5), nullable=True)
     match_weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(9, 3), nullable=True)
     decided_by_user_id: Mapped[Optional[uuid.UUID]] = _uuid(nullable=True)
+    #: ARCH43-S1:superseded. Stamped when the document's packet was split: the
+    #: children carry their own mentions; this one is kept, not counted.
+    superseded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    superseded_by_split_id: Mapped[Optional[uuid.UUID]] = _uuid(nullable=True)
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = _ts()
 

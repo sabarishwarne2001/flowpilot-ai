@@ -107,6 +107,7 @@ __all__ = [
     "PRIORITY_SLO_CAPABILITY",
     "EXTRACTION_MEMORY_CAPABILITY",
     "ENTITY_GRAPH_CAPABILITY",
+    "CASE_INTELLIGENCE_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -243,6 +244,13 @@ EXTRACTION_MEMORY_CAPABILITY: str = "capability.extraction_memory"
 #: resolution makes no LLM call and runs on the LIGHT worker profile.
 ENTITY_GRAPH_CAPABILITY: str = "capability.entity_graph"
 
+#: ARCH43-S1:capability-case-intelligence. The Universal Packet Dicer and Case
+#: Intelligence: scanned bundles split into child documents with lineage, and
+#: (Tranche 3) documents assembled into cases with completeness and consistency
+#: checks. ONE key for the milestone, as ARCH-34 recorded. Not metered:
+#: boundary detection is plain arithmetic over text OCR already stored.
+CASE_INTELLIGENCE_CAPABILITY: str = "capability.case_intelligence"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -259,6 +267,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     PRIORITY_SLO_CAPABILITY,
     EXTRACTION_MEMORY_CAPABILITY,
     ENTITY_GRAPH_CAPABILITY,
+    CASE_INTELLIGENCE_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -379,6 +388,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Entity resolution and the document knowledge graph: canonical "
             "people, organizations, addresses, accounts, assets and shipments "
             "across every document, with relationships. Bundled into a tier."
+        ),
+    ),
+    # ARCH43-S1:capability-case-intelligence-entitlement
+    Entitlement(
+        name=CASE_INTELLIGENCE_CAPABILITY,
+        description=(
+            "Case intelligence and the packet dicer: scanned bundles split into "
+            "child documents with lineage, and documents assembled into cases. "
+            "Bundled into a tier."
         ),
     ),
 )

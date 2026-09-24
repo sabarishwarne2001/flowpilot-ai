@@ -63,6 +63,10 @@ ARCH38_JOB_TYPES: frozenset[str] = frozenset(
 )
 # ARCH42-S1:entity-job-types.
 ARCH42_JOB_TYPES: frozenset[str] = frozenset({"entities.resolve_document"})
+# ARCH43-S1:packet-job-types. Detection on LIGHT, apply (pikepdf) on OCR.
+ARCH43_JOB_TYPES: frozenset[str] = frozenset(
+    {"packets.detect_boundaries", "packets.apply_split", "cases.assemble_document"}
+)
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -94,6 +98,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH35_JOB_TYPES
     | ARCH38_JOB_TYPES
     | ARCH42_JOB_TYPES
+    | ARCH43_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -318,6 +323,21 @@ def _entities_resolve_document(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_entities_resolve_document(payload)
 
 
+def _packets_detect_boundaries(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_detect_boundaries
+    return handle_detect_boundaries(payload)
+
+
+def _cases_assemble_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_assemble_document
+    return handle_assemble_document(payload)
+
+
+def _packets_apply_split(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_apply_split
+    return handle_apply_split(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -402,6 +422,12 @@ _HANDLERS = {
     # app/workers/profiles.py; assert_imports_match_profile() raises
     # ProfileError at every worker's startup on a handler no profile claims.
     "entities.resolve_document": _entities_resolve_document,
+    # ARCH43-S1:packet-handlers. detect on the LIGHT profile, apply on OCR
+    # (app/workers/profiles.py); assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "packets.detect_boundaries": _packets_detect_boundaries,
+    "packets.apply_split": _packets_apply_split,
+    "cases.assemble_document": _cases_assemble_document,
 }
 
 

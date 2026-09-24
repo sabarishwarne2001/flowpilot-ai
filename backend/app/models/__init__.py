@@ -646,3 +646,17 @@ from app.models.entity_graph import (  # noqa: E402,F401
     EntityMention,
     EntityMergeCandidate,
 )
+
+# ARCH43-S1:models-registry
+from app.models.packets import (  # noqa: E402,F401
+    PacketSplit,
+    PacketSplitSegment,
+    TenantQueueWeight,
+)
+from app.models.cases import (  # noqa: E402,F401  ARCH43-S1:models-registry-cases
+    Case,
+    CaseDocument,
+    CaseRuleResult,
+    CaseTemplate,
+    DocumentRequest,
+)

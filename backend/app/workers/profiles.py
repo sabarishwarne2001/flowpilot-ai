@@ -152,6 +152,12 @@ LIGHT = WorkerProfile(
             # similarity, indexed lookups and EM arithmetic. Nothing under
             # app/services/entities/ imports a model, OCR or a PDF engine.
             "entities.resolve_document",
+            # ARCH43-S1:packet-light-profile. Boundary detection is arithmetic
+            # over stored page text (app/services/packets/model.py scores
+            # without scikit-learn); no model, OCR or PDF engine.
+            "packets.detect_boundaries",
+            # ARCH43-S1:cases-light-profile. Case assembly: queries and the DSL.
+            "cases.assemble_document",
         }
     ),
     allow_heavy=frozenset(),
@@ -188,6 +194,9 @@ OCR = WorkerProfile(
             # without adding them here stops the entire fleet booting.
             "redaction.detect",
             "redaction.apply",
+            # ARCH43-S1:packet-ocr-profile. pikepdf writes the child PDFs:
+            # PDF-engine work, which the LIGHT profile excludes.
+            "packets.apply_split",
         }
     ),
     allow_heavy=frozenset({"paddleocr", "paddle"}),

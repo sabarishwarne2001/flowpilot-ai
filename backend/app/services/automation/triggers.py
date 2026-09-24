@@ -38,6 +38,7 @@ from app.core.automation_events import (
 )
 from app.core.entitlements import (
     ANOMALY_RADAR_CAPABILITY,
+    CASE_INTELLIGENCE_CAPABILITY,
     RECONCILIATION_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
@@ -343,6 +344,55 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         # kinds are per-document, so every event this trigger sees carries a
         # document to read, redact or route.
         has_document=True,
+    ),
+    # ARCH43-S1:trigger-packet-split. 17 triggers over 18 events after ARCH-43.
+    TriggerSpec(
+        key="packet.split",
+        label="Scanned packet split",
+        category="Documents",
+        description=(
+            "A reviewer approved a split plan and the packet became separate documents, "
+            "each linked to the pages it came from. The document is the original packet."
+        ),
+        event_types=("trigger.packet.split",),
+        fields=(
+            TriggerField("original_filename", "Packet file name", "string", "scan-0412.pdf"),
+            TriggerField("page_count", "Pages in packet", "number", "112"),
+            TriggerField("child_count", "Documents created", "number", "14"),
+        ),
+        capability=CASE_INTELLIGENCE_CAPABILITY,
+        has_document=True,
+    ),
+    # ARCH43-S1:trigger-case-completed
+    TriggerSpec(
+        key="case.completed",
+        label="Case complete",
+        category="Cases",
+        description="Every required document is present and every consistency rule passed.",
+        event_types=("trigger.case.completed",),
+        fields=(
+            TriggerField("template_key", "Case template", "string", "vendor-onboarding"),
+            TriggerField("title", "Case", "string", "Vendor onboarding — Acme Supplies"),
+            TriggerField("documents", "Documents", "number", "5"),
+        ),
+        capability=CASE_INTELLIGENCE_CAPABILITY,
+        # A case is not one document: document actions are refused by flow_service.
+        has_document=False,
+    ),
+    # ARCH43-S1:trigger-case-inconsistent
+    TriggerSpec(
+        key="case.inconsistent",
+        label="Case inconsistent",
+        category="Cases",
+        description="A consistency rule failed across the case's documents (for example, invoice vendor differs from the PO).",
+        event_types=("trigger.case.inconsistent",),
+        fields=(
+            TriggerField("template_key", "Case template", "string", "three-way-match"),
+            TriggerField("title", "Case", "string", "Purchase — PO-2231"),
+            TriggerField("failed_rules", "Failed rules", "array", "vendor-matches"),
+        ),
+        capability=CASE_INTELLIGENCE_CAPABILITY,
+        has_document=False,
     ),
 )
 

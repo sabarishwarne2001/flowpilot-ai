@@ -90,6 +90,12 @@ const ForensicAuditRadar = lazy(
 // ARCH42-S2:entity-routes
 const Entities = lazy(() => import("@/pages/entities/Entities"));
 const Entity360 = lazy(() => import("@/pages/entities/Entity360"));
+// ARCH43-S2:lazy-pages
+const Cases = lazy(() => import("@/pages/cases/Cases"));
+const CaseDetailPage = lazy(() => import("@/pages/cases/CaseDetail"));
+const PacketSplits = lazy(() => import("@/pages/packets/PacketSplits"));
+const SplitReview = lazy(() => import("@/pages/packets/SplitReview"));
+const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestUpload"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -171,6 +177,8 @@ function AppRoutes() {
         <Routes>
           {/* Public routes */}
           <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
+          {/* ARCH43-S2:public-request-route. No account: the single-use token is the credential. */}
+          <Route path="/request/:token" element={<DocumentRequestUpload />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={<ForgotPassword />}
@@ -441,6 +449,11 @@ function AppRoutes() {
                 />
                 <Route path={ROUTE_PATTERNS.workspaceEntities} element={<Entities />} />
                 <Route path={ROUTE_PATTERNS.workspaceEntity} element={<Entity360 />} />
+                {/* ARCH43-S2:routes */}
+                <Route path={ROUTE_PATTERNS.workspaceCases} element={<Cases />} />
+                <Route path={ROUTE_PATTERNS.workspaceCase} element={<CaseDetailPage />} />
+                <Route path={ROUTE_PATTERNS.workspacePacketSplits} element={<PacketSplits />} />
+                <Route path={ROUTE_PATTERNS.workspacePacketSplit} element={<SplitReview />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

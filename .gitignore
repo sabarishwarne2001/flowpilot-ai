@@ -36,6 +36,8 @@ backend/.env.production.*
 **/.arch41_apply_backup/
 # ARCH42-S1:gitignore. ARCH-42 apply backups.
 **/.arch42_apply_backup/
+# ARCH43-S1:gitignore. ARCH-43 apply backups.
+**/.arch43_apply_backup/
 .flowpilot_backups/
 **/.flowpilot_backups/
 *.fpbk

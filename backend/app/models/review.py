@@ -69,12 +69,16 @@ REVIEW_KIND_ANOMALY: str = "ANOMALY"
 #: ARCH42-S1:review-kind-merge. Entity merge proposals (entity_merge_candidates);
 #: arch42_step1_entity_graph widens the CHECK and the view to match.
 REVIEW_KIND_MERGE: str = "MERGE"
+#: ARCH43-S1:review-kind-split. Packet split plans (packet_splits);
+#: arch43_step1_case_intelligence widens the CHECK and the view to match.
+REVIEW_KIND_SPLIT: str = "SPLIT"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
     REVIEW_KIND_ASSERTION,
     REVIEW_KIND_ANOMALY,
     REVIEW_KIND_MERGE,
+    REVIEW_KIND_SPLIT,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)

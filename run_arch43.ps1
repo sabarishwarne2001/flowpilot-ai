@@ -1,0 +1,126 @@
+[CmdletBinding()]
+param(
+    [switch]$CheckOnly,
+    [switch]$SkipDb,
+    [switch]$SkipBuild,
+    [switch]$SkipMutate,
+    [switch]$SkipRegression,
+    [switch]$SkipExecBits,
+    [switch]$AllowUnpriced,
+    [switch]$Rollback
+)
+# ARCH-43 - Universal Packet Dicer & Case Intelligence.
+# ARCH43-S1:runner
+#
+# Place apply_arch43.py and verify_arch43.py in backend\ and this file in the
+# repository root, then:
+#
+#   .\run_arch43.ps1 -CheckOnly        # validate the tree; write nothing
+#   .\run_arch43.ps1                   # apply, migrate, seed, build and certify
+#   .\run_arch43.ps1 -AllowUnpriced    # seed tier versions without gateway price ids (dev)
+#   .\run_arch43.ps1 -Rollback         # restore the code
+#
+# Accepted starting point: d59baed "ARCH-41 DONE".
+#
+# DEVELOPMENT DATABASE ONLY for the -Db gates: the packet, fairness and case gates run
+# inside one rolled-back transaction; the regression run (verify_arch42 --db)
+# commits its automation conformance rows under "arch41-conformance-<stamp>".
+$ErrorActionPreference = "Stop"
+$Root = $PSScriptRoot
+$Backend = Join-Path $Root "backend"
+$Frontend = Join-Path $Root "frontend"
+$ReleaseHead = "arch43_step1_case_intelligence"
+$BeforeHead = "arch42_step1_entity_graph"
+$ContractHead = "arch40_step3_contract_ai_settings"
+$env:PYTHONUTF8 = "1"
+if (-not $env:DATABASE_URL) {
+    $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/flowpilot"
+}
+$Python = "python"
+foreach ($candidate in @((Join-Path $Backend ".venv\Scripts\python.exe"), (Join-Path $Backend "venv\Scripts\python.exe"))) {
+    if (Test-Path $candidate) { $Python = $candidate; break }
+}
+function Step([string]$Text) { Write-Host "`n=== $Text ===" -ForegroundColor Cyan }
+function Fail([string]$Text) { Write-Host "`nFAILED: $Text" -ForegroundColor Red; exit 1 }
+function RunCommand([string]$Exe, [string[]]$CmdArgs, [string]$What) {
+    & $Exe $CmdArgs
+    if ($LASTEXITCODE -ne 0) { Fail "$What (exit $LASTEXITCODE)" }
+}
+foreach ($required in @("apply_arch43.py", "verify_arch43.py")) {
+    if (-not (Test-Path (Join-Path $Backend $required))) { Fail "backend\$required not found. Copy it into backend\ first." }
+}
+Write-Host "Python: $Python"
+Set-Location $Backend
+if ($Rollback) {
+    Step "ROLLBACK"
+    RunCommand $Python @("apply_arch43.py", "--rollback") "code rollback"
+    Write-Host "`nTo take the database back too (drops the eight ARCH-43 tables, restores the ARCH-42 review view and outbox vocabulary):" -ForegroundColor Yellow
+    Write-Host "    python -m alembic downgrade $BeforeHead"
+    exit 0
+}
+Step "1/8 CHECK - every file must be the 96f4dd0 file or the ARCH-43 result"
+RunCommand $Python @("apply_arch43.py", "--check") "apply check (a file has local changes; nothing was written)"
+if ($CheckOnly) { Write-Host "`n-CheckOnly: nothing written." -ForegroundColor Green; exit 0 }
+Step "2/8 APPLY"
+RunCommand $Python @("apply_arch43.py") "apply"
+Step "3/8 IDEMPOTENCY - a second apply must change nothing"
+$second = & $Python apply_arch43.py
+if ($LASTEXITCODE -ne 0) { Fail "second apply" }
+$second | Select-Object -Last 2 | ForEach-Object { Write-Host $_ }
+if (($second -join "`n") -notmatch "0 file\(s\) to write") { Fail "the second apply wanted to write files; it is not idempotent" }
+Step "4/8 MIGRATE - to $ReleaseHead (never 'head': the contract step stays held)"
+$current = (& $Python -m alembic current 2>&1) -join "`n"
+Write-Host $current
+if ($current -match $ContractHead) {
+    # The contract step already ran. ARCH-43 now sits beneath it, so alembic
+    # believes ARCH-43 ran too; check for the tables.
+    $probe = (& $Python -c "import os; from sqlalchemy import create_engine, text; e=create_engine(os.environ['DATABASE_URL'].replace('+psycopg2','')); print(e.connect().execute(text(""select count(*) from information_schema.tables where table_name='document_requests'"")).scalar())" 2>&1) -join ""
+    if ($probe.Trim() -ne "1") {
+        Write-Host "Contract step already applied; applying ARCH-43 underneath it (stamp, upgrade, stamp back)." -ForegroundColor Yellow
+        RunCommand $Python @("-m", "alembic", "stamp", $BeforeHead) "alembic stamp $BeforeHead"
+        RunCommand $Python @("-m", "alembic", "upgrade", $ReleaseHead) "alembic upgrade $ReleaseHead"
+        RunCommand $Python @("-m", "alembic", "stamp", $ContractHead) "alembic stamp $ContractHead"
+    } else { Write-Host "ARCH-43 tables already present." }
+} else {
+    RunCommand $Python @("-m", "alembic", "upgrade", $ReleaseHead) "alembic upgrade $ReleaseHead"
+}
+$after = (& $Python -m alembic current 2>&1) -join "`n"
+if ($after -notmatch $ReleaseHead -and $after -notmatch $ContractHead) { Fail "database is not at $ReleaseHead after the upgrade: $after" }
+Write-Host $after
+Step "5/8 SEED TIERS - publish versions carrying capability.case_intelligence, carry live subscriptions forward"
+$seedArgs = @("scripts\seed_quota_tiers.py", "--carry-forward")
+if ($AllowUnpriced) { $seedArgs += "--allow-unpriced" }
+RunCommand $Python $seedArgs "seed_quota_tiers (set GATEWAY_PRICE_ID_* or pass -AllowUnpriced on a dev database)"
+& $Python scripts\seed_quota_tiers.py --matrix
+Step "6/8 EXECUTABLE BITS - deploy wrappers and the new sweep script"
+if (-not $SkipExecBits) {
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        Push-Location $Root
+        try { & git update-index --add --chmod=+x backend/deploy/bin/flowpilot-sweep backend/deploy/bin/flowpilot-sweep-watchdog backend/scripts/sweep_entities.py backend/scripts/sweep_cases.py backend/scripts/queue_weights.py backend/scripts/fit_packet_boundaries.py } finally { Pop-Location }
+    } else { Write-Host "git not found; run 'chmod +x backend/deploy/bin/* backend/scripts/sweep_cases.py backend/scripts/queue_weights.py' on the server." -ForegroundColor Yellow }
+}
+Step "7/8 NPM INSTALL"
+if (-not $SkipBuild) {
+    Set-Location $Frontend
+    RunCommand "npm.cmd" @("install", "--no-audit", "--no-fund") "npm install"
+    Set-Location $Backend
+} else { Write-Host "skipped (-SkipBuild)" }
+Step "8/8 VERIFY - offline, database, mutation, build, regression"
+$verifyArgs = @("verify_arch43.py")
+if (-not $SkipDb) { $verifyArgs += "--db" }
+if (-not $SkipMutate) { $verifyArgs += "--mutate" }
+if (-not $SkipBuild) { $verifyArgs += "--build" }
+if (-not $SkipRegression) { $verifyArgs += "--regression" }
+RunCommand $Python $verifyArgs "verify_arch43.py"
+Write-Host "`nARCH-43 applied, migrated and certified." -ForegroundColor Green
+Write-Host "Evidence: backend\evidence\arch43\verify_arch43.json" -ForegroundColor Green
+Write-Host @"
+Where to find it: Document intelligence > Entity graph (Business and Enterprise).
+New documents resolve on enrichment; to resolve documents processed before the
+upgrade, run the sweep once:  python scripts\sweep_cases.py --apply
+The nightly sweep is already scheduled on the server
+('flowpilot-sweep cases --apply' in deploy/cron.d/flowpilot-sweepers).
+Possible duplicates land in the review hub under "Entity merges".
+"@
+
+

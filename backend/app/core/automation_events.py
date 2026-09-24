@@ -70,6 +70,16 @@ TRIGGER_NATIVE_EVENT_TYPES: Final[tuple[str, ...]] = (
     "trigger.review.cleared",
 )
 
+#: ARCH43-S1:trigger-events. arch43_step1_case_intelligence rebuilds
+#: ck_outbox_events_visibility_vocabulary to admit them. Emitters:
+#: packets.service.apply (packet.split) and cases.assembly.evaluate (the two case events).
+ARCH43_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = (
+    "trigger.packet.split",
+    "trigger.case.completed",
+    "trigger.case.inconsistent",
+)
+TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH43_TRIGGER_EVENT_TYPES
+
 #: Internal events that existed before ARCH-37 and that rules may listen to.
 #: `automation_rule_triggers` accepts exactly these plus the `trigger.` names.
 LEGACY_RULE_EVENT_TYPES: Final[tuple[str, ...]] = (
@@ -92,6 +102,10 @@ VISIBILITIES: Final[FrozenSet[str]] = frozenset(
 #: `WEBHOOK_EVENT_TYPES` — the assertion below enforces that.
 INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
     {
+        # ARCH43-S1:internal-events. The packet dicer and case intelligence triggers.
+        "trigger.packet.split",
+        "trigger.case.completed",
+        "trigger.case.inconsistent",
         # --- ARCH-13 Work Item & Automation Events ---
         # Emitted by `document.enrich` when enrichment commits. Replaces the
         # fire-and-forget in-process call in `enrich.py::_run_side_effects`

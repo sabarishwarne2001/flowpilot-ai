@@ -52,7 +52,9 @@ revision = "arch40_step3_contract_ai_settings"
 # before the contract step, as hm1 did; one file head is preserved.
 # ARCH42-S1:contract-reparented. ARCH-42's expand-only migration sits between
 # ARCH-41 and the contract step in the same way.
-down_revision = "arch42_step1_entity_graph"
+# ARCH43-S1:contract-reparented. ARCH-43's expand-only migration sits between
+# ARCH-42 and the contract step in the same way.
+down_revision = "arch43_step1_case_intelligence"
 branch_labels = None
 depends_on = None
 

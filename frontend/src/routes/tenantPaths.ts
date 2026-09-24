@@ -131,6 +131,11 @@ export const ROUTE_PATTERNS = {
   // ARCH42-S2:entity-paths. Workspace-scoped: records belong to one workspace.
   workspaceEntities: "entities",
   workspaceEntity: "entities/:entityId",
+  // ARCH43-S2:route-patterns
+  workspaceCases: "cases",
+  workspaceCase: "cases/:caseId",
+  workspacePacketSplits: "packet-splits",
+  workspacePacketSplit: "packet-splits/:splitId",
   // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
   // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
   workspaceAssertions: "assertions",
@@ -266,6 +271,15 @@ export const entitiesPath = (orgSlug: string, workspaceSlug: string): string =>
 
 export const entityPath = (orgSlug: string, workspaceSlug: string, entityId: string): string =>
   `${entitiesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(entityId)}`;
+
+// ARCH43-S2:case-path-helpers
+export const casesPath = (orgSlug: string, workspaceSlug: string): string => `${workspacePath(orgSlug, workspaceSlug)}/cases`;
+export const casePath = (orgSlug: string, workspaceSlug: string, caseId: string): string =>
+  `${casesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(caseId)}`;
+export const packetSplitsPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/packet-splits`;
+export const packetSplitPath = (orgSlug: string, workspaceSlug: string, splitId: string): string =>
+  `${packetSplitsPath(orgSlug, workspaceSlug)}/${encodeURIComponent(splitId)}`;
 
 export const assertionsPath = (
   orgSlug: string,

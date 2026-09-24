@@ -249,6 +249,13 @@ def resolve_work_item(db: Session, *, work_item: Any, check_capability: bool = T
     organization_id = gate.organization_of(db, work_item)
     if check_capability and not gate.capability_held(db, organization_id):
         return {"resolved": False, "reason": "capability.entity_graph not held"}
+    # ARCH43-S1:lineage-guard. A packet that has been split is represented by
+    # its children; its own mentions are superseded (roadmap adjustment 4), so
+    # neither this call nor the nightly sweep may resolve it again.
+    from app.services.packets import lineage as _lineage
+
+    if _lineage.is_split_parent(db, work_item.id):
+        return {"resolved": False, "reason": "superseded by a packet split; its child documents are resolved instead"}
     # One resolver per workspace at a time: two documents naming the same new
     # party concurrently would otherwise both create it.
     db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"entities:{work_item.workspace_id}"})

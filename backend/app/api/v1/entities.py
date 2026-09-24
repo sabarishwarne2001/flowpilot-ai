@@ -120,7 +120,7 @@ def _rows(db: Session, workspace_id: uuid.UUID, root_ids: list[uuid.UUID]) -> di
     stats = {r.root: r for r in db.execute(text(ROOTS_SQL + """
         SELECT r.root, count(m.id) AS mentions, count(DISTINCT m.work_item_id) AS documents,
                count(DISTINCT r.id) - 1 AS merged
-        FROM r LEFT JOIN entity_mentions m ON m.entity_id = r.id
+        FROM r LEFT JOIN entity_mentions m ON m.entity_id = r.id AND m.superseded_at IS NULL
         WHERE r.root = ANY(:roots) GROUP BY r.root"""), params).all()}
     kinds: dict[uuid.UUID, set[str]] = defaultdict(set)
     for root, kind in db.execute(text(ROOTS_SQL + """
@@ -182,7 +182,7 @@ def summary(workspace_id: uuid.UUID, db: Session = Depends(get_db),
             Entity.workspace_id == workspace_id, Entity.status == v.ENTITY_ACTIVE).group_by(Entity.kind)).all():
         counts[kind] = int(count)
     documents = db.execute(select(func.count(func.distinct(EntityMention.work_item_id))).where(
-        EntityMention.workspace_id == workspace_id)).scalar_one()
+        EntityMention.workspace_id == workspace_id, EntityMention.superseded_at.is_(None))).scalar_one()  # ARCH43-S1:live-mentions
     open_rows = db.execute(select(EntityMergeCandidate.reason, func.count()).where(
         EntityMergeCandidate.workspace_id == workspace_id, EntityMergeCandidate.status == v.CANDIDATE_OPEN,
     ).group_by(EntityMergeCandidate.reason)).all()
@@ -266,7 +266,8 @@ def entity_360(workspace_id: uuid.UUID, entity_id: uuid.UUID, db: Session = Depe
         decision=m.decision, method=m.method, probability=float(m.match_probability) if m.match_probability is not None else None,
         entity_id=m.entity_id, created_at=w.created_at)
         for m, w in db.execute(select(EntityMention, WorkItem).join(WorkItem, WorkItem.id == EntityMention.work_item_id)
-                               .where(EntityMention.entity_id.in_(members)).order_by(WorkItem.created_at.desc()).limit(500)).all()]
+                               .where(EntityMention.entity_id.in_(members), EntityMention.superseded_at.is_(None))  # ARCH43-S1:live-mentions
+                               .order_by(WorkItem.created_at.desc()).limit(500)).all()]
     rel: dict[tuple[str, str, uuid.UUID], set[uuid.UUID]] = defaultdict(set)
     for edge in db.execute(select(EntityEdge).where(or_(EntityEdge.src_entity_id.in_(members),
                                                         EntityEdge.dst_entity_id.in_(members)))).scalars():
@@ -279,7 +280,7 @@ def entity_360(workspace_id: uuid.UUID, entity_id: uuid.UUID, db: Session = Depe
                                      other_name=others[o].display_name, documents=len(docs))
                      for (r, d, o), docs in sorted(rel.items(), key=lambda x: (-len(x[1]), x[0][0])) if o in others]
     mention_counts = dict(db.execute(select(EntityMention.entity_id, func.count()).where(
-        EntityMention.entity_id.in_(members)).group_by(EntityMention.entity_id)).all())
+        EntityMention.entity_id.in_(members), EntityMention.superseded_at.is_(None)).group_by(EntityMention.entity_id)).all())
     member_rows = [MemberRow(id=e.id, display_name=e.display_name, merged_at=e.merged_at, merge_reason=e.merge_reason,
                              mentions=int(mention_counts.get(e.id, 0)))
                    for e in db.execute(select(Entity).where(Entity.id.in_(members), Entity.id != root.id)).scalars()]

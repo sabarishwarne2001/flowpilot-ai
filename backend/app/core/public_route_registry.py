@@ -199,6 +199,16 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="none — returns image bytes or 404",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
+    # ARCH43-S1:public-document-requests. The recipient of a missing-document
+    # request has no account: the credential is the single-use token in the
+    # path (stored only as SHA-256; consumed by one conditional UPDATE).
+    PublicRoute(
+        path="/api/v1/public/document-requests/{token}",
+        methods=("GET", "POST"),
+        phase="ARCH-43",
+        credential="single-use expiring document-request token (path)",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
     PublicRoute(
         path="/api/v1/branding/favicon",
         methods=("GET",),

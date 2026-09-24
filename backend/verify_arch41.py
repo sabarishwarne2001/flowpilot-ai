@@ -378,12 +378,13 @@ def check_catalog(triggers_text: str, sources: Optional[dict[str, str]] = None) 
     webhook, internal, twins = event_vocabulary()
     caps = capability_constants()
     specs = trigger_specs(triggers_text)
-    assert len(specs) == 14, f"expected 14 flow-builder triggers, found {len(specs)}"
+    # ARCH43-S1:catalog-widened-41. ARCH-43 adds three triggers over three events.
+    assert len(specs) in (14, 17), f"expected 14 (17 after ARCH-43) flow-builder triggers, found {len(specs)}"
     keys = [s.get("key") for s in specs]
-    assert len(set(keys)) == 14, f"duplicate trigger keys: {keys}"
+    assert len(set(keys)) == len(specs), f"duplicate trigger keys: {keys}"
 
     events = sorted({e for s in specs for e in s.get("event_types", [])})
-    assert len(events) == 15, f"expected 15 distinct trigger events, found {len(events)}: {events}"
+    assert len(events) == len(specs) + 1, f"expected {len(specs) + 1} distinct trigger events, found {len(events)}: {events}"
     stray = [e for e in events if e not in internal]
     assert not stray, f"trigger events outside INTERNAL_EVENT_TYPES: {stray}"
     leaked = [e for e in events if e in webhook]
@@ -873,7 +874,10 @@ def check_migration_chain() -> None:
             revs[r.group(1)] = d.group(1).strip() if d else ""
     assert revs.get(A41) == f'"{HM1}"', f"{A41} revises {revs.get(A41)}, expected {HM1}"
     # ARCH42-S1:chain-widened-41. ARCH-42 sits between ARCH-41 and the contract step.
-    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"'), f"the contract step revises {revs.get(STEP3)}, expected {A41} or arch42"
+    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"', '"arch43_step1_case_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A41}, arch42 or arch43"  # ARCH43-S1:chain-widened-41
+    if revs.get(STEP3) == '"arch43_step1_case_intelligence"':
+        assert revs.get("arch43_step1_case_intelligence") == '"arch42_step1_entity_graph"', "arch43 must revise arch42"
+        assert revs.get("arch42_step1_entity_graph") == f'"{A41}"', "arch42 must revise arch41"
     if revs.get(STEP3) == '"arch42_step1_entity_graph"':
         assert revs.get("arch42_step1_entity_graph") == f'"{A41}"', "arch42 must revise arch41"
     downs = " ".join(revs.values())
@@ -1424,7 +1428,7 @@ def t23_db(rec: "Recorder", evidence: dict, mutate: bool) -> None:
             current = [r[0] for r in conn.execute(text("SELECT version_num FROM alembic_version"))]
             tables = {r[0] for r in conn.execute(text(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
-        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41
+        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41  ARCH43-S1:head-widened-41
         missing = [t_ for t_ in MEMORY_TABLES if t_ not in tables]
         assert not missing, f"tables missing: {missing}"
 

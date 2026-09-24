@@ -146,6 +146,10 @@ GATED_PAGES = {
     # ARCH42-S1:gated-page. The nav entry advertises capability.entity_graph and
     # this page enforces the same key through useCapabilityAccess.
     "workspaceEntities": "src/pages/entities/Entities.tsx",
+    # ARCH43-S1:gated-pages. Both nav entries advertise capability.case_intelligence
+    # and both pages enforce the same key through useCapabilityAccess.
+    "workspaceCases": "src/pages/cases/Cases.tsx",
+    "workspacePacketSplits": "src/pages/packets/PacketSplits.tsx",
 }
 
 
@@ -753,7 +757,7 @@ def gates_db(rec: Recorder) -> None:
         def head() -> None:
             value = db.execute(sql("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH39-S1:head-widened-36. ARCH-36 added no migration; ARCH-39 does.
-            assert value in (EXPECTED_HEAD, "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph"), (  # ARCH37-S1:head-widened-36  ARCH38-S1:head-widened-36  ARCH40-S1:head-widened-36  # HM-S1:head-widened  ARCH41-S2:head-widened-36  ARCH42-S1:head-widened-36
+            assert value in (EXPECTED_HEAD, "arch39_step1_conversations", "arch37_step1_flow_builder", "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence"), (  # ARCH37-S1:head-widened-36  ARCH38-S1:head-widened-36  ARCH40-S1:head-widened-36  # HM-S1:head-widened  ARCH41-S2:head-widened-36  ARCH42-S1:head-widened-36  ARCH43-S1:head-widened-36
                 f"alembic head is {value}; expected {EXPECTED_HEAD} or later"
             )
 
