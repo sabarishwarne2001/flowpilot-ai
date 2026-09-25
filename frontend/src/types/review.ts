@@ -7,8 +7,8 @@
  * two field lists so they cannot drift.
  */
 
-// ARCH42-S2:review-kind-merge  ARCH43-S2:review-kind-split
-export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY" | "MERGE" | "SPLIT";
+// ARCH42-S2:review-kind-merge  ARCH43-S2:review-kind-split  ARCH44-S2:review-kind-table
+export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY" | "MERGE" | "SPLIT" | "TABLE";
 export type ReviewSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type ReviewStatus = "OPEN" | "RESOLVED";
 
@@ -22,9 +22,10 @@ export type ReviewReason =
   | "CLAUSE_TRIAGE"
   | "ANOMALY"
   | "ENTITY_MERGE"
-  | "PACKET_SPLIT";
+  | "PACKET_SPLIT"
+  | "TABLE_ARITHMETIC";
 
-export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY", "MERGE", "SPLIT"];
+export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY", "MERGE", "SPLIT", "TABLE"];
 export const REVIEW_SEVERITIES: readonly ReviewSeverity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 /** The "Autonomy audits" tab: ARCH-35 holds and accuracy-audit samples. */
@@ -36,6 +37,7 @@ export const KIND_LABELS: Readonly<Record<ReviewKind, string>> = {
   ANOMALY: "Anomaly",
   MERGE: "Entity merge",
   SPLIT: "Packet split",
+  TABLE: "Table",
 };
 
 export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
@@ -48,6 +50,7 @@ export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
   ANOMALY: "Radar finding",
   ENTITY_MERGE: "Possible duplicate record",
   PACKET_SPLIT: "Scanned packet to divide",
+  TABLE_ARITHMETIC: "Figures do not reconcile",
 };
 
 export interface ReviewItem {
@@ -95,6 +98,7 @@ export type AssertionVerdict = "PASS" | "FAIL" | "UNDETERMINED";
 export type AnomalyVerdict = "CONFIRM" | "DISMISS";
 export type MergeVerdict = "MERGE" | "SEPARATE";
 export type SplitVerdict = "APPROVE" | "REJECT";
+export type TableReviewVerdict = "ACCEPT" | "REJECT";
 
 export interface ReviewResolveRequest {
   readonly values?: Readonly<Record<string, unknown>>;
@@ -106,6 +110,7 @@ export interface ReviewResolveRequest {
   readonly merge_verdict?: MergeVerdict;
   readonly split_verdict?: SplitVerdict;
   readonly split_boundaries?: readonly number[];
+  readonly table_verdict?: TableReviewVerdict;
 }
 
 export interface ReviewResolveResponse {

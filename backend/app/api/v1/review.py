@@ -98,6 +98,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
 
     if CASE_INTELLIGENCE_CAPABILITY in granted:
         kinds.append(vocab.KIND_SPLIT)
+    # ARCH44-S1:hub-table-gate. Flagged tables are the table extractor's, and
+    # every table route is gated on capability.table_intelligence.
+    from app.core.entitlements import TABLE_INTELLIGENCE_CAPABILITY
+
+    if TABLE_INTELLIGENCE_CAPABILITY in granted:
+        kinds.append(vocab.KIND_TABLE)
     return tuple(kinds)
 
 
@@ -132,6 +138,7 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         merge_verdict=body.merge_verdict,  # ARCH42-S1:merge-verdict
         split_verdict=body.split_verdict,  # ARCH43-S1:split-verdict
         split_boundaries=body.split_boundaries,
+        table_verdict=body.table_verdict,  # ARCH44-S1:table-verdict
     )
 
 

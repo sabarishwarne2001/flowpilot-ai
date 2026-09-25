@@ -3,9 +3,10 @@
 # FlowPilot AI — Master Roadmap, ARCH-41 through ARCH-50
 
 <!-- ARCH43-S1:roadmap-status -->
-**Status:** ARCH-41, ARCH-42 and ARCH-43 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md`, `ARCH-42-FINAL-CERTIFICATION.md`, `ARCH-43-FINAL-CERTIFICATION.md`). ARCH-44 to ARCH-50 specified here.
+<!-- ARCH44-S1:roadmap-status -->
+**Status:** ARCH-41, ARCH-42, ARCH-43 and ARCH-44 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md` through `ARCH-44-FINAL-CERTIFICATION.md`). ARCH-45 to ARCH-50 specified here.
 **Alembic after ARCH-42:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch42_step1_entity_graph → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch42_step1_entity_graph`.
-**Constraint held throughout:** no new recurring external cost. FastAPI, PostgreSQL 16 + pgvector ≥ 0.8, Redis, MinIO, PaddleOCR, SentenceTransformers, SciPy, scikit-learn, pikepdf, pypdfium2, camelot (already in requirements), React 19, Vite, Tailwind.
+**Constraint held throughout:** no new recurring external cost. FastAPI, PostgreSQL 16 + pgvector ≥ 0.8, Redis, MinIO, PaddleOCR, SentenceTransformers, SciPy, scikit-learn, pikepdf, pypdfium2 (camelot was never in requirements; ARCH-44 builds lattice and stream grids natively), React 19, Vite, Tailwind.
 
 This document adopts the harmonized ten-milestone plan (governance and intelligence engines fused with the commercial pillars: packet splitting, table extraction, N-way corroboration, real-time collaboration), with four adjustments recorded in §2.
 
@@ -76,13 +77,14 @@ Redaction Studio authenticated previews, back navigation and a hardened drawing 
 **Gates.** Boundary precision/recall on synthetic packets; lineage integrity; token single use; fairness bound under a 10,000-job flood; new triggers `packet.split`, `case.completed`, `case.inconsistent` in the ARCH-41 live conformance matrix.
 **As built.** One migration, `arch43_step1_case_intelligence` (the contract step re-parented onto it). Fair claiming is the default for every worker loop; the build also found and fixed a pre-existing over-claim in `claim_eligible_rows` (an `UPDATE … IN (LIMIT subquery)` could claim more than the batch). Split plans are a fifth review-hub kind, SPLIT. Children reuse the parent's per-page OCR, so a split is never OCR'd or billed twice. The recipient upload is the first ARCH-4x public route (`PUBLIC_ROUTES`). Held-out boundary quality: precision 0.975, recall 0.898 (page-number heuristic F1 0.714).
 
-### ARCH-44 — Complex Table & Hierarchical Grid Extractor (`capability.table_intelligence`, Business+)
+### ARCH-44 — Complex Table & Hierarchical Grid Extractor (`capability.table_intelligence`, Business+) — delivered
 
 **Objective.** Borderless, multi-page, rotated tables (ledgers, statements, clinical charts, nested line items) into typed JSON/CSV with cell-level confidence.
 **Backend.** Candidate grids from camelot (lattice and stream) and PaddleOCR token boxes; row/column clustering by DBSCAN over token geometry; header hierarchy detection; continuation across pages by column-signature matching; arithmetic validation (row totals, column sums) raising cell confidence or flagging; extraction memory (ARCH-41) extended to learn column mappings per layout.
 **Data.** `extracted_tables`, `extracted_table_cells` (row/col CHECKs, confidence 0–1), `table_validations`.
 **Frontend.** Table viewer with cell confidence heat, validation failures inline, CSV/XLSX export.
 **Gates.** Golden-file accuracy on synthetic statements; arithmetic validator catches planted errors; multi-page continuation.
+**As built.** One migration, `arch44_step1_table_intelligence` (the contract step re-parented onto it), adding a fourth table, `table_column_mappings`, for the learned column roles. **Camelot was not used:** it is not in `requirements.txt` (this roadmap said it was), 1.0.9 requires `pypdf<6` (the repository pins 6.14.2, and 5.x reintroduces a fixed CVE), and 2.0.0 requires `opencv-python-headless`, which installs the same `cv2` module as the `opencv-contrib-python` PaddleOCR pins. Its two modes were rebuilt natively: LATTICE from vector ruling lines (pypdfium2) or, on scans, dark-pixel runs (numpy), and STREAM from DBSCAN over token geometry, computed exactly by an interval sweep and proven equal to scikit-learn's DBSCAN. Word boxes come from the PDF text layer (the stored blocks for digital pages are whole lines); scanned pages use the OCR blocks already stored, so nothing is re-OCR'd. Rotated (/Rotate and sideways-printed) and skewed tables are normalised first. The validator discovers relations (running balance, qty × rate, row totals, column sums, subtotals, carry-forward) and localises failures; flagged tables are a sixth review-hub kind (TABLE) and a Flow Builder trigger (`table.flagged`, 18 triggers). Accuracy: every cell exact on 14 golden documents (2,816 cells) and on 140 held-out documents (28,020 cells, seeds 101–110); synthetic documents only — real-world accuracy is unmeasured.
 
 ### ARCH-45 — Universal Document Corroborator & Discrepancy Matrix (`capability.universal_corroborator`, Enterprise)
 
@@ -119,4 +121,4 @@ One egress gate for every outbound client with tenant allowlists and a deploymen
 
 ## 5. Handoffs
 
-ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md` and ARCH-43 from `ARCH-43-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-44 is in `ARCH-44-HANDOFF-PROMPT.md`.
+ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md`, ARCH-43 from `ARCH-43-HANDOFF-PROMPT.md` and ARCH-44 from `ARCH-44-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-45 is in `ARCH-45-HANDOFF-PROMPT.md`.

@@ -67,6 +67,8 @@ ARCH42_JOB_TYPES: frozenset[str] = frozenset({"entities.resolve_document"})
 ARCH43_JOB_TYPES: frozenset[str] = frozenset(
     {"packets.detect_boundaries", "packets.apply_split", "cases.assemble_document"}
 )
+# ARCH44-S1:table-job-types. Extraction reads the PDF: OCR profile.
+ARCH44_JOB_TYPES: frozenset[str] = frozenset({"tables.extract_document"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -99,6 +101,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH38_JOB_TYPES
     | ARCH42_JOB_TYPES
     | ARCH43_JOB_TYPES
+    | ARCH44_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -338,6 +341,11 @@ def _packets_apply_split(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_apply_split(payload)
 
 
+def _tables_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.tables import handle_extract_document
+    return handle_extract_document(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -428,6 +436,8 @@ _HANDLERS = {
     "packets.detect_boundaries": _packets_detect_boundaries,
     "packets.apply_split": _packets_apply_split,
     "cases.assemble_document": _cases_assemble_document,
+    # ARCH44-S1:table-handler. On the OCR profile (app/workers/profiles.py).
+    "tables.extract_document": _tables_extract_document,
 }
 
 

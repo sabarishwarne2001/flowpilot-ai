@@ -197,6 +197,10 @@ OCR = WorkerProfile(
             # ARCH43-S1:packet-ocr-profile. pikepdf writes the child PDFs:
             # PDF-engine work, which the LIGHT profile excludes.
             "packets.apply_split",
+            # ARCH44-S1:tables-ocr-profile. Table extraction reads the PDF text
+            # layer and renders scanned pages to find ruling lines (pypdfium2):
+            # PDF-engine work, which the LIGHT profile excludes.
+            "tables.extract_document",
         }
     ),
     allow_heavy=frozenset({"paddleocr", "paddle"}),

@@ -72,6 +72,9 @@ REVIEW_KIND_MERGE: str = "MERGE"
 #: ARCH43-S1:review-kind-split. Packet split plans (packet_splits);
 #: arch43_step1_case_intelligence widens the CHECK and the view to match.
 REVIEW_KIND_SPLIT: str = "SPLIT"
+#: ARCH44-S1:review-kind-table. Extracted tables whose figures do not reconcile
+#: (extracted_tables); arch44_step1_table_intelligence widens the CHECK and the view.
+REVIEW_KIND_TABLE: str = "TABLE"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
@@ -79,6 +82,7 @@ REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_ANOMALY,
     REVIEW_KIND_MERGE,
     REVIEW_KIND_SPLIT,
+    REVIEW_KIND_TABLE,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)

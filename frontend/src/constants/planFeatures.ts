@@ -26,6 +26,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.entityGraph]: "Entity graph (one record per vendor, customer and person across documents)",
   // ARCH43-S2:plan-feature
   [CAPABILITY.caseIntelligence]: "Case intelligence & packet dicer (split scanned bundles into documents)",
+  // ARCH44-S2:plan-feature
+  [CAPABILITY.tableIntelligence]: "Table intelligence (multi-page, rotated and ruled tables, validated, CSV/XLSX export)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",

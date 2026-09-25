@@ -80,6 +80,18 @@ class ReviewResolveRequest(BaseModel):
     #: corrected first page of every document after the first) or REJECT.
     split_verdict: Optional[str] = None
     split_boundaries: Optional[list[int]] = None
+    #: ARCH44-S1:table-verdict. TABLE reviews: ACCEPT or REJECT.
+    table_verdict: Optional[str] = None
+
+    @field_validator("table_verdict")
+    @classmethod
+    def _known_table_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("ACCEPT", "REJECT"):
+            raise ValueError("table_verdict must be one of: ACCEPT, REJECT")
+        return upper
 
     @field_validator("split_verdict")
     @classmethod

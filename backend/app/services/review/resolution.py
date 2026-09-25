@@ -109,6 +109,9 @@ class ResolvePayload:
     #: boundaries: the first page of every document after the first) or REJECT.
     split_verdict: Optional[str] = None
     split_boundaries: Optional[list[int]] = None
+    #: ARCH44-S1:table-verdict. TABLE -- ACCEPT (the figures are right as they
+    #: stand, after any corrections) or REJECT (the table is unusable).
+    table_verdict: Optional[str] = None
 
 
 @dataclass
@@ -509,12 +512,41 @@ def _resolve_split(
     return f"{verdict} (corrected)" if payload.split_boundaries is not None and verdict == pv.VERDICT_APPROVE else verdict
 
 
+def _resolve_table(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH44-S1:resolve-table. A person decides a table whose figures do not
+    reconcile. Corrections happen cell by cell in the table viewer (a table
+    whose figures then reconcile leaves the hub by itself); here the reviewer
+    accepts the figures as they stand or rejects the table."""
+    from app.models.tables import ExtractedTable
+    from app.services.tables import service as table_service
+    from app.services.tables import vocabulary as tv
+
+    verdict = (payload.table_verdict or "").strip().upper()
+    if verdict not in tv.TABLE_VERDICTS:
+        raise ReviewResolutionError("A table review needs table_verdict: ACCEPT or REJECT.")
+    table = db.execute(
+        select(ExtractedTable).where(ExtractedTable.id == item.item_id, ExtractedTable.workspace_id == item.workspace_id)
+    ).scalar_one_or_none()
+    if table is None:
+        raise ReviewResolutionError("This table no longer exists.")
+    if table.status != tv.STATUS_FLAGGED:
+        raise ReviewResolutionError("This table has already been decided or no longer needs review.")
+    try:
+        table_service.review(db, table=table, verdict=verdict, actor_user_id=actor_user_id)
+    except table_service.TableError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
     vocab.KIND_ANOMALY: _resolve_anomaly,
     vocab.KIND_MERGE: _resolve_merge,  # ARCH42-S1:resolve-merge
     vocab.KIND_SPLIT: _resolve_split,  # ARCH43-S1:resolve-split
+    vocab.KIND_TABLE: _resolve_table,  # ARCH44-S1:resolve-table
 }
 
 

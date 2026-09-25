@@ -299,6 +299,11 @@ def _destroy_documents(
     from app.services.entities import erasure as _entity_erasure
 
     counts["entity_mentions"] = _entity_erasure.erase_for_work_items(db, work_item_ids)["mentions"]
+    # ARCH44-S1:erasure-tables. Extracted tables are the documents' content: every
+    # cell goes with them (cells and validations cascade from the table row).
+    from app.services.tables import service as _table_service
+
+    counts["extracted_tables"] = _table_service.erase_for_work_items(db, work_item_ids)
 
 
 def _destroy_conversations(

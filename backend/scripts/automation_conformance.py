@@ -251,7 +251,7 @@ def run() -> dict[str, Any]:
     return report
 
 
-EXPECTED_TRIGGERS = 17  # ARCH43-S1:conformance-17 (14 through ARCH-42)
+EXPECTED_TRIGGERS = 18  # ARCH43-S1:conformance-17 (14 through ARCH-42)  ARCH44-S1:conformance-18 (table.flagged)
 
 
 def problems(report: dict[str, Any]) -> list[str]:

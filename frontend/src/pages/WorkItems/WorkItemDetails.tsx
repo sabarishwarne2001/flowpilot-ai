@@ -26,6 +26,8 @@ import StartRedactionButton from "@/components/redaction/StartRedactionButton";
 import ExtractionMemoryProvenance from "@/components/extractionMemory/ExtractionMemoryProvenance";
 // ARCH42-S2:entity-chips
 import EntityChips from "@/components/entities/EntityChips";
+// ARCH44-S2:document-tables
+import DocumentTables from "@/components/tables/DocumentTables";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
@@ -334,6 +336,7 @@ export const WorkItemDetails: React.FC = () => {
                   </div>
                   <ExtractionMemoryProvenance workItemId={workItem.id} />
                   <EntityChips workItemId={workItem.id} />
+                  <DocumentTables workItemId={workItem.id} />
                   <div className="overflow-auto rounded-lg border border-border/40 bg-muted/10 p-5">
                     {workItem.extracted_entities ? (
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">

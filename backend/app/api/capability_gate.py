@@ -60,6 +60,8 @@ _DISPLAY_NAMES = {
     entitlements.ENTITY_GRAPH_CAPABILITY: "The entity graph",
     # ARCH43-S1:capability-display
     entitlements.CASE_INTELLIGENCE_CAPABILITY: "Case intelligence and the packet dicer",
+    # ARCH44-S1:capability-display
+    entitlements.TABLE_INTELLIGENCE_CAPABILITY: "Table intelligence",
 }
 
 

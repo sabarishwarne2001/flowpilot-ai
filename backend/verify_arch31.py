@@ -1012,7 +1012,7 @@ def gates_db(rec: Recorder, database_url: str) -> None:
             ]
         # ARCH35-S1:head-widened-31
         # ARCH39-S1:head-widened-31
-        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"], ["arch38_step1_batches"], ["arch40_step2_settings_backfill"], ["arch40_step2a_review_view_paths"], ["arch40_step3_contract_ai_settings"], ["hm1_tier_price_per_key"], ["arch41_step1_extraction_memory"], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"]), heads  # ARCH37-S1:head-widened-31  ARCH38-S1:head-widened-31  ARCH40-S1:head-widened-31  # HM-S1:head-widened  ARCH41-S2:head-widened-31  ARCH42-S1:head-widened-31  ARCH43-S1:head-widened-31
+        assert heads in (["arch31_step1_procurement_matching"], ["arch32_step1_redaction"], ["arch33_step1_assertions"], ["arch34_step1_radar"], ["arch35_step1_calibration"], ["arch39_step1_conversations"], ["arch37_step1_flow_builder"], ["arch38_step1_batches"], ["arch40_step2_settings_backfill"], ["arch40_step2a_review_view_paths"], ["arch40_step3_contract_ai_settings"], ["hm1_tier_price_per_key"], ["arch41_step1_extraction_memory"], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"]), heads  # ARCH37-S1:head-widened-31  ARCH38-S1:head-widened-31  ARCH40-S1:head-widened-31  # HM-S1:head-widened  ARCH41-S2:head-widened-31  ARCH42-S1:head-widened-31  ARCH43-S1:head-widened-31  ARCH44-S1:head-widened-31
 
     rec.check("DB: exactly one Alembic head, at Step 1", single_alembic_head)
 

@@ -40,6 +40,7 @@ from app.core.entitlements import (
     ANOMALY_RADAR_CAPABILITY,
     CASE_INTELLIGENCE_CAPABILITY,
     RECONCILIATION_CAPABILITY,
+    TABLE_INTELLIGENCE_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
 )
@@ -393,6 +394,24 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         ),
         capability=CASE_INTELLIGENCE_CAPABILITY,
         has_document=False,
+    ),
+    # ARCH44-S1:trigger-table-flagged. 18 triggers over 19 events after ARCH-44.
+    TriggerSpec(
+        key="table.flagged",
+        label="Table does not reconcile",
+        category="Documents",
+        description=(
+            "An extracted table failed arithmetic validation: a running balance, a row total, "
+            "a column sum or a subtotal does not add up. The document is the one the table came from."
+        ),
+        event_types=("trigger.table.flagged",),
+        fields=(
+            TriggerField("original_filename", "Document", "string", "statement-apr.pdf"),
+            TriggerField("failed_checks", "Figures that do not reconcile", "number", "2"),
+            TriggerField("pages", "Pages", "string", "1-3"),
+        ),
+        capability=TABLE_INTELLIGENCE_CAPABILITY,
+        has_document=True,
     ),
 )
 

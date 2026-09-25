@@ -660,3 +660,11 @@ from app.models.cases import (  # noqa: E402,F401  ARCH43-S1:models-registry-cas
     CaseTemplate,
     DocumentRequest,
 )
+
+# ARCH44-S1:models-registry
+from app.models.tables import (  # noqa: E402,F401
+    ExtractedTable,
+    ExtractedTableCell,
+    TableColumnMapping,
+    TableValidation,
+)

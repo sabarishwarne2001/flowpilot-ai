@@ -15,6 +15,7 @@ from app.models.review import (
     REVIEW_KIND_EXTRACTION,
     REVIEW_KIND_MERGE,
     REVIEW_KIND_SPLIT,
+    REVIEW_KIND_TABLE,
     REVIEW_KINDS,
 )
 
@@ -25,6 +26,8 @@ KIND_ANOMALY: Final[str] = REVIEW_KIND_ANOMALY
 KIND_MERGE: Final[str] = REVIEW_KIND_MERGE
 #: ARCH43-S1:review-kind-split
 KIND_SPLIT: Final[str] = REVIEW_KIND_SPLIT
+#: ARCH44-S1:review-kind-table
+KIND_TABLE: Final[str] = REVIEW_KIND_TABLE
 
 KINDS: Final[tuple[str, ...]] = REVIEW_KINDS
 
@@ -68,6 +71,8 @@ REASON_ANOMALY: Final[str] = "ANOMALY"
 REASON_ENTITY_MERGE: Final[str] = "ENTITY_MERGE"
 #: ARCH43-S1:review-reason-split. arch43_step1_case_intelligence's view produces it.
 REASON_PACKET_SPLIT: Final[str] = "PACKET_SPLIT"
+#: ARCH44-S1:review-reason-table. arch44_step1_table_intelligence's view produces it.
+REASON_TABLE_ARITHMETIC: Final[str] = "TABLE_ARITHMETIC"
 
 REASONS: Final[tuple[str, ...]] = (
     REASON_DISAGREEMENT,
@@ -79,6 +84,7 @@ REASONS: Final[tuple[str, ...]] = (
     REASON_ANOMALY,
     REASON_ENTITY_MERGE,
     REASON_PACKET_SPLIT,
+    REASON_TABLE_ARITHMETIC,
 )
 
 #: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
@@ -120,6 +126,7 @@ __all__ = [
     "KIND_EXTRACTION",
     "KIND_MERGE",
     "KIND_SPLIT",
+    "KIND_TABLE",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
     "AUTONOMY_REASONS",

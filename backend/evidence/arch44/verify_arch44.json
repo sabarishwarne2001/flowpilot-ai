@@ -1,0 +1,948 @@
+{
+  "started": "2026-09-25T09:41:37",
+  "python": "3.12.10",
+  "dbscan": {
+    "trials": 120,
+    "kinds": [
+      "1-D row centres",
+      "interval-gap metric"
+    ]
+  },
+  "golden": [
+    {
+      "case": "statement",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 777,
+      "rows": [
+        111,
+        111
+      ],
+      "cols": [
+        7,
+        7
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 0.9997,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "statement_planted",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 777,
+      "rows": [
+        111,
+        111
+      ],
+      "cols": [
+        7,
+        7
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [
+        [
+          0,
+          60,
+          4
+        ],
+        [
+          0,
+          93,
+          6
+        ],
+        [
+          0,
+          112,
+          5
+        ]
+      ],
+      "flags_ok": true,
+      "status": "FLAGGED",
+      "confidence": 0.9965,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "scan",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 270,
+      "rows": [
+        54,
+        54
+      ],
+      "cols": [
+        5,
+        5
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 0.9631,
+      "rotation": 0,
+      "skew": 1.2,
+      "exact": true
+    },
+    {
+      "case": "scan_planted",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 270,
+      "rows": [
+        54,
+        54
+      ],
+      "cols": [
+        5,
+        5
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [
+        [
+          0,
+          6,
+          2
+        ],
+        [
+          0,
+          28,
+          4
+        ]
+      ],
+      "flags_ok": true,
+      "status": "FLAGGED",
+      "confidence": 0.957,
+      "rotation": 0,
+      "skew": 1.2,
+      "exact": true
+    },
+    {
+      "case": "twolevel",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 90,
+      "rows": [
+        18,
+        18
+      ],
+      "cols": [
+        5,
+        5
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 0.9984,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "twolevel_planted",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 90,
+      "rows": [
+        18,
+        18
+      ],
+      "cols": [
+        5,
+        5
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [
+        [
+          0,
+          8,
+          3
+        ]
+      ],
+      "flags_ok": true,
+      "status": "FLAGGED",
+      "confidence": 0.989,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "ledger",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 72,
+      "rows": [
+        18,
+        18
+      ],
+      "cols": [
+        4,
+        4
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 0.974,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "ledger_planted",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 72,
+      "rows": [
+        18,
+        18
+      ],
+      "cols": [
+        4,
+        4
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [
+        [
+          0,
+          3,
+          3
+        ],
+        [
+          0,
+          17,
+          3
+        ]
+      ],
+      "flags_ok": true,
+      "status": "FLAGGED",
+      "confidence": 0.9503,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "clinical",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 50,
+      "rows": [
+        10,
+        10
+      ],
+      "cols": [
+        5,
+        5
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "EXTRACTED",
+      "confidence": 1.0,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "lattice",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 60,
+      "rows": [
+        10,
+        10
+      ],
+      "cols": [
+        6,
+        6
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "LATTICE",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 1.0,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "lattice_planted",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 60,
+      "rows": [
+        10,
+        10
+      ],
+      "cols": [
+        6,
+        6
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "LATTICE",
+      "method_ok": true,
+      "flagged": [
+        [
+          0,
+          6,
+          4
+        ]
+      ],
+      "flags_ok": true,
+      "status": "FLAGGED",
+      "confidence": 0.9893,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "lattice_scan",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 60,
+      "rows": [
+        10,
+        10
+      ],
+      "cols": [
+        6,
+        6
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "LATTICE",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 0.9625,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "rotated90",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 84,
+      "rows": [
+        14,
+        14
+      ],
+      "cols": [
+        6,
+        6
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 1.0,
+      "rotation": 0,
+      "skew": 0.0,
+      "exact": true
+    },
+    {
+      "case": "sideways",
+      "tables": 1,
+      "accuracy": 1.0,
+      "cells": 84,
+      "rows": [
+        14,
+        14
+      ],
+      "cols": [
+        6,
+        6
+      ],
+      "paths": true,
+      "header_rows": true,
+      "kinds": true,
+      "levels": true,
+      "pages": true,
+      "method": "STREAM",
+      "method_ok": true,
+      "flagged": [],
+      "flags_ok": true,
+      "status": "VALIDATED",
+      "confidence": 1.0,
+      "rotation": 270,
+      "skew": 0.0,
+      "exact": true
+    }
+  ],
+  "golden_pdf_bytes_drift": [],
+  "held_out": {
+    "documents": 140,
+    "cells": 28020,
+    "seeds": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110
+    ],
+    "exact": 140
+  },
+  "lattice": {
+    "lattice_scan_accuracy": 1.0,
+    "stream_only_accuracy": 0.3667
+  },
+  "continuation": {
+    "statement_pages": [
+      1,
+      3
+    ],
+    "without_continuation_tables": 3
+  },
+  "rotation": {
+    "sideways_rotation": 270,
+    "rotated90_exact": true
+  },
+  "deskew": {
+    "skew_corrected": 1.2,
+    "accuracy_without_deskew": 0.0
+  },
+  "validator": {
+    "flagged_per_case": {
+      "statement": 0,
+      "statement_planted": 3,
+      "scan": 0,
+      "scan_planted": 2,
+      "twolevel": 0,
+      "twolevel_planted": 1,
+      "ledger": 0,
+      "ledger_planted": 2,
+      "clinical": 0,
+      "lattice": 0,
+      "lattice_planted": 1,
+      "lattice_scan": 0,
+      "rotated90": 0,
+      "sideways": 0
+    },
+    "relations": {
+      "statement": [
+        "COLUMN_SUM",
+        "RUNNING_BALANCE"
+      ],
+      "ledger": [
+        "COLUMN_SUM",
+        "HIERARCHY_SUM",
+        "ROW_PRODUCT"
+      ],
+      "lattice": [
+        "COLUMN_SUM",
+        "ROW_PRODUCT"
+      ],
+      "clinical": [],
+      "scan": [
+        "RUNNING_BALANCE"
+      ]
+    }
+  },
+  "exports": {
+    "xlsx_bytes": 8891,
+    "openpyxl": "openpyxl not installed; structure checked with zipfile"
+  },
+  "live": [
+    {
+      "step": "D2 models match the migration: zero column-level drift on the four ARCH-44 tables",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D3 schema refusals: grid/page trigger, spans, CHECKs on confidence/type/value/flags, FK, status rules, validations, roles",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D4 extraction through the service: stored grid == truth (digital and scanned), FLAGGED at the planted cells, table.flagged once (not on re-validation), hub item OPEN",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D5 HTTP: 402 on all 9 routes (+denial audit); list/detail/exports (audited)/document; 422s; corrections -> VALIDATED and hub RESOLVED; re-extract 409 then force; review 200 then 409",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D6 learned column mapping: not applied after 2 confirmations, applied (LEARNED) to the next same-layout table after 3",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D7 review hub: a flagged table is a TABLE item; ACCEPT through resolution -> REVIEWED/RESOLVED; kind hidden without the plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D8 job: enrichment enqueues tables.extract_document only with the plan; the handler extracts (LATTICE) only with the plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D9 ARCH-20 erasure: a subject's documents lose every extracted table and cell",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "seconds": 252.6,
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "T1 capability: entitlements (+Entitlement), 402 name, Business+Enterprise not Developer, console, nav lock, verify36, hardening matrix",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2 migration: 4 tables, grid trigger, CHECKs, arch43 -> arch44 -> contract, one head, hub view v5, vocabulary parity",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G1 DBSCAN: row and column sweeps equal scikit-learn DBSCAN(min_samples=1) on 240 random inputs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G2 geometry: display mapping == FPDF_PageToDevice at 0/90/180/270; quarter turns read +x; deskew levels a tilted line",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G3 values: Indian/Western/European money, Dr/Cr, negatives, currency, identifiers, DMY/MDY inference, percent",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G4 golden files: 14 synthetic documents extracted exactly (every cell, header path, kind, level, page range, flag)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G5 held-out seeds 101-110: every generator, clean and planted, exact",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G6 lattice: a scanned ruled table (rules from pixels, OCR merged across cells) is exact; stream alone is not",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G7 continuation: a 3-page statement is ONE table, repeated headers dropped; without continuation it is 3",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G8 rotation: /Rotate 90 and a sideways-printed table are exact; the sideways one reports 270",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G9 deskew: a 1.2-degree scan is exact and reports its skew; without deskew it falls apart",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "V1 validator: planted errors flagged exactly (none on clean), balance vs amount localised, carry-forward, echoes explained",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "V2 confidence: passing checks raise it, failures cut it to 40%",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "X1 exports: CSV (BOM, paths, typed, injection-safe), XLSX (merged header, numbers, dates, frozen, shaded), JSON",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "M1 learned mappings: Wilson-bounded (3 unanimous apply, 2 do not, contradictions hold back); keyword roles; layout key",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W1 wiring: job on OCR profile, dispatch gated, erasure, trigger table.flagged (18/19), conformance 18, hub TABLE gated, router",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W2 API: 9 routes, each gated first; writes CONTRIBUTOR, reads VIEWER",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W3 console: type parity (10 models), locked nav, routes, viewer heat/failures/edit/roles/export, document panel, hub TABLE",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-44 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D1 database at arch44: 4 tables, the grid trigger, TABLE in the hub CHECK, table.flagged in the outbox CHECK",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D2 models match the migration: zero column-level drift on the four ARCH-44 tables",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D3 schema refusals: grid/page trigger, spans, CHECKs on confidence/type/value/flags, FK, status rules, validations, roles",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D4 extraction through the service: stored grid == truth (digital and scanned), FLAGGED at the planted cells, table.flagged once (not on re-validation), hub item OPEN",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D5 HTTP: 402 on all 9 routes (+denial audit); list/detail/exports (audited)/document; 422s; corrections -> VALIDATED and hub RESOLVED; re-extract 409 then force; review 200 then 409",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D6 learned column mapping: not applied after 2 confirmations, applied (LEARNED) to the next same-layout table after 3",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D7 review hub: a flagged table is a TABLE item; ACCEPT through resolution -> REVIEWED/RESOLVED; kind hidden without the plan",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D8 job: enrichment enqueues tables.extract_document only with the plan; the handler extracts (LATTICE) only with the plan",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D9 ARCH-20 erasure: a subject's documents lose every extracted table and cell",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD1 the table API's capability gate removed (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD2 table.flagged emitted on every re-validation, not once per entry (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD3 the hub cannot resolve TABLE (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD4 a correction does not re-validate the table (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD5 learned mappings never applied (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD6 ARCH-20 erasure keeps the tables (D9 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD7 re-extraction overwrites a person's corrections without force (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD8 dispatch ignores the plan (D8 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD9 validation disabled in the engine (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS1 capability missing from the Business tier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS2 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS3 console plan label missing (tsc would fail)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS4 the grid trigger dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS5 the cell confidence CHECK dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS6 contract step left on arch43 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS7 column DBSCAN eps x8 (adjacent columns merge)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS8 figures side by side merged into one phrase",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS9 continuation across pages disabled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS10 reading-direction vote disabled (sideways tables)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS11 deskew disabled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS12 lattice grids disabled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS13 group labels centred over a column gap treated as single-column",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS14 TOTAL detection by prefix ('Total WBC Count' becomes a total)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS15 balance-misread localisation removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS16 echoes flagged: a total failing only because of a flagged cell",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS17 tolerance loosened to 1,000",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS18 confidence raise inverted",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS19 Indian digit grouping not recognised",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS20 day/month order never inferred from the column",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS21 CSV formula-injection guard removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS22 XLSX header spans not merged",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS23 Wilson bound bypassed (one confirmation applies a mapping)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS24 raster rules at a fixed dark threshold (hairlines lost)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS25 extraction moved to the LIGHT profile",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS26 post-enrichment dispatch ungated",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS27 ARCH-20 erasure hook removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS28 the hub shows TABLE without the plan",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS29 an API route ungated",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS30 a write route open to viewers",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS31 console type drift (a TableSummary field removed)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS32 exports fetched without the authenticated client",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS33 the resolve panel has no TABLE branch",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS34 the trigger emitter removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B1 tsc -b and vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B2 eslint --max-warnings=0 on the 14 ARCH-44 console files",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "R1 verify_arch43.py --db",
+      "outcome": "PASS"
+    }
+  ]
+}

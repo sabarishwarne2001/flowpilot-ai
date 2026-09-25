@@ -96,6 +96,9 @@ const CaseDetailPage = lazy(() => import("@/pages/cases/CaseDetail"));
 const PacketSplits = lazy(() => import("@/pages/packets/PacketSplits"));
 const SplitReview = lazy(() => import("@/pages/packets/SplitReview"));
 const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestUpload"));
+// ARCH44-S2:lazy-pages
+const Tables = lazy(() => import("@/pages/tables/Tables"));
+const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -454,6 +457,9 @@ function AppRoutes() {
                 <Route path={ROUTE_PATTERNS.workspaceCase} element={<CaseDetailPage />} />
                 <Route path={ROUTE_PATTERNS.workspacePacketSplits} element={<PacketSplits />} />
                 <Route path={ROUTE_PATTERNS.workspacePacketSplit} element={<SplitReview />} />
+                {/* ARCH44-S2:routes */}
+                <Route path={ROUTE_PATTERNS.workspaceTables} element={<Tables />} />
+                <Route path={ROUTE_PATTERNS.workspaceTable} element={<TableViewer />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

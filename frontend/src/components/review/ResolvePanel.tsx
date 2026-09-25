@@ -13,6 +13,9 @@
 
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+
+import { tablePath } from "@/routes/tenantPaths";
 
 import type {
   AnomalyVerdict,
@@ -34,6 +37,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
   const [quote, setQuote] = useState("");
   const [reason, setReason] = useState("");
   const [ttlDays, setTtlDays] = useState("");
+  const { orgSlug = "", workspaceSlug = "" } = useParams<{ orgSlug: string; workspaceSlug: string }>();
 
   if (item.kind === "ASSERTION") {
     const verdict = (value: AssertionVerdict): void => {
@@ -117,6 +121,43 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
           >
             Different — keep separate
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ARCH44-S2:resolve-table. A table whose figures do not reconcile. Cells are
+  // corrected in the table viewer (a table that then reconciles leaves the hub
+  // by itself); here the reviewer accepts the figures or rejects the table.
+  if (item.kind === "TABLE") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          Open the table to see each figure that fails and correct it. Accept keeps the figures as they stand; reject marks
+          the table unusable. <Link className="underline" to={tablePath(orgSlug, workspaceSlug, item.item_id)}>Open the table</Link>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ table_verdict: "ACCEPT" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Accept figures
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ table_verdict: "REJECT" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            Reject table
           </button>
           {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">

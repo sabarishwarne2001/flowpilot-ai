@@ -11,6 +11,7 @@ from app.api.v1 import (
     packet_splits,
     cases,
     public_document_requests,
+    tables,
     assertions,
     autonomy,
     assistant,
@@ -145,6 +146,8 @@ api_router.include_router(packet_splits.router)
 # the public upload is authorised by its single-use token (PUBLIC_ROUTES).
 api_router.include_router(cases.router)
 api_router.include_router(public_document_requests.router)
+# ARCH44-S1:tables-router. Every route is gated on capability.table_intelligence.
+api_router.include_router(tables.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.

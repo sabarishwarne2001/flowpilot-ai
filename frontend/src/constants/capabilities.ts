@@ -33,6 +33,8 @@ export const CAPABILITY = {
   entityGraph: "capability.entity_graph",
   // ARCH43-S2:capability-constant
   caseIntelligence: "capability.case_intelligence",
+  // ARCH44-S2:capability-constant
+  tableIntelligence: "capability.table_intelligence",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

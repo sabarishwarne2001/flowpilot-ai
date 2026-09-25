@@ -83,6 +83,8 @@ const TABS: readonly TabConfig[] = [
   { id: "MERGE", label: "Entity merges", kind: "MERGE" },
   // ARCH43-S2:hub-split-tab
   { id: "SPLIT", label: "Packet splits", kind: "SPLIT" },
+  // ARCH44-S2:hub-table-tab
+  { id: "TABLE", label: "Tables", kind: "TABLE" },
   { id: "AUTONOMY", label: "Autonomy audits", kind: "EXTRACTION" },
   { id: "HISTORY", label: "History" },
 ];

@@ -1,6 +1,6 @@
 {
   "milestone": "ARCH-43",
-  "at": "2026-09-24T16:30:01.194586+00:00",
+  "at": "2026-09-25T04:15:09.549599+00:00",
   "boundary_model": {
     "training_rows": 6309,
     "held_out": {
@@ -17,6 +17,106 @@
       "boundaries": 1149,
       "packets": 150
     }
+  },
+  "live": [
+    {
+      "step": "F1 fairness under a 10,000-job flood: FIFO gives the flooder everything; fair claiming shares 2:1:1 by weight, light tenants done in <=7/<=12 rounds",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "F2 in-flight accounting: a busy tenant yields to an idle one; max_inflight caps a tenant",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P1 schema: exclusion constraint, page-range CHECKs, range trigger, workspace FKs, lineage CHECKs, one live plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P2 detection: a PROPOSED plan from stored OCR pages, idempotent, in the review hub as SPLIT / PACKET_SPLIT",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P3 hub approval with corrected boundaries -> pikepdf children with lineage, page ranges and copied OCR; no re-OCR; original kept; packet.split; idempotent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P4 lineage re-resolution: parent mentions superseded (kept), parent refused on re-resolve, the child resolves on its own",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P5 HTTP: 402 without the plan (reads, detect, lineage, cases); detect, correct (422 on bad), reject, lineage, PNG thumbnail, Entity 360 shows the child",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P6 post-enrichment: detection only with the plan, for >=3-page PDFs that are not children; case assembly for every document",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "P7 review hub: SPLIT visible only with the plan; the decided plan listed as PACKET_SPLIT",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C1 templates: invalid ones refused; published = immutable (the database refuses UPDATE and DELETE); v2 publish retires v1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C2 entity assembly: PO + invoice + GRN for one ARCH-42 vendor root -> one case; INCOMPLETE -> COMPLETE (case.completed once) -> INCONSISTENT (case.inconsistent)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C3 batch assembly: two documents of one ARCH-38 batch -> one COMPLETE onboarding case",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C4 document requests: only the SHA-256 stored; upload works once (410 after), expired and withdrawn links refused; the file joins the case",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C5 HTTP cases: board counts, detail matrix + checklist, published template PUT 409, manual case, add document, close",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "fairness": {
+    "flood_jobs": 10000,
+    "batch": 20,
+    "fifo_first_batch": {
+      "flooding_tenant": 20
+    },
+    "fifo_rounds_before_light_tenants_start": 500,
+    "fair_rounds_weight2_done": 6,
+    "fair_rounds_weight1_done": 9,
+    "shares_while_all_backlogged_BAC": [
+      [
+        10,
+        5,
+        5
+      ],
+      [
+        10,
+        5,
+        5
+      ],
+      [
+        10,
+        5,
+        5
+      ]
+    ],
+    "claim_ms_with_9k_pending": 21.5
   },
   "results": [
     {
@@ -80,113 +180,78 @@
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M1 capability dropped from the Business tier",
+      "layer": "db",
+      "gate": "D1 database at arch43: 8 tables, btree_gist, both triggers, SPLIT in the hub CHECK, new events in the outbox CHECK",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M2 no Entitlement entry (has_capability would raise)",
+      "layer": "db",
+      "gate": "F1 fairness under a 10,000-job flood: FIFO gives the flooder everything; fair claiming shares 2:1:1 by weight, light tenants done in <=7/<=12 rounds",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M3 exclusion constraint removed (segments could overlap)",
+      "layer": "db",
+      "gate": "F2 in-flight accounting: a busy tenant yields to an idle one; max_inflight caps a tenant",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M4 contract step left on arch42 (two heads)",
+      "layer": "db",
+      "gate": "P1 schema: exclusion constraint, page-range CHECKs, range trigger, workspace FKs, lineage CHECKs, one live plan",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M5 published templates made mutable (trigger dropped)",
+      "layer": "db",
+      "gate": "P2 detection: a PROPOSED plan from stored OCR pages, idempotent, in the review hub as SPLIT / PACKET_SPLIT",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M19 claim returns to UPDATE ... IN (LIMIT subquery) (can over-claim)",
+      "layer": "db",
+      "gate": "P3 hub approval with corrected boundaries -> pikepdf children with lineage, page ranges and copied OCR; no re-OCR; original kept; packet.split; idempotent",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M6 fair claiming off by default",
+      "layer": "db",
+      "gate": "P4 lineage re-resolution: parent mentions superseded (kept), parent refused on re-resolve, the child resolves on its own",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M7 page-number signals ignored (held-out recall must fall below the floor)",
+      "layer": "db",
+      "gate": "P5 HTTP: 402 without the plan (reads, detect, lineage, cases); detect, correct (422 on bad), reject, lineage, PNG thumbnail, Entity 360 shows the child",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M8 a blank page may start a document",
+      "layer": "db",
+      "gate": "P6 post-enrichment: detection only with the plan, for >=3-page PDFs that are not children; case assembly for every document",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M9 SUM_EQUALS tolerance check inverted",
+      "layer": "db",
+      "gate": "P7 review hub: SPLIT visible only with the plan; the decided plan listed as PACKET_SPLIT",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M10 FUZZY_EQUAL threshold ignored",
+      "layer": "db",
+      "gate": "C1 templates: invalid ones refused; published = immutable (the database refuses UPDATE and DELETE); v2 publish retires v1",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M11 hub shows SPLIT without the capability",
+      "layer": "db",
+      "gate": "C2 entity assembly: PO + invoice + GRN for one ARCH-42 vendor root -> one case; INCOMPLETE -> COMPLETE (case.completed once) -> INCONSISTENT (case.inconsistent)",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M12 the pikepdf job moved onto the LIGHT profile",
+      "layer": "db",
+      "gate": "C3 batch assembly: two documents of one ARCH-38 batch -> one COMPLETE onboarding case",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M13 children OCR'd a second time",
+      "layer": "db",
+      "gate": "C4 document requests: only the SHA-256 stored; upload works once (410 after), expired and withdrawn links refused; the file joins the case",
       "outcome": "PASS"
     },
     {
-      "layer": "mutation",
-      "gate": "M14 case sweep not scheduled (G14)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M15 a case route loses its capability gate",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M16 the conformance matrix still expects 14 triggers",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M17 split review fetches thumbnails without the session hook",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "M18 console case type drifts from the API",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "tsc -b && vite build",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "eslint --max-warnings=0 on every ARCH-43 console file",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "regression",
-      "gate": "verify_arch42.py --db",
+      "layer": "db",
+      "gate": "C5 HTTP cases: board counts, detail matrix + checklist, published template PUT 409, manual case, add document, close",
       "outcome": "PASS"
     }
   ]

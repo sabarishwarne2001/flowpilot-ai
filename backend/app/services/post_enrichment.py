@@ -202,6 +202,23 @@ def dispatch_in_session(
             idempotency_key=f"cases.assemble_document:{work_item_id}:{marker}",
         )
         enqueued.append("cases.assemble_document")
+    # ARCH44-S1:table-dispatch. Every extractable document (PDF or image) that is
+    # not itself a split packet is scanned for tables, on the OCR profile, for
+    # organizations whose plan carries capability.table_intelligence.
+    from app.services.tables import gate as table_gate
+    from app.services.tables import vocabulary as table_vocab
+    if (
+        (work_item.file_type or "").split(";")[0].strip().lower() in table_vocab.EXTRACTABLE_MIME
+        and table_gate.capability_held(db, organization_id)
+    ):
+        job_service.enqueue(
+            db,
+            job_type=table_vocab.JOB_EXTRACT,
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"{table_vocab.JOB_EXTRACT}:{work_item_id}:{marker}",
+        )
+        enqueued.append(table_vocab.JOB_EXTRACT)
 
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued}
 
