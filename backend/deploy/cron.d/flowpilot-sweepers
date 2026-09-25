@@ -17,4 +17,6 @@ MAILTO=""
 47 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep entities --apply
 # ARCH43-S1:cron-cases
 17 5 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep cases --apply
+# ARCH45-S1:cron-corroboration
+37 5 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep corroboration --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

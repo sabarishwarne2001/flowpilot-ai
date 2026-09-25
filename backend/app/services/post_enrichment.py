@@ -220,7 +220,20 @@ def dispatch_in_session(
         )
         enqueued.append(table_vocab.JOB_EXTRACT)
 
-    return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued}
+    # ARCH45-S1:corroboration-invalidate. A reprocessed document changes the
+    # answer of every comparison it is in: those runs become STALE (their
+    # fingerprint no longer matches), and the next request recomputes. Never
+    # allowed to fail the dispatch.
+    stale = 0
+    try:
+        from app.services.corroboration import service as corroboration_service
+
+        with db.begin_nested():
+            stale = corroboration_service.invalidate_for_work_items(db, [work_item_id])
+    except Exception:  # noqa: BLE001
+        logger.exception("post_enrichment.corroboration_invalidate_failed", extra={"work_item_id": str(work_item_id)})
+
+    return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued, "stale_comparisons": stale}
 
 
 def dispatch(

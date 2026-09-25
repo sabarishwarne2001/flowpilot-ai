@@ -304,6 +304,11 @@ def _destroy_documents(
     from app.services.tables import service as _table_service
 
     counts["extracted_tables"] = _table_service.erase_for_work_items(db, work_item_ids)
+    # ARCH45-S1:erasure-corroboration. A comparison quotes its documents (values
+    # and evidence spans): every comparison that includes one of them goes too.
+    from app.services.corroboration import service as _corroboration_service
+
+    counts["corroboration_runs"] = _corroboration_service.erase_for_work_items(db, work_item_ids)
 
 
 def _destroy_conversations(

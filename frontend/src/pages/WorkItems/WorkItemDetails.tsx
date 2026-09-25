@@ -28,6 +28,8 @@ import ExtractionMemoryProvenance from "@/components/extractionMemory/Extraction
 import EntityChips from "@/components/entities/EntityChips";
 // ARCH44-S2:document-tables
 import DocumentTables from "@/components/tables/DocumentTables";
+// ARCH45-S2:document-comparisons
+import DocumentComparisons from "@/components/corroboration/DocumentComparisons";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
@@ -337,6 +339,7 @@ export const WorkItemDetails: React.FC = () => {
                   <ExtractionMemoryProvenance workItemId={workItem.id} />
                   <EntityChips workItemId={workItem.id} />
                   <DocumentTables workItemId={workItem.id} />
+                  <DocumentComparisons workItemId={workItem.id} />
                   <div className="overflow-auto rounded-lg border border-border/40 bg-muted/10 p-5">
                     {workItem.extracted_entities ? (
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6">

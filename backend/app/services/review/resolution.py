@@ -112,6 +112,9 @@ class ResolvePayload:
     #: ARCH44-S1:table-verdict. TABLE -- ACCEPT (the figures are right as they
     #: stand, after any corrections) or REJECT (the table is unusable).
     table_verdict: Optional[str] = None
+    #: ARCH45-S1:corroboration-verdict. CORROBORATION -- CONFIRM (the material
+    #: differences are real) or DISMISS (they are not), for every open one.
+    corroboration_verdict: Optional[str] = None
 
 
 @dataclass
@@ -540,6 +543,33 @@ def _resolve_table(
     return verdict
 
 
+def _resolve_corroboration(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH45-S1:resolve-corroboration. A person decides a comparison whose
+    documents disagree. Individual differences are decided on the comparison's
+    page (a run whose every material difference is decided leaves the hub by
+    itself); here the reviewer confirms or dismisses all that remain open."""
+    from app.models.corroboration import CorroborationRun
+    from app.services.corroboration import service as corroboration_service
+    from app.services.corroboration import vocabulary as cv
+
+    verdict = (payload.corroboration_verdict or "").strip().upper()
+    if verdict not in cv.RUN_VERDICTS:
+        raise ReviewResolutionError("A comparison review needs corroboration_verdict: CONFIRM or DISMISS.")
+    run = db.execute(
+        select(CorroborationRun).where(CorroborationRun.id == item.item_id,
+                                       CorroborationRun.workspace_id == item.workspace_id)
+    ).scalar_one_or_none()
+    if run is None:
+        raise ReviewResolutionError("This comparison no longer exists.")
+    try:
+        corroboration_service.review_run(db, run=run, verdict=verdict, actor_user_id=actor_user_id)
+    except corroboration_service.CorroborationError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
@@ -547,6 +577,7 @@ _DISPATCH = {
     vocab.KIND_MERGE: _resolve_merge,  # ARCH42-S1:resolve-merge
     vocab.KIND_SPLIT: _resolve_split,  # ARCH43-S1:resolve-split
     vocab.KIND_TABLE: _resolve_table,  # ARCH44-S1:resolve-table
+    vocab.KIND_CORROBORATION: _resolve_corroboration,  # ARCH45-S1:resolve-corroboration
 }
 
 

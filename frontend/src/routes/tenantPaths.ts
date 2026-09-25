@@ -139,6 +139,9 @@ export const ROUTE_PATTERNS = {
   // ARCH44-S2:route-patterns
   workspaceTables: "tables",
   workspaceTable: "tables/:tableId",
+  // ARCH45-S2:route-patterns
+  workspaceCorroborations: "corroboration",
+  workspaceCorroboration: "corroboration/:runId",
   // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
   // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
   workspaceAssertions: "assertions",
@@ -287,6 +290,11 @@ export const packetSplitPath = (orgSlug: string, workspaceSlug: string, splitId:
 export const tablesPath = (orgSlug: string, workspaceSlug: string): string => `${workspacePath(orgSlug, workspaceSlug)}/tables`;
 export const tablePath = (orgSlug: string, workspaceSlug: string, tableId: string): string =>
   `${tablesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(tableId)}`;
+// ARCH45-S2:corroboration-path-helpers
+export const corroborationsPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/corroboration`;
+export const corroborationPath = (orgSlug: string, workspaceSlug: string, runId: string): string =>
+  `${corroborationsPath(orgSlug, workspaceSlug)}/${encodeURIComponent(runId)}`;
 
 export const assertionsPath = (
   orgSlug: string,

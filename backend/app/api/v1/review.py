@@ -104,6 +104,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
 
     if TABLE_INTELLIGENCE_CAPABILITY in granted:
         kinds.append(vocab.KIND_TABLE)
+    # ARCH45-S1:hub-corroboration-gate. Comparisons are the corroborator's, and
+    # every corroboration route is gated on capability.universal_corroborator.
+    from app.core.entitlements import UNIVERSAL_CORROBORATOR_CAPABILITY
+
+    if UNIVERSAL_CORROBORATOR_CAPABILITY in granted:
+        kinds.append(vocab.KIND_CORROBORATION)
     return tuple(kinds)
 
 
@@ -139,6 +145,7 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         split_verdict=body.split_verdict,  # ARCH43-S1:split-verdict
         split_boundaries=body.split_boundaries,
         table_verdict=body.table_verdict,  # ARCH44-S1:table-verdict
+        corroboration_verdict=body.corroboration_verdict,  # ARCH45-S1:corroboration-verdict
     )
 
 

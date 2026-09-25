@@ -28,6 +28,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.caseIntelligence]: "Case intelligence & packet dicer (split scanned bundles into documents)",
   // ARCH44-S2:plan-feature
   [CAPABILITY.tableIntelligence]: "Table intelligence (multi-page, rotated and ruled tables, validated, CSV/XLSX export)",
+  // ARCH45-S2:plan-feature
+  [CAPABILITY.universalCorroborator]: "Document corroborator (compare 2–5 documents clause by clause, discrepancy matrix, PDF report)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -46,9 +48,18 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.anomalyRadar,
   CAPABILITY.customEmail,
   "addon.warehouse_sync",
+  // ARCH45-S2:plan-feature-order — ARCH-41..44 labelled their capabilities but
+  // never listed them here, so no plan card showed them (PlanSelector renders
+  // only keys in this order). Business adds these four; Enterprise adds the
+  // corroborator below.
+  CAPABILITY.extractionMemory,
+  CAPABILITY.entityGraph,
+  CAPABILITY.caseIntelligence,
+  CAPABILITY.tableIntelligence,
   CAPABILITY.calibratedAutonomy,
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,
+  CAPABILITY.universalCorroborator,
   CAPABILITY.enterpriseIdentity,
   CAPABILITY.prioritySlo,
 ];

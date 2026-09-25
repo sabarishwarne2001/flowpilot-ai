@@ -12,6 +12,7 @@ from app.api.v1 import (
     cases,
     public_document_requests,
     tables,
+    corroboration,
     assertions,
     autonomy,
     assistant,
@@ -148,6 +149,8 @@ api_router.include_router(cases.router)
 api_router.include_router(public_document_requests.router)
 # ARCH44-S1:tables-router. Every route is gated on capability.table_intelligence.
 api_router.include_router(tables.router)
+# ARCH45-S1:corroboration-router. Every route is gated on capability.universal_corroborator.
+api_router.include_router(corroboration.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.

@@ -11,7 +11,7 @@ TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases> [args...]" >&2
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases|corroboration> [args...]" >&2
     exit 64
 fi
 
@@ -36,6 +36,10 @@ case "${NAME}" in
     # ARCH43-S1:sweep-cases. Nightly: expire document requests, re-evaluate
     # open cases. See scripts/sweep_cases.py.
     cases) SCRIPT="scripts/sweep_cases.py" ; HEARTBEAT="${HEARTBEAT_UUID_CASES:-}" ;;
+    # ARCH45-S1:sweep-corroboration. Nightly: re-fingerprint completed
+    # comparisons (STALE when a document changed), fail stuck runs, delete
+    # superseded ones nobody reviewed. See scripts/sweep_corroboration.py.
+    corroboration) SCRIPT="scripts/sweep_corroboration.py" ; HEARTBEAT="${HEARTBEAT_UUID_CORROBORATION:-}" ;;
     *)
         echo "unknown sweeper: ${NAME}" >&2
         exit 64

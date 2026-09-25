@@ -354,6 +354,14 @@ def offline(rec: Recorder) -> None:
             assert view.rstrip() in step44.review_queue_view_v5(), "ARCH-44 altered an earlier arm"
             view = step44.review_queue_view_v5()
             step2a = SimpleNamespace(REVIEW_REASONS=step44.REVIEW_REASONS)
+        # ARCH45-S1:a6-widened. ARCH-45 rebuilt the view again: ARCH-44's text plus
+        # a CORROBORATION arm, and MATERIAL_DISCREPANCY; compared with the newest.
+        newest45 = VERSIONS / "arch45_step1_corroboration.py"
+        if newest45.exists():
+            step45 = _load(newest45, "arch45_step1_probe")
+            assert view.rstrip() in step45.review_queue_view_v6(), "ARCH-45 altered an earlier arm"
+            view = step45.review_queue_view_v6()
+            step2a = SimpleNamespace(REVIEW_REASONS=step45.REVIEW_REASONS)
         assert tuple(REVIEW_KINDS) == vocab.KINDS
         view_kinds = set(re.findall(r"'(\w+)'::varchar\(16\)", view))
         assert view_kinds == set(vocab.KINDS), f"view kinds {view_kinds}"
@@ -422,7 +430,7 @@ def offline(rec: Recorder) -> None:
             d = re.search(r'^down_revision\s*(?::[^=]+)?=\s*(.+)$', text, re.M)
             if r:
                 revs[r.group(1)] = d.group(1).strip() if d else None
-        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), ("arch41_step1_extraction_memory", "hm1_tier_price_per_key"), ("arch42_step1_entity_graph", "arch41_step1_extraction_memory"), ("arch43_step1_case_intelligence", "arch42_step1_entity_graph"), ("arch44_step1_table_intelligence", "arch43_step1_case_intelligence"), (STEP3, "arch44_step1_table_intelligence")]  # HM-S1:chain-widened  ARCH41-S2:chain-widened  ARCH42-S1:chain-widened  ARCH43-S1:chain-widened  ARCH44-S1:chain-widened
+        chain = [(STEP0, HEAD_BEFORE), (STEP1, STEP0), (STEP2, STEP1), (STEP2A, STEP2), ("hm1_tier_price_per_key", STEP2A), ("arch41_step1_extraction_memory", "hm1_tier_price_per_key"), ("arch42_step1_entity_graph", "arch41_step1_extraction_memory"), ("arch43_step1_case_intelligence", "arch42_step1_entity_graph"), ("arch44_step1_table_intelligence", "arch43_step1_case_intelligence"), ("arch45_step1_corroboration", "arch44_step1_table_intelligence"), (STEP3, "arch45_step1_corroboration")]  # HM-S1:chain-widened  ARCH41-S2:chain-widened  ARCH42-S1:chain-widened  ARCH43-S1:chain-widened  ARCH44-S1:chain-widened  ARCH45-S1:chain-widened
         for rev, down in chain:
             assert rev in revs, f"{rev} missing"
             assert f'"{down}"' in (revs[rev] or "") or f"'{down}'" in (revs[rev] or ""), f"{rev} revises {revs[rev]}, expected {down}"
@@ -630,7 +638,7 @@ def offline(rec: Recorder) -> None:
         from app.services.automation import triggers
 
         # ARCH43-S1:catalog-widened-40. ARCH-43 adds packet.split, case.completed, case.inconsistent.
-        assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((14, 15), (17, 18), (18, 19))  # ARCH44-S1:catalog-widened-40
+        assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((14, 15), (17, 18), (18, 19), (19, 20))  # ARCH44-S1:catalog-widened-40  ARCH45-S1:catalog-widened-40
         spec = triggers.TRIGGERS_BY_KEY["review.cleared"]
         assert spec.event_types == ("trigger.review.cleared",)
         assert "trigger.review.cleared" in INTERNAL_EVENT_TYPES
@@ -867,7 +875,7 @@ def _database_gates(rec: Recorder, sa: Any, conn: Any, session: Any) -> None:
     head = q("SELECT version_num FROM alembic_version").scalar_one()
 
     def d1() -> None:
-        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened  ARCH41-S2:head-widened-40  ARCH42-S1:head-widened-40  ARCH43-S1:head-widened-40  ARCH44-S1:head-widened-40
+        assert head in (HEAD_RELEASE, HEAD_CONTRACT, "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration"), f"alembic head is {head}; run run_arch40.ps1"  # HM-S1:head-widened  ARCH41-S2:head-widened-40  ARCH42-S1:head-widened-40  ARCH43-S1:head-widened-40  ARCH44-S1:head-widened-40  ARCH45-S1:head-widened-40
 
     if not rec.check("D1 head is the ARCH-40 release head (or the contract head)", d1):
         return
@@ -1097,8 +1105,8 @@ def _database_gates(rec: Recorder, sa: Any, conn: Any, session: Any) -> None:
             # organization holds no entity graph, so it must count zero.
             assert {k: c for k, c in body["counts_by_kind"].items() if k in tables} == tables and \
                 body["counts_by_kind"].get("MERGE", 0) == 0 and body["counts_by_kind"].get("SPLIT", 0) == 0 and \
-                body["counts_by_kind"].get("TABLE", 0) == 0, \
-                f"{body['counts_by_kind']} vs tables {tables}"  # ARCH43-S1:h1-widened (no SPLIT without the plan)  ARCH44-S1:h1-widened (no TABLE)
+                body["counts_by_kind"].get("TABLE", 0) == 0 and body["counts_by_kind"].get("CORROBORATION", 0) == 0, \
+                f"{body['counts_by_kind']} vs tables {tables}"  # ARCH43-S1:h1-widened (no SPLIT without the plan)  ARCH44-S1:h1-widened (no TABLE)  ARCH45-S1:h1-widened (no CORROBORATION)
             assert body["allowed_kinds"] == ["EXTRACTION", "ASSERTION", "ANOMALY"]
             assert str(af_other) not in {i["item_id"] for i in items}
             audits = client.get(base, params=[("reason", "AUTONOMY_AUDIT"), ("reason", "CALIBRATION_HOLD")]).json()

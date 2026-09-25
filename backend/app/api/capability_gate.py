@@ -62,6 +62,8 @@ _DISPLAY_NAMES = {
     entitlements.CASE_INTELLIGENCE_CAPABILITY: "Case intelligence and the packet dicer",
     # ARCH44-S1:capability-display
     entitlements.TABLE_INTELLIGENCE_CAPABILITY: "Table intelligence",
+    # ARCH45-S1:capability-display
+    entitlements.UNIVERSAL_CORROBORATOR_CAPABILITY: "The document corroborator",
 }
 
 

@@ -87,7 +87,8 @@ ADDON_WAREHOUSE_SYNC = {
 #                 table intelligence (ARCH44-S1:tier-business)
 #                 and analytics warehouse egress (the warehouse add-on, bundled)
 #   Enterprise  + calibrated autonomy, zero-leakage redaction, clause
-#                 assertions, SAML/SCIM enterprise identity, priority 99.9% SLO
+#                 assertions, SAML/SCIM enterprise identity, priority 99.9% SLO,
+#                 the universal document corroborator (ARCH45-S1:tier-enterprise)
 #
 # Change a line, run the seed: an unchanged tier is recognised and skipped,
 # a changed one is published as a new immutable version.
@@ -124,6 +125,7 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.entity_graph"),  # ARCH42-S1:tier-enterprise
     _capability("capability.case_intelligence"),  # ARCH43-S1:tier-enterprise
     _capability("capability.table_intelligence"),  # ARCH44-S1:tier-enterprise
+    _capability("capability.universal_corroborator"),  # ARCH45-S1:tier-enterprise (Enterprise only)
 ]
 ENTERPRISE_FEATURES = [*DEVELOPER_FEATURES, *ENTERPRISE_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 

@@ -41,6 +41,7 @@ from app.core.entitlements import (
     CASE_INTELLIGENCE_CAPABILITY,
     RECONCILIATION_CAPABILITY,
     TABLE_INTELLIGENCE_CAPABILITY,
+    UNIVERSAL_CORROBORATOR_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
 )
@@ -412,6 +413,25 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         ),
         capability=TABLE_INTELLIGENCE_CAPABILITY,
         has_document=True,
+    ),
+    # ARCH45-S1:trigger-corroboration. 19 triggers over 20 events after ARCH-45.
+    TriggerSpec(
+        key="corroboration.discrepancies",
+        label="Documents disagree",
+        category="Documents",
+        description=(
+            "A comparison of 2 to 5 documents (contract and amendment, PO, invoice and delivery note, "
+            "policy and claim) found material differences: a changed value, a missing clause or line, "
+            "a different party, or a rule one document passes and another fails."
+        ),
+        event_types=("trigger.corroboration.discrepancies",),
+        fields=(
+            TriggerField("documents", "Documents", "string", "PO-2026-0417.pdf, INV-8812.pdf"),
+            TriggerField("material_count", "Material differences", "number", "3"),
+            TriggerField("max_severity", "Highest severity", "string", "HIGH"),
+        ),
+        capability=UNIVERSAL_CORROBORATOR_CAPABILITY,
+        has_document=False,
     ),
 )
 

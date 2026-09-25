@@ -86,6 +86,13 @@ TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH43_TRIGGER_EVENT_T
 ARCH44_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.table.flagged",)
 TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH44_TRIGGER_EVENT_TYPES
 
+#: ARCH45-S1:trigger-events. arch45_step1_corroboration rebuilds
+#: ck_outbox_events_visibility_vocabulary to admit it. Emitter:
+#: corroboration.service (a comparison completing with material differences,
+#: once per run).
+ARCH45_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.corroboration.discrepancies",)
+TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH45_TRIGGER_EVENT_TYPES
+
 #: Internal events that existed before ARCH-37 and that rules may listen to.
 #: `automation_rule_triggers` accepts exactly these plus the `trigger.` names.
 LEGACY_RULE_EVENT_TYPES: Final[tuple[str, ...]] = (
@@ -114,6 +121,8 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "trigger.case.inconsistent",
         # ARCH44-S1:internal-events. Table intelligence.
         "trigger.table.flagged",
+        # ARCH45-S1:internal-events. The document corroborator.
+        "trigger.corroboration.discrepancies",
         # --- ARCH-13 Work Item & Automation Events ---
         # Emitted by `document.enrich` when enrichment commits. Replaces the
         # fire-and-forget in-process call in `enrich.py::_run_side_effects`

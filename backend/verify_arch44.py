@@ -281,7 +281,10 @@ def check_capability(ent: str, gate_text: str, seed: str, caps: str, plan: str, 
 def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A44) == f'"{A43}"', f"{A44} revises {revs.get(A44)}"
-    assert revs.get(STEP3) == f'"{A44}"', f"the contract step revises {revs.get(STEP3)}, expected {A44}"
+    # ARCH45-S1:chain-widened-44. ARCH-45 sits between ARCH-44 and the contract step.
+    assert revs.get(STEP3) in (f'"{A44}"', '"arch45_step1_corroboration"'), f"the contract step revises {revs.get(STEP3)}, expected {A44} or arch45"
+    if revs.get(STEP3) == '"arch45_step1_corroboration"':
+        assert revs.get("arch45_step1_corroboration") == f'"{A44}"', "arch45 must revise arch44"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -309,11 +312,19 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     from app.services.review import vocabulary as vocab
     from app.services.tables import vocabulary as tv
 
-    assert tuple(REVIEW_KINDS) == module.REVIEW_KINDS and tuple(vocab.REASONS) == module.REVIEW_REASONS, "hub vocabulary != migration"
+    # ARCH45-S1:vocab-widened-44. The newest hub migration defines the vocabulary;
+    # ARCH-44's kinds and reasons must remain its prefix.
+    newest45 = VERSIONS / "arch45_step1_corroboration.py"
+    ref = _load_module("_m45_check44", newest45) if newest45.exists() else module
+    assert tuple(REVIEW_KINDS) == ref.REVIEW_KINDS and tuple(vocab.REASONS) == ref.REVIEW_REASONS, "hub vocabulary != migration"
+    assert ref.REVIEW_KINDS[:len(module.REVIEW_KINDS)] == module.REVIEW_KINDS and ref.REVIEW_REASONS[:len(module.REVIEW_REASONS)] == module.REVIEW_REASONS
     for name in ("STATUSES", "METHODS", "VALUE_TYPES", "FLAGS", "CHECK_KINDS", "ROLES"):
         assert tuple(getattr(module, name)) == tuple(getattr(tv, name)), f"{name}: migration != vocabulary"
     assert set(module.NEW_TRIGGER_EVENTS) == set(ae.ARCH44_TRIGGER_EVENT_TYPES) <= set(ae.INTERNAL_EVENT_TYPES)
     internal = set(module.internal_after_44())
+    if hasattr(ref, "internal_after_45"):  # ARCH45-S1:internal-widened-44 (adds trigger.corroboration.discrepancies)
+        assert internal <= set(ref.internal_after_45())
+        internal = set(ref.internal_after_45())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
 
 
@@ -654,9 +665,9 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert "_table_service.erase_for_work_items(db, work_item_ids)" in texts["erasure"], "ARCH-20 erasure keeps tables"
     spec = triggers.TRIGGERS_BY_KEY["table.flagged"]
     assert spec.capability == KEY and spec.has_document and spec.event_types == ("trigger.table.flagged",)
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) == (18, 19)
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((18, 19), (19, 20))  # ARCH45-S1:catalog-widened-44
     assert "emit_trigger(" in texts["service"] and "event_type=v.EVENT_TABLE_FLAGGED" in texts["service"]
-    assert "EXPECTED_TRIGGERS = 18" in texts["conformance"], "the live conformance matrix does not expect table.flagged"
+    assert re.search(r"EXPECTED_TRIGGERS = (18|19)\b", texts["conformance"]), "the live conformance matrix does not expect table.flagged"  # ARCH45-S1:conformance-widened-44
     assert "vocab.KIND_TABLE: _resolve_table" in texts["resolution"]
     assert "    if TABLE_INTELLIGENCE_CAPABILITY in granted:\n        kinds.append(vocab.KIND_TABLE)\n" in texts["review_api"], "the hub shows TABLE without the capability"
     assert "table_verdict=body.table_verdict" in texts["review_api"] and "table_verdict: Optional[str] = None" in texts["review_schema"]
@@ -708,7 +719,8 @@ def check_console(texts: dict[str, str]) -> None:
     assert "<DocumentTables workItemId={workItem.id} />" in texts["fe_wid"]
     assert 'if (item.kind === "TABLE")' in texts["fe_resolve"] and 'onResolve({ table_verdict: "ACCEPT" })' in texts["fe_resolve"]
     assert '{ id: "TABLE", label: "Tables", kind: "TABLE" }' in texts["fe_hub"]
-    assert '| "TABLE_ARITHMETIC"' in texts["fe_review_types"] and '"SPLIT", "TABLE"]' in texts["fe_review_types"]
+    assert '| "TABLE_ARITHMETIC"' in texts["fe_review_types"] and (
+        '"SPLIT", "TABLE"]' in texts["fe_review_types"] or '"SPLIT", "TABLE", "CORROBORATION"]' in texts["fe_review_types"])  # ARCH45-S1:console-kinds-widened-44
 
 
 EDITED_OR_NEW = [k for k in F if k not in ("m43", "golden")]
@@ -1166,7 +1178,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             kinds = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_review_assignments_kind_known'")).scalar_one()
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
-        assert current in ([A44], [STEP3]), f"alembic current is {current}; run run_arch44.ps1"
+        assert current in ([A44], [STEP3], ["arch45_step1_corroboration"]), f"alembic current is {current}; run run_arch44.ps1"  # ARCH45-S1:head-widened-44
         assert not [x for x in TABLES if x not in tables], "ARCH-44 tables missing"
         assert "TABLE" in kinds and "trigger.table.flagged" in outbox, (kinds[-80:], outbox[-120:])
         assert "trg_extracted_table_cells_within_grid" in triggers

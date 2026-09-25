@@ -99,6 +99,9 @@ const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestU
 // ARCH44-S2:lazy-pages
 const Tables = lazy(() => import("@/pages/tables/Tables"));
 const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
+// ARCH45-S2:lazy-pages
+const Corroborations = lazy(() => import("@/pages/corroboration/Corroborations"));
+const CorroborationRun = lazy(() => import("@/pages/corroboration/CorroborationRun"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -460,6 +463,9 @@ function AppRoutes() {
                 {/* ARCH44-S2:routes */}
                 <Route path={ROUTE_PATTERNS.workspaceTables} element={<Tables />} />
                 <Route path={ROUTE_PATTERNS.workspaceTable} element={<TableViewer />} />
+                {/* ARCH45-S2:routes */}
+                <Route path={ROUTE_PATTERNS.workspaceCorroborations} element={<Corroborations />} />
+                <Route path={ROUTE_PATTERNS.workspaceCorroboration} element={<CorroborationRun />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

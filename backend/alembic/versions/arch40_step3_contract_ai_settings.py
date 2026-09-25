@@ -56,7 +56,9 @@ revision = "arch40_step3_contract_ai_settings"
 # ARCH-42 and the contract step in the same way.
 # ARCH44-S1:contract-reparented. ARCH-44's expand-only migration sits between
 # ARCH-43 and the contract step in the same way.
-down_revision = "arch44_step1_table_intelligence"
+# ARCH45-S1:contract-reparented. ARCH-45's expand-only migration sits between
+# ARCH-44 and the contract step in the same way.
+down_revision = "arch45_step1_corroboration"
 branch_labels = None
 depends_on = None
 

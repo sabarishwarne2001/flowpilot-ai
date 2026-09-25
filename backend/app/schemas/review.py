@@ -82,6 +82,18 @@ class ReviewResolveRequest(BaseModel):
     split_boundaries: Optional[list[int]] = None
     #: ARCH44-S1:table-verdict. TABLE reviews: ACCEPT or REJECT.
     table_verdict: Optional[str] = None
+    #: ARCH45-S1:corroboration-verdict. CORROBORATION reviews: CONFIRM or DISMISS.
+    corroboration_verdict: Optional[str] = None
+
+    @field_validator("corroboration_verdict")
+    @classmethod
+    def _known_corroboration_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("CONFIRM", "DISMISS"):
+            raise ValueError("corroboration_verdict must be one of: CONFIRM, DISMISS")
+        return upper
 
     @field_validator("table_verdict")
     @classmethod

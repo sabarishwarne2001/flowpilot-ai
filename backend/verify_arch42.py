@@ -207,7 +207,10 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A42) == f'"{A41}"', f"{A42} revises {revs.get(A42)}"
     # ARCH43-S1:chain-widened-42. ARCH-43 sits between ARCH-42 and the contract step.
-    assert revs.get(STEP3) in (f'"{A42}"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A42}, arch43 or arch44"  # ARCH44-S1:chain-widened-42
+    assert revs.get(STEP3) in (f'"{A42}"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"'), f"the contract step revises {revs.get(STEP3)}, expected {A42}, arch43, arch44 or arch45"  # ARCH44-S1:chain-widened-42  ARCH45-S1:chain-widened-42
+    if revs.get(STEP3) == '"arch45_step1_corroboration"':  # ARCH45-S1:chain-widened-42
+        assert revs.get("arch45_step1_corroboration") == '"arch44_step1_table_intelligence"', "arch45 must revise arch44"
+        assert revs.get("arch44_step1_table_intelligence") == '"arch43_step1_case_intelligence"', "arch44 must revise arch43"
     if revs.get(STEP3) == '"arch44_step1_table_intelligence"':
         assert revs.get("arch44_step1_table_intelligence") == '"arch43_step1_case_intelligence"', "arch44 must revise arch43"
     if revs.get(STEP3) == '"arch43_step1_case_intelligence"':
@@ -468,7 +471,8 @@ def check_wiring(texts: dict[str, str]) -> None:
     # ARCH43-S1:review-kinds-widened-42. ARCH-43 appends REVIEW_KIND_SPLIT after MERGE.
     assert 'REVIEW_KIND_MERGE: str = "MERGE"' in texts["review_model"] and (
         "    REVIEW_KIND_MERGE,\n)" in texts["review_model"] or "    REVIEW_KIND_MERGE,\n    REVIEW_KIND_SPLIT,\n)" in texts["review_model"]
-        or "    REVIEW_KIND_MERGE,\n    REVIEW_KIND_SPLIT,\n    REVIEW_KIND_TABLE,\n)" in texts["review_model"])  # ARCH44-S1:review-kinds-widened-42
+        or "    REVIEW_KIND_MERGE,\n    REVIEW_KIND_SPLIT,\n    REVIEW_KIND_TABLE,\n)" in texts["review_model"]
+        or "    REVIEW_KIND_MERGE,\n    REVIEW_KIND_SPLIT,\n    REVIEW_KIND_TABLE,\n    REVIEW_KIND_CORROBORATION,\n)" in texts["review_model"])  # ARCH44-S1:review-kinds-widened-42  ARCH45-S1:review-kinds-widened-42
     assert "vocab.KIND_MERGE: _resolve_merge" in texts["review_resolution"] and "allow_conflict=True" in texts["review_resolution"]
     assert "merge_verdict=body.merge_verdict" in texts["review_api"] and "kinds.append(vocab.KIND_MERGE)" in texts["review_api"]
     assert "ENTITY_GRAPH_CAPABILITY in granted" in texts["review_api"], "the hub shows MERGE without the capability"
@@ -489,6 +493,8 @@ def check_wiring(texts: dict[str, str]) -> None:
     newest = VERSIONS / "arch43_step1_case_intelligence.py"
     newest44 = VERSIONS / "arch44_step1_table_intelligence.py"  # ARCH44-S1:vocab-widened-42
     ref = _load_module("_m44", newest44) if newest44.exists() else (_load_module("_m43", newest) if newest.exists() else m42)
+    newest45 = VERSIONS / "arch45_step1_corroboration.py"  # ARCH45-S1:vocab-widened-42
+    ref = _load_module("_m45", newest45) if newest45.exists() else ref
     assert tuple(REVIEW_KINDS) == ref.REVIEW_KINDS and tuple(vocab.REASONS) == ref.REVIEW_REASONS, "hub vocabulary != migration"
     assert ref.REVIEW_KINDS[:len(m42.REVIEW_KINDS)] == m42.REVIEW_KINDS and ref.REVIEW_REASONS[:len(m42.REVIEW_REASONS)] == m42.REVIEW_REASONS
 
@@ -1041,7 +1047,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             annotated = conn.execute(sa.text("SELECT count(*) FROM document_schema_presets WHERE organization_id IS NULL "
                                              "AND schema::text LIKE '%x-entity%'")).scalar_one()
             vector = conn.execute(sa.text("SELECT extversion FROM pg_extension WHERE extname='vector'")).scalar_one()
-        assert current in ([A42], [STEP3], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"]), f"alembic current is {current}; run run_arch42.ps1"  # ARCH43-S1:head-widened-42  ARCH44-S1:head-widened-42
+        assert current in ([A42], [STEP3], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"]), f"alembic current is {current}; run run_arch42.ps1"  # ARCH43-S1:head-widened-42  ARCH44-S1:head-widened-42  ARCH45-S1:head-widened-42
         assert not [x for x in TABLES if x not in tables], "entity tables missing"
         assert "MERGE" in check and annotated == 11, (check, annotated)
         assert tuple(int(p) for p in vector.split(".")[:2]) >= (0, 8), f"pgvector {vector} < 0.8 (iterative scan)"

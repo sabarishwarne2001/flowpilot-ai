@@ -668,3 +668,11 @@ from app.models.tables import (  # noqa: E402,F401
     TableColumnMapping,
     TableValidation,
 )
+
+# ARCH45-S1:models-registry
+from app.models.corroboration import (  # noqa: E402,F401
+    CorroborationDocument,
+    CorroborationPair,
+    CorroborationRun,
+    Discrepancy,
+)

@@ -240,8 +240,22 @@ def extract_document(db: Session, *, work_item: WorkItem, force: bool = False,
            work_item_id=str(work_item.id), tables=len(stored), flagged=len(flagged), pages=len(pages),
            replaced=len(existing), forced=force)
     db.flush()
+    _invalidate_comparisons(db, work_item.id)
     return {"extracted": True, "tables": len(stored), "flagged": len(flagged), "pages": len(pages),
             "table_ids": [str(t.id) for t in stored]}
+
+
+def _invalidate_comparisons(db: Session, work_item_id: uuid.UUID) -> None:
+    """ARCH45-S1:tables-invalidate. New or corrected figures change the line
+    items of every comparison this document is in: those runs become STALE
+    (their fingerprint no longer matches). Never allowed to fail the caller."""
+    try:
+        from app.services.corroboration import service as corroboration_service
+
+        with db.begin_nested():
+            corroboration_service.invalidate_for_work_items(db, [work_item_id])
+    except Exception:  # noqa: BLE001
+        logger.exception("tables.corroboration_invalidate_failed", extra={"work_item_id": str(work_item_id)})
 
 
 class _Scope:
@@ -302,6 +316,7 @@ def correct_cells(db: Session, *, table: ExtractedTable, edits: Sequence[dict], 
         _emit_flagged(db, table, filename)
     _audit(db, table, "correct", actor_user_id, table_id=str(table.id), cells=len(edits), status=table.status,
            failed_checks=table.failed_checks)
+    _invalidate_comparisons(db, table.work_item_id)
     return load(db, table)
 
 
@@ -328,6 +343,7 @@ def set_column_role(db: Session, *, table: ExtractedTable, col: int, role: str, 
         _emit_flagged(db, table, filename)
     _audit(db, table, "column_role", actor_user_id, table_id=str(table.id), col=col, role=role,
            learned=bool(learned), confirmations=getattr(learned, "confirmations", 0))
+    _invalidate_comparisons(db, table.work_item_id)
     return load(db, table)
 
 
@@ -342,6 +358,7 @@ def review(db: Session, *, table: ExtractedTable, verdict: str, actor_user_id: u
     table.updated_at = now()
     db.flush()
     _audit(db, table, "review", actor_user_id, table_id=str(table.id), verdict=verdict)
+    _invalidate_comparisons(db, table.work_item_id)
     return table
 
 

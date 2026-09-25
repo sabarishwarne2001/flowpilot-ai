@@ -75,6 +75,10 @@ REVIEW_KIND_SPLIT: str = "SPLIT"
 #: ARCH44-S1:review-kind-table. Extracted tables whose figures do not reconcile
 #: (extracted_tables); arch44_step1_table_intelligence widens the CHECK and the view.
 REVIEW_KIND_TABLE: str = "TABLE"
+#: ARCH45-S1:review-kind-corroboration. Comparisons with open material
+#: discrepancies (corroboration_runs); arch45_step1_corroboration widens the
+#: CHECK and the view.
+REVIEW_KIND_CORROBORATION: str = "CORROBORATION"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
@@ -83,6 +87,7 @@ REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_MERGE,
     REVIEW_KIND_SPLIT,
     REVIEW_KIND_TABLE,
+    REVIEW_KIND_CORROBORATION,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)

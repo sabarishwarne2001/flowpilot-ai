@@ -212,7 +212,15 @@ OCR = WorkerProfile(
 
 ENRICH = WorkerProfile(
     name="enrich",
-    job_types=frozenset({"document.enrich", "knowledge.reindex"}),
+    job_types=frozenset({
+        "document.enrich",
+        "knowledge.reindex",
+        # ARCH45-S1:corroboration-enrich-profile. Clause alignment encodes
+        # clauses with the platform's SentenceTransformer, which only this
+        # profile (and ALL) may import; LIGHT forbids it and OCR does not
+        # carry it.
+        "corroboration.run",
+    }),
     allow_heavy=frozenset({"sentence_transformers", "torch", "transformers"}),
     description="Embedding, enrichment, and the ARCH-11 knowledge backfill.",
 )

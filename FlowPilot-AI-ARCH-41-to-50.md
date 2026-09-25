@@ -4,8 +4,9 @@
 
 <!-- ARCH43-S1:roadmap-status -->
 <!-- ARCH44-S1:roadmap-status -->
-**Status:** ARCH-41, ARCH-42, ARCH-43 and ARCH-44 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md` through `ARCH-44-FINAL-CERTIFICATION.md`). ARCH-45 to ARCH-50 specified here.
-**Alembic after ARCH-42:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch42_step1_entity_graph → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch42_step1_entity_graph`.
+<!-- ARCH45-S1:roadmap-status -->
+**Status:** ARCH-41 through ARCH-45 delivered and certified (see `ARCH-41-FINAL-CERTIFICATION.md` through `ARCH-45-FINAL-CERTIFICATION.md`). ARCH-46 to ARCH-50 specified here.
+**Alembic after ARCH-45:** `hm1_tier_price_per_key → arch41_step1_extraction_memory → arch42_step1_entity_graph → arch43_step1_case_intelligence → arch44_step1_table_intelligence → arch45_step1_corroboration → arch40_step3_contract_ai_settings` (held). One file head; the release head is `arch45_step1_corroboration`. (This line still described ARCH-42's chain until ARCH-45 corrected it.)
 **Constraint held throughout:** no new recurring external cost. FastAPI, PostgreSQL 16 + pgvector ≥ 0.8, Redis, MinIO, PaddleOCR, SentenceTransformers, SciPy, scikit-learn, pikepdf, pypdfium2 (camelot was never in requirements; ARCH-44 builds lattice and stream grids natively), React 19, Vite, Tailwind.
 
 This document adopts the harmonized ten-milestone plan (governance and intelligence engines fused with the commercial pillars: packet splitting, table extraction, N-way corroboration, real-time collaboration), with four adjustments recorded in §2.
@@ -18,9 +19,9 @@ This document adopts the harmonized ten-milestone plan (governance and intellige
 |---|---|---|---|---|
 | 41 | Operational Seams, Automation Conformance & **Extraction Memory** — DONE | `capability.extraction_memory` | Business+ | — |
 | 42 | Entity Resolution & Document Knowledge Graph — DONE | `capability.entity_graph` | Business+ | 41 |
-| 43 | Universal Packet Dicer & Case Intelligence (+ per-tenant fair queuing) | `capability.case_intelligence` | Business+ | 42 |
-| 44 | Complex Table & Hierarchical Grid Extractor | `capability.table_intelligence` | Business+ | 41 |
-| 45 | Universal Document Corroborator & Discrepancy Matrix | `capability.universal_corroborator` | Enterprise | 42, 44 |
+| 43 | Universal Packet Dicer & Case Intelligence (+ per-tenant fair queuing) — DONE | `capability.case_intelligence` | Business+ | 42 |
+| 44 | Complex Table & Hierarchical Grid Extractor — DONE | `capability.table_intelligence` | Business+ | 41 |
+| 45 | Universal Document Corroborator & Discrepancy Matrix — DONE | `capability.universal_corroborator` | Enterprise | 42, 44 |
 | 46 | Obligations & Temporal Intelligence | `capability.obligations` | Business+ | 42 |
 | 47 | ERP & System-of-Record Posting | `capability.erp_posting` | Business+ | 42, 44 |
 | 48 | Real-Time Collaborative Review & Live Presence | `capability.collaborative_review` | Enterprise | 40 hub |
@@ -38,7 +39,7 @@ This document adopts the harmonized ten-milestone plan (governance and intellige
 
 ## 3. Conventions every milestone follows (learned the hard way in ARCH-41)
 
-- **Capability registration is six places, not four:** `core/entitlements.py` (constant, `CAPABILITY_KEYS`, an `Entitlement` entry — without it `has_capability` raises), `api/capability_gate._DISPLAY_NAMES`, `scripts/seed_quota_tiers.py` packaging, frontend `constants/capabilities.ts`, `constants/planFeatures.ts` (typed `Record` — tsc fails without it), and `verify_arch36.GATED_PAGES` for a capability-locked nav entry. Then `seed_quota_tiers.py --carry-forward` so live subscriptions receive it.
+- **Capability registration is six places, not four:** `core/entitlements.py` (constant, `CAPABILITY_KEYS`, an `Entitlement` entry — without it `has_capability` raises), `api/capability_gate._DISPLAY_NAMES`, `scripts/seed_quota_tiers.py` packaging, frontend `constants/capabilities.ts`, `constants/planFeatures.ts` (typed `Record` — tsc fails without it — AND `PLAN_FEATURE_ORDER`, the only keys a plan card renders; ARCH-45 added the four ARCH-41–44 keys that had been missing), and `verify_arch36.GATED_PAGES` for a capability-locked nav entry. Then `seed_quota_tiers.py --carry-forward` so live subscriptions receive it.
 - **Gating is imperative:** `capability_gate.require_capability(db, context=..., capability_key=..., operation=...)` → 402 `CAPABILITY_REQUIRED`. No decorator exists.
 - **Migration position:** new expand-only revisions insert BEFORE the held contract step `arch40_step3_contract_ai_settings`, re-parenting it, as hm1 and ARCH-41 did; the run script handles a database whose contract already ran (stamp under, upgrade, stamp back).
 - **Head pins:** widen `verify_arch31, 31_step0, 34, 35, 36, 37, 38, 39, 40` and `verify_hardening_master` with an `ARCHnn-S1:head-widened-xx` sentinel; never replace an earlier sentinel.
@@ -86,13 +87,14 @@ Redaction Studio authenticated previews, back navigation and a hardened drawing 
 **Gates.** Golden-file accuracy on synthetic statements; arithmetic validator catches planted errors; multi-page continuation.
 **As built.** One migration, `arch44_step1_table_intelligence` (the contract step re-parented onto it), adding a fourth table, `table_column_mappings`, for the learned column roles. **Camelot was not used:** it is not in `requirements.txt` (this roadmap said it was), 1.0.9 requires `pypdf<6` (the repository pins 6.14.2, and 5.x reintroduces a fixed CVE), and 2.0.0 requires `opencv-python-headless`, which installs the same `cv2` module as the `opencv-contrib-python` PaddleOCR pins. Its two modes were rebuilt natively: LATTICE from vector ruling lines (pypdfium2) or, on scans, dark-pixel runs (numpy), and STREAM from DBSCAN over token geometry, computed exactly by an interval sweep and proven equal to scikit-learn's DBSCAN. Word boxes come from the PDF text layer (the stored blocks for digital pages are whole lines); scanned pages use the OCR blocks already stored, so nothing is re-OCR'd. Rotated (/Rotate and sideways-printed) and skewed tables are normalised first. The validator discovers relations (running balance, qty × rate, row totals, column sums, subtotals, carry-forward) and localises failures; flagged tables are a sixth review-hub kind (TABLE) and a Flow Builder trigger (`table.flagged`, 18 triggers). Accuracy: every cell exact on 14 golden documents (2,816 cells) and on 140 held-out documents (28,020 cells, seeds 101–110); synthetic documents only — real-world accuracy is unmeasured.
 
-### ARCH-45 — Universal Document Corroborator & Discrepancy Matrix (`capability.universal_corroborator`, Enterprise)
+### ARCH-45 — Universal Document Corroborator & Discrepancy Matrix (`capability.universal_corroborator`, Enterprise) — delivered
 
 **Objective.** Compare any 2–5 documents (contract vs. amendment, policy vs. claim, spec vs. delivery) with side-by-side visual diffs and a clause/field discrepancy matrix.
 **Backend.** Alignment in three layers — fields (extracted values), entities (ARCH-42 canonical ids), clauses (sentence embeddings with the existing SentenceTransformer, Hungarian assignment via SciPy); materiality scoring; ARCH-33 assertions reused as corroboration rules; results cached per document-set hash.
 **Data.** `corroboration_runs`, `corroboration_pairs`, `discrepancies` (kind, materiality, evidence spans).
 **Frontend.** N-pane synchronized viewer, discrepancy matrix, export to PDF report.
 **Gates.** Planted-difference recall; order independence; cache invalidation on reprocessing.
+**As built.** One migration, `arch45_step1_corroboration` (the contract step re-parented onto it), adding a fourth table, `corroboration_documents` (the ordered members of a run and the content hash each was compared at; deleting a document deletes its comparisons). Five layers, not three: FIELD (extracted values by concept — money within a tolerance, identifiers compared alphanumerically, parties by ARCH-42 entity id when both are resolved), ENTITY (live ARCH-42 mentions followed through `merged_into_id` to their root), CLAUSE (clauses segmented from the stored page lines with running headers/footers, page numbers, "Label: value" lines and ARCH-44 table regions removed; encoded with the platform's SentenceTransformer on the ENRICH profile — a hashed lexical encoder where the model cannot load — blended with a token Dice score, assigned pairwise with SciPy's Hungarian solver, re-paragraphed clauses absorbed, then grouped N-way with at most one unit per document), TABLE (ARCH-44 line items through `tables.service.load`, aligned by code and description, compared on quantity, unit price and amount; tax and total rows are not line items) and RULE (ARCH-33 plans — the workspace's saved deterministic assertion definitions and sentences given with the comparison — evaluated on every document's clauses; the llm family is refused, so no model is called and nothing is billed). Materiality is clause importance × the kind of change: a changed value or a flipped obligation is material, rewording never (severity bands 0.75 / 0.5). Documents are processed in a canonical order, so every permutation gives the identical result. The cache key is a fingerprint of the engine, encoder, options, rule digests and every document's content hash (text, page boxes, fields, table revisions, entity roots): reprocessing, a table re-extraction or correction and the nightly sweep mark changed comparisons STALE, and a newer answer for the same documents supersedes the older. Comparisons with material differences are a seventh review-hub kind (CORROBORATION, reason MATERIAL_DISCREPANCY) and a Flow Builder trigger (`corroboration.discrepancies`, 19 triggers over 20 events). The PDF report is drawn with pikepdf and Helvetica's metrics (no reportlab). Planted-difference recall and precision are 100% on 5 golden sets (22 planted) and 120 held-out sets (seeds 201–260, 769 planted) — synthetic documents only; real-world accuracy is unmeasured, and in the sandbox the SentenceTransformer path ran with a stand-in model (the MiniLM weights could not be downloaded).
 
 ### ARCH-46 — Obligations & Temporal Intelligence (`capability.obligations`, Business+)
 
@@ -121,4 +123,4 @@ One egress gate for every outbound client with tenant allowlists and a deploymen
 
 ## 5. Handoffs
 
-ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md`, ARCH-43 from `ARCH-43-HANDOFF-PROMPT.md` and ARCH-44 from `ARCH-44-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-45 is in `ARCH-45-HANDOFF-PROMPT.md`.
+ARCH-42 was started from `ARCH-42-HANDOFF-PROMPT.md`, ARCH-43 from `ARCH-43-HANDOFF-PROMPT.md`, ARCH-44 from `ARCH-44-HANDOFF-PROMPT.md` and ARCH-45 from `ARCH-45-HANDOFF-PROMPT.md`. The self-contained prompt for ARCH-46 is in `ARCH-46-HANDOFF-PROMPT.md`.

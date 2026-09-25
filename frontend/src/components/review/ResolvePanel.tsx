@@ -15,7 +15,7 @@ import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
-import { tablePath } from "@/routes/tenantPaths";
+import { corroborationPath, tablePath } from "@/routes/tenantPaths";
 
 import type {
   AnomalyVerdict,
@@ -158,6 +158,45 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
           >
             Reject table
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ARCH45-S2:resolve-corroboration. A comparison with open material
+  // differences. Each difference is decided on the comparison page; here the
+  // reviewer confirms (the documents really disagree) or dismisses every open
+  // material difference at once.
+  if (item.kind === "CORROBORATION") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          Open the comparison to see each difference side by side and decide them one at a time. Confirm records that the
+          documents really disagree; dismiss records that the open differences do not matter.{" "}
+          <Link className="underline" to={corroborationPath(orgSlug, workspaceSlug, item.item_id)}>Open the comparison</Link>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ corroboration_verdict: "CONFIRM" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Confirm differences
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ corroboration_verdict: "DISMISS" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            Dismiss differences
           </button>
           {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">

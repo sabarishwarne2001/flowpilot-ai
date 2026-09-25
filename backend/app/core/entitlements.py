@@ -109,6 +109,8 @@ __all__ = [
     "ENTITY_GRAPH_CAPABILITY",
     "CASE_INTELLIGENCE_CAPABILITY",
     "TABLE_INTELLIGENCE_CAPABILITY",
+    # ARCH45-S1:capability-corroborator-export
+    "UNIVERSAL_CORROBORATOR_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -259,6 +261,14 @@ CASE_INTELLIGENCE_CAPABILITY: str = "capability.case_intelligence"
 #: reads the OCR already stored and the PDF text layer; nothing is re-OCR'd.
 TABLE_INTELLIGENCE_CAPABILITY: str = "capability.table_intelligence"
 
+#: ARCH45-S1:capability-universal-corroborator. The Universal Document
+#: Corroborator & Discrepancy Matrix: 2 to 5 documents aligned by fields,
+#: canonical entities, clauses and line items, with materiality, ARCH-33 rules
+#: and a PDF report. ONE key for the milestone; Enterprise only. Not metered:
+#: alignment runs on the platform's own SentenceTransformer (ENRICH profile)
+#: and ARCH-33's deterministic parsers; no model is called.
+UNIVERSAL_CORROBORATOR_CAPABILITY: str = "capability.universal_corroborator"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -277,6 +287,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     ENTITY_GRAPH_CAPABILITY,
     CASE_INTELLIGENCE_CAPABILITY,
     TABLE_INTELLIGENCE_CAPABILITY,
+    UNIVERSAL_CORROBORATOR_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -415,6 +426,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Table intelligence: complex, multi-page and rotated tables extracted "
             "into typed cells with confidence, arithmetic validation and "
             "CSV/XLSX export. Bundled into a tier."
+        ),
+    ),
+    # ARCH45-S1:capability-corroborator-entitlement
+    Entitlement(
+        name=UNIVERSAL_CORROBORATOR_CAPABILITY,
+        description=(
+            "Universal document corroborator: compare 2 to 5 documents field by field, "
+            "party by party, clause by clause and line by line, with a materiality-scored "
+            "discrepancy matrix and a PDF report. Bundled into a tier."
         ),
     ),
 )
