@@ -676,3 +676,11 @@ from app.models.corroboration import (  # noqa: E402,F401
     CorroborationRun,
     Discrepancy,
 )
+
+# ARCH46-S1:models-registry
+from app.models.obligations import (  # noqa: E402,F401
+    CalendarFeedToken,
+    HolidayCalendar,
+    Obligation,
+    ObligationEvent,
+)

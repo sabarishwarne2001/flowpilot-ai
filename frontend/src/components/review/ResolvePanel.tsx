@@ -15,7 +15,7 @@ import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
-import { corroborationPath, tablePath } from "@/routes/tenantPaths";
+import { corroborationPath, obligationPath, tablePath } from "@/routes/tenantPaths";
 
 import type {
   AnomalyVerdict,
@@ -172,6 +172,42 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
   // differences. Each difference is decided on the comparison page; here the
   // reviewer confirms (the documents really disagree) or dismisses every open
   // material difference at once.
+  // ARCH46-S2:resolve-obligation
+  if (item.kind === "OBLIGATION") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          The date was read with a doubt (the reason is on the obligation). Confirm it and its due-soon and overdue
+          alerts reach your flows; reject it and it leaves every list and calendar feed. To correct the date first,{" "}
+          <Link className="underline" to={obligationPath(orgSlug, workspaceSlug, item.item_id)}>open the obligation</Link>.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ obligation_verdict: "CONFIRM" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Confirm obligation
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ obligation_verdict: "REJECT" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            Not an obligation
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (item.kind === "CORROBORATION") {
     return (
       <div className="space-y-3">

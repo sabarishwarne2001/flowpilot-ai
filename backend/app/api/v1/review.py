@@ -110,6 +110,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
 
     if UNIVERSAL_CORROBORATOR_CAPABILITY in granted:
         kinds.append(vocab.KIND_CORROBORATION)
+    # ARCH46-S1:hub-obligation-gate. Obligations are capability.obligations's,
+    # and every obligation route is gated on it.
+    from app.core.entitlements import OBLIGATIONS_CAPABILITY
+
+    if OBLIGATIONS_CAPABILITY in granted:
+        kinds.append(vocab.KIND_OBLIGATION)
     return tuple(kinds)
 
 
@@ -146,6 +152,7 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         split_boundaries=body.split_boundaries,
         table_verdict=body.table_verdict,  # ARCH44-S1:table-verdict
         corroboration_verdict=body.corroboration_verdict,  # ARCH45-S1:corroboration-verdict
+        obligation_verdict=body.obligation_verdict,  # ARCH46-S1:obligation-verdict
     )
 
 

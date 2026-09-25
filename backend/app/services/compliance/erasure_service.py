@@ -309,6 +309,12 @@ def _destroy_documents(
     from app.services.corroboration import service as _corroboration_service
 
     counts["corroboration_runs"] = _corroboration_service.erase_for_work_items(db, work_item_ids)
+    # ARCH46-S1:erasure-obligations. Obligations read from a document quote it
+    # (evidence, the clause, the counterparty): they go with it; a person's own
+    # obligation that merely links the document is unlinked.
+    from app.services.obligations import service as _obligation_service
+
+    counts["obligations"] = _obligation_service.erase_for_work_items(db, work_item_ids)
 
 
 def _destroy_conversations(

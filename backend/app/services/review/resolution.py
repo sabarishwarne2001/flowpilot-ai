@@ -115,6 +115,10 @@ class ResolvePayload:
     #: ARCH45-S1:corroboration-verdict. CORROBORATION -- CONFIRM (the material
     #: differences are real) or DISMISS (they are not), for every open one.
     corroboration_verdict: Optional[str] = None
+    #: ARCH46-S1:obligation-verdict. OBLIGATION -- CONFIRM (the obligation and
+    #: its date are right, as they stand after any edit) or REJECT (it is not an
+    #: obligation; re-extraction will not bring it back).
+    obligation_verdict: Optional[str] = None
 
 
 @dataclass
@@ -570,6 +574,32 @@ def _resolve_corroboration(
     return verdict
 
 
+def _resolve_obligation(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH46-S1:resolve-obligation. A person settles an obligation the
+    extractor read with a doubt. CONFIRM makes its alerts reach Flow Builder
+    (an alert already due is emitted now, once); REJECT keeps it out of every
+    list, the sweep and the feeds."""
+    from app.models.obligations import Obligation
+    from app.services.obligations import service as obligation_service
+    from app.services.obligations import vocabulary as ov
+
+    verdict = (payload.obligation_verdict or "").strip().upper()
+    if verdict not in ov.VERDICTS:
+        raise ReviewResolutionError("An obligation review needs obligation_verdict: CONFIRM or REJECT.")
+    row = db.execute(
+        select(Obligation).where(Obligation.id == item.item_id, Obligation.workspace_id == item.workspace_id)
+    ).scalar_one_or_none()
+    if row is None:
+        raise ReviewResolutionError("This obligation no longer exists.")
+    try:
+        obligation_service.review(db, obligation=row, verdict=verdict, actor_user_id=actor_user_id)
+    except obligation_service.ObligationError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
@@ -578,6 +608,7 @@ _DISPATCH = {
     vocab.KIND_SPLIT: _resolve_split,  # ARCH43-S1:resolve-split
     vocab.KIND_TABLE: _resolve_table,  # ARCH44-S1:resolve-table
     vocab.KIND_CORROBORATION: _resolve_corroboration,  # ARCH45-S1:resolve-corroboration
+    vocab.KIND_OBLIGATION: _resolve_obligation,  # ARCH46-S1:resolve-obligation
 }
 
 

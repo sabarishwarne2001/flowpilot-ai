@@ -14,6 +14,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core import slo_recorder
+from app.core.public_route_registry import redact_path
 from app.core.request_context import (
     context_fields,
     new_request_id,
@@ -98,7 +99,8 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
                     extra={
                         **context_fields(),
                         "method": request.method,
-                        "path": request.url.path,
+                        # ARCH46-S1:log-redaction: a token in a public path never reaches the log.
+                        "path": redact_path(request.url.path),
                         "status_code": status_code,
                         "elapsed_ms": round(elapsed_ms, 1),
                     },

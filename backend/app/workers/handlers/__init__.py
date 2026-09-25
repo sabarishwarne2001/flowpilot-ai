@@ -71,6 +71,8 @@ ARCH43_JOB_TYPES: frozenset[str] = frozenset(
 ARCH44_JOB_TYPES: frozenset[str] = frozenset({"tables.extract_document"})
 # ARCH45-S1:corroboration-job-types. Clause embeddings (SentenceTransformer): ENRICH profile.
 ARCH45_JOB_TYPES: frozenset[str] = frozenset({"corroboration.run"})
+# ARCH46-S1:obligation-job-types. Reading obligations is text and date arithmetic: LIGHT profile.
+ARCH46_JOB_TYPES: frozenset[str] = frozenset({"obligations.extract_document"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -105,6 +107,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH43_JOB_TYPES
     | ARCH44_JOB_TYPES
     | ARCH45_JOB_TYPES
+    | ARCH46_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -354,6 +357,11 @@ def _corroboration_run(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_run(payload)
 
 
+def _obligations_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.obligations import handle_extract_document
+    return handle_extract_document(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -448,6 +456,8 @@ _HANDLERS = {
     "tables.extract_document": _tables_extract_document,
     # ARCH45-S1:corroboration-handler. On the ENRICH profile (app/workers/profiles.py).
     "corroboration.run": _corroboration_run,
+    # ARCH46-S1:obligation-handler. On the LIGHT profile (app/workers/profiles.py).
+    "obligations.extract_document": _obligations_extract_document,
 }
 
 

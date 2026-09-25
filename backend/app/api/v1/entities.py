@@ -290,7 +290,28 @@ def entity_360(workspace_id: uuid.UUID, entity_id: uuid.UUID, db: Session = Depe
     return Entity360(entity=row, first_seen_at=root.first_seen_at, split_from_id=root.split_from_id,
                      identifiers=identifiers, documents=documents, relationships=relationships, members=member_rows,
                      open_candidates=_candidate_rows(db, candidates),
-                     obligations=ObligationsPlaceholder(milestone=v.OBLIGATIONS_MILESTONE))
+                     obligations=_obligations_summary(db, context.organization_id, workspace_id, members))
+
+
+def _obligations_summary(db: Session, organization_id: uuid.UUID, workspace_id: uuid.UUID,
+                         members: list[uuid.UUID]) -> ObligationsPlaceholder:
+    """ARCH46-S1:entity-360-obligations. The record's obligations (every record merged into it
+    included: obligations hang off whichever record was the root when they were read, and a
+    later merge must not orphan them). Empty and unavailable without capability.obligations;
+    the console's Obligations section reads the full list from /entities/{id}/obligations."""
+    from app.models.obligations import Obligation
+    from app.services.obligations import gate as obligation_gate
+    from app.services.obligations import vocabulary as ov
+
+    if not obligation_gate.capability_held(db, organization_id):
+        return ObligationsPlaceholder(milestone=v.OBLIGATIONS_MILESTONE)
+    rows = db.execute(select(Obligation).where(
+        Obligation.workspace_id == workspace_id, Obligation.entity_id.in_(members),
+        Obligation.superseded_at.is_(None), Obligation.review != ov.REVIEW_REJECTED)
+        .order_by(Obligation.due_date.asc().nulls_last()).limit(20)).scalars()
+    return ObligationsPlaceholder(available=True, milestone=v.OBLIGATIONS_MILESTONE, items=[
+        {"id": str(o.id), "kind": o.kind, "title": o.title, "state": o.state,
+         "due_date": o.due_date.isoformat() if o.due_date else None} for o in rows])
 
 
 @router.get("/workspaces/{workspace_id}/entities/{entity_id}/graph", response_model=EntityGraph)

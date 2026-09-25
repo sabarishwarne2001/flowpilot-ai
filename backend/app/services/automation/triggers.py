@@ -42,6 +42,7 @@ from app.core.entitlements import (
     RECONCILIATION_CAPABILITY,
     TABLE_INTELLIGENCE_CAPABILITY,
     UNIVERSAL_CORROBORATOR_CAPABILITY,
+    OBLIGATIONS_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
 )
@@ -431,6 +432,51 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
             TriggerField("max_severity", "Highest severity", "string", "HIGH"),
         ),
         capability=UNIVERSAL_CORROBORATOR_CAPABILITY,
+        has_document=False,
+    ),
+    # ARCH46-S1:trigger-obligation-due-soon. 21 triggers over 22 events after ARCH-46.
+    TriggerSpec(
+        key="obligation.due_soon",
+        label="Obligation due soon",
+        category="Obligations",
+        description=(
+            "A renewal, notice deadline, payment, delivery, expiry or report enters its reminder window "
+            "(its lead days before the due date, in the workspace's time zone). Fires once per obligation "
+            "and due date; a recurring obligation fires again for its next occurrence."
+        ),
+        event_types=("trigger.obligation.due_soon",),
+        fields=(
+            TriggerField("title", "Obligation", "string", "Notice deadline (non-renewal) — Acme Ltd"),
+            TriggerField("kind", "Kind", "string", "NOTICE"),
+            TriggerField("due_date", "Due date", "date", "2026-11-13"),
+            TriggerField("days_left", "Days left", "number", "14"),
+            TriggerField("owner_email", "Owner", "string", "legal@example.com"),
+            TriggerField("counterparty", "Counterparty", "string", "Acme Technology Services Pvt Ltd"),
+        ),
+        capability=OBLIGATIONS_CAPABILITY,
+        # An obligation is not one document (a person's own has none): document
+        # actions are refused by flow_service.
+        has_document=False,
+    ),
+    # ARCH46-S1:trigger-obligation-overdue
+    TriggerSpec(
+        key="obligation.overdue",
+        label="Obligation overdue",
+        category="Obligations",
+        description=(
+            "An obligation's due date passed (from the local midnight after it, in the workspace's time zone) "
+            "without being marked done or waived. Fires once per obligation and due date."
+        ),
+        event_types=("trigger.obligation.overdue",),
+        fields=(
+            TriggerField("title", "Obligation", "string", "Payment of INR 2,50,000 — Acme Ltd"),
+            TriggerField("kind", "Kind", "string", "PAYMENT"),
+            TriggerField("due_date", "Due date", "date", "2026-10-05"),
+            TriggerField("days_overdue", "Days overdue", "number", "1"),
+            TriggerField("owner_email", "Owner", "string", "finance@example.com"),
+            TriggerField("counterparty", "Counterparty", "string", "Acme Technology Services Pvt Ltd"),
+        ),
+        capability=OBLIGATIONS_CAPABILITY,
         has_document=False,
     ),
 )

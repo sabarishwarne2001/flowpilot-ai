@@ -11,6 +11,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from app.core.public_route_registry import redact_path
 from app.core.exceptions import (
     CannotTransferToSelfError,
     EmailImmutableError,
@@ -207,7 +208,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     logger.debug(
         "Domain exception on %s %s | %s -> %s (%s)",
         request.method,
-        request.url.path,
+        redact_path(request.url.path),  # ARCH46-S1:log-redaction
         type(exc).__name__,
         status_code,
         code,

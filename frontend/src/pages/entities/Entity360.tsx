@@ -4,7 +4,8 @@
  * never returns more), its relationships, the records merged into it (each
  * one undoable), and the graph around it. Splitting moves chosen documents to
  * a new record; the pair is remembered as separate so no sweep re-merges it.
- * Obligations arrive with ARCH-46.
+ * ARCH46-S2:entity-obligations — the Obligations section lists every
+ * obligation tied to this record (or a record merged into it).
  */
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +14,7 @@ import { ArrowLeft, Loader2, Lock, Network, Scissors, Trash2, Undo2 } from "luci
 
 import { CAPABILITY } from "@/constants/capabilities";
 import { GraphExplorer } from "@/components/entities/GraphExplorer";
+import EntityObligations from "@/components/obligations/EntityObligations";
 import { ErrorState } from "@/components/common/ErrorState";
 import { BUTTON_DESTRUCTIVE, BUTTON_GHOST, BUTTON_SECONDARY, HINT, INPUT, PAGE_TITLE, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
@@ -29,6 +31,8 @@ import {
 } from "@/services/api/entities";
 import { errorMessage } from "@/services/api/errors";
 import { RELATION_LABELS } from "@/types/entities";
+// ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
+import { formatTimestampDate } from "@/utils/displayTime";
 
 const DECISION_LABEL: Readonly<Record<string, string>> = {
   AUTO: "linked automatically",
@@ -171,7 +175,7 @@ const Entity360: React.FC = () => {
         <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{data.entity.kind.toLowerCase()}</span>
         <span className={HINT}>
           {data.entity.documents} document{data.entity.documents === 1 ? "" : "s"}
-          {data.first_seen_at ? ` · first seen ${new Date(data.first_seen_at).toLocaleDateString()}` : ""}
+          {data.first_seen_at ? ` · first seen ${formatTimestampDate(data.first_seen_at)}` : ""}
         </span>
         <div className="ml-auto flex gap-2">
           {canEdit && naming === null && ["PERSON", "ORGANIZATION", "ADDRESS"].includes(data.entity.kind) && (
@@ -302,7 +306,7 @@ const Entity360: React.FC = () => {
                   {doc.filename}
                 </Link>
                 <p className={HINT}>
-                  {new Date(doc.created_at).toLocaleDateString()} · as {doc.role.replace(/_/g, " ")} · {METHOD_LABEL[doc.method] ?? doc.method}
+                  {formatTimestampDate(doc.created_at)} · as {doc.role.replace(/_/g, " ")} · {METHOD_LABEL[doc.method] ?? doc.method}
                   {doc.probability !== null && doc.probability !== undefined && doc.method === "MODEL"
                     ? ` (${Math.round(doc.probability * 100)}%)`
                     : ""}{" "}
@@ -325,7 +329,7 @@ const Entity360: React.FC = () => {
                   <span>{member.display_name}</span>
                   <span className={HINT}>
                     {member.mentions} mention{member.mentions === 1 ? "" : "s"} · {member.merge_reason?.toLowerCase() ?? "merged"}
-                    {member.merged_at ? ` · ${new Date(member.merged_at).toLocaleDateString()}` : ""}
+                    {member.merged_at ? ` · ${formatTimestampDate(member.merged_at)}` : ""}
                   </span>
                   {canEdit && (
                     <button
@@ -344,9 +348,7 @@ const Entity360: React.FC = () => {
           )}
         </Section>
         <Section title="Obligations">
-          <p className={HINT}>
-            Renewal dates, notice periods and other obligations tied to this record arrive with {data.obligations.milestone}.
-          </p>
+          <EntityObligations entityId={data.entity.id} orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
         </Section>
       </div>
     </div>

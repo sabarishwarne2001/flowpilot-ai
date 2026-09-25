@@ -64,6 +64,8 @@ _DISPLAY_NAMES = {
     entitlements.TABLE_INTELLIGENCE_CAPABILITY: "Table intelligence",
     # ARCH45-S1:capability-display
     entitlements.UNIVERSAL_CORROBORATOR_CAPABILITY: "The document corroborator",
+    # ARCH46-S1:capability-display
+    entitlements.OBLIGATIONS_CAPABILITY: "Obligations and calendar feeds",
 }
 
 

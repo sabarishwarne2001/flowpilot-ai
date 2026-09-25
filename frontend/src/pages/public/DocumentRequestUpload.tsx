@@ -11,6 +11,8 @@ import { CheckCircle2, Loader2, Upload } from "lucide-react";
 import { BUTTON_PRIMARY, HINT, PAGE_TITLE, SURFACE } from "@/components/ui/primitives";
 import { previewDocumentRequest, uploadRequestedDocument } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
+// ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
+import { formatTimestamp } from "@/utils/displayTime";
 
 const DocumentRequestUpload: React.FC = () => {
   const { token = "" } = useParams<{ token: string }>();
@@ -30,7 +32,7 @@ const DocumentRequestUpload: React.FC = () => {
             <p className="text-sm">
               <strong>{info.data.case_title}</strong> needs a <strong>{info.data.document_type.replace(/_/g, " ")}</strong>.
             </p>
-            <p className={HINT}>This link works once and expires {new Date(info.data.expires_at).toLocaleString()}.</p>
+            <p className={HINT}>This link works once and expires {formatTimestamp(info.data.expires_at)}.</p>
             <input type="file" accept=".pdf,image/*" aria-label="Document" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             {upload.isError ? <p className="text-sm text-destructive">{errorMessage(upload.error, "This link is not valid.")}</p> : null}
             <button type="button" className={BUTTON_PRIMARY} disabled={!file || upload.isPending} onClick={() => file && upload.mutate(file)}>

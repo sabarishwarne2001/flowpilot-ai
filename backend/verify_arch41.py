@@ -379,7 +379,7 @@ def check_catalog(triggers_text: str, sources: Optional[dict[str, str]] = None) 
     caps = capability_constants()
     specs = trigger_specs(triggers_text)
     # ARCH43-S1:catalog-widened-41. ARCH-43 adds three triggers over three events.
-    assert len(specs) in (14, 17, 18, 19), f"expected 14 (17 after ARCH-43, 18 after ARCH-44, 19 after ARCH-45) flow-builder triggers, found {len(specs)}"  # ARCH44-S1:catalog-widened-41  ARCH45-S1:catalog-widened-41
+    assert len(specs) in (14, 17, 18, 19, 21), f"expected 14 (17 after ARCH-43, 18 after ARCH-44, 19 after ARCH-45, 21 after ARCH-46) flow-builder triggers, found {len(specs)}"  # ARCH44-S1:catalog-widened-41  ARCH45-S1:catalog-widened-41  ARCH46-S1:catalog-widened-41
     keys = [s.get("key") for s in specs]
     assert len(set(keys)) == len(specs), f"duplicate trigger keys: {keys}"
 
@@ -874,7 +874,10 @@ def check_migration_chain() -> None:
             revs[r.group(1)] = d.group(1).strip() if d else ""
     assert revs.get(A41) == f'"{HM1}"', f"{A41} revises {revs.get(A41)}, expected {HM1}"
     # ARCH42-S1:chain-widened-41. ARCH-42 sits between ARCH-41 and the contract step.
-    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"'), f"the contract step revises {revs.get(STEP3)}, expected {A41}, arch42, arch43, arch44 or arch45"  # ARCH43-S1:chain-widened-41  ARCH44-S1:chain-widened-41  ARCH45-S1:chain-widened-41
+    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"'), f"the contract step revises {revs.get(STEP3)}, expected {A41}, arch42, arch43, arch44, arch45 or arch46"  # ARCH43-S1:chain-widened-41  ARCH44-S1:chain-widened-41  ARCH45-S1:chain-widened-41  ARCH46-S1:chain-widened-41
+    if revs.get(STEP3) == '"arch46_step1_obligations"':  # ARCH46-S1:chain-widened-41
+        assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
+        assert revs.get("arch45_step1_corroboration") == '"arch44_step1_table_intelligence"', "arch45 must revise arch44"
     if revs.get(STEP3) == '"arch45_step1_corroboration"':  # ARCH45-S1:chain-widened-41
         assert revs.get("arch45_step1_corroboration") == '"arch44_step1_table_intelligence"', "arch45 must revise arch44"
         assert revs.get("arch44_step1_table_intelligence") == '"arch43_step1_case_intelligence"', "arch44 must revise arch43"
@@ -1433,7 +1436,7 @@ def t23_db(rec: "Recorder", evidence: dict, mutate: bool) -> None:
             current = [r[0] for r in conn.execute(text("SELECT version_num FROM alembic_version"))]
             tables = {r[0] for r in conn.execute(text(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
-        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41  ARCH43-S1:head-widened-41  ARCH44-S1:head-widened-41  ARCH45-S1:head-widened-41
+        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41  ARCH43-S1:head-widened-41  ARCH44-S1:head-widened-41  ARCH45-S1:head-widened-41  ARCH46-S1:head-widened-41
         missing = [t_ for t_ in MEMORY_TABLES if t_ not in tables]
         assert not missing, f"tables missing: {missing}"
 

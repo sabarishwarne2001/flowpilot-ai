@@ -30,6 +30,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.tableIntelligence]: "Table intelligence (multi-page, rotated and ruled tables, validated, CSV/XLSX export)",
   // ARCH45-S2:plan-feature
   [CAPABILITY.universalCorroborator]: "Document corroborator (compare 2–5 documents clause by clause, discrepancy matrix, PDF report)",
+  // ARCH46-S2:plan-feature
+  [CAPABILITY.obligations]: "Obligations & deadlines (renewals, notice periods, payments read from documents; calendar feeds)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -56,6 +58,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.entityGraph,
   CAPABILITY.caseIntelligence,
   CAPABILITY.tableIntelligence,
+  // ARCH46-S2:plan-feature-order — Business and Enterprise.
+  CAPABILITY.obligations,
   CAPABILITY.calibratedAutonomy,
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,

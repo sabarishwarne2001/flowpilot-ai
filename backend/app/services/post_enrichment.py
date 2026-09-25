@@ -233,6 +233,25 @@ def dispatch_in_session(
     except Exception:  # noqa: BLE001
         logger.exception("post_enrichment.corroboration_invalidate_failed", extra={"work_item_id": str(work_item_id)})
 
+    # ARCH46-S1:obligation-dispatch. Every enriched document is read for
+    # obligations (LIGHT profile), for organizations whose plan carries
+    # capability.obligations, a little after ARCH-42 resolves its parties.
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+    from app.services.obligations import gate as obligation_gate
+    from app.services.obligations import vocabulary as obligation_vocab
+
+    if obligation_gate.capability_held(db, organization_id):
+        job_service.enqueue(
+            db,
+            job_type=obligation_vocab.JOB_EXTRACT,
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"{obligation_vocab.JOB_EXTRACT}:{work_item_id}:{marker}",
+            available_at=_dt.now(_tz.utc) + _td(seconds=obligation_vocab.EXTRACT_DELAY_SECONDS),
+        )
+        enqueued.append(obligation_vocab.JOB_EXTRACT)
+
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued, "stale_comparisons": stale}
 
 

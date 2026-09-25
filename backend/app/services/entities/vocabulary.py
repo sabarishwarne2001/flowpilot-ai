@@ -214,7 +214,8 @@ U_SAMPLE_PAIRS: Final = 3000
 MIN_U_OBSERVATIONS: Final = 20
 SWEEP_MAX_CATCHUP_DOCUMENTS: Final = 500
 
-#: Placeholder until ARCH-46 (Obligations & Temporal Intelligence) fills it.
+#: The milestone that owns an entity's obligations (ARCH46-S1:entity-obligations:
+#: Entity 360 lists them when the plan carries capability.obligations).
 OBLIGATIONS_MILESTONE: Final = "ARCH-46"
 
 #: Domain separation for identifier HMACs. Changing it orphans every stored

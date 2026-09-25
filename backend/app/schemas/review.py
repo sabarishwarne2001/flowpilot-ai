@@ -84,6 +84,18 @@ class ReviewResolveRequest(BaseModel):
     table_verdict: Optional[str] = None
     #: ARCH45-S1:corroboration-verdict. CORROBORATION reviews: CONFIRM or DISMISS.
     corroboration_verdict: Optional[str] = None
+    #: ARCH46-S1:obligation-verdict. OBLIGATION reviews: CONFIRM or REJECT.
+    obligation_verdict: Optional[str] = None
+
+    @field_validator("obligation_verdict")
+    @classmethod
+    def _known_obligation_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("CONFIRM", "REJECT"):
+            raise ValueError("obligation_verdict must be one of: CONFIRM, REJECT")
+        return upper
 
     @field_validator("corroboration_verdict")
     @classmethod

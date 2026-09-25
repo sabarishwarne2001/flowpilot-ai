@@ -19,4 +19,7 @@ MAILTO=""
 17 5 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep cases --apply
 # ARCH45-S1:cron-corroboration
 37 5 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep corroboration --apply
+# ARCH46-S1:cron-obligations. Hourly in UTC; each workspace is swept at its own
+# local date, so a zone's midnight is caught within the hour (idempotent).
+12 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep obligations --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

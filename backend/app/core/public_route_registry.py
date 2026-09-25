@@ -209,6 +209,17 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="single-use expiring document-request token (path)",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
+    # ARCH46-S1:public-calendar-feeds. A calendar app polling a member's
+    # obligations feed has no session: the credential is the signed token in
+    # the path (HMAC-verified, stored only as SHA-256, revocable; every refusal
+    # is the same 404).
+    PublicRoute(
+        path="/api/v1/public/calendar-feeds/{token}.ics",
+        methods=("GET",),
+        phase="ARCH-46",
+        credential="signed, revocable calendar-feed token (path)",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
     PublicRoute(
         path="/api/v1/branding/favicon",
         methods=("GET",),
@@ -232,3 +243,24 @@ def policy_for(path: str, method: str) -> str | None:
 
 def registered_paths() -> set[str]:
     return {r.path for r in PUBLIC_ROUTES}
+
+
+# ARCH46-S1:redact-path. A credential carried IN a public path (a calendar-feed
+# token, an ARCH-43 document-request token) must never reach a log line. Every
+# writer of a request path -- RequestTraceMiddleware, the exception handlers,
+# and (through logging_config.RedactSecretPaths on the console handler) uvicorn's
+# access log -- passes it through redact_path(); the ingress (deploy/Caddyfile)
+# filters request>uri the same way. The whole segment after the prefix goes,
+# including a suffix such as ".ics", so a malformed token is hidden too.
+REDACTED_SEGMENT = "[redacted]"
+SECRET_PATH_PREFIXES: tuple[str, ...] = tuple(sorted(
+    {r.path.split("{token}", 1)[0] for r in PUBLIC_ROUTES if "{token}" in r.path}))
+_SECRET_SEGMENT = re.compile(
+    "(" + "|".join(re.escape(p) for p in SECRET_PATH_PREFIXES) + r")[^/?#\s\"']+") if SECRET_PATH_PREFIXES else None
+
+
+def redact_path(value):  # type: ignore[no-untyped-def]
+    """Any text that may hold a token-bearing public path, with the token replaced. Non-strings pass through."""
+    if _SECRET_SEGMENT is None or not isinstance(value, str) or "/public/" not in value:
+        return value
+    return _SECRET_SEGMENT.sub(lambda m: m.group(1) + REDACTED_SEGMENT, value)

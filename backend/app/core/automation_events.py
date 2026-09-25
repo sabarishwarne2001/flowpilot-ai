@@ -93,6 +93,14 @@ TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH44_TRIGGER_EVENT_T
 ARCH45_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.corroboration.discrepancies",)
 TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH45_TRIGGER_EVENT_TYPES
 
+#: ARCH46-S1:trigger-events. arch46_step1_obligations rebuilds
+#: ck_outbox_events_visibility_vocabulary to admit them. Emitter:
+#: obligations.service.transition (the sweep, and any edit that moves a state),
+#: once per obligation, state and due date (idempotency key and a partial
+#: UNIQUE index on obligation_events).
+ARCH46_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.obligation.due_soon", "trigger.obligation.overdue")
+TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH46_TRIGGER_EVENT_TYPES
+
 #: Internal events that existed before ARCH-37 and that rules may listen to.
 #: `automation_rule_triggers` accepts exactly these plus the `trigger.` names.
 LEGACY_RULE_EVENT_TYPES: Final[tuple[str, ...]] = (
@@ -123,6 +131,9 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "trigger.table.flagged",
         # ARCH45-S1:internal-events. The document corroborator.
         "trigger.corroboration.discrepancies",
+        # ARCH46-S1:internal-events. Obligations.
+        "trigger.obligation.due_soon",
+        "trigger.obligation.overdue",
         # --- ARCH-13 Work Item & Automation Events ---
         # Emitted by `document.enrich` when enrichment commits. Replaces the
         # fire-and-forget in-process call in `enrich.py::_run_side_effects`

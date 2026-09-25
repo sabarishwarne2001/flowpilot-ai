@@ -1,0 +1,660 @@
+{
+  "started": "2026-09-25T23:01:41",
+  "python": "3.12.10",
+  "months": {
+    "cases": 145749
+  },
+  "business_days": {
+    "cases": 13260
+  },
+  "holidays": {
+    "easter_years": 301
+  },
+  "rrule": {
+    "compared": 218
+  },
+  "zones": {
+    "instants": 9011
+  },
+  "golden": {
+    "documents": 10,
+    "planted": 22,
+    "found": 22,
+    "extra": 0,
+    "problems": []
+  },
+  "held_out": {
+    "documents": 300,
+    "planted": 642,
+    "found": 642,
+    "extra": 0,
+    "problems": []
+  },
+  "ical": {
+    "lines": 54
+  },
+  "caddy": "not run: no caddy binary on PATH or $CADDY",
+  "live": [
+    {
+      "step": "D2 models match the migration: zero column-level drift on the four ARCH-46 tables",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D3 schema refusals (41): kinds, states and their timestamps, rules, RRULE, source keys, composite FKs, owner membership, evidence and anchor triggers, alert uniqueness, sorted holidays, one default, token hash hex + UNIQUE, member FK; document delete unlinks manual obligations; record delete clears the party",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D4 extraction: the MSA's 5 obligations with exact due dates, on the counterparty record, owned by the uploader; re-reading creates nothing; enrichment enqueues the job (delayed, idempotent); the job runs; reprocessing supersedes and revives",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D5 HTTP: 402 on all 22 routes (+denial audit); list/filters in the workspace zone; create (rolled to a business day), an offset in business days that follows its anchor; refusals; calculator; calendar with projected occurrences; complete/reopen/waive; a series advances; exports (ics, csv injection-safe, audited); delete orphans dependents; document and record views; tenant isolation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D6 sweep: each workspace at its own local date (09:30 UTC Honolulu still 9 March; 10:30 UTC Kiritimati 11 March -> OVERDUE); every alert once (idempotency key per state and due date); a second and third run change and emit nothing; a forced state is restored silently; a later due date alerts again with a new key; dry run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D7 feeds: issued once (only the SHA-256 stored, never audited or logged); served uncached with ALL/MINE scope; unknown, unsigned-but-stored, removed-key, lapsed-plan, suspended-member, deactivated-user, expired and revoked tokens all get the IDENTICAL 404 on the next fetch; rotation keeps feeds; own feeds only; a limit",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D8 holiday calendars: a template (US 2026, 11 days), pasted dates, an .ics with a yearly repeat; 10 business days after 9 Jan skip MLK Day (26 Jan); adding a holiday reschedules (27 Jan); deleting the calendar -> weekends only (23 Jan)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D9 the plan: without capability.obligations the job reads nothing, enrichment enqueues nothing and the sweep skips the organization; a vanished document is a no-op",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D10 review hub: an obligation read with a doubt is an OBLIGATION item; its due-soon alert is held until a person CONFIRMs, then raised exactly once; bulk REJECT keeps it out (re-reading does not revive it); hidden without the plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D11 records: obligations follow a merge to the surviving record (its list, its Obligations section, Entity 360, the list filter); a party ARCH-42 resolves after reading is linked by the sweep",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D12 ARCH-20 erasure: obligations read from a subject's documents (evidence, quotes, parties) go; a person's own obligation is unlinked, not erased",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "db_caught_by": {
+    "MD1 the obligations API's capability gate removed (D5 must catch)": "D5: AssertionError: ('get', '/obligations', 200, '{\"items\":[{\"id\":\"f2b974ba-fe07-45c1-b0ad-1a6b487892aa\",\"kind\":\"REPORTING\",\"title\":\"Report due (monthly) \u2014 Hooli Cloud Solutions Ltd\",\"state\":\"OPEN\",\"review\":\"AUTO\",\"origin\":\"EXTRACTED\",\"due_date\":\"202')  at verify_arch46.py:1514 <- verify_arch46.py:1150",
+    "MD2 the trigger's idempotency key without the due date (a moved date never alerts again; D6 must catch)": "D6: AssertionError: {'kolkata': ['trigger.obligation.due_soon:a1408b14-c514-4779-973a-19991dae24dc'], 'honolulu': ['trigger.obligation.due_soon:61492e07-ed2b-4ac5-a340-db5977618c17'], 'kiritimati': ['trigger.obligation.due_soon:d210cbb7-f92e-4847-853d-8188ac06de89', 'trigger.obligation.overdue:d210cbb7-",
+    "MD3 the alert row inserted without its once-only guard (D6 must catch)": "D6: IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"uq_obligation_events_alert\"\nDETAIL:  Key (obligation_id, kind, due_date)=(beb587fc-682f-44a3-aaba-664c9e72357a, OVERDUE, 2026-03-10) already exists.\n\n[SQL: INSERT INTO obligation_events (id, obligation_",
+    "MD4 the sweep uses the UTC date instead of each workspace's local date (D6 must catch)": "D6: AssertionError: ('09:30 UTC: Honolulu is still on 9 March', {'kolkata': 'DUE_SOON', 'honolulu': 'DUE_SOON', 'kiritimati': 'DUE_SOON', 'new-york': 'DUE_SOON'})  at verify_arch46.py:1610 <- verify_arch46.py:1150",
+    "MD5 the sweep re-transitions obligations already in their state (not idempotent; D6 must catch)": "D6: AssertionError: a second sweep changed something: {'at': '2026-03-10T10:30:00+00:00', 'workspaces': 5, 'examined': 11, 'transitions': {'OPEN': 7, 'DUE_SOON': 3, 'OVERDUE': 1}, 'emitted': 0, 'linked': 0, 'skipped_without_plan': 0}  at verify_arch46.py:1625 <- verify_arch46.py:1150",
+    "MD6 an unconfirmed (PENDING) obligation reaches Flow Builder (D10 must catch)": "D10: AssertionError: ('an unconfirmed obligation reached Flow Builder', {'at': '2026-10-03T06:00:00+00:00', 'workspaces': 5, 'examined': 14, 'transitions': {'OPEN': 0, 'DUE_SOON': 2, 'OVERDUE': 3}, 'emitted': 5, 'linked': 0, 'skipped_without_plan': 0})  at verify_arch46.py:1847 <- verify_arch46.py:1150",
+    "MD7 the hub cannot resolve OBLIGATION (D10 must catch)": "D10: ReviewResolutionError: 'OBLIGATION' is not a review kind.  at resolution.py:641 <- verify_arch46.py:1849 <- verify_arch46.py:1150",
+    "MD8 ARCH-20 erasure keeps obligations (D12 must catch)": "D12: AssertionError: (10, {'work_items': 6, 'document_chunks': 0, 'entity_mentions': 7, 'extracted_tables': 0, 'corroboration_runs': 0, 'obligations': 0})  at verify_arch46.py:1922 <- verify_arch46.py:1150",
+    "MD9 entity merges not followed to the root (D11 must catch)": "D11: AssertionError: rows do not follow merged_into_id  at verify_arch46.py:1892 <- verify_arch46.py:1150",
+    "MD10 a revoked feed still served (D7 must catch)": "D7: AssertionError: ('a revoked token, on the very next fetch', 200, 'BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//FlowPilot AI//Obligations ARCH-46//EN\\r\\nCALSCALE:GREGORIAN\\r\\nMETHOD:PUBLISH\\r\\nX-WR-')  at verify_arch46.py:1706 <- verify_arch46.py:1755 <- verify_arch46.py:1150",
+    "MD11 feed membership not checked (a suspended member keeps reading; D7 must catch)": "D7: AssertionError: ('a suspended member', 200, 'BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//FlowPilot AI//Obligations ARCH-46//EN\\r\\nCALSCALE:GREGORIAN\\r\\nMETHOD:PUBLISH\\r\\nX-WR-')  at verify_arch46.py:1706 <- verify_arch46.py:1730 <- verify_arch46.py:1150",
+    "MD12 the feed signature not checked (a removed key keeps working; D7 must catch)": "D7: AssertionError: ('a stored hash whose token is not signed', 200, 'BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//FlowPilot AI//Obligations ARCH-46//EN\\r\\nCALSCALE:GREGORIAN\\r\\nMETHOD:PUBLISH\\r\\nX-WR-')  at verify_arch46.py:1706 <- verify_arch46.py:1718 <- verify_arch46.py:1150",
+    "MD13 a lapsed plan still gets its feed (D7 must catch)": "D7: AssertionError: ('a lapsed plan', 200, 'BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//FlowPilot AI//Obligations ARCH-46//EN\\r\\nCALSCALE:GREGORIAN\\r\\nMETHOD:PUBLISH\\r\\nX-WR-')  at verify_arch46.py:1706 <- verify_arch46.py:1725 <- verify_arch46.py:1150",
+    "MD14 an expired feed still served (D7 must catch)": "D7: AssertionError: ('an expired token', 200, 'BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//FlowPilot AI//Obligations ARCH-46//EN\\r\\nCALSCALE:GREGORIAN\\r\\nMETHOD:PUBLISH\\r\\nX-WR-')  at verify_arch46.py:1706 <- verify_arch46.py:1745 <- verify_arch46.py:1150",
+    "MD15 the extraction key salted per run (re-reading duplicates everything; D4 must catch)": "D4: AssertionError: ExtractSummary(created=5, kept=0, revived=0, superseded=5, pending=0, engine_version='ob-1')  at verify_arch46.py:1447 <- verify_arch46.py:1150",
+    "MD16 what a reprocessed document no longer says is never superseded (D4 must catch)": "D4: AssertionError: {'created': 5, 'kept': 0, 'revived': 0, 'superseded': 0, 'pending': 1, 'engine_version': 'ob-1'}  at verify_arch46.py:1464 <- verify_arch46.py:1150",
+    "MD17 dependents do not follow their anchor (D5 must catch)": "D5: AssertionError: a dependent did not follow its anchor  at verify_arch46.py:1553 <- verify_arch46.py:1150",
+    "MD18 the job ignores the plan (D9 must catch)": "D9: AssertionError: {'extracted': True, 'work_item_id': '4b6bee9f-f3d2-4ed8-af3a-c673e9d98291', 'created': 1, 'kept': 0, 'revived': 0, 'superseded': 0, 'pending': 0, 'engine_version': 'ob-1'}  at verify_arch46.py:1820 <- verify_arch46.py:1150",
+    "MD19 editing a holiday calendar reschedules nothing (D8 must catch)": "D8: AssertionError: ('editing the calendar rescheduled nothing', 0)  at verify_arch46.py:1801 <- verify_arch46.py:1150",
+    "MD20 completing a recurring obligation closes it instead of advancing (D5 must catch)": "D5: AssertionError: {'id': 'a8cef70d-4377-4202-be33-d82e4780380a', 'kind': 'PAYMENT', 'title': 'Payment of INR 125,000 (monthly) \u2014 Hooli Cloud Solutions Ltd', 'state': 'DONE', 'review': 'AUTO', 'origin': 'EXTRACTED', 'due_date': '2026-10-10', 'days_until': 15, 'lead_days': 7, 'recurrence': 'FREQ=MONTHLY",
+    "MD21 a document's deletion takes a person's own obligations (the unlink trigger disabled; D3 must catch)": "D3: AssertionError: a person's own obligation was deleted with a document  at verify_arch46.py:1415 <- verify_arch46.py:1144"
+  },
+  "caught_by": {
+    "MS1 capability missing from the Business tier": "AssertionError: not packaged into Business",
+    "MS2 capability leaked below Business": "AssertionError: leaked below Business",
+    "MS3 no Entitlement entry (has_capability would raise)": "AssertionError: no Entitlement entry (has_capability would raise)",
+    "MS4 no plan card lists obligations": "AssertionError: no plan card lists obligations (PLAN_FEATURE_ORDER)",
+    "MS5 contract step left on arch45 (two heads)": "AssertionError: the contract step revises \"arch45_step1_corroboration\", expected arch46_step1_obligations",
+    "MS6 the once-per-due-date alert index dropped": "AssertionError: CREATE UNIQUE INDEX uq_obligation_events_alert ON obligation_events (obligation_id, kind, due_date) missing from the migration",
+    "MS7 the token-hash hex CHECK dropped": "AssertionError: CONSTRAINT ck_calendar_feed_tokens_hash CHECK (token_hash ~ '^[0-9a-f]{{64}}$') missing from the migration",
+    "MS8 the manual-obligation unlink trigger dropped": "AssertionError: CREATE TRIGGER trg_work_items_unlink_obligations missing from the migration",
+    "MS9 months overflow into the next month (31 Jan + 1 month = 3 Mar)": "AssertionError: 2026-01-31 +1 month(s) = 2026-03-03; the stated rule says 2026-02-28",
+    "MS10 29 February + 1 year = 1 March": "AssertionError: 29 February + 1 year",
+    "MS11 business days count the start day": "AssertionError: weekends: 2027-04-13 +4 business days",
+    "MS12 stored holidays ignored (weekends only)": "AssertionError: us: 2027-09-01 +3 business days",
+    "MS13 PRECEDING rolls forward": "AssertionError: weekends: PRECEDING 2026-01-03",
+    "MS14 a monthly series chained instead of anchored (drifts to the 28th)": "AssertionError: a monthly series from 31 Jan drifted: [datetime.date(2026, 1, 31), datetime.date(2026, 2, 28), datetime.date(2026, 3, 28), datetime.date(2026, 4, 28), datetime.date(2026, 5, 28)]",
+    "MS15 sub-day RRULE parts accepted (BYHOUR)": "AssertionError: accepted 'FREQ=DAILY;BYHOUR=9'",
+    "MS16 the local date read in UTC (time zone ignored)": "AssertionError: 2026-03-10T10:30:00+00:00 in Pacific/Kiritimati: 2026-03-10, expected 2026-03-11",
+    "MS17 OVERDUE on the due date itself (off by one)": "AssertionError: due 2026-01-10, lead 7, today 2026-01-10, DUE_SOON: OVERDUE != DUE_SOON",
+    "MS18 the notice counted from the renewal date, not the end of the term": "AssertionError: {'documents': 10, 'planted': 22, 'found': 20, 'extra': 2, 'problems': ['msa-4601: missed NOTICE 2027-06-23', 'msa-4601: extra NOTICE 2027-06-24', 'msa-4602: missed NOTICE 2028-01-14', 'msa-4602: extra NOTICE 2028-01-17']}",
+    "MS19 a notice deadline rolled later (FOLLOWING) instead of earlier": "AssertionError: {'documents': 10, 'planted': 22, 'found': 20, 'extra': 2, 'problems': ['msa-4602: missed NOTICE 2028-01-14', 'msa-4602: extra NOTICE 2028-01-17', 'lease-4604: missed NOTICE 2027-08-27', 'lease-4604: extra NOTICE 2027-08-30']}",
+    "MS20 an ambiguous date trusted (not held for review)": "AssertionError: {'documents': 10, 'planted': 22, 'found': 21, 'extra': 1, 'problems': ['po-4610: missed DELIVERY 2026-10-05 (pending)', 'po-4610: extra DELIVERY 2026-10-05']}",
+    "MS21 Easter off by a week (GB Good Friday, Easter Monday)": "AssertionError: Easter 1900",
+    "MS22 a US holiday on a Saturday not observed on the Friday": "AssertionError: [datetime.date(2026, 1, 1), datetime.date(2026, 1, 19), datetime.date(2026, 2, 16), datetime.date(2026, 5, 25), datetime.date(2026, 6, 19), datetime.date(2026, 7, 4), datetime.date(2026, 9, 7), datetime.date(2026, 10, 12), datetime.date(2026, 11, 11), datetime.date(2026, 11, 26), datetime.date(2026,",
+    "MS23 iCal folded at 75 characters, not octets (splits UTF-8)": "AssertionError: lines over 75 octets: [81, 82, 81, 81, 81, 82]",
+    "MS24 a waived obligation still reminds": "AssertionError: only the open obligation carries a reminder",
+    "MS25 the feed signature compared with == and an early exit": "AssertionError: the signature check must compare in constant time under every key, with no early exit",
+    "MS26 the token stored instead of its hash": "AssertionError: only a SHA-256 hex digest of the token may be stored",
+    "MS27 log redaction disabled": "AssertionError: /api/v1/public/calendar-feeds/v1.SECRETbodyabcdefghijklmnopqrstuvwxyz0123456789-ABCDEF.SECRETmacMACmacMACmac.ics",
+    "MS28 the Caddy access log keeps the token": "AssertionError: an ingress access log keeps feed tokens",
+    "MS29 request logging writes the raw path": "AssertionError: request_trace logs the raw path",
+    "MS30 the job registered on the ENRICH profile": "AssertionError: reading obligations is text and date arithmetic: the LIGHT profile only",
+    "MS31 enrichment does not dispatch the reading": "AssertionError: enriched documents are not read for obligations (after ARCH-42 resolves their parties)",
+    "MS32 the trigger key without the due date": "AssertionError: the trigger is not idempotent per obligation, state AND due date",
+    "MS33 the hub shows OBLIGATION without the capability": "AssertionError: the hub shows OBLIGATION without the capability",
+    "MS34 the conformance matrix still expects 19 triggers": "AssertionError: the live conformance matrix does not expect 21 triggers",
+    "MS35 the sweep not scheduled (G14)": "AssertionError: sweep not scheduled (RH-4 G14)",
+    "MS36 erasure hook removed": "AssertionError: ARCH-20 erasure keeps obligations that quote the document",
+    "MS37 a route loses its capability gate": "AssertionError: waive_obligation is not gated first",
+    "MS38 holiday calendars open to contributors": "AssertionError: update_calendar (patch /workspaces/{workspace_id}/holiday-calendars/{calendar_id}) needs RequireAdmin, has ['RequireContributor']",
+    "MS39 a revoked feed answered differently (410)": "AssertionError: the feed can answer a refusal in more than one way",
+    "MS40 console type drifts from the API": "AssertionError: ObligationRow: API and console differ in ['days_until']",
+    "MS41 the calendar places dates in the browser's zone": "AssertionError: the calendar must place YYYY-MM-DD local dates without a browser time-zone shift",
+    "MS42 Entity 360 without its Obligations section": "AssertionError: Entity 360 has no Obligations section",
+    "MS43 extraction calls a model": "AssertionError: extract uses llm_service: extraction must be deterministic and cost nothing"
+  },
+  "seconds": 807.3,
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "T1 capability: entitlements (+Entitlement), 402 name, Business AND Enterprise (not below), console + plan card, nav lock, verify36, hardening matrix",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2 migration: 4 tables, alert/source/default/hash unique indexes, 3 triggers, composite FKs, arch45 -> arch46 -> contract, one head, hub view v7, vocabulary parity",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G1 month ends and leap years: stated cases (31 Jan + 1 month, 29 Feb + 1 year, 2100) and every day 2023-2029 x -25..25 months against dateutil; series anchored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G2 business days on stored calendars (weekends, US, Fri/Sat) and FOLLOWING / PRECEDING / MODIFIED_FOLLOWING against brute force; notice = renewal - period",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G3 holiday templates (US 2026 + observance, GB 2026/2027 substitutes, IN), Easter 1900-2200 vs dateutil, .ics import (RRULE, folding, escapes)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G4 RRULE: refusals (sub-day, DTSTART, COUNT+UNTIL...), BY* rules identical to dateutil, plain rules clamped and anchored, quarterly report rolled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G5 time zones: the local date at a UTC instant (Kiritimati +14, Honolulu -10, Kolkata +5:30, New York across both DST switches); naive refused",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G6 state machine: OPEN / DUE_SOON (lead days, inclusive) / OVERDUE (from the local midnight after), closed stays closed, a later date reopens",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G7 golden documents: every planted obligation found with its exact due date (22/22) and nothing else; notice counts back from renewal; evidence",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G8 held-out seeds 4700-4999 (300 documents): recall and precision 100%",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G9 extraction is deterministic, model-free and network-free; ARCH-33's notice reader cross-checks",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G10 iCal (RFC 5545): CRLF, 75-octet folds that never split UTF-8, escapes round-trip, all-day 29 Feb, reminders only on open items",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "G11 feed tokens: signed (HMAC under HKDF keys), tamper refused, rotation-safe, SHA-256 stored, constant-time with no early exit",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "L1 log redaction: feed / document-request tokens never reach app logs, uvicorn's access log or the Caddy access log",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W1 wiring: job on LIGHT, dispatch after enrichment (delayed, idempotent), erasure, 2 triggers (21/22), idempotency per due date, conformance 21, hub gated, router, public route, sweep scheduled, Entity 360",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W2 API: 22 routes, each gated first; roles (writes CONTRIBUTOR, calendars ADMIN, own feeds); exports audited; one identical 404 for every feed refusal, never cached or logged",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W3 console: type parity (every API model + 11 unions), locked pages, list/calendar/detail, Entity 360 section, Work Item tab, hub tab, time-zone-free dates, feeds",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-46 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "A1 apply_arch46.py --check on this tree: every file is the ARCH-46 result (a second apply writes nothing)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D1 database at arch46: 4 tables, 3 triggers, the once-per-due-date alert index, OBLIGATION in the hub, both events in the outbox CHECK",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D2 models match the migration: zero column-level drift on the four ARCH-46 tables",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D3 schema refusals (41): kinds, states and their timestamps, rules, RRULE, source keys, composite FKs, owner membership, evidence and anchor triggers, alert uniqueness, sorted holidays, one default, token hash hex + UNIQUE, member FK; document delete unlinks manual obligations; record delete clears the party",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D4 extraction: the MSA's 5 obligations with exact due dates, on the counterparty record, owned by the uploader; re-reading creates nothing; enrichment enqueues the job (delayed, idempotent); the job runs; reprocessing supersedes and revives",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D5 HTTP: 402 on all 22 routes (+denial audit); list/filters in the workspace zone; create (rolled to a business day), an offset in business days that follows its anchor; refusals; calculator; calendar with projected occurrences; complete/reopen/waive; a series advances; exports (ics, csv injection-safe, audited); delete orphans dependents; document and record views; tenant isolation",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D6 sweep: each workspace at its own local date (09:30 UTC Honolulu still 9 March; 10:30 UTC Kiritimati 11 March -> OVERDUE); every alert once (idempotency key per state and due date); a second and third run change and emit nothing; a forced state is restored silently; a later due date alerts again with a new key; dry run",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D7 feeds: issued once (only the SHA-256 stored, never audited or logged); served uncached with ALL/MINE scope; unknown, unsigned-but-stored, removed-key, lapsed-plan, suspended-member, deactivated-user, expired and revoked tokens all get the IDENTICAL 404 on the next fetch; rotation keeps feeds; own feeds only; a limit",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D8 holiday calendars: a template (US 2026, 11 days), pasted dates, an .ics with a yearly repeat; 10 business days after 9 Jan skip MLK Day (26 Jan); adding a holiday reschedules (27 Jan); deleting the calendar -> weekends only (23 Jan)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D9 the plan: without capability.obligations the job reads nothing, enrichment enqueues nothing and the sweep skips the organization; a vanished document is a no-op",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D10 review hub: an obligation read with a doubt is an OBLIGATION item; its due-soon alert is held until a person CONFIRMs, then raised exactly once; bulk REJECT keeps it out (re-reading does not revive it); hidden without the plan",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D11 records: obligations follow a merge to the surviving record (its list, its Obligations section, Entity 360, the list filter); a party ARCH-42 resolves after reading is linked by the sweep",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D12 ARCH-20 erasure: obligations read from a subject's documents (evidence, quotes, parties) go; a person's own obligation is unlinked, not erased",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD1 the obligations API's capability gate removed (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD2 the trigger's idempotency key without the due date (a moved date never alerts again; D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD3 the alert row inserted without its once-only guard (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD4 the sweep uses the UTC date instead of each workspace's local date (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD5 the sweep re-transitions obligations already in their state (not idempotent; D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD6 an unconfirmed (PENDING) obligation reaches Flow Builder (D10 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD7 the hub cannot resolve OBLIGATION (D10 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD8 ARCH-20 erasure keeps obligations (D12 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD9 entity merges not followed to the root (D11 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD10 a revoked feed still served (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD11 feed membership not checked (a suspended member keeps reading; D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD12 the feed signature not checked (a removed key keeps working; D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD13 a lapsed plan still gets its feed (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD14 an expired feed still served (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD15 the extraction key salted per run (re-reading duplicates everything; D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD16 what a reprocessed document no longer says is never superseded (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD17 dependents do not follow their anchor (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD18 the job ignores the plan (D9 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD19 editing a holiday calendar reschedules nothing (D8 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD20 completing a recurring obligation closes it instead of advancing (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD21 a document's deletion takes a person's own obligations (the unlink trigger disabled; D3 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS1 capability missing from the Business tier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS2 capability leaked below Business",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS3 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS4 no plan card lists obligations",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS5 contract step left on arch45 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS6 the once-per-due-date alert index dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS7 the token-hash hex CHECK dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS8 the manual-obligation unlink trigger dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS9 months overflow into the next month (31 Jan + 1 month = 3 Mar)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS10 29 February + 1 year = 1 March",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS11 business days count the start day",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS12 stored holidays ignored (weekends only)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS13 PRECEDING rolls forward",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS14 a monthly series chained instead of anchored (drifts to the 28th)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS15 sub-day RRULE parts accepted (BYHOUR)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS16 the local date read in UTC (time zone ignored)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS17 OVERDUE on the due date itself (off by one)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS18 the notice counted from the renewal date, not the end of the term",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS19 a notice deadline rolled later (FOLLOWING) instead of earlier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS20 an ambiguous date trusted (not held for review)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS21 Easter off by a week (GB Good Friday, Easter Monday)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS22 a US holiday on a Saturday not observed on the Friday",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS23 iCal folded at 75 characters, not octets (splits UTF-8)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS24 a waived obligation still reminds",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS25 the feed signature compared with == and an early exit",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS26 the token stored instead of its hash",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS27 log redaction disabled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS28 the Caddy access log keeps the token",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS29 request logging writes the raw path",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS30 the job registered on the ENRICH profile",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS31 enrichment does not dispatch the reading",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS32 the trigger key without the due date",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS33 the hub shows OBLIGATION without the capability",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS34 the conformance matrix still expects 19 triggers",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS35 the sweep not scheduled (G14)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS36 erasure hook removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS37 a route loses its capability gate",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS38 holiday calendars open to contributors",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS39 a revoked feed answered differently (410)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS40 console type drifts from the API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS41 the calendar places dates in the browser's zone",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS42 Entity 360 without its Obligations section",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS44 a wrapped last line without ascenders split into its own clause",
+      "outcome": "FAIL  the gate PASSED against broken code"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS43 extraction calls a model",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B1 tsc -b and vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B2 eslint --max-warnings=0 on the 25 ARCH-46 console files",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "R1 verify_arch45.py --db",
+      "outcome": "PASS"
+    }
+  ]
+}

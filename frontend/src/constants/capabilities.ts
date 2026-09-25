@@ -37,6 +37,8 @@ export const CAPABILITY = {
   tableIntelligence: "capability.table_intelligence",
   // ARCH45-S2:capability-constant
   universalCorroborator: "capability.universal_corroborator",
+  // ARCH46-S2:capability-constant
+  obligations: "capability.obligations",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

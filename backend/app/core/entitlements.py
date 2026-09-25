@@ -111,6 +111,8 @@ __all__ = [
     "TABLE_INTELLIGENCE_CAPABILITY",
     # ARCH45-S1:capability-corroborator-export
     "UNIVERSAL_CORROBORATOR_CAPABILITY",
+    # ARCH46-S1:capability-obligations-export
+    "OBLIGATIONS_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -269,6 +271,14 @@ TABLE_INTELLIGENCE_CAPABILITY: str = "capability.table_intelligence"
 #: and ARCH-33's deterministic parsers; no model is called.
 UNIVERSAL_CORROBORATOR_CAPABILITY: str = "capability.universal_corroborator"
 
+#: ARCH46-S1:capability-obligations. Obligations & Temporal Intelligence:
+#: renewal, notice, payment, delivery, expiry and reporting obligations read
+#: from documents, deterministic date arithmetic over stored holiday calendars,
+#: a sweep that raises due-soon and overdue Flow Builder triggers exactly once,
+#: and signed, revocable iCal feeds. ONE key for the milestone; Business and
+#: Enterprise. Not metered: extraction is deterministic (no model call).
+OBLIGATIONS_CAPABILITY: str = "capability.obligations"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -288,6 +298,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     CASE_INTELLIGENCE_CAPABILITY,
     TABLE_INTELLIGENCE_CAPABILITY,
     UNIVERSAL_CORROBORATOR_CAPABILITY,
+    OBLIGATIONS_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -435,6 +446,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Universal document corroborator: compare 2 to 5 documents field by field, "
             "party by party, clause by clause and line by line, with a materiality-scored "
             "discrepancy matrix and a PDF report. Bundled into a tier."
+        ),
+    ),
+    # ARCH46-S1:capability-obligations-entitlement
+    Entitlement(
+        name=OBLIGATIONS_CAPABILITY,
+        description=(
+            "Obligations & temporal intelligence: renewals, notice deadlines, payments, deliveries, "
+            "expiries and reports read from documents, with business-day arithmetic, owners, "
+            "due-soon and overdue triggers, and subscribable calendar feeds. Bundled into a tier."
         ),
     ),
 )

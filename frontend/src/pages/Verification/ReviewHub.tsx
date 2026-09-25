@@ -87,6 +87,8 @@ const TABS: readonly TabConfig[] = [
   { id: "TABLE", label: "Tables", kind: "TABLE" },
   // ARCH45-S2:hub-corroboration-tab
   { id: "CORROBORATION", label: "Comparisons", kind: "CORROBORATION" },
+  // ARCH46-S2:hub-obligation-tab
+  { id: "OBLIGATION", label: "Obligations", kind: "OBLIGATION" },
   { id: "AUTONOMY", label: "Autonomy audits", kind: "EXTRACTION" },
   { id: "HISTORY", label: "History" },
 ];
@@ -528,6 +530,17 @@ export const ReviewHub: React.FC = () => {
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { corroboration_verdict: "DISMISS" } })}
                 className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Dismiss all</button>
+            </>
+          )}
+          {/* ARCH46-S2:hub-obligation-bulk */}
+          {onlyKind === "OBLIGATION" && (
+            <>
+              <button type="button" disabled={bulk.isPending}
+                onClick={() => bulk.mutate({ action: "resolve", body: { obligation_verdict: "CONFIRM" } })}
+                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">Confirm all</button>
+              <button type="button" disabled={bulk.isPending}
+                onClick={() => bulk.mutate({ action: "resolve", body: { obligation_verdict: "REJECT" } })}
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Reject all</button>
             </>
           )}
           {selectedKinds.has("EXTRACTION") && (

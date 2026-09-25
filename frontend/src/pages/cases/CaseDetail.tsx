@@ -18,6 +18,8 @@ import {
 } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { CASE_STATUS_LABELS, type RuleOutcome } from "@/types/cases";
+// ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
+import { formatTimestamp } from "@/utils/displayTime";
 
 const OUTCOME_STYLE: Readonly<Record<RuleOutcome, string>> = {
   PASS: "bg-green-100 text-green-800", FAIL: "bg-red-100 text-red-800", MISSING: "bg-muted text-muted-foreground", ERROR: "bg-amber-100 text-amber-800",
@@ -121,7 +123,7 @@ const CaseDetailPage: React.FC = () => {
           <h2 className={SECTION_TITLE}>Upload requests</h2>
           {requests.map((r) => (
             <p key={r.id} className="flex flex-wrap items-center gap-2">
-              {r.document_type.replace(/_/g, " ")} · {r.status.toLowerCase()} · expires {new Date(r.expires_at).toLocaleString()}
+              {r.document_type.replace(/_/g, " ")} · {r.status.toLowerCase()} · expires {formatTimestamp(r.expires_at)}
               {r.status === "OPEN" && <button type="button" className="text-xs underline" onClick={() => revoke.mutate(r.id)}>Withdraw</button>}
             </p>
           ))}

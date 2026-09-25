@@ -251,6 +251,13 @@ def segment(pages: Sequence[PageText], *, table_regions: Optional[dict[int, list
             elif not new_page and line.bbox is not None and last_box is not None and h > 0:
                 gap = line.bbox[1] - last_box[3]
                 gap_break = gap > 0.9 * h or gap < -0.5 * h
+            # ARCH46-S1:segment-continuation. A line box is its glyphs' extent, so a last line with
+            # no ascenders ("year.") sits lower and read as a paragraph gap: "payable on 31 December
+            # of each / year." became two clauses. A line that starts lower-case after a line that
+            # does not end a sentence continues that sentence, whatever the gap.
+            if gap_break and current is not None and current.lines and text[:1].islower() \
+                    and not _SENTENCE_END.search(n.fold(current.lines[-1][1].text)):
+                gap_break = False
             if heading:
                 close()
                 section = n.strip_clause_number(text)[1].strip().rstrip(":") or text

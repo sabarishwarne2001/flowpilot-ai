@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  CalendarClock,
   Database,
   Eye,
   FileCheck,
@@ -30,11 +31,13 @@ import EntityChips from "@/components/entities/EntityChips";
 import DocumentTables from "@/components/tables/DocumentTables";
 // ARCH45-S2:document-comparisons
 import DocumentComparisons from "@/components/corroboration/DocumentComparisons";
+// ARCH46-S2:document-obligations
+import DocumentObligations from "@/components/obligations/DocumentObligations";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
 
-type DetailTab = "summary" | "entities" | "ocr" | "chat";
+type DetailTab = "summary" | "entities" | "obligations" | "ocr" | "chat";
 
 const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
   QUEUED: "bg-primary/10 text-primary border-primary/20",
@@ -46,6 +49,8 @@ const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
 const DETAIL_TABS = [
   { value: "summary", label: "Summary", icon: FileCheck },
   { value: "entities", label: "Entities", icon: Database },
+  // ARCH46-S2:obligations-tab
+  { value: "obligations", label: "Obligations", icon: CalendarClock },
   { value: "ocr", label: "OCR", icon: Eye },
   { value: "chat", label: "Chat", icon: MessageSquare },
 ] as const;
@@ -351,6 +356,8 @@ export const WorkItemDetails: React.FC = () => {
                   </div>
                 </section>
               )}
+
+              {activeTab === "obligations" && <DocumentObligations workItemId={workItem.id} />}
 
               {activeTab === "ocr" && (
                 <section className="space-y-4">

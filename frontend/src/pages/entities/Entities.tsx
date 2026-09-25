@@ -19,6 +19,8 @@ import { entityPath, verificationPath } from "@/routes/tenantPaths";
 import { entityKeys, getEntityPotential, getEntitySummary, listEntities } from "@/services/api/entities";
 import { errorMessage } from "@/services/api/errors";
 import { ENTITY_KIND_LABELS, ENTITY_KINDS, type EntityKind } from "@/types/entities";
+// ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
+import { formatTimestampDate } from "@/utils/displayTime";
 
 const PAGE_SIZE = 25;
 
@@ -194,7 +196,7 @@ const Entities: React.FC = () => {
                     <td className="px-3 py-2 text-right">{row.documents}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{row.identifier_kinds.join(", ") || "—"}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {row.last_seen_at ? new Date(row.last_seen_at).toLocaleDateString() : "—"}
+                      {row.last_seen_at ? formatTimestampDate(row.last_seen_at) : "—"}
                     </td>
                   </tr>
                 ))}

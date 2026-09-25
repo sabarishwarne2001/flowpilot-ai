@@ -267,7 +267,9 @@ async def _encryption_not_configured(request, exc):  # type: ignore[no-untyped-d
     from fastapi.responses import JSONResponse
 
     logger_ = __import__("logging").getLogger("app.main")
-    logger_.error("encryption.not_configured", extra={"path": request.url.path})
+    from app.core.public_route_registry import redact_path  # ARCH46-S1:log-redaction
+
+    logger_.error("encryption.not_configured", extra={"path": redact_path(request.url.path)})
     return JSONResponse(
         status_code=503,
         content={

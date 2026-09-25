@@ -79,6 +79,10 @@ REVIEW_KIND_TABLE: str = "TABLE"
 #: discrepancies (corroboration_runs); arch45_step1_corroboration widens the
 #: CHECK and the view.
 REVIEW_KIND_CORROBORATION: str = "CORROBORATION"
+#: ARCH46-S1:review-kind-obligation. Extracted obligations read with a doubt
+#: (obligations.review = PENDING); arch46_step1_obligations widens the CHECK
+#: and the view.
+REVIEW_KIND_OBLIGATION: str = "OBLIGATION"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
@@ -88,6 +92,7 @@ REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_SPLIT,
     REVIEW_KIND_TABLE,
     REVIEW_KIND_CORROBORATION,
+    REVIEW_KIND_OBLIGATION,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)

@@ -110,3 +110,27 @@ export const formatTimestampTime = (
     timeZone: current.timeZone,
   }).format(date);
 };
+
+/**
+ * ARCH46-S2:calendar-dates — a CALENDAR date ("2026-02-28": a due date, a
+ * holiday), not an instant. It is the same day for every reader, so it is
+ * formatted in the profile's language but never shifted by a zone (UTC is only
+ * the arithmetic frame): "28 Feb 2026".
+ */
+export const formatCalendarDate = (iso?: string | null, fallback = "—"): string => {
+  if (!iso) {
+    return fallback;
+  }
+  const [y, m, d] = iso.slice(0, 10).split("-").map((x) => Number.parseInt(x, 10));
+  if (!y || !m || !d) {
+    return iso;
+  }
+  return new Intl.DateTimeFormat(current.locale, {
+    year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
+  }).format(Date.UTC(y, m - 1, d));
+};
+
+/** A calendar month's heading ("February 2028"), in the profile's language, never zone-shifted. */
+export const formatCalendarMonth = (year: number, month: number): string =>
+  new Intl.DateTimeFormat(current.locale, { month: "long", year: "numeric", timeZone: "UTC" })
+    .format(Date.UTC(year, month - 1, 1));

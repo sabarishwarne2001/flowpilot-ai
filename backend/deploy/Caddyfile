@@ -23,8 +23,9 @@
     # challenge has been satisfied.
     on_demand_tls {
         ask http://web:8000/api/v1/internal/tls/authorize
-        interval 2m
-        burst 5
+        # ARCH46-S1:caddy-current. `interval` / `burst` were removed from Caddy
+        # (caddy:2-alpine refuses to start with them); the ask endpoint is the
+        # control that decides which domains get a certificate.
     }
 
     servers {
@@ -100,9 +101,17 @@
         file_server
     }
 
+    # ARCH46-S1:log-redaction. A calendar-feed or document-request token rides in
+    # the path; the access log keeps the path without it (the app's own logs
+    # do the same: public_route_registry.redact_path).
     log {
         output stdout
-        format json
+        format filter {
+            wrap json
+            fields {
+                request>uri regexp "(/api/v1/public/(?:calendar-feeds|document-requests)/)[^/?#]+" "$1[redacted]"
+            }
+        }
     }
 }
 
@@ -157,9 +166,17 @@
         file_server
     }
 
+    # ARCH46-S1:log-redaction. A calendar-feed or document-request token rides in
+    # the path; the access log keeps the path without it (the app's own logs
+    # do the same: public_route_registry.redact_path).
     log {
         output stdout
-        format json
+        format filter {
+            wrap json
+            fields {
+                request>uri regexp "(/api/v1/public/(?:calendar-feeds|document-requests)/)[^/?#]+" "$1[redacted]"
+            }
+        }
     }
 }
 

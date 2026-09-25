@@ -13,6 +13,8 @@ from app.api.v1 import (
     public_document_requests,
     tables,
     corroboration,
+    obligations,
+    public_calendar_feeds,
     assertions,
     autonomy,
     assistant,
@@ -151,6 +153,10 @@ api_router.include_router(public_document_requests.router)
 api_router.include_router(tables.router)
 # ARCH45-S1:corroboration-router. Every route is gated on capability.universal_corroborator.
 api_router.include_router(corroboration.router)
+# ARCH46-S1:obligations-router. Every route is gated on capability.obligations;
+# the public feed (a signed token in the path) is in PUBLIC_ROUTES.
+api_router.include_router(obligations.router)
+api_router.include_router(public_calendar_feeds.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.

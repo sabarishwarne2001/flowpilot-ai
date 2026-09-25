@@ -158,6 +158,11 @@ LIGHT = WorkerProfile(
             "packets.detect_boundaries",
             # ARCH43-S1:cases-light-profile. Case assembly: queries and the DSL.
             "cases.assemble_document",
+            # ARCH46-S1:obligations-light-profile. Reading obligations is ARCH-45's
+            # clause segmentation over stored page text, typed values, ARCH-33's
+            # regular-expression notice reader and date arithmetic: no model,
+            # OCR or PDF engine. Not optional bookkeeping (see above).
+            "obligations.extract_document",
         }
     ),
     allow_heavy=frozenset(),

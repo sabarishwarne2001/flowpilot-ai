@@ -17,6 +17,7 @@ from app.models.review import (
     REVIEW_KIND_SPLIT,
     REVIEW_KIND_TABLE,
     REVIEW_KIND_CORROBORATION,
+    REVIEW_KIND_OBLIGATION,
     REVIEW_KINDS,
 )
 
@@ -31,6 +32,8 @@ KIND_SPLIT: Final[str] = REVIEW_KIND_SPLIT
 KIND_TABLE: Final[str] = REVIEW_KIND_TABLE
 #: ARCH45-S1:review-kind-corroboration
 KIND_CORROBORATION: Final[str] = REVIEW_KIND_CORROBORATION
+#: ARCH46-S1:review-kind-obligation
+KIND_OBLIGATION: Final[str] = REVIEW_KIND_OBLIGATION
 
 KINDS: Final[tuple[str, ...]] = REVIEW_KINDS
 
@@ -78,6 +81,8 @@ REASON_PACKET_SPLIT: Final[str] = "PACKET_SPLIT"
 REASON_TABLE_ARITHMETIC: Final[str] = "TABLE_ARITHMETIC"
 #: ARCH45-S1:review-reason-corroboration. arch45_step1_corroboration's view produces it.
 REASON_MATERIAL_DISCREPANCY: Final[str] = "MATERIAL_DISCREPANCY"
+#: ARCH46-S1:review-reason-obligation. arch46_step1_obligations's view produces it.
+REASON_OBLIGATION_UNCONFIRMED: Final[str] = "OBLIGATION_UNCONFIRMED"
 
 REASONS: Final[tuple[str, ...]] = (
     REASON_DISAGREEMENT,
@@ -91,6 +96,7 @@ REASONS: Final[tuple[str, ...]] = (
     REASON_PACKET_SPLIT,
     REASON_TABLE_ARITHMETIC,
     REASON_MATERIAL_DISCREPANCY,
+    REASON_OBLIGATION_UNCONFIRMED,
 )
 
 #: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
@@ -134,6 +140,7 @@ __all__ = [
     "KIND_SPLIT",
     "KIND_TABLE",
     "KIND_CORROBORATION",
+    "KIND_OBLIGATION",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
     "AUTONOMY_REASONS",
