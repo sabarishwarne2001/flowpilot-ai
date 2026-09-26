@@ -1,5 +1,5 @@
 {
-  "started": "2026-09-25T23:01:41",
+  "started": "2026-09-26T09:50:27",
   "python": "3.12.10",
   "months": {
     "cases": 145749
@@ -92,9 +92,9 @@
     }
   ],
   "db_caught_by": {
-    "MD1 the obligations API's capability gate removed (D5 must catch)": "D5: AssertionError: ('get', '/obligations', 200, '{\"items\":[{\"id\":\"f2b974ba-fe07-45c1-b0ad-1a6b487892aa\",\"kind\":\"REPORTING\",\"title\":\"Report due (monthly) \u2014 Hooli Cloud Solutions Ltd\",\"state\":\"OPEN\",\"review\":\"AUTO\",\"origin\":\"EXTRACTED\",\"due_date\":\"202')  at verify_arch46.py:1514 <- verify_arch46.py:1150",
-    "MD2 the trigger's idempotency key without the due date (a moved date never alerts again; D6 must catch)": "D6: AssertionError: {'kolkata': ['trigger.obligation.due_soon:a1408b14-c514-4779-973a-19991dae24dc'], 'honolulu': ['trigger.obligation.due_soon:61492e07-ed2b-4ac5-a340-db5977618c17'], 'kiritimati': ['trigger.obligation.due_soon:d210cbb7-f92e-4847-853d-8188ac06de89', 'trigger.obligation.overdue:d210cbb7-",
-    "MD3 the alert row inserted without its once-only guard (D6 must catch)": "D6: IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"uq_obligation_events_alert\"\nDETAIL:  Key (obligation_id, kind, due_date)=(beb587fc-682f-44a3-aaba-664c9e72357a, OVERDUE, 2026-03-10) already exists.\n\n[SQL: INSERT INTO obligation_events (id, obligation_",
+    "MD1 the obligations API's capability gate removed (D5 must catch)": "D5: AssertionError: ('get', '/obligations', 200, '{\"items\":[{\"id\":\"9addb294-f9d5-45b8-8d9e-6ba3340b3eab\",\"kind\":\"REPORTING\",\"title\":\"Report due (monthly) \u2014 Hooli Cloud Solutions Ltd\",\"state\":\"OPEN\",\"review\":\"AUTO\",\"origin\":\"EXTRACTED\",\"due_date\":\"202')  at verify_arch46.py:1514 <- verify_arch46.py:1150",
+    "MD2 the trigger's idempotency key without the due date (a moved date never alerts again; D6 must catch)": "D6: AssertionError: {'kolkata': ['trigger.obligation.due_soon:3b50aaec-57b1-4e24-b311-5fde6a8be164'], 'honolulu': ['trigger.obligation.due_soon:fd56b4d1-5a1e-4567-9d6e-95aad36ff141'], 'kiritimati': ['trigger.obligation.due_soon:5b49d7ed-fb25-456d-9bde-4b68f801dc80', 'trigger.obligation.overdue:5b49d7ed-",
+    "MD3 the alert row inserted without its once-only guard (D6 must catch)": "D6: IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"uq_obligation_events_alert\"\nDETAIL:  Key (obligation_id, kind, due_date)=(1611c80e-6b7f-4914-a006-b15b8930be46, OVERDUE, 2026-03-10) already exists.\n\n[SQL: INSERT INTO obligation_events (id, obligation_",
     "MD4 the sweep uses the UTC date instead of each workspace's local date (D6 must catch)": "D6: AssertionError: ('09:30 UTC: Honolulu is still on 9 March', {'kolkata': 'DUE_SOON', 'honolulu': 'DUE_SOON', 'kiritimati': 'DUE_SOON', 'new-york': 'DUE_SOON'})  at verify_arch46.py:1610 <- verify_arch46.py:1150",
     "MD5 the sweep re-transitions obligations already in their state (not idempotent; D6 must catch)": "D6: AssertionError: a second sweep changed something: {'at': '2026-03-10T10:30:00+00:00', 'workspaces': 5, 'examined': 11, 'transitions': {'OPEN': 7, 'DUE_SOON': 3, 'OVERDUE': 1}, 'emitted': 0, 'linked': 0, 'skipped_without_plan': 0}  at verify_arch46.py:1625 <- verify_arch46.py:1150",
     "MD6 an unconfirmed (PENDING) obligation reaches Flow Builder (D10 must catch)": "D10: AssertionError: ('an unconfirmed obligation reached Flow Builder', {'at': '2026-10-03T06:00:00+00:00', 'workspaces': 5, 'examined': 14, 'transitions': {'OPEN': 0, 'DUE_SOON': 2, 'OVERDUE': 3}, 'emitted': 5, 'linked': 0, 'skipped_without_plan': 0})  at verify_arch46.py:1847 <- verify_arch46.py:1150",
@@ -109,9 +109,9 @@
     "MD15 the extraction key salted per run (re-reading duplicates everything; D4 must catch)": "D4: AssertionError: ExtractSummary(created=5, kept=0, revived=0, superseded=5, pending=0, engine_version='ob-1')  at verify_arch46.py:1447 <- verify_arch46.py:1150",
     "MD16 what a reprocessed document no longer says is never superseded (D4 must catch)": "D4: AssertionError: {'created': 5, 'kept': 0, 'revived': 0, 'superseded': 0, 'pending': 1, 'engine_version': 'ob-1'}  at verify_arch46.py:1464 <- verify_arch46.py:1150",
     "MD17 dependents do not follow their anchor (D5 must catch)": "D5: AssertionError: a dependent did not follow its anchor  at verify_arch46.py:1553 <- verify_arch46.py:1150",
-    "MD18 the job ignores the plan (D9 must catch)": "D9: AssertionError: {'extracted': True, 'work_item_id': '4b6bee9f-f3d2-4ed8-af3a-c673e9d98291', 'created': 1, 'kept': 0, 'revived': 0, 'superseded': 0, 'pending': 0, 'engine_version': 'ob-1'}  at verify_arch46.py:1820 <- verify_arch46.py:1150",
+    "MD18 the job ignores the plan (D9 must catch)": "D9: AssertionError: {'extracted': True, 'work_item_id': 'b82463f7-1b74-42fc-bba5-d8ff4cefc347', 'created': 1, 'kept': 0, 'revived': 0, 'superseded': 0, 'pending': 0, 'engine_version': 'ob-1'}  at verify_arch46.py:1820 <- verify_arch46.py:1150",
     "MD19 editing a holiday calendar reschedules nothing (D8 must catch)": "D8: AssertionError: ('editing the calendar rescheduled nothing', 0)  at verify_arch46.py:1801 <- verify_arch46.py:1150",
-    "MD20 completing a recurring obligation closes it instead of advancing (D5 must catch)": "D5: AssertionError: {'id': 'a8cef70d-4377-4202-be33-d82e4780380a', 'kind': 'PAYMENT', 'title': 'Payment of INR 125,000 (monthly) \u2014 Hooli Cloud Solutions Ltd', 'state': 'DONE', 'review': 'AUTO', 'origin': 'EXTRACTED', 'due_date': '2026-10-10', 'days_until': 15, 'lead_days': 7, 'recurrence': 'FREQ=MONTHLY",
+    "MD20 completing a recurring obligation closes it instead of advancing (D5 must catch)": "D5: AssertionError: {'id': '36116c42-8fd3-4316-b93e-94fef2ab214e', 'kind': 'PAYMENT', 'title': 'Payment of INR 125,000 (monthly) \u2014 Hooli Cloud Solutions Ltd', 'state': 'DONE', 'review': 'AUTO', 'origin': 'EXTRACTED', 'due_date': '2026-10-10', 'days_until': 15, 'lead_days': 7, 'recurrence': 'FREQ=MONTHLY",
     "MD21 a document's deletion takes a person's own obligations (the unlink trigger disabled; D3 must catch)": "D3: AssertionError: a person's own obligation was deleted with a document  at verify_arch46.py:1415 <- verify_arch46.py:1144"
   },
   "caught_by": {
@@ -159,7 +159,7 @@
     "MS42 Entity 360 without its Obligations section": "AssertionError: Entity 360 has no Obligations section",
     "MS43 extraction calls a model": "AssertionError: extract uses llm_service: extraction must be deterministic and cost nothing"
   },
-  "seconds": 807.3,
+  "seconds": 284.7,
   "results": [
     {
       "layer": "offline",
