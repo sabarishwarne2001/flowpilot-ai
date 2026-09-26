@@ -11,7 +11,7 @@ TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases|corroboration|obligations> [args...]" >&2
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases|corroboration|obligations|erp_postings> [args...]" >&2
     exit 64
 fi
 
@@ -44,6 +44,10 @@ case "${NAME}" in
     # OVERDUE at each workspace's local date and raise each alert once; link
     # late-resolved parties. See scripts/sweep_obligations.py.
     obligations) SCRIPT="scripts/sweep_obligations.py" ; HEARTBEAT="${HEARTBEAT_UUID_OBLIGATIONS:-}" ;;
+    # ARCH47-S1:sweep-erp-postings. Every 10 minutes: auto-post approved
+    # outcomes, re-enqueue due retries and expired leases, read SFTP
+    # acknowledgements. See scripts/sweep_erp_postings.py.
+    erp_postings) SCRIPT="scripts/sweep_erp_postings.py" ; HEARTBEAT="${HEARTBEAT_UUID_ERP_POSTINGS:-}" ;;
     *)
         echo "unknown sweeper: ${NAME}" >&2
         exit 64

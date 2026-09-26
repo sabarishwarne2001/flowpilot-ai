@@ -15,6 +15,7 @@ from app.api.v1 import (
     corroboration,
     obligations,
     public_calendar_feeds,
+    erp,
     assertions,
     autonomy,
     assistant,
@@ -157,6 +158,9 @@ api_router.include_router(corroboration.router)
 # the public feed (a signed token in the path) is in PUBLIC_ROUTES.
 api_router.include_router(obligations.router)
 api_router.include_router(public_calendar_feeds.router)
+# ARCH47-S1:erp-router. Every route is gated on capability.erp_posting; no
+# route is public (acknowledgements are read from the target, never received).
+api_router.include_router(erp.router)
 # ARCH35-S1:autonomy-router. ARCH-35 calibrated autonomy. Every route is
 # capability-gated, including the reads: the reliability diagram is the
 # platform's measured accuracy on this tenant's documents, which is the product.

@@ -1,0 +1,1 @@
+{"tranDate":"2026-09-01","tranId":"INV-2026-0042","line":{"items":[{"account":{"id":"64"},"debit":60000.00,"memo":"Managed IT services, September"},{"account":{"id":"65"},"debit":40000.00,"memo":"Laptop docking station"},{"account":{"id":"31"},"debit":18000.00,"memo":"Input tax"},{"account":{"id":"33"},"credit":118000.00,"memo":"Payable to Acme Technology Services Pvt Ltd"}]}}

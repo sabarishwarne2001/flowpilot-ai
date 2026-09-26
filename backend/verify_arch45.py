@@ -339,7 +339,11 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A45) == f'"{A44}"', f"{A45} revises {revs.get(A45)}"
     # ARCH46-S1:chain-widened-45. ARCH-46 sits between ARCH-45 and the contract step.
-    assert revs.get(STEP3) in (f'"{A45}"', '"arch46_step1_obligations"'), f"the contract step revises {revs.get(STEP3)}, expected {A45} or arch46"
+    # ARCH47-S1:chain-widened-45. ARCH-47 sits between ARCH-46 and the contract step.
+    assert revs.get(STEP3) in (f'"{A45}"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"'), f"the contract step revises {revs.get(STEP3)}, expected {A45}, arch46 or arch47"
+    if revs.get(STEP3) == '"arch47_step1_erp_posting"':
+        assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+        assert revs.get("arch46_step1_obligations") == f'"{A45}"', "arch46 must revise arch45"
     if revs.get(STEP3) == '"arch46_step1_obligations"':
         assert revs.get("arch46_step1_obligations") == f'"{A45}"', "arch46 must revise arch45"
     downs = " ".join(revs.values())
@@ -373,6 +377,8 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     # ARCH-45's kinds and reasons must remain its prefix.
     newest46 = VERSIONS / "arch46_step1_obligations.py"
     ref = _load_module("_m46_check45", newest46) if newest46.exists() else module
+    newest47 = VERSIONS / "arch47_step1_erp_posting.py"  # ARCH47-S1:vocab-widened-45
+    ref = _load_module("_m47_check45", newest47) if newest47.exists() else ref
     assert tuple(REVIEW_KINDS) == ref.REVIEW_KINDS and tuple(vocab.REASONS) == ref.REVIEW_REASONS, "hub vocabulary != migration"
     assert ref.REVIEW_KINDS[:len(module.REVIEW_KINDS)] == module.REVIEW_KINDS and ref.REVIEW_REASONS[:len(module.REVIEW_REASONS)] == module.REVIEW_REASONS
     for name in ("STATUSES", "LIVE_STATUSES", "LAYERS", "KINDS", "SEVERITIES", "DECISIONS"):
@@ -386,6 +392,9 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     if hasattr(ref, "internal_after_46"):  # ARCH46-S1:internal-widened-45 (adds the two obligation triggers)
         assert internal <= set(ref.internal_after_46())
         internal = set(ref.internal_after_46())
+    if hasattr(ref, "internal_after_47"):  # ARCH47-S1:internal-widened-45 (adds trigger.posting.failed)
+        assert internal <= set(ref.internal_after_47())
+        internal = set(ref.internal_after_47())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
     assert "def downgrade" in text and "review_queue_view_v5()" in text.split("def downgrade", 1)[1], "downgrade does not restore v5"
 
@@ -714,11 +723,11 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert "_corroboration_service.erase_for_work_items(db, work_item_ids)" in texts["erasure"], "ARCH-20 erasure keeps comparisons"
     spec = triggers.TRIGGERS_BY_KEY["corroboration.discrepancies"]
     assert spec.capability == KEY and not spec.has_document and spec.event_types == ("trigger.corroboration.discrepancies",)
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((19, 20), (21, 22))  # ARCH46-S1:catalog-widened-45
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((19, 20), (21, 22), (22, 23))  # ARCH46-S1:catalog-widened-45  ARCH47-S1:catalog-widened-45
     assert "emit_trigger(" in texts["service"] and "event_type=v.EVENT_DISCREPANCIES" in texts["service"], "nothing emits the trigger"
     assert 'f"{v.EVENT_DISCREPANCIES}:{run.id}"' in texts["service"], "the trigger is not idempotent per run"
     assert '"trigger.corroboration.discrepancies": (' in texts["v37"], "verify_arch37 EMITTERS not widened"
-    assert re.search(r"EXPECTED_TRIGGERS = (19|21)\b", texts["conformance"]), "the live conformance matrix does not expect corroboration.discrepancies"  # ARCH46-S1:conformance-widened-45
+    assert re.search(r"EXPECTED_TRIGGERS = (19|21|22)\b", texts["conformance"]), "the live conformance matrix does not expect corroboration.discrepancies"  # ARCH46-S1:conformance-widened-45  ARCH47-S1:conformance-widened-45
     assert "vocab.KIND_CORROBORATION: _resolve_corroboration" in texts["resolution"]
     assert "    if UNIVERSAL_CORROBORATOR_CAPABILITY in granted:\n        kinds.append(vocab.KIND_CORROBORATION)\n" in texts["review_api"], \
         "the hub shows CORROBORATION without the capability"
@@ -797,7 +806,8 @@ def check_console(texts: dict[str, str]) -> None:
     assert 'if (item.kind === "CORROBORATION")' in texts["fe_resolve"] and 'onResolve({ corroboration_verdict: "CONFIRM" })' in texts["fe_resolve"]
     assert '{ id: "CORROBORATION", label: "Comparisons", kind: "CORROBORATION" }' in texts["fe_hub"]
     assert '| "MATERIAL_DISCREPANCY"' in texts["fe_review_types"] and (
-        '"TABLE", "CORROBORATION"]' in texts["fe_review_types"] or '"TABLE", "CORROBORATION", "OBLIGATION"]' in texts["fe_review_types"])  # ARCH46-S1:console-kinds-widened-45
+        '"TABLE", "CORROBORATION"]' in texts["fe_review_types"] or '"TABLE", "CORROBORATION", "OBLIGATION"]' in texts["fe_review_types"]
+        or '"TABLE", "CORROBORATION", "OBLIGATION", "POSTING"]' in texts["fe_review_types"])  # ARCH46-S1:console-kinds-widened-45  ARCH47-S1:console-kinds-widened-45
     assert "diffWords(" in texts["fe_diff"] and "MAX_WORDS" in texts["fe_diff"]
 
 
@@ -1536,7 +1546,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
             index = conn.execute(sa.text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_corroboration_runs_live'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-        assert current in ([A45], [STEP3], ["arch46_step1_obligations"]), f"alembic current is {current}; run run_arch45.ps1"  # ARCH46-S1:head-widened-45
+        assert current in ([A45], [STEP3], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"]), f"alembic current is {current}; run run_arch45.ps1"  # ARCH46-S1:head-widened-45  ARCH47-S1:head-widened-45
         assert not [x for x in TABLES if x not in tables], "ARCH-45 tables missing"
         assert "CORROBORATION" in kinds and "trigger.corroboration.discrepancies" in outbox, (kinds[-80:], outbox[-120:])
         assert {"trg_corroboration_documents_position", "trg_corroboration_documents_removed", "trg_discrepancies_evidence"} <= triggers
@@ -1718,7 +1728,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("MS25 the job registered on the LIGHT profile", mutation(lambda: (texts_with("profiles", swap(texts["profiles"], "LIGHT = WorkerProfile(\n", 'LIGHT = WorkerProfile(\n    # "corroboration.run",\n')),), check_wiring)),
         ("MS26 reprocessing hook removed", mutation(lambda: (texts_with("post", swap(texts["post"], "corroboration_service.invalidate_for_work_items(db, [work_item_id])", "0")),), check_wiring)),
         ("MS27 the hub shows CORROBORATION without the capability", mutation(lambda: (texts_with("review_api", swap(texts["review_api"], "    if UNIVERSAL_CORROBORATOR_CAPABILITY in granted:\n        kinds.append(vocab.KIND_CORROBORATION)\n", "    kinds.append(vocab.KIND_CORROBORATION)\n")),), check_wiring)),
-        ("MS28 the conformance matrix still expects 18 triggers", mutation(lambda: (texts_with("conformance", swap(texts["conformance"], re.search(r"EXPECTED_TRIGGERS = (?:19|21)\b", texts["conformance"]).group(0), "EXPECTED_TRIGGERS = 18")),), check_wiring)),  # ARCH46-S1:ms28-widened
+        ("MS28 the conformance matrix still expects 18 triggers", mutation(lambda: (texts_with("conformance", swap(texts["conformance"], re.search(r"EXPECTED_TRIGGERS = (?:19|21|22)\b", texts["conformance"]).group(0), "EXPECTED_TRIGGERS = 18")),), check_wiring)),  # ARCH46-S1:ms28-widened  ARCH47-S1:ms28-widened
         ("MS29 the trigger emitter removed", mutation(lambda: (texts_with("service", swap(texts["service"], "event_type=v.EVENT_DISCREPANCIES", "event_type=None")),), check_wiring)),
         ("MS30 the sweep not scheduled (G14)", mutation(lambda: (texts_with("cron", swap(texts["cron"], "flowpilot-sweep corroboration --apply", "flowpilot-sweep corroboration-off")),), check_wiring)),
         ("MS31 erasure hook removed", mutation(lambda: (texts_with("erasure", swap(texts["erasure"], "_corroboration_service.erase_for_work_items(db, work_item_ids)", "0")),), check_wiring)),

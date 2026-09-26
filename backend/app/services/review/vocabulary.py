@@ -18,6 +18,7 @@ from app.models.review import (
     REVIEW_KIND_TABLE,
     REVIEW_KIND_CORROBORATION,
     REVIEW_KIND_OBLIGATION,
+    REVIEW_KIND_POSTING,
     REVIEW_KINDS,
 )
 
@@ -34,6 +35,8 @@ KIND_TABLE: Final[str] = REVIEW_KIND_TABLE
 KIND_CORROBORATION: Final[str] = REVIEW_KIND_CORROBORATION
 #: ARCH46-S1:review-kind-obligation
 KIND_OBLIGATION: Final[str] = REVIEW_KIND_OBLIGATION
+#: ARCH47-S1:review-kind-posting
+KIND_POSTING: Final[str] = REVIEW_KIND_POSTING
 
 KINDS: Final[tuple[str, ...]] = REVIEW_KINDS
 
@@ -83,6 +86,8 @@ REASON_TABLE_ARITHMETIC: Final[str] = "TABLE_ARITHMETIC"
 REASON_MATERIAL_DISCREPANCY: Final[str] = "MATERIAL_DISCREPANCY"
 #: ARCH46-S1:review-reason-obligation. arch46_step1_obligations's view produces it.
 REASON_OBLIGATION_UNCONFIRMED: Final[str] = "OBLIGATION_UNCONFIRMED"
+#: ARCH47-S1:review-reason-posting. arch47_step1_erp_posting's view produces it.
+REASON_POSTING_EXCEPTION: Final[str] = "POSTING_EXCEPTION"
 
 REASONS: Final[tuple[str, ...]] = (
     REASON_DISAGREEMENT,
@@ -97,6 +102,7 @@ REASONS: Final[tuple[str, ...]] = (
     REASON_TABLE_ARITHMETIC,
     REASON_MATERIAL_DISCREPANCY,
     REASON_OBLIGATION_UNCONFIRMED,
+    REASON_POSTING_EXCEPTION,
 )
 
 #: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
@@ -141,6 +147,7 @@ __all__ = [
     "KIND_TABLE",
     "KIND_CORROBORATION",
     "KIND_OBLIGATION",
+    "KIND_POSTING",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
     "AUTONOMY_REASONS",

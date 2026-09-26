@@ -89,6 +89,8 @@ const TABS: readonly TabConfig[] = [
   { id: "CORROBORATION", label: "Comparisons", kind: "CORROBORATION" },
   // ARCH46-S2:hub-obligation-tab
   { id: "OBLIGATION", label: "Obligations", kind: "OBLIGATION" },
+  // ARCH47-S2:hub-posting-tab
+  { id: "POSTING", label: "ERP postings", kind: "POSTING" },
   { id: "AUTONOMY", label: "Autonomy audits", kind: "EXTRACTION" },
   { id: "HISTORY", label: "History" },
 ];
@@ -541,6 +543,17 @@ export const ReviewHub: React.FC = () => {
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { obligation_verdict: "REJECT" } })}
                 className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Reject all</button>
+            </>
+          )}
+          {/* ARCH47-S2:hub-posting-bulk — accepting needs the ERP's reference, so it is one at a time. */}
+          {onlyKind === "POSTING" && (
+            <>
+              <button type="button" disabled={bulk.isPending}
+                onClick={() => bulk.mutate({ action: "resolve", body: { posting_verdict: "RETRY" } })}
+                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">Retry all</button>
+              <button type="button" disabled={bulk.isPending}
+                onClick={() => bulk.mutate({ action: "resolve", body: { posting_verdict: "CANCEL" } })}
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Cancel all</button>
             </>
           )}
           {selectedKinds.has("EXTRACTION") && (

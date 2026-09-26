@@ -8,6 +8,7 @@ import {
   Table2,
   Bell,
   CalendarClock,
+  BookUp,
   ClipboardCheck,
   CreditCard,
   FileText,
@@ -53,6 +54,7 @@ import {
   tablesPath,
   corroborationsPath,
   obligationsPath,
+  erpPath,
   createWorkspacePath,
   notificationsPath,
   organizationApiKeysPath,
@@ -293,6 +295,17 @@ export const buildWorkspaceNavigationGroups = (
         description: "Invoice, purchase order and receipt reconciliation cases",
         capability: CAPABILITY.reconciliation,
         keywords: ["procurement", "invoice matching", "po", "grn", "accounts payable"],
+      },
+      // ARCH47-S2:nav-erp
+      {
+        id: "erp",
+        name: "ERP posting",
+        route: "workspaceErp",
+        path: erpPath(orgSlug, workspaceSlug),
+        icon: BookUp,
+        description: "Post approved bills, orders, receipts and journals to your ERP, exactly once, with acknowledgements",
+        capability: CAPABILITY.erpPosting,
+        keywords: ["erp", "posting", "quickbooks", "zoho", "business central", "sap", "netsuite", "tally", "edi", "x12", "ubl", "sftp", "journal", "vendor bill"],
       },
       {
         id: "radar",

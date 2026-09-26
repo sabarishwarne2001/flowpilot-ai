@@ -29,6 +29,8 @@ export const ACTION_FORMS: Readonly<Record<string, readonly string[]>> = {
   "autonomy.decide": ["score_source", "on_hold", "hold_reason"],
   "email.send": ["recipient", "subject", "body"],
   "work_item.mutate": ["target_field", "target_value"],
+  // ARCH47-S2:action-form-erp-post
+  "erp.post": ["target_id", "object_kinds"],
 };
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -43,6 +45,8 @@ const LABELS: Readonly<Record<string, string>> = {
   hold_reason: "Reason shown to the reviewer",
   target_field: "Field to set",
   target_value: "New value",
+  target_id: "ERP target",
+  object_kinds: "What to post",
 };
 
 const HELP: Readonly<Record<string, string>> = {
@@ -51,6 +55,8 @@ const HELP: Readonly<Record<string, string>> = {
   destination_id: "Registered by an organization owner. Exports are debounced per destination.",
   score_source: "Held when below the calibrated threshold, suspended, or sampled for audit.",
   on_hold: "Either way, the actions after this one are skipped.",
+  target_id: "Active ERP targets of this workspace. Runs on “procurement approved” and “case completed” only.",
+  object_kinds: "One posting per kind, exactly once: a rule that fires again finds it already in the ledger.",
 };
 
 const enumOf = (prop: JsonSchemaProperty | undefined): readonly string[] | undefined =>
@@ -156,6 +162,16 @@ export const ActionConfigForm: React.FC<ActionConfigFormProps> = ({
         return checks(resources.export_datasets, "No datasets available.");
       case "include_fields":
         return checks(documentKeys, "No extracted fields seen in this workspace yet.");
+      // ARCH47-S2:action-form-erp-controls
+      case "target_id":
+        return select(
+          resources.erp_targets.map((t) => ({ value: t.id, label: `${t.label} · ${t.preset !== "NONE" ? t.preset : t.format}` })),
+          "No active ERP targets — add one under ERP posting › Targets",
+        );
+      case "object_kinds": {
+        const chosen = resources.erp_targets.find((t) => t.id === text("target_id"));
+        return checks(chosen ? chosen.objects : resources.erp_object_kinds, "This target takes no objects.");
+      }
       case "target_field":
         return select(
           [
@@ -236,7 +252,7 @@ export const ActionConfigForm: React.FC<ActionConfigFormProps> = ({
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {keys.map((key) => {
         const prop = properties.get(key);
-        const wide = ["include_fields", "roles", "datasets", "body", "message", "title", "subject", "reason", "hold_reason"].includes(key);
+        const wide = ["include_fields", "roles", "datasets", "object_kinds", "body", "message", "title", "subject", "reason", "hold_reason"].includes(key);
         return (
           <div key={key} className={wide ? "md:col-span-2" : ""}>
             <label htmlFor={`${idPrefix}-${key}`} className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">

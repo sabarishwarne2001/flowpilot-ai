@@ -70,6 +70,15 @@ export interface FlowAction {
   readonly config_schema: FlowActionSchema;
 }
 
+/** ARCH47-S2:flow-erp-target — an active ERP target the erp.post action can name. */
+export interface FlowErpTargetOption {
+  readonly id: string;
+  readonly label: string;
+  readonly format: string;
+  readonly preset: string;
+  readonly objects: readonly string[];
+}
+
 export interface FlowEndpointOption {
   readonly id: string;
   readonly label: string;
@@ -96,6 +105,9 @@ export interface FlowCatalog {
     readonly organization_roles: readonly string[];
     readonly export_datasets: readonly string[];
     readonly mutable_fields: readonly string[];
+    // ARCH47-S2:flow-resources-erp
+    readonly erp_targets: readonly FlowErpTargetOption[];
+    readonly erp_object_kinds: readonly string[];
   };
   readonly limits: {
     readonly triggers: number;

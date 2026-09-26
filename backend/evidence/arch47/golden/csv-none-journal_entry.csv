@@ -1,0 +1,5 @@
+Journal,Date,Currency,Memo,Line,Account,Description,Debit,Credit
+INV-2026-0042,2026-09-01,INR,,1,64,"Managed IT services, September",60000.00,
+INV-2026-0042,2026-09-01,INR,,2,65,Laptop docking station,40000.00,
+INV-2026-0042,2026-09-01,INR,,3,31,Input tax,18000.00,
+INV-2026-0042,2026-09-01,INR,,4,33,Payable to Acme Technology Services Pvt Ltd,,118000.00

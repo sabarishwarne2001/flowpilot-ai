@@ -22,4 +22,7 @@ MAILTO=""
 # ARCH46-S1:cron-obligations. Hourly in UTC; each workspace is swept at its own
 # local date, so a zone's midnight is caught within the hour (idempotent).
 12 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep obligations --apply
+# ARCH47-S1:cron-erp-postings. Every 10 minutes: auto-post, retries, expired
+# leases (probed before any re-send), SFTP acknowledgements (idempotent).
+3-59/10 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep erp_postings --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

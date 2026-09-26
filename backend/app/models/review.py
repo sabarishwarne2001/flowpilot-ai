@@ -83,6 +83,10 @@ REVIEW_KIND_CORROBORATION: str = "CORROBORATION"
 #: (obligations.review = PENDING); arch46_step1_obligations widens the CHECK
 #: and the view.
 REVIEW_KIND_OBLIGATION: str = "OBLIGATION"
+#: ARCH47-S1:review-kind-posting. ERP postings that failed, were rejected, were
+#: acknowledged with different figures, or whose outcome is unknown
+#: (erp_postings.state); arch47_step1_erp_posting widens the CHECK and the view.
+REVIEW_KIND_POSTING: str = "POSTING"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
@@ -93,6 +97,7 @@ REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_TABLE,
     REVIEW_KIND_CORROBORATION,
     REVIEW_KIND_OBLIGATION,
+    REVIEW_KIND_POSTING,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)

@@ -79,3 +79,6 @@ deploy/cron.d/* text eol=lf
 # not bury the two lines that matter.
 package-lock.json linguist-generated=true -diff
 yarn.lock         linguist-generated=true -diff
+
+# ARCH47-S1:golden-csv. RFC 4180 CSV golden files are CRLF by definition; keep their bytes.
+backend/evidence/arch47/golden/*.csv -text

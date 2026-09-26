@@ -119,6 +119,11 @@ class ResolvePayload:
     #: its date are right, as they stand after any edit) or REJECT (it is not an
     #: obligation; re-extraction will not bring it back).
     obligation_verdict: Optional[str] = None
+    #: ARCH47-S1:posting-verdict. POSTING -- RETRY (send it again; for an
+    #: UNCERTAIN posting, a person checked the target does not have it), ACCEPT
+    #: (the target has it: posting_reference is its id there) or CANCEL.
+    posting_verdict: Optional[str] = None
+    posting_reference: Optional[str] = None
 
 
 @dataclass
@@ -600,6 +605,32 @@ def _resolve_obligation(
     return verdict
 
 
+def _resolve_posting(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """ARCH47-S1:resolve-posting. A person settles an ERP posting in an exception state: RETRY sends it again
+    (a posting that never rendered is rendered again with today's mapping), ACCEPT records it as posted, CANCEL
+    closes it. The ledger keeps the posting either way (one posting per object and target)."""
+    from app.models.erp import ErpPosting
+    from app.services.erp import service as erp_service
+    from app.services.erp import vocabulary as ev
+
+    verdict = (payload.posting_verdict or "").strip().upper()
+    if verdict not in ev.VERDICTS:
+        raise ReviewResolutionError("A posting review needs posting_verdict: RETRY, ACCEPT or CANCEL.")
+    row = db.execute(
+        select(ErpPosting).where(ErpPosting.id == item.item_id, ErpPosting.workspace_id == item.workspace_id)
+    ).scalar_one_or_none()
+    if row is None:
+        raise ReviewResolutionError("This posting no longer exists.")
+    try:
+        erp_service.review(db, posting=row, verdict=verdict, actor_user_id=actor_user_id, note=payload.note,
+                           reference=payload.posting_reference)
+    except erp_service.ErpError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return verdict
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
@@ -609,6 +640,7 @@ _DISPATCH = {
     vocab.KIND_TABLE: _resolve_table,  # ARCH44-S1:resolve-table
     vocab.KIND_CORROBORATION: _resolve_corroboration,  # ARCH45-S1:resolve-corroboration
     vocab.KIND_OBLIGATION: _resolve_obligation,  # ARCH46-S1:resolve-obligation
+    vocab.KIND_POSTING: _resolve_posting,  # ARCH47-S1:resolve-posting
 }
 
 

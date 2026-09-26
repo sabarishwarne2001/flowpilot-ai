@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Order xmlns="urn:oasis:names:specification:ubl:schema:xsd:Order-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:ID>PO-7781</cbc:ID>
+  <cbc:IssueDate>2026-08-20</cbc:IssueDate>
+  <cbc:DocumentCurrencyCode>INR</cbc:DocumentCurrencyCode>
+  <cbc:LineCountNumeric>2</cbc:LineCountNumeric>
+  <cac:BuyerCustomerParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>Globex Manufacturing Ltd</cbc:Name>
+      </cac:PartyName>
+    </cac:Party>
+  </cac:BuyerCustomerParty>
+  <cac:SellerSupplierParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>Acme Technology Services Pvt Ltd</cbc:Name>
+      </cac:PartyName>
+    </cac:Party>
+  </cac:SellerSupplierParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="INR">18000.00</cbc:TaxAmount>
+  </cac:TaxTotal>
+  <cac:AnticipatedMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="INR">100000.00</cbc:LineExtensionAmount>
+    <cbc:PayableAmount currencyID="INR">118000.00</cbc:PayableAmount>
+  </cac:AnticipatedMonetaryTotal>
+  <cac:OrderLine>
+    <cac:LineItem>
+      <cbc:ID>1</cbc:ID>
+      <cbc:Quantity unitCode="EA">1</cbc:Quantity>
+      <cbc:LineExtensionAmount currencyID="INR">60000.00</cbc:LineExtensionAmount>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="INR">60000</cbc:PriceAmount>
+      </cac:Price>
+      <cac:Item>
+        <cbc:Description>Managed IT services, September</cbc:Description>
+        <cbc:Name>Managed IT services, September</cbc:Name>
+        <cac:SellersItemIdentification>
+          <cbc:ID>SVC-100</cbc:ID>
+        </cac:SellersItemIdentification>
+      </cac:Item>
+    </cac:LineItem>
+  </cac:OrderLine>
+  <cac:OrderLine>
+    <cac:LineItem>
+      <cbc:ID>2</cbc:ID>
+      <cbc:Quantity unitCode="C62">8</cbc:Quantity>
+      <cbc:LineExtensionAmount currencyID="INR">40000.00</cbc:LineExtensionAmount>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="INR">5000</cbc:PriceAmount>
+      </cac:Price>
+      <cac:Item>
+        <cbc:Description>Laptop docking station</cbc:Description>
+        <cbc:Name>Laptop docking station</cbc:Name>
+        <cac:SellersItemIdentification>
+          <cbc:ID>HW-200</cbc:ID>
+        </cac:SellersItemIdentification>
+      </cac:Item>
+    </cac:LineItem>
+  </cac:OrderLine>
+</Order>

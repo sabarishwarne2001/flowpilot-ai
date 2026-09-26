@@ -18,7 +18,12 @@ What "front to back" means here, step by step, for EVERY row:
      (GET .../executions and .../executions/{id}/nodes).
 
 Matrix: 14 triggers x notify.role, then 7 commercial actions x document.created,
-plus a capability refusal for every gated trigger and action.
+plus a capability refusal for every gated trigger and action. ARCH47-S1:
+conformance-erp. And ARCH-47's erp.post on procurement.approved: an APPROVED
+three-way match in the conformance organization, a DOWNLOAD target, the rule
+authored over HTTP, the approval emitted through the real outbox, the real
+handler planning the posting, and the ledger holding exactly ONE posting even
+when the same approval is emitted a second time.
 
 Local capture sinks, not the internet: email goes to an in-process capture; the
 webhook endpoint is 127.0.0.1; the warehouse destination is a registered row
@@ -112,6 +117,27 @@ def run() -> dict[str, Any]:
                                secret_encrypted=encrypt_secret("arch41-conformance-secret"))
         destination = seed.insert("warehouse_destinations", id=uuid.uuid4(), organization_id=org,
                                   label="arch41 capture", encrypted_credential=encrypt_secret("{}"))
+        # ARCH47-S1:conformance-erp-seed. An APPROVED three-way match with its invoice and PO.
+        erp_docs = {}
+        for role, fields in (("invoice", {"invoice_number": f"CONF-{stamp}", "invoice_date": "2026-09-01",
+                                          "vendor_name": "Conformance Supplies Ltd", "total_amount": "118.00",
+                                          "tax_amount": "18.00", "currency": "USD"}),
+                             ("po", {"po_number": f"PO-{stamp}", "po_date": "2026-08-20",
+                                     "vendor_name": "Conformance Supplies Ltd", "total_amount": "118.00"})):
+            erp_docs[role] = uuid.uuid4()
+            seed.insert("work_items", id=erp_docs[role], workspace_id=ws, organization_id=org,
+                        original_filename=f"conformance-{role}.pdf", stored_filename=f"arch47-{erp_docs[role]}.pdf",
+                        extracted_entities=json.dumps(fields), extracted_text=f"{role} conformance")
+        erp_case = seed.insert("procurement_cases", id=uuid.uuid4(), organization_id=org, workspace_id=ws,
+                               po_work_item_id=erp_docs["po"], invoice_work_item_id=erp_docs["invoice"],
+                               status="APPROVED", input_digest="c" * 64, policy_version="conformance", line_count=1,
+                               exception_count=0, variance_micros=0, resolved_at=datetime.now(timezone.utc),
+                               resolved_by_user_id=user)
+        seed.insert("procurement_case_lines", id=uuid.uuid4(), organization_id=org, workspace_id=ws,
+                    case_id=erp_case["id"], line_number=1, outcome="MATCHED", description="Conformance service",
+                    sku="CONF-1", po_line_index=0, po_quantity=1, po_unit_price_micros=100_000_000,
+                    po_amount_micros=100_000_000, invoice_line_index=0, invoice_quantity=1,
+                    invoice_unit_price_micros=100_000_000, invoice_amount_micros=100_000_000)
 
     granted = {"value": list(entitlements.CAPABILITY_KEYS)}
     captured: list[dict[str, Any]] = []
@@ -200,7 +226,8 @@ def run() -> dict[str, Any]:
                 "nodes": [{"key": n.get("node_key"), "status": n.get("status"), "outcome": n.get("outcome") or n.get("detail"), "error": n.get("error")}
                           for n in node_rows]}
 
-    report: dict[str, Any] = {"organization_id": str(org), "workspace_id": str(ws), "triggers": [], "actions": [], "refusals": []}
+    report: dict[str, Any] = {"organization_id": str(org), "workspace_id": str(ws), "triggers": [], "actions": [],
+                              "refusals": [], "erp": []}
     try:
         for spec in catalog.TRIGGERS:
             code, body = author(f"conf trigger {spec.key}", spec.key, "notify.role", {"roles": ["ADMIN"]})
@@ -233,6 +260,40 @@ def run() -> dict[str, Any]:
             report["actions"].append(row)
         report["email_captured"] = len(captured)
 
+        # ARCH47-S1:conformance-erp-row. erp.post x procurement.approved, twice, into one posting.
+        from app.models.erp import ErpPosting
+        from app.services.erp import service as erp_service
+
+        with SessionLocal() as db:
+            erp_target = erp_service.create_target(
+                db, organization_id=org, workspace_id=ws, actor_user_id=user, name="Conformance CSV",
+                format="CSV", transport="DOWNLOAD", check_network=False)
+            erp_target_id = erp_target.id
+            db.commit()
+        approved = catalog.TRIGGERS_BY_KEY["procurement.approved"]
+        code, body = author("conf action erp.post", "procurement.approved", "erp.post",
+                            {"target_id": str(erp_target_id), "object_kinds": ["VENDOR_BILL", "PURCHASE_ORDER"]})
+        row = {"action": "erp.post", "trigger": "procurement.approved", "authored": code}
+        if code in (200, 201) and body:
+            for _ in range(2):  # the same approval twice: one posting per object, whatever fires
+                with SessionLocal() as db:
+                    _public, twin = outbox_service.emit_public_with_twin(
+                        db, organization_id=org, workspace_id=ws, event_type="procurement.approved",
+                        resource_id=erp_case["id"], twin_resource_id=erp_docs["invoice"],
+                        payload={"case_id": str(erp_case["id"]), "exception_count": 0, "variance_micros": 0,
+                                 "policy_version": "conformance"})
+                    event_id = twin.id
+                    db.commit()
+                handle_automation_execute({"outbox_event_id": str(event_id)})
+            row.update(observe(body["id"]))
+            with SessionLocal() as db:
+                postings = db.execute(sa.select(ErpPosting.object_kind, ErpPosting.state).where(
+                    ErpPosting.target_id == erp_target_id)).all()
+            row["postings"] = sorted(f"{k}:{s}" for k, s in postings)
+        else:
+            row["error"] = body
+        report["erp"].append(row)
+
         granted["value"] = []
         for spec in catalog.TRIGGERS:
             if spec.capability:
@@ -243,6 +304,10 @@ def run() -> dict[str, Any]:
             if definition.capability:
                 code, _ = author(f"refused {action_type}", "document.created", action_type, configs[action_type])
                 report["refusals"].append({"action": action_type, "status": code})
+        # ARCH47-S1:conformance-erp-refusal. erp.post without capability.erp_posting.
+        code, _ = author("refused erp.post", "procurement.approved", "erp.post",
+                         {"target_id": str(erp_target_id), "object_kinds": ["VENDOR_BILL"]})
+        report["refusals"].append({"action": "erp.post", "status": code})
     finally:
         (capability_gate.granted_capabilities, capability_gate.has_capability,
          entitlement_service.addon_access, email_service.send_email) = originals
@@ -251,7 +316,7 @@ def run() -> dict[str, Any]:
     return report
 
 
-EXPECTED_TRIGGERS = 21  # ARCH43-S1:conformance-17 (14 through ARCH-42)  ARCH44-S1:conformance-18 (table.flagged)  ARCH45-S1:conformance-19 (corroboration.discrepancies)  ARCH46-S1:conformance-21 (obligation.due_soon, obligation.overdue)
+EXPECTED_TRIGGERS = 22  # ARCH43-S1:conformance-17 (14 through ARCH-42)  ARCH44-S1:conformance-18 (table.flagged)  ARCH45-S1:conformance-19 (corroboration.discrepancies)  ARCH46-S1:conformance-21 (obligation.due_soon, obligation.overdue)  ARCH47-S1:conformance-22 (posting.failed)
 
 
 def problems(report: dict[str, Any]) -> list[str]:
@@ -279,6 +344,20 @@ def problems(report: dict[str, Any]) -> list[str]:
         out.append("email.send delivered nothing to the capture sink")
     if len(report["actions"]) != 7:
         out.append(f"{len(report['actions'])} actions exercised, expected 7")
+    # ARCH47-S1:conformance-erp-check. erp.post on procurement.approved, emitted twice: one posting per object.
+    erp_rows = report.get("erp") or []
+    if len(erp_rows) != 1:
+        out.append(f"{len(erp_rows)} ERP rows exercised, expected 1 (erp.post x procurement.approved)")
+    for row in erp_rows:
+        if row.get("authored") not in (200, 201):
+            out.append(f"erp.post: authoring returned {row.get('authored')}: {str(row.get('error'))[:300]}")
+        elif row.get("status") != "COMPLETED" or not row.get("in_timeline") or not row.get("nodes"):
+            out.append(f"erp.post: execution {row.get('status')} timeline={row.get('in_timeline')} nodes={row.get('nodes')}")
+        elif [n for n in row["nodes"] if n.get("status") != "COMPLETED"]:
+            out.append(f"erp.post: node(s) not completed: {row['nodes']}")
+        elif row.get("postings") != ["PURCHASE_ORDER:DELIVERED", "VENDOR_BILL:DELIVERED"]:
+            out.append(f"erp.post: the ledger holds {row.get('postings')}, expected exactly one delivered posting "
+                       "per object")
     for refusal in report["refusals"]:
         if refusal["status"] not in (400, 402, 403, 422):
             out.append(f"capability refusal not enforced: {refusal}")
@@ -296,8 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         pathlib.Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         pathlib.Path(args.json).write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
-    for row in report["triggers"] + report["actions"]:
-        print(f"  {(row.get('trigger') or row.get('action')):<24} authored={row.get('authored')} "
+    for row in report["triggers"] + report["actions"] + report.get("erp", []):
+        print(f"  {(row.get('trigger') if 'action' not in row else row.get('action')):<24} authored={row.get('authored')} "
               f"status={row.get('status')} timeline={row.get('in_timeline')} nodes={len(row.get('nodes') or [])}")
     print(f"refusals: {report['refusals']}")
     print("PROBLEMS:\n  " + "\n  ".join(report["problems"]) if report["problems"] else "ALL CONFORMANT")

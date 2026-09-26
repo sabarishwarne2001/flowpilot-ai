@@ -1,0 +1,18 @@
+ISA*00*          *00*          *ZZ*GLOBEX         *ZZ*ACMETECH       *260925*0630*U*00401*000000042*1*T*>~
+GS*IN*GLOBEX*ACMETECH*20260925*0630*42*X*004010~
+ST*810*0001~
+BIG*20260901*INV-2026-0042**PO-7781~
+CUR*SE*INR~
+N1*SE*Acme Technology Services Pvt Ltd~
+N1*BT*Globex Manufacturing Ltd~
+ITD*01*3****20261001*30~
+IT1*1*1*EA*60000**VP*SVC-100~
+PID*F****Managed IT services, September~
+IT1*2*8*EA*5000**VP*HW-200~
+PID*F****Laptop docking station~
+TDS*11800000~
+TXI*TX*18000~
+CTT*2~
+SE*14*0001~
+GE*1*42~
+IEA*1*000000042~

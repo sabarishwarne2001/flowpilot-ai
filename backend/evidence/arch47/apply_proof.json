@@ -1,0 +1,128 @@
+{
+  "baseline": "ff82586",
+  "owned_files": 133,
+  "passed": 24,
+  "failed": 0,
+  "results": [
+    {
+      "check": "CRLF copy: 1634 text files rewritten to CRLF",
+      "ok": true,
+      "detail": "1634"
+    },
+    {
+      "check": "LF: --check exits 0",
+      "ok": true,
+      "detail": "es/erp/ErpPosting.tsx\n  new file                         frontend/src/pages/erp/ErpPostingDetail.tsx\n  new file                         frontend/src/pages/erp/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "LF: --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: --check plans 133 files",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "LF: apply exits 0",
+      "ok": true,
+      "detail": "p/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\nWrote 133 file(s). Originals kept in .arch47_apply_backup/20260926T110011016502Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "LF: second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 133 unchanged.\n"
+    },
+    {
+      "check": "LF: all 133 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 133 unchanged.\n"
+    },
+    {
+      "check": "LF: rollback exits 0",
+      "ok": true,
+      "detail": "rgetDetail.tsx\n  restored  frontend/src/routes/tenantPaths.ts\n  removed   frontend/src/services/api/erp.ts\n  restored  frontend/src/types/automationFlow.ts\n  removed   frontend/src/types/erp.ts\n  restored  frontend/src/types/review.ts\n  removed   run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "LF: rollback restores every file byte for byte (1665 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "LF: no backup left behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check exits 0",
+      "ok": true,
+      "detail": "es/erp/ErpPosting.tsx\n  new file                         frontend/src/pages/erp/ErpPostingDetail.tsx\n  new file                         frontend/src/pages/erp/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "CRLF: --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check plans 133 files",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "CRLF: apply exits 0",
+      "ok": true,
+      "detail": "p/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n133 file(s) to write, 0 unchanged.\nWrote 133 file(s). Originals kept in .arch47_apply_backup/20260926T110012323389Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "CRLF: second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 133 unchanged.\n"
+    },
+    {
+      "check": "CRLF: all 133 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: edited files keep CRLF; new files are written LF (.gitattributes eol=lf), never mixed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 133 unchanged.\n"
+    },
+    {
+      "check": "CRLF: rollback exits 0",
+      "ok": true,
+      "detail": "rgetDetail.tsx\n  restored  frontend/src/routes/tenantPaths.ts\n  removed   frontend/src/services/api/erp.ts\n  restored  frontend/src/types/automationFlow.ts\n  removed   frontend/src/types/erp.ts\n  restored  frontend/src/types/review.ts\n  removed   run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "CRLF: rollback restores every file byte for byte (1665 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "CRLF: no backup left behind",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

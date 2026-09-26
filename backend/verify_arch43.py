@@ -220,7 +220,10 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A43) == f'"{A42}"', f"{A43} revises {revs.get(A43)}"
     # ARCH44-S1:chain-widened-43. ARCH-44 sits between ARCH-43 and the contract step.
-    assert revs.get(STEP3) in (f'"{A43}"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"'), f"the contract step revises {revs.get(STEP3)}, expected {A43}, arch44, arch45 or arch46"  # ARCH45-S1:chain-widened-43  ARCH46-S1:chain-widened-43
+    assert revs.get(STEP3) in (f'"{A43}"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"'), f"the contract step revises {revs.get(STEP3)}, expected {A43}, arch44, arch45, arch46 or arch47"  # ARCH45-S1:chain-widened-43  ARCH46-S1:chain-widened-43  ARCH47-S1:chain-widened-43
+    if revs.get(STEP3) == '"arch47_step1_erp_posting"':  # ARCH47-S1:chain-widened-43
+        assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+        assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
     if revs.get(STEP3) == '"arch46_step1_obligations"':  # ARCH46-S1:chain-widened-43
         assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
         assert revs.get("arch45_step1_corroboration") == '"arch44_step1_table_intelligence"', "arch45 must revise arch44"
@@ -261,6 +264,8 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     ref = _load_module("_m45_check", newest45) if newest45.exists() else ref
     newest46 = VERSIONS / "arch46_step1_obligations.py"  # ARCH46-S1:vocab-widened-43
     ref = _load_module("_m46_check", newest46) if newest46.exists() else ref
+    newest47 = VERSIONS / "arch47_step1_erp_posting.py"  # ARCH47-S1:vocab-widened-43
+    ref = _load_module("_m47_check", newest47) if newest47.exists() else ref
     assert tuple(REVIEW_KINDS) == ref.REVIEW_KINDS and tuple(vocab.REASONS) == ref.REVIEW_REASONS, "hub vocabulary != migration"
     assert ref.REVIEW_KINDS[:len(module.REVIEW_KINDS)] == module.REVIEW_KINDS and ref.REVIEW_REASONS[:len(module.REVIEW_REASONS)] == module.REVIEW_REASONS
     assert set(module.NEW_TRIGGER_EVENTS) == set(ae.ARCH43_TRIGGER_EVENT_TYPES) <= set(ae.INTERNAL_EVENT_TYPES)
@@ -272,6 +277,8 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
         internal = set(ref.internal_after_45())
     if hasattr(ref, "internal_after_46"):  # ARCH46-S1:internal-widened-43 (adds the two obligation triggers)
         internal = set(ref.internal_after_46())
+    if hasattr(ref, "internal_after_47"):  # ARCH47-S1:internal-widened-43 (adds trigger.posting.failed)
+        internal = set(ref.internal_after_47())
     assert set(module.internal_after_43()) <= internal
     assert internal == set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) | \
         (internal - set(ae.TRIGGER_NATIVE_EVENT_TYPES) - set(ae.TRIGGER_TWIN_EVENT_TYPES))
@@ -387,14 +394,14 @@ def check_triggers(texts: dict[str, str]) -> None:
     from app.core import automation_events as ae
     from app.services.automation import triggers
 
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((17, 18), (18, 19), (19, 20), (21, 22)), "catalog is not 17 (18 after ARCH-44, 19 after ARCH-45, 21 after ARCH-46) triggers over 18 (19, 20, 22) events"  # ARCH44-S1:catalog-widened-43  ARCH45-S1:catalog-widened-43  ARCH46-S1:catalog-widened-43
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((17, 18), (18, 19), (19, 20), (21, 22), (22, 23)), "catalog is not 17 (18 after ARCH-44, 19 after ARCH-45, 21 after ARCH-46, 22 after ARCH-47) triggers over 18 (19, 20, 22, 23) events"  # ARCH44-S1:catalog-widened-43  ARCH45-S1:catalog-widened-43  ARCH46-S1:catalog-widened-43  ARCH47-S1:catalog-widened-43
     for key in ("packet.split", "case.completed", "case.inconsistent"):
         spec = triggers.TRIGGERS_BY_KEY[key]
         assert spec.capability == KEY and spec.event_types[0] in ae.INTERNAL_EVENT_TYPES, key
     assert not triggers.TRIGGERS_BY_KEY["case.completed"].has_document and triggers.TRIGGERS_BY_KEY["packet.split"].has_document
     assert "event_type=EVENT_PACKET_SPLIT" in texts["p_service"] and "emit_trigger(" in texts["p_service"]
     assert "v.EVENT_CASE_COMPLETED" in texts["c_assembly"] and "v.EVENT_CASE_INCONSISTENT" in texts["c_assembly"]
-    assert re.search(r"EXPECTED_TRIGGERS = (17|18|19|21)\b", texts["conformance"]), "the live conformance matrix still expects 14"  # ARCH44-S1:conformance-widened-43  ARCH45-S1:conformance-widened-43  ARCH46-S1:conformance-widened-43
+    assert re.search(r"EXPECTED_TRIGGERS = (17|18|19|21|22)\b", texts["conformance"]), "the live conformance matrix still expects 14"  # ARCH44-S1:conformance-widened-43  ARCH45-S1:conformance-widened-43  ARCH46-S1:conformance-widened-43  ARCH47-S1:conformance-widened-43
     assert '"trigger.case.completed": (' in texts["verify37"] and "(17, 18)" in texts["verify37"]
     assert "assert len(specs) in (14, 17" in texts["verify41"]  # ARCH44-S1:catalog-widened-43
 
@@ -1085,7 +1092,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             gist = conn.execute(sa.text("SELECT count(*) FROM pg_extension WHERE extname='btree_gist'")).scalar_one()
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
-        assert current in ([A43], [STEP3], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"]), f"alembic current is {current}; run run_arch43.ps1"  # ARCH44-S1:head-widened-43  ARCH45-S1:head-widened-43  ARCH46-S1:head-widened-43
+        assert current in ([A43], [STEP3], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"]), f"alembic current is {current}; run run_arch43.ps1"  # ARCH44-S1:head-widened-43  ARCH45-S1:head-widened-43  ARCH46-S1:head-widened-43  ARCH47-S1:head-widened-43
         assert not [x for x in TABLES if x not in tables], "ARCH-43 tables missing"
         assert "SPLIT" in kinds and "trigger.case.completed" in outbox and gist == 1, (kinds, gist)
         assert {"trg_packet_split_segments_within_packet", "trg_case_templates_immutable"} <= triggers
@@ -1210,7 +1217,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("M15 a case route loses its capability gate", mutation(lambda: (t("api_packets"), swap(
             t("api_cases"), '    _gate(db, context, "cases.close")\n', ""), t("api_public")), check_api)),
         ("M16 the conformance matrix still expects 14 triggers", mutation(lambda: (texts_with("conformance", swap(
-            t("conformance"), re.search(r"EXPECTED_TRIGGERS = (?:1[789]|21)\b", t("conformance")).group(0), "EXPECTED_TRIGGERS = 14")),), check_triggers)),  # ARCH44-S1:m16-widened  ARCH45-S1:m16-widened  ARCH46-S1:m16-widened
+            t("conformance"), re.search(r"EXPECTED_TRIGGERS = (?:1[789]|2[12])\b", t("conformance")).group(0), "EXPECTED_TRIGGERS = 14")),), check_triggers)),  # ARCH44-S1:m16-widened  ARCH45-S1:m16-widened  ARCH46-S1:m16-widened  ARCH47-S1:m16-widened
         ("M17 split review fetches thumbnails without the session hook", mutation(lambda: (texts_with("fe_split", swap(
             t("fe_split"), "const blob = useAuthorizedBlobUrl(", "const blob = ((p: string) => ({ url: p }))(")),), check_console)),
         ("M18 console case type drifts from the API", mutation(lambda: (texts_with("fe_case_types", swap(

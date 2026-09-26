@@ -208,6 +208,12 @@ EMITTERS: dict[str, tuple[str, tuple[str, ...]]] = {
         "app/services/obligations/service.py",
         ("emit_trigger(", "v.TRIGGER_EVENT_OF_STATE[state]"),
     ),
+    # ARCH47-S1:emitters. A posting entering an exception state (FAILED, REJECTED,
+    # MISMATCH, UNCERTAIN), once per posting and exception.
+    "trigger.posting.failed": (
+        "app/services/erp/service.py",
+        ("emit_trigger(", "event_type=v.EVENT_POSTING_FAILED"),
+    ),
     # ARCH38-S1:emitter-batch-completed.
     "trigger.batch.completed": (
         "app/services/ingestion/batch_service.py",
@@ -497,7 +503,7 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             # ARCH40-S1:catalog-counts-37. 13/14 after ARCH-38; ARCH-40 adds
             # review.cleared, so 14/15. Both are accepted so this gate states
             # what each milestone left, not only the newest.
-            assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22))  # ARCH43-S1:catalog-counts-37  ARCH44-S1:catalog-counts-37  ARCH45-S1:catalog-counts-37  ARCH46-S1:catalog-counts-37
+            assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22), (22, 23))  # ARCH43-S1:catalog-counts-37  ARCH44-S1:catalog-counts-37  ARCH45-S1:catalog-counts-37  ARCH46-S1:catalog-counts-37  ARCH47-S1:catalog-counts-37
             assert "workflow.triggered" in WEBHOOK_EVENT_TYPES
             # The public events must fail as INTERNAL and twins as PUBLIC.
             from app.services import outbox_service
@@ -529,6 +535,7 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             later |= {"trigger.table.flagged"}  # ARCH44-S1:later-events
             later |= {"trigger.corroboration.discrepancies"}  # ARCH45-S1:later-events
             later |= {"trigger.obligation.due_soon", "trigger.obligation.overdue"}  # ARCH46-S1:later-events
+            later |= {"trigger.posting.failed"}  # ARCH47-S1:later-events
             difference = set(m.INTERNAL_AFTER) ^ set(ae.INTERNAL_EVENT_TYPES)
             assert difference <= later and later <= set(ae.INTERNAL_EVENT_TYPES) | set(m.INTERNAL_AFTER), (
                 "the visibility CHECK the migration writes differs from INTERNAL_EVENT_TYPES: "
@@ -600,7 +607,9 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
                 "webhook.send", "redaction.start", "review.escalate", "warehouse.export",
                 "notify.role", "autonomy.decide", "email.send",
             }
-            assert set(actions.ACTIONS) == set(actions.COMMERCIAL_ACTION_TYPES) | {"work_item.mutate"}
+            # ARCH47-S1:actions-widened-37. ARCH-47 registers erp.post (ERP_ACTION_TYPES,
+            # gated on capability.erp_posting) alongside; every other rule below holds for it.
+            assert set(actions.ACTIONS) == set(actions.COMMERCIAL_ACTION_TYPES) | {"work_item.mutate"} | set(getattr(actions, "ERP_ACTION_TYPES", ()))
             for action_type, definition in actions.ACTIONS.items():
                 assert issubclass(definition.config_model, ActionConfig), action_type
                 assert definition.selector in TOOL_SELECTORS, f"{action_type}: selector unregistered"
@@ -1195,7 +1204,7 @@ def gates_db(rec: Recorder, *, root: Path) -> None:
             # ARCH38-S1:head-widened-37. ARCH-38 advances the head; this gate
             # asserts that ARCH-37's migration is still applied, not that it is
             # still the newest thing in the tree.
-            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37  ARCH42-S1:head-widened-37  ARCH43-S1:head-widened-37  ARCH44-S1:head-widened-37  ARCH45-S1:head-widened-37  ARCH46-S1:head-widened-37
+            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37  ARCH42-S1:head-widened-37  ARCH43-S1:head-widened-37  ARCH44-S1:head-widened-37  ARCH45-S1:head-widened-37  ARCH46-S1:head-widened-37  ARCH47-S1:head-widened-37
             names = set(db.execute(sql(
                 "SELECT conname FROM pg_constraint WHERE conname IN ("
                 "'ck_automation_rule_triggers_event_known','ck_automation_rules_flow_spec_is_object',"

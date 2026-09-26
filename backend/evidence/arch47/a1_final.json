@@ -1,0 +1,22 @@
+{
+  "started": "2026-09-26T11:00:03",
+  "python": "3.12.3",
+  "seconds": 0.2,
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-47 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S2 earlier verifiers widened with ARCH47-S1 sentinels, never replacing theirs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "A1 apply_arch47.py --check on this tree: every file is the ARCH-47 result (a second apply writes nothing)",
+      "outcome": "PASS"
+    }
+  ]
+}

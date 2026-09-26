@@ -116,6 +116,12 @@ def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
 
     if OBLIGATIONS_CAPABILITY in granted:
         kinds.append(vocab.KIND_OBLIGATION)
+    # ARCH47-S1:hub-posting-gate. Postings are capability.erp_posting's, and every
+    # ERP route is gated on it.
+    from app.core.entitlements import ERP_POSTING_CAPABILITY
+
+    if ERP_POSTING_CAPABILITY in granted:
+        kinds.append(vocab.KIND_POSTING)
     return tuple(kinds)
 
 
@@ -153,6 +159,8 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         table_verdict=body.table_verdict,  # ARCH44-S1:table-verdict
         corroboration_verdict=body.corroboration_verdict,  # ARCH45-S1:corroboration-verdict
         obligation_verdict=body.obligation_verdict,  # ARCH46-S1:obligation-verdict
+        posting_verdict=body.posting_verdict,  # ARCH47-S1:posting-verdict
+        posting_reference=body.posting_reference,
     )
 
 

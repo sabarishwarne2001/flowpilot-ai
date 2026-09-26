@@ -39,6 +39,8 @@ export const CAPABILITY = {
   universalCorroborator: "capability.universal_corroborator",
   // ARCH46-S2:capability-constant
   obligations: "capability.obligations",
+  // ARCH47-S2:capability-constant
+  erpPosting: "capability.erp_posting",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

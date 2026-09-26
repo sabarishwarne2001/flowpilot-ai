@@ -86,6 +86,19 @@ class ReviewResolveRequest(BaseModel):
     corroboration_verdict: Optional[str] = None
     #: ARCH46-S1:obligation-verdict. OBLIGATION reviews: CONFIRM or REJECT.
     obligation_verdict: Optional[str] = None
+    #: ARCH47-S1:posting-verdict. POSTING reviews: RETRY, ACCEPT (with the target's reference) or CANCEL.
+    posting_verdict: Optional[str] = None
+    posting_reference: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("posting_verdict")
+    @classmethod
+    def _known_posting_verdict(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in ("RETRY", "ACCEPT", "CANCEL"):
+            raise ValueError("posting_verdict must be one of: RETRY, ACCEPT, CANCEL")
+        return upper
 
     @field_validator("obligation_verdict")
     @classmethod

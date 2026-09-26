@@ -121,10 +121,20 @@ def select_work_item_mutate(
     return _select("automation.flow.work_item_mutate", node_config=node_config, facts=facts, tenant=tenant)
 
 
+@register_tool_selector("automation.flow.erp_post")
+def select_erp_post(
+    *, node_config: ActionNodeConfig, facts: FactSet, tenant: TenantScope
+) -> ActionSpec:
+    # ARCH47-S1:selector-erp-post. The target and object kinds are the author's;
+    # the approved outcome comes from the trigger event, never from a document.
+    return _select("automation.flow.erp_post", node_config=node_config, facts=facts, tenant=tenant)
+
+
 __all__ = [
     "SELECTOR_PREFIX",
     "select_autonomy_decide",
     "select_email_send",
+    "select_erp_post",
     "select_notify_role",
     "select_redaction_start",
     "select_review_escalate",
