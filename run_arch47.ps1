@@ -68,7 +68,7 @@ if ($Rollback) {
     Write-Host "    python -m alembic downgrade $BeforeHead"
     exit 0
 }
-# Step 1 skipped`n<# Step 1/10 CHECK - every file must be the ff82586 file or the ARCH-47 result"
+Step "1/10 CHECK - every file must be the ff82586 file or the ARCH-47 result"
 RunCommand $Python @("apply_arch47.py", "--check") "apply check (a file has local changes; nothing was written)"
 if ($CheckOnly) { Write-Host "`n-CheckOnly: nothing written." -ForegroundColor Green; exit 0 }
 Step "2/10 APPLY"
@@ -78,7 +78,7 @@ $second = & $Python apply_arch47.py
 if ($LASTEXITCODE -ne 0) { Fail "second apply" }
 $second | Select-Object -Last 2 | ForEach-Object { Write-Host $_ }
 if (($second -join "`n") -notmatch "0 file\(s\) to write") { Fail "the second apply wanted to write files; it is not idempotent" }
-#> `nStep "4/10 DEPENDENCIES - paramiko and PyNaCl (SFTP), lxml and jsonschema (schema validation)"
+Step "4/10 DEPENDENCIES - paramiko and PyNaCl (SFTP), lxml and jsonschema (schema validation)"
 RunCommand $Python @("-m", "pip", "install", "paramiko==3.5.1", "PyNaCl==1.6.2") "pip install paramiko"
 RunCommand $Python @("-c", "import paramiko, lxml.etree, jsonschema; print('paramiko', paramiko.__version__, '- lxml and jsonschema ok')") "a dependency is missing: pip install -r requirements.txt"
 RunCommand $Python @("-c", "from app.services.erp.formats import xsd; e = xsd.warm(); print(e or 'the vendored UBL 2.1 / ECMA-376 / Tally schemas compile'); raise SystemExit(1 if e else 0)") "the vendored schemas do not compile"
@@ -148,4 +148,3 @@ every 10 minutes from deploy/cron.d/flowpilot-sweepers:
 Fill each target's lookup tables (<prefix>_vendors, _accounts incl. TAX and AP, _items,
 _settings) before posting: a missing code fails the posting with the line and field named.
 "@
-
