@@ -54,6 +54,23 @@ from urllib.parse import parse_qs, unquote, urlsplit
 # ---------------------------------------------------------------------------
 
 
+#: ARCH47-S1:mock-loopback. Every mock binds and is addressed by this literal address (never "localhost").
+LOOPBACK = "127.0.0.1"
+
+
+def _wait_listening(port: int, timeout: float = 10.0) -> None:
+    """Return once a TCP connect to the mock succeeds (the listener is up before the first request)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with socket.create_connection((LOOPBACK, port), timeout=1.0):
+                return
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.05)
+
+
 def _self_signed(directory: str) -> tuple[str, str]:
     import ipaddress
 
@@ -133,7 +150,7 @@ class MockErp:
             def do_POST(self) -> None:  # noqa: N802
                 self._serve("POST")
 
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server = http.server.ThreadingHTTPServer((LOOPBACK, 0), Handler)
         self.server.daemon_threads = True
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(self.cert, self.key)
@@ -141,6 +158,7 @@ class MockErp:
         self.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
+        _wait_listening(self.port)
         return self
 
     def stop(self) -> None:
@@ -155,7 +173,9 @@ class MockErp:
 
     @property
     def base(self) -> str:
-        return f"https://localhost:{self.port}"
+        # ARCH47-S1:mock-loopback. The address the server is bound to, literally (the certificate names it):
+        # "localhost" resolves to ::1 first on Windows, and a mock must not depend on the platform's resolver.
+        return f"https://{LOOPBACK}:{self.port}"
 
     def fault(self, match: str, fault: str, **extra: Any) -> None:
         with self.lock:
@@ -507,7 +527,7 @@ class MockSftp:
         logging.getLogger("paramiko").setLevel(logging.CRITICAL)  # a client closing is not news
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind(("127.0.0.1", 0))
+        self.sock.bind((LOOPBACK, 0))
         self.sock.listen(16)
         self.sock.settimeout(0.5)
         self.port = self.sock.getsockname()[1]

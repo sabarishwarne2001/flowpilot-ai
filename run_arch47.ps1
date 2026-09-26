@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [switch]$CheckOnly,
     [switch]$SkipDb,
@@ -22,7 +22,9 @@ param(
 #   .\run_arch47.ps1 -SeedPriceBook    # a FRESH database: publish the price book before the tiers
 #   .\run_arch47.ps1 -Rollback         # restore the code
 #
-# Accepted starting point: ff82586 "ARCH-46 DONE".
+# Accepted starting points: ff82586 "ARCH-46 DONE", the first ARCH-47 package's
+# result, and that result as committed from Windows (c22e486). Every file is
+# brought to this package's result; any other local change is refused.
 #
 # New dependency: paramiko (SFTP delivery; open source, no service, no cost)
 # and PyNaCl, its signing backend - both pinned in requirements.txt.

@@ -9,6 +9,7 @@ nothing is ever fetched: a URL outside the schema directory is refused.
 from __future__ import annotations
 
 import functools
+import os
 import re
 import threading
 from pathlib import Path
@@ -47,6 +48,26 @@ def _patched(path: Path) -> bytes:
     return text.encode("utf-8")
 
 
+def local_path(url: str, *, windows: Optional[bool] = None) -> str:
+    """ARCH47-S1:file-url. The file a schema import names. lxml hands the resolver an absolute `file:` URL built
+    from the including file's base URL -- percent-encoded ("sp%20ace", "%23") and, on Windows, with the drive
+    after a slash (file:///C:/Users/...). `url2pathname` is the standard library's inverse of
+    `Path.as_uri()` for the platform (`nturl2path` on Windows): it decodes the escapes and drops the slash
+    before the drive. A URL naming another host (file://server/...) is refused -- a vendored schema is local."""
+    import nturl2path
+    from urllib.parse import unquote, urlsplit
+
+    windows = (os.name == "nt") if windows is None else windows
+    if not url.lower().startswith("file:"):
+        return url
+    parts = urlsplit(url)
+    if parts.netloc not in ("", "localhost"):
+        raise SchemaError(f"schema import from another host refused: {url}")
+    if windows:
+        return nturl2path.url2pathname(parts.path)
+    return unquote(parts.path)
+
+
 def _resolver():
     from app.services.erp.formats import xmlsafe  # ARCH47-S1:xmlsafe (ARCH-16 S1: lxml only in xmlsafe)
 
@@ -54,13 +75,9 @@ def _resolver():
 
     class _Local(xmlsafe.Resolver):
         def resolve(self, url, pubid, context):  # noqa: ANN001
-            raw = url[7:] if url.startswith("file://") else url
-            if re.match(r"^/[a-zA-Z]:", raw):
-                raw = raw[1:]
-            path = Path(raw)
             try:
-                resolved = path.resolve()
-            except OSError:
+                resolved = Path(local_path(url)).resolve()
+            except (OSError, ValueError):
                 resolved = None
             if resolved is None or root not in resolved.parents or not resolved.is_file():
                 raise SchemaError(f"schema import outside the vendored directory refused: {url}")
