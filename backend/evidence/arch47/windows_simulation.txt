@@ -1,0 +1,36 @@
+# ARCH47-S1 windows-simulation: 'localhost' resolves to a dead address first (as ::1 is on Windows), mocks addressed as localhost
+## the first package's SSRF client (baa652b)
+PASS D2 models match the migration: zero column-level drift on th 
+PASS D3 schema refusals: ledger and idempotency keys unique, stat 
+PASS D4 sources and planning: an APPROVED three-way match yields  
+FAIL D5 HTTP: all 27 routes 402 without capability.erp_posting (d 
+     AssertionError: {'ok': False, 'kind': 'TRANSIENT', 'message': 'ConnectionRefusedError: [Errno 111] Connection refused', 'detail': {'status': None, 'path': '/'}}  at verify_arch47.py:2086 <- verify_arch47.py:1691
+FAIL D6 REST/OData presets (QuickBooks Online with OAuth refresh  
+     AssertionError: ('QUICKBOOKS_ONLINE', 'VENDOR_BILL', 'RETRYING', 'token endpoint: ConnectionRefusedError: [Errno 111] Connection refused', {'delivered': False, 'state': 'RETRYING', 'message': 'token endpoint: ConnectionRefusedError: [Errno 111] Connection refu
+FAIL D7 exactly once under faults: a reset after the target commi 
+     AssertionError: ('RETRYING', 'ConnectionRefusedError: [Errno 111] Connection refused', 0)  at verify_arch47.py:2254 <- verify_arch47.py:1691
+PASS D8 SFTP (pinned host key): an X12 810 uploaded atomically an 
+FAIL D9 review hub: a POSTING item per exception; RETRY re-sends  
+     AssertionError: not run: needs 'rejected' from an earlier gate, which did not complete (failed: D5, D6, D7; fix those first)  at verify_arch47.py:1635 <- verify_arch47.py:2429 <- verify_arch47.py:1691
+PASS D10 Flow Builder: erp.post validates its trigger, its worksp 
+FAIL D11 sweep: auto-post plans only outcomes approved after it w 
+     AssertionError: not run: needs 'qbo_faults' from an earlier gate, which did not complete (failed: D5, D6, D7, D9; fix those first)  at verify_arch47.py:1635 <- verify_arch47.py:2530 <- verify_arch47.py:1691
+FAIL D12 the worker: without capability.erp_posting the job sends 
+     AssertionError: {'delivered': False, 'state': 'RETRYING', 'message': 'ConnectionRefusedError: [Errno 111] Connection refused', 'posting_id': '37e85390-4f64-4f3f-bb37-aad4cd333ca3'}  at verify_arch47.py:2582 <- verify_arch47.py:1691
+PASS D13 ARCH-20 erasure: postings built from a subject's documen 
+FAIL X1 AssertionError (0, [{'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not 
+## the fixed SSRF client
+PASS D2 models match the migration: zero column-level drift on th 
+PASS D3 schema refusals: ledger and idempotency keys unique, stat 
+PASS D4 sources and planning: an APPROVED three-way match yields  
+PASS D5 HTTP: all 27 routes 402 without capability.erp_posting (d 
+PASS D6 REST/OData presets (QuickBooks Online with OAuth refresh  
+PASS D7 exactly once under faults: a reset after the target commi 
+PASS D8 SFTP (pinned host key): an X12 810 uploaded atomically an 
+PASS D9 review hub: a POSTING item per exception; RETRY re-sends  
+PASS D10 Flow Builder: erp.post validates its trigger, its worksp 
+PASS D11 sweep: auto-post plans only outcomes approved after it w 
+PASS D12 the worker: without capability.erp_posting the job sends 
+PASS D13 ARCH-20 erasure: postings built from a subject's documen 
+PASS X1
+SIMDONE

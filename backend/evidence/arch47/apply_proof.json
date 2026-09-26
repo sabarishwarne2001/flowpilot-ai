@@ -1,0 +1,238 @@
+{
+  "baseline": "ff82586",
+  "owned_files": 135,
+  "passed": 46,
+  "failed": 0,
+  "results": [
+    {
+      "check": "CRLF copy: 1637 text files rewritten to CRLF",
+      "ok": true,
+      "detail": "1637"
+    },
+    {
+      "check": "LF: --check exits 0",
+      "ok": true,
+      "detail": "es/erp/ErpPosting.tsx\n  new file                         frontend/src/pages/erp/ErpPostingDetail.tsx\n  new file                         frontend/src/pages/erp/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "LF: --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: --check plans 135 files",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "LF: apply exits 0",
+      "ok": true,
+      "detail": "p/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\nWrote 135 file(s). Originals kept in .arch47_apply_backup/20260926T155051326240Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "LF: second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "LF: all 135 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "LF: --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "LF: rollback exits 0",
+      "ok": true,
+      "detail": "rgetDetail.tsx\n  restored  frontend/src/routes/tenantPaths.ts\n  removed   frontend/src/services/api/erp.ts\n  restored  frontend/src/types/automationFlow.ts\n  removed   frontend/src/types/erp.ts\n  restored  frontend/src/types/review.ts\n  removed   run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "LF: rollback restores every file byte for byte (1668 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "LF: no backup left behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check exits 0",
+      "ok": true,
+      "detail": "es/erp/ErpPosting.tsx\n  new file                         frontend/src/pages/erp/ErpPostingDetail.tsx\n  new file                         frontend/src/pages/erp/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "CRLF: --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check plans 135 files",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\n"
+    },
+    {
+      "check": "CRLF: apply exits 0",
+      "ok": true,
+      "detail": "p/ErpTargetDetail.tsx\n  patched                          frontend/src/routes/tenantPaths.ts\n  new file                         frontend/src/services/api/erp.ts\n  patched                          frontend/src/types/automationFlow.ts\n  new file                         frontend/src/types/erp.ts\n  patched                          frontend/src/types/review.ts\n  new file                         run_arch47.ps1\n\n135 file(s) to write, 0 unchanged.\nWrote 135 file(s). Originals kept in .arch47_apply_backup/20260926T155053291367Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "CRLF: second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "CRLF: all 135 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: edited files keep CRLF; new files are written LF (.gitattributes eol=lf), never mixed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "CRLF: --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "CRLF: rollback exits 0",
+      "ok": true,
+      "detail": "rgetDetail.tsx\n  restored  frontend/src/routes/tenantPaths.ts\n  removed   frontend/src/services/api/erp.ts\n  restored  frontend/src/types/automationFlow.ts\n  removed   frontend/src/types/erp.ts\n  restored  frontend/src/types/review.ts\n  removed   run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "CRLF: rollback restores every file byte for byte (1668 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "CRLF: no backup left behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): --check exits 0",
+      "ok": true,
+      "detail": "es/erp/ErpPosting.tsx\n  already applied                  frontend/src/pages/erp/ErpPostingDetail.tsx\n  already applied                  frontend/src/pages/erp/ErpTargetDetail.tsx\n  already applied                  frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n9 file(s) to write, 126 unchanged.\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): --check plans the changed files (9), nothing refused",
+      "ok": true,
+      "detail": "              frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n9 file(s) to write, 126 unchanged.\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): apply exits 0",
+      "ok": true,
+      "detail": "erp/ErpTargetDetail.tsx\n  already applied                  frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n9 file(s) to write, 126 unchanged.\nWrote 9 file(s). Originals kept in .arch47_apply_backup/20260926T155056007803Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): all 135 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): rollback exits 0",
+      "ok": true,
+      "detail": "ackend/app/services/erp/formats/tabular.py\n  restored  backend/app/services/erp/formats/xsd.py\n  restored  backend/app/services/erp/transport/http.py\n  restored  backend/scripts/erp_mock_targets.py\n  restored  backend/verify_arch47.py\n  restored  run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): rollback restores every file byte for byte (1799 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "first ARCH-47 package result (baa652b): no backup left behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): --check exits 0",
+      "ok": true,
+      "detail": "s/erp/ErpPosting.tsx\n  already applied                  frontend/src/pages/erp/ErpPostingDetail.tsx\n  already applied                  frontend/src/pages/erp/ErpTargetDetail.tsx\n  already applied                  frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n12 file(s) to write, 123 unchanged.\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): --check wrote nothing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): --check plans the changed files (12), nothing refused",
+      "ok": true,
+      "detail": "             frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n12 file(s) to write, 123 unchanged.\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): apply exits 0",
+      "ok": true,
+      "detail": "p/ErpTargetDetail.tsx\n  already applied                  frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  patched                          run_arch47.ps1\n\n12 file(s) to write, 123 unchanged.\nWrote 12 file(s). Originals kept in .arch47_apply_backup/20260926T155058754747Z.\nNext: alembic upgrade arch47_step1_erp_posting  (run_arch47.ps1 does this)\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): second apply writes 0",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): all 135 owned files equal the certified tree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): executable bits match",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): --check after apply reports 0 to write",
+      "ok": true,
+      "detail": "vices/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n  already applied                  run_arch47.ps1\n\n0 file(s) to write, 135 unchanged.\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): rollback exits 0",
+      "ok": true,
+      "detail": "red  backend/app/services/erp/formats/xsd.py\n  restored  backend/app/services/erp/transport/http.py\n  restored  backend/scripts/erp_mock_targets.py\n  restored  backend/scripts/sweep_erp_postings.py\n  restored  backend/verify_arch47.py\n  restored  run_arch47.ps1\n  removed   the backup snapshot; nothing is left behind\n\nCode restored to the state before the last apply. The DATABASE is not\ntouched. To take it back as well (drops the five ARCH-47 tables and the\nlookup CHECK function, restores ARCH-46's review view, review kinds and\noutbox vocabulary):\n    alembic downgrade arch46_step1_obligations\n"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): rollback restores every file byte for byte (1794 files)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "check": "ARCH-47 as committed from Windows (c22e486): no backup left behind",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

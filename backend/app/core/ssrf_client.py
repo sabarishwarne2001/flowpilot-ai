@@ -46,7 +46,14 @@ class ForbiddenAddressError(SSRFClientError):
 
 
 class ConnectError(SSRFClientError):
-    pass
+    """ARCH47-S1:connect-fallback. `request_sent` is False when the socket never opened ("Connection to ...
+    failed": refused, unreachable, timed out connecting) -- nothing reached the server, so the next resolved
+    address may be tried -- and True once the request was (being) written ("Communication with ... failed"):
+    trying another address then could deliver the same request twice, so it is never done."""
+
+    def __init__(self, message: str = "", *, request_sent: bool = False) -> None:
+        super().__init__(message)
+        self.request_sent = request_sent
 
 
 class TLSError(SSRFClientError):
@@ -223,6 +230,8 @@ class SSRFSafeHTTPClient:
                     started=started,
                 )
             except (ConnectError, TLSError) as exc:
+                if isinstance(exc, ConnectError) and exc.request_sent:
+                    raise  # the request may have arrived: never repeat it at another address
                 last_error = exc
                 logger.warning(
                     "ssrf_client.connect_failed",
@@ -259,7 +268,13 @@ class SSRFSafeHTTPClient:
     ) -> SSRFResponse:
         remaining_connect = min(self._connect_timeout, max(deadline - time.monotonic(), 0.1))
 
-        raw_sock = socket.create_connection((ip, port), timeout=remaining_connect)
+        try:
+            # A refused / unreachable / timed-out connect sent nothing (e.g. Windows resolving "localhost" to
+            # ::1 first while the server listens on 127.0.0.1): report it as such, so the caller tries the
+            # next address instead of failing on a raw OSError.
+            raw_sock = socket.create_connection((ip, port), timeout=remaining_connect)
+        except OSError as exc:
+            raise ConnectError(f"Connection to {ip}:{port} failed: {exc}") from exc
         try:
             context = self._test_ssl_context or ssl.create_default_context()
             tls_sock = context.wrap_socket(raw_sock, server_hostname=hostname)
@@ -304,7 +319,7 @@ class SSRFSafeHTTPClient:
         except socket.timeout as exc:
             raise TimeoutExceededError(f"Socket timeout with {ip}:{port}.") from exc
         except OSError as exc:
-            raise ConnectError(f"Communication with {ip}:{port} failed: {exc}") from exc
+            raise ConnectError(f"Communication with {ip}:{port} failed: {exc}", request_sent=True) from exc
         finally:
             conn.close()
 

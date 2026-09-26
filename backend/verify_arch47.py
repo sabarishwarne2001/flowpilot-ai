@@ -95,6 +95,7 @@ F = {
     "jsonapi": E_ / "formats/jsonapi.py", "transport_init": E_ / "transport/__init__.py",
     "http": E_ / "transport/http.py", "sftp": E_ / "transport/sftp.py",
     "xmlsafe": E_ / "formats/xmlsafe.py", "v16": BACKEND / "scripts/verify_arch16.py",  # ARCH47-S1:xml-safety
+    "ssrf": APP / "core/ssrf_client.py",  # ARCH47-S1:portability (the connect fallback)
     "tally_xsd": E_ / "schemas/tally/tally-voucher-import.xsd", "sources_md": E_ / "schemas/SOURCES.md",
     "models": APP / "models/erp.py", "schemas": APP / "schemas/erp.py", "api": APP / "api/v1/erp.py",
     "action": APP / "services/automation/actions/erp_post.py",
@@ -305,6 +306,7 @@ def _with_file(key: str, old: str, new: str, gate: Callable[[], Any]) -> Callabl
         finally:
             F[key] = saved
             shutil.rmtree(tmp.parent, ignore_errors=True)
+    run.gate = gate  # type: ignore[attr-defined]  # checked unmutated first (main)
     return run
 
 
@@ -1134,6 +1136,104 @@ def check_xml_safety() -> dict:
     return out
 
 
+def check_schema_paths() -> dict:
+    """P1: schema imports resolve from any checkout location. lxml hands the resolver percent-encoded file URLs
+    (a space is %20, '#' is %23) and, on Windows, file:///C:/... -- both converted with the standard library's
+    url2pathname; another host is refused. End to end: the vendored schemas copied under a directory whose name
+    has a space and a '#' all compile."""
+    from app.services.erp.formats import xmlsafe, xsd
+
+    out: dict[str, Any] = {}
+    cases = {
+        ("file:///C:/Users/John%20Doe/flowpilot-ai/backend/app/services/erp/schemas/ubl21/common/UBL-CommonAggregateComponents-2.1.xsd", True):
+            "C:\\Users\\John Doe\\flowpilot-ai\\backend\\app\\services\\erp\\schemas\\ubl21\\common\\UBL-CommonAggregateComponents-2.1.xsd",
+        ("file:///D:/a%23b/x.xsd", True): "D:\\a#b\\x.xsd",
+        ("file://localhost/C:/x/y.xsd", True): "C:\\x\\y.xsd",
+        ("file:///home/u/sp%20ace%231/x.xsd", False): "/home/u/sp ace#1/x.xsd",
+        ("/home/u/plain.xsd", False): "/home/u/plain.xsd",
+    }
+    for (url, windows), want in cases.items():
+        got = xsd.local_path(url, windows=windows)
+        assert got == want, f"{url} ({'Windows' if windows else 'POSIX'}): {got!r}, expected {want!r}"
+        out[url] = got
+    for url in ("file://attacker.example/share/x.xsd", "file://server/C:/x.xsd"):
+        err = _raises(lambda: xsd.local_path(url, windows=True), xsd.SchemaError)
+        assert err is not None, f"{url}: another host accepted"
+    tmp = Path(tempfile.mkdtemp(prefix="arch47 schema#"))
+    saved = (xsd.SCHEMAS, xmlsafe.SCHEMAS)
+    try:
+        copy = tmp / "sp ace#1" / "schemas"
+        shutil.copytree(VENDORED, copy)
+        xsd.SCHEMAS = xmlsafe.SCHEMAS = copy.resolve()
+        xsd._compile.cache_clear()
+        problem = xsd.warm()
+        assert problem is None, f"schemas under {copy} do not compile: {problem}"
+        out["compiled under"] = str(copy)
+    finally:
+        xsd.SCHEMAS, xmlsafe.SCHEMAS = saved
+        xsd._compile.cache_clear()
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
+def check_connect_fallback() -> dict:
+    """N3: a host that resolves to several addresses (Windows resolves "localhost" to ::1 first) is tried address
+    by address while NOTHING has been sent -- a refused connect is a ConnectError("Connection to ...") that falls
+    through to the next address, and the ERP transport classes it TRANSIENT (no probe needed) -- but once the
+    request was written, a failure is never retried at another address (that could post twice) and is UNCERTAIN."""
+    import app.services.erp.transport.http as H
+    from app.core import ssrf_client
+
+    mock = _load_module("_mock47_fallback", F["mock"]).MockErp().start()
+    real = socket.getaddrinfo
+    dead = "127.0.0.2"   # loopback, nothing listening: refused at once
+
+    def resolving(order: list[str]):
+        def fake(host, port, *a, **k):  # noqa: ANN001
+            if host == "localhost" and int(port) == mock.port:
+                return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, mock.port)) for ip in order]
+            return real(host, port, *a, **k)
+        return fake
+
+    def client():
+        return ssrf_client.SSRFSafeHTTPClient(connect_timeout=5, total_timeout=15, allow_private_ranges=True,
+                                              test_ssl_context=mock.client_ssl_context())
+
+    out: dict[str, Any] = {}
+    url = f"https://localhost:{mock.port}/postings/fallback-probe"
+    try:
+        socket.getaddrinfo = resolving([dead, "127.0.0.1"])
+        mock.reset()
+        before = len(mock.requests)
+        resp = client().request("GET", url, headers={"Authorization": "Bearer static-token"})
+        assert resp.resolved_ip == "127.0.0.1", f"answered by {resp.resolved_ip}"
+        assert len(mock.requests) - before == 1, f"{len(mock.requests) - before} requests for one call"
+        out["refused first address, then"] = f"{resp.resolved_ip} -> HTTP {resp.status_code}"
+        socket.getaddrinfo = resolving([dead])
+        only_dead = _raises(lambda: client().request("GET", url), ssrf_client.ConnectError)
+        assert only_dead is not None and not only_dead.request_sent and str(only_dead).startswith("Connection to"), \
+            f"a refused connect surfaced as {type(only_dead).__name__}: {only_dead}"
+        assert H._classify(only_dead)[0] == "TRANSIENT", H._classify(only_dead)
+        out["every address refused"] = f"{type(only_dead).__name__}: TRANSIENT"
+        # the request is written, then the connection drops: never repeated at the next address
+        socket.getaddrinfo = resolving(["127.0.0.1", dead])
+        mock.fault("POST /postings/", "reset_before")
+        before = len(mock.requests)
+        err = _raises(lambda: client().request("POST", f"https://localhost:{mock.port}/postings/bills",
+                                               headers={"Authorization": "Bearer static-token",
+                                                        "Content-Type": "application/json"}, body=b"{}"),
+                      ssrf_client.ConnectError)
+        assert err is not None and err.request_sent, f"a failure after sending surfaced as {err!r}"
+        assert H._classify(err)[0] == "UNCERTAIN", H._classify(err)
+        assert len(mock.requests) - before == 1, f"sent {len(mock.requests) - before} times"
+        out["dropped after sending"] = "ConnectError(request_sent) -> UNCERTAIN, sent once"
+        assert H._classify(ConnectionRefusedError(10061, "refused"))[0] == "TRANSIENT"
+    finally:
+        socket.getaddrinfo = real
+        mock.stop()
+    return out
+
+
 def check_tabular_safety() -> None:
     """T1: a CSV cell that a spreadsheet would run as a formula is neutralised (a negative number is not); an XLSX
     posting has inline strings and numbers only -- never a formula, never a shared-string table to poison."""
@@ -1157,6 +1257,9 @@ def check_tabular_safety() -> None:
     with zipfile.ZipFile(io.BytesIO(xlsx)) as z:
         stamps = {i.date_time for i in z.infolist()}
     assert stamps == {(2026, 1, 1, 0, 0, 0)}, f"zip timestamps are not fixed: {stamps}"
+    with zipfile.ZipFile(io.BytesIO(xlsx)) as z:  # ARCH47-S1:zip-platform -- the same bytes on Windows and Linux
+        made_by = {(i.create_system, i.external_attr >> 16) for i in z.infolist()}
+    assert made_by == {(3, 0o600)}, f"zip 'made by' system / mode depend on the platform: {made_by}"
 
 
 # ---------------------------------------------------------------------------
@@ -1447,6 +1550,10 @@ def offline(rec: Recorder, evidence: dict) -> None:
               lambda: evidence.__setitem__("egress", check_egress()))
     rec.check("offline", "N2 XML safety: lxml only in the hardened xmlsafe.py (ARCH-16 S1), DOCTYPE/ENTITY refused (XXE, parameter entities, billion laughs, UTF-16), nothing resolved, every ERP XML reader routed through it",
               lambda: evidence.__setitem__("xml_safety", check_xml_safety()))
+    rec.check("offline", "N3 connect fallback: a refused address falls through to the next while nothing was sent (Windows 'localhost' -> ::1 first), TRANSIENT; after sending never repeated elsewhere, UNCERTAIN",
+              lambda: evidence.__setitem__("connect_fallback", check_connect_fallback()))
+    rec.check("offline", "P1 schema paths: percent-encoded and Windows drive file URLs resolve (url2pathname), another host refused, the schemas compile from a directory named 'sp ace#1'",
+              lambda: evidence.__setitem__("schema_paths", check_schema_paths()))
     rec.check("offline", "T3 file safety: CSV formula neutralisation, XLSX inline strings only, fixed zip timestamps", check_tabular_safety)
     rec.check("offline", "W1 wiring: job on LIGHT (plan-checked), erasure, posting.failed (22/23, no erp.post loop), erp.post (ledger, admin, author-chosen target), conformance 22, hub gated, router, sweep scheduled, paramiko pinned",
               lambda: check_wiring(texts))
@@ -1512,6 +1619,21 @@ def sftp_config(box: Any) -> dict:
     return {**json.loads(json.dumps(S.CONFIG)),
             "sftp": {"host": "127.0.0.1", "port": box.port, "host_key_sha256": box.fingerprint,
                      "directory": "/inbound", "ack_directory": "/acks"}}
+
+
+class _Shared(dict):
+    """ARCH47-S1:gate-dependencies. What one database gate leaves for a later one (D7's rejected posting for D9's
+    hub, D6's QuickBooks target for D11's sweep). Reading something an earlier gate never left says so -- naming
+    the gates that failed -- instead of a bare KeyError that hides the real failure."""
+
+    def __init__(self, steps: list) -> None:
+        super().__init__()
+        self._steps = steps
+
+    def __missing__(self, key: str) -> Any:
+        failed = [name.split(" ", 1)[0] for name, ok, _ in self._steps if not ok]
+        raise AssertionError(f"not run: needs {key!r} from an earlier gate, which did not complete"
+                             + (f" (failed: {', '.join(failed)}; fix those first)" if failed else ""))
 
 
 def live_e2e(patches: Optional[list] = None, until: Optional[str] = None) -> list[tuple[str, bool, str]]:
@@ -1632,7 +1754,7 @@ def live_e2e(patches: Optional[list] = None, until: Optional[str] = None) -> lis
     for target, attr, value in patches or []:
         originals.append((target, attr, getattr(target, attr)))
         setattr(target, attr, value)
-    s: dict[str, Any] = {}
+    s: dict[str, Any] = _Shared(steps)
     stack = contextlib.ExitStack()
     try:
         erp, box = stack.enter_context(mock_targets())
@@ -2687,10 +2809,19 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
         evidence["live"] = [{"step": n_, "ok": ok, "detail": d} for n_, ok, d in results]
     for name, ok, detail in results:
         rec.check("db", name, (lambda: None) if ok else (lambda d=detail: (_ for _ in ()).throw(AssertionError(d))))
-    rec.check("db", "X1 exactly once under real concurrency (committed, then deleted): 16 planners -> 1 posting; 12 deliverers -> 1 send; a lost answer raced by 8 -> 1 send, UNCERTAIN",
-              lambda: evidence.__setitem__("concurrency", concurrency_gate()))
+    x1_ok = rec.check("db", "X1 exactly once under real concurrency (committed, then deleted): 16 planners -> 1 posting; 12 deliverers -> 1 send; a lost answer raced by 8 -> 1 send, UNCERTAIN",
+                      lambda: evidence.__setitem__("concurrency", concurrency_gate()))
     if not mutate:
         return
+    #: ARCH47-S1:mutation-baseline. A mutation proves something only if its gate PASSES on the real code: a gate
+    #: that already fails (a refused connection on Windows, say) would "catch" every mutation aimed at it.
+    baseline = {name.split(" ", 1)[0]: ok for name, ok, _ in results}
+    baseline["X1"] = bool(x1_ok)
+
+    def sound(step_prefix: str) -> None:
+        if base_run and baseline.get(step_prefix) is False:
+            raise AssertionError(f"not evidence: {step_prefix} fails on the unmutated code, so it would 'catch' "
+                                 "anything; fix it first")
 
     from app.api.v1 import erp as api_module
     from app.services.erp import gate as gate_module
@@ -2700,6 +2831,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
 
     def must_fail(step_prefix: str, build: Callable[[], list]) -> Callable[[], None]:
         def run() -> None:
+            sound(step_prefix)
             patches = build()  # anchors first: a drifted anchor raises AnchorMissing, never "caught"
             for target, attr, _ in patches:
                 if not hasattr(target, attr):
@@ -2713,6 +2845,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
 
     def must_fail_x(build: Callable[[], list]) -> Callable[[], None]:
         def run() -> None:
+            sound("X1")
             patches = build()
             for target, attr, _ in patches:
                 if not hasattr(target, attr):
@@ -2794,6 +2927,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
     from app.services.erp import mapping as M
     from app.services.erp import presets as PR
     from app.services.erp import service as SV
+    from app.core import ssrf_client
     from app.services.erp.formats import jsonapi, tabular, x12, xmlsafe, xsd
     from app.services.erp.transport import http as H
     from app.services.erp.transport import sftp as SF
@@ -2815,6 +2949,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         def run() -> None:
             with patched(*patches):
                 expect_failure(gate)
+        run.gate = gate  # type: ignore[attr-defined]  # checked unmutated first (main)
         return run
 
     def no_jitter(attempt: int, retry_after: Optional[int] = None, *, rng: Any = None) -> int:
@@ -2898,6 +3033,17 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("MS45 a Tally response parsed with lxml directly (outside xmlsafe.py)", _with_file(
             "tally", "        root = xmlsafe.parse(data)  # untrusted",
             "        from lxml import etree\n        root = etree.fromstring(data)  # untrusted", check_xml_safety)),
+        ("MS46 XLSX 'made by' stamped as zipfile does on Windows (Windows and Linux bytes differ)", under([(tabular, "to_xlsx", variant(
+            "tabular", "            info.create_system = 3\n", "            info.create_system = 0\n", "to_xlsx"))], check_tabular_safety)),
+        ("MS47 schema import URLs read by slicing 'file://' off (Windows drives and %20 break)", under([(xsd, "local_path", lambda url, windows=None: (
+            url[7:] if url.startswith("file://") else url))], check_schema_paths)),
+        ("MS48 a refused connect is a raw OSError (no fall-through to the next address)", under([(ssrf_client, "SSRFSafeHTTPClient", variant(
+            "ssrf", "        except OSError as exc:\n            raise ConnectError(f\"Connection to {ip}:{port} failed: {exc}\") from exc\n",
+            "        except ZeroDivisionError as exc:\n            raise ConnectError(f\"Connection to {ip}:{port} failed: {exc}\") from exc\n",
+            "SSRFSafeHTTPClient"))], check_connect_fallback)),
+        ("MS49 a failure after the request was sent is retried at the next address (a double send)", under([(ssrf_client, "SSRFSafeHTTPClient", variant(
+            "ssrf", "                if isinstance(exc, ConnectError) and exc.request_sent:\n",
+            "                if False:\n", "SSRFSafeHTTPClient"))], check_connect_fallback)),
     ]
 
 
@@ -2919,7 +3065,25 @@ def main() -> int:
     if args.mutate:
         print("\nMutations")
         caught: dict[str, str] = {}
+        # ARCH47-S1:mutation-baseline. Each mutation's gate is first run on the UNMUTATED code: a gate that
+        # already fails there would "catch" the mutation for the wrong reason, so the mutation is reported as a
+        # failure (not evidence) instead of a pass.
+        unmutated: dict[int, Optional[str]] = {}
         for name, fn in mutations():
+            gate = getattr(fn, "gate", None)
+            selected = not ONLY or any(name.startswith(prefix) for prefix in ONLY)
+            if gate is not None and selected:
+                if id(gate) not in unmutated:
+                    try:
+                        gate()
+                        unmutated[id(gate)] = None
+                    except Exception as exc:  # noqa: BLE001
+                        unmutated[id(gate)] = f"{type(exc).__name__}: {exc}"[:300]
+                why = unmutated[id(gate)]
+                if why:
+                    rec.check("mutation", name, lambda why=why: (_ for _ in ()).throw(AssertionError(
+                        f"not evidence: its gate fails on the unmutated code ({why})")))
+                    continue
             CAUGHT.clear()
             if rec.check("mutation", name, fn) and CAUGHT:
                 caught[name] = CAUGHT[-1]

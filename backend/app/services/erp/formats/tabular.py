@@ -286,6 +286,9 @@ def to_xlsx(record: Record, config: Mapping[str, Any] | None = None) -> bytes:
             info = zipfile.ZipInfo(name, date_time=_FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o600 << 16
+            # ARCH47-S1:zip-platform. zipfile stamps the "made by" system from the running OS (0 on Windows,
+            # 3 elsewhere); pinning it makes the same posting the same bytes on every platform.
+            info.create_system = 3
             z.writestr(info, text.encode("utf-8"))
     return buf.getvalue()
 

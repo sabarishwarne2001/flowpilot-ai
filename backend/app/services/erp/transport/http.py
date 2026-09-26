@@ -98,11 +98,16 @@ def _classify(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, S.ConnectError):
         # "Connection to ... failed": the socket never opened -- nothing was sent.
         # "Communication with ... failed": the request was (being) written.
-        return (v.OUTCOME_TRANSIENT, text) if text.startswith("Connection to") else (v.OUTCOME_UNCERTAIN, text)
+        sent = getattr(exc, "request_sent", False) or not text.startswith("Connection to")
+        return (v.OUTCOME_UNCERTAIN, text) if sent else (v.OUTCOME_TRANSIENT, text)
     if isinstance(exc, S.TimeoutExceededError):
         return (v.OUTCOME_TRANSIENT, text) if "before DNS" in text else (v.OUTCOME_UNCERTAIN, text)
     if isinstance(exc, S.ResponseTooLargeError):
         return v.OUTCOME_UNCERTAIN, text
+    if isinstance(exc, ConnectionRefusedError):
+        # ARCH47-S1:refused-transient. A connection the server refused carried no request (the SSRF-safe client
+        # reports these as ConnectError; this is the belt for any raw one): retry, no probe needed.
+        return v.OUTCOME_TRANSIENT, f"{type(exc).__name__}: {text}"
     return v.OUTCOME_UNCERTAIN, f"{type(exc).__name__}: {text}"
 
 
