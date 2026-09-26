@@ -684,3 +684,12 @@ from app.models.obligations import (  # noqa: E402,F401
     Obligation,
     ObligationEvent,
 )
+
+# ARCH47-S1:models-registry
+from app.models.erp import (  # noqa: E402,F401
+    ErpLookupTable,
+    ErpMapping,
+    ErpPosting,
+    ErpPostingAttempt,
+    ErpTarget,
+)

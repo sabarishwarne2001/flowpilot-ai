@@ -1,0 +1,1 @@
+{"VendorRef":{"value":"56"},"PayType":"Check","CheckPayment":{"BankAccountRef":{"value":"35"}},"TotalAmt":118000.00,"TxnDate":"2026-10-01","Line":[{"Amount":118000.00,"LinkedTxn":[{"TxnId":"5001","TxnType":"Bill"}]}]}

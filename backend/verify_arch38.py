@@ -597,7 +597,7 @@ def gates_offline(rec: Recorder, *, root: Path, only: Optional[set[str]]) -> Non
             # is present, not that nothing was added after it.
             counts = (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))
             # ARCH43-S1:catalog-widened-38. ARCH-43 adds three triggers over three events.
-            assert counts in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22)), counts  # ARCH44-S1:catalog-widened-38  ARCH45-S1:catalog-widened-38  ARCH46-S1:catalog-widened-38
+            assert counts in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22), (22, 23)), counts  # ARCH44-S1:catalog-widened-38  ARCH45-S1:catalog-widened-38  ARCH46-S1:catalog-widened-38  ARCH47-S1:catalog-widened-38
             spec = triggers.TRIGGERS_BY_KEY["batch.completed"]
             assert spec.has_document is False, (
                 "a batch is not one document; has_document=True would offer "
@@ -823,7 +823,7 @@ def gates_db(rec: Recorder) -> None:
             head = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
             # ARCH40-S1:head-widened-38. ARCH-40 advances the head; this gate
             # asserts ARCH-38's schema is applied, not that it is the newest.
-            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations"), f"alembic head is {head}; run `alembic upgrade head`"  # HM-S1:head-widened  ARCH41-S2:head-widened-38  ARCH42-S1:head-widened-38  ARCH43-S1:head-widened-38  ARCH44-S1:head-widened-38  ARCH45-S1:head-widened-38  ARCH46-S1:head-widened-38
+            assert head in (HEAD, "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting"), f"alembic head is {head}; run `alembic upgrade head`"  # HM-S1:head-widened  ARCH41-S2:head-widened-38  ARCH42-S1:head-widened-38  ARCH43-S1:head-widened-38  ARCH44-S1:head-widened-38  ARCH45-S1:head-widened-38  ARCH46-S1:head-widened-38  ARCH47-S1:head-widened-38
             present = set(
                 db.execute(
                     text("SELECT tablename FROM pg_tables WHERE schemaname='public'")

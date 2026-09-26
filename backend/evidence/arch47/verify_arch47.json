@@ -1,0 +1,1128 @@
+{
+  "started": "2026-09-26T17:10:38",
+  "python": "3.12.10",
+  "golden": {
+    "CSV/NONE/VENDOR_BILL": {
+      "file": "csv-none-vendor_bill.csv",
+      "bytes": 538,
+      "sha256": "2ac5d39d801a711cc2c10372ebfd01996d47708cef9b3e43127a355d255571dc",
+      "media_type": "text/csv"
+    },
+    "CSV/NONE/PURCHASE_ORDER": {
+      "file": "csv-none-purchase_order.csv",
+      "bytes": 462,
+      "sha256": "4fa02decba8286b7ee3d3726b1f2fcbc1f0ec9625f286be31149cd55ea5d9452",
+      "media_type": "text/csv"
+    },
+    "CSV/NONE/GOODS_RECEIPT": {
+      "file": "csv-none-goods_receipt.csv",
+      "bytes": 303,
+      "sha256": "0e9af62dc69155b6115b69778a446a0d1b27e2a4aeae4caf9d0b4ba347282f6c",
+      "media_type": "text/csv"
+    },
+    "CSV/NONE/JOURNAL_ENTRY": {
+      "file": "csv-none-journal_entry.csv",
+      "bytes": 361,
+      "sha256": "fbb8754b9c1441834d2a1fda7d99df6271604f229015d25bc5c9b23e30fe5a5d",
+      "media_type": "text/csv"
+    },
+    "CSV/NONE/PAYMENT_REFERENCE": {
+      "file": "csv-none-payment_reference.csv",
+      "bytes": 182,
+      "sha256": "aa001c73b3c0bbe1e24423f0fa06824df4b8b20b41769f1fffff2da6e7f8c8f3",
+      "media_type": "text/csv"
+    },
+    "XLSX/NONE/VENDOR_BILL": {
+      "file": "xlsx-none-vendor_bill.xlsx",
+      "bytes": 2620,
+      "sha256": "88c932819b5866cc49d153fdd9f4cc1e2e21c6f2d4701eccff313cc68dd8eced",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "XLSX/NONE/PURCHASE_ORDER": {
+      "file": "xlsx-none-purchase_order.xlsx",
+      "bytes": 2576,
+      "sha256": "4cc060f60efd2fe51f094de1d9df32820dc6f236a8d03e98b738e0f006eb71ff",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "XLSX/NONE/GOODS_RECEIPT": {
+      "file": "xlsx-none-goods_receipt.xlsx",
+      "bytes": 2466,
+      "sha256": "cbcf7209462981f3ecb25a814108e2b2465022b15c2dfdca7e2e36da25917d5f",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "XLSX/NONE/JOURNAL_ENTRY": {
+      "file": "xlsx-none-journal_entry.xlsx",
+      "bytes": 2508,
+      "sha256": "ccfb338ce9f0b550086ed8ebee69f427b508ebafdaa305f907a5d1533d028ac3",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "XLSX/NONE/PAYMENT_REFERENCE": {
+      "file": "xlsx-none-payment_reference.xlsx",
+      "bytes": 2359,
+      "sha256": "b0533fcfff2e0f07d5f863ef3ce61cc7ed0099042fc6d4634f13606c31d7c085",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "X12/NONE/VENDOR_BILL": {
+      "file": "x12-none-vendor_bill.edi",
+      "bytes": 520,
+      "sha256": "2cd03622dc18ad3ca24a8bed2f601ce0338a736fa628fa364a7be5d34494bb14",
+      "media_type": "application/edi-x12"
+    },
+    "X12/NONE/PURCHASE_ORDER": {
+      "file": "x12-none-purchase_order.edi",
+      "bytes": 474,
+      "sha256": "cf7b4348d6a39757c8998b33ddb5ac3f3590fe0450a21f1da4af086444300737",
+      "media_type": "application/edi-x12"
+    },
+    "X12/NONE/GOODS_RECEIPT": {
+      "file": "x12-none-goods_receipt.edi",
+      "bytes": 528,
+      "sha256": "55916fbc6728943318e41ec391a36c14417d352b6c182fd6bf8837bf3fb2226b",
+      "media_type": "application/edi-x12"
+    },
+    "UBL/NONE/VENDOR_BILL": {
+      "file": "ubl-none-vendor_bill.xml",
+      "bytes": 3141,
+      "sha256": "d67c7c958209d98f061dd06058aad89426ae0c32db0e8701724b6177c0bdd9c2",
+      "media_type": "application/xml"
+    },
+    "UBL/NONE/PURCHASE_ORDER": {
+      "file": "ubl-none-purchase_order.xml",
+      "bytes": 2433,
+      "sha256": "0d14b289f8a2b14dae36b352f801a6c0f02388fa07250b998902fef36eaf3597",
+      "media_type": "application/xml"
+    },
+    "UBL/NONE/GOODS_RECEIPT": {
+      "file": "ubl-none-goods_receipt.xml",
+      "bytes": 1909,
+      "sha256": "136a14a9353e053c7361a45bfd5fd980d07b2f589fa5d05844f4d722b08369d3",
+      "media_type": "application/xml"
+    },
+    "TALLY/NONE/VENDOR_BILL": {
+      "file": "tally-none-vendor_bill.xml",
+      "bytes": 1986,
+      "sha256": "4c660ef0572835751ff56e3885ff7d22605960ce4d5f6633a6c0643d1cb086be",
+      "media_type": "application/xml"
+    },
+    "TALLY/NONE/JOURNAL_ENTRY": {
+      "file": "tally-none-journal_entry.xml",
+      "bytes": 1784,
+      "sha256": "7a61b8434547f8712f8cb4a53e1d1c4b1df428db69022075f1a31b44e0b1e9d3",
+      "media_type": "application/xml"
+    },
+    "TALLY/NONE/PAYMENT_REFERENCE": {
+      "file": "tally-none-payment_reference.xml",
+      "bytes": 1500,
+      "sha256": "3eeaab8aee81313a08d25cd0d360ae10a2efe315083effa00bf1855781cd2986",
+      "media_type": "application/xml"
+    },
+    "TALLY/NONE/PURCHASE_ORDER": {
+      "file": "tally-none-purchase_order.xml",
+      "bytes": 2447,
+      "sha256": "50e10512b5ab81eb9589957d59777389b0b8d97e5a1a14e635c1076a7c9b4a0b",
+      "media_type": "application/xml"
+    },
+    "TALLY/NONE/GOODS_RECEIPT": {
+      "file": "tally-none-goods_receipt.xml",
+      "bytes": 2390,
+      "sha256": "86c739c6eb1b241a83d61f1eda198af336d206b5c8fac4800281a026c6774d82",
+      "media_type": "application/xml"
+    },
+    "JSON/QUICKBOOKS_ONLINE/VENDOR_BILL": {
+      "file": "json-quickbooks_online-vendor_bill.json",
+      "bytes": 691,
+      "sha256": "9d551b0a5b1024caca858fa592fc237a367569c25263c3bb5d2d4097fb124b28",
+      "media_type": "application/json"
+    },
+    "JSON/QUICKBOOKS_ONLINE/PURCHASE_ORDER": {
+      "file": "json-quickbooks_online-purchase_order.json",
+      "bytes": 599,
+      "sha256": "558734fbdf709d97c0daedc3988a5dbabe77d3006c680c504f0b14a0c1c0dfba",
+      "media_type": "application/json"
+    },
+    "JSON/QUICKBOOKS_ONLINE/JOURNAL_ENTRY": {
+      "file": "json-quickbooks_online-journal_entry.json",
+      "bytes": 775,
+      "sha256": "95a60dab7c58a2ae2c3e485935aeecf4a4d3570125b76d88e14199589f2eb7bf",
+      "media_type": "application/json"
+    },
+    "JSON/QUICKBOOKS_ONLINE/PAYMENT_REFERENCE": {
+      "file": "json-quickbooks_online-payment_reference.json",
+      "bytes": 217,
+      "sha256": "6081c03aca5275ab1ab934e561894ece8289c427e992a20580dfb71111fa6bff",
+      "media_type": "application/json"
+    },
+    "JSON/ZOHO_BOOKS/VENDOR_BILL": {
+      "file": "json-zoho_books-vendor_bill.json",
+      "bytes": 458,
+      "sha256": "6bb0288995879d45c2219cf6db0aa76c79ab0e99143cd6171cdafd2dcd828f44",
+      "media_type": "application/json"
+    },
+    "JSON/ZOHO_BOOKS/PURCHASE_ORDER": {
+      "file": "json-zoho_books-purchase_order.json",
+      "bytes": 263,
+      "sha256": "bc8d63d638b2e60dd2ffb823a9d683c769785460f1339efe20fd2996f67f263b",
+      "media_type": "application/json"
+    },
+    "JSON/ZOHO_BOOKS/JOURNAL_ENTRY": {
+      "file": "json-zoho_books-journal_entry.json",
+      "bytes": 337,
+      "sha256": "8f283c30cdacf92aefdd84f556935b368ddea6c357ae235cccc4641897b1a814",
+      "media_type": "application/json"
+    },
+    "JSON/ZOHO_BOOKS/PAYMENT_REFERENCE": {
+      "file": "json-zoho_books-payment_reference.json",
+      "bytes": 179,
+      "sha256": "3a15e0523863816003731c7ba351cc7abe959a6dc6e1d4578ec8d889c3249fe8",
+      "media_type": "application/json"
+    },
+    "JSON/BUSINESS_CENTRAL/VENDOR_BILL": {
+      "file": "json-business_central-vendor_bill.json",
+      "bytes": 546,
+      "sha256": "34c17d6c3fd98b68fe041fe4dff87682e9b50789dbc387e1a5af0c26417b5c41",
+      "media_type": "application/json"
+    },
+    "JSON/BUSINESS_CENTRAL/PURCHASE_ORDER": {
+      "file": "json-business_central-purchase_order.json",
+      "bytes": 452,
+      "sha256": "de134b3916e9295b53d954de916fe498bcb5cf5b3b4f79f6a03a602d09000273",
+      "media_type": "application/json"
+    },
+    "JSON/S4HANA_ODATA/VENDOR_BILL": {
+      "file": "json-s4hana_odata-vendor_bill.json",
+      "bytes": 885,
+      "sha256": "11588644ff0b343e7a6ccb6a4ea7ec33a32e43ef415e238fc336f180fb1304e4",
+      "media_type": "application/json"
+    },
+    "JSON/S4HANA_ODATA/PURCHASE_ORDER": {
+      "file": "json-s4hana_odata-purchase_order.json",
+      "bytes": 508,
+      "sha256": "d164e340ba2e2f0422f2f7887483442fd24980a7c034780041cb0463b6de3c06",
+      "media_type": "application/json"
+    },
+    "JSON/S4HANA_ODATA/GOODS_RECEIPT": {
+      "file": "json-s4hana_odata-goods_receipt.json",
+      "bytes": 465,
+      "sha256": "a4c98fcf241e054dd95f56f169320909551dec50f1dfc03fd8a51cc94ca0f5c7",
+      "media_type": "application/json"
+    },
+    "JSON/NETSUITE_REST/VENDOR_BILL": {
+      "file": "json-netsuite_rest-vendor_bill.json",
+      "bytes": 407,
+      "sha256": "0f91c98b2dc0355e0f741d502577ae40f0dd0fcb462fcfa6541f3c913822c989",
+      "media_type": "application/json"
+    },
+    "JSON/NETSUITE_REST/PURCHASE_ORDER": {
+      "file": "json-netsuite_rest-purchase_order.json",
+      "bytes": 179,
+      "sha256": "8f1ccb1e8b239c65824dd735748db8103b4e015940894ab557437de46e3199e3",
+      "media_type": "application/json"
+    },
+    "JSON/NETSUITE_REST/JOURNAL_ENTRY": {
+      "file": "json-netsuite_rest-journal_entry.json",
+      "bytes": 379,
+      "sha256": "810e67d835dc548d22fc0a9e7a663039946c8e6f1ff838610b294e9c0ef5ce0e",
+      "media_type": "application/json"
+    },
+    "JSON/NETSUITE_REST/PAYMENT_REFERENCE": {
+      "file": "json-netsuite_rest-payment_reference.json",
+      "bytes": 142,
+      "sha256": "1883a1c7facf6be20452583bdc85d745b03c0c31ebfbb88bfb0e153c330e2a75",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_REST/VENDOR_BILL": {
+      "file": "json-generic_rest-vendor_bill.json",
+      "bytes": 726,
+      "sha256": "84c1abeefd7f82d236d2be2778c0b5894363083c0b6f964ee35927c28116c9e9",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_REST/PURCHASE_ORDER": {
+      "file": "json-generic_rest-purchase_order.json",
+      "bytes": 676,
+      "sha256": "30dadc3a8e28eafb4e7647115ff1711ef94d96fdea15895aaf7c277fae721ad0",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_REST/GOODS_RECEIPT": {
+      "file": "json-generic_rest-goods_receipt.json",
+      "bytes": 565,
+      "sha256": "aa3087e1d63595c9447ffee2517ae835e8d89d9bf65d939209ff6fa416d50855",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_REST/JOURNAL_ENTRY": {
+      "file": "json-generic_rest-journal_entry.json",
+      "bytes": 734,
+      "sha256": "6a7ecc4ad6e97ab34c2b5f7191fad58252db459357882220cb329875c915e962",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_REST/PAYMENT_REFERENCE": {
+      "file": "json-generic_rest-payment_reference.json",
+      "bytes": 476,
+      "sha256": "7c423385a6332b3aa32fcbbd59629f59f1a66376bbaa9be202e5356add449c12",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_ODATA/VENDOR_BILL": {
+      "file": "json-generic_odata-vendor_bill.json",
+      "bytes": 726,
+      "sha256": "84c1abeefd7f82d236d2be2778c0b5894363083c0b6f964ee35927c28116c9e9",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_ODATA/PURCHASE_ORDER": {
+      "file": "json-generic_odata-purchase_order.json",
+      "bytes": 676,
+      "sha256": "30dadc3a8e28eafb4e7647115ff1711ef94d96fdea15895aaf7c277fae721ad0",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_ODATA/GOODS_RECEIPT": {
+      "file": "json-generic_odata-goods_receipt.json",
+      "bytes": 565,
+      "sha256": "aa3087e1d63595c9447ffee2517ae835e8d89d9bf65d939209ff6fa416d50855",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_ODATA/JOURNAL_ENTRY": {
+      "file": "json-generic_odata-journal_entry.json",
+      "bytes": 734,
+      "sha256": "6a7ecc4ad6e97ab34c2b5f7191fad58252db459357882220cb329875c915e962",
+      "media_type": "application/json"
+    },
+    "JSON/GENERIC_ODATA/PAYMENT_REFERENCE": {
+      "file": "json-generic_odata-payment_reference.json",
+      "bytes": 476,
+      "sha256": "7c423385a6332b3aa32fcbbd59629f59f1a66376bbaa9be202e5356add449c12",
+      "media_type": "application/json"
+    }
+  },
+  "schema_refusals": {
+    "UBL without cbc:ID": "line 5: Element '{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}IssueDate': This element is not expected. Expected is one of ( {urn:oasis",
+    "UBL with an unknown element": "line 5: Element '{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}Nonsense': This element is not expected. Expected is one of ( {urn:oasis:",
+    "UBL amount without currencyID": "line 49: Element '{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}PayableAmount': The attribute 'currencyID' is required but missing.",
+    "X12 SE01 miscounted": "SE01 is 13; the transaction set has 14 segments",
+    "X12 IEA02 != ISA13": "IEA02 ['000000043'] does not match ISA13 ['000000042']",
+    "X12 GE02 != GS06": "GE02 ['41'] does not match GS06 ['42']",
+    "X12 unknown segment in 810": "segment 15 ZZZ: not a segment this validator knows",
+    "X12 date not CCYYMMDD": "segment 4 BIG BIG01 length 7 not in 8-8: '2026091'",
+    "X12 missing mandatory BIG02": "segment 4 BIG BIG02 is mandatory",
+    "CSV unbalanced quote": "text after a closing quote at offset 287",
+    "CSV ragged row": "record 4 has 1 fields, the header has 17",
+    "CSV bare quote in a field": "a quote inside an unquoted field at offset 487",
+    "XLSX sheet with an unknown element": "xl/worksheets/sheet1.xml: line 2: Element '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}nonsense': This element is not expected. Expected is one o",
+    "XLSX content types without the workbook": "[Content_Types].xml names parts that are not in the package: ['xl/gone.xml']",
+    "Tally without VOUCHERTYPENAME": "line 19: Element 'VOUCHERNUMBER': This element is not expected. Expected is ( VOUCHERTYPENAME ).",
+    "Tally amount not a number": "line 29: Element 'AMOUNT': [facet 'pattern'] The value 'lots' is not accepted by the pattern '-?\\d{1,15}(\\.\\d{1,6})?'.",
+    "QBO bill without VendorRef": "(body): 'VendorRef' is a required property"
+  },
+  "held_out": {
+    "seeds": 60,
+    "renders": 564,
+    "by_target": {
+      "CSV/NONE": 60,
+      "XLSX/NONE": 60,
+      "TALLY/NONE": 60,
+      "JSON/QUICKBOOKS_ONLINE": 47,
+      "JSON/ZOHO_BOOKS": 47,
+      "JSON/NETSUITE_REST": 47,
+      "JSON/GENERIC_REST": 60,
+      "JSON/GENERIC_ODATA": 60,
+      "X12/NONE": 31,
+      "UBL/NONE": 34,
+      "JSON/S4HANA_ODATA": 34,
+      "JSON/BUSINESS_CENTRAL": 21,
+      "X12/NONE refused (N2)": 3
+    },
+    "currencies": [
+      "EUR",
+      "GBP",
+      "INR",
+      "JPY",
+      "KWD",
+      "USD"
+    ]
+  },
+  "mapping_refusals": {
+    "an eval key": "header[2].value.eval: a mapping never runs code or evaluates templates; use the declarative expressions (path, const, concat, coalesce) and ",
+    "an exec key on a field": "header[0].exec: a mapping never runs code or evaluates templates; use the declarative expressions (path, const, concat, coalesce) and transf",
+    "a lambda key": "header[2].value.lambda: a mapping never runs code or evaluates templates; use the declarative expressions (path, const, concat, coalesce) an",
+    "a python key at the top": "mapping.python: a mapping never runs code or evaluates templates; use the declarative expressions (path, const, concat, coalesce) and transf",
+    "a script transform": "header[2].value.transforms[0].op: unknown transform 'script' (allowed: date, edm_date, number, minor_units, currency, lookup, map, upper, lo",
+    "an unknown transform": "header[2].value.transforms[0].op: unknown transform 'shell' (allowed: date, edm_date, number, minor_units, currency, lookup, map, upper, low",
+    "a Jinja template in a const": "header[2].value.const: '{{' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a Jinja statement": "header[2].value.const: '{%' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a ${} template": "header[2].value.const: '${' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "an ERB/ASP template": "header[2].value.const: '<%' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a Ruby #{} template": "header[2].value.const: '#{' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a backtick": "header[2].value.const: '`' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a %-format": "header[2].value.const: '%(' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "a str.format field": "header[2].value.const: '{0' looks like a template; the mapping language never evaluates strings (use concat for joined values)",
+    "an unknown object path": "header[2].value.path: '__class__.__mro__' is not a field of the posting object",
+    "a dunder path segment": "header[2].value.path: 'vendor.__dict__' is not a field of the posting object",
+    "a line path in the header": "header[2].value.path: 'line.amount' is a line path; it is only valid inside \"lines\"",
+    "an attribute-style 'to'": "header[2].to: a dotted path of identifiers (letters, digits, underscores; no '__')",
+    "a 'to' with a bracket": "header[2].to: a dotted path of identifiers (letters, digits, underscores; no '__')",
+    "a control character": "header[2].value.const: control characters are not allowed",
+    "a replace with a regex key": "header[2].value.transforms[0].regex: a mapping never runs code or evaluates templates; use the declarative expressions (path, const, concat,",
+    "a lookup of a table that does not exist": "header[2].value.transforms[0].table: no lookup table named 'nope' in this workspace",
+    "a lookup table name with a dot": "header[2].value.transforms[0].table: a lookup table name (lower case, digits, underscores)",
+    "truncate over the limit": "header[2].value.transforms[0].max: 1 to 2000",
+    "number with 9 decimals": "header[2].value.transforms[0].decimals: 0 to 6",
+    "a date format with a letter token": "header[2].value.transforms[0].format: '%' is not a date token (YYYY YY MM M DD D MMM MMMM) or separator (- / . , : T)",
+    "more than 12 transforms": "header[2].value.transforms: at most 12 transforms",
+    "expressions nested too deep": "header[2].value.coalesce[0].coalesce[0].coalesce[0].coalesce[0].coalesce[0].coalesce[0]: nested deeper than 6",
+    "two expression kinds at once": "header[2].value: exactly one of path, const, concat, coalesce",
+    "multiply by a non-number": "header[2].value.transforms[0].by: a decimal literal such as \"0.01\" (no exponent)",
+    "a mapping for another object kind": "mapping.object_kind: must be 'VENDOR_BILL'",
+    "another language version": "mapping.language: must be 'fp-map/1'",
+    "not an object": "a mapping is a JSON object",
+    "a mapping over 64 KiB": "70330 bytes; a mapping is at most 65536",
+    "lines from an unknown source": "lines.from: one of lines, lines_with_tax",
+    "a non-boolean required": "header[0].required: true or false",
+    "a map with a nested value": "header[2].value.transforms[0].values['INR']: a literal is a string, a number, true, false or null"
+  },
+  "mapping_semantics": {
+    "number JPY 1234": "1234",
+    "number INR 1234.5": "1234.50",
+    "number KWD 1.125": "1.125",
+    "number USD 0.005": "0.01",
+    "AP role without an account": "line 4, Account: 'AP' is not in the lookup table 'accounts'"
+  },
+  "x12_acks": {
+    "997 A": "ACCEPTED: 997 accepted (group 42)",
+    "997 R": "REJECTED: the partner rejected the 810 (AK9 R, AK5 ['R'])",
+    "997 E": "MISMATCH: accepted with errors (AK9 E): check what the partner kept"
+  },
+  "file_acks": {
+    "tally created": "ACCEPTED: Tally created the voucher",
+    "tally error": "REJECTED: Tally refused the voucher: Ledger 'Acme' does not exist!",
+    "tally ignored": "MISMATCH: Tally ignored the voucher (an existing voucher with the same REMOTEID?)",
+    "tally two vouchers": "MISMATCH: Tally reported 2 vouchers for one posting",
+    "ack ACCEPTED": "ACCEPTED: accepted",
+    "ack REJECTED": "REJECTED: vendor 56 is blocked",
+    "ack json ok": "ACCEPTED: accepted",
+    "ack json error": "REJECTED: period closed",
+    "ack unreadable": "MISMATCH: an acknowledgement that could not be read: not a Tally response: not well-formed XML: Premature end of data in tag oops line 1, line 1, column 17 (<string>, line 1)",
+    "ack says maybe": "MISMATCH: an acknowledgement that says 'PENDING'"
+  },
+  "rest_acks": {
+    "total off by 1.00": "total: sent 118000.00, the target has 117999.0",
+    "another document number": "document_number: sent 'INV-2026-0042', the target has 'INV-2026-0043'",
+    "no record named": "the target answered success but named no record",
+    "KWD off by 2 fils": "total: sent 118000.00, the target has 118000.002",
+    "probe QUICKBOOKS_ONLINE": "/v3/company/9130350000000000/query?query=select%20Id%2C%20DocNumber%2C%20TotalAmt%20from%20Bill%20where%20DocNumber%20%3D%20%27INV-2026-0042%27",
+    "probe ZOHO_BOOKS": "/books/v3/bills?organization_id=60012345678&bill_number=INV-2026-0042",
+    "probe BUSINESS_CENTRAL": "/companies(c1d2e3f4-0000-4000-8000-000000000001)/purchaseInvoices?$filter=vendorInvoiceNumber%20eq%20%27INV-2026-0042%27",
+    "probe S4HANA_ODATA": "/API_SUPPLIERINVOICE_PROCESS_SRV/A_SupplierInvoice?sap-client=100&$format=json&$filter=SupplierInvoiceIDByInvcgParty%20eq%20%27INV-2026-0042%27",
+    "probe NETSUITE_REST": "/vendorBill?q=tranId%20IS%20%22INV-2026-0042%22"
+  },
+  "backoff": {
+    "1": [
+      15,
+      29
+    ],
+    "2": [
+      30,
+      59
+    ],
+    "3": [
+      60,
+      119
+    ],
+    "4": [
+      120,
+      239
+    ],
+    "5": [
+      240,
+      478
+    ],
+    "6": [
+      480,
+      959
+    ],
+    "7": [
+      962,
+      1919
+    ],
+    "8": [
+      1802,
+      3599
+    ],
+    "9": [
+      1804,
+      3593
+    ],
+    "10": [
+      1803,
+      3595
+    ],
+    "11": [
+      1802,
+      3596
+    ],
+    "12": [
+      1800,
+      3598
+    ],
+    "13": [
+      1801,
+      3597
+    ],
+    "14": [
+      1806,
+      3590
+    ],
+    "15": [
+      1800,
+      3599
+    ]
+  },
+  "egress": {
+    "modules imported without network": 20,
+    "https://127.0.0.1/x": "ForbiddenAddressError",
+    "https://10.0.0.8/x": "ForbiddenAddressError",
+    "https://169.254.169.254/latest/meta-data": "ForbiddenAddressError",
+    "https://[::1]/x": "ForbiddenAddressError",
+    "classification": {
+      "refused before connect": "TRANSIENT",
+      "reset after sending": "UNCERTAIN",
+      "forbidden address": "PERMANENT",
+      "timeout mid-request": "UNCERTAIN"
+    }
+  },
+  "xml_safety": {
+    "external entity (XXE)": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "external entity (XXE) in UTF-16": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "parameter entity": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "parameter entity in UTF-16": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "billion laughs": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "billion laughs in UTF-16": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "spaced declaration": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "spaced declaration in UTF-16": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "external DTD": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "external DTD in UTF-16": "XML declaring a DOCTYPE or an ENTITY is refused (external and nested entities)",
+    "hardened parser resolves nothing": true
+  },
+  "live": [
+    {
+      "step": "D2 models match the migration: zero column-level drift on the five ARCH-47 tables",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D3 schema refusals: ledger and idempotency keys unique, state CHECKs (bytes, leases, retries, acks, exceptions, erasure), composite FKs, flat lookup tables, one active mapping; a document's deletion unlinks, a target with postings cannot be deleted",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D4 sources and planning: an APPROVED three-way match yields all five objects on the ARCH-42 vendor record (due date from the terms), rendered once and valid; planning again finds the same posting; an unapproved match is refused; a missing role account FAILS at render, raising posting.failed once",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D5 HTTP: all 27 routes 402 without capability.erp_posting (denial audited, hub hides POSTING); with it targets (private and metadata URLs refused), credentials (encrypted, fingerprint only, never audited), mappings (templates refused, versions, default), lookups, outcomes, preview (posts nothing), post (twice = one), list, detail, file (audited), acknowledge by response file / refusal, cancel, workspace scoping",
+      "ok": false,
+      "detail": "AssertionError: {'ok': False, 'kind': 'TRANSIENT', 'message': 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', 'detail': {'status': None, 'path': '/'}}  at verify_arch47.py:1964 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D6 REST/OData presets (QuickBooks Online with OAuth refresh rotation, Zoho Books, Business Central, S/4HANA with CSRF, NetSuite with its idempotency header, generic REST and OData): every supported object planned, enqueued, delivered to the mock and DONE only on its acknowledgement; delivering again sends nothing",
+      "ok": false,
+      "detail": "AssertionError: ('QUICKBOOKS_ONLINE', 'VENDOR_BILL', 'RETRYING', 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', {'delivered': False, 'state': 'RETRYING', 'message': 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', 'posting_id': 'cf1f26be-2a22-4269-85e7-7492b28fc27c'})  at verify_arch47.py:2084 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D7 exactly once under faults: a reset after the target committed is resolved by a probe (one bill); a reset before, 503 + Retry-After and exhausted retries back off and fail cleanly; 400 is REJECTED and a different acknowledged total is a MISMATCH (both in the hub, posting.failed once); a duplicate refusal of our own bill is DONE; an expired lease probes before re-sending",
+      "ok": false,
+      "detail": "AssertionError: ('RETRYING', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; the look-up failed too: will look again before re-sending', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D8 SFTP (pinned host key): an X12 810 uploaded atomically and DONE on its 997, a 997 rejection REJECTED, control numbers never reused, Tally's import response read (voucher id), UBL delivery-level DONE, an importer that took the file with the answer lost is UNCERTAIN (never re-sent blind), an impostor host key FAILED with nothing uploaded, silence past the ack timeout FAILED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D9 review hub: a POSTING item per exception; RETRY re-sends (DONE), ACCEPT records the ERP's reference without sending, bulk CANCEL closes; a verdict the state does not allow is refused",
+      "ok": false,
+      "detail": "KeyError: 'rejected'  at verify_arch47.py:2307 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D10 Flow Builder: erp.post validates its trigger, its workspace's target and the objects the target takes; refuses document-derived parameters; three firings plan two postings once; refused without the plan; posting.failed carries its catalogue fields",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D11 sweep: auto-post plans only outcomes approved after it was switched on (again: nothing new), reclaims an expired lease, times out an unconfirmed download; a dry run commits nothing; skipped without the plan",
+      "ok": false,
+      "detail": "KeyError: 'qbo_faults'  at verify_arch47.py:2408 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D12 the worker: without capability.erp_posting the job sends nothing; with it the posting is delivered and DONE; a vanished posting is a no-op",
+      "ok": false,
+      "detail": "AssertionError: {'delivered': False, 'state': 'UNCERTAIN', 'message': 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; Generic REST offers no way to look this vendor_bill up: check the target, then retry or accept', 'posting_id': 'e9090750-5360-4986-ae07-bd71feab2f37'}  at verify_arch47.py:2460 <- verify_arch47.py:1569"
+    },
+    {
+      "step": "D13 ARCH-20 erasure: postings built from a subject's documents lose every quoted value (file, canonical, mapped, number, attempt details); the ledger row stays; one not yet sent is cancelled",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "db_caught_by": {
+    "MD1 the ERP API's capability gate removed (D5 must catch)": "D5: AssertionError: ('get', '/erp/catalog', 200, '{\"formats\":[{\"key\":\"CSV\",\"label\":\"CSV (RFC 4180)\",\"transports\":[\"DOWNLOAD\",\"SFTP\"],\"objects\":[\"VENDOR_BILL\",\"PURCHASE_ORDER\",\"GOODS_RECEIPT\",\"JOURNAL_ENTRY\",\"PAYMENT_REFERENCE\"]},{\"key\":\"XLSX\",\"label\"')  at verify_arch47.py:1925 <- verify_arch47.py:1569",
+    "MD2 planning without the ledger look-up and ON CONFLICT (a second 'Post' is a second posting; D4 must catch)": "D4: IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"uq_erp_postings_ledger\"\nDETAIL:  Key (target_id, object_kind, source_kind, source_id)=(882c6507-bacd-4fe2-a770-177f8605367c, VENDOR_BILL, PROCUREMENT_CASE, 6c46bf70-9c3f-4217-ba2a-55e7df2c2ea6) already ",
+    "MD3 no probe after an uncertain send (a lost answer is re-sent or failed blind; D7 must catch)": "D7: AssertionError: ('FAILED', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569",
+    "MD4 the acknowledgement ignores the echoed figures (a different total is DONE; D7 must catch)": "D7: AssertionError: ('RETRYING', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; the look-up failed too: will look again before re-sending', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569",
+    "MD5 posting.failed keyed without the exception number (raised again on every save; D4 must catch)": "D4: AssertionError: ['trigger.posting.failed:878ea2c5-52bd-4c1f-b701-1daed59a9b2d:fc0a45b7-52eb-496c-afc1-c77cc8876e91']  at verify_arch47.py:1873 <- verify_arch47.py:1569",
+    "MD6 the hub cannot resolve POSTING (D9 must catch)": "D9: KeyError: 'rejected'  at verify_arch47.py:2307 <- verify_arch47.py:1569",
+    "MD7 ARCH-20 erasure keeps what postings quote (D13 must catch)": "D13: AssertionError: an erased posting still quotes the document  at verify_arch47.py:2483 <- verify_arch47.py:1569",
+    "MD8 the delivery job ignores the plan (D12 must catch)": "D12: KeyError: 'reason'  at verify_arch47.py:2456 <- verify_arch47.py:1569",
+    "MD9 auto-post reaches back before it was switched on (D11 must catch)": "D11: AssertionError: [(UUID('2f140f2a-46a1-458f-993d-eafddb71a3c8'), 'VENDOR_BILL'), (UUID('07012731-a4e0-40c9-890f-ceda60e4360e'), 'VENDOR_BILL'), (UUID('091c3d5e-c914-4822-ab87-716b22cf4e80'), 'VENDOR_BILL'), (UUID('d76f1ab5-6664-4066-800f-15bbc777e39e'), 'VENDOR_BILL'), (UUID('9f4ffb0d-9159-4764-aa7d-",
+    "MD10 a rotated OAuth refresh token is not stored (the next refresh fails; D6 must catch)": "D6: AssertionError: ('QUICKBOOKS_ONLINE', 'VENDOR_BILL', 'RETRYING', 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', {'delivered': False, 'state': 'RETRYING', 'message': 'token endpoint: ConnectionRefusedError: [WinEr",
+    "MD11 S/4HANA written without its CSRF token (D6 must catch)": "D6: AssertionError: ('QUICKBOOKS_ONLINE', 'VENDOR_BILL', 'RETRYING', 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', {'delivered': False, 'state': 'RETRYING', 'message': 'token endpoint: ConnectionRefusedError: [WinEr",
+    "MD12 the SFTP host key not compared with the pin (an impostor receives the file; D8 must catch)": "D8: AssertionError: ('FAILED', \"refused by the egress guard: '127.0.0.1' resolved to a disallowed address: 127.0.0.1 (loopback)\")  at verify_arch47.py:2231 <- verify_arch47.py:1569",
+    "MD13 retries never exhaust (a failing posting retries forever; D7 must catch)": "D7: AssertionError: ('RETRYING', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; the look-up failed too: will look again before re-sending', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569",
+    "MD14 an expired lease re-sends without probing (D7 must catch)": "D7: AssertionError: ('RETRYING', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; the look-up failed too: will look again before re-sending', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569",
+    "MD15 a private target URL accepted at registration (D5 must catch)": "D5: AssertionError: {\"target\":{\"id\":\"a58f4fca-f861-4ea5-8d6b-8d23841fb498\",\"name\":\"internal\",\"format\":\"JSON\",\"transport\":\"HTTP\",\"preset\":\"GENERIC_REST\",\"ack_mode\":\"SYNC\",\"auth_mode\":\"BEARER\",\"status\":\"ACTIVE\",\"host\":\"10.1.2.3\",\"credential_set\":false,\"credential_fingerprint\":null,\"credential_updated_at\":",
+    "MD16 the credential stored in the clear (D5 must catch)": "D5: AssertionError:   at verify_arch47.py:1956 <- verify_arch47.py:1569",
+    "MX1 claiming without the row lock and lease (two workers send the same posting; X1 must catch)": "DatabaseError: (psycopg2.DatabaseError) audit_logs is append-only: DELETE is not permitted. Only the retention sweeper role may delete rows older than 400 days.\nCONTEXT:  PL/pgSQL function fn_audit_logs_prevent_mutation() line 22 at RAISE\nSQL statement \"DELETE FROM ONLY \"public\".\"audit_logs\" WHERE $1 OPERATOR(pg_c"
+  },
+  "caught_by": {
+    "MS1 capability missing from the Business tier": "AssertionError: not packaged into Business",
+    "MS2 capability leaked below Business": "AssertionError: leaked below Business",
+    "MS3 no Entitlement entry (has_capability would raise)": "AssertionError: no Entitlement entry (has_capability would raise)",
+    "MS4 no plan card lists ERP posting": "AssertionError: no plan card lists ERP posting (PLAN_FEATURE_ORDER)",
+    "MS5 contract step left on arch46 (two heads)": "AssertionError: the contract step revises \"arch46_step1_obligations\", expected arch47_step1_erp_posting",
+    "MS6 the ledger's unique key dropped": "AssertionError: CONSTRAINT uq_erp_postings_ledger UNIQUE (target_id, object_kind, source_kind, source_id) missing from the migration",
+    "MS7 the idempotency key's uniqueness dropped": "AssertionError: CONSTRAINT uq_erp_postings_idempotency UNIQUE (idempotency_key) missing from the migration",
+    "MS8 a queued posting may lack its bytes (the rendered CHECK dropped)": "AssertionError: ck_erp_postings_rendered missing from the migration",
+    "MS9 UBL amounts without currencyID": "RenderError: the UBL 2.1 schema refuses this document: line 43: Element '{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}TaxAmount': The attribute 'currencyID' is required but missing.; line 46: Element '{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}LineExtensionAmou",
+    "MS10 X12 SE01 off by one": "AssertionError: X12/NONE/VENDOR_BILL: ['SE01 is 13; the transaction set has 14 segments']",
+    "MS11 CSV formula neutralisation removed": "AssertionError: ['DocumentNumber', 'DocumentDate', 'Vendor', 'VendorTaxId', 'Currency', 'DueDate', 'POReference', 'Subtotal', 'Tax', 'Total', 'Line', 'Code', 'Description', 'Quantity', 'Unit', 'UnitPrice', 'Amount', 'INV-2026-0042', '2026-09-01', '=HYPERLINK(\"http://evil\",\"x\")']",
+    "MS12 XLSX zip timestamps from the clock (not deterministic)": "AssertionError: zip timestamps are not fixed: {(2031, 5, 6, 7, 8, 10)}",
+    "MS13 the mapping language accepts templates": "AssertionError: a Jinja template in a const: ACCEPTED",
+    "MS14 executable keys only refused as unknown keys": "AssertionError: an eval key was refused, but not as code: header[2].value.eval: unknown key (allowed: coalesce, concat, const, path, sep, transforms)",
+    "MS15 mapping.py evaluates something": "AssertionError: mapping.py uses eval(",
+    "MS16 a TAX / AP line falls back to the default expense account": "AssertionError: a TAX line fell back to the default expense account",
+    "MS17 money always written with two decimals (KWD loses a fils)": "AssertionError: JPY 1234 -> '1234.00', expected '1234'",
+    "MS18 X12 N2 rounds a 3-decimal amount silently": "AssertionError: seed 4728: a 3-decimal X12 total was not refused",
+    "MS19 a 997 of another group settles ours": "AssertionError: another group's 997 settled ours",
+    "MS20 the REST acknowledgement ignores echoed figures": "AssertionError: total off by 1.00: ACCEPTED (created as 145)",
+    "MS21 the acknowledgement tolerance ignores the currency": "AssertionError: KWD off by 2 fils: ACCEPTED (created as 1)",
+    "MS22 backoff without jitter or ceiling": "AssertionError: attempt 1: no jitter",
+    "MS23 backoff ignores Retry-After": "AssertionError: Retry-After ignored",
+    "MS24 ERP calls through a raw HTTP client": "AssertionError: not the SSRF-safe client",
+    "MS25 secrets recorded unscrubbed": "AssertionError: {\"access_token\": \"abc123\", \"refresh_token\":\"r-9\", \"client_secret\": \"s\"} password=hunter2",
+    "MS26 SFTP accepts an unpinned host key": "AssertionError: {'sftp': {'host': 'sftp.example', 'host_key_sha256': 'none'}}: None",
+    "MS27 the X12 validator ignores the SE count": "AssertionError: X12 SE01 miscounted accepted",
+    "MS28 the XLSX package structure unchecked": "AssertionError: XLSX content types without the workbook accepted",
+    "MS29 delivery registered on the OCR profile": "AssertionError: delivering a posting is network and file work: the LIGHT profile only",
+    "MS30 posting.failed keyed without the exception number": "AssertionError: posting.failed is not idempotent per posting and exception",
+    "MS31 the hub shows POSTING without the capability": "AssertionError: the hub shows POSTING without the capability",
+    "MS32 the conformance matrix still expects 21 triggers": "AssertionError: the live conformance matrix does not expect 22 triggers",
+    "MS33 the sweep not scheduled (G14)": "AssertionError: sweep not scheduled (RH-4 G14)",
+    "MS34 erasure hook removed": "AssertionError: ARCH-20 erasure keeps what postings quote of a document",
+    "MS35 erp.post takes a document-derived parameter": "AssertionError: erp.post takes a document-derived parameter",
+    "MS36 a route loses its capability gate": "AssertionError: accept_posting is not gated first",
+    "MS37 credentials settable by contributors": "AssertionError: set_credential (put /workspaces/{workspace_id}/erp/targets/{target_id}/credential) needs RequireAdmin, has ['RequireContributor']",
+    "MS38 the posting file download not audited": "AssertionError: the posting file download must be audited, uncached, nosniff",
+    "MS39 console type drifts from the API": "AssertionError: PostingDetail: API and console differ in ['source_changed']",
+    "MS40 Work Item details without its ERP postings tab": "AssertionError: Work Item details has no ERP postings tab",
+    "MS41 the console's credential fields differ from the API's": "AssertionError: console credential fields for SSH_KEY:   SSH_KEY: { required: [\"username\"], optional: [] },",
+    "MS42 a file ARCH-47 touched loses its sentinel": "AssertionError: no ARCH47 sentinel in ['gate (gate.py)']",
+    "MS43 untrusted ERP XML may declare a DOCTYPE (the XXE refusal removed)": "AssertionError: external entity (XXE) accepted",
+    "MS44 the ERP XML parser resolves entities and loads DTDs": "AssertionError: the hardened parser resolved an external entity",
+    "MS45 a Tally response parsed with lxml directly (outside xmlsafe.py)": "AssertionError: XML parsed outside xmlsafe.py: ['app\\\\services\\\\erp\\\\formats\\\\tally.py imports lxml']"
+  },
+  "seconds": 631.0,
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "T1 capability: entitlements (+Entitlement), 402 name, Business AND Enterprise (not below), console + plan card, nav lock, verify36, hardening matrix",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2 migration: 5 tables, the ledger's two unique keys, CHECKs, composite FKs, arch46 -> arch47 -> contract, one head, hub view v8, vocabulary parity, posting.failed in the outbox CHECK",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "F1 golden files: 48 format x preset x object renders valid against OASIS UBL 2.1 / ECMA-376 / RFC 4180 / X12 004010 / the Tally XSD / each preset's schema, figures exact, deterministic",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "F2 the validators refuse broken documents of every format (UBL, X12 envelope arithmetic and grammar, CSV, XLSX package, Tally, JSON)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "F3 held-out seeds 4700-4759 (JPY/INR/KWD..., hostile names) through every target: valid and exact; an inexact N2 amount refused",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "M1 the mapping language refuses anything executable (eval/exec/lambda keys, templates, dunder paths, unknown transforms/tables), says where; every default mapping validates",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "M2 transforms exact: money in the currency's minor units, minor units refuse inexact yen, lookups fail naming the line, AP/TAX roles never fall back",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "C1 canonical objects reconcile (line arithmetic, subtotal, total, balanced journals, one side per line) and digest content only",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "K1 X12 997: accepted / rejected / accepted-with-errors, another group ignored, our set missing is a mismatch",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "K2 Tally import responses and .ack files: created (with the voucher id), errors, ignored, two vouchers, unreadable",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "K3 REST/OData acknowledgements: every echoed figure compared (currency minor-unit tolerance), no record named = mismatch; probes and idempotency per preset",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "R1 backoff: 30 s x 2^(n-1), full jitter in [d/2, d], 1-hour ceiling, never below Retry-After",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "N1 egress: SSRF-safe client only (private/loopback/metadata refused), test switches refused in production, no network at import, secrets scrubbed, SFTP host key pinned",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "N2 XML safety: lxml only in the hardened xmlsafe.py (ARCH-16 S1), DOCTYPE/ENTITY refused (XXE, parameter entities, billion laughs, UTF-16), nothing resolved, every ERP XML reader routed through it",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T3 file safety: CSV formula neutralisation, XLSX inline strings only, fixed zip timestamps",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W1 wiring: job on LIGHT (plan-checked), erasure, posting.failed (22/23, no erp.post loop), erp.post (ledger, admin, author-chosen target), conformance 22, hub gated, router, sweep scheduled, paramiko pinned",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W2 API: 27 routes, each gated first; roles (targets/credentials/mappings ADMIN, posting CONTRIBUTOR, reads VIEWER); download audited, uncached; no secret in a response",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W3 console: type parity (every API model + 14 unions + labels + credential fields), locked pages, routes, Work Item tab, hub tab + bulk, ResolvePanel, erp.post form, no raw Date formatting",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-47 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S2 earlier verifiers widened with ARCH47-S1 sentinels, never replacing theirs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "A1 apply_arch47.py --check on this tree: every file is the ARCH-47 result (a second apply writes nothing)",
+      "outcome": "FAIL  nents/erp/ReadyToPost.tsx\n  already applied                  frontend/src/components/erp/common.tsx\n  already applied                  frontend/src/components/layout/navigation.ts\n  already applied                  frontend/src/components/review/ResolvePanel.tsx\n  already applied                  frontend/src/constants/capabilities.ts\n  already applied                  frontend/src/constants/planFeatures.ts\n  already applied                  frontend/src/pages/Verification/ReviewHub.tsx\n  already applied                  frontend/src/pages/WorkItems/WorkItemDetails.tsx\n  already applied                  frontend/src/pages/erp/ErpPosting.tsx\n  already applied                  frontend/src/pages/erp/ErpPostingDetail.tsx\n  already applied                  frontend/src/pages/erp/ErpTargetDetail.tsx\n  already applied                  frontend/src/routes/tenantPaths.ts\n  already applied                  frontend/src/services/api/erp.ts\n  already applied                  frontend/src/types/automationFlow.ts\n  already applied                  frontend/src/types/erp.ts\n  already applied                  frontend/src/types/review.ts\n\nREFUSED:\n  backend/app/services/erp/formats/xsd.py: sha256 8f45977c9b32... is not the ff82586 file or the ARCH-47 result. It has local changes this script would discard. Nothing has been written.\n  run_arch47.ps1: sha256 c20c74b34a5c... is not the ff82586 file or the ARCH-47 result. It has local changes this script would discard. Nothing has been written.\n"
+    },
+    {
+      "layer": "db",
+      "gate": "D1 database at arch47: 5 tables, the ledger key, POSTING in the hub, posting.failed in the outbox CHECK",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D2 models match the migration: zero column-level drift on the five ARCH-47 tables",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D3 schema refusals: ledger and idempotency keys unique, state CHECKs (bytes, leases, retries, acks, exceptions, erasure), composite FKs, flat lookup tables, one active mapping; a document's deletion unlinks, a target with postings cannot be deleted",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D4 sources and planning: an APPROVED three-way match yields all five objects on the ARCH-42 vendor record (due date from the terms), rendered once and valid; planning again finds the same posting; an unapproved match is refused; a missing role account FAILS at render, raising posting.failed once",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D5 HTTP: all 27 routes 402 without capability.erp_posting (denial audited, hub hides POSTING); with it targets (private and metadata URLs refused), credentials (encrypted, fingerprint only, never audited), mappings (templates refused, versions, default), lookups, outcomes, preview (posts nothing), post (twice = one), list, detail, file (audited), acknowledge by response file / refusal, cancel, workspace scoping",
+      "outcome": "FAIL  AssertionError: {'ok': False, 'kind': 'TRANSIENT', 'message': 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', 'detail': {'status': None, 'path': '/'}}  at verify_arch47.py:1964 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D6 REST/OData presets (QuickBooks Online with OAuth refresh rotation, Zoho Books, Business Central, S/4HANA with CSRF, NetSuite with its idempotency header, generic REST and OData): every supported object planned, enqueued, delivered to the mock and DONE only on its acknowledgement; delivering again sends nothing",
+      "outcome": "FAIL  AssertionError: ('QUICKBOOKS_ONLINE', 'VENDOR_BILL', 'RETRYING', 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', {'delivered': False, 'state': 'RETRYING', 'message': 'token endpoint: ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it', 'posting_id': 'cf1f26be-2a22-4269-85e7-7492b28fc27c'})  at verify_arch47.py:2084 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D7 exactly once under faults: a reset after the target committed is resolved by a probe (one bill); a reset before, 503 + Retry-After and exhausted retries back off and fail cleanly; 400 is REJECTED and a different acknowledged total is a MISMATCH (both in the hub, posting.failed once); a duplicate refusal of our own bill is DONE; an expired lease probes before re-sending",
+      "outcome": "FAIL  AssertionError: ('RETRYING', 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; the look-up failed too: will look again before re-sending', 0)  at verify_arch47.py:2132 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D8 SFTP (pinned host key): an X12 810 uploaded atomically and DONE on its 997, a 997 rejection REJECTED, control numbers never reused, Tally's import response read (voucher id), UBL delivery-level DONE, an importer that took the file with the answer lost is UNCERTAIN (never re-sent blind), an impostor host key FAILED with nothing uploaded, silence past the ack timeout FAILED",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D9 review hub: a POSTING item per exception; RETRY re-sends (DONE), ACCEPT records the ERP's reference without sending, bulk CANCEL closes; a verdict the state does not allow is refused",
+      "outcome": "FAIL  KeyError: 'rejected'  at verify_arch47.py:2307 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D10 Flow Builder: erp.post validates its trigger, its workspace's target and the objects the target takes; refuses document-derived parameters; three firings plan two postings once; refused without the plan; posting.failed carries its catalogue fields",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D11 sweep: auto-post plans only outcomes approved after it was switched on (again: nothing new), reclaims an expired lease, times out an unconfirmed download; a dry run commits nothing; skipped without the plan",
+      "outcome": "FAIL  KeyError: 'qbo_faults'  at verify_arch47.py:2408 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D12 the worker: without capability.erp_posting the job sends nothing; with it the posting is delivered and DONE; a vanished posting is a no-op",
+      "outcome": "FAIL  AssertionError: {'delivered': False, 'state': 'UNCERTAIN', 'message': 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; Generic REST offers no way to look this vendor_bill up: check the target, then retry or accept', 'posting_id': 'e9090750-5360-4986-ae07-bd71feab2f37'}  at verify_arch47.py:2460 <- verify_arch47.py:1569"
+    },
+    {
+      "layer": "db",
+      "gate": "D13 ARCH-20 erasure: postings built from a subject's documents lose every quoted value (file, canonical, mapped, number, attempt details); the ledger row stays; one not yet sent is cancelled",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "X1 exactly once under real concurrency (committed, then deleted): 16 planners -> 1 posting; 12 deliverers -> 1 send; a lost answer raced by 8 -> 1 send, UNCERTAIN",
+      "outcome": "FAIL  (0, [{'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'state': 'UNCERTAIN', 'message': 'ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it; Generic REST offers no way to look this vendor_bill up: check the target, then retry or accept', 'posting_id': 'b8e53978-3eb8-46e4-870e-8819897f53bc'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}, {'delivered': False, 'reason': 'not due, already claimed, or finished'}])"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD1 the ERP API's capability gate removed (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD2 planning without the ledger look-up and ON CONFLICT (a second 'Post' is a second posting; D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD3 no probe after an uncertain send (a lost answer is re-sent or failed blind; D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD4 the acknowledgement ignores the echoed figures (a different total is DONE; D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD5 posting.failed keyed without the exception number (raised again on every save; D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD6 the hub cannot resolve POSTING (D9 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD7 ARCH-20 erasure keeps what postings quote (D13 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD8 the delivery job ignores the plan (D12 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD9 auto-post reaches back before it was switched on (D11 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD10 a rotated OAuth refresh token is not stored (the next refresh fails; D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD11 S/4HANA written without its CSRF token (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD12 the SFTP host key not compared with the pin (an impostor receives the file; D8 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD13 retries never exhaust (a failing posting retries forever; D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD14 an expired lease re-sends without probing (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD15 a private target URL accepted at registration (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD16 the credential stored in the clear (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MX1 claiming without the row lock and lease (two workers send the same posting; X1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS1 capability missing from the Business tier",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS2 capability leaked below Business",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS3 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS4 no plan card lists ERP posting",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS5 contract step left on arch46 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS6 the ledger's unique key dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS7 the idempotency key's uniqueness dropped",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS8 a queued posting may lack its bytes (the rendered CHECK dropped)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS9 UBL amounts without currencyID",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS10 X12 SE01 off by one",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS11 CSV formula neutralisation removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS12 XLSX zip timestamps from the clock (not deterministic)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS13 the mapping language accepts templates",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS14 executable keys only refused as unknown keys",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS15 mapping.py evaluates something",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS16 a TAX / AP line falls back to the default expense account",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS17 money always written with two decimals (KWD loses a fils)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS18 X12 N2 rounds a 3-decimal amount silently",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS19 a 997 of another group settles ours",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS20 the REST acknowledgement ignores echoed figures",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS21 the acknowledgement tolerance ignores the currency",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS22 backoff without jitter or ceiling",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS23 backoff ignores Retry-After",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS24 ERP calls through a raw HTTP client",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS25 secrets recorded unscrubbed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS26 SFTP accepts an unpinned host key",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS27 the X12 validator ignores the SE count",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS28 the XLSX package structure unchecked",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS29 delivery registered on the OCR profile",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS30 posting.failed keyed without the exception number",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS31 the hub shows POSTING without the capability",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS32 the conformance matrix still expects 21 triggers",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS33 the sweep not scheduled (G14)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS34 erasure hook removed",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS35 erp.post takes a document-derived parameter",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS36 a route loses its capability gate",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS37 credentials settable by contributors",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS38 the posting file download not audited",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS39 console type drifts from the API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS40 Work Item details without its ERP postings tab",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS41 the console's credential fields differ from the API's",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS42 a file ARCH-47 touched loses its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS43 untrusted ERP XML may declare a DOCTYPE (the XXE refusal removed)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS44 the ERP XML parser resolves entities and loads DTDs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS45 a Tally response parsed with lxml directly (outside xmlsafe.py)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B1 tsc -b and vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B2 eslint --max-warnings=0 on the 25 ARCH-47 console files",
+      "outcome": "PASS"
+    }
+  ]
+}

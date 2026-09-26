@@ -43,6 +43,7 @@ from app.core.entitlements import (
     TABLE_INTELLIGENCE_CAPABILITY,
     UNIVERSAL_CORROBORATOR_CAPABILITY,
     OBLIGATIONS_CAPABILITY,
+    ERP_POSTING_CAPABILITY,
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
 )
@@ -478,6 +479,34 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         ),
         capability=OBLIGATIONS_CAPABILITY,
         has_document=False,
+    ),
+    # ARCH47-S1:trigger-posting-failed. 22 triggers over 23 events after ARCH-47.
+    TriggerSpec(
+        key="posting.failed",
+        label="ERP posting failed",
+        category="ERP posting",
+        description=(
+            "A posting to an ERP or system of record could not be completed: it failed (retries exhausted, or it "
+            "could not be rendered), the target rejected it, the target acknowledged different figures than were "
+            "sent, or the outcome of a send is unknown. Fires once each time a posting enters one of these "
+            "states; the review hub holds it until a person retries, accepts or cancels it."
+        ),
+        event_types=("trigger.posting.failed",),
+        fields=(
+            TriggerField("target", "Target", "string", "QuickBooks Online (production)"),
+            TriggerField("object_kind", "Object", "string", "VENDOR_BILL"),
+            TriggerField("state", "State", "string", "REJECTED"),
+            TriggerField("document_number", "Document number", "string", "INV-2026-0042"),
+            TriggerField("amount", "Amount", "string", "118000.00"),
+            TriggerField("currency", "Currency", "string", "INR"),
+            TriggerField("reason", "Reason", "string", "the target answered 400: 6000 Business Validation Error"),
+            TriggerField("attempts", "Attempts", "number", "3"),
+        ),
+        capability=ERP_POSTING_CAPABILITY,
+        # A posting is not one document (a journal from a table, a payment): document actions are refused by
+        # flow_service, and posting from a posting failure would loop back into the ledger.
+        has_document=False,
+        excluded_actions=("erp.post",),
     ),
 )
 

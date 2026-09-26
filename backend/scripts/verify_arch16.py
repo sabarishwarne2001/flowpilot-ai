@@ -73,6 +73,13 @@ def rel(path: Path) -> str:
 XML_MODULES = {"lxml", "lxml.etree", "xml.etree", "xml.etree.ElementTree",
                "xml.dom", "xml.dom.minidom", "xml.sax", "xmltodict"}
 SAML_GATEWAY = "app/services/identity/saml_gateway.py"
+# ARCH47-S1:xml-confined-16. ERP posting (ARCH-47) writes and reads UBL, Tally and
+# SpreadsheetML XML. Its one hardened module is the only other place lxml may be
+# imported, and only while it refuses DOCTYPE/ENTITY declarations in untrusted input
+# and parses with entities unresolved and the network off (checked below).
+ERP_XML_SAFE = "app/services/erp/formats/xmlsafe.py"
+ERP_XML_SAFE_REQUIRED = ("resolve_entities=False", "no_network=True", "load_dtd=False", "huge_tree=False",
+                         'rb"<!\\s*(DOCTYPE|ENTITY)"', "raise XMLRefused(\"XML declaring a DOCTYPE or an ENTITY is refused")
 DNS_SERVICE = "app/services/identity/dns_service.py"
 
 
@@ -80,6 +87,12 @@ def s1_xml_confined(report: Report) -> None:
     offenders = []
     for path in python_files(APP):
         if rel(path).replace("\\", "/") == SAML_GATEWAY:
+            continue
+        if rel(path).replace("\\", "/") == ERP_XML_SAFE:
+            source = path.read_text(encoding="utf-8")
+            missing = [needle for needle in ERP_XML_SAFE_REQUIRED if needle not in source]
+            if missing:
+                offenders.append(f"{ERP_XML_SAFE} is not hardened (missing {', '.join(missing)})")
             continue
         tree = parse(path)
         if tree is None:
@@ -94,7 +107,7 @@ def s1_xml_confined(report: Report) -> None:
     if offenders:
         report.fail("S1", "unsafe XML parser outside saml_gateway: " + "; ".join(offenders))
     else:
-        report.ok("S1", "XML parsing is confined to saml_gateway")
+        report.ok("S1", "XML parsing is confined to saml_gateway (and ARCH-47's hardened erp/formats/xmlsafe.py)")
 
 
 def s2_defusedxml_used(report: Report) -> None:

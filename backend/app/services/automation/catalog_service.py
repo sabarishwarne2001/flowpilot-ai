@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.entitlements import WAREHOUSE_SYNC_ADDON
+from app.core.entitlements import ERP_POSTING_CAPABILITY, WAREHOUSE_SYNC_ADDON  # ARCH47-S1:catalog-capability
 from app.services.automation import actions as action_registry
 from app.services.automation import triggers as catalog
 from app.services.automation.actions.base import STATIC_VARIABLES
@@ -158,6 +158,19 @@ def _destinations(db: Session, *, organization_id: uuid.UUID) -> list[dict[str, 
     ]
 
 
+def _erp_targets(db: Session, *, workspace_id: uuid.UUID) -> list[dict[str, Any]]:
+    """ARCH47-S1:catalog-erp-targets. Active ERP targets the erp.post action can name."""
+    from app.models.erp import ErpTarget
+    from app.services.erp import presets as PR
+    from app.services.erp import vocabulary as ev
+
+    rows = db.execute(select(ErpTarget).where(ErpTarget.workspace_id == workspace_id,
+                                              ErpTarget.status == ev.TARGET_ACTIVE)
+                      .order_by(ErpTarget.name)).scalars().all()
+    return [{"id": str(t.id), "label": t.name, "format": t.format, "preset": t.preset,
+             "objects": list(PR.supported_objects(t.format, t.preset))} for t in rows]
+
+
 def build(db: Session, *, context: Any) -> dict[str, Any]:
     from app.models.warehouse_sync import EXPORT_DATASET_VALUES
     from app.services.automation.actions.notify_role import ROLE_VALUES
@@ -214,6 +227,13 @@ def build(db: Session, *, context: Any) -> dict[str, Any]:
         "organization_roles": list(ROLE_VALUES),
         "export_datasets": list(EXPORT_DATASET_VALUES),
         "mutable_fields": list(MUTABLE_COLUMNS),
+        # ARCH47-S1:catalog-erp-resources
+        "erp_targets": (
+            _erp_targets(db, workspace_id=authoring.workspace_id)
+            if ERP_POSTING_CAPABILITY in authoring.granted_capabilities
+            else []
+        ),
+        "erp_object_kinds": ["VENDOR_BILL", "PURCHASE_ORDER", "GOODS_RECEIPT", "JOURNAL_ENTRY", "PAYMENT_REFERENCE"],
     }
     return {
         "triggers": triggers,

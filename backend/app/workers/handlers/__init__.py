@@ -73,6 +73,8 @@ ARCH44_JOB_TYPES: frozenset[str] = frozenset({"tables.extract_document"})
 ARCH45_JOB_TYPES: frozenset[str] = frozenset({"corroboration.run"})
 # ARCH46-S1:obligation-job-types. Reading obligations is text and date arithmetic: LIGHT profile.
 ARCH46_JOB_TYPES: frozenset[str] = frozenset({"obligations.extract_document"})
+# ARCH47-S1:erp-job-types. Delivering a posting is network and file work (HTTPS, SFTP): LIGHT profile.
+ARCH47_JOB_TYPES: frozenset[str] = frozenset({"erp.deliver_posting"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -108,6 +110,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH44_JOB_TYPES
     | ARCH45_JOB_TYPES
     | ARCH46_JOB_TYPES
+    | ARCH47_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -357,6 +360,12 @@ def _corroboration_run(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_run(payload)
 
 
+def _erp_deliver_posting(payload: dict[str, Any]) -> dict[str, Any]:
+    # ARCH47-S1:erp-handler-fn
+    from app.workers.handlers.erp import handle_deliver_posting
+    return handle_deliver_posting(payload)
+
+
 def _obligations_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.obligations import handle_extract_document
     return handle_extract_document(payload)
@@ -458,6 +467,8 @@ _HANDLERS = {
     "corroboration.run": _corroboration_run,
     # ARCH46-S1:obligation-handler. On the LIGHT profile (app/workers/profiles.py).
     "obligations.extract_document": _obligations_extract_document,
+    # ARCH47-S1:erp-handler. On the LIGHT profile (app/workers/profiles.py).
+    "erp.deliver_posting": _erp_deliver_posting,
 }
 
 

@@ -301,7 +301,10 @@ def check_capability(ent: str, gate_text: str, seed: str, caps: str, plan: str, 
 def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A46) == f'"{A45}"', f"{A46} revises {revs.get(A46)}"
-    assert revs.get(STEP3) == f'"{A46}"', f"the contract step revises {revs.get(STEP3)}, expected {A46}"
+    # ARCH47-S1:chain-widened-46. ARCH-47 sits between ARCH-46 and the contract step.
+    assert revs.get(STEP3) in (f'"{A46}"', '"arch47_step1_erp_posting"'), f"the contract step revises {revs.get(STEP3)}, expected {A46} or arch47"
+    if revs.get(STEP3) == '"arch47_step1_erp_posting"':
+        assert revs.get("arch47_step1_erp_posting") == f'"{A46}"', "arch47 must revise arch46"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -337,7 +340,12 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     from app.services.obligations import vocabulary as ov
     from app.services.review import vocabulary as vocab
 
-    assert tuple(REVIEW_KINDS) == module.REVIEW_KINDS and tuple(vocab.REASONS) == module.REVIEW_REASONS, "hub vocabulary != migration"
+    # ARCH47-S1:vocab-widened-46. The newest hub migration defines the vocabulary;
+    # ARCH-46's kinds and reasons must remain its prefix.
+    newest47 = VERSIONS / "arch47_step1_erp_posting.py"
+    ref = _load_module("_m47_check46", newest47) if newest47.exists() else module
+    assert tuple(REVIEW_KINDS) == ref.REVIEW_KINDS and tuple(vocab.REASONS) == ref.REVIEW_REASONS, "hub vocabulary != migration"
+    assert ref.REVIEW_KINDS[:len(module.REVIEW_KINDS)] == module.REVIEW_KINDS and ref.REVIEW_REASONS[:len(module.REVIEW_REASONS)] == module.REVIEW_REASONS
     for name in ("KINDS", "STATES", "ACTIVE_STATES", "ORIGINS", "REVIEWS", "RULE_KINDS", "ROLLS", "EVENT_KINDS",
                  "ALERT_EVENT_KINDS", "CALENDAR_SOURCES", "FEED_SCOPES"):
         assert tuple(getattr(module, name)) == tuple(getattr(ov, name)), f"{name}: migration != vocabulary"
@@ -345,6 +353,9 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     assert set(module.NEW_TRIGGER_EVENTS) == set(ov.TRIGGER_EVENT_OF_STATE.values())
     internal = set(module.internal_after_46())
     assert set(m45.internal_after_45()) < internal
+    if hasattr(ref, "internal_after_47"):  # ARCH47-S1:internal-widened-46 (adds trigger.posting.failed)
+        assert internal <= set(ref.internal_after_47())
+        internal = set(ref.internal_after_47())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
     down = text.split("def downgrade", 1)[1]
     assert "review_queue_view_v6()" in down and "internal_after_45()" in down, "downgrade does not restore ARCH-45"
@@ -688,9 +699,75 @@ def check_extraction() -> None:
     assert notice.detail.get("arch33_agrees") in (True, None), notice.detail
     # A clause whose last line has no ascenders ("... of each / year.") stays one clause (found by the
     # 1,000-document stress run; ARCH-45's segmenter read the lower glyph box as a paragraph gap).
+    # ARCH47-S1:ms44-witness. The pinned geometry below is the witness MS44 relies on; the PDF sample
+    # after it is an end-to-end check only. Its gap cleared the paragraph threshold by 0.9 px at
+    # 200 DPI with Linux pdfium's Courier, and pdfium substitutes a system font for the unembedded
+    # base-14 Courier on Windows -- there the gap fell under the threshold, the clause stayed whole
+    # with the continuation rule disabled, and MS44 was reported "not caught".
+    wrapped_line_witness()
     wrapped = syn.fixed(5195)
     got = [(g[0], g[1], g[2]) for g in run_doc(wrapped)[1]]
     assert ("PAYMENT", date(2026, 12, 31), "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31") in got, got
+
+
+def wrapped_line_witness() -> None:
+    """ARCH47-S1:ms44-witness. The continuation rule on explicit line boxes (200 DPI, 22 px lines, 40 px pitch).
+
+    Nothing here depends on a font rasterizer. "year." has no ascenders, so its box starts 6 px lower
+    than a full line's would: a 28 px gap against the 19.8 px paragraph threshold (0.9 x the median
+    line height). A CONTROL first proves the segmenter reads exactly that gap as a paragraph break when
+    the next line starts a sentence; only the continuation rule keeps "year." in its clause.
+    """
+    from app.services.corroboration import segment as S
+    from app.services.obligations import extract as X
+    from app.services.obligations import temporal as T
+
+    x0, x1 = 150.0, 1450.0
+
+    def box(top: float, height: float = 22.0, right: float = x1) -> tuple:
+        return (x0, top, right, top + height)
+
+    first = "1. Annual Licence Fee. The annual licence fee of USD 45,000 is payable on 31 December of each"
+    law = "2. Governing Law. This Agreement is governed by the laws of India."
+
+    def page(second: S.LineBox) -> list:
+        lines = (
+            S.LineBox("FIXED TERM SERVICES AGREEMENT", box(200.0)),
+            S.LineBox("This Agreement is entered into between Globex Manufacturing Ltd and Acme Technology", box(280.0)),
+            S.LineBox("Services Pvt Ltd.", box(320.0, right=520.0)),
+            S.LineBox(first, box(400.0)),
+            second,
+            S.LineBox(law, box(520.0)),
+        )
+        return [S.PageText(1, 1700.0, 2200.0, lines)]
+
+    wrapped_pages = page(S.LineBox("year.", box(450.0, height=16.0, right=223.0)))
+    heights = [ln.bbox[3] - ln.bbox[1] for p in wrapped_pages for ln in p.lines]
+    threshold = 0.9 * sorted(heights)[len(heights) // 2]
+    gap = 450.0 - (400.0 + 22.0)
+    assert gap > threshold + 5.0, ("the witness no longer crosses the paragraph-gap threshold by a clear margin; "
+                                   "re-pin its geometry", gap, threshold)
+    # CONTROL: the same gap before a line that starts a sentence IS a paragraph break. Without this,
+    # a witness the segmenter never reads as a gap would pass with the continuation rule disabled.
+    control = [c.text for c in S.segment(page(S.LineBox("Year-end statements follow.", box(450.0, height=16.0))))]
+    assert any(c.startswith("Year-end statements follow") for c in control), \
+        ("the control gap is not read as a paragraph break, so the witness proves nothing", control)
+    clauses = [c.text for c in S.segment(wrapped_pages)]
+    joined = next((c for c in clauses if "annual licence fee" in c.lower()), "")
+    assert joined.rstrip().endswith("of each year."), \
+        ("a wrapped last line without ascenders was split into its own clause", clauses)
+    assert not any(c.strip() == "year." for c in clauses), ("'year.' became its own clause", clauses)
+    doc = X.DocText(id="ms44-witness", label="Agreement-ms44.pdf", pages=wrapped_pages, fields={},
+                    parties=[X.Party("vendor", None, "Acme Technology Services Pvt Ltd"),
+                             X.Party("customer", None, "Globex Manufacturing Ltd")],
+                    date_order="DMY", order_decided=True, currency="INR", reference=date(2026, 9, 25),
+                    has_holiday_calendar=False)
+    ex = X.extract(doc)
+    anchors = ex.by_key()
+    got = [(d.kind, X.draft_for_tests(d, cal=T.WEEKENDS_ONLY, anchors=anchors, today=date(2026, 9, 25))["due"],
+            d.rule.rrule) for d in ex.drafts]
+    assert ("PAYMENT", date(2026, 12, 31), "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31") in got, \
+        ("the yearly payment was not read from the wrapped clause", got)
 
 
 def check_ical() -> dict:
@@ -875,7 +952,7 @@ def check_wiring(texts: dict[str, str]) -> None:
         spec = triggers.TRIGGERS_BY_KEY[key]
         assert spec.capability == KEY and not spec.has_document and spec.event_types == (event,), spec
         assert event in ae.INTERNAL_EVENT_TYPES and event in ae.TRIGGER_NATIVE_EVENT_TYPES
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) == (21, 22), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((21, 22), (22, 23)), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))  # ARCH47-S1:catalog-widened-46
     svc = texts["service"]
     assert 'idempotency_key=f"{event_type}:{ob.id}:{ob.due_date.isoformat()}"' in svc, \
         "the trigger is not idempotent per obligation, state AND due date"
@@ -883,7 +960,7 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert "if emit and trusted(ob):" in svc, "a PENDING (unconfirmed) obligation would reach Flow Builder"
     assert '"trigger.obligation.due_soon": (' in texts["v37"] and '"trigger.obligation.overdue": (' in texts["v37"], \
         "verify_arch37 EMITTERS not widened"
-    assert re.search(r"EXPECTED_TRIGGERS = 21\b", texts["conformance"]), "the live conformance matrix does not expect 21 triggers"
+    assert re.search(r"EXPECTED_TRIGGERS = (21|22)\b", texts["conformance"]), "the live conformance matrix does not expect 21 triggers"  # ARCH47-S1:conformance-widened-46
     assert "vocab.KIND_OBLIGATION: _resolve_obligation" in texts["resolution"]
     assert "    if OBLIGATIONS_CAPABILITY in granted:\n        kinds.append(vocab.KIND_OBLIGATION)\n" in texts["review_api"], \
         "the hub shows OBLIGATION without the capability"
@@ -1954,7 +2031,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
             index = conn.execute(sa.text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_obligation_events_alert'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-        assert current in ([A46], [STEP3]), f"alembic current is {current}; run run_arch46.ps1"
+        assert current in ([A46], [STEP3], ["arch47_step1_erp_posting"]), f"alembic current is {current}; run run_arch46.ps1"  # ARCH47-S1:head-widened-46
         assert not [x for x in TABLES if x not in tables], "ARCH-46 tables missing"
         assert "OBLIGATION" in kinds and "trigger.obligation.due_soon" in outbox and "trigger.obligation.overdue" in outbox
         assert {"trg_obligations_evidence", "trg_obligations_anchor", "trg_work_items_unlink_obligations"} <= triggers
@@ -2193,7 +2270,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("MS31 enrichment does not dispatch the reading", mutation(lambda: (texts_with("post", swap(texts["post"], "obligation_gate.capability_held(db, organization_id)", "False")),), check_wiring)),
         ("MS32 the trigger key without the due date", mutation(lambda: (texts_with("service", swap(texts["service"], 'idempotency_key=f"{event_type}:{ob.id}:{ob.due_date.isoformat()}"', 'idempotency_key=f"{event_type}:{ob.id}"')),), check_wiring)),
         ("MS33 the hub shows OBLIGATION without the capability", mutation(lambda: (texts_with("review_api", swap(texts["review_api"], "    if OBLIGATIONS_CAPABILITY in granted:\n        kinds.append(vocab.KIND_OBLIGATION)\n", "    kinds.append(vocab.KIND_OBLIGATION)\n")),), check_wiring)),
-        ("MS34 the conformance matrix still expects 19 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = 21\b", "EXPECTED_TRIGGERS = 19", texts["conformance"])),), check_wiring)),
+        ("MS34 the conformance matrix still expects 19 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = (?:21|22)\b", "EXPECTED_TRIGGERS = 19", texts["conformance"])),), check_wiring)),  # ARCH47-S1:ms34-widened
         ("MS35 the sweep not scheduled (G14)", mutation(lambda: (texts_with("cron", swap(texts["cron"], "flowpilot-sweep obligations --apply", "flowpilot-sweep obligations-off")),), check_wiring)),
         ("MS36 erasure hook removed", mutation(lambda: (texts_with("erasure", swap(texts["erasure"], 'counts["obligations"] = _obligation_service.erase_for_work_items(db, work_item_ids)', 'counts["obligations"] = 0')),), check_wiring)),
         ("MS37 a route loses its capability gate", mutation(lambda: (swap(texts["api"], '    _gate(db, context, "obligations.waive")\n', ""), texts["public_api"]), check_api)),

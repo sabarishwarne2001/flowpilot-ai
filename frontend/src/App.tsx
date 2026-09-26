@@ -105,6 +105,10 @@ const CorroborationRun = lazy(() => import("@/pages/corroboration/CorroborationR
 // ARCH46-S2:lazy-pages
 const Obligations = lazy(() => import("@/pages/obligations/Obligations"));
 const ObligationDetail = lazy(() => import("@/pages/obligations/ObligationDetail"));
+// ARCH47-S2:lazy-pages
+const ErpPosting = lazy(() => import("@/pages/erp/ErpPosting"));
+const ErpPostingDetail = lazy(() => import("@/pages/erp/ErpPostingDetail"));
+const ErpTargetDetail = lazy(() => import("@/pages/erp/ErpTargetDetail"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -472,6 +476,10 @@ function AppRoutes() {
                 {/* ARCH46-S2:routes */}
                 <Route path={ROUTE_PATTERNS.workspaceObligations} element={<Obligations />} />
                 <Route path={ROUTE_PATTERNS.workspaceObligation} element={<ObligationDetail />} />
+                {/* ARCH47-S2:routes */}
+                <Route path={ROUTE_PATTERNS.workspaceErp} element={<ErpPosting />} />
+                <Route path={ROUTE_PATTERNS.workspaceErpPosting} element={<ErpPostingDetail />} />
+                <Route path={ROUTE_PATTERNS.workspaceErpTarget} element={<ErpTargetDetail />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

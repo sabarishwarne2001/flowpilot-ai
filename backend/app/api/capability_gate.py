@@ -66,6 +66,8 @@ _DISPLAY_NAMES = {
     entitlements.UNIVERSAL_CORROBORATOR_CAPABILITY: "The document corroborator",
     # ARCH46-S1:capability-display
     entitlements.OBLIGATIONS_CAPABILITY: "Obligations and calendar feeds",
+    # ARCH47-S1:capability-display
+    entitlements.ERP_POSTING_CAPABILITY: "ERP posting",
 }
 
 

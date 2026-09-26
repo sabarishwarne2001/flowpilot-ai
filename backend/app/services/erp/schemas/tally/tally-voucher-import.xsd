@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ARCH47-S1:tally-xsd. FlowPilot's schema of the Tally Prime XML voucher import
+  envelope, written for this milestone from Tally's documented import format
+  (TALLYREQUEST "Import Data", REPORTNAME "Vouchers", TALLYMESSAGE / VOUCHER
+  with ALLLEDGERENTRIES.LIST and ALLINVENTORYENTRIES.LIST). Tally publishes no
+  XSD of its own: this is NOT Tally's schema. It fixes the structure FlowPilot
+  writes (element order, required elements, the value formats Tally accepts);
+  formats/tally.py adds the accounting rules (amounts sum to zero,
+  ISDEEMEDPOSITIVE agrees with the sign).
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+  <xs:simpleType name="TallyDate">
+    <xs:restriction base="xs:string"><xs:pattern value="(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="YesNo">
+    <xs:restriction base="xs:string"><xs:enumeration value="Yes"/><xs:enumeration value="No"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Amount">
+    <xs:restriction base="xs:string"><xs:pattern value="-?\d{1,15}(\.\d{1,6})?"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Name">
+    <xs:restriction base="xs:string"><xs:minLength value="1"/><xs:maxLength value="200"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Quantity">
+    <xs:restriction base="xs:string"><xs:pattern value="-?\d{1,12}(\.\d{1,6})? [^ ]{1,20}"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Rate">
+    <xs:restriction base="xs:string"><xs:pattern value="\d{1,15}(\.\d{1,6})?/[^ ]{1,20}"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="VoucherType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Purchase"/><xs:enumeration value="Journal"/><xs:enumeration value="Payment"/>
+      <xs:enumeration value="Purchase Order"/><xs:enumeration value="Receipt Note"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="LedgerEntry">
+    <xs:sequence>
+      <xs:element name="LEDGERNAME" type="Name"/>
+      <xs:element name="ISDEEMEDPOSITIVE" type="YesNo"/>
+      <xs:element name="ISPARTYLEDGER" type="YesNo" minOccurs="0"/>
+      <xs:element name="AMOUNT" type="Amount"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InventoryEntry">
+    <xs:sequence>
+      <xs:element name="STOCKITEMNAME" type="Name"/>
+      <xs:element name="ISDEEMEDPOSITIVE" type="YesNo"/>
+      <xs:element name="RATE" type="Rate" minOccurs="0"/>
+      <xs:element name="AMOUNT" type="Amount"/>
+      <xs:element name="ACTUALQTY" type="Quantity"/>
+      <xs:element name="BILLEDQTY" type="Quantity"/>
+      <xs:element name="ACCOUNTINGALLOCATIONS.LIST" type="LedgerEntry" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Voucher">
+    <xs:sequence>
+      <xs:element name="DATE" type="TallyDate"/>
+      <xs:element name="VOUCHERTYPENAME" type="VoucherType"/>
+      <xs:element name="VOUCHERNUMBER" type="Name" minOccurs="0"/>
+      <xs:element name="REFERENCE" type="Name" minOccurs="0"/>
+      <xs:element name="REFERENCEDATE" type="TallyDate" minOccurs="0"/>
+      <xs:element name="PARTYLEDGERNAME" type="Name" minOccurs="0"/>
+      <xs:element name="NARRATION" type="xs:string" minOccurs="0"/>
+      <xs:element name="PERSISTEDVIEW" type="xs:string"/>
+      <xs:element name="ISINVOICE" type="YesNo" minOccurs="0"/>
+      <xs:element name="ALLINVENTORYENTRIES.LIST" type="InventoryEntry" minOccurs="0" maxOccurs="2000"/>
+      <xs:element name="ALLLEDGERENTRIES.LIST" type="LedgerEntry" minOccurs="1" maxOccurs="2002"/>
+    </xs:sequence>
+    <xs:attribute name="REMOTEID" type="Name" use="required"/>
+    <xs:attribute name="VCHTYPE" type="VoucherType" use="required"/>
+    <xs:attribute name="ACTION" use="required">
+      <xs:simpleType><xs:restriction base="xs:string"><xs:enumeration value="Create"/></xs:restriction></xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="OBJVIEW" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:element name="ENVELOPE">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="HEADER">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="TALLYREQUEST">
+                <xs:simpleType><xs:restriction base="xs:string"><xs:enumeration value="Import Data"/></xs:restriction></xs:simpleType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="BODY">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="IMPORTDATA">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="REQUESTDESC">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="REPORTNAME">
+                            <xs:simpleType><xs:restriction base="xs:string"><xs:enumeration value="Vouchers"/></xs:restriction></xs:simpleType>
+                          </xs:element>
+                          <xs:element name="STATICVARIABLES">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="SVCURRENTCOMPANY" type="Name"/>
+                              </xs:sequence>
+                            </xs:complexType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                    <xs:element name="REQUESTDATA">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="TALLYMESSAGE">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="VOUCHER" type="Voucher"/>
+                              </xs:sequence>
+                            </xs:complexType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

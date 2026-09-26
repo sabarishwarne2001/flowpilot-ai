@@ -315,6 +315,13 @@ def _destroy_documents(
     from app.services.obligations import service as _obligation_service
 
     counts["obligations"] = _obligation_service.erase_for_work_items(db, work_item_ids)
+    # ARCH47-S1:erasure-erp-postings. A posting quotes its document (figures,
+    # names, lines, the rendered file): what the ledger holds of it is erased;
+    # the ledger row stays (a posting that happened is a fact), and one not yet
+    # delivered is cancelled.
+    from app.services.erp import service as _erp_service
+
+    counts["erp_postings"] = _erp_service.erase_for_work_items(db, work_item_ids)
 
 
 def _destroy_conversations(

@@ -15,7 +15,7 @@ import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
-import { corroborationPath, obligationPath, tablePath } from "@/routes/tenantPaths";
+import { corroborationPath, erpPostingPath, obligationPath, tablePath } from "@/routes/tenantPaths";
 
 import type {
   AnomalyVerdict,
@@ -198,6 +198,65 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
           >
             Not an obligation
+          </button>
+          {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ARCH47-S2:resolve-posting. A posting in FAILED / REJECTED / MISMATCH /
+  // UNCERTAIN. RETRY sends it again (for an unknown outcome: only after you
+  // checked the ERP does not have it); ACCEPT marks it posted with the ERP's
+  // reference; CANCEL means it will not be posted.
+  if (item.kind === "POSTING") {
+    const reference = quote.trim();
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          If the outcome is unknown, check the ERP first: retry only when it does not have the document, accept when it
+          does. The attempts and the target&apos;s answers are on the{" "}
+          <Link className="underline" to={erpPostingPath(orgSlug, workspaceSlug, item.item_id)}>posting page</Link>.
+        </p>
+        <label htmlFor="resolve-posting-reference" className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          ERP reference (when accepting)
+        </label>
+        <input
+          id="resolve-posting-reference"
+          value={quote}
+          maxLength={200}
+          onChange={(event) => setQuote(event.target.value)}
+          placeholder="The document number or id the ERP shows"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ posting_verdict: "RETRY" })}
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Retry posting
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve(reference ? { posting_verdict: "ACCEPT", posting_reference: reference } : { posting_verdict: "ACCEPT" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+          >
+            The ERP has it
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onResolve({ posting_verdict: "CANCEL" })}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-bold text-destructive hover:bg-muted disabled:opacity-50"
+          >
+            Do not post
           </button>
           {pending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           <button type="button" onClick={onCancel} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">

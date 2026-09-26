@@ -171,7 +171,9 @@ def _sha256(text: str) -> str:
 #: Arbitrary local edits still fail, which is the property the gate exists for.
 #: ARCH40-S1:supersede-newfile. ARCH-40 edits files this apply created
 #: (verify scripts' head pins, the trigger catalog's gate counts).
-SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH38-S1:", "ARCH40-S1:")
+#: ARCH47-S1:supersede-newfile. ARCH-47 edits the flow catalog this apply created
+#: (the erp_targets / erp_object_kinds resources the erp.post action picks from).
+SUPERSEDING_SENTINELS: tuple[str, ...] = ("ARCH38-S1:", "ARCH40-S1:", "ARCH47-S1:", "ARCH47-S2:")
 
 
 def _is_superseded(text: str) -> bool:

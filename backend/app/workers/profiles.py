@@ -163,6 +163,11 @@ LIGHT = WorkerProfile(
             # regular-expression notice reader and date arithmetic: no model,
             # OCR or PDF engine. Not optional bookkeeping (see above).
             "obligations.extract_document",
+            # ARCH47-S1:erp-light-profile. Delivering an ERP posting is HTTPS
+            # through the SSRF-safe client and SFTP through paramiko: network
+            # and file work, no model, OCR or PDF engine. Not optional
+            # bookkeeping (see above).
+            "erp.deliver_posting",
         }
     ),
     allow_heavy=frozenset(),

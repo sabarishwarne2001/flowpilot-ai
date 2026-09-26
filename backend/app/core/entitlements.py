@@ -113,6 +113,8 @@ __all__ = [
     "UNIVERSAL_CORROBORATOR_CAPABILITY",
     # ARCH46-S1:capability-obligations-export
     "OBLIGATIONS_CAPABILITY",
+    # ARCH47-S1:capability-erp-posting-export
+    "ERP_POSTING_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -279,6 +281,15 @@ UNIVERSAL_CORROBORATOR_CAPABILITY: str = "capability.universal_corroborator"
 #: Enterprise. Not metered: extraction is deterministic (no model call).
 OBLIGATIONS_CAPABILITY: str = "capability.obligations"
 
+#: ARCH47-S1:capability-erp-posting. ERP & System-of-Record Posting: approved
+#: outcomes (reconciled invoices, confirmed tables, completed cases) posted
+#: exactly once to CSV/XLSX, EDI X12, UBL 2.1, Tally Prime XML, SFTP and
+#: REST/OData targets through versioned, declarative mappings, with an
+#: idempotency ledger and acknowledgement reconciliation. ONE key for the
+#: milestone; Business and Enterprise. Not metered: posting is deterministic
+#: (no model call).
+ERP_POSTING_CAPABILITY: str = "capability.erp_posting"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -299,6 +310,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     TABLE_INTELLIGENCE_CAPABILITY,
     UNIVERSAL_CORROBORATOR_CAPABILITY,
     OBLIGATIONS_CAPABILITY,
+    ERP_POSTING_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -455,6 +467,17 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Obligations & temporal intelligence: renewals, notice deadlines, payments, deliveries, "
             "expiries and reports read from documents, with business-day arithmetic, owners, "
             "due-soon and overdue triggers, and subscribable calendar feeds. Bundled into a tier."
+        ),
+    ),
+    # ARCH47-S1:capability-erp-posting-entitlement
+    Entitlement(
+        name=ERP_POSTING_CAPABILITY,
+        description=(
+            "ERP & system-of-record posting: reconciled invoices, confirmed tables and completed cases posted "
+            "exactly once as vendor bills, purchase orders, goods receipts, journal entries and payment "
+            "references to CSV/XLSX, EDI X12, UBL 2.1, Tally, SFTP and REST/OData targets (QuickBooks Online, "
+            "Zoho Books, Business Central, S/4HANA, NetSuite), with acknowledgement reconciliation. "
+            "Bundled into a tier."
         ),
     ),
 )

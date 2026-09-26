@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarClock,
+  BookUp,
   Database,
   Eye,
   FileCheck,
@@ -33,11 +34,13 @@ import DocumentTables from "@/components/tables/DocumentTables";
 import DocumentComparisons from "@/components/corroboration/DocumentComparisons";
 // ARCH46-S2:document-obligations
 import DocumentObligations from "@/components/obligations/DocumentObligations";
+// ARCH47-S2:document-postings
+import DocumentPostings from "@/components/erp/DocumentPostings";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
 
-type DetailTab = "summary" | "entities" | "obligations" | "ocr" | "chat";
+type DetailTab = "summary" | "entities" | "obligations" | "postings" | "ocr" | "chat";
 
 const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
   QUEUED: "bg-primary/10 text-primary border-primary/20",
@@ -51,6 +54,8 @@ const DETAIL_TABS = [
   { value: "entities", label: "Entities", icon: Database },
   // ARCH46-S2:obligations-tab
   { value: "obligations", label: "Obligations", icon: CalendarClock },
+  // ARCH47-S2:postings-tab
+  { value: "postings", label: "ERP postings", icon: BookUp },
   { value: "ocr", label: "OCR", icon: Eye },
   { value: "chat", label: "Chat", icon: MessageSquare },
 ] as const;
@@ -358,6 +363,7 @@ export const WorkItemDetails: React.FC = () => {
               )}
 
               {activeTab === "obligations" && <DocumentObligations workItemId={workItem.id} />}
+              {activeTab === "postings" && <DocumentPostings workItemId={workItem.id} />}
 
               {activeTab === "ocr" && (
                 <section className="space-y-4">

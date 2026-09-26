@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from app.services.automation.actions import (
     autonomy_decide,
     email_send,
+    erp_post,
     notify_role,
     redaction_start,
     review_escalate,
@@ -42,6 +43,7 @@ _MODULES = (
     autonomy_decide,
     email_send,
     work_item_mutate,
+    erp_post,  # ARCH47-S1:action-erp-post
 )
 
 ACTIONS: Mapping[str, ActionDefinition] = {
@@ -49,7 +51,8 @@ ACTIONS: Mapping[str, ActionDefinition] = {
 }
 
 #: The seven actions ARCH-37 sells, in catalog order. `work_item.mutate`
-#: predates it and is registered alongside.
+#: predates it and is registered alongside; ARCH-47's `erp.post` is sold with
+#: capability.erp_posting and registered alongside too (ERP_ACTION_TYPES).
 COMMERCIAL_ACTION_TYPES: tuple[str, ...] = (
     "webhook.send",
     "redaction.start",
@@ -59,6 +62,9 @@ COMMERCIAL_ACTION_TYPES: tuple[str, ...] = (
     "autonomy.decide",
     "email.send",
 )
+
+#: ARCH47-S1:erp-action-types. Registered with the others; gated on capability.erp_posting.
+ERP_ACTION_TYPES: tuple[str, ...] = ("erp.post",)
 
 ALIASES: Mapping[str, str] = {
     alias: definition.action_type
@@ -115,7 +121,7 @@ def _assert_registry_complete() -> None:
             problems.append(f"{action_type}: unknown minimum role {definition.minimum_role!r}")
         if not hasattr(definition, "capability"):
             problems.append(f"{action_type}: no capability declaration")
-    missing = [a for a in COMMERCIAL_ACTION_TYPES if a not in ACTIONS]
+    missing = [a for a in (*COMMERCIAL_ACTION_TYPES, *ERP_ACTION_TYPES) if a not in ACTIONS]
     if missing:
         problems.append(f"commercial actions not registered: {missing}")
     clashes = [alias for alias in ALIASES if alias in ACTIONS]
@@ -134,6 +140,7 @@ __all__ = [
     "ACTIONS",
     "ALIASES",
     "COMMERCIAL_ACTION_TYPES",
+    "ERP_ACTION_TYPES",
     "LLM_ACTION_TYPES",
     "ActionDefinition",
     "ActionFailure",

@@ -32,6 +32,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.universalCorroborator]: "Document corroborator (compare 2–5 documents clause by clause, discrepancy matrix, PDF report)",
   // ARCH46-S2:plan-feature
   [CAPABILITY.obligations]: "Obligations & deadlines (renewals, notice periods, payments read from documents; calendar feeds)",
+  // ARCH47-S2:plan-feature
+  [CAPABILITY.erpPosting]: "ERP posting (approved bills, POs, receipts and journals to QuickBooks, Zoho, Business Central, SAP, NetSuite, Tally, EDI X12, UBL, SFTP — exactly once)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -60,6 +62,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.tableIntelligence,
   // ARCH46-S2:plan-feature-order — Business and Enterprise.
   CAPABILITY.obligations,
+  // ARCH47-S2:plan-feature-order — Business and Enterprise.
+  CAPABILITY.erpPosting,
   CAPABILITY.calibratedAutonomy,
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,

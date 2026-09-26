@@ -8,8 +8,8 @@
  */
 
 // ARCH42-S2:review-kind-merge  ARCH43-S2:review-kind-split  ARCH44-S2:review-kind-table
-// ARCH45-S2:review-kind-corroboration  ARCH46-S2:review-kind-obligation
-export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY" | "MERGE" | "SPLIT" | "TABLE" | "CORROBORATION" | "OBLIGATION";
+// ARCH45-S2:review-kind-corroboration  ARCH46-S2:review-kind-obligation  ARCH47-S2:review-kind-posting
+export type ReviewKind = "EXTRACTION" | "ASSERTION" | "ANOMALY" | "MERGE" | "SPLIT" | "TABLE" | "CORROBORATION" | "OBLIGATION" | "POSTING";
 export type ReviewSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type ReviewStatus = "OPEN" | "RESOLVED";
 
@@ -26,9 +26,10 @@ export type ReviewReason =
   | "PACKET_SPLIT"
   | "TABLE_ARITHMETIC"
   | "MATERIAL_DISCREPANCY"
-  | "OBLIGATION_UNCONFIRMED";
+  | "OBLIGATION_UNCONFIRMED"
+  | "POSTING_EXCEPTION";
 
-export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY", "MERGE", "SPLIT", "TABLE", "CORROBORATION", "OBLIGATION"];
+export const REVIEW_KINDS: readonly ReviewKind[] = ["EXTRACTION", "ASSERTION", "ANOMALY", "MERGE", "SPLIT", "TABLE", "CORROBORATION", "OBLIGATION", "POSTING"];
 export const REVIEW_SEVERITIES: readonly ReviewSeverity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 /** The "Autonomy audits" tab: ARCH-35 holds and accuracy-audit samples. */
@@ -43,6 +44,7 @@ export const KIND_LABELS: Readonly<Record<ReviewKind, string>> = {
   TABLE: "Table",
   CORROBORATION: "Comparison",
   OBLIGATION: "Obligation",
+  POSTING: "ERP posting",
 };
 
 export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
@@ -58,6 +60,7 @@ export const REASON_LABELS: Readonly<Record<ReviewReason, string>> = {
   TABLE_ARITHMETIC: "Figures do not reconcile",
   MATERIAL_DISCREPANCY: "Documents disagree",
   OBLIGATION_UNCONFIRMED: "Obligation to confirm",
+  POSTING_EXCEPTION: "Posting needs a decision",
 };
 
 export interface ReviewItem {
@@ -108,6 +111,8 @@ export type SplitVerdict = "APPROVE" | "REJECT";
 export type TableReviewVerdict = "ACCEPT" | "REJECT";
 export type CorroborationVerdict = "CONFIRM" | "DISMISS";
 export type ObligationReviewVerdict = "CONFIRM" | "REJECT";
+// ARCH47-S2:posting-verdict
+export type PostingReviewVerdict = "RETRY" | "ACCEPT" | "CANCEL";
 
 export interface ReviewResolveRequest {
   readonly values?: Readonly<Record<string, unknown>>;
@@ -122,6 +127,8 @@ export interface ReviewResolveRequest {
   readonly table_verdict?: TableReviewVerdict;
   readonly corroboration_verdict?: CorroborationVerdict;
   readonly obligation_verdict?: ObligationReviewVerdict;
+  readonly posting_verdict?: PostingReviewVerdict;
+  readonly posting_reference?: string;
 }
 
 export interface ReviewResolveResponse {
