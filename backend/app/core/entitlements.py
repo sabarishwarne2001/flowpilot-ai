@@ -115,6 +115,8 @@ __all__ = [
     "OBLIGATIONS_CAPABILITY",
     # ARCH47-S1:capability-erp-posting-export
     "ERP_POSTING_CAPABILITY",
+    # ARCH48-S1:capability-collaborative-review-export
+    "COLLABORATIVE_REVIEW_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -290,6 +292,16 @@ OBLIGATIONS_CAPABILITY: str = "capability.obligations"
 #: (no model call).
 ERP_POSTING_CAPABILITY: str = "capability.erp_posting"
 
+#: ARCH48-S1:capability-collaborative-review. Real-Time Collaborative Review &
+#: Live Presence: the review hub goes live (queue updates pushed over an
+#: authenticated WebSocket, fanned out across API workers through Redis),
+#: presence avatars, soft per-item locks with heartbeats and expiry, and
+#: paragraph-anchored discussion threads. ONE key for the milestone; Enterprise
+#: only. Not metered: no model call. Optimistic concurrency on resolutions is
+#: NOT behind this key -- two reviewers never both resolving one item is a
+#: correctness property of the hub on every plan.
+COLLABORATIVE_REVIEW_CAPABILITY: str = "capability.collaborative_review"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -311,6 +323,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     UNIVERSAL_CORROBORATOR_CAPABILITY,
     OBLIGATIONS_CAPABILITY,
     ERP_POSTING_CAPABILITY,
+    COLLABORATIVE_REVIEW_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -478,6 +491,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "references to CSV/XLSX, EDI X12, UBL 2.1, Tally, SFTP and REST/OData targets (QuickBooks Online, "
             "Zoho Books, Business Central, S/4HANA, NetSuite), with acknowledgement reconciliation. "
             "Bundled into a tier."
+        ),
+    ),
+    # ARCH48-S1:capability-collaborative-review-entitlement
+    Entitlement(
+        name=COLLABORATIVE_REVIEW_CAPABILITY,
+        description=(
+            "Real-time collaborative review: the review hub updates live for every reviewer, shows who is "
+            "looking at which item, holds a soft lock while someone decides, and carries discussion threads "
+            "anchored to a paragraph, a field or the whole item. Bundled into a tier."
         ),
     ),
 )

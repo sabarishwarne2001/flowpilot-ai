@@ -41,6 +41,8 @@ export const CAPABILITY = {
   obligations: "capability.obligations",
   // ARCH47-S2:capability-constant
   erpPosting: "capability.erp_posting",
+  // ARCH48-S2:capability-constant
+  collaborativeReview: "capability.collaborative_review",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

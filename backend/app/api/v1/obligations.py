@@ -442,6 +442,9 @@ def review_obligation(workspace_id: uuid.UUID, obligation_id: uuid.UUID, body: R
     _ws(context, workspace_id)
     _gate(db, context, "obligations.review")
     ob = _one(db, workspace_id, obligation_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="OBLIGATION", item_id=ob.id)
     try:
         service.review(db, obligation=ob, verdict=body.verdict, actor_user_id=context.user_id)
     except service.ObligationError as exc:

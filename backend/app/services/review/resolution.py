@@ -88,6 +88,31 @@ ANOMALY_VERDICTS: tuple[str, ...] = (ANOMALY_VERDICT_CONFIRM, ANOMALY_VERDICT_DI
 class ReviewResolutionError(ValueError):
     """The payload does not fit the kind, or the item cannot be resolved."""
 
+    #: ARCH48-S1:refusal-codes. What a bulk result and a 409 body carry.
+    code: str = "REFUSED"
+
+    def __init__(self, message: str = "", *, details: Optional[dict] = None) -> None:
+        super().__init__(message)
+        self.details: dict = dict(details or {})
+
+
+class StaleVersionError(ReviewResolutionError):
+    """ARCH48-S1:stale-version. The caller read an older version: someone else decided first."""
+
+    code = "STALE_VERSION"
+
+
+class ItemLockedError(ReviewResolutionError):
+    """ARCH48-S1:item-locked. Another reviewer holds the item's live soft lock."""
+
+    code = "LOCKED"
+
+
+class AlreadyResolvedError(ReviewResolutionError):
+    """ARCH48-S1:already-resolved. Resolved by someone else while this request waited its turn."""
+
+    code = "ALREADY_RESOLVED"
+
 
 @dataclass
 class ResolvePayload:
@@ -133,6 +158,8 @@ class ResolutionOutcome:
     work_item_id: Optional[uuid.UUID]
     detail: str
     audit_log_id: Optional[uuid.UUID] = None
+    #: ARCH48-S1:resolution-version. The item's version after this resolution.
+    version: Optional[int] = None
 
 
 def _audit(
@@ -645,6 +672,105 @@ _DISPATCH = {
 
 
 # ---------------------------------------------------------------------------
+# ARCH48-S1:concurrency. Versions and soft locks, for every kind at once
+# ---------------------------------------------------------------------------
+
+
+def _claim_turn(
+    db: Session,
+    *,
+    item: ReviewItem,
+    actor_user_id: uuid.UUID,
+    expected_version: Optional[int],
+) -> int:
+    """Take this item's turn: the version row's lock, the version check, a fresh
+    status, the soft lock. Returns the new version.
+
+    WHY HERE, FOR EVERY KIND
+    ------------------------
+    Before ARCH-48 two reviewers who opened the same OPEN item could both
+    resolve it: each read OPEN in its own snapshot, each ran the owning
+    service, each wrote an audit row, and the second decision silently
+    overwrote the first. The owning services check their own status, but on a
+    snapshot taken before either commit. `collab.service.claim_version`
+    serialises every decider of one item on ONE row lock (the hub, bulk, the
+    source screens alike), so the second decider waits, then either finds the
+    version moved (it read an older one: STALE_VERSION) or re-reads the item
+    and finds it RESOLVED (ALREADY_RESOLVED). A live soft lock held by someone
+    else refuses too (LOCKED): the lock exists so a reviewer's work is not
+    wasted by someone deciding underneath them.
+    """
+    from app.services.collab import service as collab_service
+
+    claimed, version = collab_service.claim_version(
+        db, kind=item.kind, item_id=item.item_id, workspace_id=item.workspace_id,
+        expected=expected_version, actor_user_id=actor_user_id,
+    )
+    if not claimed:
+        raise StaleVersionError(
+            "Someone else changed this item since you opened it. Reload it to see what they decided.",
+            details={"current_version": version, "expected_version": expected_version},
+        )
+    # A fresh statement sees what a concurrent decider committed while this one waited.
+    fresh = load_item(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id)
+    if fresh is None or fresh.status == vocab.STATUS_RESOLVED:
+        raise AlreadyResolvedError(
+            "Someone else resolved this item a moment ago.",
+            details={"current_version": version},
+        )
+    held = collab_service.live_lock(db, kind=item.kind, item_id=item.item_id)
+    if held is not None and held.holder_user_id != actor_user_id:
+        people = collab_service.people(db, [held.holder_user_id])
+        who = people.get(str(held.holder_user_id), {})
+        raise ItemLockedError(
+            f"{who.get('name') or who.get('email') or 'Another reviewer'} is deciding this item right now. "
+            "Their lock lapses if they step away.",
+            details={"holder": who, "expires_at": held.expires_at.isoformat()},
+        )
+    return version
+
+
+def _announce_resolved(db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, version: int,
+                       detail: str) -> None:
+    """The item's lock goes with its decision; both announcements leave after the commit."""
+    from app.services.collab import events as collab_events
+    from app.services.collab import service as collab_service
+    from app.services.collab import vocabulary as collab_vocab
+
+    holder = collab_service.clear_item_lock(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id)
+    if holder is not None:
+        collab_events.lock_released(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id,
+                                    holder_user_id=holder, reason=collab_vocab.RELEASE_RESOLVED)
+    collab_events.item_resolved(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id,
+                                version=version, actor_user_id=actor_user_id, resolution=detail)
+
+
+def guard_decision(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    kind: str,
+    item_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> Optional[int]:
+    """ARCH48-S1:decision-guard. The same turn for a source screen that decides a hub item itself.
+
+    ANOMALY (confirm / dismiss), TABLE, CORROBORATION, OBLIGATION, POSTING
+    (retry / accept / cancel) and SPLIT (approve / reject) are decided by their
+    own routes calling their own services, not through `resolve_item` -- only
+    the hub, verifications and assertions call it. Each of those routes calls
+    this first. Not a hub item (not OPEN in the view): nothing to guard, the
+    owning service decides as before. Returns the new version when guarded.
+    """
+    item = load_item(db, workspace_id=workspace_id, kind=kind, item_id=item_id)
+    if item is None or item.status != vocab.STATUS_OPEN:
+        return None
+    version = _claim_turn(db, item=item, actor_user_id=actor_user_id, expected_version=None)
+    _announce_resolved(db, item=item, actor_user_id=actor_user_id, version=version, detail="DECIDED")
+    return version
+
+
+# ---------------------------------------------------------------------------
 # The single entry point
 # ---------------------------------------------------------------------------
 
@@ -655,15 +781,20 @@ def resolve_item(
     item: ReviewItem,
     actor_user_id: uuid.UUID,
     payload: ResolvePayload,
+    expected_version: Optional[int] = None,
 ) -> ResolutionOutcome:
     """Dispatch to the owning service, audit it, announce it.
 
     Does not commit. The caller owns the transaction, which is what lets the
     outbox event, its job and the audit row land atomically with the state
     change.
+
+    ARCH48-S1:resolve-guarded. `expected_version` is the version the caller
+    read (the queue carries it); without one the caller still waits its turn
+    and is refused if the item was resolved meanwhile.
     """
     if item.status == vocab.STATUS_RESOLVED:
-        raise ReviewResolutionError(
+        raise AlreadyResolvedError(
             "This item has already been resolved. Reopening it would discard "
             "the decision and the person who made it."
         )
@@ -671,6 +802,8 @@ def resolve_item(
     handler = _DISPATCH.get(item.kind)
     if handler is None:  # pragma: no cover - the CHECK and the view agree
         raise ReviewResolutionError(f"'{item.kind}' is not a review kind.")
+
+    version = _claim_turn(db, item=item, actor_user_id=actor_user_id, expected_version=expected_version)
 
     detail = handler(db, item=item, actor_user_id=actor_user_id, payload=payload)
 
@@ -685,7 +818,8 @@ def resolve_item(
 
     # An assignment outlives nothing. Clearing it here keeps "assigned to me"
     # meaning "waiting on me" rather than "was once mine".
-    clear_assignment(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id)
+    clear_assignment(db, workspace_id=item.workspace_id, kind=item.kind, item_id=item.item_id, announce=False)
+    _announce_resolved(db, item=item, actor_user_id=actor_user_id, version=version, detail=detail)
 
     _emit_cleared(
         db,
@@ -710,6 +844,7 @@ def resolve_item(
         work_item_id=item.work_item_id,
         detail=detail,
         audit_log_id=audit_log_id,
+        version=version,
     )
 
 
@@ -721,6 +856,7 @@ def resolve_scoped(
     item_id: uuid.UUID,
     actor_user_id: uuid.UUID,
     payload: ResolvePayload,
+    expected_version: Optional[int] = None,
 ) -> ResolutionOutcome:
     """Load the item inside the workspace, then resolve it.
 
@@ -732,7 +868,8 @@ def resolve_scoped(
     item = load_item(db, workspace_id=workspace_id, kind=kind, item_id=item_id)
     if item is None:
         raise LookupError("Review item not found in this workspace.")
-    return resolve_item(db, item=item, actor_user_id=actor_user_id, payload=payload)
+    return resolve_item(db, item=item, actor_user_id=actor_user_id, payload=payload,
+                        expected_version=expected_version)
 
 
 # ---------------------------------------------------------------------------
@@ -770,32 +907,39 @@ def assign(
         )
     ).scalar_one_or_none()
 
-    if existing is not None:
-        existing.assignee_user_id = assignee_user_id
-        existing.assigned_by_user_id = assigned_by_user_id
-    else:
-        db.add(
-            ReviewAssignment(
-                kind=kind,
-                item_id=item_id,
-                workspace_id=workspace_id,
-                assignee_user_id=assignee_user_id,
-                assigned_by_user_id=assigned_by_user_id,
-            )
-        )
-
+    # ARCH48-S1:assign-savepoint. The refusal rolls back a SAVEPOINT, not the
+    # caller's transaction: `db.rollback()` here used to discard every earlier
+    # item of a bulk request that had already reported "ok".
     try:
-        db.flush()
+        with db.begin_nested():
+            if existing is not None:
+                existing.assignee_user_id = assignee_user_id
+                existing.assigned_by_user_id = assigned_by_user_id
+            else:
+                db.add(
+                    ReviewAssignment(
+                        kind=kind,
+                        item_id=item_id,
+                        workspace_id=workspace_id,
+                        assignee_user_id=assignee_user_id,
+                        assigned_by_user_id=assigned_by_user_id,
+                    )
+                )
+            db.flush()
     except IntegrityError as exc:
-        db.rollback()
         raise ReviewResolutionError(
             "That person is not a member of this workspace, so they cannot be "
             "assigned an item in it."
         ) from exc
 
+    from app.services.collab import events as collab_events
+
+    collab_events.item_assigned(db, workspace_id=workspace_id, kind=kind, item_id=item_id,
+                                assignee_user_id=assignee_user_id)
+
 
 def clear_assignment(
-    db: Session, *, workspace_id: uuid.UUID, kind: str, item_id: uuid.UUID
+    db: Session, *, workspace_id: uuid.UUID, kind: str, item_id: uuid.UUID, announce: bool = True
 ) -> bool:
     from app.models.review import ReviewAssignment
 
@@ -810,6 +954,10 @@ def clear_assignment(
         return False
     db.delete(row)
     db.flush()
+    if announce:
+        from app.services.collab import events as collab_events
+
+        collab_events.item_assigned(db, workspace_id=workspace_id, kind=kind, item_id=item_id, assignee_user_id=None)
     return True
 
 
@@ -818,11 +966,15 @@ __all__ = [
     "ANOMALY_VERDICT_CONFIRM",
     "ANOMALY_VERDICT_DISMISS",
     "REVIEW_CLEARED_EVENT",
+    "AlreadyResolvedError",
+    "ItemLockedError",
     "ResolutionOutcome",
     "ResolvePayload",
     "ReviewResolutionError",
+    "StaleVersionError",
     "assign",
     "clear_assignment",
+    "guard_decision",
     "resolve_anomaly_transition",
     "resolve_item",
     "resolve_scoped",

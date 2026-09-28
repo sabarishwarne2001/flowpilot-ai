@@ -257,6 +257,9 @@ def review_run(workspace_id: uuid.UUID, run_id: uuid.UUID, body: ReviewRunReques
     _ws(context, workspace_id)
     _gate(db, context, "corroboration.review")
     run = _run_or_404(db, workspace_id, run_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="CORROBORATION", item_id=run.id)
     try:
         decided = service.review_run(db, run=run, verdict=body.verdict, actor_user_id=context.user_id)
     except service.CorroborationError as exc:

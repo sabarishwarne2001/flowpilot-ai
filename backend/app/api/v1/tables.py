@@ -218,6 +218,9 @@ def review_table(workspace_id: uuid.UUID, table_id: uuid.UUID, body: TableReview
     _ws(context, workspace_id)
     _gate(db, context, "tables.review")
     table = _table_or_404(db, workspace_id, table_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="TABLE", item_id=table.id)
     try:
         service.review(db, table=table, verdict=body.verdict, actor_user_id=context.user_id)
     except service.TableError as exc:

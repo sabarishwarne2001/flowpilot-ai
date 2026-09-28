@@ -34,6 +34,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.obligations]: "Obligations & deadlines (renewals, notice periods, payments read from documents; calendar feeds)",
   // ARCH47-S2:plan-feature
   [CAPABILITY.erpPosting]: "ERP posting (approved bills, POs, receipts and journals to QuickBooks, Zoho, Business Central, SAP, NetSuite, Tally, EDI X12, UBL, SFTP — exactly once)",
+  // ARCH48-S2:plan-feature
+  [CAPABILITY.collaborativeReview]: "Real-time collaborative review (live queue, who is looking at what, item locks, paragraph-anchored discussions)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -68,6 +70,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,
   CAPABILITY.universalCorroborator,
+  // ARCH48-S2:plan-feature-order — Enterprise only.
+  CAPABILITY.collaborativeReview,
   CAPABILITY.enterpriseIdentity,
   CAPABILITY.prioritySlo,
 ];

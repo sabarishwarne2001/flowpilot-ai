@@ -693,3 +693,11 @@ from app.models.erp import (  # noqa: E402,F401
     ErpPostingAttempt,
     ErpTarget,
 )
+
+# ARCH48-S1:models-registry
+from app.models.collab import (  # noqa: E402,F401
+    ReviewComment,
+    ReviewItemVersion,
+    ReviewLock,
+    ReviewThread,
+)

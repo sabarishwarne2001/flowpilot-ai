@@ -426,6 +426,9 @@ def confirm_anomaly(
     _gate(db, context, "anomalies.confirm")
 
     finding = _load(db, workspace_id=workspace_id, finding_id=finding_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="ANOMALY", item_id=finding.id)
     if finding.status != vocab.STATUS_OPEN:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -515,6 +518,9 @@ def dismiss_anomaly(
     _gate(db, context, "anomalies.dismiss")
 
     finding = _load(db, workspace_id=workspace_id, finding_id=finding_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="ANOMALY", item_id=finding.id)
     if finding.status != vocab.STATUS_OPEN:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

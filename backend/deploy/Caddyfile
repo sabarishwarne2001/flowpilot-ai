@@ -64,6 +64,22 @@
         respond 404
     }
 
+    # ARCH48-S1:ws-live-review. The live review channel is a WebSocket
+    # (/api/v1/workspaces/{id}/review/collab/live). reverse_proxy passes the
+    # Upgrade through by itself; what this block adds is lifetime: frames are
+    # flushed as they arrive, and a config reload lets open reviewers' sockets
+    # run on for up to five minutes instead of cutting every one of them at
+    # once (they reconnect by themselves either way).
+    @review_live path /api/v1/workspaces/*/review/collab/live
+    handle @review_live {
+        reverse_proxy web:8000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+            flush_interval -1
+            stream_close_delay 5m
+        }
+    }
+
     handle /api/* {
         reverse_proxy web:8000 {
             header_up X-Forwarded-Proto {scheme}
@@ -110,6 +126,11 @@
             wrap json
             fields {
                 request>uri regexp "(/api/v1/public/(?:calendar-feeds|document-requests)/)[^/?#]+" "$1[redacted]"
+                # ARCH48-S1:ws-log-redaction. The live review socket carries the
+                # access token in its subprotocol list (a browser can set no
+                # Authorization header on a WebSocket); Caddy redacts
+                # Authorization by itself but not this header.
+                request>headers>Sec-Websocket-Protocol delete
             }
         }
     }
@@ -149,6 +170,19 @@
         }
     }
 
+    # ARCH48-S1:ws-live-review. The live review channel on a custom domain
+    # (the Host survives, as for every /api route here).
+    @review_live path /api/v1/workspaces/*/review/collab/live
+    handle @review_live {
+        reverse_proxy web:8000 {
+            header_up Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+            flush_interval -1
+            stream_close_delay 5m
+        }
+    }
+
     handle /api/* {
         reverse_proxy web:8000 {
             header_up Host {host}
@@ -175,6 +209,11 @@
             wrap json
             fields {
                 request>uri regexp "(/api/v1/public/(?:calendar-feeds|document-requests)/)[^/?#]+" "$1[redacted]"
+                # ARCH48-S1:ws-log-redaction. The live review socket carries the
+                # access token in its subprotocol list (a browser can set no
+                # Authorization header on a WebSocket); Caddy redacts
+                # Authorization by itself but not this header.
+                request>headers>Sec-Websocket-Protocol delete
             }
         }
     }

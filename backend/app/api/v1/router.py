@@ -50,6 +50,7 @@ from app.api.v1 import (
     upload,
     usage,
     review,  # ARCH40-S1:review-import
+    review_collab,  # ARCH48-S1:review-collab-import
     verifications,
     warehouse_sync,
     ingestion,
@@ -212,6 +213,12 @@ _SCOPED = (
     # A `/review` prefix has no catch-all to race with, so nothing here is
     # order-dependent.
     (review.router,            "/review",             "Review Hub"),
+    # ARCH48-S1:review-collab-router. Live review (threads, paragraphs, the
+    # admin lock break, and the WebSocket) under /review/collab: no route there
+    # has the hub's /{kind}/{item_id}/{verb} shape, so neither router can
+    # capture the other's paths at any registration order. Every REST route is
+    # gated on capability.collaborative_review; the socket at its handshake.
+    (review_collab.router,     "/review",             "Review Hub"),
 )
 
 for _router, _suffix, _tag in _SCOPED:

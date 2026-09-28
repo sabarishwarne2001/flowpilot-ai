@@ -43,6 +43,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.core.exceptions import FlowPilotError
 from app.schemas.review import (
     ReviewAssignRequest,
     ReviewAssigneeResponse,
@@ -60,6 +61,49 @@ from app.services.review import vocabulary as vocab
 logger = logging.getLogger("app.api.v1.review")
 
 router = APIRouter(tags=["Review Hub"])
+
+
+class ReviewConflictError(FlowPilotError):
+    """ARCH48-S1:review-conflict. A 409 in the ARCH-01 envelope, `{code, message, details}`.
+
+    One subclass per refusal code (the domain handler reads `code` from the
+    class): STALE_VERSION (details.current_version), LOCKED (details.holder,
+    details.expires_at), ALREADY_RESOLVED. The console branches on the code;
+    `detail` still carries the message for callers that read only that.
+    """
+
+    status_code = 409
+    code = "REVIEW_CONFLICT"
+
+    def __init__(self, message: str, details: Optional[dict] = None) -> None:
+        super().__init__(message)
+        self.details = dict(details or {})
+
+
+_CONFLICTS: dict[str, type[ReviewConflictError]] = {}
+
+
+def _conflict(exc: "resolution.ReviewResolutionError") -> ReviewConflictError:
+    klass = _CONFLICTS.get(exc.code)
+    if klass is None:
+        klass = type(f"ReviewConflict_{exc.code}", (ReviewConflictError,), {"code": exc.code})
+        _CONFLICTS[exc.code] = klass
+    return klass(str(exc), {"code": exc.code, **getattr(exc, "details", {})})
+
+
+_TURN_ERRORS = (resolution.StaleVersionError, resolution.ItemLockedError, resolution.AlreadyResolvedError)
+
+
+def decision_guard(db: Session, context: deps.TenantContext, *, kind: str, item_id: uuid.UUID) -> None:
+    """ARCH48-S1:decision-guard. For a source screen deciding a hub item itself (anomalies,
+    tables, comparisons, obligations, ERP postings, packet splits): wait this item's turn, and
+    refuse with the hub's 409 when someone else decided it meanwhile or holds its lock."""
+    try:
+        resolution.guard_decision(db, workspace_id=context.workspace_id, kind=kind, item_id=item_id,
+                                  actor_user_id=context.user_id)
+    except _TURN_ERRORS as exc:
+        db.rollback()
+        raise _conflict(exc) from exc
 
 
 def _allowed_kinds(db: Session, context: deps.TenantContext) -> tuple[str, ...]:
@@ -181,6 +225,8 @@ def _as_response(item: projection.ReviewItem) -> ReviewItemResponse:
         under_retention_hold=item.under_retention_hold,
         tags=item.tags,
         review_reason=item.review_reason,
+        version=item.version,
+        open_threads=item.open_threads,
     )
 
 
@@ -317,43 +363,42 @@ def bulk(
     seen: set[uuid.UUID] = set()
     ordered_ids = [i for i in body.ids if not (i in seen or seen.add(i))]
 
-    for item_id in ordered_ids:
+    expected_versions = body.expected_versions or {}
+
+    def refused(item_id: uuid.UUID, work_item_id: object, code: str, detail: Optional[str]) -> ReviewBulkItemResult:
+        return ReviewBulkItemResult(work_item_id=str(work_item_id or item_id), review_item_id=str(item_id),
+                                    outcome="refused", code=code, detail=detail)
+
+    def skipped(item_id: uuid.UUID, work_item_id: object, code: str) -> ReviewBulkItemResult:
+        return ReviewBulkItemResult(work_item_id=str(work_item_id or item_id), review_item_id=str(item_id),
+                                    outcome="skipped", code=code)
+
+    def decide(item_id: uuid.UUID) -> ReviewBulkItemResult:
         item = projection.load_item(
             db, workspace_id=context.workspace_id, kind=body.kind, item_id=item_id
         )
         if item is None:
-            results.append(
-                ReviewBulkItemResult(
-                    work_item_id=str(item_id),
-                    review_item_id=str(item_id),
-                    outcome="refused",
-                    code="NOT_FOUND",
-                    detail="No such review item in this workspace.",
-                )
-            )
-            continue
+            return refused(item_id, None, "NOT_FOUND", "No such review item in this workspace.")
 
+        # ARCH48-S1:bulk-savepoint. Each item in its own SAVEPOINT: a refusal
+        # (a stale version, someone's lock, a payload the kind rejects) rolls
+        # back that item alone. Before ARCH-48 the refusal path called
+        # `db.rollback()`, which discarded every earlier item of the batch
+        # while the response still reported them "ok".
+        savepoint = db.begin_nested()
         try:
             if body.action == "resolve":
                 if item.status == vocab.STATUS_RESOLVED:
-                    results.append(
-                        ReviewBulkItemResult(
-                            work_item_id=str(item.work_item_id or item_id),
-                            review_item_id=str(item_id),
-                            outcome="skipped",
-                            code="ALREADY_RESOLVED",
-                        )
-                    )
-                    continue
+                    savepoint.commit()
+                    return skipped(item_id, item.work_item_id, "ALREADY_RESOLVED")
                 outcome = resolution.resolve_item(
-                    db, item=item, actor_user_id=context.user_id, payload=payload
+                    db, item=item, actor_user_id=context.user_id, payload=payload,
+                    expected_version=expected_versions.get(item_id),
                 )
                 detail = outcome.detail
             elif body.action == "assign":
                 if body.assignee_user_id is None:
-                    raise resolution.ReviewResolutionError(
-                        "assign needs assignee_user_id."
-                    )
+                    raise resolution.ReviewResolutionError("assign needs assignee_user_id.")
                 resolution.assign(
                     db,
                     workspace_id=context.workspace_id,
@@ -368,39 +413,33 @@ def bulk(
                     db, workspace_id=context.workspace_id, kind=body.kind, item_id=item_id
                 )
                 if not changed:
-                    results.append(
-                        ReviewBulkItemResult(
-                            work_item_id=str(item.work_item_id or item_id),
-                            review_item_id=str(item_id),
-                            outcome="skipped",
-                            code="NOT_ASSIGNED",
-                        )
-                    )
-                    continue
+                    savepoint.commit()
+                    return skipped(item_id, item.work_item_id, "NOT_ASSIGNED")
                 detail = "unassigned"
         except resolution.ReviewResolutionError as exc:
-            db.rollback()
-            results.append(
-                ReviewBulkItemResult(
-                    work_item_id=str(item.work_item_id or item_id),
-                    review_item_id=str(item_id),
-                    outcome="refused",
-                    code="REFUSED",
-                    detail=str(exc),
-                )
-            )
-            continue
-
-        results.append(
-            ReviewBulkItemResult(
-                work_item_id=str(item.work_item_id or item_id),
-                review_item_id=str(item_id),
-                outcome="ok",
-                detail=detail,
-            )
+            if savepoint.is_active:
+                savepoint.rollback()
+            return refused(item_id, item.work_item_id, exc.code, str(exc))
+        except BaseException:
+            if savepoint.is_active:
+                savepoint.rollback()
+            raise
+        savepoint.commit()
+        return ReviewBulkItemResult(
+            work_item_id=str(item.work_item_id or item_id),
+            review_item_id=str(item_id),
+            outcome="ok",
+            detail=detail,
         )
 
+    # ARCH48-S1:bulk-lock-order. Items are decided in ONE canonical order (by id)
+    # and reported in the order asked. Each decision holds its item's version-row
+    # lock until the commit, so two bulk requests over overlapping items taking
+    # those locks in different orders could deadlock; in one order they queue.
+    by_id = {item_id: decide(item_id) for item_id in sorted(ordered_ids, key=str)}
+
     db.commit()
+    results = [by_id[item_id] for item_id in ordered_ids]
 
     return ReviewBulkResponse(
         action=body.action,
@@ -434,12 +473,16 @@ def resolve_one(
             item_id=item_id,
             actor_user_id=context.user_id,
             payload=_payload(body),
+            expected_version=body.expected_version,  # ARCH48-S1:resolve-expected-version
         )
     except LookupError as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
+    except _TURN_ERRORS as exc:
+        db.rollback()
+        raise _conflict(exc) from exc
     except resolution.ReviewResolutionError as exc:
         db.rollback()
         raise HTTPException(
@@ -452,6 +495,7 @@ def resolve_one(
         item_id=outcome.item_id,
         work_item_id=outcome.work_item_id,
         resolution=outcome.detail,
+        version=outcome.version,
     )
 
 

@@ -34,6 +34,12 @@ class ReviewItemResponse(BaseModel):
     #: ARCH40-S1:review-reason-wire. DISAGREEMENT, ESCALATION,
     #: CALIBRATION_HOLD, AUTONOMY_AUDIT, PENDING_REVIEW, CLAUSE_TRIAGE, ANOMALY.
     review_reason: str = ""
+    #: ARCH48-S1:item-version. The optimistic-concurrency version: send it back as
+    #: `expected_version` when resolving, and a decision someone else made first
+    #: is refused (409 STALE_VERSION) instead of silently overwritten.
+    version: int = 0
+    #: ARCH48-S1:item-open-threads. Open discussion threads on the item.
+    open_threads: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -89,6 +95,8 @@ class ReviewResolveRequest(BaseModel):
     #: ARCH47-S1:posting-verdict. POSTING reviews: RETRY, ACCEPT (with the target's reference) or CANCEL.
     posting_verdict: Optional[str] = None
     posting_reference: Optional[str] = Field(default=None, max_length=200)
+    #: ARCH48-S1:expected-version. The version the reviewer read (ReviewItemResponse.version).
+    expected_version: Optional[int] = Field(default=None, ge=0)
 
     @field_validator("posting_verdict")
     @classmethod
@@ -158,6 +166,8 @@ class ReviewResolveResponse(BaseModel):
     item_id: uuid.UUID
     work_item_id: Optional[uuid.UUID] = None
     resolution: str
+    #: ARCH48-S1:resolved-version. The item's version after the resolution.
+    version: Optional[int] = None
 
 
 class ReviewAssignRequest(BaseModel):
@@ -181,6 +191,9 @@ class ReviewBulkRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     assignee_user_id: Optional[uuid.UUID] = None
     payload: Optional[ReviewResolveRequest] = None
+    #: ARCH48-S1:bulk-expected-versions. Per item, the version the reviewer read. A
+    #: stale one is refused for that item alone (code STALE_VERSION); the rest go on.
+    expected_versions: Optional[dict[uuid.UUID, int]] = None
 
     @field_validator("action")
     @classmethod

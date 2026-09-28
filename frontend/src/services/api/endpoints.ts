@@ -555,4 +555,20 @@ export const REVIEW_ENDPOINTS = {
     `${scoped(workspaceId)}/review/${seg(kind)}/${seg(itemId)}/resolve`,
   assign: (workspaceId: string, kind: string, itemId: string): string =>
     `${scoped(workspaceId)}/review/${seg(kind)}/${seg(itemId)}/assign`,
+  // ARCH48-S2:collab-endpoints. Live review (Enterprise): threads, paragraphs, live state, the admin lock break.
+  collabState: (workspaceId: string): string => `${scoped(workspaceId)}/review/collab/state`,
+  collabThreads: (workspaceId: string, kind: string, itemId: string): string =>
+    `${scoped(workspaceId)}/review/collab/${seg(kind)}/${seg(itemId)}/threads`,
+  collabParagraphs: (workspaceId: string, kind: string, itemId: string): string =>
+    `${scoped(workspaceId)}/review/collab/${seg(kind)}/${seg(itemId)}/paragraphs`,
+  collabBreakLock: (workspaceId: string, kind: string, itemId: string): string =>
+    `${scoped(workspaceId)}/review/collab/${seg(kind)}/${seg(itemId)}/lock/break`,
+  collabComments: (workspaceId: string, threadId: string): string =>
+    `${scoped(workspaceId)}/review/collab/threads/${seg(threadId)}/comments`,
+  collabThreadResolve: (workspaceId: string, threadId: string): string =>
+    `${scoped(workspaceId)}/review/collab/threads/${seg(threadId)}/resolve`,
+  collabThreadReopen: (workspaceId: string, threadId: string): string =>
+    `${scoped(workspaceId)}/review/collab/threads/${seg(threadId)}/reopen`,
+  collabComment: (workspaceId: string, commentId: string): string =>
+    `${scoped(workspaceId)}/review/collab/comments/${seg(commentId)}`,
 } as const;

@@ -22,6 +22,16 @@
  *   j / k   next / previous item          x   toggle selection
  *   a       assign to me (again: unassign) r   resolve
  *   e       expand / collapse             Esc close the open panel
+ *   c       open / close the discussion (live review)
+ *
+ * ARCH48-S2:live-hub. LIVE REVIEW (the collaborative-review capability, Enterprise).
+ * The queue updates as reviewers decide (a WebSocket fanned out across API
+ * workers); avatars show who else has an item open; opening an item to decide
+ * takes its soft lock (a lock badge for everyone else, refused resolutions for
+ * them while it lives); each item carries paragraph-anchored discussion
+ * threads. Every resolution sends the version the reviewer read, on every
+ * plan: a decision someone else made first is a 409 (STALE_VERSION,
+ * ALREADY_RESOLVED or LOCKED), never a silent overwrite.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -35,13 +45,21 @@ import {
   Keyboard,
   Loader2,
   Lock,
+  MessageSquare,
   Square,
+  Unlock,
   UserRound,
 } from "lucide-react";
 
 import VerificationReviewQueue from "./VerificationReviewQueue";
+import { LiveStatusPill, LockBadge, PresenceAvatars } from "@/components/review/LivePresence";
 import ResolvePanel from "@/components/review/ResolvePanel";
+import ThreadPanel from "@/components/review/ThreadPanel";
+import { CAPABILITY } from "@/constants/capabilities";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
+import { liveKey, useLiveReview, type LiveChange } from "@/hooks/useLiveReview";
+import { breakLock } from "@/services/api/collab";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ApiError } from "@/services/api/client";
 import { reviewKeys, verificationKeys } from "@/services/api/queryKeys";
@@ -59,6 +77,7 @@ import {
   REASON_LABELS,
   REVIEW_SEVERITIES,
   formatAge,
+  type ReviewConflictCode,
   type ReviewItem,
   type ReviewKind,
   type ReviewQueueFilters,
@@ -135,7 +154,46 @@ export const ReviewHub: React.FC = () => {
   const [resolving, setResolving] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulkReason, setBulkReason] = useState("");
+  const [discussing, setDiscussing] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const isAdmin = workspace?.role === "ADMIN";
+
+  // ARCH48-S2:live-channel. Enterprise only; without it the hub works exactly as before.
+  const collab = useCapabilityAccess(workspace?.organizationId ?? "", CAPABILITY.collaborativeReview);
+  const resolvingRef = useRef<string | null>(null);
+  resolvingRef.current = resolving;
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onLiveChange = useCallback(
+    (change: LiveChange): void => {
+      if (change.type === "lock.released" && change.reason !== "RESOLVED") {
+        return;
+      }
+      if (change.type === "item.resolved" && change.by_user_id !== user.id && resolvingRef.current === liveKey(change.kind, change.item_id)) {
+        toast.info("Another reviewer just resolved this item.");
+        setResolving(null);
+      }
+      if (change.type === "thread.changed") {
+        void queryClient.invalidateQueries({ queryKey: reviewKeys.threads(workspaceId, change.kind, change.item_id) });
+      }
+      // Coalesce a burst (a bulk resolution) into one refetch.
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+      }
+      refreshTimer.current = setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: reviewKeys.queue(workspaceId, undefined).slice(0, -1) });
+      }, 250);
+    },
+    [queryClient, workspaceId, user.id],
+  );
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+      }
+    },
+    [],
+  );
+  const live = useLiveReview({ workspaceId, enabled: collab.granted, onChange: onLiveChange });
 
   const active = TABS.find((entry) => entry.id === tab) ?? TABS[0];
 
@@ -184,6 +242,7 @@ export const ReviewHub: React.FC = () => {
     setSelected(new Set());
     setExpanded(null);
     setResolving(null);
+    setDiscussing(null);
   }, [filters]);
 
   useEffect(() => {
@@ -201,15 +260,29 @@ export const ReviewHub: React.FC = () => {
     toast.error(error instanceof ApiError ? error.message : fallback);
   };
 
+  // ARCH48-S2:resolve-conflicts. The item's version travels with the decision.
   const resolve = useMutation({
     mutationFn: (args: { item: ReviewItem; body: ReviewResolveRequest }) =>
-      resolveReview(workspaceId, args.item.kind, args.item.item_id, args.body),
+      resolveReview(workspaceId, args.item.kind, args.item.item_id, { ...args.body, expected_version: args.item.version }),
     onSuccess: async (result) => {
       toast.success(`Resolved: ${result.resolution.toLowerCase()}.`);
       setResolving(null);
       await refresh();
     },
-    onError: failure("That item could not be resolved."),
+    onError: async (error: unknown) => {
+      const code = error instanceof ApiError ? (error.code as ReviewConflictCode | undefined) : undefined;
+      if (code === "STALE_VERSION" || code === "ALREADY_RESOLVED") {
+        toast.warning(error instanceof ApiError ? error.message : "Someone else decided this item first.");
+        setResolving(null);
+        await refresh();
+        return;
+      }
+      if (code === "LOCKED") {
+        toast.warning(error instanceof ApiError ? error.message : "Another reviewer is deciding this item.");
+        return;
+      }
+      failure("That item could not be resolved.")(error);
+    },
   });
 
   const assign = useMutation({
@@ -232,6 +305,8 @@ export const ReviewHub: React.FC = () => {
         }
       }
       // One request per kind: ARCH-38's bulk contract carries one `kind`.
+      // ARCH48-S2:bulk-versions. Each item's version as read; a stale one is refused alone.
+      const versions = new Map(items.map((item) => [item.item_id, item.version]));
       const responses = [];
       for (const [kind, ids] of byKind) {
         if (args.action === "resolve" && kind === "EXTRACTION") {
@@ -245,6 +320,9 @@ export const ReviewHub: React.FC = () => {
             idempotency_key: newKey(),
             ...(args.userId ? { assignee_user_id: args.userId } : {}),
             ...(args.body ? { payload: args.body } : {}),
+            ...(args.action === "resolve"
+              ? { expected_versions: Object.fromEntries(ids.map((id) => [id, versions.get(id) ?? 0])) }
+              : {}),
           }),
         );
       }
@@ -286,13 +364,55 @@ export const ReviewHub: React.FC = () => {
     assign.mutate({ item, userId: item.assignee_user_id === user.id ? null : user.id });
   }, [assign, user.id]);
 
+  // ARCH48-S2:lock-on-open. Deciding takes the item's soft lock (when live); a lock
+  // someone else holds keeps the panel closed and says who.
   const openResolve = useCallback((item: ReviewItem): void => {
     if (item.status === "RESOLVED") {
       return;
     }
     setExpanded(itemKey(item));
-    setResolving(itemKey(item));
-  }, []);
+    if (live.status !== "live" || item.kind === "EXTRACTION") {
+      setResolving(itemKey(item));
+      return;
+    }
+    void live.lock(item.kind, item.item_id).then((result) => {
+      if (result.ok || result.code === "OFFLINE" || result.code === "TIMEOUT" || result.code === "DISCONNECTED") {
+        setResolving(itemKey(item));
+        return;
+      }
+      if (result.code === "LOCKED") {
+        toast.warning(`${result.holder?.name || result.holder?.email || "Another reviewer"} is deciding this item right now.`);
+        return;
+      }
+      toast.error(result.detail ?? "That item cannot be opened for a decision.");
+    });
+  }, [live]);
+
+  const closeResolve = useCallback((): void => {
+    const key = resolvingRef.current;
+    if (key) {
+      const [kind, itemId] = key.split(":");
+      if (live.held.has(key) && kind && itemId) {
+        live.unlock(kind as ReviewKind, itemId);
+      }
+    }
+    setResolving(null);
+  }, [live]);
+
+  const breakItemLock = useMutation({
+    mutationFn: (item: ReviewItem) => breakLock(workspaceId, item.kind, item.item_id),
+    onSuccess: (result) => toast.success(result.released ? "Lock released." : "The lock had already lapsed."),
+    onError: failure("The lock could not be released."),
+  });
+
+  // Presence: tell the others which item this reviewer has open.
+  useEffect(() => {
+    if (live.status !== "live") {
+      return;
+    }
+    const open = expanded ? items.find((item) => itemKey(item) === expanded) : undefined;
+    live.view(open ? open.kind : null, open ? open.item_id : null);
+  }, [expanded, items, live]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -343,9 +463,17 @@ export const ReviewHub: React.FC = () => {
             setExpanded((open) => (open === itemKey(item) ? null : itemKey(item)));
           }
           break;
+        case "c":
+          if (item && collab.granted) {
+            event.preventDefault();
+            setExpanded(itemKey(item));
+            setDiscussing((open) => (open === itemKey(item) ? null : itemKey(item)));
+          }
+          break;
         case "Escape":
-          setResolving(null);
+          closeResolve();
           setExpanded(null);
+          setDiscussing(null);
           break;
         default:
           break;
@@ -353,7 +481,7 @@ export const ReviewHub: React.FC = () => {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items, cursor, toggleSelected, assignToMe, openResolve]);
+  }, [items, cursor, toggleSelected, assignToMe, openResolve, closeResolve, collab.granted]);
 
   useEffect(() => {
     const row = listRef.current?.querySelector<HTMLElement>(`[data-index="${cursor}"]`);
@@ -375,6 +503,13 @@ export const ReviewHub: React.FC = () => {
             Everything waiting on a person, oldest high-severity first.
           </p>
         </div>
+        {collab.granted && (
+          <LiveStatusPill
+            status={live.status}
+            degraded={live.degraded}
+            others={new Set(live.viewers.filter((v) => v.user_id !== user.id).map((v) => v.user_id)).size}
+          />
+        )}
         <dl className="flex gap-2" aria-label="Open items by source">
           {allowed.map((kind) => (
             <div key={kind} className="rounded-lg border border-border bg-card px-3 py-1.5 text-center">
@@ -467,7 +602,7 @@ export const ReviewHub: React.FC = () => {
           className="w-28 rounded-lg border border-border bg-background px-2 py-1 text-xs"
         />
         <span className="ml-auto hidden items-center gap-1 text-[11px] text-muted-foreground md:inline-flex">
-          <Keyboard className="h-3.5 w-3.5" aria-hidden="true" /> j/k move · x select · a assign · r resolve · e expand
+          <Keyboard className="h-3.5 w-3.5" aria-hidden="true" /> j/k move · x select · a assign · r resolve · e expand{collab.granted ? " · c discuss" : ""}
         </span>
       </div>
 
@@ -635,6 +770,29 @@ export const ReviewHub: React.FC = () => {
                     </span>
                   </button>
                   <span className="flex shrink-0 items-center gap-2">
+                    {/* ARCH48-S2:row-live — who else is looking, who is deciding, the open discussion */}
+                    {collab.granted && (
+                      <>
+                        <PresenceAvatars viewers={live.viewersOf(item.kind, item.item_id)} meId={user.id} />
+                        <LockBadge lock={live.lockOf(item.kind, item.item_id)} meId={user.id} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCursor(index);
+                            setExpanded(key);
+                            setDiscussing((open) => (open === key ? null : key));
+                          }}
+                          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                            item.open_threads > 0 ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          aria-label={item.open_threads > 0 ? `${item.open_threads} open discussion threads` : "Discuss this item"}
+                          aria-pressed={discussing === key}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                          {item.open_threads > 0 ? item.open_threads : null}
+                        </button>
+                      </>
+                    )}
                     {item.assignee_email ? (
                       <span className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full bg-muted px-2 py-0.5 text-[11px]">
                         <UserRound className="h-3 w-3" aria-hidden="true" /> {item.assignee_email}
@@ -685,7 +843,7 @@ export const ReviewHub: React.FC = () => {
                         item={item}
                         pending={resolve.isPending}
                         onResolve={(body) => resolve.mutate({ item, body })}
-                        onCancel={() => setResolving(null)}
+                        onCancel={closeResolve}
                       />
                     ) : (
                       <div className="flex items-center justify-between gap-3 text-sm">
@@ -693,10 +851,34 @@ export const ReviewHub: React.FC = () => {
                           {item.status === "RESOLVED" ? "Resolved." : "Press r, or use Resolve, to decide."}
                         </span>
                         {item.status === "OPEN" && (
-                          <button type="button" onClick={() => setResolving(key)} className="text-xs font-semibold text-primary hover:underline">
-                            Decide now
-                          </button>
+                          <span className="flex items-center gap-3">
+                            {collab.granted && isAdmin && live.lockOf(item.kind, item.item_id) && live.lockOf(item.kind, item.item_id)?.holder_user_id !== user.id && (
+                              <button
+                                type="button"
+                                disabled={breakItemLock.isPending}
+                                onClick={() => breakItemLock.mutate(item)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:underline dark:text-amber-400"
+                              >
+                                <Unlock className="h-3.5 w-3.5" aria-hidden="true" /> Break lock
+                              </button>
+                            )}
+                            <button type="button" onClick={() => openResolve(item)} className="text-xs font-semibold text-primary hover:underline">
+                              Decide now
+                            </button>
+                          </span>
                         )}
+                      </div>
+                    )}
+                    {collab.granted && discussing === key && (
+                      <div className="mt-4">
+                        <ThreadPanel
+                          workspaceId={workspaceId}
+                          item={item}
+                          meId={user.id}
+                          isAdmin={isAdmin}
+                          people={assigneesQuery.data ?? []}
+                          onClose={() => setDiscussing(null)}
+                        />
                       </div>
                     )}
                   </div>

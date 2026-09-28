@@ -322,6 +322,12 @@ def _destroy_documents(
     from app.services.erp import service as _erp_service
 
     counts["erp_postings"] = _erp_service.erase_for_work_items(db, work_item_ids)
+    # ARCH48-S1:erasure-review-threads. A discussion anchored on a document
+    # quotes it (the anchored paragraph, and replies that answer it): the
+    # threads on the subject's documents go with them, comments included.
+    from app.services.collab import threads as _collab_threads
+
+    counts["review_threads"] = _collab_threads.erase_for_work_items(db, work_item_ids)
 
 
 def _destroy_conversations(
@@ -502,6 +508,14 @@ def erase_subject(
     counts["entity_records"] = _entity_erasure.erase_by_identifier(
         db, workspace_ids=workspace_ids, kind="EMAIL", raw_value=subject.email
     )["entities"]
+    # ARCH48-S1:erasure-review-comments. The subject's own words leave every
+    # discussion in the organization (the comment keeps its place with a NULL
+    # body, so replies still read in order), and any soft lock they hold goes.
+    from app.services.collab import service as _collab_service
+    from app.services.collab import threads as _collab_threads
+
+    counts["review_comments"] = _collab_threads.erase_author(db, organization_id=organization_id, user_id=subject.id)
+    counts["review_locks"] = _collab_service.release_user_locks(db, user_id=subject.id)
     _destroy_credentials(db, subject_id=subject.id, now=now, counts=counts)
     _release_files(
         db,

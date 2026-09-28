@@ -605,6 +605,9 @@ def download_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, db: Session
 def _review(db: Session, context: TenantContext, workspace_id: uuid.UUID, posting_id: uuid.UUID, verdict: str,
             body: Optional[ReviewAction]) -> PostingDetail:
     p = _posting(db, workspace_id, posting_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="POSTING", item_id=p.id)
     try:
         service.review(db, posting=p, verdict=verdict, actor_user_id=context.user_id,
                        note=body.note if body else None, reference=body.reference if body else None)

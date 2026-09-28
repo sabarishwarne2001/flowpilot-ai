@@ -348,7 +348,11 @@ def check_capability(ent: str, gate_text: str, seed: str, caps: str, plan: str, 
 def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A47) == f'"{A46}"', f"{A47} revises {revs.get(A47)}"
-    assert revs.get(STEP3) == f'"{A47}"', f"the contract step revises {revs.get(STEP3)}, expected {A47}"
+    # ARCH48-S1:t2-widened. ARCH-48 inserts its migration between ARCH-47 and the contract step.
+    assert revs.get(STEP3) in (f'"{A47}"', '"arch48_step1_collaborative_review"'), \
+        f"the contract step revises {revs.get(STEP3)}, expected {A47} or arch48"
+    if revs.get(STEP3) == '"arch48_step1_collaborative_review"':
+        assert revs.get("arch48_step1_collaborative_review") == f'"{A47}"', "arch48 must revise arch47"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -2796,7 +2800,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
             ledger = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='uq_erp_postings_ledger'")).scalar_one()
-        assert current in ([A47], [STEP3]), f"alembic current is {current}; run run_arch47.ps1"
+        assert current in ([A47], [STEP3], ["arch48_step1_collaborative_review"]), f"alembic current is {current}; run run_arch47.ps1"  # ARCH48-S1:head-widened-47
         assert not [x for x in TABLES if x not in tables], "ARCH-47 tables missing"
         assert "POSTING" in kinds and "trigger.posting.failed" in outbox and "POSTING_EXCEPTION" in view
         assert "UNIQUE (target_id, object_kind, source_kind, source_id)" in ledger

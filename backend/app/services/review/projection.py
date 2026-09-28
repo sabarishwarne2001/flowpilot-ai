@@ -81,6 +81,10 @@ class ReviewItem:
     tags: list[str] = field(default_factory=list)
     #: ARCH40-S1:review-reason-field. Why the item needs a human.
     review_reason: str = ""
+    #: ARCH48-S1:projection-version. The optimistic-concurrency version (0 until first decided).
+    version: int = 0
+    #: ARCH48-S1:projection-threads. Open discussion threads on the item.
+    open_threads: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -101,6 +105,8 @@ class ReviewItem:
             "under_retention_hold": self.under_retention_hold,
             "tags": list(self.tags),
             "review_reason": self.review_reason,
+            "version": self.version,
+            "open_threads": self.open_threads,
         }
 
 
@@ -334,6 +340,13 @@ def query_reviews(
         ).all():
             tags_by_work_item.setdefault(work_item_id_value, []).append(str(tag_value))
 
+    # ARCH48-S1:projection-join. Versions and open threads for this page only: the
+    # view stays ARCH-47's, and the two lookups are primary-key / indexed probes.
+    versions = _versions(db, [(str(row.kind), row.item_id) for row in rows])
+    from app.services.collab import threads as collab_threads
+
+    threads_open = collab_threads.open_counts(db, workspace_id=workspace_id, item_ids=item_ids)
+
     now = db.execute(select(func.now())).scalar_one()
     items = [
         ReviewItem(
@@ -357,6 +370,8 @@ def query_reviews(
             under_retention_hold=bool(row.under_retention_hold),
             tags=sorted(tags_by_work_item.get(row.work_item_id, [])),
             review_reason=str(row.review_reason or ""),
+            version=versions.get((str(row.kind), str(row.item_id)), 0),
+            open_threads=threads_open.get((str(row.kind), str(row.item_id)), 0),
         )
         for row in rows
     ]
@@ -409,7 +424,22 @@ def load_item(
         under_retention_hold=False,
         tags=[],
         review_reason=str(row.review_reason or ""),
+        version=_versions(db, [(str(row.kind), row.item_id)]).get((str(row.kind), str(row.item_id)), 0),
     )
+
+
+def _versions(db: Session, keys: Sequence[tuple[str, uuid.UUID]]) -> dict[tuple[str, str], int]:
+    """ARCH48-S1:projection-versions. {(kind, item id): version} (absent = 0)."""
+    if not keys:
+        return {}
+    from app.models.collab import ReviewItemVersion
+
+    rows = db.execute(
+        select(ReviewItemVersion.kind, ReviewItemVersion.item_id, ReviewItemVersion.version).where(
+            ReviewItemVersion.item_id.in_([k[1] for k in keys]))
+    ).all()
+    wanted = {(k, str(i)) for k, i in keys}
+    return {(str(k), str(i)): int(n) for k, i, n in rows if (str(k), str(i)) in wanted}
 
 
 __all__ = [

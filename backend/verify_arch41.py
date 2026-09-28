@@ -874,10 +874,13 @@ def check_migration_chain() -> None:
             revs[r.group(1)] = d.group(1).strip() if d else ""
     assert revs.get(A41) == f'"{HM1}"', f"{A41} revises {revs.get(A41)}, expected {HM1}"
     # ARCH42-S1:chain-widened-41. ARCH-42 sits between ARCH-41 and the contract step.
-    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"'), f"the contract step revises {revs.get(STEP3)}, expected {A41}, arch42, arch43, arch44, arch45, arch46 or arch47"  # ARCH43-S1:chain-widened-41  ARCH44-S1:chain-widened-41  ARCH45-S1:chain-widened-41  ARCH46-S1:chain-widened-41  ARCH47-S1:chain-widened-41
+    assert revs.get(STEP3) in (f'"{A41}"', '"arch42_step1_entity_graph"', '"arch43_step1_case_intelligence"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"'), f"the contract step revises {revs.get(STEP3)}, expected {A41}, arch42, arch43, arch44, arch45, arch46 or arch47"  # ARCH43-S1:chain-widened-41  ARCH44-S1:chain-widened-41  ARCH45-S1:chain-widened-41  ARCH46-S1:chain-widened-41  ARCH47-S1:chain-widened-41  ARCH48-S1:chain-widened-41
     if revs.get(STEP3) == '"arch47_step1_erp_posting"':  # ARCH47-S1:chain-widened-41
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
         assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
+    if revs.get(STEP3) == '"arch48_step1_collaborative_review"':  # ARCH48-S1:chain-widened-41
+        assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
+        assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
     if revs.get(STEP3) == '"arch46_step1_obligations"':  # ARCH46-S1:chain-widened-41
         assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
         assert revs.get("arch45_step1_corroboration") == '"arch44_step1_table_intelligence"', "arch45 must revise arch44"
@@ -1439,7 +1442,7 @@ def t23_db(rec: "Recorder", evidence: dict, mutate: bool) -> None:
             current = [r[0] for r in conn.execute(text("SELECT version_num FROM alembic_version"))]
             tables = {r[0] for r in conn.execute(text(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
-        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41  ARCH43-S1:head-widened-41  ARCH44-S1:head-widened-41  ARCH45-S1:head-widened-41  ARCH46-S1:head-widened-41  ARCH47-S1:head-widened-41
+        assert current in ([A41], [STEP3], ["arch42_step1_entity_graph"], ["arch43_step1_case_intelligence"], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"]), f"alembic current is {current}; run run_arch41.ps1"  # ARCH42-S1:head-widened-41  ARCH43-S1:head-widened-41  ARCH44-S1:head-widened-41  ARCH45-S1:head-widened-41  ARCH46-S1:head-widened-41  ARCH47-S1:head-widened-41  ARCH48-S1:head-widened-41
         missing = [t_ for t_ in MEMORY_TABLES if t_ not in tables]
         assert not missing, f"tables missing: {missing}"
 

@@ -163,6 +163,9 @@ def approve_packet_split(
     _assert_workspace(context, workspace_id)
     _gate(db, context, "packets.approve")
     split = _split_or_404(db, workspace_id, split_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="SPLIT", item_id=split.id)
     try:
         service.approve(db, split=split, actor_user_id=context.user_id, boundaries=body.boundaries if body else None)
     except service.PacketError as exc:
@@ -181,6 +184,9 @@ def reject_packet_split(
     _assert_workspace(context, workspace_id)
     _gate(db, context, "packets.reject")
     split = _split_or_404(db, workspace_id, split_id)
+    from app.api.v1 import review as review_api  # ARCH48-S1:decision-guard
+
+    review_api.decision_guard(db, context, kind="SPLIT", item_id=split.id)
     try:
         service.reject(db, split=split, actor_user_id=context.user_id)
     except service.PacketError as exc:

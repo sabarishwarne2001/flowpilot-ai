@@ -79,6 +79,10 @@ export interface ReviewItem {
   readonly under_retention_hold: boolean;
   readonly tags: readonly string[];
   readonly review_reason: ReviewReason | "";
+  /** ARCH48-S2:item-version. Send back as `expected_version`: a decision someone else made first is a 409, never overwritten. */
+  readonly version: number;
+  /** ARCH48-S2:item-open-threads. Open discussion threads on the item. */
+  readonly open_threads: number;
 }
 
 export interface ReviewQueue {
@@ -129,6 +133,8 @@ export interface ReviewResolveRequest {
   readonly obligation_verdict?: ObligationReviewVerdict;
   readonly posting_verdict?: PostingReviewVerdict;
   readonly posting_reference?: string;
+  // ARCH48-S2:expected-version
+  readonly expected_version?: number;
 }
 
 export interface ReviewResolveResponse {
@@ -136,9 +142,15 @@ export interface ReviewResolveResponse {
   readonly item_id: string;
   readonly work_item_id: string | null;
   readonly resolution: string;
+  // ARCH48-S2:resolved-version
+  readonly version: number | null;
 }
 
 export type ReviewBulkAction = "resolve" | "assign" | "unassign";
+
+/** ARCH48-S2:review-conflict-codes. The 409 codes a resolution can meet (hub, bulk and source screens). */
+export type ReviewConflictCode = "STALE_VERSION" | "LOCKED" | "ALREADY_RESOLVED";
+export const REVIEW_CONFLICT_CODES: readonly ReviewConflictCode[] = ["STALE_VERSION", "LOCKED", "ALREADY_RESOLVED"];
 
 /** ARCH-38's bulk request shape, with `kind` as a sibling field. */
 export interface ReviewBulkRequest {
@@ -148,6 +160,8 @@ export interface ReviewBulkRequest {
   readonly idempotency_key: string;
   readonly assignee_user_id?: string;
   readonly payload?: ReviewResolveRequest;
+  /** ARCH48-S2:bulk-expected-versions. Per item id; a stale one is refused alone (code STALE_VERSION). */
+  readonly expected_versions?: Readonly<Record<string, number>>;
 }
 
 /** ARCH-38's `ItemResult`, field for field, plus the review item id. */

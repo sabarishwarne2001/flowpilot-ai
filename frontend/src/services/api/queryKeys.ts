@@ -335,6 +335,12 @@ export const reviewKeys = {
   queue: (workspaceId: string, filters: unknown) =>
     [...reviewKeys.all(workspaceId), "queue", filters] as const,
   assignees: (workspaceId: string) => [...reviewKeys.all(workspaceId), "assignees"] as const,
+  // ARCH48-S2:collab-keys. Under reviewKeys.all, so a queue refresh refreshes threads too.
+  threads: (workspaceId: string, kind: string, itemId: string) =>
+    [...reviewKeys.all(workspaceId), "threads", kind, itemId] as const,
+  paragraphs: (workspaceId: string, kind: string, itemId: string) =>
+    [...reviewKeys.all(workspaceId), "paragraphs", kind, itemId] as const,
+  liveState: (workspaceId: string) => [...reviewKeys.all(workspaceId), "live-state"] as const,
 };
 
 /**
