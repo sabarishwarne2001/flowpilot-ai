@@ -52,6 +52,10 @@ def label_for(consensus: Any, resolved: Any) -> str:
 
 
 def on_review_resolved(db: Session, *, verification: Any, work_item: Any) -> Optional[int]:
+    # ARCH49-S1:memory-skip-agent. A review the exception agent applied ITSELF is not a person's correction:
+    # learning exemplars (and trial outcomes) from it would teach memory the platform's own reading.
+    if db.info.get("arch49_autonomous_apply"):
+        return None
     try:
         with db.begin_nested():
             return _harvest(db, verification=verification, work_item=work_item)

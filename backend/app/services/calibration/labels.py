@@ -164,6 +164,16 @@ def _row(
     }
 
 
+def _not_agent_auto_applied(column: Any) -> Any:
+    """ARCH49-S1:labels-exclude-agent. A review the exception agent APPLIED ITSELF (within a conformal bound)
+    is not a person's verdict: harvesting it as a label would train the calibrator on the decisions it
+    licensed. Such rows are skipped. A proposal a PERSON approved is a person's review and stays a label."""
+    from sqlalchemy import column as sa_column, exists, table
+
+    proposals = table("agent_proposals", sa_column("subject_id"), sa_column("status"))
+    return ~exists().where(proposals.c.subject_id == column, proposals.c.status == "AUTO_APPLIED")
+
+
 def _calibration_details(details: Any) -> dict[str, Any]:
     if not isinstance(details, dict):
         return {}
@@ -194,6 +204,7 @@ def _from_verifications(
     )
     if since is not None:
         stmt = stmt.where(DocumentVerification.reviewed_at >= since)
+    stmt = stmt.where(_not_agent_auto_applied(DocumentVerification.id))  # ARCH49-S1:labels-exclude-agent
 
     rows: list[dict[str, Any]] = []
     for verification in db.execute(stmt).scalars().all():
@@ -276,6 +287,7 @@ def _from_assertions(
     )
     if since is not None:
         stmt = stmt.where(AssertionEvaluation.reviewed_at >= since)
+    stmt = stmt.where(_not_agent_auto_applied(AssertionEvaluation.id))  # ARCH49-S1:labels-exclude-agent
 
     rows: list[dict[str, Any]] = []
     for evaluation, family, details in db.execute(stmt).all():

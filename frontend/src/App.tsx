@@ -109,6 +109,8 @@ const ObligationDetail = lazy(() => import("@/pages/obligations/ObligationDetail
 const ErpPosting = lazy(() => import("@/pages/erp/ErpPosting"));
 const ErpPostingDetail = lazy(() => import("@/pages/erp/ErpPostingDetail"));
 const ErpTargetDetail = lazy(() => import("@/pages/erp/ErpTargetDetail"));
+// ARCH49-S2:lazy-process
+const ProcessIntelligence = lazy(() => import("@/pages/process/ProcessIntelligence"));
 // ARCH41-S3:extraction-memory-route
 const ExtractionMemory = lazy(
   () => import("@/pages/extractionMemory/ExtractionMemory"),
@@ -480,6 +482,9 @@ function AppRoutes() {
                 <Route path={ROUTE_PATTERNS.workspaceErp} element={<ErpPosting />} />
                 <Route path={ROUTE_PATTERNS.workspaceErpPosting} element={<ErpPostingDetail />} />
                 <Route path={ROUTE_PATTERNS.workspaceErpTarget} element={<ErpTargetDetail />} />
+                {/* ARCH49-S2:routes */}
+                <Route path={ROUTE_PATTERNS.workspaceProcess} element={<ProcessIntelligence />} />
+                <Route path={ROUTE_PATTERNS.workspaceProcessProposal} element={<ProcessIntelligence />} />
                 <Route
                   path={ROUTE_PATTERNS.workspaceProcurement}
                   element={<ProcurementCaseQueue />}

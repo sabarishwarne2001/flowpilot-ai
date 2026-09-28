@@ -1,5 +1,6 @@
 ﻿import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   BarChart3,
   Brain,
   Network,
@@ -55,6 +56,7 @@ import {
   corroborationsPath,
   obligationsPath,
   erpPath,
+  processPath,
   createWorkspacePath,
   notificationsPath,
   organizationApiKeysPath,
@@ -306,6 +308,17 @@ export const buildWorkspaceNavigationGroups = (
         description: "Post approved bills, orders, receipts and journals to your ERP, exactly once, with acknowledgements",
         capability: CAPABILITY.erpPosting,
         keywords: ["erp", "posting", "quickbooks", "zoho", "business central", "sap", "netsuite", "tally", "edi", "x12", "ubl", "sftp", "journal", "vendor bill"],
+      },
+      // ARCH49-S2:nav-process
+      {
+        id: "process",
+        name: "Process intelligence",
+        route: "workspaceProcess",
+        path: processPath(orgSlug, workspaceSlug),
+        icon: Activity,
+        description: "How work really flows: variants, conformance, SLA-breach prediction, cost-to-serve, and the exception agent",
+        capability: CAPABILITY.processIntelligence,
+        keywords: ["process mining", "process intelligence", "event log", "variants", "conformance", "sla", "bottleneck", "cost to serve", "exception agent", "agent", "proposals"],
       },
       {
         id: "radar",

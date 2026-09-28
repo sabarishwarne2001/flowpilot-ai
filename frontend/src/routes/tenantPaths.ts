@@ -149,6 +149,9 @@ export const ROUTE_PATTERNS = {
   workspaceErp: "erp",
   workspaceErpPosting: "erp/postings/:postingId",
   workspaceErpTarget: "erp/targets/:targetId",
+  // ARCH49-S2:route-patterns
+  workspaceProcess: "process",
+  workspaceProcessProposal: "process/proposals/:proposalId",
   // ARCH-36. ARCH-33's assertion review queue. A child of the workspace
   // shell, so no RESERVED_ROUTE_SEGMENTS entry is needed.
   workspaceAssertions: "assertions",
@@ -308,6 +311,10 @@ export const erpPostingPath = (orgSlug: string, workspaceSlug: string, postingId
   `${erpPath(orgSlug, workspaceSlug)}/postings/${encodeURIComponent(postingId)}`;
 export const erpTargetPath = (orgSlug: string, workspaceSlug: string, targetId: string): string =>
   `${erpPath(orgSlug, workspaceSlug)}/targets/${encodeURIComponent(targetId)}`;
+// ARCH49-S2:route-paths
+export const processPath = (orgSlug: string, workspaceSlug: string): string => `${workspacePath(orgSlug, workspaceSlug)}/process`;
+export const processProposalPath = (orgSlug: string, workspaceSlug: string, proposalId: string): string =>
+  `${processPath(orgSlug, workspaceSlug)}/proposals/${encodeURIComponent(proposalId)}`;
 // ARCH45-S2:corroboration-path-helpers
 export const corroborationsPath = (orgSlug: string, workspaceSlug: string): string =>
   `${workspacePath(orgSlug, workspaceSlug)}/corroboration`;

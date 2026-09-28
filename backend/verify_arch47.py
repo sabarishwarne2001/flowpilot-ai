@@ -349,9 +349,13 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A47) == f'"{A46}"', f"{A47} revises {revs.get(A47)}"
     # ARCH48-S1:t2-widened. ARCH-48 inserts its migration between ARCH-47 and the contract step.
-    assert revs.get(STEP3) in (f'"{A47}"', '"arch48_step1_collaborative_review"'), \
-        f"the contract step revises {revs.get(STEP3)}, expected {A47} or arch48"
+    # ARCH49-S1:t2-widened. ARCH-49 inserts its migration between ARCH-48 and the contract step.
+    assert revs.get(STEP3) in (f'"{A47}"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), \
+        f"the contract step revises {revs.get(STEP3)}, expected {A47}, arch48 or arch49"
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':
+        assert revs.get("arch48_step1_collaborative_review") == f'"{A47}"', "arch48 must revise arch47"
+    if revs.get(STEP3) == '"arch49_step1_process_intelligence"':
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
         assert revs.get("arch48_step1_collaborative_review") == f'"{A47}"', "arch48 must revise arch47"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
@@ -390,6 +394,11 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     assert ev.EVENT_POSTING_FAILED in ae.INTERNAL_EVENT_TYPES and ev.EVENT_POSTING_FAILED in ae.TRIGGER_NATIVE_EVENT_TYPES
     internal = set(module.internal_after_47())
     assert set(m46.internal_after_46()) < internal and internal - set(m46.internal_after_46()) == {ev.EVENT_POSTING_FAILED}
+    newest49 = VERSIONS / "arch49_step1_process_intelligence.py"  # ARCH49-S1:internal-widened-47 (adds trigger.process.sla_at_risk)
+    if newest49.exists():
+        m49 = _load_module("_m49_check47", newest49)
+        assert internal <= set(m49.internal_after_49())
+        internal = set(m49.internal_after_49())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
     down = text.split("def downgrade", 1)[1]
     assert "review_queue_view_v7()" in down and "internal_after_46()" in down, "downgrade does not restore ARCH-46"
@@ -1292,12 +1301,12 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert spec.capability == KEY and not spec.has_document and spec.event_types == (ev.EVENT_POSTING_FAILED,), spec
     assert "erp.post" in spec.excluded_actions, "a posting failure could trigger another posting (a loop)"
     assert ev.EVENT_POSTING_FAILED in ae.INTERNAL_EVENT_TYPES and ev.EVENT_POSTING_FAILED in ae.TRIGGER_NATIVE_EVENT_TYPES
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) == (22, 23), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((22, 23), (23, 24)), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))  # ARCH49-S1:catalog-widened-47
     svc = texts["service"]
     assert 'idempotency_key=f"{v.EVENT_POSTING_FAILED}:{posting.id}:{posting.exception_seq}"' in svc, \
         "posting.failed is not idempotent per posting and exception"
     assert '"trigger.posting.failed": (' in texts["v37"], "verify_arch37 EMITTERS not widened"
-    assert re.search(r"EXPECTED_TRIGGERS = 22\b", texts["conformance"]), "the live conformance matrix does not expect 22 triggers"
+    assert re.search(r"EXPECTED_TRIGGERS = (22|23)\b", texts["conformance"]), "the live conformance matrix does not expect 22 triggers"  # ARCH49-S1:conformance-widened-47
     assert "erp.post" in texts["conformance"] and "report[\"erp\"]" in texts["conformance"], "erp.post is not in the conformance matrix"
     action = actions.ACTIONS["erp.post"]
     assert action.capability == KEY and action.minimum_role == "WORKSPACE_ADMIN" and action.validate_resources is not None
@@ -2800,7 +2809,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
             ledger = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='uq_erp_postings_ledger'")).scalar_one()
-        assert current in ([A47], [STEP3], ["arch48_step1_collaborative_review"]), f"alembic current is {current}; run run_arch47.ps1"  # ARCH48-S1:head-widened-47
+        assert current in ([A47], [STEP3], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch47.ps1"  # ARCH48-S1:head-widened-47  ARCH49-S1:head-widened-47
         assert not [x for x in TABLES if x not in tables], "ARCH-47 tables missing"
         assert "POSTING" in kinds and "trigger.posting.failed" in outbox and "POSTING_EXCEPTION" in view
         assert "UNIQUE (target_id, object_kind, source_kind, source_id)" in ledger
@@ -3019,7 +3028,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("MS29 delivery registered on the OCR profile", mutation(lambda: (texts_with("profiles", swap(texts["profiles"], "OCR = WorkerProfile(\n", 'OCR = WorkerProfile(\n    # "erp.deliver_posting",\n')),), check_wiring)),
         ("MS30 posting.failed keyed without the exception number", mutation(lambda: (texts_with("service", swap(texts["service"], 'idempotency_key=f"{v.EVENT_POSTING_FAILED}:{posting.id}:{posting.exception_seq}"', 'idempotency_key=f"{v.EVENT_POSTING_FAILED}:{posting.id}"')),), check_wiring)),
         ("MS31 the hub shows POSTING without the capability", mutation(lambda: (texts_with("review_api", swap(texts["review_api"], "    if ERP_POSTING_CAPABILITY in granted:\n        kinds.append(vocab.KIND_POSTING)\n", "    kinds.append(vocab.KIND_POSTING)\n")),), check_wiring)),
-        ("MS32 the conformance matrix still expects 21 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = 22\b", "EXPECTED_TRIGGERS = 21", texts["conformance"])),), check_wiring)),
+        ("MS32 the conformance matrix still expects 21 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = (?:22|23)\b", "EXPECTED_TRIGGERS = 21", texts["conformance"])),), check_wiring)),  # ARCH49-S1:ms32-widened-47
         ("MS33 the sweep not scheduled (G14)", mutation(lambda: (texts_with("cron", swap(texts["cron"], "flowpilot-sweep erp_postings --apply", "flowpilot-sweep erp_postings-off")),), check_wiring)),
         ("MS34 erasure hook removed", mutation(lambda: (texts_with("erasure", swap(texts["erasure"], 'counts["erp_postings"] = _erp_service.erase_for_work_items(db, work_item_ids)', 'counts["erp_postings"] = 0')),), check_wiring)),
         ("MS35 erp.post takes a document-derived parameter", under([(actions_module, "ACTIONS", {**actions_module.ACTIONS, "erp.post": wider})], lambda: check_wiring(texts))),

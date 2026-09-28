@@ -118,9 +118,12 @@ EVENT_ITEM_RESOLVED: Final[str] = "item.resolved"
 EVENT_ITEM_ASSIGNED: Final[str] = "item.assigned"
 EVENT_QUEUE_CHANGED: Final[str] = "queue.changed"
 EVENT_THREAD_CHANGED: Final[str] = "thread.changed"
+#: ARCH49-S1:event-proposal-changed. The exception agent proposed, scheduled, applied or retired a
+#: suggestion for an item (ids and a status only; the console re-reads the gated REST route).
+EVENT_PROPOSAL_CHANGED: Final[str] = "proposal.changed"
 EVENT_TYPES: Final[tuple[str, ...]] = (EVENT_PRESENCE, EVENT_LOCK_ACQUIRED, EVENT_LOCK_RELEASED,
                                        EVENT_ITEM_RESOLVED, EVENT_ITEM_ASSIGNED, EVENT_QUEUE_CHANGED,
-                                       EVENT_THREAD_CHANGED)
+                                       EVENT_THREAD_CHANGED, EVENT_PROPOSAL_CHANGED)
 SERVER_TYPES: Final[tuple[str, ...]] = (SERVER_HELLO, SERVER_PONG, SERVER_LOCK_RESULT, SERVER_ERROR) + EVENT_TYPES
 
 #: Why a lock went away.

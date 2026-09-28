@@ -2,7 +2,7 @@
   "milestone": "ARCH-48",
   "capability": "capability.collaborative_review",
   "release_head": "arch48_step1_collaborative_review",
-  "started": "2026-09-28T07:22:37.785198+00:00",
+  "started": "2026-09-28T17:20:09.151264+00:00",
   "anchors": {
     "paragraphs": [
       "1. Payment. Fees are payable within thirty (30) days of the invoice date.",
@@ -65,7 +65,7 @@
   },
   "head": {
     "alembic": [
-      "arch48_step1_collaborative_review"
+      "arch49_step1_process_intelligence"
     ],
     "tiers": {
       "free": false,
@@ -129,8 +129,8 @@
       "a token issued before 'sign out everywhere'"
     ],
     "ws_race": {
-      "bob": false,
-      "cara": true
+      "bob": true,
+      "cara": false
     },
     "closed": {
       "too big": 1009,
@@ -175,8 +175,8 @@
   },
   "fanout": {
     "ports": [
-      62884,
-      62885
+      52726,
+      52727
     ],
     "crossed": 10,
     "types": [
@@ -207,58 +207,6 @@
       "Upgrade",
       "User-Agent"
     ]
-  },
-  "caught_by": {
-    "MS1 the capability leaked into Business": "AssertionError: capability.collaborative_review leaked below Enterprise (BUSINESS_CAPABILITIES)",
-    "MS2 the capability missing from Enterprise": "AssertionError: not packaged into Enterprise",
-    "MS3 no Entitlement entry (has_capability would raise)": "AssertionError: no Entitlement entry (has_capability would raise)",
-    "MS4 no plan card would list it (PLAN_FEATURE_ORDER)": "AssertionError: missing from PLAN_FEATURE_ORDER (no plan card would list it)",
-    "MS5 the contract step left on arch47 (two heads)": "AssertionError: the contract step revises \"arch47_step1_erp_posting\", expected arch48_step1_collaborative_review",
-    "MS6 the lease bound dropped": "AssertionError: migration: a lease bounded past its heartbeat missing",
-    "MS7 more than one live lock per item": "AssertionError: migration: one live lock per item missing",
-    "MS8 the NULL-unsafe anchor CHECK D3 found (a paragraph anchor without its digest passes)": "AssertionError: migration: a paragraph anchor carries its digest (NULL-safe) missing",
-    "MS9 the migration rebuilds the hub view": "AssertionError: ARCH-48 must leave the hub view and the outbox vocabulary as ARCH-47 left them",
-    "MS10 the console forgets an event type": "AssertionError: live event types drift: {'thread.changed'}",
-    "MS11 the console's close code drifts (4401 -> 4001)": "AssertionError: close codes drift: {'POLICY': '1008', 'TOO_BIG': '1009', 'GOING_AWAY': '1001', 'SERVER_ERROR': '1011', 'SESSION_ENDED': '4001', 'ACCESS_LOST': '4403', 'RATE_LIMITED': '4429'} vs {'POLICY': 1008, 'TOO_BIG': 1009, 'GOING_AWAY': 1001, 'SERVER_ERROR': 1011, 'SESSION_ENDED': 4401, 'ACCESS_LOST': 4403, 'RATE_LIMITED': 4429}",
-    "MS12 digests depend on layout (whitespace, case)": "AssertionError: the digest must not depend on layout (whitespace, case)",
-    "MS13 anchors found by index only (a moved paragraph reads CURRENT)": "AssertionError: Located(state='CURRENT', page=1, index=2)",
-    "MS14 running headers and folios kept as paragraphs": "AssertionError: running header / folio kept: ['ACME SERVICES AGREEMENT - CONFIDENTIAL', '1. Payment. Fees are payable within thirty (30) days of the invoice date.', 'Invoice total: 1,240.00', 'Late fees accrue at 2% per month on any amount not paid when due.', 'Page 1 of 2', 'ACME SERVICES AGREEMENT - CONFIDENTIAL', '2. Term. This agreement renews every year unless either party gives notice.', 'Pa",
-    "MS15 events published before the commit": "AssertionError: an event was published before the commit",
-    "MS16 a SAVEPOINT rollback no longer drops its events": "AssertionError: ['a', 'dropped-savepoint', 'b', 'dropped-inner-of-rolled-back']",
-    "MS17 a token in the query string accepted": "AssertionError: the handshake accepted a query-string access_token",
-    "MS18 API keys accepted on the live channel": "AssertionError: the handshake accepted a API key",
-    "MS19 cross-origin handshakes accepted": "AssertionError: a cross-origin handshake from https://evil.example was accepted",
-    "MS20 the hub's dispatch not thread-safe (a REST route's event waits for something else to wake the loop)": "AssertionError: dispatch reached the loop only when something else woke it (2.81 s)",
-    "MS21 resolve_item without the item's turn": "AssertionError: resolve_item must take the item's turn BEFORE the owning service runs, and announce after",
-    "MS22 the obligations screen decides without the guard": "AssertionError: obligations.py: 0 decision guard(s) for kind=\"OBLIGATION\", expected 1",
-    "MS23 bulk rolls back the whole batch on one refusal": "AssertionError: bulk: one refusal would roll back every earlier item of the batch",
-    "MS24 the erasure hook removed": "AssertionError: erasure: _collab_threads.erase_for_work_items(db, work_item_ids) missing",
-    "MS25 the ingress access log keeps the token": "AssertionError: an ingress access log would keep the access token (Sec-WebSocket-Protocol)",
-    "MS26 a live-review route loses its gate": "AssertionError: POST /collab/{kind}/{item_id}/threads: the capability gate is not the first statement ('pass')",
-    "MS27 the WebSocket accepted before authenticating": "AssertionError: the endpoint must never accept before the hub has authenticated",
-    "MS28 an open connection no longer re-checked for its plan": "AssertionError: an open connection is not re-checked for the plan",
-    "MS29 the access token put in the WebSocket URL": "AssertionError: the access token must never be in the WebSocket URL (it is logged)",
-    "MS30 the hub stops sending the version it read": "AssertionError: the hub does not send the version it read",
-    "MS31 the console stops heartbeating": "AssertionError: no heartbeat",
-    "MS32 a touched file loses its sentinel": "AssertionError: no ARCH48 sentinel in ['fe_presence (LivePresence.tsx)']",
-    "MD1 the REST capability gate removed (D4 must catch)": "AssertionError: AssertionError: served without the plan: GET /collab/state: 200 {\"locks\":[],\"presence\":[],\"heartbeat_seconds\":25,\"lock_ttl_seconds\":90,\"subprotocol\":\"flowpilot.review.v1\",\"live_path\":\"/workspaces/21e86296-b9eb-42ec-a106-0e2aeb50fd6d/review/collab/live\"}  at verify_arch48.py:1275 <- verify_arch48.py:1183",
-    "MD2 comment submissions not idempotent (D5 must catch)": "AssertionError: AssertionError: a retried submission wrote a second thread  at verify_arch48.py:1302 <- verify_arch48.py:1183",
-    "MD3 a mention of someone outside the workspace accepted (D5 must catch)": "AssertionError: AssertionError: a mention of someone outside the workspace was accepted: 201 {\"thread\":{\"id\":\"fd07c597-00ba-48ad-af40-1730e6f507d5\",\"kind\":\"ANOMALY\",\"item_id\":\"cad87370-1876-488b-80fd-e05227a70dad\",\"status\":\"OPEN\",\"anchor\":{\"kind\":\"ITEM\",\"page\":null,\"paragraph\":null,\"field\":nu  at verify_arch48.py:1315 <- verify_arch48.py:1183",
-    "MD4 no thread.changed event (D5 must catch)": "AssertionError: AssertionError: no thread.changed event after the commit  at verify_arch48.py:1310 <- verify_arch48.py:1183",
-    "MD5 a live lock does not refuse another reviewer (D6 must catch)": "AssertionError: AssertionError: a live lock did not refuse another reviewer: 200 {\"kind\":\"ANOMALY\",\"item_id\":\"440f3ad1-fd75-49e3-bb30-f6b602343cca\",\"work_item_id\":\"e043cb18-4d63-4e2b-b473-9f0e2cc17a63\",\"resolution\":\"CONFIRMED\",\"version\":1}  at verify_arch48.py:1403 <- verify_arch48.py:1183",
-    "MD6 the source screen decides without the guard (D6 must catch)": "AssertionError: AssertionError: the source screen ignored the lock: 200 {\"id\":\"bbfc5418-2f89-4e90-9b34-c9cfb44c8168\",\"kind\":\"DUPLICATE_DOCUMENT\",\"layer\":\"L0\",\"severity\":\"HIGH\",\"status\":\"CONFIRMED\",\"score\":\"0.90000\",\"headline\":\"Possible duplicate #2\",\"subject_work_item_id\"  at verify_arch48.py:1406 <- verify_arch48.py:1183",
-    "MD7 one bulk refusal rolls back the batch (D6 must catch)": "AssertionError: AssertionError: one refusal undid (or leaked) another item's decision: {UUID('0b1be6d4-a8d9-41c5-85a1-7fd5fef3ba7f'): 'OPEN', UUID('1e1f4abd-90a2-4262-87fd-ed50e1faa8ff'): 'OPEN', UUID('b25ea2c3-a8dd-4c48-8fb4-85ddcf4bec7d'): 'OPEN', UUID('e45fc867-366e-4e9f-88e1-c26dd4c67ba6'): 'OPEN', UUID('d8933465-a389-4e07-bf7a-6bcc0e403ed9'): 'CONFIRMED'}  at verify_arch48.py:1446 <- verify_a",
-    "MD8 erasure keeps the subject's words (D8 must catch)": "AssertionError: AssertionError: erasure left live-review data behind: {'work_items': 2, 'document_chunks': 0, 'entity_mentions': 0, 'extracted_tables': 0, 'corroboration_runs': 0, 'obligations': 0, 'erp_postings': 0, 'review_threads': 1, 'conversations': 0, 'conversation_messages': 0, 'entity_records': 0, 'review_comments': 0, 'review_locks': 2, 'auth_tokens': 0, 'sessions_revoked': 0, 'uploaded_f",
-    "MD9 the handshake ignores the plan (D7 must catch)": "AssertionError: the handshake ACCEPTED an organization whose plan lacks the capability (402 on REST)",
-    "MD10 open connections never re-checked (D7 must catch)": "AssertionError: session revoked: the server never closed the connection (no frame within 5 s)",
-    "MD11 the version guard removed (X1 must catch)": "AssertionError: 16 versioned resolvers: ['ALREADY_RESOLVED', 'ok', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED', 'ALREADY_RESOLVED']",
-    "MD12 resolve_item without the item's turn (X1 must catch)": "AssertionError: 16 unversioned resolvers: ['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']",
-    "MD13 the lock claim takes over a live lease (X1 must catch)": "AssertionError: 11 first acquisitions, holders 3 (a lock must have one holder)",
-    "MD14 a heartbeat revives a lapsed lease (X2 must catch)": "AssertionError: a late heartbeat revived a lapsed lease (the console never learnt it had lost the lock)",
-    "MD18 a re-acquisition may move the lease backwards (X2 must catch)": "AssertionError: a second tab's earlier timestamp moved the lease backwards: new row for relation \"review_locks\" violates check constraint \"ck_review_locks_lease_order\"\nDETAIL:  Failing row contain",
-    "MD15 the leader never expires locks (X2 must catch)": "AssertionError: the leader did not take the lapsed badge down: {'leader': True, 'expired': 0, 'queue_changed': False, 'presence': True}",
-    "MD16 each worker keeps its events to itself: no fan-out through Redis (X3 must catch)": "AssertionError: Asha viewing f0, seen on process 2 never arrived (saw ['presence'])",
-    "MD17 the real ingress without the header filter logs the token (C1 must catch)": "AssertionError: the ingress access log kept the access token"
   },
   "results": [
     {
@@ -390,267 +338,7 @@
       "layer": "db",
       "gate": "C1 the REAL Caddy passes the WebSocket through (101, the subprotocol, frames both ways; a refusal is 403) and its access log keeps neither the token nor Sec-WebSocket-Protocol",
       "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS1 the capability leaked into Business",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS2 the capability missing from Enterprise",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS3 no Entitlement entry (has_capability would raise)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS4 no plan card would list it (PLAN_FEATURE_ORDER)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS5 the contract step left on arch47 (two heads)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS6 the lease bound dropped",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS7 more than one live lock per item",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS8 the NULL-unsafe anchor CHECK D3 found (a paragraph anchor without its digest passes)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS9 the migration rebuilds the hub view",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS10 the console forgets an event type",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS11 the console's close code drifts (4401 -> 4001)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS12 digests depend on layout (whitespace, case)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS13 anchors found by index only (a moved paragraph reads CURRENT)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS14 running headers and folios kept as paragraphs",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS15 events published before the commit",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS16 a SAVEPOINT rollback no longer drops its events",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS17 a token in the query string accepted",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS18 API keys accepted on the live channel",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS19 cross-origin handshakes accepted",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS20 the hub's dispatch not thread-safe (a REST route's event waits for something else to wake the loop)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS21 resolve_item without the item's turn",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS22 the obligations screen decides without the guard",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS23 bulk rolls back the whole batch on one refusal",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS24 the erasure hook removed",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS25 the ingress access log keeps the token",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS26 a live-review route loses its gate",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS27 the WebSocket accepted before authenticating",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS28 an open connection no longer re-checked for its plan",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS29 the access token put in the WebSocket URL",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS30 the hub stops sending the version it read",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS31 the console stops heartbeating",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MS32 a touched file loses its sentinel",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD1 the REST capability gate removed (D4 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD2 comment submissions not idempotent (D5 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD3 a mention of someone outside the workspace accepted (D5 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD4 no thread.changed event (D5 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD5 a live lock does not refuse another reviewer (D6 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD6 the source screen decides without the guard (D6 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD7 one bulk refusal rolls back the batch (D6 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD8 erasure keeps the subject's words (D8 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD9 the handshake ignores the plan (D7 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD10 open connections never re-checked (D7 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD11 the version guard removed (X1 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD12 resolve_item without the item's turn (X1 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD13 the lock claim takes over a live lease (X1 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD14 a heartbeat revives a lapsed lease (X2 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD18 a re-acquisition may move the lease backwards (X2 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD15 the leader never expires locks (X2 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD16 each worker keeps its events to itself: no fan-out through Redis (X3 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "mutation",
-      "gate": "MD17 the real ingress without the header filter logs the token (C1 must catch)",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "B1 tsc -b and vite build",
-      "outcome": "PASS"
-    },
-    {
-      "layer": "build",
-      "gate": "B2 eslint --max-warnings=0 on the 11 ARCH-48 console files",
-      "outcome": "PASS"
     }
   ],
-  "seconds": 299.6
+  "seconds": 48.5
 }

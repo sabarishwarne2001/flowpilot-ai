@@ -133,6 +133,7 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.obligations"),  # ARCH46-S1:tier-enterprise
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-enterprise
     _capability("capability.collaborative_review"),  # ARCH48-S1:tier-enterprise (Enterprise only)
+    _capability("capability.process_intelligence"),  # ARCH49-S1:tier-enterprise (Enterprise only)
 ]
 ENTERPRISE_FEATURES = [*DEVELOPER_FEATURES, *ENTERPRISE_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 

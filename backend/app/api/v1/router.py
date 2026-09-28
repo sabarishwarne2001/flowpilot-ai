@@ -51,6 +51,7 @@ from app.api.v1 import (
     usage,
     review,  # ARCH40-S1:review-import
     review_collab,  # ARCH48-S1:review-collab-import
+    process_intel,  # ARCH49-S1:process-intel-import
     verifications,
     warehouse_sync,
     ingestion,
@@ -219,6 +220,10 @@ _SCOPED = (
     # capture the other's paths at any registration order. Every REST route is
     # gated on capability.collaborative_review; the socket at its handshake.
     (review_collab.router,     "/review",             "Review Hub"),
+    # ARCH49-S1:process-intel-router. Process intelligence and the exception agent
+    # under /process: every route is gated on capability.process_intelligence as its
+    # first statement. No route here has a catch-all, so nothing is order-dependent.
+    (process_intel.router,     "/process",            "Process Intelligence"),
 )
 
 for _router, _suffix, _tag in _SCOPED:

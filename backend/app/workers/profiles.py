@@ -168,6 +168,12 @@ LIGHT = WorkerProfile(
             # and file work, no model, OCR or PDF engine. Not optional
             # bookkeeping (see above).
             "erp.deliver_posting",
+            # ARCH49-S1:process-light-profile. A workspace's process sweep: SQL
+            # over the event log's sources, scikit-learn's histogram gradient
+            # boosting on at most tens of thousands of snapshots, and the
+            # exception agent's structured reads -- no model, OCR or PDF engine.
+            # Not optional bookkeeping (see above).
+            "process.sweep_workspace",
         }
     ),
     allow_heavy=frozenset(),

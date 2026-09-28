@@ -57,7 +57,8 @@ export type LiveStatus = "off" | "connecting" | "live" | "reconnecting" | "refus
 
 export type LiveChange = Extract<
   ServerMessage,
-  { type: "item.resolved" | "item.assigned" | "queue.changed" | "thread.changed" | "lock.released" }
+  // ARCH49-S2:live-proposal-change. proposal.changed reaches the hub like the other item changes.
+  { type: "item.resolved" | "item.assigned" | "queue.changed" | "thread.changed" | "lock.released" | "proposal.changed" }
 >;
 
 export interface LiveReview {
@@ -199,6 +200,7 @@ export const useLiveReview = ({ workspaceId, enabled, onChange }: Options): Live
         case "item.assigned":
         case "queue.changed":
         case "thread.changed":
+        case "proposal.changed":
           onChangeRef.current?.(message);
           break;
         default:

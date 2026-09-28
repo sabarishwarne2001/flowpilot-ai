@@ -32,6 +32,12 @@
  * threads. Every resolution sends the version the reviewer read, on every
  * plan: a decision someone else made first is a 409 (STALE_VERSION,
  * ALREADY_RESOLVED or LOCKED), never a silent overwrite.
+ *
+ * ARCH49-S2:agent-in-hub. THE EXCEPTION AGENT (process intelligence, Enterprise).
+ * An expanded item shows the agent's proposal for it — what it would decide,
+ * why, and why a person decides — with approve / reject / undo for
+ * contributors; the evidence and fenced source excerpts open in Process
+ * intelligence. A `proposal.changed` event on the live channel refetches it.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +58,7 @@ import {
 } from "lucide-react";
 
 import VerificationReviewQueue from "./VerificationReviewQueue";
+import { AgentSuggestion } from "@/components/review/AgentSuggestion";
 import { LiveStatusPill, LockBadge, PresenceAvatars } from "@/components/review/LivePresence";
 import ResolvePanel from "@/components/review/ResolvePanel";
 import ThreadPanel from "@/components/review/ThreadPanel";
@@ -60,6 +67,7 @@ import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { liveKey, useLiveReview, type LiveChange } from "@/hooks/useLiveReview";
 import { breakLock } from "@/services/api/collab";
+import { processKeys } from "@/services/api/process";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ApiError } from "@/services/api/client";
 import { reviewKeys, verificationKeys } from "@/services/api/queryKeys";
@@ -160,12 +168,20 @@ export const ReviewHub: React.FC = () => {
 
   // ARCH48-S2:live-channel. Enterprise only; without it the hub works exactly as before.
   const collab = useCapabilityAccess(workspace?.organizationId ?? "", CAPABILITY.collaborativeReview);
+  // ARCH49-S2:agent-capability. The agent's proposals, for the people who decide items.
+  const agent = useCapabilityAccess(workspace?.organizationId ?? "", CAPABILITY.processIntelligence);
+  const canDecide = workspace?.role === "ADMIN" || workspace?.role === "OWNER" || workspace?.role === "CONTRIBUTOR";
   const resolvingRef = useRef<string | null>(null);
   resolvingRef.current = resolving;
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onLiveChange = useCallback(
     (change: LiveChange): void => {
       if (change.type === "lock.released" && change.reason !== "RESOLVED") {
+        return;
+      }
+      // ARCH49-S2:live-proposal. The agent's suggestion for an item changed: refetch it, not the queue.
+      if (change.type === "proposal.changed") {
+        void queryClient.invalidateQueries({ queryKey: processKeys.forItem(workspaceId, change.item_id) });
         return;
       }
       if (change.type === "item.resolved" && change.by_user_id !== user.id && resolvingRef.current === liveKey(change.kind, change.item_id)) {
@@ -825,6 +841,10 @@ export const ReviewHub: React.FC = () => {
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         This document is under a retention hold. Resolving the review does not release it, and the document cannot be deleted or exported until the hold is lifted.
                       </p>
+                    )}
+                    {/* ARCH49-S2:agent-suggestion — the exception agent's proposal for this item */}
+                    {agent.granted && canDecide && (
+                      <AgentSuggestion workspaceId={workspaceId} item={item} canAct={canDecide} onApplied={() => void refresh()} />
                     )}
                     {item.kind === "EXTRACTION" ? (
                       item.status === "OPEN" ? (

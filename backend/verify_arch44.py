@@ -282,7 +282,7 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A44) == f'"{A43}"', f"{A44} revises {revs.get(A44)}"
     # ARCH45-S1:chain-widened-44. ARCH-45 sits between ARCH-44 and the contract step.
-    assert revs.get(STEP3) in (f'"{A44}"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"'), f"the contract step revises {revs.get(STEP3)}, expected {A44}, arch45, arch46 or arch47"  # ARCH46-S1:chain-widened-44  ARCH47-S1:chain-widened-44  ARCH48-S1:chain-widened-44
+    assert revs.get(STEP3) in (f'"{A44}"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A44}, arch45, arch46 or arch47"  # ARCH46-S1:chain-widened-44  ARCH47-S1:chain-widened-44  ARCH48-S1:chain-widened-44  ARCH49-S1:chain-widened-44
     if revs.get(STEP3) == '"arch45_step1_corroboration"':
         assert revs.get("arch45_step1_corroboration") == f'"{A44}"', "arch45 must revise arch44"
     if revs.get(STEP3) == '"arch47_step1_erp_posting"':  # ARCH47-S1:chain-widened-44
@@ -291,6 +291,9 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':  # ARCH48-S1:chain-widened-44
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+    if revs.get(STEP3) == '"arch49_step1_process_intelligence"':  # ARCH49-S1:chain-widened-44
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
+        assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
     if revs.get(STEP3) == '"arch46_step1_obligations"':  # ARCH46-S1:chain-widened-44
         assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
         assert revs.get("arch45_step1_corroboration") == f'"{A44}"', "arch45 must revise arch44"
@@ -344,6 +347,11 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     if hasattr(ref, "internal_after_47"):  # ARCH47-S1:internal-widened-44 (adds trigger.posting.failed)
         assert internal <= set(ref.internal_after_47())
         internal = set(ref.internal_after_47())
+    newest49 = VERSIONS / "arch49_step1_process_intelligence.py"  # ARCH49-S1:internal-widened-44 (adds trigger.process.sla_at_risk)
+    if newest49.exists():
+        m49 = _load_module("_m49_check44", newest49)
+        assert internal <= set(m49.internal_after_49())
+        internal = set(m49.internal_after_49())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
 
 
@@ -684,9 +692,9 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert "_table_service.erase_for_work_items(db, work_item_ids)" in texts["erasure"], "ARCH-20 erasure keeps tables"
     spec = triggers.TRIGGERS_BY_KEY["table.flagged"]
     assert spec.capability == KEY and spec.has_document and spec.event_types == ("trigger.table.flagged",)
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((18, 19), (19, 20), (21, 22), (22, 23))  # ARCH45-S1:catalog-widened-44  ARCH46-S1:catalog-widened-44  ARCH47-S1:catalog-widened-44
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((18, 19), (19, 20), (21, 22), (22, 23), (23, 24))  # ARCH45-S1:catalog-widened-44  ARCH46-S1:catalog-widened-44  ARCH47-S1:catalog-widened-44  ARCH49-S1:catalog-widened-44
     assert "emit_trigger(" in texts["service"] and "event_type=v.EVENT_TABLE_FLAGGED" in texts["service"]
-    assert re.search(r"EXPECTED_TRIGGERS = (18|19|21|22)\b", texts["conformance"]), "the live conformance matrix does not expect table.flagged"  # ARCH45-S1:conformance-widened-44  ARCH46-S1:conformance-widened-44  ARCH47-S1:conformance-widened-44
+    assert re.search(r"EXPECTED_TRIGGERS = (18|19|21|22|23)\b", texts["conformance"]), "the live conformance matrix does not expect table.flagged"  # ARCH45-S1:conformance-widened-44  ARCH46-S1:conformance-widened-44  ARCH47-S1:conformance-widened-44  ARCH49-S1:conformance-widened-44
     assert "vocab.KIND_TABLE: _resolve_table" in texts["resolution"]
     assert "    if TABLE_INTELLIGENCE_CAPABILITY in granted:\n        kinds.append(vocab.KIND_TABLE)\n" in texts["review_api"], "the hub shows TABLE without the capability"
     assert "table_verdict=body.table_verdict" in texts["review_api"] and "table_verdict: Optional[str] = None" in texts["review_schema"]
@@ -1199,7 +1207,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             kinds = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_review_assignments_kind_known'")).scalar_one()
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
-        assert current in ([A44], [STEP3], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"]), f"alembic current is {current}; run run_arch44.ps1"  # ARCH45-S1:head-widened-44  ARCH46-S1:head-widened-44  ARCH47-S1:head-widened-44  ARCH48-S1:head-widened-44
+        assert current in ([A44], [STEP3], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch44.ps1"  # ARCH45-S1:head-widened-44  ARCH46-S1:head-widened-44  ARCH47-S1:head-widened-44  ARCH48-S1:head-widened-44  ARCH49-S1:head-widened-44
         assert not [x for x in TABLES if x not in tables], "ARCH-44 tables missing"
         assert "TABLE" in kinds and "trigger.table.flagged" in outbox, (kinds[-80:], outbox[-120:])
         assert "trg_extracted_table_cells_within_grid" in triggers

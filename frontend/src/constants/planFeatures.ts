@@ -36,6 +36,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.erpPosting]: "ERP posting (approved bills, POs, receipts and journals to QuickBooks, Zoho, Business Central, SAP, NetSuite, Tally, EDI X12, UBL, SFTP — exactly once)",
   // ARCH48-S2:plan-feature
   [CAPABILITY.collaborativeReview]: "Real-time collaborative review (live queue, who is looking at what, item locks, paragraph-anchored discussions)",
+  // ARCH49-S2:plan-feature
+  [CAPABILITY.processIntelligence]: "Process intelligence & exception agent (object-centric process mining, conformance, SLA-breach prediction, cost-to-serve; an agent that proposes resolutions — applied only with approval or within your calibrated error bound)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -73,6 +75,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   // ARCH48-S2:plan-feature-order — Enterprise only.
   CAPABILITY.collaborativeReview,
   CAPABILITY.enterpriseIdentity,
+  // ARCH49-S2:plan-feature-order — Enterprise only.
+  CAPABILITY.processIntelligence,
   CAPABILITY.prioritySlo,
 ];
 

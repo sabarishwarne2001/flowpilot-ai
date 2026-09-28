@@ -214,6 +214,12 @@ EMITTERS: dict[str, tuple[str, tuple[str, ...]]] = {
         "app/services/erp/service.py",
         ("emit_trigger(", "event_type=v.EVENT_POSTING_FAILED"),
     ),
+    # ARCH49-S1:emitters. An open object whose predicted breach probability reaches
+    # its policy's threshold, once per object and due time.
+    "trigger.process.sla_at_risk": (
+        "app/services/process_intel/sla.py",
+        ("emit_trigger(", "event_type=v.EVENT_SLA_AT_RISK"),
+    ),
     # ARCH38-S1:emitter-batch-completed.
     "trigger.batch.completed": (
         "app/services/ingestion/batch_service.py",
@@ -503,7 +509,7 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             # ARCH40-S1:catalog-counts-37. 13/14 after ARCH-38; ARCH-40 adds
             # review.cleared, so 14/15. Both are accepted so this gate states
             # what each milestone left, not only the newest.
-            assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22), (22, 23))  # ARCH43-S1:catalog-counts-37  ARCH44-S1:catalog-counts-37  ARCH45-S1:catalog-counts-37  ARCH46-S1:catalog-counts-37  ARCH47-S1:catalog-counts-37
+            assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((13, 14), (14, 15), (17, 18), (18, 19), (19, 20), (21, 22), (22, 23), (23, 24))  # ARCH43-S1:catalog-counts-37  ARCH44-S1:catalog-counts-37  ARCH45-S1:catalog-counts-37  ARCH46-S1:catalog-counts-37  ARCH47-S1:catalog-counts-37  ARCH49-S1:catalog-counts-37
             assert "workflow.triggered" in WEBHOOK_EVENT_TYPES
             # The public events must fail as INTERNAL and twins as PUBLIC.
             from app.services import outbox_service
@@ -536,6 +542,7 @@ def gates_offline(rec: Recorder, *, root: Path, only: set[str] | None) -> None:
             later |= {"trigger.corroboration.discrepancies"}  # ARCH45-S1:later-events
             later |= {"trigger.obligation.due_soon", "trigger.obligation.overdue"}  # ARCH46-S1:later-events
             later |= {"trigger.posting.failed"}  # ARCH47-S1:later-events
+            later |= {"trigger.process.sla_at_risk"}  # ARCH49-S1:later-events
             difference = set(m.INTERNAL_AFTER) ^ set(ae.INTERNAL_EVENT_TYPES)
             assert difference <= later and later <= set(ae.INTERNAL_EVENT_TYPES) | set(m.INTERNAL_AFTER), (
                 "the visibility CHECK the migration writes differs from INTERNAL_EVENT_TYPES: "
@@ -1204,7 +1211,7 @@ def gates_db(rec: Recorder, *, root: Path) -> None:
             # ARCH38-S1:head-widened-37. ARCH-38 advances the head; this gate
             # asserts that ARCH-37's migration is still applied, not that it is
             # still the newest thing in the tree.
-            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting", "arch48_step1_collaborative_review"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37  ARCH42-S1:head-widened-37  ARCH43-S1:head-widened-37  ARCH44-S1:head-widened-37  ARCH45-S1:head-widened-37  ARCH46-S1:head-widened-37  ARCH47-S1:head-widened-37  ARCH48-S1:head-widened-37
+            assert value in (HEAD, "arch38_step1_batches", "arch40_step2_settings_backfill", "arch40_step2a_review_view_paths", "arch40_step3_contract_ai_settings", "hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting", "arch48_step1_collaborative_review", "arch49_step1_process_intelligence"), f"alembic head is {value}; run `alembic upgrade head`"  # ARCH40-S1:head-widened-37  # HM-S1:head-widened  ARCH41-S2:head-widened-37  ARCH42-S1:head-widened-37  ARCH43-S1:head-widened-37  ARCH44-S1:head-widened-37  ARCH45-S1:head-widened-37  ARCH46-S1:head-widened-37  ARCH47-S1:head-widened-37  ARCH48-S1:head-widened-37  ARCH49-S1:head-widened-37
             names = set(db.execute(sql(
                 "SELECT conname FROM pg_constraint WHERE conname IN ("
                 "'ck_automation_rule_triggers_event_known','ck_automation_rules_flow_spec_is_object',"

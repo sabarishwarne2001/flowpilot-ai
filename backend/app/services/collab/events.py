@@ -155,5 +155,15 @@ def thread_changed(db: Session, *, workspace_id: uuid.UUID, kind: str, item_id: 
         "action": action, "open_threads": int(open_threads)})
 
 
-__all__ = ["item_assigned", "item_resolved", "lock_released", "pending", "publish_after_commit", "publish_now",
-           "thread_changed"]
+def proposal_changed(db: Session, *, workspace_id: uuid.UUID, kind: str, item_id: uuid.UUID, proposal_id: uuid.UUID,
+                     status: str) -> None:
+    """ARCH49-S1:proposal-changed. The exception agent's suggestion for an item changed (after commit, ids only)."""
+    from app.services.collab import vocabulary as v
+
+    publish_after_commit(db, workspace_id, {
+        "type": v.EVENT_PROPOSAL_CHANGED, "kind": kind, "item_id": str(item_id), "proposal_id": str(proposal_id),
+        "status": str(status)[:16]})
+
+
+__all__ = ["item_assigned", "item_resolved", "lock_released", "pending", "proposal_changed", "publish_after_commit",
+           "publish_now", "thread_changed"]

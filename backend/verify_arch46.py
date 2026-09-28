@@ -302,12 +302,15 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A46) == f'"{A45}"', f"{A46} revises {revs.get(A46)}"
     # ARCH47-S1:chain-widened-46. ARCH-47 sits between ARCH-46 and the contract step.
-    assert revs.get(STEP3) in (f'"{A46}"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"'), f"the contract step revises {revs.get(STEP3)}, expected {A46} or arch47"  # ARCH48-S1:chain-widened-46
+    assert revs.get(STEP3) in (f'"{A46}"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A46} or arch47"  # ARCH48-S1:chain-widened-46  ARCH49-S1:chain-widened-46
     if revs.get(STEP3) == '"arch47_step1_erp_posting"':
         assert revs.get("arch47_step1_erp_posting") == f'"{A46}"', "arch47 must revise arch46"
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':  # ARCH48-S1:chain-widened-46
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+    if revs.get(STEP3) == '"arch49_step1_process_intelligence"':  # ARCH49-S1:chain-widened-46
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
+        assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -359,6 +362,11 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     if hasattr(ref, "internal_after_47"):  # ARCH47-S1:internal-widened-46 (adds trigger.posting.failed)
         assert internal <= set(ref.internal_after_47())
         internal = set(ref.internal_after_47())
+    newest49 = VERSIONS / "arch49_step1_process_intelligence.py"  # ARCH49-S1:internal-widened-46 (adds trigger.process.sla_at_risk)
+    if newest49.exists():
+        m49 = _load_module("_m49_check46", newest49)
+        assert internal <= set(m49.internal_after_49())
+        internal = set(m49.internal_after_49())
     assert set(ae.TRIGGER_NATIVE_EVENT_TYPES) | set(ae.TRIGGER_TWIN_EVENT_TYPES) <= internal, "a trigger event outside the outbox CHECK"
     down = text.split("def downgrade", 1)[1]
     assert "review_queue_view_v6()" in down and "internal_after_45()" in down, "downgrade does not restore ARCH-45"
@@ -955,7 +963,7 @@ def check_wiring(texts: dict[str, str]) -> None:
         spec = triggers.TRIGGERS_BY_KEY[key]
         assert spec.capability == KEY and not spec.has_document and spec.event_types == (event,), spec
         assert event in ae.INTERNAL_EVENT_TYPES and event in ae.TRIGGER_NATIVE_EVENT_TYPES
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((21, 22), (22, 23)), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))  # ARCH47-S1:catalog-widened-46
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((21, 22), (22, 23), (23, 24)), (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES))  # ARCH47-S1:catalog-widened-46  ARCH49-S1:catalog-widened-46
     svc = texts["service"]
     assert 'idempotency_key=f"{event_type}:{ob.id}:{ob.due_date.isoformat()}"' in svc, \
         "the trigger is not idempotent per obligation, state AND due date"
@@ -963,7 +971,7 @@ def check_wiring(texts: dict[str, str]) -> None:
     assert "if emit and trusted(ob):" in svc, "a PENDING (unconfirmed) obligation would reach Flow Builder"
     assert '"trigger.obligation.due_soon": (' in texts["v37"] and '"trigger.obligation.overdue": (' in texts["v37"], \
         "verify_arch37 EMITTERS not widened"
-    assert re.search(r"EXPECTED_TRIGGERS = (21|22)\b", texts["conformance"]), "the live conformance matrix does not expect 21 triggers"  # ARCH47-S1:conformance-widened-46
+    assert re.search(r"EXPECTED_TRIGGERS = (21|22|23)\b", texts["conformance"]), "the live conformance matrix does not expect 21 triggers"  # ARCH47-S1:conformance-widened-46  ARCH49-S1:conformance-widened-46
     assert "vocab.KIND_OBLIGATION: _resolve_obligation" in texts["resolution"]
     assert "    if OBLIGATIONS_CAPABILITY in granted:\n        kinds.append(vocab.KIND_OBLIGATION)\n" in texts["review_api"], \
         "the hub shows OBLIGATION without the capability"
@@ -2034,7 +2042,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
             index = conn.execute(sa.text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_obligation_events_alert'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-        assert current in ([A46], [STEP3], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"]), f"alembic current is {current}; run run_arch46.ps1"  # ARCH47-S1:head-widened-46  ARCH48-S1:head-widened-46
+        assert current in ([A46], [STEP3], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch46.ps1"  # ARCH47-S1:head-widened-46  ARCH48-S1:head-widened-46  ARCH49-S1:head-widened-46
         assert not [x for x in TABLES if x not in tables], "ARCH-46 tables missing"
         assert "OBLIGATION" in kinds and "trigger.obligation.due_soon" in outbox and "trigger.obligation.overdue" in outbox
         assert {"trg_obligations_evidence", "trg_obligations_anchor", "trg_work_items_unlink_obligations"} <= triggers
@@ -2273,7 +2281,7 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
         ("MS31 enrichment does not dispatch the reading", mutation(lambda: (texts_with("post", swap(texts["post"], "obligation_gate.capability_held(db, organization_id)", "False")),), check_wiring)),
         ("MS32 the trigger key without the due date", mutation(lambda: (texts_with("service", swap(texts["service"], 'idempotency_key=f"{event_type}:{ob.id}:{ob.due_date.isoformat()}"', 'idempotency_key=f"{event_type}:{ob.id}"')),), check_wiring)),
         ("MS33 the hub shows OBLIGATION without the capability", mutation(lambda: (texts_with("review_api", swap(texts["review_api"], "    if OBLIGATIONS_CAPABILITY in granted:\n        kinds.append(vocab.KIND_OBLIGATION)\n", "    kinds.append(vocab.KIND_OBLIGATION)\n")),), check_wiring)),
-        ("MS34 the conformance matrix still expects 19 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = (?:21|22)\b", "EXPECTED_TRIGGERS = 19", texts["conformance"])),), check_wiring)),  # ARCH47-S1:ms34-widened
+        ("MS34 the conformance matrix still expects 19 triggers", mutation(lambda: (texts_with("conformance", re.sub(r"EXPECTED_TRIGGERS = (?:21|22|23)\b", "EXPECTED_TRIGGERS = 19", texts["conformance"])),), check_wiring)),  # ARCH47-S1:ms34-widened  ARCH49-S1:ms34-widened
         ("MS35 the sweep not scheduled (G14)", mutation(lambda: (texts_with("cron", swap(texts["cron"], "flowpilot-sweep obligations --apply", "flowpilot-sweep obligations-off")),), check_wiring)),
         ("MS36 erasure hook removed", mutation(lambda: (texts_with("erasure", swap(texts["erasure"], 'counts["obligations"] = _obligation_service.erase_for_work_items(db, work_item_ids)', 'counts["obligations"] = 0')),), check_wiring)),
         ("MS37 a route loses its capability gate", mutation(lambda: (swap(texts["api"], '    _gate(db, context, "obligations.waive")\n', ""), texts["public_api"]), check_api)),

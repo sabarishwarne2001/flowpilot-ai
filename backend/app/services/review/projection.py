@@ -442,10 +442,63 @@ def _versions(db: Session, keys: Sequence[tuple[str, uuid.UUID]]) -> dict[tuple[
     return {(str(k), str(i)): int(n) for k, i, n in rows if (str(k), str(i)) in wanted}
 
 
+def timeline(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    since: datetime,
+    since_key: str,
+    until: datetime,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """ARCH49-S1:projection-timeline. When each hub item of the workspace opened and closed, keyset-paged on
+    (ts, key) -- the process-intelligence event log's REVIEW source. Through `_queue_cte`, so the view keeps
+    its one reader and its one workspace predicate. Ids, kinds, severities and reasons only (no headline:
+    a headline can quote a document)."""
+    from sqlalchemy import DateTime as SaDateTime
+    from sqlalchemy import cast, literal, or_, union_all
+    from sqlalchemy.dialects.postgresql import UUID as PgUUID
+
+    scoped = _queue_cte(workspace_id)
+    ident = cast(scoped.c.item_id, String) + literal(":") + scoped.c.kind
+    opened = select(
+        cast(scoped.c.created_at, SaDateTime(timezone=True)).label("ts"),
+        (ident + literal(":opened")).label("k"),
+        literal("opened").label("what"),
+        scoped.c.kind.label("kind"),
+        scoped.c.item_id.label("item_id"),
+        scoped.c.work_item_id.label("work_item_id"),
+        cast(literal(None), PgUUID(as_uuid=True)).label("actor"),
+        scoped.c.severity.label("severity"),
+        scoped.c.review_reason.label("reason"),
+    )
+    closed = select(
+        cast(scoped.c.resolved_at, SaDateTime(timezone=True)).label("ts"),
+        (ident + literal(":closed")).label("k"),
+        literal("closed").label("what"),
+        scoped.c.kind.label("kind"),
+        scoped.c.item_id.label("item_id"),
+        scoped.c.work_item_id.label("work_item_id"),
+        scoped.c.resolved_by_user_id.label("actor"),
+        scoped.c.severity.label("severity"),
+        scoped.c.review_reason.label("reason"),
+    ).where(scoped.c.status == vocab.STATUS_RESOLVED, scoped.c.resolved_at.isnot(None))
+    rows = union_all(opened, closed).subquery("review_timeline")
+    query = (
+        select(rows)
+        .where(rows.c.ts.isnot(None), rows.c.ts <= until,
+               or_(rows.c.ts > since, and_(rows.c.ts == since, rows.c.k > since_key)))
+        .order_by(rows.c.ts, rows.c.k)
+        .limit(limit)
+    )
+    return [dict(row) for row in db.execute(query).mappings().all()]
+
+
 __all__ = [
     "ReviewItem",
     "ReviewPage",
     "ReviewQueryError",
     "load_item",
     "query_reviews",
+    "timeline",
 ]

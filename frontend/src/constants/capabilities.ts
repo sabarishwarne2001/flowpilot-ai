@@ -43,6 +43,8 @@ export const CAPABILITY = {
   erpPosting: "capability.erp_posting",
   // ARCH48-S2:capability-constant
   collaborativeReview: "capability.collaborative_review",
+  // ARCH49-S2:capability-constant
+  processIntelligence: "capability.process_intelligence",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

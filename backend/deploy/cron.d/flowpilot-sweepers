@@ -25,4 +25,7 @@ MAILTO=""
 # ARCH47-S1:cron-erp-postings. Every 10 minutes: auto-post, retries, expired
 # leases (probed before any re-send), SFTP acknowledgements (idempotent).
 3-59/10 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep erp_postings --apply
+# ARCH49-S1:cron-process. Every 15 minutes: one process sweep job per enabled
+# workspace and slot (idempotent on the slot; the job runs on the LIGHT worker).
+8-59/15 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep process --apply
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

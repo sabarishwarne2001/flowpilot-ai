@@ -338,7 +338,11 @@ def check_migration() -> None:
     text = t("migration")
     revs = _revisions()
     assert revs.get(A48) == f'"{A47}"', f"{A48} revises {revs.get(A48)}"
-    assert revs.get(STEP3) == f'"{A48}"', f"the contract step revises {revs.get(STEP3)}, expected {A48}"
+    # ARCH49-S1:t2-widened-48. ARCH-49 inserts its migration between ARCH-48 and the contract step.
+    assert revs.get(STEP3) in (f'"{A48}"', '"arch49_step1_process_intelligence"'), \
+        f"the contract step revises {revs.get(STEP3)}, expected {A48} or arch49"
+    if revs.get(STEP3) == '"arch49_step1_process_intelligence"':
+        assert revs.get("arch49_step1_process_intelligence") == f'"{A48}"', "arch49 must revise arch48"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -709,7 +713,8 @@ def check_wiring() -> None:
             assert "stream_close_delay" in site.split("handle @review_live", 1)[1].split("handle /api/*", 1)[0]
     from app.services.automation import triggers
 
-    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) == (22, 23), \
+    # ARCH49-S1:trigger-widened-48. ARCH-49 adds exactly one trigger (process.sla_at_risk).
+    assert (len(triggers.TRIGGERS), len(triggers.CATALOG_EVENT_TYPES)) in ((22, 23), (23, 24)), \
         "ARCH-48 adds no Flow Builder trigger (the live channel is not the outbox)"
     for path in C_.glob("*.py"):
         tree = ast.parse(read(path))
@@ -1006,7 +1011,7 @@ def db_head() -> dict:
         current = [r[0] for r in conn.execute(sa.text("SELECT version_num FROM alembic_version"))]
         tables = {r[0] for r in conn.execute(sa.text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
         view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-    assert current in ([A48], [STEP3]), f"alembic current is {current}; run run_arch48.ps1"
+    assert current in ([A48], [STEP3], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch48.ps1"  # ARCH49-S1:head-widened-48
     assert not [x for x in TABLES if x not in tables], "ARCH-48 tables missing"
     assert "POSTING_EXCEPTION" in view, "the hub view is not ARCH-47's"
     quota_service.clear_cache()
@@ -2407,7 +2412,7 @@ def static_mutations() -> list[tuple]:
                   "name=ERP_POSTING_CAPABILITY", check_capability, r"no Entitlement entry"),
         _text_mut("MS4 no plan card would list it (PLAN_FEATURE_ORDER)", "fe_plan", "  CAPABILITY.collaborativeReview,\n  CAPABILITY.enterpriseIdentity,",
                   "  CAPABILITY.enterpriseIdentity,", check_capability, r"PLAN_FEATURE_ORDER"),
-        _text_mut("MS5 the contract step left on arch47 (two heads)", "step3", 'down_revision = "arch48_step1_collaborative_review"',
+        _text_mut("MS5 the contract step left on arch47 (two heads)", "step3", re.search(r'down_revision = "[^"]+"', t("step3")).group(0),  # ARCH49-S1:ms5-widened-48
                   'down_revision = "arch47_step1_erp_posting"', check_migration, r"the contract step revises"),
         _text_mut("MS6 the lease bound dropped", "migration", "CONSTRAINT ck_review_locks_lease_bounded CHECK (",
                   "CONSTRAINT ck_review_locks_lease_unbounded CHECK (", check_migration, r"a lease bounded past its heartbeat"),

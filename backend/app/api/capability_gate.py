@@ -70,6 +70,8 @@ _DISPLAY_NAMES = {
     entitlements.ERP_POSTING_CAPABILITY: "ERP posting",
     # ARCH48-S1:capability-display
     entitlements.COLLABORATIVE_REVIEW_CAPABILITY: "Real-time collaborative review",
+    # ARCH49-S1:capability-display
+    entitlements.PROCESS_INTELLIGENCE_CAPABILITY: "Process intelligence and the exception agent",
 }
 
 

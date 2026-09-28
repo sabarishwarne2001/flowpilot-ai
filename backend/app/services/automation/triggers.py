@@ -44,6 +44,7 @@ from app.core.entitlements import (
     UNIVERSAL_CORROBORATOR_CAPABILITY,
     OBLIGATIONS_CAPABILITY,
     ERP_POSTING_CAPABILITY,
+    PROCESS_INTELLIGENCE_CAPABILITY,  # ARCH49-S1:trigger-capability
     REDACTION_CAPABILITY,
     SEMANTIC_ASSERTIONS_CAPABILITY,
 )
@@ -507,6 +508,29 @@ TRIGGERS: Final[tuple[TriggerSpec, ...]] = (
         # flow_service, and posting from a posting failure would loop back into the ledger.
         has_document=False,
         excluded_actions=("erp.post",),
+    ),
+    # ARCH49-S1:trigger-sla-at-risk. 23 triggers over 24 events after ARCH-49.
+    TriggerSpec(
+        key="process.sla_at_risk",
+        label="SLA breach predicted",
+        category="Process intelligence",
+        description=(
+            "An open review item, case or ERP posting is predicted to miss its SLA: the workspace's gradient-"
+            "boosted model, Brier-checked on held-out history, puts its chance of finishing late at or above the "
+            "workspace's threshold. Fires once per item and due time."
+        ),
+        event_types=("trigger.process.sla_at_risk",),
+        fields=(
+            TriggerField("object_type", "Object", "string", "POSTING"),
+            TriggerField("kind", "Kind", "string", "VENDOR_BILL"),
+            TriggerField("probability", "Breach probability", "number", "0.83"),
+            TriggerField("due_at", "Due", "date", "2026-10-05T14:00:00+00:00"),
+            TriggerField("target_hours", "SLA target (hours)", "number", "4"),
+            TriggerField("age_hours", "Age (hours)", "number", "2.5"),
+        ),
+        capability=PROCESS_INTELLIGENCE_CAPABILITY,
+        # A prediction is about a review item, a case or a posting -- not one document.
+        has_document=False,
     ),
 )
 

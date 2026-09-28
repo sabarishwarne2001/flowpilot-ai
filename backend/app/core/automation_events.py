@@ -109,6 +109,13 @@ TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH46_TRIGGER_EVENT_T
 ARCH47_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.posting.failed",)
 TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH47_TRIGGER_EVENT_TYPES
 
+#: ARCH49-S1:trigger-events. arch49_step1_process_intelligence rebuilds
+#: ck_outbox_events_visibility_vocabulary to admit it. Emitter:
+#: process_intel.sla.write_predictions (an open instance predicted AT_RISK), once
+#: per instance and due time (idempotency key <event>:<type>:<id>:<due>).
+ARCH49_TRIGGER_EVENT_TYPES: Final[tuple[str, ...]] = ("trigger.process.sla_at_risk",)
+TRIGGER_NATIVE_EVENT_TYPES = TRIGGER_NATIVE_EVENT_TYPES + ARCH49_TRIGGER_EVENT_TYPES
+
 #: Internal events that existed before ARCH-37 and that rules may listen to.
 #: `automation_rule_triggers` accepts exactly these plus the `trigger.` names.
 LEGACY_RULE_EVENT_TYPES: Final[tuple[str, ...]] = (
@@ -144,6 +151,8 @@ INTERNAL_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         "trigger.obligation.overdue",
         # ARCH47-S1:internal-events. ERP posting.
         "trigger.posting.failed",
+        # ARCH49-S1:internal-events. Process intelligence.
+        "trigger.process.sla_at_risk",
         # --- ARCH-13 Work Item & Automation Events ---
         # Emitted by `document.enrich` when enrichment commits. Replaces the
         # fire-and-forget in-process call in `enrich.py::_run_side_effects`

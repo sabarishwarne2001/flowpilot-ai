@@ -39,6 +39,7 @@ export type LiveEventType =
   | "lock.released"
   | "item.resolved"
   | "item.assigned"
+  | "proposal.changed"
   | "queue.changed"
   | "thread.changed";
 export const LIVE_EVENT_TYPES: readonly LiveEventType[] = [
@@ -47,6 +48,8 @@ export const LIVE_EVENT_TYPES: readonly LiveEventType[] = [
   "lock.released",
   "item.resolved",
   "item.assigned",
+  // ARCH49-S2:live-proposal-event. The exception agent's suggestion for an item changed (ids and a status).
+  "proposal.changed",
   "queue.changed",
   "thread.changed",
 ];
@@ -113,6 +116,7 @@ export type ServerMessage =
   | { readonly type: "lock.released"; readonly kind: ReviewKind; readonly item_id: string; readonly holder_user_id: string | null; readonly reason: string }
   | { readonly type: "item.resolved"; readonly kind: ReviewKind; readonly item_id: string; readonly version: number; readonly by_user_id: string | null; readonly resolution: string }
   | { readonly type: "item.assigned"; readonly kind: ReviewKind; readonly item_id: string; readonly assignee_user_id: string | null }
+  | { readonly type: "proposal.changed"; readonly kind: ReviewKind; readonly item_id: string; readonly proposal_id: string; readonly status: string }
   | { readonly type: "queue.changed"; readonly reason: string }
   | { readonly type: "thread.changed"; readonly kind: ReviewKind; readonly item_id: string; readonly thread_id: string; readonly action: string; readonly open_threads: number };
 

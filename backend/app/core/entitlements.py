@@ -117,6 +117,8 @@ __all__ = [
     "ERP_POSTING_CAPABILITY",
     # ARCH48-S1:capability-collaborative-review-export
     "COLLABORATIVE_REVIEW_CAPABILITY",
+    # ARCH49-S1:capability-process-intelligence-export
+    "PROCESS_INTELLIGENCE_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -302,6 +304,17 @@ ERP_POSTING_CAPABILITY: str = "capability.erp_posting"
 #: correctness property of the hub on every plan.
 COLLABORATIVE_REVIEW_CAPABILITY: str = "capability.collaborative_review"
 
+#: ARCH49-S1:capability-process-intelligence. Process Intelligence & the
+#: Governed Exception Agent: an object-centric event log built from what already
+#: records activity, directly-follows discovery and variants, conformance by
+#: token replay against Flow Builder flows and case templates, SLA-breach
+#: prediction (gradient boosting, Brier-checked on held-out data) and
+#: cost-to-serve; and the exception agent, which proposes resolutions through a
+#: typed tool registry and applies one itself only within an ARCH-35 conformal
+#: bound. ONE key for the milestone (the agent rides it); Enterprise only. Not
+#: metered: no model is called.
+PROCESS_INTELLIGENCE_CAPABILITY: str = "capability.process_intelligence"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -324,6 +337,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     OBLIGATIONS_CAPABILITY,
     ERP_POSTING_CAPABILITY,
     COLLABORATIVE_REVIEW_CAPABILITY,
+    PROCESS_INTELLIGENCE_CAPABILITY,  # ARCH49-S1:capability-keys
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -500,6 +514,16 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Real-time collaborative review: the review hub updates live for every reviewer, shows who is "
             "looking at which item, holds a soft lock while someone decides, and carries discussion threads "
             "anchored to a paragraph, a field or the whole item. Bundled into a tier."
+        ),
+    ),
+    # ARCH49-S1:capability-process-intelligence-entitlement
+    Entitlement(
+        name=PROCESS_INTELLIGENCE_CAPABILITY,
+        description=(
+            "Process intelligence and the governed exception agent: how documents, cases, postings and review "
+            "items really flow, where they deviate from your flows and case templates, which will miss their SLA, "
+            "and what each path costs to serve; and an agent that proposes resolutions for exceptions and applies "
+            "one itself only within your calibrated error limit. Bundled into a tier."
         ),
     ),
 )

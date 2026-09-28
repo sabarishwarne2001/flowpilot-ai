@@ -701,3 +701,16 @@ from app.models.collab import (  # noqa: E402,F401
     ReviewLock,
     ReviewThread,
 )
+
+# ARCH49-S1:models-registry
+from app.models.process_intel import (  # noqa: E402,F401
+    AgentPolicy,
+    AgentProposal,
+    AgentToolCall,
+    ProcessEvent,
+    ProcessEventObject,
+    ProcessIngestCursor,
+    ProcessModelRun,
+    ProcessPrediction,
+    ProcessSlaPolicy,
+)

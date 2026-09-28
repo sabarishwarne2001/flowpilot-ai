@@ -316,7 +316,7 @@ def run() -> dict[str, Any]:
     return report
 
 
-EXPECTED_TRIGGERS = 22  # ARCH43-S1:conformance-17 (14 through ARCH-42)  ARCH44-S1:conformance-18 (table.flagged)  ARCH45-S1:conformance-19 (corroboration.discrepancies)  ARCH46-S1:conformance-21 (obligation.due_soon, obligation.overdue)  ARCH47-S1:conformance-22 (posting.failed)
+EXPECTED_TRIGGERS = 23  # ARCH43-S1:conformance-17 (14 through ARCH-42)  ARCH44-S1:conformance-18 (table.flagged)  ARCH45-S1:conformance-19 (corroboration.discrepancies)  ARCH46-S1:conformance-21 (obligation.due_soon, obligation.overdue)  ARCH47-S1:conformance-22 (posting.failed)  ARCH49-S1:conformance-23 (process.sla_at_risk)
 
 
 def problems(report: dict[str, Any]) -> list[str]:
