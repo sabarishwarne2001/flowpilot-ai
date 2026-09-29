@@ -73,6 +73,10 @@ const IdentityAdminHub = lazy(
 );
 const AuditExplorer = lazy(() => import("@/pages/admin/AuditExplorer"));
 const AdminMarginsHub = lazy(() => import("@/pages/admin/AdminMarginsHub"));
+// ARCH50-S2:lazy-pages
+const SovereignConsole = lazy(() => import("@/pages/admin/SovereignConsole"));
+const RevOpsConsole = lazy(() => import("@/pages/admin/RevOpsConsole"));
+const OrganizationEgress = lazy(() => import("@/pages/organization/OrganizationEgress"));
 const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
@@ -339,6 +343,11 @@ function AppRoutes() {
                   path={ROUTE_PATTERNS.organizationBYOK}
                   element={<OrganizationBYOK />}
                 />
+                {/* ARCH50-S2:route-egress */}
+                <Route
+                  path={ROUTE_PATTERNS.organizationEgress}
+                  element={<OrganizationEgress />}
+                />
                 <Route
                   path={ROUTE_PATTERNS.organizationAnalytics}
                   element={<OrganizationAnalytics />}
@@ -376,6 +385,15 @@ function AppRoutes() {
                 <Route
                   path={ROUTE_PATTERNS.platformMargins}
                   element={<AdminMarginsHub />}
+                />
+                {/* ARCH50-S2:route-platform */}
+                <Route
+                  path={ROUTE_PATTERNS.platformSovereign}
+                  element={<SovereignConsole />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.platformRevops}
+                  element={<RevOpsConsole />}
                 />
               </Route>
             </Route>

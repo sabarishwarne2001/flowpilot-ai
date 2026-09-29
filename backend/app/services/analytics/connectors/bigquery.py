@@ -94,7 +94,9 @@ def _access_token(service_account_json: str) -> str:
         credentials = service_account.Credentials.from_service_account_info(
             info, scopes=list(SCOPES)
         )
-        credentials.refresh(GoogleRequest())
+        from app.core import egress  # ARCH50-S1:egress-warehouse -- token_uri comes from the tenant's key file
+
+        credentials.refresh(GoogleRequest(session=egress.requests_session(egress.WAREHOUSE)))
     except Exception as exc:  # noqa: BLE001 - google-auth raises broadly
         raise ConnectorAuthError(
             f"BigQuery credential could not be exchanged for a token: "

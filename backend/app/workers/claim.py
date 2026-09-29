@@ -788,7 +788,11 @@ def run_worker_loop(poll_interval: float = 1.0) -> None:
                         try:
                             payload = dict(job.payload or {})
                             payload["job_id"] = str(job.id)
-                            result = handler(payload)
+                            # ARCH50-S1:egress-attribution
+                            from app.core import egress
+
+                            with egress.attributed(job.organization_id):
+                                result = handler(payload)
                             mark_job_succeeded(db, job.id, result=result)
                             db.commit()
                             dur = round(time.perf_counter() - start_t, 3)

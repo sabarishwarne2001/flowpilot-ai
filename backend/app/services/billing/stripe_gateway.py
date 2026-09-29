@@ -408,6 +408,11 @@ class StripeGateway:
         return stripe
 
     def _stripe_client(self) -> Any:
+        # ARCH50-S1:egress-billing. Stripe's host is fixed; the gate is asked before every use of the client (a
+        # sovereign deployment in deny mode bills through invoiced contracts instead).
+        from app.core import egress
+
+        egress.guard(egress.BILLING, "api.stripe.com", 443)
         if self._client is None:
             stripe = self._sdk()
             self._client = stripe.StripeClient(
@@ -880,6 +885,7 @@ class StripeGateway:
         quota_tier_key: str,
         success_url: Optional[str] = None,
         cancel_url: Optional[str] = None,
+        discount_code: Optional[str] = None,
     ) -> Any:
         from app.services.billing.portal_service import EphemeralSession
 
@@ -902,6 +908,8 @@ class StripeGateway:
             params["success_url"] = success_url
         if cancel_url:
             params["cancel_url"] = cancel_url
+        if discount_code:
+            params["discounts"] = [{"coupon": discount_code}]  # ARCH50-S1:checkout-discount
 
         client = self._stripe_client()
         try:

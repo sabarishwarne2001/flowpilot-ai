@@ -85,6 +85,11 @@ class InternalServiceClient:
         self._max_response_bytes = max_response_bytes
 
     def _connection(self) -> http.client.HTTPConnection:
+        # ARCH50-S1:egress-internal. Internal RPC reaches only the operator's configured host (an operator-only
+        # channel in every egress mode).
+        from app.core import egress
+
+        egress.guard(egress.INTERNAL, self._host, self._port)
         if self._scheme == "https":
             return http.client.HTTPSConnection(
                 self._host, self._port, timeout=self._connect_timeout

@@ -106,6 +106,10 @@ def _stream_openai_compatible(
     ai_settings: AISettings,
     provider_label: str,
 ) -> Iterator[StreamChunk]:
+    # ARCH50-S1:groq-stream-options. The pinned groq SDK (1.5.0) has no `stream_options` parameter: passing it
+    # raised TypeError before any request, so EVERY Groq stream failed. Groq reports usage in `x_groq.usage`
+    # (read below) without being asked; the OpenAI-shaped providers need the option. Found by verify_arch50 D6.
+    options = {} if provider_label == "groq" else {"stream_options": {"include_usage": True}}
     completion = client.chat.completions.create(
         model=ai_settings.model,
         temperature=temperature,
@@ -115,7 +119,7 @@ def _stream_openai_compatible(
         max_tokens=ai_settings.max_output_tokens,
         messages=[{"role": "user", "content": prompt}],
         stream=True,
-        stream_options={"include_usage": True},
+        **options,
     )
 
     for chunk in completion:
@@ -342,6 +346,24 @@ def open_stream(
     ai_settings: AISettings,
     prefer_tenant_key: bool = True,
 ) -> StreamSession:
+    # ARCH50-S1:local-llm-stream. EXCLUSIVE: the operator's local model streams every answer; FALLBACK: it
+    # streams one the egress gate refused before a token was sent. Provider clients are bound to the
+    # organization, so its egress lockdown governs the provider host on every request.
+    from app.core import egress
+    from app.services.byok.provider_clients import SOURCE_PLATFORM
+    from app.services.sovereign import local_llm
+
+    def _local_session(reason: str) -> StreamSession:
+        return StreamSession(
+            chunks=local_llm.stream(prompt, temperature=temperature,
+                                    max_tokens=getattr(ai_settings, "max_output_tokens", None)),
+            credential_use=CredentialUse(source=SOURCE_PLATFORM, provider="LOCAL", organization_id=organization_id,
+                                         reason=reason),
+        )
+
+    if local_llm.is_exclusive():
+        return _local_session("operator local model (exclusive)")
+
     provider = normalize_provider(ai_settings.provider.value)
 
     adapter = _STREAM_ADAPTERS.get(provider)
@@ -381,6 +403,19 @@ def open_stream(
                 f"{spec_for(provider).label} refused the stream: {exc}"
             ) from exc
 
+        try:
+            first = next(iterator)
+        except StopIteration:
+            return
+        except Exception as exc:  # noqa: BLE001 -- the SDKs wrap the gate's refusal in their connection error
+            refusal = egress.refusal_in(exc)
+            if refusal is None:
+                raise
+            if not local_llm.is_fallback():
+                raise egress.EgressDenied(refusal.decision) from None
+            yield from _local_session("operator local model (the provider was refused by the egress gate)").chunks
+            return
+        yield first
         yield from iterator
 
     logger.info(

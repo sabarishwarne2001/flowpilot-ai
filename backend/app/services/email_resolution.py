@@ -184,6 +184,7 @@ def _override_smtp(row: WorkspaceEmailOverride) -> SMTPConfig:
         sender_name=str(row.sender_name),
         encryption=EmailEncryption(row.encryption),
         from_email=row.from_address,
+        organization_id=getattr(row, "organization_id", None),  # ARCH50-S1:smtp-attribution
     )
 
 

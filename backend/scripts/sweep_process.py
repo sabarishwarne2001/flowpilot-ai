@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCH50-S1:executable. Carried by apply_arch50.py with its executable bit (git stored it 100644).
 """ARCH49-S1:sweep-process — the process-intelligence clock.
 
     python scripts/sweep_process.py              # report which workspaces would be swept (nothing written)
@@ -50,6 +51,13 @@ def sweep(db, *, apply: bool, inline: bool = False, at: Optional[datetime] = Non
     from app.services.process_intel import vocabulary as v
 
     moment = at or service.now()
+    if apply and not inline:
+        # ARCH50-S1:sweep-registers-handlers. Run from cron this script is not the worker: without the handler
+        # registry job_service.enqueue() refuses process.sweep_workspace (UnknownJobTypeError) as soon as one
+        # workspace is enabled. Found by the GA-2 run; the ARCH-49 gate called register_all() itself.
+        from app.workers.handlers import register_all
+
+        register_all()
     if not db.in_transaction():
         db.begin()  # job_service.enqueue writes only inside a transaction (the caller's commit is the enqueue)
     targets = service.workspaces_enabled(db)

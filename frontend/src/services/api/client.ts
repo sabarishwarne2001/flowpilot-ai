@@ -63,7 +63,7 @@ import type {
   InternalAxiosRequestConfig,
 } from "axios";
 
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore, type User } from "@/store/useAuthStore";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ApiError, parseErrorEnvelope } from "@/services/api/errors";
@@ -660,6 +660,20 @@ export const restoreSession = async (): Promise<string | null> => {
   try {
     const token = await refreshOnce();
     useAuthStore.getState().setToken(token);
+    // ARCH50-S2:restore-user. A restored session must carry its user. When a
+    // concurrent restore lost the rotation race it cleared the cached user and
+    // the winner only set the token, so the session lived on with `user: null`
+    // and every guard reading the user (the platform shell's superuser check,
+    // the sidebar's name) acted as if nobody were signed in. Found by the ARCH-50
+    // browser smoke: a superadmin was sent from /admin/sovereign to /workspaces.
+    if (!useAuthStore.getState().user) {
+      try {
+        const me = await apiClient.get<User>("/auth/me", { headers: { Accept: "application/json" } });
+        useAuthStore.getState().setAuth(me.data, token);
+      } catch {
+        // The guards ask for the session again; an unreadable /auth/me is not a sign-out.
+      }
+    }
     return token;
   } catch {
     useAuthStore.getState().clearAuth();

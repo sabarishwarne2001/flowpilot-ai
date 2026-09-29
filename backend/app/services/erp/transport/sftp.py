@@ -126,15 +126,26 @@ class Connection:
     def __enter__(self) -> "Connection":
         import paramiko
 
+        from app.core import egress
+
         cfg = self.cfg
         last: Optional[Exception] = None
         sock = None
-        for ip in _resolve(cfg["host"], cfg["port"]):
-            try:
-                sock = socket.create_connection((ip, cfg["port"]), timeout=cfg["timeout"])
-                break
-            except OSError as exc:
-                last = exc
+        # ARCH50-S1:egress-erp-sftp. The egress gate decides on the configured NAME before the name is even
+        # resolved (a refused destination must not leak a DNS query); the socket goes to the address _resolve()
+        # pinned, through the gate again.
+        # A refusal is PERMANENT and certain: nothing was sent (never "uncertain", never retried as an outage).
+        try:
+            egress.guard(egress.ERP_SFTP, cfg["host"], cfg["port"])
+            for ip in _resolve(cfg["host"], cfg["port"]):
+                try:
+                    sock = egress.open_connection(egress.ERP_SFTP, cfg["host"], cfg["port"], timeout=cfg["timeout"],
+                                                  address=ip)
+                    break
+                except OSError as exc:
+                    last = exc
+        except egress.EgressDenied as exc:
+            raise SftpError(v.OUTCOME_PERMANENT, f"refused by the egress gate: {exc}") from exc
         if sock is None:
             raise SftpError(v.OUTCOME_TRANSIENT, f"could not connect: {last}")
         try:

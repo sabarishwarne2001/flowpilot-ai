@@ -331,7 +331,12 @@ def run_jobs_loop(
                 try:
                     payload_dict = dict(payload or {})
                     payload_dict["job_id"] = str(job_id)
-                    result = handler(payload_dict)
+                    # ARCH50-S1:egress-attribution. Every connection a job opens is made on its organization's
+                    # behalf, so that organization's egress lockdown applies.
+                    from app.core import egress
+
+                    with egress.attributed(org_id):
+                        result = handler(payload_dict)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(
                         "jobs.handler_failed",

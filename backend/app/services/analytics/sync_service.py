@@ -406,9 +406,12 @@ def test_destination(
     tested_at = _now()
     try:
         credential = _decrypted_credential(destination)
-        outcome = connector.test_connection(
-            config=dict(destination.config or {}), credential=credential
-        )
+        from app.core import egress  # ARCH50-S1:egress-warehouse-attribution
+
+        with egress.attributed(organization_id):
+            outcome = connector.test_connection(
+                config=dict(destination.config or {}), credential=credential
+            )
         ok = bool(outcome.ok)
         detail = outcome.detail
         latency_ms = outcome.latency_ms
@@ -1104,12 +1107,15 @@ def execute_sync(
 
         connector = get_connector(destination.kind)
         credential = _decrypted_credential(destination)
-        outcome: PushOutcome = connector.push(
-            config=dict(destination.config or {}),
-            credential=credential,
-            parts=parts,
-            run_id=str(run.id),
-        )
+        from app.core import egress
+
+        with egress.attributed(destination.organization_id):
+            outcome: PushOutcome = connector.push(
+                config=dict(destination.config or {}),
+                credential=credential,
+                parts=parts,
+                run_id=str(run.id),
+            )
 
         if outcome.ok:
             status = "SUCCEEDED"

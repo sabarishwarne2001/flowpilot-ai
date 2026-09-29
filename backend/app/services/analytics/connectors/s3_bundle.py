@@ -115,7 +115,9 @@ def _client(
     import boto3
     from botocore.config import Config
 
-    return boto3.client(
+    from app.core import egress  # ARCH50-S1:egress-warehouse
+
+    return egress.attach_boto(boto3.client(
         "s3",
         region_name=_validate_region(region),
         aws_access_key_id=access_key_id,
@@ -127,7 +129,7 @@ def _client(
             connect_timeout=10,
             read_timeout=60,
         ),
-    )
+    ), egress.WAREHOUSE)
 
 
 def put_object_bytes(

@@ -512,12 +512,25 @@ def mirror(result: BackupResult) -> Optional[str]:
         return None
     import boto3
 
+    # ARCH50-S1:egress-backup. The mirror goes through the egress gate (BACKUP is an operator channel: in deny
+    # mode only FLOWPILOT_BACKUP_S3_ENDPOINT's host, or a declared EGRESS_OPERATOR_HOSTS entry, is reachable).
+    # If the gate cannot be loaded, the mirror runs only when the deployment is not in deny mode.
+    gate = None
+    try:
+        if str(BACKEND) not in sys.path:
+            sys.path.insert(0, str(BACKEND))
+        from app.core import egress as gate
+    except Exception as exc:  # noqa: BLE001
+        if os.environ.get("EGRESS_MODE", "open").strip().lower() != "open":
+            raise RuntimeError(f"the egress gate is unavailable ({exc}); refusing the off-host mirror in deny mode")
     client = boto3.client(
         "s3",
         endpoint_url=os.environ.get("FLOWPILOT_BACKUP_S3_ENDPOINT") or None,
         aws_access_key_id=os.environ.get("FLOWPILOT_BACKUP_S3_ACCESS_KEY") or None,
         aws_secret_access_key=os.environ.get("FLOWPILOT_BACKUP_S3_SECRET_KEY") or None,
     )
+    if gate is not None:
+        gate.attach_boto(client, gate.BACKUP)
     prefix = os.environ.get("FLOWPILOT_BACKUP_S3_PREFIX", "flowpilot-backups/").lstrip("/")
     for path in (result.file, result.manifest):
         client.upload_file(str(path), bucket, f"{prefix}{path.name}")

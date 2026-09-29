@@ -466,6 +466,35 @@ class Settings(BaseSettings):
     RERANKER_BREAKER_THRESHOLD: int = 5
     RERANKER_BREAKER_RESET_SECONDS: float = 30.0
 
+    # ARCH50-S1:settings. The sovereign edition. Every value here is the
+    # OPERATOR's: environment only, never a database column and never an API
+    # field, so no tenant can widen egress or point the local model elsewhere.
+    #
+    #   FLOWPILOT_EDITION      saas (the hosted service) | sovereign (on-premise /
+    #                          air-gapped; needs a licence signed by FlowPilot's
+    #                          Ed25519 key, verified offline)
+    #   EGRESS_MODE            open | deny. deny: nothing leaves except the
+    #                          destinations the operator declared -- the ones its
+    #                          own settings name per channel (object store, SMTP
+    #                          relay, DNS resolvers, local model, reranker, backup
+    #                          mirror) plus EGRESS_OPERATOR_HOSTS
+    #   EGRESS_OPERATOR_HOSTS  comma-separated `host`, `*.suffix`, IP or CIDR,
+    #                          optionally `CHANNEL=` in front and `:port` behind
+    #   LOCAL_LLM_*            an OpenAI-compatible endpoint (llama.cpp server,
+    #                          vLLM, Ollama) the operator runs. MODE: off |
+    #                          fallback (used when the configured provider fails
+    #                          or is refused) | exclusive (every completion and
+    #                          stream, whatever a tenant selected)
+    FLOWPILOT_EDITION: str = "saas"
+    EGRESS_MODE: str = "open"
+    EGRESS_OPERATOR_HOSTS: str = ""
+    LOCAL_LLM_MODE: str = "off"
+    LOCAL_LLM_BASE_URL: Optional[str] = None
+    LOCAL_LLM_MODEL: str = ""
+    LOCAL_LLM_API_KEY: Optional[SecretStr] = None
+    LOCAL_LLM_TIMEOUT_SECONDS: float = 120.0
+    LICENCE_FILE: Optional[str] = None
+
     CONTEXT_INJECTION_BLOCK_THRESHOLD: int = 3
     LLM_METERING_ENABLED: bool = True
     LLM_REQUEST_DEADLINE_SECONDS: float = 25.0

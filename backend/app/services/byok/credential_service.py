@@ -61,7 +61,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -546,11 +546,20 @@ def record_validation(
 # must not show up on anyone's invoice.
 
 
+def _probe_http(config: "ProviderCredentialConfig") -> Any:
+    """ARCH50-S1:egress-byok-probe. Every probe's HTTP goes through the egress gate for the credential's
+    organization: a locked-down tenant cannot validate a key against a provider it has not allowed."""
+    from app.core import egress
+
+    return egress.httpx_client(egress.LLM_PROVIDER, organization_id=getattr(config, "organization_id", None),
+                               timeout=VALIDATION_TIMEOUT_SECONDS)
+
+
 def _probe_groq(config: "ProviderCredentialConfig") -> None:
     """Groq: list models via the SDK. The client holds no process state."""
     from groq import Groq
 
-    client = Groq(api_key=config.api_key, timeout=VALIDATION_TIMEOUT_SECONDS)
+    client = Groq(api_key=config.api_key, timeout=VALIDATION_TIMEOUT_SECONDS, http_client=_probe_http(config))
     client.models.list()
 
 
@@ -570,7 +579,7 @@ def _probe_gemini(config: "ProviderCredentialConfig") -> None:
     client = genai.Client(
         api_key=config.api_key,
         http_options=genai_types.HttpOptions(
-            timeout=int(VALIDATION_TIMEOUT_SECONDS * 1000)
+            timeout=int(VALIDATION_TIMEOUT_SECONDS * 1000), httpx_client=_probe_http(config)
         ),
     )
     # `list()` is lazy; consuming one page is what forces the auth round trip.
@@ -578,38 +587,32 @@ def _probe_gemini(config: "ProviderCredentialConfig") -> None:
 
 
 def _probe_openai(config: "ProviderCredentialConfig") -> None:
-    import httpx
-
-    response = httpx.get(
-        "https://api.openai.com/v1/models",
-        headers={"Authorization": f"Bearer {config.api_key}"},
-        timeout=VALIDATION_TIMEOUT_SECONDS,
-    )
+    with _probe_http(config) as client:
+        response = client.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {config.api_key}"},
+        )
     response.raise_for_status()
 
 
 def _probe_anthropic(config: "ProviderCredentialConfig") -> None:
-    import httpx
-
-    response = httpx.get(
-        "https://api.anthropic.com/v1/models",
-        headers={
-            "x-api-key": config.api_key,
-            "anthropic-version": "2023-06-01",
-        },
-        timeout=VALIDATION_TIMEOUT_SECONDS,
-    )
+    with _probe_http(config) as client:
+        response = client.get(
+            "https://api.anthropic.com/v1/models",
+            headers={
+                "x-api-key": config.api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
     response.raise_for_status()
 
 
 def _probe_mistral(config: "ProviderCredentialConfig") -> None:
-    import httpx
-
-    response = httpx.get(
-        "https://api.mistral.ai/v1/models",
-        headers={"Authorization": f"Bearer {config.api_key}"},
-        timeout=VALIDATION_TIMEOUT_SECONDS,
-    )
+    with _probe_http(config) as client:
+        response = client.get(
+            "https://api.mistral.ai/v1/models",
+            headers={"Authorization": f"Bearer {config.api_key}"},
+        )
     response.raise_for_status()
 
 
@@ -632,7 +635,7 @@ def _probe_azure_openai(config: "ProviderCredentialConfig") -> None:
     than a completion: it proves the key, the resource AND the deployment name
     are all correct, without generating a token the tenant pays for.
     """
-    from app.core.ssrf_client import SSRFSafeHTTPClient
+    from app.core import egress
 
     if not config.resource_endpoint or not config.deployment_name:
         raise CredentialShapeError(
@@ -652,7 +655,8 @@ def _probe_azure_openai(config: "ProviderCredentialConfig") -> None:
         f"?api-version={AZURE_API_VERSION}"
     )
 
-    client = SSRFSafeHTTPClient(total_timeout=VALIDATION_TIMEOUT_SECONDS)
+    client = egress.http_client(egress.LLM_PROVIDER, organization_id=getattr(config, "organization_id", None),
+                                total_timeout=VALIDATION_TIMEOUT_SECONDS)
     response = client.request(
         "GET",
         url,
@@ -730,7 +734,11 @@ def validate_credential(
         probe(config)
     except Exception as exc:  # noqa: BLE001 — every provider raises its own
         elapsed = int((time.monotonic() - started) * 1000)
-        message = _scrub(f"{type(exc).__name__}: {exc}", plaintext)
+        # ARCH50-S1:egress-byok-probe -- a refusal by the egress gate is reported as one, not as "Connection error."
+        from app.core import egress
+
+        refused = egress.refusal_in(exc)
+        message = _scrub(f"{type(exc).__name__}: {exc}" if refused is None else str(refused), plaintext)
         logger.warning(
             "byok.validation_failed",
             extra={

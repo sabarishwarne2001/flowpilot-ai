@@ -1,0 +1,19 @@
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# ARCH41-S1:cron-backups. The ARCH-41 backup floor.
+#
+# Nightly: an encrypted, snapshot-consistent pg_dump, verified end to end,
+# pruned to 7 daily + 4 weekly, and mirrored off-host when
+# FLOWPILOT_BACKUP_S3_BUCKET is set in /etc/flowpilot/sweepers.env.
+#
+# Weekly: restore the newest backup into a scratch database, compare every
+# table's row count and the Alembic head with what the backup recorded, then
+# drop the scratch database. A backup nobody restores is a hypothesis.
+#
+# Both need FLOWPILOT_BACKUP_KEY (and PG client tools matching the server's
+# major version) in /etc/flowpilot/sweepers.env. Keep a copy of the key OFF
+# this host: it is the only thing that opens these files.
+11 2 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep backup
+37 4 * * 0  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep restore-drill

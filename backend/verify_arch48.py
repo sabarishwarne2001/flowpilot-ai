@@ -339,8 +339,12 @@ def check_migration() -> None:
     revs = _revisions()
     assert revs.get(A48) == f'"{A47}"', f"{A48} revises {revs.get(A48)}"
     # ARCH49-S1:t2-widened-48. ARCH-49 inserts its migration between ARCH-48 and the contract step.
-    assert revs.get(STEP3) in (f'"{A48}"', '"arch49_step1_process_intelligence"'), \
-        f"the contract step revises {revs.get(STEP3)}, expected {A48} or arch49"
+    # ARCH50-S1:t2-widened-48. ARCH-50 inserts its migration between ARCH-49 and the contract step.
+    assert revs.get(STEP3) in (f'"{A48}"', '"arch49_step1_process_intelligence"', '"arch50_step1_sovereign_revops"'), \
+        f"the contract step revises {revs.get(STEP3)}, expected {A48}, arch49 or arch50"
+    if revs.get(STEP3) == '"arch50_step1_sovereign_revops"':
+        assert revs.get("arch50_step1_sovereign_revops") == '"arch49_step1_process_intelligence"', "arch50 must revise arch49"
+        assert revs.get("arch49_step1_process_intelligence") == f'"{A48}"', "arch49 must revise arch48"
     if revs.get(STEP3) == '"arch49_step1_process_intelligence"':
         assert revs.get("arch49_step1_process_intelligence") == f'"{A48}"', "arch49 must revise arch48"
     downs = " ".join(revs.values())
@@ -1011,7 +1015,7 @@ def db_head() -> dict:
         current = [r[0] for r in conn.execute(sa.text("SELECT version_num FROM alembic_version"))]
         tables = {r[0] for r in conn.execute(sa.text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
         view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-    assert current in ([A48], [STEP3], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch48.ps1"  # ARCH49-S1:head-widened-48
+    assert current in ([A48], [STEP3], ["arch49_step1_process_intelligence"], ["arch50_step1_sovereign_revops"]), f"alembic current is {current}; run run_arch48.ps1"  # ARCH49-S1:head-widened-48  ARCH50-S1:head-widened-48
     assert not [x for x in TABLES if x not in tables], "ARCH-48 tables missing"
     assert "POSTING_EXCEPTION" in view, "the hub view is not ARCH-47's"
     quota_service.clear_cache()

@@ -126,7 +126,12 @@ class S3CompatibleStorageDriver(StorageDriver):
             session_token=session_token,
         )
 
-        self._client = boto3.client(
+        # ARCH50-S1:egress-storage. Every S3 request is checked by the egress gate before it leaves (the object
+        # store is an operator destination: in deny mode it must be the one S3_ENDPOINT_URL names or a declared
+        # EGRESS_OPERATOR_HOSTS entry).
+        from app.core import egress
+
+        self._client = egress.attach_boto(boto3.client(
             "s3",
             region_name="auto" if self._flavor == "r2" else region,
             endpoint_url=endpoint_url,
@@ -137,7 +142,7 @@ class S3CompatibleStorageDriver(StorageDriver):
                 signature_version="s3v4",
             ),
             **credentials,
-        )
+        ), egress.STORAGE)
 
     @staticmethod
     def _resolved_credentials(

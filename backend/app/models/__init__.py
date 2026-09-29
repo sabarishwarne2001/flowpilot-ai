@@ -714,3 +714,23 @@ from app.models.process_intel import (  # noqa: E402,F401
     ProcessPrediction,
     ProcessSlaPolicy,
 )
+
+# ARCH50-S1:models-registry
+from app.models.sovereign import (  # noqa: E402,F401
+    DrDrill,
+    DrHeartbeat,
+    EgressAllowRule,
+    EgressPolicy,
+    EgressRefusal,
+    PlatformLicence,
+)
+from app.models.revops import (  # noqa: E402,F401
+    CheckoutSelection,
+    ContractInvoice,
+    EnterpriseContract,
+    PlanPriceBook,
+    PlanPriceBookEntry,
+    PromoCode,
+    PromoRedemption,
+    RevenueSnapshot,
+)

@@ -302,12 +302,15 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A46) == f'"{A45}"', f"{A46} revises {revs.get(A46)}"
     # ARCH47-S1:chain-widened-46. ARCH-47 sits between ARCH-46 and the contract step.
-    assert revs.get(STEP3) in (f'"{A46}"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A46} or arch47"  # ARCH48-S1:chain-widened-46  ARCH49-S1:chain-widened-46
+    assert revs.get(STEP3) in (f'"{A46}"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"', '"arch50_step1_sovereign_revops"'), f"the contract step revises {revs.get(STEP3)}, expected {A46} or arch47"  # ARCH48-S1:chain-widened-46  ARCH49-S1:chain-widened-46
     if revs.get(STEP3) == '"arch47_step1_erp_posting"':
         assert revs.get("arch47_step1_erp_posting") == f'"{A46}"', "arch47 must revise arch46"
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':  # ARCH48-S1:chain-widened-46
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+    if revs.get(STEP3) == '"arch50_step1_sovereign_revops"':  # ARCH50-S1:chain-widened-46
+        assert revs.get("arch50_step1_sovereign_revops") == '"arch49_step1_process_intelligence"', "arch50 must revise arch49"
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
     if revs.get(STEP3) == '"arch49_step1_process_intelligence"':  # ARCH49-S1:chain-widened-46
         assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
@@ -2042,7 +2045,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
             index = conn.execute(sa.text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_obligation_events_alert'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
-        assert current in ([A46], [STEP3], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch46.ps1"  # ARCH47-S1:head-widened-46  ARCH48-S1:head-widened-46  ARCH49-S1:head-widened-46
+        assert current in ([A46], [STEP3], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"], ["arch50_step1_sovereign_revops"]), f"alembic current is {current}; run run_arch46.ps1"  # ARCH47-S1:head-widened-46  ARCH48-S1:head-widened-46  ARCH49-S1:head-widened-46  ARCH50-S1:head-widened-46
         assert not [x for x in TABLES if x not in tables], "ARCH-46 tables missing"
         assert "OBLIGATION" in kinds and "trigger.obligation.due_soon" in outbox and "trigger.obligation.overdue" in outbox
         assert {"trg_obligations_evidence", "trg_obligations_anchor", "trg_work_items_unlink_obligations"} <= triggers

@@ -236,6 +236,11 @@ class CheckoutSessionRequest(BaseModel):
     price_id: Optional[str] = None
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
+    #: ARCH50-S1:checkout-interval. Annual billing and INR; a promo code reserved at checkout. All optional: a
+    #: request without them is the ARCH-29 checkout, unchanged.
+    interval: Optional[Literal["month", "year"]] = None
+    currency: Optional[Literal["USD", "INR"]] = None
+    promo_code: Optional[str] = Field(default=None, min_length=3, max_length=32)
 
 
 class PortalSessionRequest(BaseModel):

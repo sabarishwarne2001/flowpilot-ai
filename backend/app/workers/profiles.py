@@ -174,6 +174,9 @@ LIGHT = WorkerProfile(
             # exception agent's structured reads -- no model, OCR or PDF engine.
             # Not optional bookkeeping (see above).
             "process.sweep_workspace",
+            # ARCH50-S1:revops-light-profile. The daily RevOps sweep: contracts,
+            # invoices, promo reservations and revenue snapshots -- SQL only.
+            "revops.sweep",
         }
     ),
     allow_heavy=frozenset(),

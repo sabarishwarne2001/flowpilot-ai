@@ -119,6 +119,8 @@ __all__ = [
     "COLLABORATIVE_REVIEW_CAPABILITY",
     # ARCH49-S1:capability-process-intelligence-export
     "PROCESS_INTELLIGENCE_CAPABILITY",
+    # ARCH50-S1:capability-egress-lockdown-export
+    "EGRESS_LOCKDOWN_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -315,6 +317,15 @@ COLLABORATIVE_REVIEW_CAPABILITY: str = "capability.collaborative_review"
 #: metered: no model is called.
 PROCESS_INTELLIGENCE_CAPABILITY: str = "capability.process_intelligence"
 
+#: ARCH50-S1:capability-egress-lockdown. The Sovereign Edition's tenant side: an
+#: organization confines every connection the platform makes on its behalf --
+#: webhooks, warehouse and ERP targets, SSO metadata, its own SMTP server and the
+#: AI model providers -- to destinations it allows, and every refusal is recorded
+#: and audited. ONE key for the milestone; Enterprise only. Not metered. The
+#: deployment-wide deny mode, the operator's local model and the offline licence
+#: are the operator's (environment), not a plan feature.
+EGRESS_LOCKDOWN_CAPABILITY: str = "capability.egress_lockdown"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -338,6 +349,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     ERP_POSTING_CAPABILITY,
     COLLABORATIVE_REVIEW_CAPABILITY,
     PROCESS_INTELLIGENCE_CAPABILITY,  # ARCH49-S1:capability-keys
+    EGRESS_LOCKDOWN_CAPABILITY,  # ARCH50-S1:capability-keys
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -524,6 +536,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "items really flow, where they deviate from your flows and case templates, which will miss their SLA, "
             "and what each path costs to serve; and an agent that proposes resolutions for exceptions and applies "
             "one itself only within your calibrated error limit. Bundled into a tier."
+        ),
+    ),
+    # ARCH50-S1:capability-egress-lockdown-entitlement
+    Entitlement(
+        name=EGRESS_LOCKDOWN_CAPABILITY,
+        description=(
+            "Egress lockdown: every connection the platform makes for your organization -- webhooks, warehouses, "
+            "ERP targets, SSO metadata, your SMTP server and AI model providers -- is confined to the destinations "
+            "you allow; anything else is refused before it connects, recorded and audited. Bundled into a tier."
         ),
     ),
 )

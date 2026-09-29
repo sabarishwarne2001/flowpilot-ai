@@ -75,6 +75,8 @@ ENT = ENT + ["capability.erp_posting"]
 ENT = ENT + ["capability.collaborative_review"]
 # ARCH49-S1:matrix-widened. ARCH-49 packages capability.process_intelligence into Enterprise only.
 ENT = ENT + ["capability.process_intelligence"]
+# ARCH50-S1:matrix-widened. ARCH-50 packages capability.egress_lockdown into Enterprise only.
+ENT = ENT + ["capability.egress_lockdown"]
 EXPECTED_MATRIX = {"free": [], "developer": sorted(DEV), "business": sorted(BUS), "enterprise": sorted(ENT)}
 EXPECTED_PRICES = {"free": 0, "developer": 49_000_000, "business": 299_000_000, "enterprise": 799_000_000}
 NEW_CAPABILITIES = ("capability.developer_api", "capability.outgoing_webhooks", "capability.custom_branding",
@@ -317,7 +319,7 @@ def g_migration() -> Optional[str]:
     step3 = script.get_revision("arch40_step3_contract_ai_settings")
     if hm1.down_revision != "arch40_step2a_review_view_paths":
         return f"hm1 revises {hm1.down_revision}"
-    if step3.down_revision not in ("hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting", "arch48_step1_collaborative_review", "arch49_step1_process_intelligence"):  # ARCH41-S2:hm-chain-widened  ARCH42-S1:hm-chain-widened  ARCH43-S1:hm-chain-widened  ARCH44-S1:hm-chain-widened  ARCH45-S1:hm-chain-widened  ARCH46-S1:hm-chain-widened  ARCH47-S1:hm-chain-widened  ARCH48-S1:hm-chain-widened  ARCH49-S1:hm-chain-widened
+    if step3.down_revision not in ("hm1_tier_price_per_key", "arch41_step1_extraction_memory", "arch42_step1_entity_graph", "arch43_step1_case_intelligence", "arch44_step1_table_intelligence", "arch45_step1_corroboration", "arch46_step1_obligations", "arch47_step1_erp_posting", "arch48_step1_collaborative_review", "arch49_step1_process_intelligence", "arch50_step1_sovereign_revops"):  # ARCH41-S2:hm-chain-widened  ARCH42-S1:hm-chain-widened  ARCH43-S1:hm-chain-widened  ARCH44-S1:hm-chain-widened  ARCH45-S1:hm-chain-widened  ARCH46-S1:hm-chain-widened  ARCH47-S1:hm-chain-widened  ARCH48-S1:hm-chain-widened  ARCH49-S1:hm-chain-widened  # ARCH50-S1:hm-chain-widened
         return f"the contract step revises {step3.down_revision}; hm1 must sit before it"
     if list(script.get_heads()) != ["arch40_step3_contract_ai_settings"]:
         return f"heads {script.get_heads()}"

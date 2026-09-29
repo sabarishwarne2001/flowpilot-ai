@@ -220,13 +220,16 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     revs = revs if revs is not None else _revisions()
     assert revs.get(A43) == f'"{A42}"', f"{A43} revises {revs.get(A43)}"
     # ARCH44-S1:chain-widened-43. ARCH-44 sits between ARCH-43 and the contract step.
-    assert revs.get(STEP3) in (f'"{A43}"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), f"the contract step revises {revs.get(STEP3)}, expected {A43}, arch44, arch45, arch46 or arch47"  # ARCH45-S1:chain-widened-43  ARCH46-S1:chain-widened-43  ARCH47-S1:chain-widened-43  ARCH48-S1:chain-widened-43  ARCH49-S1:chain-widened-43
+    assert revs.get(STEP3) in (f'"{A43}"', '"arch44_step1_table_intelligence"', '"arch45_step1_corroboration"', '"arch46_step1_obligations"', '"arch47_step1_erp_posting"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"', '"arch50_step1_sovereign_revops"'), f"the contract step revises {revs.get(STEP3)}, expected {A43}, arch44, arch45, arch46 or arch47"  # ARCH45-S1:chain-widened-43  ARCH46-S1:chain-widened-43  ARCH47-S1:chain-widened-43  ARCH48-S1:chain-widened-43  ARCH49-S1:chain-widened-43
     if revs.get(STEP3) == '"arch47_step1_erp_posting"':  # ARCH47-S1:chain-widened-43
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
         assert revs.get("arch46_step1_obligations") == '"arch45_step1_corroboration"', "arch46 must revise arch45"
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':  # ARCH48-S1:chain-widened-43
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
         assert revs.get("arch47_step1_erp_posting") == '"arch46_step1_obligations"', "arch47 must revise arch46"
+    if revs.get(STEP3) == '"arch50_step1_sovereign_revops"':  # ARCH50-S1:chain-widened-43
+        assert revs.get("arch50_step1_sovereign_revops") == '"arch49_step1_process_intelligence"', "arch50 must revise arch49"
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
     if revs.get(STEP3) == '"arch49_step1_process_intelligence"':  # ARCH49-S1:chain-widened-43
         assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
         assert revs.get("arch48_step1_collaborative_review") == '"arch47_step1_erp_posting"', "arch48 must revise arch47"
@@ -1102,7 +1105,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             gist = conn.execute(sa.text("SELECT count(*) FROM pg_extension WHERE extname='btree_gist'")).scalar_one()
             triggers = {r[0] for r in conn.execute(sa.text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"))}
-        assert current in ([A43], [STEP3], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch43.ps1"  # ARCH44-S1:head-widened-43  ARCH45-S1:head-widened-43  ARCH46-S1:head-widened-43  ARCH47-S1:head-widened-43  ARCH48-S1:head-widened-43  ARCH49-S1:head-widened-43
+        assert current in ([A43], [STEP3], ["arch44_step1_table_intelligence"], ["arch45_step1_corroboration"], ["arch46_step1_obligations"], ["arch47_step1_erp_posting"], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"], ["arch50_step1_sovereign_revops"]), f"alembic current is {current}; run run_arch43.ps1"  # ARCH44-S1:head-widened-43  ARCH45-S1:head-widened-43  ARCH46-S1:head-widened-43  ARCH47-S1:head-widened-43  ARCH48-S1:head-widened-43  ARCH49-S1:head-widened-43  ARCH50-S1:head-widened-43
         assert not [x for x in TABLES if x not in tables], "ARCH-43 tables missing"
         assert "SPLIT" in kinds and "trigger.case.completed" in outbox and gist == 1, (kinds, gist)
         assert {"trg_packet_split_segments_within_packet", "trg_case_templates_immutable"} <= triggers

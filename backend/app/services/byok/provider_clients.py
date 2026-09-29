@@ -166,6 +166,9 @@ class ProviderCredentialConfig:
     api_key: str
     resource_endpoint: Optional[str] = None
     deployment_name: Optional[str] = None
+    #: ARCH50-S1:byok-attribution. The organization the client's calls are made for: its transport asks the
+    #: egress gate on every request (a platform client built for one organization carries it too).
+    organization_id: Optional[uuid.UUID] = None
 
     def __post_init__(self) -> None:
         if not self.api_key:
@@ -188,6 +191,7 @@ def config_from_credential(credential: Any, plaintext: str) -> ProviderCredentia
         api_key=plaintext,
         resource_endpoint=getattr(credential, "resource_endpoint", None),
         deployment_name=getattr(credential, "deployment_name", None),
+        organization_id=getattr(credential, "organization_id", None),
     )
 
 
@@ -253,6 +257,14 @@ def _timeout() -> float:
     return float(settings.LLM_REQUEST_DEADLINE_SECONDS)
 
 
+def _http(config: ProviderCredentialConfig) -> Any:
+    """ARCH50-S1:egress-llm. Every provider SDK is handed this client: its transport takes the egress decision
+    on each request (redirect hops included) for the organization the call is made for."""
+    from app.core import egress
+
+    return egress.httpx_client(egress.LLM_PROVIDER, organization_id=config.organization_id, timeout=_timeout())
+
+
 def _build_groq(config: ProviderCredentialConfig) -> Any:
     """A fresh Groq client bound to one key.
 
@@ -261,7 +273,7 @@ def _build_groq(config: ProviderCredentialConfig) -> Any:
     """
     from groq import Groq
 
-    return Groq(api_key=config.api_key, timeout=_timeout())
+    return Groq(api_key=config.api_key, timeout=_timeout(), http_client=_http(config))
 
 
 def _build_gemini(config: ProviderCredentialConfig) -> Any:
@@ -284,14 +296,14 @@ def _build_gemini(config: ProviderCredentialConfig) -> Any:
 
     return genai.Client(
         api_key=config.api_key,
-        http_options=genai_types.HttpOptions(timeout=int(_timeout() * 1000)),
+        http_options=genai_types.HttpOptions(timeout=int(_timeout() * 1000), httpx_client=_http(config)),
     )
 
 
 def _build_openai(config: ProviderCredentialConfig) -> Any:
     from openai import OpenAI
 
-    return OpenAI(api_key=config.api_key, timeout=_timeout(), max_retries=0)
+    return OpenAI(api_key=config.api_key, timeout=_timeout(), max_retries=0, http_client=_http(config))
 
 
 def _build_anthropic(config: ProviderCredentialConfig) -> Any:
@@ -305,13 +317,13 @@ def _build_anthropic(config: ProviderCredentialConfig) -> Any:
     """
     from anthropic import Anthropic
 
-    return Anthropic(api_key=config.api_key, timeout=_timeout(), max_retries=0)
+    return Anthropic(api_key=config.api_key, timeout=_timeout(), max_retries=0, http_client=_http(config))
 
 
 def _build_mistral(config: ProviderCredentialConfig) -> Any:
     from mistralai import Mistral
 
-    return Mistral(api_key=config.api_key, timeout_ms=int(_timeout() * 1000))
+    return Mistral(api_key=config.api_key, timeout_ms=int(_timeout() * 1000), client=_http(config))
 
 
 def _build_azure_openai(config: ProviderCredentialConfig) -> Any:
@@ -354,6 +366,7 @@ def _build_azure_openai(config: ProviderCredentialConfig) -> Any:
         api_version=AZURE_API_VERSION,
         timeout=_timeout(),
         max_retries=0,
+        http_client=_http(config),
     )
 
 
@@ -505,7 +518,7 @@ class ProviderClientFactory:
         return getter() if callable(getter) else str(secret)
 
     @staticmethod
-    def build_platform_client(provider: str) -> Any:
+    def build_platform_client(provider: str, organization_id: Optional[uuid.UUID] = None) -> Any:
         key = ProviderClientFactory.platform_key(provider)
         if not key:
             raise ProviderUnavailableError(
@@ -528,7 +541,7 @@ class ProviderClientFactory:
                 "deployment name, which the platform configuration does not "
                 "carry. Platform fallback is not available for this provider."
             )
-        return adapter(ProviderCredentialConfig(api_key=key))
+        return adapter(ProviderCredentialConfig(api_key=key, organization_id=organization_id))
 
     @staticmethod
     def build(
@@ -575,7 +588,7 @@ class ProviderClientFactory:
                 },
             )
             return (
-                ProviderClientFactory.build_platform_client(key),
+                ProviderClientFactory.build_platform_client(key, organization_id),
                 platform_use(
                     provider=key,
                     organization_id=organization_id,
@@ -585,7 +598,7 @@ class ProviderClientFactory:
 
         if not prefer_tenant_key:
             return (
-                ProviderClientFactory.build_platform_client(key),
+                ProviderClientFactory.build_platform_client(key, organization_id),
                 platform_use(
                     provider=key,
                     organization_id=organization_id,
@@ -598,7 +611,7 @@ class ProviderClientFactory:
         )
         if credential is None:
             return (
-                ProviderClientFactory.build_platform_client(key),
+                ProviderClientFactory.build_platform_client(key, organization_id),
                 platform_use(
                     provider=key,
                     organization_id=organization_id,
@@ -718,7 +731,7 @@ class ProviderClientFactory:
                 "credential."
             )
 
-        client = ProviderClientFactory.build_platform_client(key)
+        client = ProviderClientFactory.build_platform_client(key, organization_id)
         logger.warning(
             "byok.fell_back_to_platform",
             extra={

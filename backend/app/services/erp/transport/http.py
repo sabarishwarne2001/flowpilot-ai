@@ -77,9 +77,11 @@ class HttpError(RuntimeError):
 #: Replaced by the gates with a client that trusts the mock servers' certificate (allow_private_ranges and a
 #: test SSL context are refused by the client itself in production).
 def _default_client_factory(timeout: float) -> Any:
-    from app.core.ssrf_client import SSRFSafeHTTPClient
+    # ARCH50-S1:egress-erp-http. The client comes from the egress gate (attributed to the posting's organization
+    # by the job loop, or by erp.service.test_target).
+    from app.core import egress
 
-    return SSRFSafeHTTPClient(connect_timeout=min(10.0, timeout), total_timeout=timeout)
+    return egress.http_client(egress.ERP_HTTP, connect_timeout=min(10.0, timeout), total_timeout=timeout)
 
 
 client_factory: Callable[[float], Any] = _default_client_factory

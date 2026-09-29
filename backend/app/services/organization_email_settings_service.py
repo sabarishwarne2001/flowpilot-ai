@@ -131,6 +131,7 @@ def to_smtp_config(row: OrganizationEmailSettings) -> SMTPConfig:
         sender_name=row.sender_name,
         encryption=row.encryption,
         from_email=row.sender_email,
+        organization_id=getattr(row, "organization_id", None),  # ARCH50-S1:smtp-attribution
     )
 
 

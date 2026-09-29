@@ -16,4 +16,6 @@ MAILTO=""
 # major version) in /etc/flowpilot/sweepers.env. Keep a copy of the key OFF
 # this host: it is the only thing that opens these files.
 11 2 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep backup
-37 4 * * 0  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep restore-drill
+# ARCH50-S1:cron-restore-drill-record. The weekly drill records its measured backup
+# age (RPO) and restore time (RTO) in dr_drills (kind RESTORE) for the operator console.
+37 4 * * 0  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep restore-drill --record

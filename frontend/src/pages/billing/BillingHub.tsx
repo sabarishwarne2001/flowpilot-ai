@@ -5,6 +5,8 @@ import { ExternalLink, Loader2 } from "lucide-react";
 import ConsumptionDashboard from "@/pages/billing/ConsumptionDashboard";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
 import PlanSelector from "@/pages/billing/PlanSelector";
+// ARCH50-S2:billing-contract
+import InvoicedContractPanel from "@/components/billing/InvoicedContractPanel";
 import SeatManager from "@/pages/billing/SeatManager";
 import SpendLimitForm from "@/pages/billing/SpendLimitForm";
 import UsageDashboard from "@/pages/billing/UsageDashboard";
@@ -139,6 +141,8 @@ export const BillingHub: React.FC = () => {
               organizationId={organizationId}
               canManageBilling={canManageBilling}
             />
+
+            <InvoicedContractPanel organizationId={organizationId} />
 
             <InvoiceBrowser organizationId={organizationId} />
 

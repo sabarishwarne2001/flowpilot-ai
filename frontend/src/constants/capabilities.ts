@@ -45,6 +45,8 @@ export const CAPABILITY = {
   collaborativeReview: "capability.collaborative_review",
   // ARCH49-S2:capability-constant
   processIntelligence: "capability.process_intelligence",
+  // ARCH50-S2:capability-constant
+  egressLockdown: "capability.egress_lockdown",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

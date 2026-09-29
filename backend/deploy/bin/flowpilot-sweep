@@ -11,7 +11,7 @@ TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 LOCK_DIR="${LOCK_DIR:-/var/lock/flowpilot}"
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases|corroboration|obligations|erp_postings|process> [args...]" >&2
+    echo "usage: $(basename "$0") <arch07|identity|invitations|arch09|compliance|backup|restore-drill|extraction_memory|entities|cases|corroboration|obligations|erp_postings|process|revops|dr-heartbeat|base-backup|pitr-drill> [args...]" >&2
     exit 64
 fi
 
@@ -52,6 +52,15 @@ case "${NAME}" in
     # per enabled workspace and slot (the event log, SLA predictions, the
     # exception agent). See scripts/sweep_process.py.
     process) SCRIPT="scripts/sweep_process.py" ; HEARTBEAT="${HEARTBEAT_UUID_PROCESS:-}" ;;
+    # ARCH50-S1:sweep-revops. Daily: contracts, invoices, promo reservations,
+    # revenue snapshots, egress-refusal retention. See scripts/sweep_revops.py.
+    revops) SCRIPT="scripts/sweep_revops.py" ; HEARTBEAT="${HEARTBEAT_UUID_REVOPS:-}" ;;
+    # ARCH50-S1:sweep-dr. Point-in-time recovery (scripts/dr_pitr.py): the
+    # heartbeat, the nightly base backup and the weekly timed PITR drill. The
+    # WAL archiver itself is PostgreSQL's archive_command (dr_pitr.py archive-wal).
+    dr-heartbeat) SCRIPT="scripts/dr_pitr.py" ; set -- heartbeat "$@" ; HEARTBEAT="" ;;
+    base-backup)  SCRIPT="scripts/dr_pitr.py" ; set -- base-backup "$@" ; HEARTBEAT="${HEARTBEAT_UUID_BASE_BACKUP:-}" ;;
+    pitr-drill)   SCRIPT="scripts/dr_pitr.py" ; set -- drill --from-archive --record "$@" ; HEARTBEAT="${HEARTBEAT_UUID_PITR_DRILL:-}" ;;
     *)
         echo "unknown sweeper: ${NAME}" >&2
         exit 64

@@ -352,7 +352,10 @@ def check_migration() -> None:
     text = t("migration")
     revs = _revisions()
     assert revs.get(A49) == f'"{A48}"', f"{A49} revises {revs.get(A49)}"
-    assert revs.get(STEP3) == f'"{A49}"', f"the contract step revises {revs.get(STEP3)}, expected {A49}"
+    # ARCH50-S1:t2-widened-49. ARCH-50 inserts its migration between ARCH-49 and the contract step.
+    assert revs.get(STEP3) in (f'"{A49}"', '"arch50_step1_sovereign_revops"'), f"the contract step revises {revs.get(STEP3)}, expected {A49} or arch50"
+    if revs.get(STEP3) == '"arch50_step1_sovereign_revops"':
+        assert revs.get("arch50_step1_sovereign_revops") == f'"{A49}"', "arch50 must revise arch49"
     downs = " ".join(revs.values())
     heads = [r for r in revs if f'"{r}"' not in downs and f"'{r}'" not in downs]
     assert heads == [STEP3], f"file heads {heads}; the held contract step must stay the only head"
@@ -1104,7 +1107,7 @@ def db_head() -> dict:
         tables = {r[0] for r in conn.execute(sa.text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'"))}
         check = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = "
                                      "'ck_outbox_events_visibility_vocabulary'")).scalar()
-    assert current in ([A49], [STEP3]), f"alembic current is {current}; run run_arch49.ps1"
+    assert current in ([A49], [STEP3], ["arch50_step1_sovereign_revops"]), f"alembic current is {current}; run run_arch49.ps1"  # ARCH50-S1:head-widened-49
     missing = [x for x in TABLES if x not in tables]
     assert not missing, f"ARCH-49 tables missing: {missing}"
     assert check and "trigger.process.sla_at_risk" in check, "the outbox CHECK does not admit trigger.process.sla_at_risk"
@@ -2445,7 +2448,7 @@ def static_mutations() -> list[tuple]:
         _text_mut("MS4 no plan card would list it (PLAN_FEATURE_ORDER)", "fe_plan",
                   "  // ARCH49-S2:plan-feature-order — Enterprise only.\n  CAPABILITY.processIntelligence,\n",
                   "  // ARCH49-S2:plan-feature-order — Enterprise only.\n", check_capability, r"PLAN_FEATURE_ORDER"),
-        _text_mut("MS5 the contract step left on arch48 (two heads)", "step3", f'down_revision = "{A49}"',
+        _text_mut("MS5 the contract step left on arch48 (two heads)", "step3", re.search(r'down_revision = "[^"]+"', t("step3")).group(0),  # ARCH50-S1:ms5-widened-49
                   f'down_revision = "{A48}"', check_migration, r"the contract step revises"),
         _text_mut("MS6 the CHECK that only calibrated kinds apply themselves dropped", "migration",
                   "CONSTRAINT ck_agent_proposals_only_calibrated_kinds_apply_themselves CHECK (",

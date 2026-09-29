@@ -78,6 +78,10 @@ import {
   organizationWebhooksPath,
   partnerPortalPath,
   platformMarginsPath,
+  // ARCH50-S2:nav-imports
+  platformSovereignPath,
+  platformRevopsPath,
+  organizationEgressPath,
   procurementPath,
   procurementPoliciesPath,
   radarPath,
@@ -578,6 +582,15 @@ export const buildOrganizationNavigationItems = (
       capability: CAPABILITY.calibratedAutonomy,
       icon: Target,
     });
+    // ARCH50-S2:nav-egress. ADMIN reads the policy and the refusals and tests a
+    // destination; switching the lockdown and editing rules are OWNER-gated by
+    // RequireOrgOwner on the endpoints. Plan-gated like its API.
+    items.push({
+      name: "Egress lockdown",
+      path: organizationEgressPath(orgSlug),
+      capability: CAPABILITY.egressLockdown,
+      icon: ShieldCheck,
+    });
   }
 
   if (role === "OWNER" || role === "BILLING") {
@@ -643,6 +656,17 @@ export const buildPlatformNavigationItems = (
       name: "Unit economics",
       path: platformMarginsPath(),
       icon: Scale,
+    },
+    // ARCH50-S2:nav-platform
+    {
+      name: "Sovereign edition",
+      path: platformSovereignPath(),
+      icon: Shield,
+    },
+    {
+      name: "Revenue operations",
+      path: platformRevopsPath(),
+      icon: CreditCard,
     },
   ];
 };

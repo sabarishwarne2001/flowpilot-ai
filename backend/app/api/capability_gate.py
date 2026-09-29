@@ -72,6 +72,8 @@ _DISPLAY_NAMES = {
     entitlements.COLLABORATIVE_REVIEW_CAPABILITY: "Real-time collaborative review",
     # ARCH49-S1:capability-display
     entitlements.PROCESS_INTELLIGENCE_CAPABILITY: "Process intelligence and the exception agent",
+    # ARCH50-S1:capability-display
+    entitlements.EGRESS_LOCKDOWN_CAPABILITY: "Egress lockdown",
 }
 
 

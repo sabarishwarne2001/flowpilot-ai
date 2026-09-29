@@ -90,12 +90,18 @@ export const ROUTE_PATTERNS = {
   // per (organization, decision type), across every workspace's reviews.
   // "organizations" is already a reserved segment, so no new entry is needed.
   organizationAutonomy: "autonomy",
+  // ARCH50-S2:route-patterns. The organization's egress lockdown; "organizations" is
+  // already reserved, so no new reserved segment is needed.
+  organizationEgress: "egress",
   organizationNewWorkspace: `/organizations/${P_ORG}/workspaces/new`,
 
   // ARCH-18 platform administration. No tenant parameter, by design: these
   // pages read across every organization.
   platformShell: "/admin",
   platformMargins: "margins",
+  // ARCH50-S2:route-patterns. The operator's Sovereign and RevOps consoles.
+  platformSovereign: "sovereign",
+  platformRevops: "revops",
 
   // ARCH-27 partner portal. A sibling of the organization shell, never a child
   // of it — the same decision ARCH-18 made for /admin. A partner principal
@@ -223,6 +229,11 @@ export const partnerPortalPath = (): string => "/partners";
 export const platformPath = (): string => "/admin";
 
 export const platformMarginsPath = (): string => "/admin/margins";
+
+// ARCH50-S2:route-paths
+export const platformSovereignPath = (): string => "/admin/sovereign";
+export const platformRevopsPath = (): string => "/admin/revops";
+export const organizationEgressPath = (orgSlug: string): string => `${organizationPath(orgSlug)}/egress`;
 
 export const createWorkspacePath = (orgSlug: string): string =>
   `${organizationPath(orgSlug)}/workspaces/new`;

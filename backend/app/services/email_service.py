@@ -76,25 +76,40 @@ class _PinnedSMTP(smtplib.SMTP):
 
     `self._host` stays the configured hostname, so STARTTLS verifies the
     certificate against the name the tenant typed, not the IP.
+
+    ARCH50-S1:egress-smtp. The socket comes from the egress gate: the decision
+    is taken on the configured host name, the connection goes to the pinned IP.
     """
 
-    def __init__(self, *, pinned_ip: str | None, **kwargs: object) -> None:
+    def __init__(self, *, pinned_ip: str | None, egress_channel: str = "SMTP_TENANT",
+                 organization_id: object = None, **kwargs: object) -> None:
         self._pinned_ip = pinned_ip
+        self._egress_channel = egress_channel
+        self._egress_org = organization_id
         super().__init__(**kwargs)  # type: ignore[arg-type]
 
     def _get_socket(self, host, port, timeout):  # type: ignore[no-untyped-def]
-        target = self._pinned_ip or host
-        return socket.create_connection((target, port), timeout, self.source_address)
+        from app.core import egress
+
+        return egress.open_connection(self._egress_channel, host, port, timeout=timeout,
+                                      organization_id=self._egress_org, address=self._pinned_ip,
+                                      source_address=self.source_address)
 
 
 class _PinnedSMTP_SSL(smtplib.SMTP_SSL):
-    def __init__(self, *, pinned_ip: str | None, **kwargs: object) -> None:
+    def __init__(self, *, pinned_ip: str | None, egress_channel: str = "SMTP_TENANT",
+                 organization_id: object = None, **kwargs: object) -> None:
         self._pinned_ip = pinned_ip
+        self._egress_channel = egress_channel
+        self._egress_org = organization_id
         super().__init__(**kwargs)  # type: ignore[arg-type]
 
     def _get_socket(self, host, port, timeout):  # type: ignore[no-untyped-def]
-        target = self._pinned_ip or host
-        raw = socket.create_connection((target, port), timeout, self.source_address)
+        from app.core import egress
+
+        raw = egress.open_connection(self._egress_channel, host, port, timeout=timeout,
+                                     organization_id=self._egress_org, address=self._pinned_ip,
+                                     source_address=self.source_address)
         return self.context.wrap_socket(raw, server_hostname=self._host)
 
 
@@ -129,6 +144,16 @@ class EmailService:
         # 2. TLS certificates are verified. smtplib's default context
         #    (`ssl._create_stdlib_context`) does not verify them, so SSL and
         #    STARTTLS were encrypted but unauthenticated.
+        # ARCH50-S1:egress-smtp-first. The egress gate decides on the configured name BEFORE the tenant's host
+        # is resolved: a refused destination must not leak a DNS query.
+        from app.core import egress
+
+        egress.guard(
+            egress.SMTP_PLATFORM if config.trusted else egress.SMTP_TENANT,
+            config.smtp_host,
+            int(config.smtp_port),
+            organization_id=None if config.trusted else getattr(config, "organization_id", None),
+        )
         pinned_ip = None if config.trusted else validate_smtp_host(
             config.smtp_host, int(config.smtp_port)
         )
@@ -136,6 +161,8 @@ class EmailService:
         if config.encryption == EmailEncryption.SSL:
             client: smtplib.SMTP = _PinnedSMTP_SSL(
                 pinned_ip=pinned_ip,
+                egress_channel="SMTP_PLATFORM" if config.trusted else "SMTP_TENANT",
+                organization_id=None if config.trusted else getattr(config, "organization_id", None),
                 host=config.smtp_host,
                 port=config.smtp_port,
                 timeout=20,
@@ -144,6 +171,8 @@ class EmailService:
         else:
             client = _PinnedSMTP(
                 pinned_ip=pinned_ip,
+                egress_channel="SMTP_PLATFORM" if config.trusted else "SMTP_TENANT",
+                organization_id=None if config.trusted else getattr(config, "organization_id", None),
                 host=config.smtp_host,
                 port=config.smtp_port,
                 timeout=20,

@@ -286,7 +286,10 @@ class WarehouseConnector(abc.ABC):
         objects in the registry are shared across threads, and the client
         holds per-request deadline state.
         """
-        return SSRFSafeHTTPClient(
+        from app.core import egress  # ARCH50-S1:egress-warehouse
+
+        return egress.http_client(
+            egress.WAREHOUSE,
             connect_timeout=CONTROL_PLANE_CONNECT_TIMEOUT_SECONDS,
             total_timeout=CONTROL_PLANE_TIMEOUT_SECONDS,
             max_response_bytes=MAX_CONTROL_RESPONSE_BYTES,

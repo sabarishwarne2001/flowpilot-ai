@@ -148,6 +148,7 @@ def _gateway_checkout(
     seats: int,
     success_url: Optional[str],
     cancel_url: Optional[str],
+    discount_code: Optional[str] = None,
 ) -> EphemeralSession:
     """ARCH-30 Tranche 2 (D-10). Checkout through a Merchant of Record.
 
@@ -181,6 +182,7 @@ def _gateway_checkout(
             "organization_id": str(organization_id),
             "quota_tier_key": quota_tier_key,
         },
+        **({"discount_code": discount_code} if discount_code else {}),
     )
     return EphemeralSession(
         url=remote.url,
@@ -274,6 +276,7 @@ def create_checkout_session(
     price_id: Optional[str] = None,
     success_url: Optional[str] = None,
     cancel_url: Optional[str] = None,
+    discount_code: Optional[str] = None,  # ARCH50-S1:checkout-discount (a promo code's gateway coupon)
 ) -> EphemeralSession:
     # ARCH-29 Tranche 2 (F-2). The price is a property of the tier being
     # sold, resolved here from the tier key the caller named.
@@ -333,6 +336,7 @@ def create_checkout_session(
             seats=int(seats),
             success_url=success_url,
             cancel_url=cancel_url,
+            **({"discount_code": discount_code} if discount_code else {}),
         )
         logger.info(
             "billing.checkout_session_created",
@@ -357,6 +361,7 @@ def create_checkout_session(
         quota_tier_key=quota_tier_key,
         success_url=success_url or settings.BILLING_CHECKOUT_SUCCESS_URL,
         cancel_url=cancel_url or settings.BILLING_CHECKOUT_CANCEL_URL,
+        **({"discount_code": discount_code} if discount_code else {}),
     )
 
     logger.info(

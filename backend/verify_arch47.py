@@ -350,8 +350,12 @@ def check_migration(text: str, revs: Optional[dict] = None) -> None:
     assert revs.get(A47) == f'"{A46}"', f"{A47} revises {revs.get(A47)}"
     # ARCH48-S1:t2-widened. ARCH-48 inserts its migration between ARCH-47 and the contract step.
     # ARCH49-S1:t2-widened. ARCH-49 inserts its migration between ARCH-48 and the contract step.
-    assert revs.get(STEP3) in (f'"{A47}"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"'), \
-        f"the contract step revises {revs.get(STEP3)}, expected {A47}, arch48 or arch49"
+    # ARCH50-S1:t2-widened. ARCH-50 inserts its migration between ARCH-49 and the contract step.
+    assert revs.get(STEP3) in (f'"{A47}"', '"arch48_step1_collaborative_review"', '"arch49_step1_process_intelligence"', '"arch50_step1_sovereign_revops"'), \
+        f"the contract step revises {revs.get(STEP3)}, expected {A47}, arch48, arch49 or arch50"
+    if revs.get(STEP3) == '"arch50_step1_sovereign_revops"':
+        assert revs.get("arch50_step1_sovereign_revops") == '"arch49_step1_process_intelligence"', "arch50 must revise arch49"
+        assert revs.get("arch49_step1_process_intelligence") == '"arch48_step1_collaborative_review"', "arch49 must revise arch48"
     if revs.get(STEP3) == '"arch48_step1_collaborative_review"':
         assert revs.get("arch48_step1_collaborative_review") == f'"{A47}"', "arch48 must revise arch47"
     if revs.get(STEP3) == '"arch49_step1_process_intelligence"':
@@ -1016,7 +1020,16 @@ def check_egress() -> dict:
 
     out = {}
     src = t("http")
-    assert "SSRFSafeHTTPClient(connect_timeout=min(10.0, timeout), total_timeout=timeout)" in src, "not the SSRF-safe client"
+    # ARCH50-S1:n1-widened-47. ARCH-50 builds the client through the egress gate: `egress.http_client` returns its
+    # GuardedHTTPClient, a subclass of SSRFSafeHTTPClient that asks the gate before connecting (proved below too).
+    assert ("SSRFSafeHTTPClient(connect_timeout=min(10.0, timeout), total_timeout=timeout)" in src
+            or "egress.http_client(egress.ERP_HTTP, connect_timeout=min(10.0, timeout), total_timeout=timeout)" in src), \
+        "not the SSRF-safe client"
+    if "egress.http_client(" in src:
+        from app.core import egress as _egress
+
+        assert issubclass(_egress.GuardedHTTPClient, ssrf_client.SSRFSafeHTTPClient), "the gate's client is not SSRF-safe"
+        assert isinstance(H._default_client_factory(5.0), ssrf_client.SSRFSafeHTTPClient), "not the SSRF-safe client"
     assert "import requests" not in src and "import httpx" not in src and "urllib.request" not in src, "a raw HTTP client"
     for key in ("http", "sftp", "jsonapi", "service", "sources"):
         text = t(key)
@@ -2809,7 +2822,7 @@ def db_layer(rec: Recorder, evidence: dict, mutate: bool) -> None:
             outbox = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_outbox_events_visibility_vocabulary'")).scalar_one()
             view = conn.execute(sa.text("SELECT pg_get_viewdef('review_queue_items'::regclass)")).scalar_one()
             ledger = conn.execute(sa.text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='uq_erp_postings_ledger'")).scalar_one()
-        assert current in ([A47], [STEP3], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"]), f"alembic current is {current}; run run_arch47.ps1"  # ARCH48-S1:head-widened-47  ARCH49-S1:head-widened-47
+        assert current in ([A47], [STEP3], ["arch48_step1_collaborative_review"], ["arch49_step1_process_intelligence"], ["arch50_step1_sovereign_revops"]), f"alembic current is {current}; run run_arch47.ps1"  # ARCH48-S1:head-widened-47  ARCH49-S1:head-widened-47  ARCH50-S1:head-widened-47
         assert not [x for x in TABLES if x not in tables], "ARCH-47 tables missing"
         assert "POSTING" in kinds and "trigger.posting.failed" in outbox and "POSTING_EXCEPTION" in view
         assert "UNIQUE (target_id, object_kind, source_kind, source_id)" in ledger
@@ -3017,7 +3030,11 @@ def mutations() -> list[tuple[str, Callable[[], None]]]:
             '    tolerance = Decimal("0.01")', "acknowledge"))], check_rest_acks)),
         ("MS22 backoff without jitter or ceiling", under([(SV, "backoff_seconds", no_jitter)], check_backoff)),
         ("MS23 backoff ignores Retry-After", under([(SV, "backoff_seconds", ignores_retry_after)], check_backoff)),
-        ("MS24 ERP calls through a raw HTTP client", _with_file("http", "SSRFSafeHTTPClient(connect_timeout=min(10.0, timeout), total_timeout=timeout)",
+        # ARCH50-S1:ms24-widened-47 -- the anchor is whichever form the client line has (ARCH-50: the egress gate's)
+        ("MS24 ERP calls through a raw HTTP client", _with_file("http", (
+            "egress.http_client(egress.ERP_HTTP, connect_timeout=min(10.0, timeout), total_timeout=timeout)"
+            if "egress.http_client(" in t("http") else
+            "SSRFSafeHTTPClient(connect_timeout=min(10.0, timeout), total_timeout=timeout)"),
                                                                "__import__('httpx').Client(timeout=timeout)", check_egress)),
         ("MS25 secrets recorded unscrubbed", under([(H, "scrub", lambda text: text)], check_egress)),
         ("MS26 SFTP accepts an unpinned host key", under([(SF, "settings", variant("sftp", '    if not re.fullmatch(r"SHA256:[A-Za-z0-9+/]{43}", pin):',

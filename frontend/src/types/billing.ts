@@ -204,6 +204,10 @@ export interface CheckoutSessionRequest {
   readonly price_id?: string;
   readonly success_url?: string;
   readonly cancel_url?: string;
+  // ARCH50-S2:checkout-interval — annual billing, INR, a promo code (all optional).
+  readonly interval?: "month" | "year";
+  readonly currency?: "USD" | "INR";
+  readonly promo_code?: string;
 }
 
 export interface PortalSessionRequest {
@@ -245,6 +249,17 @@ export interface PlanOption {
   readonly is_priced: boolean;
   readonly entitlements: readonly PlanEntitlement[];
   readonly notes: string | null;
+  // ARCH50-S2:plan-prices — every (interval, currency) the plan is sold in.
+  readonly prices?: readonly PlanPriceOption[];
+}
+
+/** ARCH50-S2:plan-prices. `unit_amount` in minor units; `price_id` null = not sold self-serve (contact sales). */
+export interface PlanPriceOption {
+  readonly interval: string;
+  readonly currency: string;
+  readonly unit_amount: number;
+  readonly price_id: string | null;
+  readonly source: string;
 }
 
 export interface PlanListResponse {

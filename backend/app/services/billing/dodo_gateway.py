@@ -359,7 +359,7 @@ class DodoGateway:
         never requires the HTTP client to be installed on a deployment that
         runs Stripe.
         """
-        import httpx
+        from app.core import egress  # ARCH50-S1:egress-billing
 
         url = f"{self._api_base}{path}"
         headers = {
@@ -370,13 +370,15 @@ class DodoGateway:
             headers["Content-Type"] = "application/json"
 
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            with egress.httpx_client(egress.BILLING, timeout=self._timeout) as client:
                 response = client.request(
                     method,
                     url,
                     json=dict(body) if body is not None else None,
                     headers=headers,
                 )
+        except egress.EgressDenied:
+            raise  # refused by the gate: permanent, not a transient outage to retry
         except Exception as exc:  # noqa: BLE001
             raise GatewayTransientError(
                 f"Dodo API unreachable at {path}: {exc}"
@@ -627,6 +629,7 @@ class DodoGateway:
         client_reference_id: Optional[str] = None,
         metadata: Optional[Mapping[str, str]] = None,
         idempotency_key: Optional[str] = None,
+        discount_code: Optional[str] = None,
     ) -> EphemeralSession:
         if not price_id:
             raise GatewayNotConfiguredError(
@@ -658,6 +661,8 @@ class DodoGateway:
             body["customer"] = {"customer_id": customer_id}
         elif customer_email:
             body["customer"] = {"email": customer_email}
+        if discount_code:
+            body["discount_code"] = discount_code  # ARCH50-S1:checkout-discount
 
         payload = self._post("/checkouts", body)
 

@@ -68,6 +68,12 @@ def provision_organization(
     currency: str = "USD",
     date_format: str = "YYYY-MM-DD",
 ) -> ProvisionedOrganization:
+    # ARCH50-S1:licence-capacity. A sovereign deployment creates an organization only under a valid licence with
+    # room for it (a no-op on the hosted edition).
+    from app.services.sovereign import licence as _licence
+
+    _licence.require_capacity(db, operation="organization.create", adding_organizations=1)
+
     owned = organization_crud.count_organizations_owned_by_user(
         db, user_id=user_id
     )

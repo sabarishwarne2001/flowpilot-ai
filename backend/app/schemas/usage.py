@@ -177,6 +177,17 @@ class PlanEntitlement(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
 
+class PlanPriceOption(BaseModel):
+    """ARCH50-S1:plan-prices. One way to buy a plan: interval x currency, from the published plan price book (or
+    the tier version's own price). `unit_amount` in minor units; `price_id` None = not sold self-serve."""
+
+    interval: str
+    currency: str
+    unit_amount: int
+    price_id: Optional[str] = None
+    source: str
+
+
 class PlanOption(BaseModel):
     key: str
     display_name: str
@@ -198,6 +209,8 @@ class PlanOption(BaseModel):
     is_priced: bool = False
     entitlements: list[PlanEntitlement] = Field(default_factory=list)
     notes: Optional[str] = None
+    #: ARCH50-S1:plan-prices. Every interval and currency this plan is sold in (annual, INR).
+    prices: list[PlanPriceOption] = Field(default_factory=list)
 
     model_config = ConfigDict(protected_namespaces=())
 

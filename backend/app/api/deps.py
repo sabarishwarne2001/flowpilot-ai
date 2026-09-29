@@ -714,10 +714,25 @@ async def require_api_key(
     decision: RateLimitDecision = consume_rate_limit(request, policy)
 
     if not decision.allowed:
+        # ARCH50-S1:rate-limit-429-headers (GA-2, verify_arch21 G16). This 429 short-circuits
+        # PublicApiRateLimitMiddleware, so it carries the rate limit headers itself: a client
+        # that backs off on X-RateLimit-* / RateLimit-* sees them on the refusal too. The names
+        # are app.middleware.public_rate_limit.RATE_LIMIT_HEADERS (CORS exposes them).
+        reset = str(int(decision.reset_seconds))
+        limit = str(int(policy.limit))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Rate limit exceeded for tier {tier.value} ({policy.limit} requests/minute).",
-            headers={"Retry-After": str(int(decision.reset_seconds))},
+            headers={
+                "Retry-After": reset,
+                "X-RateLimit-Limit": limit,
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": reset,
+                "RateLimit-Limit": limit,
+                "RateLimit-Remaining": "0",
+                "RateLimit-Reset": reset,
+                "X-RateLimit-Tier": tier.value,
+            },
         )
 
     # ARCH30-T4F:api-key-billing-gate — A6.

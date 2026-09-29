@@ -1,0 +1,547 @@
+"""Job handler registration across ARCH-10 through ARCH-16."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from app.services import job_service
+
+logger = logging.getLogger("app.workers.handlers")
+
+ARCH10_JOB_TYPES: frozenset[str] = frozenset(
+    {"document.extract", "document.enrich", "storage.sample"}
+)
+ARCH11_JOB_TYPES: frozenset[str] = frozenset({"knowledge.reindex"})
+ARCH12_JOB_TYPES: frozenset[str] = frozenset({"notification.deliver"})
+ARCH14_JOB_TYPES: frozenset[str] = frozenset(
+    {"usage.rollup", "usage.seal", "usage.reconcile"}
+)
+ARCH13_JOB_TYPES: frozenset[str] = frozenset(
+    {"automation.execute", "document.verify"}
+)
+ARCH15_JOB_TYPES: frozenset[str] = frozenset(
+    {
+        "billing.reconcile",
+        "billing.seat_sync",
+        "billing.seat_drift",
+        "billing.assemble_invoice",
+        "billing.dunning_sweep",
+        "billing.addon_grace_sweep",
+    }
+)
+ARCH16_JOB_TYPES: frozenset[str] = frozenset(
+    {
+        "identity.recheck_domains",
+        "identity.purge_assertion_payloads",
+        "identity.sweep_replay_guard",
+        "identity.sweep_auth_requests",
+    }
+)
+ARCH25_JOB_TYPES: frozenset[str] = frozenset(
+    {"domain.verify_dns", "tls.renew_sweep"}
+)
+ARCH26_JOB_TYPES: frozenset[str] = frozenset(
+    {"analytics.export_sync", "analytics.warehouse_push"}
+)
+ARCH27_JOB_TYPES: frozenset[str] = frozenset(
+    {"partner.rev_share_compute", "partner.rev_share_seal"}
+)
+ARCH31_JOB_TYPES: frozenset[str] = frozenset({"procurement.score"})
+ARCH32_JOB_TYPES: frozenset[str] = frozenset(
+    {"redaction.detect", "redaction.apply"}
+)
+ARCH34_JOB_TYPES: frozenset[str] = frozenset(
+    {"anomaly.scan_document", "anomaly.nightly"}
+)
+ARCH35_JOB_TYPES: frozenset[str] = frozenset(
+    {"calibration.harvest", "calibration.refit"}
+)
+# ARCH38-S1:ingestion-job-types.
+ARCH38_JOB_TYPES: frozenset[str] = frozenset(
+    {"batch.expand_archive", "work_items.bulk", "ingestion.sweep_sessions"}
+)
+# ARCH42-S1:entity-job-types.
+ARCH42_JOB_TYPES: frozenset[str] = frozenset({"entities.resolve_document"})
+# ARCH43-S1:packet-job-types. Detection on LIGHT, apply (pikepdf) on OCR.
+ARCH43_JOB_TYPES: frozenset[str] = frozenset(
+    {"packets.detect_boundaries", "packets.apply_split", "cases.assemble_document"}
+)
+# ARCH44-S1:table-job-types. Extraction reads the PDF: OCR profile.
+ARCH44_JOB_TYPES: frozenset[str] = frozenset({"tables.extract_document"})
+# ARCH45-S1:corroboration-job-types. Clause embeddings (SentenceTransformer): ENRICH profile.
+ARCH45_JOB_TYPES: frozenset[str] = frozenset({"corroboration.run"})
+# ARCH46-S1:obligation-job-types. Reading obligations is text and date arithmetic: LIGHT profile.
+ARCH46_JOB_TYPES: frozenset[str] = frozenset({"obligations.extract_document"})
+# ARCH47-S1:erp-job-types. Delivering a posting is network and file work (HTTPS, SFTP): LIGHT profile.
+ARCH47_JOB_TYPES: frozenset[str] = frozenset({"erp.deliver_posting"})
+# ARCH49-S1:process-job-types. The event log, SLA prediction and the exception agent: LIGHT profile.
+ARCH49_JOB_TYPES: frozenset[str] = frozenset({"process.sweep_workspace"})
+#: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
+HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
+
+#: Every job type this package claims to register, by phase.
+#:
+#: ARCH-27 carried-forward resolution 2. Before this, ARCH16_JOB_TYPES,
+#: ARCH25_JOB_TYPES and ARCH26_JOB_TYPES were module-level exports with zero
+#: consumers — the recurring "orphaned guard" defect class in this codebase:
+#: correct declarations that no code path reads, invisible to linters, and
+#: therefore free to drift from the registry they claim to describe.
+#:
+#: `register_all()` now asserts this union equals `_HANDLERS.keys()`, so a
+#: phase constant that falls out of step with the handler table fails loudly
+#: at import instead of silently documenting a lie.
+ALL_PHASE_JOB_TYPES: frozenset[str] = (
+    ARCH10_JOB_TYPES
+    | ARCH11_JOB_TYPES
+    | ARCH12_JOB_TYPES
+    | ARCH13_JOB_TYPES
+    | ARCH14_JOB_TYPES
+    | ARCH15_JOB_TYPES
+    | ARCH16_JOB_TYPES
+    | ARCH25_JOB_TYPES
+    | ARCH26_JOB_TYPES
+    | ARCH27_JOB_TYPES
+    | ARCH31_JOB_TYPES
+    | ARCH32_JOB_TYPES
+    | ARCH34_JOB_TYPES
+    | ARCH35_JOB_TYPES
+    | ARCH38_JOB_TYPES
+    | ARCH42_JOB_TYPES
+    | ARCH43_JOB_TYPES
+    | ARCH44_JOB_TYPES
+    | ARCH45_JOB_TYPES
+    | ARCH46_JOB_TYPES
+    | ARCH47_JOB_TYPES
+    | ARCH49_JOB_TYPES
+    | HARDENING_JOB_TYPES
+)
+
+
+def _document_extract(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ocr import handle_document_extract
+    return handle_document_extract(payload)
+
+
+def _document_enrich(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.enrich import handle_document_enrich
+    return handle_document_enrich(payload)
+
+
+def _storage_sample(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.services.storage_sampler_service import handle_storage_sample
+    return handle_storage_sample(payload)
+
+
+def _knowledge_reindex(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.knowledge_reindex import handle_knowledge_reindex
+    return handle_knowledge_reindex(payload)
+
+
+def _notification_deliver(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.notify import handle_notification_deliver
+    return handle_notification_deliver(payload)
+
+
+def _usage_rollup(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.rollup import handle_usage_rollup
+    return handle_usage_rollup(payload)
+
+
+def _usage_seal(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.rollup import handle_usage_seal
+    return handle_usage_seal(payload)
+
+
+def _usage_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.reconcile import handle_usage_reconcile
+    return handle_usage_reconcile(payload)
+
+
+def _automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.automation import handle_automation_execute
+    return handle_automation_execute(payload)
+
+
+def _document_verify(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.verification import handle_document_verify
+    return handle_document_verify(payload)
+
+
+def _billing_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_reconcile
+    return handle_billing_reconcile(payload)
+
+
+def _billing_seat_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_seat_sync
+    return handle_billing_seat_sync(payload)
+
+
+def _billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_seat_drift
+    return handle_billing_seat_drift(payload)
+
+
+def _billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_assemble_invoice
+    return handle_billing_assemble_invoice(payload)
+
+
+def _billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_dunning_sweep
+    return handle_billing_dunning_sweep(payload)
+
+
+def _billing_addon_grace_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_addon_grace_sweep
+    return handle_billing_addon_grace_sweep(payload)
+
+
+def _identity_recheck_domains(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_recheck_domains
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_recheck_domains(db, payload)
+
+
+def _identity_purge_assertions(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_purge_assertion_payloads
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_purge_assertion_payloads(db, payload)
+
+
+def _identity_sweep_replay_guard(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_sweep_replay_guard
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_sweep_replay_guard(db, payload)
+
+
+def _identity_sweep_auth_requests(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.identity_jobs import handle_sweep_auth_requests
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_sweep_auth_requests(db, payload)
+
+
+def _domain_verify_dns(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.branding import handle_domain_verify_dns
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_domain_verify_dns(db, payload)
+
+
+def _tls_renew_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.branding import handle_tls_renew_sweep
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_tls_renew_sweep(db, payload)
+
+
+def _redaction_detect(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.redaction import handle_redaction_detect
+    return handle_redaction_detect(payload)
+
+
+def _redaction_apply(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.redaction import handle_redaction_apply
+    return handle_redaction_apply(payload)
+
+
+def _analytics_export_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.analytics import handle_export_sync
+    return handle_export_sync(payload)
+
+
+def _analytics_warehouse_push(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.analytics import handle_warehouse_push
+    return handle_warehouse_push(payload)
+
+
+def _procurement_score(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.procurement import handle_procurement_score
+    return handle_procurement_score(payload)
+
+
+def _partner_rev_share_compute(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.partner import handle_rev_share_compute
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_rev_share_compute(db, payload)
+
+
+def _partner_rev_share_seal(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.partner import handle_rev_share_seal
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_rev_share_seal(db, payload)
+
+
+def _anomaly_scan_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.radar import handle_anomaly_scan_document
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        result = handle_anomaly_scan_document(db, payload)
+        db.commit()
+        return result
+
+
+def _anomaly_nightly(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.radar import handle_anomaly_nightly
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        # The nightly handler commits per workspace itself, so one tenant's
+        # malformed extraction cannot roll back another tenant's findings.
+        return handle_anomaly_nightly(db, payload)
+
+
+def _calibration_harvest(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.calibration import handle_calibration_harvest
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        # Commits per organization itself: one tenant's failure must not roll
+        # back another tenant's labels.
+        return handle_calibration_harvest(db, payload)
+
+
+def _calibration_refit(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.calibration import handle_calibration_refit
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        return handle_calibration_refit(db, payload)
+
+
+def _batch_expand_archive(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_batch_expand_archive
+    return handle_batch_expand_archive(payload)
+
+
+def _work_items_bulk(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_work_items_bulk
+    return handle_work_items_bulk(payload)
+
+
+def _pipeline_sweep_stuck(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.dead_letter import handle_pipeline_sweep_stuck
+    return handle_pipeline_sweep_stuck(payload)
+
+
+def _ingestion_sweep_sessions(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.ingestion import handle_sweep_upload_sessions
+    return handle_sweep_upload_sessions(payload)
+
+
+def _entities_resolve_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.entities import handle_entities_resolve_document
+    return handle_entities_resolve_document(payload)
+
+
+def _packets_detect_boundaries(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_detect_boundaries
+    return handle_detect_boundaries(payload)
+
+
+def _cases_assemble_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_assemble_document
+    return handle_assemble_document(payload)
+
+
+def _packets_apply_split(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.packets import handle_apply_split
+    return handle_apply_split(payload)
+
+
+def _tables_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.tables import handle_extract_document
+    return handle_extract_document(payload)
+
+
+def _corroboration_run(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.corroboration import handle_run
+    return handle_run(payload)
+
+
+def _erp_deliver_posting(payload: dict[str, Any]) -> dict[str, Any]:
+    # ARCH47-S1:erp-handler-fn
+    from app.workers.handlers.erp import handle_deliver_posting
+    return handle_deliver_posting(payload)
+
+
+def _process_sweep_workspace(payload: dict[str, Any]) -> dict[str, Any]:
+    # ARCH49-S1:process-handler-fn
+    from app.workers.handlers.process import handle_sweep_workspace
+    return handle_sweep_workspace(payload)
+
+
+def _obligations_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.obligations import handle_extract_document
+    return handle_extract_document(payload)
+
+
+_HANDLERS = {
+    "document.extract": _document_extract,
+    "document.enrich": _document_enrich,
+    "storage.sample": _storage_sample,
+    "knowledge.reindex": _knowledge_reindex,
+    "notification.deliver": _notification_deliver,
+    "usage.rollup": _usage_rollup,
+    "usage.seal": _usage_seal,
+    "usage.reconcile": _usage_reconcile,
+    "automation.execute": _automation_execute,
+    "document.verify": _document_verify,
+    "billing.reconcile": _billing_reconcile,
+    "billing.seat_sync": _billing_seat_sync,
+    "billing.seat_drift": _billing_seat_drift,
+    "billing.assemble_invoice": _billing_assemble_invoice,
+    "billing.dunning_sweep": _billing_dunning_sweep,
+    "billing.addon_grace_sweep": _billing_addon_grace_sweep,
+    "identity.recheck_domains": _identity_recheck_domains,
+    "identity.purge_assertion_payloads": _identity_purge_assertions,
+    "identity.sweep_replay_guard": _identity_sweep_replay_guard,
+    "identity.sweep_auth_requests": _identity_sweep_auth_requests,
+    # ARCH-25. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "domain.verify_dns": _domain_verify_dns,
+    "tls.renew_sweep": _tls_renew_sweep,
+    # ARCH-26. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "analytics.export_sync": _analytics_export_sync,
+    "analytics.warehouse_push": _analytics_warehouse_push,
+    # ARCH-27. Both are also listed on the LIGHT profile in
+    # app/workers/profiles.py; a handler here with no profile there is a job
+    # that enqueues cleanly and never runs.
+    "partner.rev_share_compute": _partner_rev_share_compute,
+    "partner.rev_share_seal": _partner_rev_share_seal,
+    # ARCH-31. Also listed on the LIGHT profile in
+    # app/workers/profiles.py and in DEFAULT_SCHEDULE in
+    # app/workers/scheduler.py. A handler here with no profile there
+    # is a job that enqueues cleanly and never runs — and
+    # assert_imports_match_profile() raises ProfileError at every
+    # worker's startup on a handler no profile claims, so registering
+    # this without the profile entry stops the entire fleet booting.
+    "procurement.score": _procurement_score,
+    # ARCH-32. Also claimed by the OCR profile in
+    # app/workers/profiles.py. NOT in DEFAULT_SCHEDULE: neither job is
+    # recurring, and re-running an apply on a schedule would re-render
+    # and re-upload a document somebody may have cancelled. A handler
+    # here with no profile there is a job that enqueues cleanly and
+    # never runs -- and assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile
+    # claims, so registering these without the profile entry stops the
+    # entire fleet booting.
+    "redaction.detect": _redaction_detect,
+    "redaction.apply": _redaction_apply,
+    # ARCH34-S2:radar-handlers. Both are also listed on the LIGHT profile
+    # in app/workers/profiles.py, and `anomaly.nightly` is in
+    # DEFAULT_SCHEDULE in app/workers/scheduler.py. A handler here with no
+    # profile there is a job that enqueues cleanly and never runs — and
+    # assert_imports_match_profile() raises ProfileError at every worker's
+    # startup on a handler no profile claims, so registering these without
+    # the profile entry stops the entire fleet booting.
+    "anomaly.scan_document": _anomaly_scan_document,
+    "anomaly.nightly": _anomaly_nightly,
+    # ARCH35-S1:calibration-handlers. Both are also on the LIGHT profile in
+    # app/workers/profiles.py and in DEFAULT_SCHEDULE in
+    # app/workers/scheduler.py. assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "calibration.harvest": _calibration_harvest,
+    "calibration.refit": _calibration_refit,
+    # ARCH38-S1:ingestion-handlers. All three are also on the LIGHT profile in
+    # app/workers/profiles.py, and `ingestion.sweep_sessions` is in
+    # DEFAULT_SCHEDULE in app/workers/scheduler.py.
+    # assert_imports_match_profile() raises ProfileError at every worker's
+    # startup on a handler no profile claims, so registering these without the
+    # profile entry stops the entire fleet booting.
+    "batch.expand_archive": _batch_expand_archive,
+    "work_items.bulk": _work_items_bulk,
+    "ingestion.sweep_sessions": _ingestion_sweep_sessions,
+    "pipeline.sweep_stuck": _pipeline_sweep_stuck,
+    # ARCH42-S1:entity-handler. Also on the LIGHT profile in
+    # app/workers/profiles.py; assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "entities.resolve_document": _entities_resolve_document,
+    # ARCH43-S1:packet-handlers. detect on the LIGHT profile, apply on OCR
+    # (app/workers/profiles.py); assert_imports_match_profile() raises
+    # ProfileError at every worker's startup on a handler no profile claims.
+    "packets.detect_boundaries": _packets_detect_boundaries,
+    "packets.apply_split": _packets_apply_split,
+    "cases.assemble_document": _cases_assemble_document,
+    # ARCH44-S1:table-handler. On the OCR profile (app/workers/profiles.py).
+    "tables.extract_document": _tables_extract_document,
+    # ARCH45-S1:corroboration-handler. On the ENRICH profile (app/workers/profiles.py).
+    "corroboration.run": _corroboration_run,
+    # ARCH46-S1:obligation-handler. On the LIGHT profile (app/workers/profiles.py).
+    "obligations.extract_document": _obligations_extract_document,
+    # ARCH47-S1:erp-handler. On the LIGHT profile (app/workers/profiles.py).
+    "erp.deliver_posting": _erp_deliver_posting,
+    # ARCH49-S1:process-handler. On the LIGHT profile (app/workers/profiles.py).
+    "process.sweep_workspace": _process_sweep_workspace,
+}
+
+
+def _assert_vocabulary_matches_registry() -> None:
+    """ARCH-27 CF2. Give the per-phase constants a consumer.
+
+    A frozenset nothing reads is a comment with a type annotation. Comparing
+    the union against the registry means a job type added to one and not the
+    other raises here, at import, naming both sides — rather than surfacing
+    weeks later as a queue that never drains.
+    """
+    registered = frozenset(_HANDLERS)
+    undeclared = registered - ALL_PHASE_JOB_TYPES
+    unregistered = ALL_PHASE_JOB_TYPES - registered
+    if undeclared or unregistered:
+        raise RuntimeError(
+            "job type vocabulary and handler registry disagree. "
+            f"registered but undeclared: {sorted(undeclared)}; "
+            f"declared but unregistered: {sorted(unregistered)}. "
+            "Update the ARCHnn_JOB_TYPES constant for the owning phase."
+        )
+
+
+_assert_vocabulary_matches_registry()
+
+
+def register_all(*, replace: bool = False) -> list[str]:
+    registered: list[str] = []
+    for job_type, handler in _HANDLERS.items():
+        existing = job_service.JOB_HANDLERS.get(job_type)
+        if existing is handler:
+            continue
+        if existing is not None:
+            if not replace:
+                raise job_service.JobServiceError(
+                    f"job_type {job_type!r} is already registered to {existing!r}."
+                )
+            job_service.JOB_HANDLERS[job_type] = handler
+        else:
+            job_service.register_handler(job_type, handler)
+        registered.append(job_type)
+
+    if registered:
+        logger.info("jobs.handlers_registered", extra={"job_types": registered})
+    return registered
+
+
+__all__ = [
+    "ARCH10_JOB_TYPES",
+    "ARCH11_JOB_TYPES",
+    "ARCH12_JOB_TYPES",
+    "ARCH13_JOB_TYPES",
+    "ARCH14_JOB_TYPES",
+    "ARCH15_JOB_TYPES",
+    "ARCH16_JOB_TYPES",
+    "ARCH25_JOB_TYPES",
+    "ARCH26_JOB_TYPES",
+    "ARCH27_JOB_TYPES",
+    "ARCH31_JOB_TYPES",
+    "ARCH32_JOB_TYPES",
+    "ARCH34_JOB_TYPES",
+    "ARCH35_JOB_TYPES",
+    "ALL_PHASE_JOB_TYPES",
+    "register_all",
+]

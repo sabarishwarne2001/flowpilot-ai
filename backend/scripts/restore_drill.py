@@ -197,7 +197,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--target-url", help="server to restore on (default DATABASE_URL's server)")
     parser.add_argument("--keep", action="store_true", help="keep the scratch database")
     parser.add_argument("--json", help="write the drill report here")
+    # ARCH50-S1:restore-drill-record -- the measured backup age (RPO) and restore time (RTO) go to dr_drills
+    # (kind RESTORE), where the operator console compares them with the stated objectives.
+    parser.add_argument("--record", action="store_true", help="record the drill in dr_drills (kind RESTORE)")
     args = parser.parse_args(argv)
+    started_at = datetime.now(timezone.utc)
 
     try:
         report = run_drill(
@@ -223,7 +227,27 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"  {problem}", file=sys.stderr)
     if args.json:
         Path(args.json).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    if args.record:
+        report["drill_id"] = record(report, started_at=started_at)
     return 0 if report.get("ok") else 1
+
+
+def record(report: dict[str, Any], *, started_at: datetime) -> str:
+    """ARCH50-S1:restore-drill-record. One dr_drills row: PASSED only when every table matched."""
+    backend = str(Path(__file__).resolve().parents[1])
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+    from app.db.session import SessionLocal
+    from app.services.sovereign import dr
+
+    with SessionLocal() as db:
+        drill_id = dr.record_drill(
+            db, kind="RESTORE", outcome="PASSED" if report.get("ok") else "FAILED", started_at=started_at,
+            finished_at=datetime.now(timezone.utc),
+            rpo_seconds=report.get("backup_age_seconds"), rto_seconds=report.get("restore_seconds"),
+            details={k: report.get(k) for k in ("backup", "tables", "alembic_heads", "problems", "error")})
+        db.commit()
+    return str(drill_id)
 
 
 if __name__ == "__main__":

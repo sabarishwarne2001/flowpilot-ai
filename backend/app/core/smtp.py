@@ -46,6 +46,10 @@ class SMTPConfig(BaseModel):
     #: metadata ranges, and the connection is pinned to the checked address.
     trusted: bool = False
 
+    #: ARCH50-S1:smtp-attribution. The organization a tenant SMTP connection is made for, so its egress lockdown
+    #: applies (None for the platform relay, which is an operator destination).
+    organization_id: uuid.UUID | None = None
+
     @property
     def sender_address(self) -> str:
         return self.from_email or self.smtp_username

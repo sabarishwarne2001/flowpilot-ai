@@ -51,6 +51,15 @@ def lookup_txt(domain: str, *, subdomain: str | None = None) -> TxtLookupResult:
     resolver = dns.resolver.Resolver(configure=False)
     configured = getattr(settings, "DNS_RESOLVERS", "1.1.1.1,8.8.8.8")
     resolver.nameservers = [s.strip() for s in str(configured).split(",") if s.strip()]
+    # ARCH50-S1:egress-dns. Every resolver is asked about through the egress gate first.
+    from app.core import egress
+
+    try:
+        for nameserver in resolver.nameservers:
+            egress.guard(egress.DNS, nameserver, 53)
+    except egress.EgressDenied as exc:
+        result.error = f"refused by the egress gate: {exc}"
+        return result
     timeout = float(getattr(settings, "DNS_TIMEOUT_S", 5))
     resolver.timeout = timeout
     resolver.lifetime = timeout

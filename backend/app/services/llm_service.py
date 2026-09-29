@@ -7,6 +7,7 @@ ARCH-14 Step 1 & 6: Platform-owned pricing and Vertex billing label guard.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import uuid
@@ -301,9 +302,15 @@ class LLMService:
             # stalled platform call held a worker for the SDK default (minutes);
             # llm_resilience's deadline is only checked BETWEEN attempts. BYOK
             # clients (provider_clients._build_groq) already set this.
+            # ARCH50-S1:egress-llm. A platform client serves every organization: its transport asks the egress
+            # gate on each request for the organization the call is attributed to (_execute_query / the job loop).
+            from app.core import egress
+
             self._groq_client = Groq(
                 api_key=settings.GROQ_API_KEY.get_secret_value(),
                 timeout=float(settings.LLM_REQUEST_DEADLINE_SECONDS),
+                http_client=egress.httpx_client(egress.LLM_PROVIDER,
+                                                timeout=float(settings.LLM_REQUEST_DEADLINE_SECONDS)),
             )
         return self._groq_client
 
@@ -319,10 +326,14 @@ class LLMService:
 
             # HARDENING-T1:llm-deadline. Same reasoning as the Groq client;
             # HttpOptions.timeout is in milliseconds.
+            from app.core import egress
+
             self._gemini_client = genai.Client(
                 api_key=settings.GEMINI_API_KEY.get_secret_value(),
                 http_options=genai_types.HttpOptions(
-                    timeout=int(float(settings.LLM_REQUEST_DEADLINE_SECONDS) * 1000)
+                    timeout=int(float(settings.LLM_REQUEST_DEADLINE_SECONDS) * 1000),
+                    httpx_client=egress.httpx_client(egress.LLM_PROVIDER,
+                                                     timeout=float(settings.LLM_REQUEST_DEADLINE_SECONDS)),
                 ),
             )
         return self._gemini_client
@@ -599,7 +610,35 @@ class LLMService:
         allow_failover: bool = True,
         deadline_seconds: float | None = None,
         max_attempts: int | None = None,
+        organization_id: uuid.UUID | None = None,
     ) -> tuple[str, TokenUsage]:
+        # ARCH50-S1:local-llm. The operator's local model: EXCLUSIVE serves every call whatever the tenant
+        # selected; FALLBACK serves a call the configured provider failed or the egress gate refused. Calls are
+        # attributed to the organization so its egress lockdown governs the provider hosts.
+        from app.core import egress
+        from app.services.sovereign import local_llm
+
+        attribution = (egress.attributed(organization_id) if organization_id is not None
+                       else contextlib.nullcontext())
+
+        def call_local(_provider: str = "local") -> tuple[str, TokenUsage]:
+            return local_llm.complete(prompt, temperature=temperature,
+                                      max_tokens=getattr(ai_settings, "max_output_tokens", None),
+                                      top_p=getattr(ai_settings, "top_p", None))
+
+        if local_llm.is_exclusive():
+            try:
+                with attribution:
+                    return llm_resilience.execute(call_local, provider="local", fallback_provider=None,
+                                                  deadline_seconds=deadline_seconds,
+                                                  max_attempts=max_attempts).value
+            except LLMPermanentError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail="The AI request could not be processed as sent.") from exc
+            except LLMUnavailable as exc:
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                    detail="The local AI model is temporarily unavailable. Please try again.") from exc
+
         # HARDENING-T1:D1. `allow_failover=False` exists for the AI settings
         # connection test: a test that silently failed over would report the
         # fallback provider's success as the configured provider's. Every
@@ -607,6 +646,17 @@ class LLMService:
         configured = self._validate_provider(ai_settings=ai_settings)
 
         def call(provider: str) -> tuple[str, TokenUsage]:
+            try:
+                return call_provider(provider)
+            except Exception as exc:  # noqa: BLE001 -- the SDKs wrap the gate's refusal in their connection error
+                refusal = egress.refusal_in(exc)
+                if refusal is None:
+                    raise
+                if local_llm.is_fallback():
+                    return call_local()
+                raise egress.EgressDenied(refusal.decision) from None  # permanent: never retried as an outage
+
+        def call_provider(provider: str) -> tuple[str, TokenUsage]:
             client = byok_client if provider == configured else None
 
             if provider in _COMPLETION_DISPATCH:
@@ -645,21 +695,27 @@ class LLMService:
             raise ValueError(f"No completion path for provider '{provider}'.")
 
         try:
-            outcome = llm_resilience.execute(
-                call,
-                provider=configured,
-                fallback_provider=(
-                    settings.LLM_FALLBACK_PROVIDER if allow_failover else None
-                ),
-                deadline_seconds=deadline_seconds,
-                max_attempts=max_attempts,
-            )
+            with attribution:
+                outcome = llm_resilience.execute(
+                    call,
+                    provider=configured,
+                    fallback_provider=(
+                        settings.LLM_FALLBACK_PROVIDER if allow_failover else None
+                    ),
+                    deadline_seconds=deadline_seconds,
+                    max_attempts=max_attempts,
+                )
         except LLMPermanentError as exc:
+            if isinstance(exc.__cause__, egress.EgressDenied):
+                raise exc.__cause__  # 403 EGRESS_DENIED: the gate refused the provider, the request is fine
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="The AI request could not be processed as sent.",
             ) from exc
         except LLMUnavailable as exc:
+            if local_llm.is_fallback() and allow_failover:
+                with attribution:
+                    return call_local()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="The AI service is temporarily unavailable. Please try again.",
@@ -720,6 +776,7 @@ class LLMService:
                 temperature=temperature,
                 ai_settings=effective_settings,
                 byok_client=byok_client,
+                organization_id=organization_id,
             )
 
         if reservation is not None and db is not None:
@@ -1037,6 +1094,7 @@ class LLMService:
                         temperature=effective_settings.temperature,
                         ai_settings=effective_settings,
                         byok_client=byok_client,
+                        organization_id=organization_id,
                     )
                 break
             except Exception as exc:  # noqa: BLE001 — re-raised unless too large

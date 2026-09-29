@@ -148,6 +148,9 @@ def list_plans(
     )
 
     tiers = quota_service.list_published_tiers(db, at=moment)
+    from app.services.revops import price_books as _price_books
+
+    book_prices = _price_books.published_prices(db)
 
     plans: list[PlanOption] = []
     for tier in tiers:
@@ -185,6 +188,19 @@ def list_plans(
             else None
         )
 
+        # ARCH50-S1:plan-prices. Every (interval, currency) the plan is sold in, from the published plan price
+        # books, plus the tier version's own price when no book covers it.
+        from app.schemas.usage import PlanPriceOption
+
+        options = [PlanPriceOption(interval=p.interval, currency=p.currency, unit_amount=p.unit_amount_minor,
+                                   price_id=p.gateway_price_id, source=p.source)
+                   for p in book_prices if p.tier_key == tier.key]
+        if tier.unit_amount_micros is not None and not any(
+                (o.interval, o.currency) == (tier.billing_interval or "month", tier.currency or "USD") for o in options):
+            options.append(PlanPriceOption(interval=tier.billing_interval or "month", currency=tier.currency or "USD",
+                                           unit_amount=tier.unit_amount_micros // 10_000,
+                                           price_id=tier.gateway_price_id, source="TIER"))
+
         plans.append(
             PlanOption(
                 key=tier.key,
@@ -198,6 +214,7 @@ def list_plans(
                 is_priced=tier.is_priced,
                 entitlements=entitlements,
                 notes=None,
+                prices=options,
             )
         )
 
@@ -486,15 +503,31 @@ def create_checkout_session(
         db.commit()
         return EphemeralSessionResponse(url="", kind="assigned", expires_at=None)
 
+    # ARCH50-S1:checkout-price-book. Annual / INR / a promo code: priced from the published plan price book,
+    # the code reserved under its row lock; what was sold is recorded for revenue metrics. Without them this is
+    # the ARCH-29 checkout -- except that a known gateway price must belong to the plan being bought.
+    from app.services.billing import payment_gateway as _payment_gateway
+    from app.services.revops import checkout as revops_checkout
+
+    prepared = None
+    price_id = payload.price_id
+    revops_checkout.check_price_id(db, tier_key=payload.quota_tier_key, price_id=price_id)
+    if payload.interval or payload.currency or payload.promo_code:
+        prepared = revops_checkout.prepare(
+            db, organization_id=context.organization_id, tier_key=payload.quota_tier_key,
+            interval=payload.interval or "month", currency=payload.currency or "USD", seats=payload.seats,
+            price_id=payload.price_id, promo_code=payload.promo_code)
+        price_id = prepared.price_id
     try:
         session = portal_service.create_checkout_session(
             db,
             organization_id=context.organization_id,
             quota_tier_key=payload.quota_tier_key,
             seats=payload.seats,
-            price_id=payload.price_id,
+            price_id=price_id,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,
+            **({"discount_code": prepared.discount_code} if prepared is not None and prepared.discount_code else {}),
         )
     except CheckoutConfigurationError as exc:
         raise HTTPException(
@@ -514,6 +547,17 @@ def create_checkout_session(
                 "details": {"gateway": getattr(exc, "gateway", None)},
             },
         ) from exc
+    except _payment_gateway.GatewayTransientError as exc:
+        # ARCH50-S1:checkout-gateway-down. The gateway could not be reached (or answered 5xx): nothing was sold,
+        # and the promo reservation made above is rolled back with this request -- a 503 to retry, never a 500.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_UNAVAILABLE",
+                "message": "The payment provider could not be reached. Nothing was charged; please try again.",
+                "details": {"gateway": _payment_gateway.active_gateway_name()},
+            },
+        ) from exc
 
     audit_service.record(
         db,
@@ -525,8 +569,12 @@ def create_checkout_session(
             "quota_tier_key": payload.quota_tier_key,
             "seats": payload.seats,
             "stripe_session_id": session.stripe_session_id,
+            **({"interval": prepared.price.interval, "currency": prepared.price.currency,
+                "promo": (prepared.reservation or {}).get("code")} if prepared is not None else {}),
         },
     )
+    if prepared is not None:
+        revops_checkout.record(db, prepared, gateway=str(_payment_gateway.active_gateway_name() or "DODO").upper())
     db.commit()
 
     return EphemeralSessionResponse(
@@ -641,3 +689,51 @@ def sync_seats(
 
 
 __all__ = ["RequireOrgBillingReader", "router"]
+
+# ---------------------------------------------------------------------------
+# ARCH50-S1:tenant-revops. A promo code quote before checkout, and the
+# organization's invoiced contract (read-only: contracts are drafted, activated
+# and invoiced by the operator's RevOps console).
+# ---------------------------------------------------------------------------
+
+from app.schemas.revops import PromoQuoteIn, PromoQuoteOut, TenantContractOut  # noqa: E402
+
+
+@router.post(
+    "/organizations/{organization_id}/billing/promo-quote",
+    response_model=PromoQuoteOut,
+    summary="What a promo code would take off a plan",
+)
+def quote_promo_code(
+    organization_id: uuid.UUID,
+    payload: PromoQuoteIn,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgBillingReader),
+) -> PromoQuoteOut:
+    from app.services.revops import price_books, promos
+    from app.services.revops.service import RevOpsError
+
+    price = price_books.resolve_price(db, tier_key=payload.quota_tier_key, interval=payload.interval,
+                                      currency=payload.currency)
+    if price is None:
+        raise RevOpsError(f"the {payload.quota_tier_key} plan is not sold billed {payload.interval}ly in "
+                          f"{payload.currency}", "PRICE_NOT_SOLD", 400)
+    return PromoQuoteOut(**promos.quote(db, organization_id=context.organization_id, code=payload.code,
+                                        tier_key=payload.quota_tier_key, interval=payload.interval,
+                                        currency=payload.currency,
+                                        list_amount_micros=price.unit_amount_micros * payload.seats))
+
+
+@router.get(
+    "/organizations/{organization_id}/billing/contract",
+    response_model=TenantContractOut,
+    summary="The organization's invoiced contract and its invoices",
+)
+def get_billing_contract(
+    organization_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgBillingReader),
+) -> TenantContractOut:
+    from app.services.revops import checkout as revops_checkout
+
+    return TenantContractOut(contract=revops_checkout.tenant_contract(db, organization_id=context.organization_id))

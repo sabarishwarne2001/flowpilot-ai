@@ -28,4 +28,15 @@ MAILTO=""
 # ARCH49-S1:cron-process. Every 15 minutes: one process sweep job per enabled
 # workspace and slot (idempotent on the slot; the job runs on the LIGHT worker).
 8-59/15 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep process --apply
+# ARCH50-S1:cron-revops. Daily: end contracts past their term, issue invoices for
+# periods that started, expire unused promo reservations, freeze last month's
+# revenue snapshot, prune egress refusals past 90 days (idempotent; LIGHT job).
+23 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep revops --apply
+# ARCH50-S1:cron-dr. Every minute a heartbeat on the primary (after a restore the
+# newest heartbeat present bounds the data lost: the measured RPO). Every 5
+# minutes the WAL archive is checked; nightly a base backup; weekly a timed
+# point-in-time restore drill into a scratch cluster (RPO and RTO recorded).
+* * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep dr-heartbeat
+41 1 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep base-backup
+53 5 * * 6  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep pitr-drill
 7 * * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep-watchdog

@@ -1,0 +1,424 @@
+{
+  "milestone": "ARCH-50",
+  "capability": "capability.egress_lockdown",
+  "release_head": "arch50_step1_sovereign_revops",
+  "started": "2026-09-29T14:13:27.227808+00:00",
+  "migration": {
+    "tables": 14,
+    "revises": "arch49_step1_process_intelligence",
+    "contract_step_revises": "arch50_step1_sovereign_revops",
+    "stage_transitions": 21
+  },
+  "vocabulary": {
+    "channels": 14,
+    "governed": 7
+  },
+  "egress_ast": {
+    "modules_scanned": 784,
+    "sanctioned_openers": 10
+  },
+  "decisions": {
+    "decisions": 30
+  },
+  "local_model": {
+    "readers": [
+      "app/core/config.py",
+      "app/services/sovereign/local_llm.py"
+    ]
+  },
+  "licence": {
+    "valid": "VALID"
+  },
+  "release": {
+    "components": 647,
+    "files": 4
+  },
+  "revops_rules": {
+    "periods": 4,
+    "last_period_micros": 733700000
+  },
+  "dr_tooling": {
+    "archive": "refuses overwrite, fsync + rename"
+  },
+  "api": {
+    "tenant_routes": 6,
+    "admin_sovereign": 6,
+    "admin_revops": 19
+  },
+  "console": {
+    "models": 17
+  },
+  "zero_cost": {
+    "dependencies": "unchanged",
+    "new_services": 0
+  },
+  "caught_by": {
+    "MS1 the capability leaked into Business": "AssertionError: packaged into Business (Enterprise only)",
+    "MS2 the capability missing from Enterprise": "AssertionError: not packaged into Enterprise",
+    "MS3 no Entitlement entry (has_capability would raise)": "AssertionError: no Entitlement entry (has_capability would raise)",
+    "MS4 no plan card would list it (PLAN_FEATURE_ORDER)": "AssertionError: not in PLAN_FEATURE_ORDER",
+    "MS5 the contract step left on arch49 (two heads)": "AssertionError: the contract step revises \"arch49_step1_process_intelligence\", expected arch50_step1_sovereign_revops",
+    "MS6 the refusal bucket is not unique (a count per call, an audit per call)": "AssertionError: uq_egress_refusals_bucket is not UNIQUE",
+    "MS7 two live redemptions of one code by one organization": "AssertionError: uq_promo_redemptions_one_live is not UNIQUE",
+    "MS8 a published price book can be edited (no guard trigger)": "AssertionError: the entries guard does not cover UPDATE and DELETE",
+    "MS9 the migration forgets a channel": "AssertionError: channels drift: ('WEBHOOK', 'WAREHOUSE', 'ERP_HTTP', 'ERP_SFTP', 'IDENTITY', 'SMTP_TENANT', 'LLM_PROVIDER', 'SMTP_PLATFORM', 'LLM_LOCAL', 'STORAGE', 'BILLING', 'INTERNAL', 'DNS') vs ('WEBHOOK', 'WAREHOUSE', 'ERP_HTTP', 'ERP_SFTP', 'IDENTITY', 'SMTP_TENANT', 'LLM_PROVIDER', 'SMTP_PLATFORM', 'LLM_LOCAL', 'STORAGE', 'BILLING', 'INTERNAL', 'DNS', 'BACKUP')",
+    "MS10 an opener without an inventory entry": "AssertionError: a channel has no declared opener",
+    "MS11 a webhook opened with httpx directly (around the gate)": "AssertionError: network opened outside the egress gate:\n  app/services/webhook_dispatch.py:200 opens httpx.Client outside the egress gate",
+    "MS12 a provider SDK without the gated transport": "AssertionError: network opened outside the egress gate:\n  app/services/byok/provider_clients.py:306 builds openai.OpenAI without an egress-gated http_client=",
+    "MS13 SMTP opens its own socket": "AssertionError: network opened outside the egress gate:\n  app/services/email_service.py:94 opens a socket (socket.create_connection) outside the egress gate",
+    "MS14 the warehouse S3 bundle client is not attached to the gate": "AssertionError: network opened outside the egress gate:\n  app/services/analytics/connectors/s3_bundle.py: opens boto but never calls attach_boto(",
+    "MS15 the SSRF client built directly (no egress decision)": "AssertionError: network opened outside the egress gate:\n  app/services/webhook_dispatch.py:199 constructs SSRFSafeHTTPClient directly: use egress.http_client(channel, ...)",
+    "MS16 an unknown EGRESS_MODE read as open": "AssertionError: WEBHOOK hooks.anywhere.io:443 -> allowed=True reason=None; expected False/DEPLOYMENT_DENY",
+    "MS17 a derived operator host serves every channel": "AssertionError: WEBHOOK minio.internal:9000 -> allowed=True reason=None; expected False/DEPLOYMENT_DENY",
+    "MS18 an unreadable tenant policy read as 'no lockdown'": "AssertionError: an unreadable policy must refuse",
+    "MS19 a rule's pinned port ignored": "AssertionError: LLM_LOCAL llm.internal:9999 -> allowed=True reason=None; expected False/OPERATOR_ONLY",
+    "MS20 the local model's URL read outside local_llm.config()": "AssertionError: the local model's settings are read outside local_llm.config(): ['app/services/llm_service.py']",
+    "MS21 the local model over the provider channel (not operator-only)": "AssertionError: the local client does not use the operator-only transport",
+    "MS22 licence verification skips the signature": "AssertionError: a tampered payload verified",
+    "MS23 a development key licenses production": "AssertionError: a development key licensed production",
+    "MS24 release verification ignores changed files": "AssertionError: a changed file was not reported: {'status': 'VERIFIED', 'release_dir': 'C:\\\\Users\\\\sabar\\\\AppData\\\\Local\\\\Temp\\\\arch50-release-f41tfoc8\\\\tree\\\\release', 'files': 6, 'modified': ['backend/app/core/egress.py'], 'missing': [], 'key_id': 'ed25519:7aaec4ac2b6da25f', 'release': {'built_at': '2026-09-29T14:15:42+00:00', 'commit': 'b76347ada7cfd078fac907f2a7626a6a0e7e6933', 'components': 6",
+    "MS25 the SBOM generator imports XML (a third XML module)": "AssertionError: release_manifest.py imports XML (verify_arch16 S1 confines it to two modules)",
+    "MS26 a percent discount not rounded to whole paise": "AssertionError: a percent discount must round to whole minor units",
+    "MS27 the short last period billed in full": "AssertionError: the short last period was billed 900000000",
+    "MS28 the WAL archiver overwrites a different segment": "AssertionError: a different segment under the same name was overwritten",
+    "MS29 the RevOps sweep off the LIGHT profile": "AssertionError: the RevOps sweep is not on LIGHT",
+    "MS30 the job loop does not attribute egress": "AssertionError: a job loop does not attribute connections to the job's organization",
+    "MS31 a cron sweep that cannot enqueue (no handler registry)": "AssertionError: sweep_revops.py never registers the job handlers (enqueue refuses every job)",
+    "MS32 Dodo retries an egress refusal as an outage": "AssertionError: the Dodo gateway would retry a refusal",
+    "MS33 organization creation ignores the licence": "AssertionError: organization creation never asks the licence (require_capacity)",
+    "MS34 a route checks the plan after doing work": "AssertionError: test_egress_destination does not gate the capability FIRST",
+    "MS35 an ADMIN may switch the lockdown": "AssertionError: {'get_egress_policy': 'RequireOrgAdmin', 'set_egress_lockdown': 'RequireOrgAdmin', 'add_egress_rule': 'RequireOrgOwner', 'delete_egress_rule': 'RequireOrgOwner', 'list_egress_refusals': 'RequireOrgAdmin', 'test_egress_destination': 'RequireOrgAdmin'}",
+    "MS36 the operator console open to tenants": "AssertionError: sovereign.py is not superadmin-only",
+    "MS37 the console's decision drifts from the API": "AssertionError: EgressDecision drifted from EgressDecisionOut: only API ['matched'], only console []",
+    "MS38 the capability key literal in a page": "AssertionError: the capability key literal appears outside constants/capabilities.ts: ['pages/organization/OrganizationEgress.tsx']",
+    "MS39 a touched file loses its sentinel": "AssertionError: no ARCH50 sentinel in ['fe_contract (InvoicedContractPanel.tsx)']",
+    "MS40 an earlier verifier's pin loses its ARCH-50 widening": "AssertionError: earlier verifiers not widened: ['v49: ARCH50-S1:head-widened-49']",
+    "MS41 the licence module calls out": "AssertionError: licence.py reaches import requests\n",
+    "MS42 the sweep job off the LIGHT profile at runtime": "AssertionError: revops.sweep is not claimable on LIGHT",
+    "MS43 the upgrade keeps ARCH-10's pipeline stage guard": "AssertionError: the upgrade does not install the application's stage table",
+    "MS44 the stage table drifts from the application's": "AssertionError: the stage guard is not the application's transition table: [('QUOTA_BLOCKED', 'ENRICHING')]"
+  },
+  "results": [
+    {
+      "layer": "offline",
+      "gate": "T1 capability in six places: entitlements (+__all__, +Entitlement), 402 name, Enterprise only (not Business), console constant + plan card label + order, hardening matrix; the organization navigation entry advertises what its page enforces (and stays out of verify_arch36's workspace-only GATED_PAGES)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2 migration: 14 tables, the refusal buckets, the immutable published price book, one gateway price one plan, one live redemption, one active contract, invoice arithmetic, measured PITR drills, arch49 -> arch50 -> contract, one head, no outbox change; the pipeline stage guard widened to exactly the application's table (the downgrade restores ARCH-10's body byte for byte)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T2b vocabulary parity: channels, governed channels, reasons, modes, DR kinds and every RevOps set == the migration's CHECKs; every channel has a declared opener",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T3 THE EGRESS GATE (AST over app/ + the backup mirror): no socket, http.client, httpx, requests, smtplib, paramiko, boto3, Stripe or DNS resolver opened outside the gate; SSRFSafeHTTPClient built only by it; every provider SDK and google-auth handed an egress-gated transport; the inventory names every opener",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T4 the decision table: open vs deny, operator destinations per channel (derived hosts serve only their channel), EGRESS_OPERATOR_HOSTS (channel-scoped, CIDR, pinned port, *.suffix not the apex), unknown mode = deny, operator-only channels in every mode, tenant lockdown (channel and port scoped), an unreadable policy refuses, attribution",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T5 the local model is the operator's: LOCAL_LLM_* read only in local_llm.config(); LOCAL is no BYOK provider and no AI-settings provider; no tenant-writable base_url; the client uses the operator-only transport; completions and streams route exclusive / fallback",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T6 Ed25519 licence offline: VALID; tampered, forged and untrusted refused; a development key refused in production; grace, expiry, not-yet-valid, wrong edition, deployment binding; malformed documents; no key or private key committed; `trust` rewrites only its block",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T7 release manifest: CycloneDX 1.5 SBOM (pypi + npm purls), SHA256SUMS signed with Ed25519, VERIFIED; a changed file MODIFIED, an untrusted key, a tampered SUMS BAD_SIGNATURE; no XML import",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T8 RevOps arithmetic: calendar months clamp, discounts in whole minor units and capped at the price, quarterly periods with a prorated short last period, MRR movements (new / expansion / contraction / churn), a promo's running window",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "T9 the WAL archiver: fsync + rename, an identical segment is success, a different one under the same name is REFUSED (never overwritten), restore of a missing segment answers 'not found'; the drill drives pg_basebackup, recovery_target_time and a crash (-m immediate); no network import",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W1 wiring: revops.sweep job on LIGHT + idempotent daily script + cron + flowpilot-sweep (revops, dr-heartbeat, base-backup, pitr-drill), routers, BOTH job loops attribute egress to the job's organization, organization creation asks the licence, checkout prices from the books with a promo and the gateways carry the discount, Dodo never retries a refusal",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W2 API: the six egress routes gated FIRST (402), roles as documented (OWNER writes, ADMIN reads and tests), both operator consoles superadmin-only",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "W3 console: 17 response models in parity, every vocabulary (channels, labels, reasons, modes, currencies, intervals, statuses, codes), every endpoint called, the capability literal only in constants, no hand-formatted dates or counts, routes and navigation, the plan selector's interval / currency / promo and the contract panel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S1 every ARCH-50 file carries its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "S2 earlier verifiers widened with ARCH50-S1 sentinels (heads, chains, MS5, the matrix, ARCH-47's egress gate N1 / MS24), never replacing theirs",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "Z1 zero new recurring cost: requirements.txt and package.json unchanged; Ed25519 = cryptography, the local model through the pinned openai SDK, PITR = PostgreSQL's binaries; no outbound host on a sovereign / RevOps path",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "offline",
+      "gate": "A1 apply_arch50.py --check on this tree: every file is the ARCH-50 result (a second apply writes nothing)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS1 the capability leaked into Business",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS2 the capability missing from Enterprise",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS3 no Entitlement entry (has_capability would raise)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS4 no plan card would list it (PLAN_FEATURE_ORDER)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS5 the contract step left on arch49 (two heads)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS6 the refusal bucket is not unique (a count per call, an audit per call)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS7 two live redemptions of one code by one organization",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS8 a published price book can be edited (no guard trigger)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS9 the migration forgets a channel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS10 an opener without an inventory entry",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS11 a webhook opened with httpx directly (around the gate)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS12 a provider SDK without the gated transport",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS13 SMTP opens its own socket",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS14 the warehouse S3 bundle client is not attached to the gate",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS15 the SSRF client built directly (no egress decision)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS16 an unknown EGRESS_MODE read as open",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS17 a derived operator host serves every channel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS18 an unreadable tenant policy read as 'no lockdown'",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS19 a rule's pinned port ignored",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS20 the local model's URL read outside local_llm.config()",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS21 the local model over the provider channel (not operator-only)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS22 licence verification skips the signature",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS23 a development key licenses production",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS24 release verification ignores changed files",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS25 the SBOM generator imports XML (a third XML module)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS26 a percent discount not rounded to whole paise",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS27 the short last period billed in full",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS28 the WAL archiver overwrites a different segment",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS29 the RevOps sweep off the LIGHT profile",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS30 the job loop does not attribute egress",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS31 a cron sweep that cannot enqueue (no handler registry)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS32 Dodo retries an egress refusal as an outage",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS33 organization creation ignores the licence",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS34 a route checks the plan after doing work",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS35 an ADMIN may switch the lockdown",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS36 the operator console open to tenants",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS37 the console's decision drifts from the API",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS38 the capability key literal in a page",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS39 a touched file loses its sentinel",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS40 an earlier verifier's pin loses its ARCH-50 widening",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS41 the licence module calls out",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS42 the sweep job off the LIGHT profile at runtime",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS43 the upgrade keeps ARCH-10's pipeline stage guard",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MS44 the stage table drifts from the application's",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B1 tsc -b and vite build",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "build",
+      "gate": "B2 eslint --max-warnings=0 on the 17 ARCH-50 console files",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "regression",
+      "gate": "R1 verify_arch49.py --db (ARCH-49's whole database layer against the ARCH-50 tree)",
+      "outcome": "PASS"
+    }
+  ],
+  "seconds": 400.0
+}

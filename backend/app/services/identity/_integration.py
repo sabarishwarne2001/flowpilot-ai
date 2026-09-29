@@ -252,9 +252,9 @@ def safe_get(url: str, *, timeout: float, max_bytes: int = 1_048_576) -> bytes:
     `SSRFSafeHTTPClient` has never had, so every OIDC discovery and JWKS
     fetch raised AttributeError and OIDC SSO could not be configured.
     """
-    from app.core.ssrf_client import SSRFSafeHTTPClient
+    from app.core import egress  # ARCH50-S1:egress-identity
 
-    client = SSRFSafeHTTPClient(total_timeout=timeout, max_response_bytes=max_bytes)
+    client = egress.http_client(egress.IDENTITY, total_timeout=timeout, max_response_bytes=max_bytes)
     resp = client.request("GET", url, headers={"Accept": "application/json"})
     if not 200 <= resp.status_code < 300:
         raise RuntimeError(f"{url} returned HTTP {resp.status_code}")
@@ -274,9 +274,9 @@ def safe_post_form(
     """
     from urllib.parse import urlencode
 
-    from app.core.ssrf_client import SSRFSafeHTTPClient
+    from app.core import egress
 
-    client = SSRFSafeHTTPClient(total_timeout=timeout, max_response_bytes=max_bytes)
+    client = egress.http_client(egress.IDENTITY, total_timeout=timeout, max_response_bytes=max_bytes)
     resp = client.request(
         "POST",
         url,

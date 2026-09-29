@@ -1423,6 +1423,15 @@ def erase_for_work_items(db: Session, work_item_ids: Sequence[uuid.UUID]) -> int
 
 
 def test_target(db: Session, *, target: ErpTarget, actor_user_id: uuid.UUID) -> dict:
+    """ARCH50-S1:egress-erp-attribution. A connection test is made on the target's organization's behalf, so its
+    egress lockdown applies (a job is attributed by the job loop)."""
+    from app.core import egress
+
+    with egress.attributed(target.organization_id):
+        return _test_target(db, target=target, actor_user_id=actor_user_id)
+
+
+def _test_target(db: Session, *, target: ErpTarget, actor_user_id: uuid.UUID) -> dict:
     """Can FlowPilot reach and authenticate to the target? Nothing is posted: HTTP reads the probe path (a
     document number that cannot exist) or the base URL; SFTP connects, checks the pinned host key, logs in and
     lists the upload directory."""

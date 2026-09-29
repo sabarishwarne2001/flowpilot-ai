@@ -38,6 +38,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.collaborativeReview]: "Real-time collaborative review (live queue, who is looking at what, item locks, paragraph-anchored discussions)",
   // ARCH49-S2:plan-feature
   [CAPABILITY.processIntelligence]: "Process intelligence & exception agent (object-centric process mining, conformance, SLA-breach prediction, cost-to-serve; an agent that proposes resolutions — applied only with approval or within your calibrated error bound)",
+  // ARCH50-S2:plan-feature
+  [CAPABILITY.egressLockdown]: "Egress lockdown (every connection made for your organization — webhooks, warehouses, ERP, SSO metadata, SMTP, AI providers — confined to destinations you allow; refusals recorded and audited)",
   "addon.warehouse_sync": "Analytics warehouse egress",
   [CAPABILITY.calibratedAutonomy]: "Calibrated autonomy & conformal risk",
   [CAPABILITY.redaction]: "Zero-leakage geometric PII redaction",
@@ -77,6 +79,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.enterpriseIdentity,
   // ARCH49-S2:plan-feature-order — Enterprise only.
   CAPABILITY.processIntelligence,
+  // ARCH50-S2:plan-feature-order — Enterprise only.
+  CAPABILITY.egressLockdown,
   CAPABILITY.prioritySlo,
 ];
 

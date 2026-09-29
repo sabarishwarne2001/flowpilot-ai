@@ -4,10 +4,13 @@ import { AlertTriangle, Check, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { createCheckoutSession, getPlans } from "@/services/api/billing";
+// ARCH50-S2:plan-selector-interval — annual billing, INR and promo codes.
+import { quotePromoCode } from "@/services/api/revops";
+import { REVOPS_MESSAGES, money, type PromoQuote, type RevOpsCode } from "@/types/revops";
 import { ApiError } from "@/services/api/client";
 import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
-import type { PlanOption } from "@/types/billing";
+import type { PlanOption, PlanPriceOption } from "@/types/billing";
 import { describeEntitlement } from "@/types/planEntitlements";
 import {
   CORE_FEATURES,
@@ -58,6 +61,11 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [seats, setSeats] = useState<number>(Math.max(currentSeats, 1));
   const [confirming, setConfirming] = useState(false);
+  const [interval, setBillingInterval] = useState<"month" | "year">("month");
+  const [currency, setCurrency] = useState<"USD" | "INR">("USD");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoQuote, setPromoQuote] = useState<PromoQuote | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: billingKeys.plans(organizationId),
@@ -76,15 +84,38 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
     [plans, selectedKey],
   );
 
+  const hasPriceBooks = plans.some((plan) => (plan.prices ?? []).length > 0);
+  const currencies = Array.from(new Set(plans.flatMap((plan) => (plan.prices ?? []).map((p) => p.currency))));
+  const priceFor = (plan: PlanOption): PlanPriceOption | null =>
+    (plan.prices ?? []).find((p) => p.interval === interval && p.currency === currency) ?? null;
+
+  const applyPromo = useMutation({
+    mutationFn: (plan: PlanOption) => quotePromoCode(organizationId, {
+      code: promoCode.trim(), quota_tier_key: plan.key, interval, currency, seats,
+    }),
+    onSuccess: (quote) => {
+      setPromoQuote(quote);
+      setPromoError(null);
+    },
+    onError: (error) => {
+      setPromoQuote(null);
+      const code = error instanceof ApiError ? error.code : undefined;
+      setPromoError((code && REVOPS_MESSAGES[code as RevOpsCode]) || "That promo code can't be used.");
+    },
+  });
+
   const checkout = useMutation({
     mutationFn: (plan: PlanOption) => {
       const returnUrl =
         window.location.origin + organizationBillingReturnPath(organizationSlug);
+      const priced = hasPriceBooks && priceFor(plan) !== null;
       return createCheckoutSession(organizationId, {
         quota_tier_key: plan.key,
         seats,
         success_url: `${returnUrl}?outcome=success`,
         cancel_url: `${returnUrl}?outcome=cancelled`,
+        ...(priced ? { interval, currency } : {}),
+        ...(promoQuote ? { promo_code: promoQuote.code } : {}),
       });
     },
     onSuccess: async (session, plan) => {
@@ -184,6 +215,28 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             ? "Switching to a paid plan starts a new checkout; your current plan stays active until it completes. To move to Free, cancel in the billing portal."
             : "Free starts immediately. Paid plans open a secure checkout."}
         </p>
+        {hasPriceBooks && (
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs" data-testid="plan-billing-options">
+            <div className="inline-flex rounded-md border border-border" role="group" aria-label="Billing interval">
+              {(["month", "year"] as const).map((value) => (
+                <button key={value} type="button" aria-pressed={interval === value}
+                        onClick={() => { setBillingInterval(value); setPromoQuote(null); setConfirming(false); }}
+                        className={`px-2.5 py-1 ${interval === value ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                  {value === "month" ? "Monthly" : "Annual"}
+                </button>
+              ))}
+            </div>
+            {currencies.length > 1 && (
+              <label className="inline-flex items-center gap-1.5">
+                <span className="text-muted-foreground">Currency</span>
+                <select value={currency} onChange={(e) => { setCurrency(e.target.value as "USD" | "INR"); setPromoQuote(null); setConfirming(false); }}
+                        className="rounded-md border border-border bg-background px-2 py-1 text-foreground">
+                  {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
         {!checkoutAvailable && (
           <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden />
@@ -238,7 +291,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   </div>
 
                   <p className="mt-1 text-sm font-medium text-muted-foreground">
-                    {formatPrice(plan)}
+                    {hasPriceBooks && !isFreePlan(plan) ? formatBookPrice(priceFor(plan), interval, currency) : formatPrice(plan)}
                   </p>
 
                   {plan.notes && (
@@ -247,7 +300,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
                   <PlanFeatureList plan={plan} previous={index > 0 ? (plans[index - 1] ?? null) : null} />
 
-                  {!isCurrent && plan.is_priced && !isFreePlan(plan) ? (
+                  {/* ARCH50-S2:plan-cta-book-priced — a plan sold through a price book is purchasable even when its
+                      tier version carries no price of its own (found by the ARCH-50 browser smoke). */}
+                  {!isCurrent && !isFreePlan(plan) && (hasPriceBooks ? Boolean(priceFor(plan)?.price_id) : plan.is_priced) ? (
                     <button
                       type="button"
                       data-testid={`plan-cta-${plan.key}`}
@@ -295,6 +350,25 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               <span className="text-xs text-muted-foreground">
                 You&apos;ll see the total at checkout, before you pay.
               </span>
+            </div>
+          )}
+
+          {!selectedIsFree && (
+            <div className="flex flex-wrap items-center gap-2" data-testid="promo-code">
+              <label htmlFor="promo-code-input" className="text-sm font-medium text-foreground">Promo code:</label>
+              <input id="promo-code-input" value={promoCode} maxLength={32}
+                     onChange={(event) => { setPromoCode(event.target.value); setPromoQuote(null); setPromoError(null); }}
+                     className="w-36 rounded-md border border-border bg-background px-3 py-1.5 text-sm uppercase text-foreground" />
+              <button type="button" disabled={promoCode.trim().length < 3 || applyPromo.isPending}
+                      onClick={() => applyPromo.mutate(selected)}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60">Apply</button>
+              {promoQuote && (
+                <span className="text-xs text-emerald-700 dark:text-emerald-400">
+                  {promoQuote.code}: −{money(promoQuote.discount_micros, currency)} per {interval}
+                  {promoQuote.duration === "REPEATING" ? ` for ${promoQuote.duration_in_months ?? 0} months` : promoQuote.duration === "FOREVER" ? " while subscribed" : " on the first payment"}
+                </span>
+              )}
+              {promoError && <span role="alert" className="text-xs text-destructive">{promoError}</span>}
             </div>
           )}
 
@@ -423,6 +497,17 @@ const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: 
  * a published price, Enterprise included; a tier without one is a deployment
  * that has not configured its gateway product yet, and says exactly that.
  */
+/** ARCH50-S2:plan-prices. A plan's price for the chosen interval and currency from the plan price books. */
+function formatBookPrice(price: PlanPriceOption | null, interval: string, currency: string): string {
+  if (price === null) {
+    return `Not sold ${interval === "year" ? "annually" : "monthly"} in ${currency} — contact sales`;
+  }
+  const amount = new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency.toUpperCase() })
+    .format(price.unit_amount / 100);
+  const suffix = price.price_id ? "" : " (contact sales)";
+  return `${amount} per seat / ${price.interval}${suffix}`;
+}
+
 function formatPrice(plan: PlanOption): string {
   if (!plan.is_priced || plan.unit_amount === null || plan.currency === null) {
     return "Price not configured yet";

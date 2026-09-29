@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core import egress  # ARCH50-S1:egress-webhook -- the delivery client comes from the egress gate
 from app.core.ssrf_client import (
     ConnectError,
     DNSResolutionError,
@@ -195,7 +196,7 @@ def attempt_delivery(
     timestamp: Optional[int] = None,
 ) -> AttemptOutcome:
     """Make one delivery attempt. No database access, no transaction held."""
-    http = client or SSRFSafeHTTPClient()
+    http = client or egress.http_client(egress.WEBHOOK, organization_id=getattr(endpoint, "organization_id", None))
 
     envelope = build_envelope(delivery)
     body = serialise_body(envelope)

@@ -38,6 +38,13 @@ if str(BACKEND) not in sys.path:
 def sweep(db, *, apply: bool) -> dict:
     from app.services.erp import service
 
+    if apply:
+        # ARCH50-S1:sweep-registers-handlers. Run from cron this script is not the worker: the sweep enqueues
+        # erp.deliver jobs (auto-posts, due retries), which job_service.enqueue() refuses without the handler
+        # registry (UnknownJobTypeError). Found by the GA-2 run.
+        from app.workers.handlers import register_all
+
+        register_all()
     report = service.sweep(db, apply=apply).as_json()
     report["applied"] = apply
     if apply:

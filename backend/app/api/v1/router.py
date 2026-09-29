@@ -171,6 +171,17 @@ api_router.include_router(autonomy.router)
 api_router.include_router(admin_cogs.router)
 api_router.include_router(identity_admin.router)
 
+# ARCH50-S1:router. The tenant's egress lockdown (every route gated on
+# capability.egress_lockdown first) and the operator's Sovereign and RevOps
+# consoles (require_superadmin on each router; 404 for anyone else).
+from app.api.v1 import egress as egress_api  # noqa: E402
+from app.api.v1.admin import revops as admin_revops  # noqa: E402
+from app.api.v1.admin import sovereign as admin_sovereign  # noqa: E402
+
+api_router.include_router(egress_api.router)
+api_router.include_router(admin_sovereign.router)
+api_router.include_router(admin_revops.router)
+
 # Global & Identity Federation
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])

@@ -172,19 +172,26 @@ def s1_6() -> str:
     assert hasattr(claim, "claim_eligible_rows"), "primitive missing"
     assert hasattr(claim, "release_expired_leases"), "generic reaper missing"
 
-    for name in ("claim_batch", "claim_webhook_deliveries", "claim_jobs"):
+    # ARCH50-S1:s16-widened (GA-2). ARCH-13 split the outbox into a public and an internal queue and ARCH-15 added
+    # the Stripe inbound queue: more specs over the SAME primitive. The invariant stays "one implementation": every
+    # claimer and reaper that exists delegates to it, and the spec set is ARCH-10's or today's.
+    claimers = [n for n in ("claim_batch", "claim_webhook_deliveries", "claim_jobs", "claim_stripe_inbound_events")
+                if hasattr(claim, n)]
+    reapers = [n for n in ("reap_expired_leases", "reap_expired_webhook_leases", "reap_expired_job_leases",
+                           "reap_expired_stripe_inbound_leases") if hasattr(claim, n)]
+    assert len(claimers) >= 3 and len(reapers) >= 3, "a queue shim is missing"
+    for name in claimers:
         src = inspect.getsource(getattr(claim, name))
         assert "claim_eligible_rows" in src, f"{name} does not delegate to primitive"
-    for name in (
-        "reap_expired_leases",
-        "reap_expired_webhook_leases",
-        "reap_expired_job_leases",
-    ):
+    for name in reapers:
         src = inspect.getsource(getattr(claim, name))
         assert "release_expired_leases" in src, f"{name} still has its own SQL"
 
-    assert set(claim.QUEUE_SPECS) == {"outbox", "webhook_delivery", "jobs"}
-    return "3 queue specs, 6 shims, 1 implementation"
+    assert set(claim.QUEUE_SPECS) in (
+        {"outbox", "webhook_delivery", "jobs"},
+        {"outbox_public", "outbox_internal", "webhook_delivery", "jobs", "stripe_inbound"},
+    ), f"unexpected queue specs {sorted(claim.QUEUE_SPECS)}"
+    return f"{len(claim.QUEUE_SPECS)} queue specs, {len(claimers) + len(reapers)} shims, 1 implementation"
 
 
 @check("S1.7", "claim/reap round-trips on the jobs queue (behavioural)")
@@ -288,33 +295,49 @@ def s2_3(db) -> str:
 
     from app.services import usage_service
 
+    from sqlalchemy import func, select
+
+    from app.models.usage_event import UsageEvent
+
     org_id = _seed_org(db)
     key = f"{GATE_PREFIX}ocr:{uuid.uuid4()}"
-    usage_service.record_usage(
+    first = usage_service.record_usage(
         db,
         organization_id=org_id,
         event_type="ocr.page",
         quantity=10,
         idempotency_key=key,
     )
+    first_id = getattr(first, "id", None)
     db.commit()
 
+    # ARCH50-S1:s23-widened (GA-2). SEAM-I-1 made record_usage idempotent (insert_or_get on
+    # uq_usage_events_org_idempotency_key): the second write on the same key RETURNS the first event
+    # instead of raising. The invariant this gate protects is unchanged -- exactly ONE row, no double-bill.
     raised = False
+    second_id = None
     try:
-        usage_service.record_usage(
+        second = usage_service.record_usage(
             db,
             organization_id=org_id,
             event_type="ocr.page",
             quantity=10,
             idempotency_key=key,
         )
+        second_id = getattr(second, "id", None)
         db.commit()
     except IntegrityError:
         raised = True
         db.rollback()
-    assert raised, "duplicate idempotency_key was permitted"
+    rows = db.execute(
+        select(func.count()).select_from(UsageEvent).where(
+            UsageEvent.organization_id == org_id, UsageEvent.idempotency_key == key
+        )
+    ).scalar_one()
+    assert rows == 1, f"duplicate idempotency_key was permitted ({rows} rows)"
+    assert raised or second_id == first_id, "the second write returned a different event"
     _cleanup(db, org_id)
-    return "second write on the same key rejected"
+    return "second write on the same key rejected" if raised else "second write on the same key returned the first event"
 
 
 @check("S2.4", "the vocabulary is closed and SAMPLED types cannot be emitted inline")

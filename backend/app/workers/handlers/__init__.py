@@ -77,6 +77,9 @@ ARCH46_JOB_TYPES: frozenset[str] = frozenset({"obligations.extract_document"})
 ARCH47_JOB_TYPES: frozenset[str] = frozenset({"erp.deliver_posting"})
 # ARCH49-S1:process-job-types. The event log, SLA prediction and the exception agent: LIGHT profile.
 ARCH49_JOB_TYPES: frozenset[str] = frozenset({"process.sweep_workspace"})
+# ARCH50-S1:revops-job-types. The daily RevOps sweep (contracts, invoices, promo reservations, revenue snapshots,
+# egress-refusal retention): SQL only, LIGHT profile.
+ARCH50_JOB_TYPES: frozenset[str] = frozenset({"revops.sweep"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 
@@ -114,6 +117,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH46_JOB_TYPES
     | ARCH47_JOB_TYPES
     | ARCH49_JOB_TYPES
+    | ARCH50_JOB_TYPES
     | HARDENING_JOB_TYPES
 )
 
@@ -375,6 +379,12 @@ def _process_sweep_workspace(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_sweep_workspace(payload)
 
 
+def _revops_sweep(payload: dict[str, Any]) -> dict[str, Any]:
+    # ARCH50-S1:revops-handler-fn
+    from app.workers.handlers.revops import handle_sweep
+    return handle_sweep(payload)
+
+
 def _obligations_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.obligations import handle_extract_document
     return handle_extract_document(payload)
@@ -480,6 +490,8 @@ _HANDLERS = {
     "erp.deliver_posting": _erp_deliver_posting,
     # ARCH49-S1:process-handler. On the LIGHT profile (app/workers/profiles.py).
     "process.sweep_workspace": _process_sweep_workspace,
+    # ARCH50-S1:revops-handler. On the LIGHT profile (app/workers/profiles.py).
+    "revops.sweep": _revops_sweep,
 }
 
 
