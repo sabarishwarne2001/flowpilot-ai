@@ -2,7 +2,7 @@
   "milestone": "ARCH-50",
   "capability": "capability.egress_lockdown",
   "release_head": "arch50_step1_sovereign_revops",
-  "started": "2026-09-29T14:13:27.227808+00:00",
+  "started": "2026-09-29T14:36:45.792061+00:00",
   "migration": {
     "tables": 14,
     "revises": "arch49_step1_process_intelligence",
@@ -52,6 +52,258 @@
     "dependencies": "unchanged",
     "new_services": 0
   },
+  "head": {
+    "alembic": [
+      "arch50_step1_sovereign_revops"
+    ],
+    "tiers": {
+      "free": false,
+      "developer": false,
+      "business": false,
+      "enterprise": true
+    }
+  },
+  "refusals": {
+    "refused": {
+      "the same rule twice": "duplicate key value violates unique constraint \"uq_egress_allow_rules_scope\"",
+      "a rule on an operator channel (STORAGE)": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_channel_governed\"",
+      "a URL as a host pattern": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_pattern_shape\"",
+      "an upper-case pattern (stored patterns are normalized)": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_pattern_shape\"",
+      "a credential in the pattern": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_pattern_shape\"",
+      "allow everything (*)": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_no_everything\"",
+      "allow everything (0.0.0.0/0)": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_no_everything\"",
+      "port 70000": "new row for relation \"egress_allow_rules\" violates check constraint \"ck_egress_allow_rules_port_range\"",
+      "a second platform row for one destination and hour (the bucket is unique without a tenant too)": "duplicate key value violates unique constraint \"uq_egress_refusals_bucket\"",
+      "a TENANT_LOCKDOWN refusal with no tenant": "new row for relation \"egress_refusals\" violates check constraint \"ck_egress_refusals_tenant_reason_has_tenant\"",
+      "an unknown channel": "new row for relation \"egress_refusals\" violates check constraint \"ck_egress_refusals_channel_known\"",
+      "a zero count": "new row for relation \"egress_refusals\" violates check constraint \"ck_egress_refusals_count_positive\"",
+      "a first refusal before its bucket": "new row for relation \"egress_refusals\" violates check constraint \"ck_egress_refusals_window\"",
+      "two current licences": "duplicate key value violates unique constraint \"uq_platform_licences_current\"",
+      "a key id that is not an Ed25519 fingerprint": "new row for relation \"platform_licences\" violates check constraint \"ck_platform_licences_key_id_shape\"",
+      "a row whose licence id disagrees with its signed payload": "new row for relation \"platform_licences\" violates check constraint \"ck_platform_licences_id_matches_payload\"",
+      "a PASSED PITR drill without its RPO": "new row for relation \"dr_drills\" violates check constraint \"ck_dr_drills_passed_pitr_is_measured\"",
+      "a PASSED PITR drill that recovered to nothing": "new row for relation \"dr_drills\" violates check constraint \"ck_dr_drills_passed_pitr_is_measured\"",
+      "a drill that finished before it started": "new row for relation \"dr_drills\" violates check constraint \"ck_dr_drills_ordered\"",
+      "an unknown drill kind": "new row for relation \"dr_drills\" violates check constraint \"ck_dr_drills_kind_known\"",
+      "a lower-case book code": "new row for relation \"plan_price_books\" violates check constraint \"ck_plan_price_books_code_shape\"",
+      "a price that is not whole paise": "new row for relation \"plan_price_book_entries\" violates check constraint \"ck_plan_price_book_entries_minor_units\"",
+      "one gateway price for two plans": "gateway price pdt_d3_aa2982ff already identifies another plan, interval or currency",
+      "an entry re-priced on a published book": "the entries of a PUBLISHED plan price book are immutable",
+      "an entry added to a published book": "the entries of a PUBLISHED plan price book are immutable",
+      "an entry removed from a published book": "the entries of a PUBLISHED plan price book are immutable",
+      "a published book moved to another currency": "plan price book D3-INR is published and immutable",
+      "a published book deleted": "plan price book D3-INR is PUBLISHED; only a draft can be deleted",
+      "a published book sent back to draft": "plan price book D3-INR cannot return to draft",
+      "a published book without its digest": "new row for relation \"plan_price_books\" violates check constraint \"ck_plan_price_books_published_is_digested\"",
+      "two published books in one currency": "duplicate key value violates unique constraint \"uq_plan_price_books_one_published\"",
+      "both a percent and an amount off": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_one_discount\"",
+      "redeemed past its cap": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_within_cap\"",
+      "REPEATING without its months": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_months_iff_repeating\"",
+      "an amount off without its currency": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_amount_has_currency\"",
+      "a lower-case code": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_code_shape\"",
+      "a weekly interval": "new row for relation \"promo_codes\" violates check constraint \"ck_promo_codes_intervals_known\"",
+      "a second live redemption of one code by one organization": "duplicate key value violates unique constraint \"uq_promo_redemptions_one_live\"",
+      "a discount larger than the price": "new row for relation \"promo_redemptions\" violates check constraint \"ck_promo_redemptions_discount_bounded\"",
+      "REDEEMED with no time": "new row for relation \"promo_redemptions\" violates check constraint \"ck_promo_redemptions_redeemed_has_time\"",
+      "two active contracts for one organization": "duplicate key value violates unique constraint \"uq_enterprise_contracts_one_active\"",
+      "ACTIVE but never activated": "new row for relation \"enterprise_contracts\" violates check constraint \"ck_enterprise_contracts_active_was_activated\"",
+      "ENDED without its reason": "new row for relation \"enterprise_contracts\" violates check constraint \"ck_enterprise_contracts_ended_has_reason\"",
+      "a term that ends before it starts": "new row for relation \"enterprise_contracts\" violates check constraint \"ck_enterprise_contracts_term_ordered\"",
+      "an amount that is not whole paise": "new row for relation \"enterprise_contracts\" violates check constraint \"ck_enterprise_contracts_minor_units\"",
+      "a total that is not subtotal - discount + tax": "new row for relation \"contract_invoices\" violates check constraint \"ck_contract_invoices_arithmetic\"",
+      "a discount larger than the subtotal": "new row for relation \"contract_invoices\" violates check constraint \"ck_contract_invoices_arithmetic\"",
+      "a second live invoice for one period": "duplicate key value violates unique constraint \"uq_contract_invoices_period\"",
+      "PAID with no time": "new row for relation \"contract_invoices\" violates check constraint \"ck_contract_invoices_paid_has_time\"",
+      "VOID with no reason": "new row for relation \"contract_invoices\" violates check constraint \"ck_contract_invoices_void_has_reason\"",
+      "ARR that is not 12 x MRR": "new row for relation \"revenue_snapshots\" violates check constraint \"ck_revenue_snapshots_arr_is_12_mrr\"",
+      "a snapshot not on the first of a month": "new row for relation \"revenue_snapshots\" violates check constraint \"ck_revenue_snapshots_first_of_month\"",
+      "a month snapshotted twice": "duplicate key value violates unique constraint \"uq_revenue_snapshots_month\"",
+      "an unknown gateway": "new row for relation \"checkout_selections\" violates check constraint \"ck_checkout_selections_gateway_known\"",
+      "stage COMPLETED -> ENRICHING": "work_items 4d902b2a-d280-4725-a9d6-aec472ae352d: illegal pipeline transition COMPLETED -> ENRICHING",
+      "stage COMPLETED -> EXTRACTED": "work_items 33966d3c-47d0-44cf-8059-cd6dc3a1675a: illegal pipeline transition COMPLETED -> EXTRACTED",
+      "stage COMPLETED -> EXTRACTING": "work_items a586a7d5-8b43-4b52-b65d-8f666e59aec4: illegal pipeline transition COMPLETED -> EXTRACTING",
+      "stage COMPLETED -> FAILED": "work_items fe0d3760-305f-48be-a83b-327a5911e07e: illegal pipeline transition COMPLETED -> FAILED",
+      "stage COMPLETED -> QUOTA_BLOCKED": "work_items 753228ed-ff89-4767-9beb-c0e7ae6d47d6: illegal pipeline transition COMPLETED -> QUOTA_BLOCKED",
+      "stage ENRICHING -> EXTRACTED": "work_items 1764bd69-5e97-4a43-bd04-3b132c28d3dd: illegal pipeline transition ENRICHING -> EXTRACTED",
+      "stage ENRICHING -> EXTRACTING": "work_items 5c263170-11a3-4e25-97f1-301b34028d93: illegal pipeline transition ENRICHING -> EXTRACTING",
+      "stage ENRICHING -> QUOTA_BLOCKED": "work_items 3e70138b-d283-4c92-83eb-78e079cb0323: illegal pipeline transition ENRICHING -> QUOTA_BLOCKED",
+      "stage EXTRACTED -> EXTRACTING": "work_items 05ad6cc4-97cc-498a-b7ce-1e19872a5a5e: illegal pipeline transition EXTRACTED -> EXTRACTING",
+      "stage EXTRACTED -> QUOTA_BLOCKED": "work_items 504bb102-3b63-4660-90ab-ee5f84637185: illegal pipeline transition EXTRACTED -> QUOTA_BLOCKED",
+      "stage EXTRACTING -> COMPLETED": "work_items 54a81cc3-d446-4e5b-ac01-373efe9296e0: illegal pipeline transition EXTRACTING -> COMPLETED",
+      "stage EXTRACTING -> ENRICHING": "work_items 03ba7e01-69b8-482d-9953-8d452e584349: illegal pipeline transition EXTRACTING -> ENRICHING",
+      "stage FAILED -> COMPLETED": "work_items dcd1eff9-44a3-4ce3-8889-e9fa40507ad9: illegal pipeline transition FAILED -> COMPLETED",
+      "stage FAILED -> EXTRACTED": "work_items df593aa8-7da0-4121-b077-0cd299c8cce9: illegal pipeline transition FAILED -> EXTRACTED",
+      "stage FAILED -> QUOTA_BLOCKED": "work_items aa6c34f2-2420-4058-9ca6-5b4748a88337: illegal pipeline transition FAILED -> QUOTA_BLOCKED",
+      "stage QUEUED -> COMPLETED": "work_items 90894d8b-76e3-4c48-9038-e4cfe9b72016: illegal pipeline transition QUEUED -> COMPLETED",
+      "stage QUEUED -> ENRICHING": "work_items 3f7e2325-48a8-4af7-9724-fe868ce25f66: illegal pipeline transition QUEUED -> ENRICHING",
+      "stage QUEUED -> EXTRACTED": "work_items 1ab6af15-fa13-4e85-b1b2-f518289fcf2e: illegal pipeline transition QUEUED -> EXTRACTED",
+      "stage QUOTA_BLOCKED -> COMPLETED": "work_items 4c31e049-a968-413b-883f-e0d9df1a8acc: illegal pipeline transition QUOTA_BLOCKED -> COMPLETED",
+      "stage QUOTA_BLOCKED -> EXTRACTED": "work_items 3d0023a8-b71d-48db-bc1b-a618f74cbe6c: illegal pipeline transition QUOTA_BLOCKED -> EXTRACTED",
+      "stage QUOTA_BLOCKED -> FAILED": "work_items ce6224fb-f8e4-440b-8bce-b8074b6def96: illegal pipeline transition QUOTA_BLOCKED -> FAILED"
+    },
+    "accepted": [
+      "a measured PASSED PITR drill",
+      "a new reservation once the earlier one was released",
+      "a re-issue of a voided period",
+      "stage COMPLETED -> QUEUED",
+      "stage ENRICHING -> COMPLETED",
+      "stage ENRICHING -> FAILED",
+      "stage ENRICHING -> QUEUED",
+      "stage EXTRACTED -> COMPLETED",
+      "stage EXTRACTED -> ENRICHING",
+      "stage EXTRACTED -> FAILED",
+      "stage EXTRACTED -> QUEUED",
+      "stage EXTRACTING -> EXTRACTED",
+      "stage EXTRACTING -> FAILED",
+      "stage EXTRACTING -> QUEUED",
+      "stage EXTRACTING -> QUOTA_BLOCKED",
+      "stage FAILED -> ENRICHING",
+      "stage FAILED -> EXTRACTING",
+      "stage FAILED -> QUEUED",
+      "stage QUEUED -> EXTRACTING",
+      "stage QUEUED -> FAILED",
+      "stage QUEUED -> QUOTA_BLOCKED",
+      "stage QUOTA_BLOCKED -> ENRICHING",
+      "stage QUOTA_BLOCKED -> EXTRACTING",
+      "stage QUOTA_BLOCKED -> QUEUED"
+    ]
+  },
+  "rest": [
+    {
+      "step": "D4 HTTP 402/200 on the six egress routes (REAL Business/Enterprise tiers, real org roles, every 402 audited); OWNER writes, ADMIN reads and tests, MEMBER refused; patterns normalized, URLs / '*' / operator channels refused; the dry run never records; changes audited; a downgrade takes the editing away, never the enforcement, and only the operator lifts it (egress_admin clear: a reason required, audited, rules kept); both operator consoles 404 for tenants, 200 for superadmins",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D5 egress END TO END through the real clients under a network tap, per channel: webhook (DEAD, not retried), ERP HTTP, ERP SFTP and SMTP (decided BEFORE the name is resolved), a provider SDK (its wrapped refusal still one), OIDC, warehouse, object storage (operator's), internal RPC (operator-only); deny mode (the operator's DNS resolvers asked, the rest refused): tenant allowlists do not open it, declared hosts do, tenants narrow them; one row per destination and hour, one audit per row; the tenant and the operator see them",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D6 the operator's local model against a live OpenAI-compatible server: EXCLUSIVE answers everything (the operator's key sent, no provider touched); FALLBACK answers a deny-mode refusal, a tenant-lockdown refusal and an outage; OFF reports a refusal as 403 EGRESS_DENIED (never an outage); streams exclusive and on refusal; health reachable / unreachable within its timeout; LOCAL is selectable by no tenant schema or route; the key never leaves the console",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D7 the sovereign licence: no licence -> organization creation 402 LICENCE_REQUIRED; tampered, expired and malformed licences refused (402), a tenant cannot install one (404); a valid Ed25519 licence installs, creation works up to its limit and not past it; a development key is refused in production; the LICENCE_FILE source; the hosted edition is never gated",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "D8 RevOps through HTTP: an INR price book (unknown tier refused, immutable once published, plans show it), promo codes (quotes, 404/409/400, currency mismatch), an ANNUAL INR checkout with a promo through the real Dodo gateway to a live mock (product, seats, discount code), a code used twice, a price sold as another plan, deny mode refuses the gateway and keeps nothing until it is declared; the sweep redeems; MRR = annual / 12; an invoiced contract (numbering, prorate, 10% repeating promo, 18% tax, pay, void + R1 re-issue, one active per org), tenant view, MRR = quarter / 3, cancel -> free; frozen snapshots; a new book retires the old",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C1 chaos: Redis unreachable -> the plan refusal, a role refusal (its denial counter lives in Redis: it fails open), the policy, refusals, RevOps metrics and sweep, the operator console, the local model and the DR heartbeat all still answer (Redis is never on these paths)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "C4 chaos: dead targets -> a dead local model answers 503 inside its timeout; a dead billing gateway answers 503 BILLING_GATEWAY_UNAVAILABLE (never a 500) and keeps no promo reservation and no sale",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "crash": {
+    "reaped": 1,
+    "attempts": 2,
+    "first_run": {
+      "reservations_expired": 0,
+      "redemptions_confirmed": 0,
+      "contracts_ended": 0,
+      "invoices_issued": 0,
+      "snapshots_written": 2,
+      "refusals_pruned": 0
+    },
+    "re_run": {
+      "reservations_expired": 0,
+      "redemptions_confirmed": 0,
+      "contracts_ended": 0,
+      "invoices_issued": 0,
+      "snapshots_written": 0,
+      "refusals_pruned": 0
+    }
+  },
+  "kill": {
+    "killed_backend": 2950,
+    "error": "OperationalError",
+    "after_kill": [
+      "DRAFT",
+      0,
+      0,
+      "business",
+      0
+    ],
+    "after_retry": [
+      "ACTIVE",
+      1,
+      1,
+      "enterprise",
+      2
+    ]
+  },
+  "chaos": {
+    "drill_id": "d069421e-6d62-4e97-a579-c21293843b0d",
+    "scenarios": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true
+    }
+  },
+  "races": {
+    "promo_cap": {
+      "sessions": 8,
+      "cap": 3,
+      "reserved": 3
+    },
+    "promo_per_org": {
+      "sessions": 8,
+      "reserved": 1
+    },
+    "activation": {
+      "sessions": 8,
+      "active": 1
+    },
+    "invoices": {
+      "sessions": 8,
+      "periods": 2,
+      "each_once": true
+    },
+    "refusal_bucket": {
+      "sessions": 8,
+      "rounds": 4,
+      "count_each": 8,
+      "audits": 4
+    },
+    "rule_cap": {
+      "sessions": 8,
+      "added": 3,
+      "cap": 200
+    }
+  },
+  "sweep": {
+    "jobs_per_day": 1,
+    "handler": {
+      "first": {
+        "reservations_expired": 0,
+        "redemptions_confirmed": 0,
+        "contracts_ended": 0,
+        "invoices_issued": 0,
+        "snapshots_written": 2,
+        "refusals_pruned": 1
+      },
+      "second": {
+        "reservations_expired": 0,
+        "redemptions_confirmed": 0,
+        "contracts_ended": 0,
+        "invoices_issued": 0,
+        "snapshots_written": 0,
+        "refusals_pruned": 0
+      }
+    }
+  },
   "caught_by": {
     "MS1 the capability leaked into Business": "AssertionError: packaged into Business (Enterprise only)",
     "MS2 the capability missing from Enterprise": "AssertionError: not packaged into Enterprise",
@@ -76,7 +328,7 @@
     "MS21 the local model over the provider channel (not operator-only)": "AssertionError: the local client does not use the operator-only transport",
     "MS22 licence verification skips the signature": "AssertionError: a tampered payload verified",
     "MS23 a development key licenses production": "AssertionError: a development key licensed production",
-    "MS24 release verification ignores changed files": "AssertionError: a changed file was not reported: {'status': 'VERIFIED', 'release_dir': 'C:\\\\Users\\\\sabar\\\\AppData\\\\Local\\\\Temp\\\\arch50-release-f41tfoc8\\\\tree\\\\release', 'files': 6, 'modified': ['backend/app/core/egress.py'], 'missing': [], 'key_id': 'ed25519:7aaec4ac2b6da25f', 'release': {'built_at': '2026-09-29T14:15:42+00:00', 'commit': 'b76347ada7cfd078fac907f2a7626a6a0e7e6933', 'components': 6",
+    "MS24 release verification ignores changed files": "AssertionError: a changed file was not reported: {'status': 'VERIFIED', 'release_dir': 'C:\\\\Users\\\\sabar\\\\AppData\\\\Local\\\\Temp\\\\arch50-release-637ehotj\\\\tree\\\\release', 'files': 6, 'modified': ['backend/app/core/egress.py'], 'missing': [], 'key_id': 'ed25519:11023338d968d389', 'release': {'built_at': '2026-09-29T14:40:29+00:00', 'commit': '8d6f785200ceed95adcc26a4efe9cc2b66e3c8c3', 'components': 6",
     "MS25 the SBOM generator imports XML (a third XML module)": "AssertionError: release_manifest.py imports XML (verify_arch16 S1 confines it to two modules)",
     "MS26 a percent discount not rounded to whole paise": "AssertionError: a percent discount must round to whole minor units",
     "MS27 the short last period billed in full": "AssertionError: the short last period was billed 900000000",
@@ -96,7 +348,26 @@
     "MS41 the licence module calls out": "AssertionError: licence.py reaches import requests\n",
     "MS42 the sweep job off the LIGHT profile at runtime": "AssertionError: revops.sweep is not claimable on LIGHT",
     "MS43 the upgrade keeps ARCH-10's pipeline stage guard": "AssertionError: the upgrade does not install the application's stage table",
-    "MS44 the stage table drifts from the application's": "AssertionError: the stage guard is not the application's transition table: [('QUOTA_BLOCKED', 'ENRICHING')]"
+    "MS44 the stage table drifts from the application's": "AssertionError: the stage guard is not the application's transition table: [('QUOTA_BLOCKED', 'ENRICHING')]",
+    "MD1 the REST capability gate removed (D4 must catch)": "AssertionError: AssertionError: GET /organizations/9a66847f-360e-404e-b4e0-d3b885c90e2a/egress on the Business plan -> HTTP 200: served without the plan: {\"organization_id\":\"9a66847f-360e-404e-b4e0-d3b885c90e2a\",\"lockdown_enabled\":false,\"updated_at\":null,\"updated_by_user_id\":null,\"rules\":[],\"max_rules\":200,\"deployment_mode\":\"open\",\"governed_channels\":[\"WEBHOOK\",\"WAREHOUSE\",\"ERP_HTTP\",\"ERP_SFTP\",\"I",
+    "MD2 the dry run records a refusal (D4 must catch)": "AssertionError: AssertionError: the dry run recorded a refusal (2 recorded)  at verify_arch50.py:1860 <- verify_arch50.py:1702",
+    "MD3 a downgrade switches the lockdown off (D4 must catch)": "AssertionError: AssertionError: a downgrade switched the lockdown off: Decision(allowed=True, channel='WEBHOOK', host='evil.example.net', port=443, mode='open', reason=None, explanation='', organization_id=UUID('d1c835f2-3168-497c-bbb3-d947dbfe5e34'), matched=None)  at verify_arch50.py:1874 <- verify_arch50.py:1702",
+    "MD4 refusals bucketed per call, not per hour (D5 must catch)": "AssertionError: AssertionError: two refusals of one destination in one hour must be ONE row counting 2: {('ERP_SFTP', 'TENANT_LOCKDOWN'): (1, 1), ('INTERNAL', 'OPERATOR_ONLY'): (1, 1), ('IDENTITY', 'TENANT_LOCKDOWN'): (1, 1), ('WAREHOUSE', 'TENANT_LOCKDOWN'): (1, 1), ('WEBHOOK', 'TENANT_LOCKDOWN'): (2, 2), ('ERP_HTTP', 'TENANT_LOCKDOWN'): (1, 1), ('SMTP_TENANT', 'TENANT_LOCKDOWN'): (1, 1), ('LLM_P",
+    "MD5 an audit row per refused attempt (D5 must catch)": "AssertionError: AssertionError: 13 audit rows for 12 refusal buckets (one per destination and hour)  at verify_arch50.py:2083 <- verify_arch50.py:1702",
+    "MD6 SFTP resolves the name before the gate decides (D5 must catch)": "AssertionError: AssertionError: ERP SFTP to another host (decided before the name is resolved): expected a TENANT_LOCKDOWN refusal, got SftpError: DNS resolution for 'sftp.other.example' failed: [Errno 11001] arch50 network tap: sftp.other.example is not resolved here  at verify_arch50.py:1950 <- verify_arch50.py:1988 <- verify_arch50.py:1702",
+    "MD7 deny mode ignored (D5 must catch)": "AssertionError: AssertionError: deny mode: a webhook the tenant allowed: expected a DEPLOYMENT_DENY refusal, got AttemptOutcome: AttemptOutcome(disposition=<AttemptDisposition.RETRY: 'RETRY'>, attempt_number=1, request_url='https://hooks.acme.example/in', request_headers={'Content-Type': 'application/json', 'User-Agent': 'FlowPilot-Webhooks/1.0', 'X-FlowPilot-Delivery-Id': 'a71d6740-461d-4181-871e",
+    "MD8 an SDK-wrapped refusal treated as an outage (D6 must catch)": "AssertionError: AssertionError: a refused provider was reported as HTTPException (503: The AI service is temporarily unavailable. Please try again.): an outage, not a refusal  at verify_arch50.py:2147 <- verify_arch50.py:1702",
+    "MD9 exclusive mode not honoured (D6 must catch)": "AssertionError: AssertionError: exclusive: HTTPException(status_code=503, detail='The AI service is temporarily unavailable. Please try again.')  at verify_arch50.py:2121 <- verify_arch50.py:1702",
+    "MD10 organization creation without the licence check (D7 must catch)": "AssertionError: AssertionError: an organization was created without a licence: HTTP 201 None, expected 402 LICENCE_REQUIRED: {\"id\":\"89377336-a462-4568-bc5d-183105a4f48d\",\"slug\":\"sovereign-two\",\"name\":\"Sovereign Two\",\"legal_name\":null,\"status\":\"ACTIVE\",\"created_at\":\"2026-09-29T14:41:55.643623Z\",\"updated_at\":\"2026-09-29T14:41:55.643623Z\"}  at verify_arch50.py:1792 <- verify_arch50.py:2213 <- verify_",
+    "MD11 a tampered licence installs (D7 must catch)": "AssertionError: AssertionError: a tampered licence was installed: 200  at verify_arch50.py:2219 <- verify_arch50.py:1702",
+    "MD12 a promo reserved without its row lock (X1 must catch)": "AssertionError: 8 of 8 simultaneous reservations succeeded for a cap of 3",
+    "MD13 activation without the organization lock or the UNIQUE answer (X1 must catch)": "AssertionError: 8 contracts of one organization activated at once: ['error', 'error', 'error', 'error', 'error', 'error', 'error', 'ok'] ['gkpj', 'gkpj', 'gkpj', 'gkpj', 'gkpj', 'gkpj', 'gkpj']",
+    "MD14 the refusal count as SELECT-then-UPDATE (X1 must catch)": "AssertionError: 8 concurrent refusals of one destination were counted [(1,)]",
+    "MD15 the rule cap without the policy row lock (X1 must catch)": "AssertionError: 8 concurrent adds left 205 rules (cap 200)",
+    "MD16 the frozen snapshot rewritten (X2 must catch)": "AssertionError: a frozen snapshot was rewritten: {'reservations_expired': 0, 'redemptions_confirmed': 0, 'contracts_ended': 0, 'invoices_issued': 0, 'snapshots_written': 2, 'refusals_pruned': 0}",
+    "MD17 the local model fallback ignores an egress refusal (D6 must catch)": "AssertionError: AssertionError: fallback when the deployment refuses the provider: EgressDenied('Outbound connection to api.groq.com:443 over LLM_PROVIDER refused (DEPLOYMENT_DENY): this deployment denies outbound connections except to destinations its operator declared')  at verify_arch50.py:2130 <- verify_arch50.py:1702",
+    "MD18 the operator lifts a lockdown without an audit row (D4 must catch)": "AssertionError: AssertionError: the operator's clear was not audited: None  at verify_arch50.py:1891 <- verify_arch50.py:1702",
+    "MD19 the database keeps ARCH-10's pipeline stage guard (D3 must catch)": "AssertionError: the schema refused stage ENRICHING -> QUEUED the application declares legal: work_items 1fe10b3e-50e1-4771-b9a8-856c7ac84372: illegal pipeline transition ENRICHING -> QUEUED"
   },
   "results": [
     {
@@ -182,6 +453,86 @@
     {
       "layer": "offline",
       "gate": "A1 apply_arch50.py --check on this tree: every file is the ARCH-50 result (a second apply writes nothing)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D1 database at arch50 (or the contract head above it): 14 tables, the three price-book triggers, the capability on the published Enterprise tier only",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D2 zero column drift between the ORM and the migration on the 14 tables",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D3 schema refusals: rules (operator channel, URL, upper case, credential, '*', 0.0.0.0/0, port, duplicate), refusal buckets (unique without a tenant, lockdown needs a tenant, window), one current licence with a matching id, a measured PITR drill, the immutable published price book (entries, currency, delete, back to draft, one per currency, digest), one gateway price one plan, promo shape and cap, one live redemption, one active contract, invoice arithmetic, one live invoice per period (a void re-issues), snapshots; the REAL pipeline stage guard: all 21 transitions the application declares legal pass, the other 9 are refused",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D4 HTTP 402/200 on the six egress routes (REAL Business/Enterprise tiers, real org roles, every 402 audited); OWNER writes, ADMIN reads and tests, MEMBER refused; patterns normalized, URLs / '*' / operator channels refused; the dry run never records; changes audited; a downgrade takes the editing away, never the enforcement, and only the operator lifts it (egress_admin clear: a reason required, audited, rules kept); both operator consoles 404 for tenants, 200 for superadmins",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D5 egress END TO END through the real clients under a network tap, per channel: webhook (DEAD, not retried), ERP HTTP, ERP SFTP and SMTP (decided BEFORE the name is resolved), a provider SDK (its wrapped refusal still one), OIDC, warehouse, object storage (operator's), internal RPC (operator-only); deny mode (the operator's DNS resolvers asked, the rest refused): tenant allowlists do not open it, declared hosts do, tenants narrow them; one row per destination and hour, one audit per row; the tenant and the operator see them",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D6 the operator's local model against a live OpenAI-compatible server: EXCLUSIVE answers everything (the operator's key sent, no provider touched); FALLBACK answers a deny-mode refusal, a tenant-lockdown refusal and an outage; OFF reports a refusal as 403 EGRESS_DENIED (never an outage); streams exclusive and on refusal; health reachable / unreachable within its timeout; LOCAL is selectable by no tenant schema or route; the key never leaves the console",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D7 the sovereign licence: no licence -> organization creation 402 LICENCE_REQUIRED; tampered, expired and malformed licences refused (402), a tenant cannot install one (404); a valid Ed25519 licence installs, creation works up to its limit and not past it; a development key is refused in production; the LICENCE_FILE source; the hosted edition is never gated",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D8 RevOps through HTTP: an INR price book (unknown tier refused, immutable once published, plans show it), promo codes (quotes, 404/409/400, currency mismatch), an ANNUAL INR checkout with a promo through the real Dodo gateway to a live mock (product, seats, discount code), a code used twice, a price sold as another plan, deny mode refuses the gateway and keeps nothing until it is declared; the sweep redeems; MRR = annual / 12; an invoiced contract (numbering, prorate, 10% repeating promo, 18% tax, pay, void + R1 re-issue, one active per org), tenant view, MRR = quarter / 3, cancel -> free; frozen snapshots; a new book retires the old",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "C1 chaos: Redis unreachable -> the plan refusal, a role refusal (its denial counter lives in Redis: it fails open), the policy, refusals, RevOps metrics and sweep, the operator console, the local model and the DR heartbeat all still answer (Redis is never on these paths)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "C4 chaos: dead targets -> a dead local model answers 503 inside its timeout; a dead billing gateway answers 503 BILLING_GATEWAY_UNAVAILABLE (never a 500) and keeps no promo reservation and no sale",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "D9 disaster recovery MEASURED: the scratch PITR drill (WAL archive, pg_basebackup, a crash, restore to a timestamp with EXACTLY the rows committed by then, restore to the end of the archive; RPO and RTO timed) and the ARCH-41 encrypted logical backup restored and compared table by table; both recorded; the console meets the stated RPO 300 s / RTO 3600 s",
+      "outcome": "FAIL  C:\\Users\\sabar\\Desktop\\flowpilot-ai\\backend\\.venv\\Scripts\\python.exe C:\\Users\\sabar\\Desktop\\flowpilot-ai\\backend\\scripts\\dr_pitr.py drill --scratch --record --json C:\\Users\\sabar\\AppData\\Local\\Temp\\arch50-dr-br7_pvzx\\pitr.json exited 1\ninitdb not found: set PG_BIN to PostgreSQL 16's bin directory\n"
+    },
+    {
+      "layer": "db",
+      "gate": "C2 chaos: a worker dies after doing the RevOps sweep but before recording it: the lease expires, the reaper returns the job, a second worker completes it (attempt 2) and the frozen snapshot is written once",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "C3 chaos: the database connection is killed mid-activation (after the promo redemption and the plan change): the contract stays DRAFT, no redemption, the plan unchanged, no invoices; a retry activates exactly once",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "C5 the chaos run is recorded as the deployment's latest CHAOS drill (dr_drills)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "X1 races on N=8 sessions behind a barrier (committed, REAL tiers, dedicated pool N+2): a promo capped at 3 -> 3 reserved + 5 PROMO_EXHAUSTED; one org one code -> 1 + 7 PROMO_ALREADY_USED; 8 contracts of one org -> 1 ACTIVE + 7 CONTRACT_ACTIVE_EXISTS; one contract x8 -> 1 + 7 CONTRACT_NOT_DRAFT; 8 invoice issuers -> each period once; 8 refusals of one destination (x4 rounds) -> one row counting 8, one audit each (the first-refusal timestamp race found here is fixed); 8 rule adds at 197 -> 3 + 5 TOO_MANY_RULES",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "db",
+      "gate": "X2 the clock (committed): the REAL cron entry point twice on one day -> ONE job, 8 at once -> one (advisory lock; the NULL-organization idempotency key is not covered by the unique index); the job on LIGHT; the handler freezes the closed month once and prunes refusals past retention",
       "outcome": "PASS"
     },
     {
@@ -405,6 +756,101 @@
       "outcome": "PASS"
     },
     {
+      "layer": "mutation",
+      "gate": "MD1 the REST capability gate removed (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD2 the dry run records a refusal (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD3 a downgrade switches the lockdown off (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD4 refusals bucketed per call, not per hour (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD5 an audit row per refused attempt (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD6 SFTP resolves the name before the gate decides (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD7 deny mode ignored (D5 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD8 an SDK-wrapped refusal treated as an outage (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD9 exclusive mode not honoured (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD10 organization creation without the licence check (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD11 a tampered licence installs (D7 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD12 a promo reserved without its row lock (X1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD13 activation without the organization lock or the UNIQUE answer (X1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD14 the refusal count as SELECT-then-UPDATE (X1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD15 the rule cap without the policy row lock (X1 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD16 the frozen snapshot rewritten (X2 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD17 the local model fallback ignores an egress refusal (D6 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD18 the operator lifts a lockdown without an audit row (D4 must catch)",
+      "outcome": "PASS"
+    },
+    {
+      "layer": "mutation",
+      "gate": "MD19 the database keeps ARCH-10's pipeline stage guard (D3 must catch)",
+      "outcome": "PASS"
+    },
+    {
       "layer": "build",
       "gate": "B1 tsc -b and vite build",
       "outcome": "PASS"
@@ -420,5 +866,5 @@
       "outcome": "PASS"
     }
   ],
-  "seconds": 400.0
+  "seconds": 581.1
 }

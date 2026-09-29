@@ -2,7 +2,7 @@
   "milestone": "ARCH-49",
   "capability": "capability.process_intelligence",
   "release_head": "arch49_step1_process_intelligence",
-  "started": "2026-09-29T14:18:35.826514+00:00",
+  "started": "2026-09-29T14:45:13.842037+00:00",
   "vocabulary": {
     "auto_capable": [
       "extraction.approve_consensus",
@@ -178,7 +178,7 @@
     "jobs_per_slot": 1,
     "handler": {
       "swept": true,
-      "workspace_id": "ef49e93e-c92e-4134-aa51-15223a9b313e",
+      "workspace_id": "cb54ffd5-833a-441b-b836-a76c92a2bfb0",
       "written": 12,
       "agent": {
         "retired": 0,
@@ -352,5 +352,5 @@
       "outcome": "PASS"
     }
   ],
-  "seconds": 89.0
+  "seconds": 70.6
 }
