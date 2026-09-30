@@ -265,7 +265,7 @@ through Docker itself. The first run on the VPS must be watched (RUNBOOK,
 PostgreSQL WAL archiving configured; a Compose deployment does not have it. The
 RUNBOOK tells you to leave those three lines commented out. Point-in-time
 recovery is an owner decision (RPO wanted: today the newest nightly backup, up
-to 24 hours of data) → N-011. Also unverified: whether anything enqueues the job
+to 24 hours of data) → N-012. Also unverified: whether anything enqueues the job
 types `billing.reconcile`, `billing.assemble_invoice`, `usage.reconcile` and
 `billing.seat_sync` on a schedule (apart from scripts and gateway code paths).
 
