@@ -15,7 +15,7 @@ How to read this file:
 |----|-----|--------|------|-------|
 | F-001 | P1 | **fixed** (Phase 1, PR #2) | CI | CI on `main` fails instantly with zero jobs; the encoding gate would also fail (44 files) |
 | F-002 | P1 | confirmed (static count) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
-| F-003 | P2 | unverified | Config/secrets | Hard-coded default secrets are used if the env var is missing |
+| F-003 | P2 | **fixed** (Phase 2) | Config/secrets | Hard-coded default secrets are used if the env var is missing |
 | F-004 | P2 | unverified | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
 | F-005 | P3 | unverified | Plan gating / UX | Sidebar lock state does not match what the server enforces |
 | F-006 | P2 | unverified | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
@@ -117,9 +117,43 @@ compose file. There is one more gap: `.env.production.template` ships
 `API_KEY_PEPPER=` blank. A blank value overrides the default, which would give
 an empty pepper with no error.
 
-**Next step.** Phase 2: a test that builds `Settings(ENVIRONMENT="production")`
-without these values must fail. Then fix it by refusing defaults and blanks in
-production.
+**Fixed (Phase 2).** Proof of the bug and the fix on the same input
+(`ENVIRONMENT=production`, `CORS_ORIGINS=*`, `LOG_LEVEL=DEBUG`,
+`POSTGRES_PASSWORD=postgres`, `STORAGE_BACKEND=local`, rate limit off): the code
+on `main` **booted**, using the public pepper and the public email key; the new
+code refuses with 12 named problems. What changed:
+
+- `app/core/production_guard.py` (new) and one validator in `Settings`. In
+  `production` **and `staging`** the app refuses to start and lists every
+  problem at once, by variable name, never by value: missing, blank, short,
+  repetitive, placeholder or repository-published secrets (`API_KEY_PEPPER`,
+  `REDIS_IDENTITY_PEPPER`, `EMAIL_ENCRYPTION_KEYS`, `JWT_SECRET_KEY`); the same
+  value reused for two secrets; a default or trivial `POSTGRES_PASSWORD`;
+  wildcard, non-https or localhost CORS; a non-https `FRONTEND_URL`; debug
+  logging; rate limiting, login back-off, SAML wrapping defence or LLM
+  metering switched off; an in-memory rate limiter; `STORAGE_BACKEND=local` in
+  production; the public MinIO credentials; no `REDIS_URL`; no SMTP host
+  (invitations and password resets would silently never arrive); a reranker
+  without its token; Stripe or Dodo keys without their webhook secret, a
+  wrong-mode publishable key, and live payment mode in staging.
+- The three public defaults are **gone from `config.py`**. Development and
+  test derive private values from the checkout's own `JWT_SECRET_KEY`, so
+  nothing public can be the key and API keys survive a restart.
+- `ENVIRONMENT` is normalised (`Production`, `prod`) and a misspelling is
+  refused. Before, `ENVIRONMENT=Production` silently switched off every check
+  that compares against the literal `"production"` (API-key prefix, SSRF
+  production rules, internal-TLS rule, SFTP host checks).
+- The refusal is its own exception, because a pydantic `ValidationError`
+  prints the whole input dictionary, which here holds every secret.
+- `.env.production.template` now names every variable the compose file and the
+  guard require (it lacked `REDIS_URL`, the AI provider keys, session and
+  upload limits and the migration flag) and a test proves it: copied as-is it
+  is refused, with secrets filled in it boots, and it ships no usable secret.
+
+Tests: `tests/core/test_production_config_guard.py` (72) and
+`tests/infra/test_production_env_template.py` (21) pass. The
+existing ML-stub, encryption-boundary and config tests pass; the only failures
+in the neighbouring test files are ones already in the Phase 1 baseline.
 
 ## F-004 — Server-side plan gating gaps to prove (P2, unverified)
 
