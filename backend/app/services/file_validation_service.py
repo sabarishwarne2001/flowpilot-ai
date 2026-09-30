@@ -298,14 +298,86 @@ def _probe_pdf(handle: BinaryIO, *, max_pages: int) -> tuple[int, list[str]]:
     return page_count, notes
 
 
+#: Action types a viewer runs or fetches when a page is opened or a link is
+#: clicked. A plain /URI or /GoTo link is ordinary navigation and is kept.
+_DANGEROUS_ACTIONS: frozenset[str] = frozenset(
+    {"/JavaScript", "/Launch", "/SubmitForm", "/ImportData", "/GoToR", "/GoToE", "/Rendition", "/Sound", "/Movie"}
+)
+#: Annotation types that embed content or media instead of describing a page.
+_DANGEROUS_ANNOTATIONS: frozenset[str] = frozenset(
+    {"/FileAttachment", "/Movie", "/Sound", "/Screen", "/RichMedia", "/3D"}
+)
+
+
+def _action_is_active(action: Any, *, depth: int = 0) -> bool:
+    """True if `action`, or anything chained after it (/Next), runs code or fetches."""
+    if depth > 8:
+        return True
+    try:
+        action = action.get_object()
+        if "/JS" in action or str(action.get("/S")) in _DANGEROUS_ACTIONS:
+            return True
+        chained = action.get("/Next")
+        if chained is None:
+            return False
+        chained = chained.get_object()
+        if isinstance(chained, list):
+            return any(_action_is_active(item, depth=depth + 1) for item in chained)
+        return _action_is_active(chained, depth=depth + 1)
+    except Exception:  # noqa: BLE001 - an action we cannot read is not one we keep
+        return True
+
+
+def _strip_page_active_content(page: Any) -> int:
+    """Remove page-level scripts and embedded content, in place. Returns how many were removed.
+
+    F-035. The scrub rebuilds a document from its pages, which drops the
+    catalog-level /OpenAction and /Names /JavaScript, but a page keeps its own
+    additional-actions dictionary (/AA) and its annotations, and an annotation
+    can carry an action (/A) or a whole attachment. Those survived into the
+    stored, downloadable file. Working on the reader's page BEFORE it is added
+    to the writer means the removed objects are unreachable, so they are not
+    written either.
+    """
+    from pypdf.generic import ArrayObject, NameObject
+
+    removed = 0
+    if "/AA" in page:
+        del page["/AA"]
+        removed += 1
+    annotations = page.get("/Annots")
+    if annotations is None:
+        return removed
+    kept = ArrayObject()
+    for reference in annotations.get_object():
+        annotation = reference.get_object()
+        if str(annotation.get("/Subtype")) in _DANGEROUS_ANNOTATIONS:
+            removed += 1
+            continue
+        if "/AA" in annotation:
+            del annotation["/AA"]
+            removed += 1
+        action = annotation.get("/A")
+        if action is not None and _action_is_active(action):
+            del annotation["/A"]
+            removed += 1
+        kept.append(reference)
+    page[NameObject("/Annots")] = kept
+    return removed
+
+
 def _scrub_pdf(handle: BinaryIO) -> tuple[BinaryIO, int]:
     from pypdf import PdfReader, PdfWriter
 
     handle.seek(0)
     reader = PdfReader(handle)
     writer = PdfWriter()
+    removed = 0
     for page in reader.pages:
+        removed += _strip_page_active_content(page)
         writer.add_page(page)
+    if removed:
+        logger.info("file_validation.pdf_active_content_removed", extra={"removed": removed})
     writer.add_metadata({})
 
     out = tempfile.SpooledTemporaryFile(max_size=SPOOL_MAX_MEMORY_BYTES)

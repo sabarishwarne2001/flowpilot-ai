@@ -47,6 +47,8 @@ How to read this file:
 | F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
 | F-033 | P3 | confirmed (test); open | Billing | Dodo's "test event reached a live deployment" guard compares the deployment's config with itself and cannot fire |
 | F-034 | P3 | **fixed** (Phase 2) | Billing | `/billing/webhooks/STRIPE` (any capitalisation but lowercase) crashed with an unhandled AttributeError |
+| F-035 | P2 | **fixed** (Phase 2) | Uploads | Page-level PDF actions (JavaScript, Launch, SubmitForm) survive the upload scrub into the stored, downloadable file |
+| F-036 | P2 | **fixed** (Phase 2) | Uploads | An upload over the size limit crashed the upload endpoint with a 500 instead of answering 413 |
 
 ---
 
@@ -811,3 +813,65 @@ forged future timestamp needs the secret.
 cancellation, downgrade and quota enforcement are decided by the reconciler jobs,
 which fetch current state from the gateway; the gateways are blocked here. They
 are on the Phase 3 list and in `02-security-deploy.md`.
+
+## F-036 — An over-size upload was a 500, not a 413 (P2, fixed)
+
+**Plain language.** The main upload endpoint (`POST /workspaces/{id}/work-items`)
+is supposed to answer "413: file too large" when someone uploads more than the
+workspace allows. The line that builds that answer named a constant that does not
+exist in the installed web framework (`HTTP_413_PAYLOAD_TOO_LARGE`; the real name is
+`HTTP_413_REQUEST_ENTITY_TOO_LARGE`), so the size check itself worked and then the
+error handler crashed. Every oversize upload was an unhandled 500 with a traceback
+in the log, and the console could not tell the user "too large". Nothing oversize
+was stored, so this is a correctness and noise problem, not a data leak. Found by
+the upload attack tests; nothing else in the code used the wrong name.
+**Proof:** `test_an_upload_over_the_limit_is_413_and_stores_nothing` fails with
+`AttributeError` before the change and passes after.
+
+## F-035 — Page-level PDF actions survived the scrub (P2, fixed)
+
+**Plain language.** Uploaded PDFs are rebuilt from their pages, which removes the
+document-level scripts (`/OpenAction`, `/Names /JavaScript`); that part worked and
+is tested. But a page keeps its own "additional actions" and its links, and a link
+can carry a JavaScript, Launch (run a program), SubmitForm or ImportData (send data
+to a URL) action, or a whole attachment. Those were copied into the stored file,
+which colleagues then download and open in Acrobat or a browser. A low-privilege
+member could plant a hostile PDF for an administrator to open. Defence in depth, not
+a server compromise, hence P2.
+**Fixed.** `_strip_page_active_content` removes `/AA`, dangerous annotation actions
+(JavaScript, Launch, SubmitForm, ImportData, GoToR/GoToE, media, following any
+`/Next` chain) and attachment and media annotations from each page before it is
+copied, so the removed objects are unreachable and are not written at all. Ordinary
+links and destinations are kept. **Proof:** four tests (one per action type) that
+inspect the stored bytes failed before and pass after; a control test proves an
+ordinary 3-page PDF still round-trips.
+
+## File handling and injection audit (Phase 2, uploads)
+
+`tests/security/test_upload_attacks.py` (49 tests) and
+`test_upload_endpoint_filenames.py` (14). Result: the pipeline is sound. **Refused
+(and pinned):** HTML, a Windows executable, a shell script, SVG, empty, null-filled
+and truncated bodies named or declared as PDF; a ZIP called a PDF; a PDF declared as
+PNG (mismatch, quarantined); an octet-stream declaration hiding an executable; a
+script in a GIF comment (removed by the re-encode); encrypted PDFs; corrupt PDFs; a
+60-page PDF over a 50-page limit; an image that declares 1.6 billion pixels in a few
+hundred bytes. **Archives** (the bulk-import path, `ingestion/archive.py`): a
+300 MB-inflating bomb refused from its directory alone; thirty entries at moderate
+ratio refused in aggregate; 2,005 tiny entries refused; six traversal and absolute
+names never become a member; a nested archive, executables, HTML, SVG, macro
+documents inside an archive are not members; a fake ZIP is refused. **XML** (the ERP
+formats): external entities, entity-expansion bombs, parameter entities, case and
+spacing variants, a UTF-16-encoded DOCTYPE, oversized input are refused; XInclude is
+not processed. **Filenames through the real endpoint:** eleven hostile names (path
+traversal in both slash styles, absolute paths, a 400-character name, NUL, an HTML
+tag, CR/LF, a right-to-left override) never change where the file is stored (key is
+`<organization>/<random>`), nothing is written outside the storage root, and the
+download response carries no injected header. A non-PDF body leaves no work item and
+no stored file; a viewer cannot upload. **Presigned links:** exports and redaction
+bundles use a fixed 15-minute lifetime the client cannot change; the generated URL
+carries `X-Amz-Expires <= 900` and is scoped to one key.
+**Not covered here (residual):** the multipart upload-session and batch/bulk paths
+(they share `validate_spooled` and `archive.inspect`, exercised above, but their own
+endpoints are Phase 3), virus scanning (none exists; an owner decision for
+enterprise sales), and the Caddy request-size ceiling (checked with the container
+audit).
