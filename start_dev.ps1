@@ -320,7 +320,8 @@ try {
     # 1. Price Book
     if (Test-Path 'scripts/seed_price_book.py') {
         & $venvPython scripts/seed_price_book.py
-        Write-Ok "scripts/seed_price_book.py"
+        if ($LASTEXITCODE -eq 0) { Write-Ok "scripts/seed_price_book.py" }
+        else { Write-Warn2 "scripts/seed_price_book.py FAILED (exit $LASTEXITCODE, see output above)" }
     }
 
     # 2. Quota Tiers
@@ -328,7 +329,8 @@ try {
         # Dev has no payment gateway, so publish the tiers without gateway
         # price ids; without the flag the script refuses and no tier exists.
         & $venvPython scripts/seed_quota_tiers.py --allow-unpriced
-        Write-Ok "scripts/seed_quota_tiers.py"
+        if ($LASTEXITCODE -eq 0) { Write-Ok "scripts/seed_quota_tiers.py" }
+        else { Write-Warn2 "scripts/seed_quota_tiers.py FAILED (exit $LASTEXITCODE, see output above)" }
     }
 
     # 3. Admin User

@@ -248,10 +248,20 @@ else
 fi
 
 step '6/8  Seeding commercial defaults'
-"${VENV_PY}" scripts/seed_price_book.py --version 1 >/dev/null 2>&1 && ok "scripts/seed_price_book.py" || warn "scripts/seed_price_book.py (already seeded)"
+# Both scripts exit 0 when the data is already there, so any other exit is a
+# real failure: show its last line instead of hiding it.
+run_seed() {
+    local output
+    if output="$("${VENV_PY}" "$@" 2>&1)"; then
+        ok "$1"
+    else
+        warn "$1 FAILED: $(printf '%s\n' "${output}" | tail -n 1)"
+    fi
+}
+run_seed scripts/seed_price_book.py --version 1
 # Dev has no payment gateway, so publish the tiers without gateway price ids;
 # without the flag the script refuses and no plan tier exists at all.
-"${VENV_PY}" scripts/seed_quota_tiers.py --allow-unpriced >/dev/null 2>&1 && ok "scripts/seed_quota_tiers.py" || warn "scripts/seed_quota_tiers.py (already seeded)"
+run_seed scripts/seed_quota_tiers.py --allow-unpriced
 
 ADMIN_EMAIL='admin@flowpilot.local'
 ADMIN_PASSWORD='FlowPilot!Dev123'
