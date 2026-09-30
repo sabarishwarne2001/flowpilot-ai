@@ -18,7 +18,7 @@ How to read this file:
 | F-003 | P2 | **fixed** (Phase 2) | Config/secrets | Hard-coded default secrets are used if the env var is missing |
 | F-004 | P2 | **fixed** (Phase 2; reads/deletes await N-003) | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
 | F-005 | P3 | unverified | Plan gating / UX | Sidebar lock state does not match what the server enforces |
-| F-006 | P2 | unverified | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
+| F-006 | P2 | **fixed for Compose** (Phase 2; a real `docker compose` run on the VPS is unverified) | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
 | F-007 | P3 | confirmed (git) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
 | F-008 | P3 | unverified | Frontend guards | Route-level role guard exists but is unused; org pages have no route-level role check |
 | F-009 | P3 | unverified | Frontend | `/admin` has no index route (likely an empty screen) |
@@ -205,7 +205,7 @@ column in COVERAGE.csv). Rows marked `UNGATED in a <plan>-plan module`.
   "Data governance" have no plan gating anywhere (neither UI nor API). That may
   be intended. **Owner decision → N-002.**
 
-## F-006 — Critical sweeps and backups depend on host cron (P2, unverified)
+## F-006 — Critical sweeps and backups depend on host cron (P2, fixed for Docker Compose)
 
 **Plain language.** Some important jobs are not started by the app or its
 containers. They are started by a Linux "cron" file that must be installed on
@@ -213,15 +213,59 @@ the server by hand (`backend/deploy/cron.d/`). These are the data-retention and
 erasure sweep (`compliance`), obligation reminders, ERP posting retries,
 invitation and identity sweeps, and **the database backup and the restore
 drill**. `docker-compose.prod.yml` does not run cron. If you deploy only with
-containers (or on a PaaS), these jobs never run, and nothing tells you. Your
-retention promises break silently and you have no backups.
+containers, these jobs never run, and nothing tells you. Your retention
+promises break silently and you have no backups.
 
-**Evidence.** `backend/deploy/cron.d/flowpilot-sweepers` (17 entries),
-`flowpilot-backups` (2 entries), `docker-compose.prod.yml` (no cron service).
-Also, no producer was found in the app for the job types `billing.reconcile`,
-`billing.assemble_invoice`, `usage.reconcile` and `billing.seat_sync`, apart from
-scripts and gateway code paths. It is unverified whether anything enqueues them
-on a schedule.
+**Why the existing files could not work on your VPS.** Both scripts assumed a
+Python virtual environment and Postgres client tools installed *on the server*.
+A Docker Compose VPS has neither: Python and Postgres live in containers.
+
+**What changed (Phase 2).**
+
+- `deploy/bin/flowpilot-sweep` accepts `FLOWPILOT_RUNNER`. Set it (in
+  `/etc/flowpilot/sweepers.env`) to a `docker compose ... run --rm ... python`
+  command and every sweeper runs inside the stack's own image. Unset, the wrapper
+  behaves exactly as before.
+- New `deploy/bin/flowpilot-compose-backup`: `pg_dump` inside the `db`
+  container (so the client always matches the server), AES-256 encryption, a
+  read-back **verification** (decrypt, then `pg_restore --list`; a backup that
+  cannot be read back is deleted, not kept), a checksum, 7 daily + 4 weekly
+  retention, and an optional off-host mirror command.
+- New `deploy/bin/flowpilot-compose-restore-drill`: restores the newest backup
+  into a scratch database, compares table row counts and the Alembic head with
+  the live one, times it, and drops the scratch database.
+- New `deploy/cron.d/flowpilot-compose-backups`: the schedule (nightly backup,
+  weekly drill). Install it *instead of* `flowpilot-backups`.
+- `docs/RUNBOOK.md` gained "First deploy", "Backups" and "Scheduled jobs".
+
+**Evidence.** `tests/infra/test_compose_backup_scripts.py` (13 tests) runs the
+scripts against a real PostgreSQL with real `pg_dump`, `pg_restore` and
+`openssl`: a backup is encrypted, checksummed and readable only with the key; a
+missing or empty key stops the run and writes nothing; a failing dump keeps
+nothing; the restore drill restores into a scratch database and drops it; the
+drill fails on a corrupted backup and when a core table comes back empty;
+retention keeps 7 daily + 4 weekly; a failed mirror is reported while the local
+backup stays; the mirror command receives the backup path; a sweep runs through
+the configured container runner and a failing sweep is recorded as a failure;
+every cron entry names a sweeper the wrapper knows; the compose cron file
+schedules a nightly backup and a weekly drill. A mutation check (encryption
+removed from the script) makes the encryption test fail.
+
+**Not verified.** A real `docker compose exec` / `run` against the production
+stack: this session has no Docker daemon that can pull images (Docker Hub rate
+limit), so the container-side commands were exercised through the
+`FLOWPILOT_PG_EXEC` and `FLOWPILOT_RUNNER` prefixes with a native Postgres, not
+through Docker itself. The first run on the VPS must be watched (RUNBOOK,
+"First deploy", step 6).
+
+**Still open.** The three point-in-time-recovery entries in
+`flowpilot-sweepers` (`dr-heartbeat`, `base-backup`, `pitr-drill`) need
+PostgreSQL WAL archiving configured; a Compose deployment does not have it. The
+RUNBOOK tells you to leave those three lines commented out. Point-in-time
+recovery is an owner decision (RPO wanted: today the newest nightly backup, up
+to 24 hours of data) → N-011. Also unverified: whether anything enqueues the job
+types `billing.reconcile`, `billing.assemble_invoice`, `usage.reconcile` and
+`billing.seat_sync` on a schedule (apart from scripts and gateway code paths).
 
 ## F-007 — Repository hygiene (P3, confirmed from git)
 

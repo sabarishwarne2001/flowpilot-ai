@@ -80,14 +80,29 @@ STARTED_AT="$(date -u +%s)"
 MODULE="${SCRIPT%.py}"
 MODULE="${MODULE//\//.}"
 
-cd "${FLOWPILOT_ROOT}/backend" || {
-    echo "SWEEP_FAILED | ${NAME} | cannot cd to ${FLOWPILOT_ROOT}/backend" >> "${LOG_FILE}"
-    exit 1
-}
+# F-006. On a Docker Compose host there is no Python venv on the host at all. Setting
+# FLOWPILOT_RUNNER (in sweepers.env) to a command that runs `python` inside the stack
+# makes every sweep run in a container, for example:
+#
+#   FLOWPILOT_RUNNER="docker compose -f /srv/flowpilot/backend/docker-compose.prod.yml \
+#       --env-file /srv/flowpilot/backend/.env.production run --rm --no-deps -T \
+#       -e SERVICE_ROLE=sweeper worker-light python"
+#
+# The runner receives `-m <module> <args>`; the host needs no checkout of the venv, only
+# the compose files. Unset, the wrapper behaves exactly as before (host venv).
+if [[ -n "${FLOWPILOT_RUNNER:-}" ]]; then
+    read -r -a RUNNER <<< "${FLOWPILOT_RUNNER}"
+    RUN_CMD=("${RUNNER[@]}" -m "${MODULE}" "$@")
+else
+    cd "${FLOWPILOT_ROOT}/backend" || {
+        echo "SWEEP_FAILED | ${NAME} | cannot cd to ${FLOWPILOT_ROOT}/backend" >> "${LOG_FILE}"
+        exit 1
+    }
+    RUN_CMD=(env SERVICE_ROLE=sweeper "${FLOWPILOT_VENV}/bin/python" -m "${MODULE}" "$@")
+fi
 
 flock -w 0 "${LOCK_FILE}" \
-    env SERVICE_ROLE=sweeper \
-    "${FLOWPILOT_VENV}/bin/python" -m "${MODULE}" "$@" \
+    "${RUN_CMD[@]}" \
     >> "${LOG_FILE}" 2>&1
 STATUS=$?
 

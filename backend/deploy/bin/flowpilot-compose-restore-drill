@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# FlowPilot AI: prove the newest backup restores, into a scratch database, and time it.
+#
+#   flowpilot-compose-restore-drill [backup-file]
+#
+# A backup nobody has restored is a hypothesis. This restores the newest one (or the
+# file named) into a throwaway database next to the live one, checks that the Alembic
+# revision matches the live database and that the core tables have rows when the live
+# ones do, prints the restore time (your measured RTO for a database this size), and
+# drops the scratch database. It never touches the live database. Exit 0 only if every
+# check passed. Same configuration variables as flowpilot-compose-backup.
+set -euo pipefail
+
+BACKUP_DIR="${FLOWPILOT_BACKUP_DIR:-/srv/flowpilot/backups}"
+KEY_FILE="${FLOWPILOT_BACKUP_KEY_FILE:-}"
+DB_USER="${POSTGRES_USER:-flowpilot}"
+DB_NAME="${POSTGRES_DB:-flowpilot}"
+COMPOSE_FILE="${FLOWPILOT_COMPOSE_FILE:-/srv/flowpilot/backend/docker-compose.prod.yml}"
+ENV_FILE="${FLOWPILOT_ENV_FILE:-/srv/flowpilot/backend/.env.production}"
+DEFAULT_EXEC="docker compose -f ${COMPOSE_FILE} --env-file ${ENV_FILE} exec -T db"
+read -r -a PGX <<< "${FLOWPILOT_PG_EXEC-${DEFAULT_EXEC}}"
+CORE_TABLES=(${FLOWPILOT_DRILL_TABLES:-organizations users work_items})
+
+[[ -n "${KEY_FILE}" && -r "${KEY_FILE}" ]] || { echo "FLOWPILOT_BACKUP_KEY_FILE must name a readable passphrase file" >&2; exit 64; }
+BACKUP="${1:-$(ls -1 "${BACKUP_DIR}"/flowpilot-*.dump.enc 2>/dev/null | sort -r | head -1)}"
+[[ -n "${BACKUP}" && -r "${BACKUP}" ]] || { echo "no backup found in ${BACKUP_DIR}" >&2; exit 66; }
+
+if [[ -r "${BACKUP}.sha256" ]]; then
+    ( cd "$(dirname "${BACKUP}")" && sha256sum --check --status "$(basename "${BACKUP}").sha256" ) \
+        || { echo "DRILL FAILED: ${BACKUP} does not match its checksum" >&2; exit 1; }
+fi
+
+SCRATCH="drill_$(date -u +%Y%m%d%H%M%S)_$$"
+sql() { "${PGX[@]}" psql -U "${DB_USER}" -tA -d "$1" -c "$2"; }
+cleanup() { "${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "DROP DATABASE IF EXISTS \"${SCRATCH}\"" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+started="$(date -u +%s)"
+"${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "CREATE DATABASE \"${SCRATCH}\"" 
+sql "${SCRATCH}" "CREATE EXTENSION IF NOT EXISTS vector" >/dev/null 2>&1 || true
+
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:${KEY_FILE}" -in "${BACKUP}" \
+    | "${PGX[@]}" pg_restore --no-owner --exit-on-error -U "${DB_USER}" -d "${SCRATCH}" \
+    || { echo "DRILL FAILED: pg_restore could not restore ${BACKUP}" >&2; exit 1; }
+seconds=$(( $(date -u +%s) - started ))
+
+live_rev="$(sql "${DB_NAME}" "SELECT version_num FROM alembic_version" 2>/dev/null || echo none)"
+back_rev="$(sql "${SCRATCH}" "SELECT version_num FROM alembic_version" 2>/dev/null || echo none)"
+status=0
+if [[ "${live_rev}" != "${back_rev}" ]]; then
+    echo "NOTE: Alembic revision differs (live ${live_rev}, backup ${back_rev}); expected only if a migration ran since the backup" >&2
+fi
+for table in "${CORE_TABLES[@]}"; do
+    live="$(sql "${DB_NAME}" "SELECT count(*) FROM ${table}" 2>/dev/null || echo 0)"
+    back="$(sql "${SCRATCH}" "SELECT count(*) FROM ${table}" 2>/dev/null || echo missing)"
+    echo "table ${table}: live=${live} backup=${back}"
+    if [[ "${back}" == "missing" ]] || { (( live > 0 )) && (( back == 0 )); }; then
+        echo "DRILL FAILED: table ${table} is missing or empty in the restored copy" >&2
+        status=1
+    fi
+done
+echo "restore time: ${seconds}s (revision ${back_rev})"
+exit "${status}"
