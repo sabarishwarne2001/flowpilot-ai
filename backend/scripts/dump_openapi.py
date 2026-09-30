@@ -1,4 +1,4 @@
-﻿"""
+"""
 Dumps the OpenAPI document to a file without serving the application.
 """
 

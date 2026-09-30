@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Pure tenant resolution for FlowPilot AI.
  */
 

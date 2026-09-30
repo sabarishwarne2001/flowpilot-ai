@@ -1,4 +1,4 @@
-﻿"""Gate: every callable-class dependency must expose a real __globals__.
+"""Gate: every callable-class dependency must expose a real __globals__.
 
     python scripts/verify_dependency_resolution.py
 """

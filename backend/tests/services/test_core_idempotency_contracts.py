@@ -1,4 +1,4 @@
-﻿"""Anchor regression tests for the three core idempotency contracts."""
+"""Anchor regression tests for the three core idempotency contracts."""
 
 from __future__ import annotations
 

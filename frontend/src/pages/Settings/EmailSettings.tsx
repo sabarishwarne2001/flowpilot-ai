@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ARCH40-S2:email-settings-page. Workspace email: the override, and why.
  *
  * Two things this page must answer, and before ARCH-40 answered neither:

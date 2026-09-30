@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The single source of truth for tenant context in the FlowPilot AI UI.
  */
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ARCH-18 / ARCH-24 — COGS, unit economics and supplier reconciliation DTOs.
  */
 

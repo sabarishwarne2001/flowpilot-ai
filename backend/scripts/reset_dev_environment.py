@@ -1,4 +1,4 @@
-﻿"""Unified development environment reset — Postgres, Redis, MinIO."""
+"""Unified development environment reset — Postgres, Redis, MinIO."""
 
 from __future__ import annotations
 

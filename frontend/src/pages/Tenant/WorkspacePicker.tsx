@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tenant picker for FlowPilot AI.
  */
 

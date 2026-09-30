@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tenancy type contract for FlowPilot AI.
  */
 

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """ARCH-14 Step 1 & ARCH-18 — publish commercial price book with ratecards and cost bases."""
 
 from __future__ import annotations

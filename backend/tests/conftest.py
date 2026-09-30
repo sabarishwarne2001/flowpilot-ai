@@ -1,4 +1,4 @@
-﻿"""
+"""
 Test fixtures for the FlowPilot AI tenant isolation suite.
 Fully isolated in a dedicated test database (flowpilot_test).
 Never connects to or truncates the development database.
