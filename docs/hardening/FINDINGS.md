@@ -43,6 +43,7 @@ How to read this file:
 | F-028 | P3 | confirmed (Playwright) | Frontend | Dashboard fires 4 failing avatar requests for users without an avatar |
 | F-029 | P3 | confirmed (gate run) | Gates | 33 of 78 verification gates fail; several are stale |
 | F-030 | P3 | confirmed (test runs) | Tests | The test harness is slow and order-dependent |
+| F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
 
 ---
 
@@ -588,3 +589,49 @@ tests use a fixed database name (`flowpilot_svc_test`), so two runs at once
 collide, and results change with test order (for example, no published tier
 is "in force"). Phase 3: transaction-rollback isolation or a template
 database, plus a unique database name per run.
+
+---
+
+# Phase 2 findings (2026-09-30)
+
+## F-031 — A foreign or unknown document id answers 200 on two sub-routes (P3, fixed)
+
+**Plain language.** Every route that addresses a document by id should answer
+"not found" when the document is not in your workspace, whether it belongs to
+another customer or does not exist at all. Two did not: `GET
+/workspaces/{ws}/work-items/{id}/entities` and `.../extraction-memory` answered
+`200` with an empty result. No data crossed the boundary (both queries filter by
+your workspace), so this is not a leak, but it broke the rule every other route
+follows and would have hidden a future leak behind a friendly empty page.
+
+**How it was found.** A new sweep (`tests/security/test_idor_child_entities.py`)
+creates real objects in tenant B (12 kinds through the API, plus work items,
+API keys, automation rules and memberships through the ORM), then calls every
+route that addresses a child of those collections from tenant A's own
+organization, with B's ids, with every method. 44 child routes were probed and
+these two were the only ones that answered.
+
+**Fixed.** Both handlers now return `404 Document not found` unless the document
+is in the URL's workspace. Six new tests (three per route: foreign, unknown, and
+the control that a workspace's own document still answers 200): 4 failed before,
+all pass after. The sweep and its control that B's rows are untouched afterwards
+also pass.
+
+## Multi-tenancy proof (Phase 2) — no cross-tenant leak found
+
+- **Path-level (all 423 org- and workspace-scoped operations, both
+  directions):** `tests/security/test_cross_tenant_sweep.py`. Tenant A's owner
+  called tenant B's real organization and workspace ids with schema-valid bodies
+  on every route and method; every answer was 401/403/404, none 2xx, none 5xx. A
+  user in no tenant is refused everywhere; anonymous callers get 401/403
+  everywhere. A **mutation control** turns the membership check off and the
+  sweep must then find crossings (it does), so a passing sweep is not vacuous.
+- **Object-level (IDOR):** F-031 above.
+- **Platform routes:** 39+ super-admin operations, discovered from the
+  dependency tree, refuse all tenant roles (`test_superadmin_only.py`).
+- **Partner programme:** 25 routes with route-level "any signed-in user" refuse
+  non-members and lower partner roles (`test_partner_isolation.py`).
+- **Not covered here (honest limits):** object-level IDOR is proven for the 12
+  object kinds the API can create with a generated body plus four ORM-created
+  kinds; the remaining collections need hand-built fixtures (Phase 3/4). SCIM,
+  the public API-key gateway and the WebSocket are checked separately below.
