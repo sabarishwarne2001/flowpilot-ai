@@ -25,10 +25,10 @@ StubTokenizer
     A word-and-punctuation tokenizer with the call signature the chunker and
     the metering code use (input_ids, offset_mapping, add_special_tokens).
 StubOCRProvider
-    One page per image, and one page per PDF page (counted with pypdfium2).
-    Each page's text is the literal label below, followed by the page number
-    and the first 12 hex digits of the file's SHA-256. It never reads the
-    content.
+    The real PaddleOCRProvider with only the model call replaced. Digital PDF
+    pages keep their real text layer. Each image or scanned page becomes one
+    full-page block whose text is the label below plus the first 12 hex
+    digits of the page image's SHA-256. It never reads the pixels.
 """
 
 from __future__ import annotations
@@ -36,11 +36,12 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Sequence, Union
 
 import numpy as np
 
-from app.services.ocr.base import OCRBlock, OCRPage, OCRProvider, OCRResult, OCRUnsupportedError
+from app.services.ocr.base import OCRUnavailableError
+from app.services.ocr.paddle import PaddleOCRProvider
 
 STUB_OCR_LABEL = "[FLOWPILOT TEST STUB OCR - NOT REAL TEXT]"
 STUB_EMBEDDING_DIMENSION = 384
@@ -155,59 +156,35 @@ def get_stub_embedding_model() -> StubSentenceTransformer:
     return StubSentenceTransformer()
 
 
-class StubOCRProvider(OCRProvider):
-    """Stands in for PaddleOCRProvider. Labels every page as stub output."""
+class StubOCRProvider(PaddleOCRProvider):
+    """PaddleOCRProvider with only the model call replaced.
+
+    Everything else is the real provider: the PDF text layer (digital pages
+    keep their real text and boxes and never reach the stub), page
+    rasterisation, and block parsing. Each image or scanned page the model
+    would have read becomes one full-page block whose text is the stub label.
+    """
 
     name = "test-stub-ocr"
-    cost_micros_per_page = 0
 
     def __init__(self, *, language: str = "en") -> None:
         _refuse_in_production()
-        self._language = language
+        super().__init__(language=language)
+        self._model_name = "stub"
 
     def is_available(self) -> bool:
         return True
 
-    def supports(self, mime_type: str) -> bool:
-        from app.services.ocr.paddle import SUPPORTED_MIME_TYPES
+    def _build_engine(self) -> Any:
+        raise OCRUnavailableError("The test stub has no engine to build.")
 
-        return mime_type.split(";")[0].strip().lower() in SUPPORTED_MIME_TYPES
-
-    @staticmethod
-    def _pdf_page_count(path: Path) -> int:
-        import pypdfium2 as pdfium  # noqa: PLC0415
-
-        document = pdfium.PdfDocument(str(path))
-        try:
-            return len(document)
-        finally:
-            document.close()
-
-    def extract(
-        self,
-        path: Path,
-        *,
-        mime_type: str,
-        language: str = "en",
-        max_pages: Optional[int] = None,
-    ) -> OCRResult:
+    def _run_engine(self, image_path: Path) -> Any:
         _refuse_in_production()
-        if not self.supports(mime_type):
-            raise OCRUnsupportedError(f"{self.name} cannot process {mime_type!r}.")
-        path = Path(path)
+        from PIL import Image  # noqa: PLC0415
+
+        path = Path(image_path)
+        with Image.open(path) as image:
+            width, height = image.size
         fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
-        count = self._pdf_page_count(path) if mime_type.startswith("application/pdf") else 1
-        if max_pages is not None:
-            count = min(count, max_pages)
-        pages = []
-        for number in range(1, count + 1):
-            text = f"{STUB_OCR_LABEL} page {number} sha256={fingerprint}"
-            pages.append(
-                OCRPage(
-                    page_number=number,
-                    text=text,
-                    blocks=[OCRBlock(text=text, confidence=1.0)],
-                    ocr_applied=True,
-                )
-            )
-        return OCRResult(pages=pages, provider=self.name, model="stub")
+        polygon = [[0.0, 0.0], [float(width), 0.0], [float(width), float(height)], [0.0, float(height)]]
+        return [[[polygon, (f"{STUB_OCR_LABEL} sha256={fingerprint}", 1.0)]]]

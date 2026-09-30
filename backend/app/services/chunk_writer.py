@@ -8,6 +8,7 @@ from typing import Any, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.embeddings import active_model_name
 from app.db.chunk_scope import delete_chunks_for_work_item
 from app.models.document_chunk import DocumentChunk
@@ -39,6 +40,11 @@ def replace_document_chunks(
         )
 
     model = embedding_model or active_model_name()
+    if settings.ML_STUBS:
+        # Stub vectors must not pass for real ones once ML_STUBS is turned off.
+        from app.services.ml_stubs import STUB_MODEL_NAME
+
+        model = STUB_MODEL_NAME
     removed = delete_chunks_for_work_item(
         db, workspace_id=workspace_id, work_item_id=work_item_id
     )
