@@ -303,4 +303,6 @@ def test_dodo_with_no_secret_configured_nothing_is_trusted(
 @pytest.mark.parametrize("gateway", ["paypal", "unknown", "..%2f..%2fadmin", "stripe%00"])
 def test_an_unknown_gateway_is_a_plain_404(client: TestClient, gateway: str) -> None:
     response = client.post(f"/api/v1/billing/webhooks/{gateway}", content=b"{}")
-    assert response.status_code in (404, 405)
+    # A NUL character in the URL is refused at the edge as a 400 (F-037, added after this
+    # case was written); every other unknown gateway is a plain 404.
+    assert response.status_code in ((400,) if "%00" in gateway else (404, 405))
