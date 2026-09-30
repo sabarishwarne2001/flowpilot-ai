@@ -35,7 +35,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.11"
+  # Must match backend/Dockerfile (python:3.12-slim). requirements.txt pins
+  # scipy==1.18.0, which has no Python 3.11 build.
+  PYTHON_VERSION: "3.12"
   NODE_VERSION: "22"
 
 jobs:
@@ -91,6 +93,13 @@ jobs:
           REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
           EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
           DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot
+          # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
+          # is read only by the backup scripts.
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot
           SERVICE_ROLE: web
         run: python scripts/run_all_gates.py --static-only
 
@@ -154,6 +163,16 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
+          # is read only by the backup scripts.
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_test
+          # Fresh, throwaway database: the lossy ARCH-40 contract step has
+          # nothing to lose here, and the models already assume it ran.
+          ARCH40_CONTRACT: "1"
           JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
           API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
           REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
@@ -165,6 +184,16 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
+          # is read only by the backup scripts.
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_test
+          # Fresh, throwaway database: the lossy ARCH-40 contract step has
+          # nothing to lose here, and the models already assume it ran.
+          ARCH40_CONTRACT: "1"
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
           API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
@@ -217,6 +246,16 @@ jobs:
         working-directory: backend
         env: &migrate_env
           DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_migrate
+          # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
+          # is read only by the backup scripts.
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_migrate
+          # Fresh, throwaway database: the lossy ARCH-40 contract step has
+          # nothing to lose here, and the models already assume it ran.
+          ARCH40_CONTRACT: "1"
           JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
           API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
           REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
