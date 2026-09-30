@@ -44,6 +44,7 @@ How to read this file:
 | F-029 | P3 | confirmed (gate run) | Gates | 33 of 78 verification gates fail; several are stale |
 | F-030 | P3 | confirmed (test runs) | Tests | The test harness is slow and order-dependent |
 | F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
+| F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
 
 ---
 
@@ -707,3 +708,56 @@ AST check that no other module splits the header or reads the socket peer.
 **Deployment note:** with `TRUSTED_PROXY_HOPS=0` behind a reverse proxy every user
 shares the proxy's IP and the per-IP limits (600 requests a minute globally) would
 throttle everyone together. `docker-compose.prod.yml` defaults it to 1 for Caddy.
+
+## F-032 — Pending invitations were shown to an unverified account (P2, fixed)
+
+**Plain language.** Registration deliberately never says whether an email address
+is already taken (good: it stops people probing who has an account). The side
+effect is that *anyone* can create an account for `victim@company.com` before the
+real person does, and that account starts out "unverified". The list "my pending
+invitations" looked up invitations by the address alone. So the squatter could
+open it and read every invitation sent to the victim: the organization's name, the
+role offered, the inviter's email address and the workspace names. No token and no
+access to the victim's mailbox was needed. This is the "pre-hijacking" pattern.
+
+**Proof.** `tests/security/test_invitations_and_unverified_accounts.py`: an
+organization invites an address; an unverified account holds that address; before
+the fix the response listed the organization, its role and the inviter's email.
+
+**Fixed.** `list_invitations_for_user` returns nothing until the account's email is
+verified. A genuine invitee loses nothing: accepting an invitation needs the
+emailed token and itself verifies the address. Control test: a verified owner of
+the address still sees the invitation. The 34 existing invitation tests pass.
+
+## Authentication audit (Phase 2)
+
+**Already covered by existing tests (2,000+ pass; nothing weakened):** refresh
+rotation and reuse detection (replaying a rotated cookie kills the family), grace
+window for racing tabs, logout, logout-all (in-flight access tokens die),
+per-device revocation, another user's session is a 404, tokens are stored only as
+hashes, verification/reset/email-change tokens are single-use and purpose-scoped,
+a completed reset kills a link sent to a stolen mailbox, login back-off. Refresh
+cookie: HttpOnly, SameSite=Lax, path-scoped to `/auth/refresh`, `Secure` in every
+environment except development and test (`ENVIRONMENT` is now normalised, so a
+different spelling cannot switch it off).
+
+**Added (`tests/security/test_auth_token_attacks.py`, 28 tests, all pass):**
+unsigned `alg: none` tokens, wrong-secret and tampered-payload tokens, HS384/HS512
+signed with the right secret (only the configured algorithm is accepted), expired
+tokens, wrong or missing `type`, missing expiry, tokens for a user that does not
+exist, malformed subjects (SQL text, empty, nil UUID) and malformed
+`Authorization` headers all answer 401 and never 500, all refusals return the
+same body (the reason is not revealed), an unverified member reaches no tenant
+data, a deactivated user is refused, a token issued before the user's revocation
+cutoff is refused, an access token is not accepted as a refresh cookie.
+
+**Registration and reset do not enumerate accounts:** registration answers 202
+with the same message whether or not the address exists (and emails the existing
+owner instead); F-032 was the one place that undid that.
+
+**Not covered here (residual, Phase 3/4):** live rate-limit behaviour of login and
+forgot-password against Redis (the limiter is disabled by the test harness and the
+per-user token limit is unit-tested), MFA (the product has none), SSO/SAML
+end-to-end (an XML-signature-wrapping rig exists from ARCH-28), OIDC state and
+nonce handling, and invitation role-escalation edge cases beyond the existing
+suite (OWNER is not invitable by design).

@@ -860,6 +860,14 @@ def list_invitations_for_user(
     user = user_crud.get_user_by_id(db, user_id=user_id)
     if user is None:
         return []
+    # F-032. Registration never says whether an address is taken, so anyone can
+    # hold an unverified account for someone else's address. Listing by the
+    # address string alone showed that person the victim's pending invitations
+    # (organization, role, inviter, workspaces). Only an account that has proved
+    # the mailbox may read them. Accepting an invitation, which needs the emailed
+    # token, still verifies the address, so a genuine invitee loses nothing.
+    if user.email_verified_at is None:
+        return []
     return invitation_crud.list_pending_invitations_for_email(db, email=user.email)
 
 
