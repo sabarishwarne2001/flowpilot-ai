@@ -16,7 +16,7 @@ How to read this file:
 | F-001 | P1 | **fixed** (Phase 1, PR #2) | CI | CI on `main` fails instantly with zero jobs; the encoding gate would also fail (44 files) |
 | F-002 | P1 | confirmed (static count) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
 | F-003 | P2 | **fixed** (Phase 2) | Config/secrets | Hard-coded default secrets are used if the env var is missing |
-| F-004 | P2 | unverified | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
+| F-004 | P2 | **fixed** (Phase 2; reads/deletes await N-003) | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
 | F-005 | P3 | unverified | Plan gating / UX | Sidebar lock state does not match what the server enforces |
 | F-006 | P2 | unverified | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
 | F-007 | P3 | confirmed (git) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
@@ -34,8 +34,8 @@ How to read this file:
 | F-019 | P1 | **fixed** (Phase 2) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | **fixed** (Phase 2) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
-| F-022 | P2 | unverified (gate 0V-G13) | Tenancy | An AI agent tool selector takes no tenant scope |
-| F-023 | P2 | unverified (gate arch08_step6) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
+| F-022 | P2 | **not a defect** (Phase 2; guard tests) | Tenancy | An AI agent tool selector takes no tenant scope |
+| F-023 | P2 | **not a defect** (Phase 2; guard tests) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
 | F-024 | P2 | confirmed (same command fails live) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
 | F-025 | P3 | confirmed (gate arch20 + drift) | Models | `organization_addon` model is not registered in `app/models/__init__` |
 | F-026 | P3 | confirmed (live) | Uploads | Storage errors surface as a raw 500 on upload |
@@ -635,3 +635,75 @@ also pass.
   object collections above (12 the API can create from a generated body, 4
   created through the ORM); the remaining collections need hand-built fixtures (Phase 3/4). SCIM,
   the public API-key gateway and the WebSocket are checked separately below.
+
+## F-004 — resolved (Phase 2): five routes gated, the rest documented
+
+Method: a real organization on the seeded FREE tier (and one on ENTERPRISE as the
+control) calls **every route in every locked feature area** with a schema-valid
+request (`tests/security/test_plan_gating_server_side.py`, 200+ operations across
+26 areas). Every answer must be a plan refusal (HTTP 402 `CAPABILITY_REQUIRED` or
+`ADDON_REQUIRED`) or be listed with a reason. The server answers **402, not 403**,
+by design: "your plan does not include this" is the true statement.
+
+**Two real bypasses (a FREE tenant succeeded):**
+- `POST /organizations/{id}/developer/keys` → **201**: minted a public-API
+  gateway key, while `POST /api-keys` (same key type) was refused. The module's
+  comment claimed the plan ceiling was "enforced inside the service"; the
+  capability itself was checked nowhere. Fixed (commit `4d8f24e`).
+- `PUT /organizations/{id}/identity/security-policy` → **200**: the Enterprise
+  session and IP policy was writable from any plan. Fixed (`b7b5f34`).
+
+**Three routes with a missing gate that were not exploitable on FREE** (no object
+can exist to act on) but belong to the same feature: `PATCH
+.../developer/keys/{id}/tier`, `POST .../identity/domains/{id}/verify`, `POST
+.../branding/sender-domain/verify`. Gated (`4d8f24e`, `b7b5f34`, `d9fc369`).
+
+**Deliberately still open, pending owner decision N-003** (listed by name with
+that reason in `ALLOWED_OPEN`, so a change is a one-line test edit): reads and
+deletes of a paid feature's own data (API keys, custom domains, developer
+console, identity config, branding, analytics destinations, webhooks, email
+settings). Two more are open by design: the `/potential` upsell counts and the
+email "test" routes, which use the tenant's own SMTP settings and send nothing
+without them. A NEW ungated route in a locked area now fails the test.
+
+**Not yet gated by anyone's decision (N-002):** BYOK, marketplace, service
+levels, data governance and analytics reads have no plan gating in the API or the
+UI; the sweep does not treat them as locked.
+
+**Controls.** The ENTERPRISE tenant is refused on plan grounds on none of these
+routes, so the gate is not a blanket refusal.
+
+**Existing tests touched.** Three tests in `test_public_api_endpoints.py` issued
+developer keys on an organization with no plan. Their arrangement now uses a
+fixture that puts it on the seeded DEVELOPER plan; no assertion changed.
+
+## F-022 — not a defect; guarded (Phase 2)
+
+Gate 0V-G13 flagged `agent_selectors.resolve_review_item` because it has no
+parameter named `tenant`. Reading the code: every selector takes `scope:
+AgentScope` (organization, workspace and proposal ids) and only *builds* a typed
+action. Tenancy is enforced where an action is *applied*:
+`actions._execute` loads the review item with `workspace_id=proposal.workspace_id`
+and cases with `Case.workspace_id == proposal.workspace_id`, and
+`lock_proposal` filters by workspace, so a proposal in workspace A that names an
+item id from workspace B finds nothing and is SUPERSEDED. Guard tests
+(`tests/security/test_agent_selectors_carry_a_tenant_scope.py`) pin those facts.
+**Unverified dynamically:** a full cross-workspace apply needs review fixtures
+(Phase 3). The gate that flagged it is not edited (N-010).
+
+## F-023 — not a defect; guarded (Phase 2)
+
+The five "reads" are one parser and its callers. Only `app/core/client_ip.py`
+splits the header, applies `TRUSTED_PROXY_HOPS` and takes the entry the trusted
+proxy appended (the last), never the client-controlled first. The SAML route
+hands the raw header to the same resolver; BYOK, SCIM, warehouse sync and custom
+domains call `client_ip(request)`; three of the five hits in the gate are comments
+or docstrings. No code reads `request.client.host` directly. With forged headers:
+the real address always wins, 39 rotating forged values resolve to one client (a
+per-IP rate limit cannot be evaded), a chain shorter than the trusted hops or a
+garbage entry never becomes the client IP (rate limiting falls back to the proxy,
+IP pinning refuses). `tests/security/test_forged_forwarded_for.py`, including an
+AST check that no other module splits the header or reads the socket peer.
+**Deployment note:** with `TRUSTED_PROXY_HOPS=0` behind a reverse proxy every user
+shares the proxy's IP and the per-IP limits (600 requests a minute globally) would
+throttle everyone together. `docker-compose.prod.yml` defaults it to 1 for Caddy.
