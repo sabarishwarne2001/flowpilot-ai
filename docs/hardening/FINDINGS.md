@@ -52,6 +52,7 @@ How to read this file:
 | F-037 | P3 | **fixed** (Phase 2) | Input handling | A NUL character (`%00`) in a search box crashed 19 routes with a 500 |
 | F-038 | P2 | **fixed** (Phase 2) | Frontend | Production builds shipped source maps (`index-*.js.map`), publishing the original TypeScript |
 | F-039 | P2 | **partly fixed** (Phase 2) | Dependencies | 7 npm advisories (fixed) and 13 Python packages with known advisories (4 bumped, rest tracked) |
+| F-040 | P1 | **fixed** (Phase 2) | Deployment | The production API container cannot start: `gunicorn` is in no requirements file |
 
 ---
 
@@ -965,3 +966,24 @@ uploaded PDFs**), `pyasn1` 0.6.3 → 0.6.4, `anyio` 4.14.1 → 4.14.2, `aiohttp`
   python-jose and is not used for HS256.
 A `pip-audit` job now runs on every pull request as **advisory** (not required),
 so the list stays visible.
+
+## F-040 — The production API container could not start (P1, fixed)
+
+**Plain language.** The production compose file starts the API with
+`gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker ...`. Gunicorn is
+not listed in `requirements.txt` (or anywhere else), and the Docker image installs
+only what that file lists, so the `web` container would exit at once with
+"gunicorn: executable file not found". Every other production service waits for
+`web`, and Caddy waits for `web` to be healthy, so the whole stack would come up
+with no API. It survived because nothing in CI ever runs the production command
+(the dev compose uses `uvicorn --reload`).
+**Proof.** `tests/infra/test_production_compose_commands.py` reads the compose file
+and checks that every Python program it starts (`gunicorn`, `uvicorn`, `alembic`) is a
+pinned requirement and importable, that the worker class and the `app.main:app`
+target exist: the gunicorn check failed before, all 9 pass after.
+**Fixed.** `gunicorn==26.2.0` is pinned (installed and imported here; the pinned
+resolution has no conflict). **Unverified:** a real `docker compose up` of the
+production stack (images cannot be pulled or built in this sandbox: Docker Hub
+rate-limits and the image needs ~8 GB), so the first production deploy should run
+`docker compose -f docker-compose.prod.yml --env-file .env.production config` and
+then `up -d web` and watch `docker compose logs -f web` (RUNBOOK, "First deploy").
