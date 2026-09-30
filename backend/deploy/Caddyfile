@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # FlowPilot AI — Caddy ingress.
 #
 # Mounted read-only at /etc/caddy/Caddyfile by docker-compose.prod.yml.
@@ -43,6 +43,10 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
+        # F-044. Report-only first: it logs violations in the browser console without
+        # blocking anything. Enforce (rename to Content-Security-Policy) once a real
+        # session shows no violations. Uploaded PDFs render with pdf.js (a blob: worker).
+        Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         -Server
     }
 

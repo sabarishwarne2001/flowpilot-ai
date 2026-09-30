@@ -32,6 +32,11 @@ x-app-env: &app-env
   ENVIRONMENT: production
   SERVICE_ROLE: ${SERVICE_ROLE:-web}
 
+  # The last Alembic revision DROPS three unused ai_settings columns and refuses to
+  # run unless this is 1 (F-024). Default 0: production runs it once, deliberately,
+  # after a backup (RUNBOOK, "First deploy"). Staging may keep it at 1.
+  ARCH40_CONTRACT: ${ARCH40_CONTRACT:-0}
+
   POSTGRES_HOST: db
   POSTGRES_PORT: 5432
   POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
@@ -78,7 +83,10 @@ x-app-env: &app-env
   STRIPE_WEBHOOK_SECRETS: ${STRIPE_WEBHOOK_SECRETS:-}
   STRIPE_LIVEMODE: ${STRIPE_LIVEMODE:-false}
 
-  PLATFORM_SMTP_HOST: ${PLATFORM_SMTP_HOST:-}
+  # Required: without mail, invitations, verification links and password resets are
+  # generated and never delivered, and the UI shows no error. The application also
+  # refuses to start without it in production.
+  PLATFORM_SMTP_HOST: ${PLATFORM_SMTP_HOST:?PLATFORM_SMTP_HOST must be set, e.g. smtp.postmarkapp.com}
   PLATFORM_SMTP_PORT: ${PLATFORM_SMTP_PORT:-587}
   PLATFORM_SMTP_USERNAME: ${PLATFORM_SMTP_USERNAME:-}
   PLATFORM_SMTP_PASSWORD: ${PLATFORM_SMTP_PASSWORD:-}
@@ -104,7 +112,9 @@ services:
   # ---------------------------------------------------------------- data ---
 
   db:
-    image: pgvector/pgvector:pg16
+    # Pinned (F-043). pgvector >= 0.8 is required by the application; 0.8.1 is a
+    # released tag. Upgrade deliberately, after a backup, not by a floating tag.
+    image: pgvector/pgvector:0.8.1-pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -142,7 +152,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.6-alpine
     # noeviction is deliberate. Rate-limit counters and idempotency markers
     # must not be silently dropped under memory pressure; a hard failure is
     # recoverable, a silently-reset rate limiter is not.
@@ -398,7 +408,7 @@ services:
   # -------------------------------------------------------------- ingress ---
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.10.2-alpine
     ports:
       - "80:80"
       - "443:443"

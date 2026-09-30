@@ -36,7 +36,7 @@ How to read this file:
 | F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
 | F-022 | P2 | **not a defect** (Phase 2; guard tests) | Tenancy | An AI agent tool selector takes no tenant scope |
 | F-023 | P2 | **not a defect** (Phase 2; guard tests) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
-| F-024 | P2 | confirmed (same command fails live) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
+| F-024 | P2 | **mitigated** (Phase 2; production still needs N-009) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
 | F-025 | P3 | confirmed (gate arch20 + drift) | Models | `organization_addon` model is not registered in `app/models/__init__` |
 | F-026 | P3 | confirmed (live) | Uploads | Storage errors surface as a raw 500 on upload |
 | F-027 | P3 | confirmed (live) | Dev env | Dev compose makes the shell's `AWS_ACCESS_KEY_ID` the MinIO root user |
@@ -53,6 +53,11 @@ How to read this file:
 | F-038 | P2 | **fixed** (Phase 2) | Frontend | Production builds shipped source maps (`index-*.js.map`), publishing the original TypeScript |
 | F-039 | P2 | **partly fixed** (Phase 2) | Dependencies | 7 npm advisories (fixed) and 13 Python packages with known advisories (4 bumped, rest tracked) |
 | F-040 | P1 | **fixed** (Phase 2) | Deployment | The production API container cannot start: `gunicorn` is in no requirements file |
+| F-041 | P2 | **fixed** (Phase 2) | Logs | gunicorn's access log wrote capability tokens (public upload and calendar-feed paths), query strings and the Referer to stdout |
+| F-042 | P3 | **fixed** (Phase 2) | Ops | No readiness probe: `/health` reported "healthy" with Postgres down |
+| F-043 | P3 | **fixed** (Phase 2) | Containers | Floating image tags (`pg16`, `7-alpine`, `2-alpine`, `python:3.12-slim`) |
+| F-044 | P3 | **mitigated** (Phase 2) | Frontend/ingress | No Content-Security-Policy header |
+| F-045 | P3 | open | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
 
 ---
 
@@ -987,3 +992,40 @@ production stack (images cannot be pulled or built in this sandbox: Docker Hub
 rate-limits and the image needs ~8 GB), so the first production deploy should run
 `docker compose -f docker-compose.prod.yml --env-file .env.production config` and
 then `up -d web` and watch `docker compose logs -f web` (RUNBOOK, "First deploy").
+
+## Containers and infrastructure audit (Phase 2)
+
+**Verified by reading and by rendering `docker compose config` with a filled-in env
+file** (the daemon cannot pull images here, so nothing below was *run* in containers):
+
+- **Non-root: yes.** Every Dockerfile target ends with `USER flowpilot`; the two that
+  switch to root to create a cache directory switch back.
+- **Ports:** only Caddy publishes ports (80, 443); Postgres, Redis, MinIO, the API and
+  the reranker are on the internal network. The dev compose publishes database and
+  MinIO ports, which is dev only.
+- **Health:** the API had a liveness check only; F-042 adds readiness and the
+  production `web` healthcheck uses it. Workers, the scheduler and the reranker have no
+  health check (a worker has no port; a heartbeat file is a Phase 4 item).
+- **Memory limits:** set on every service.
+- **`/api/v1/internal/*` is not published** (Caddy answers 404); the TLS "ask" endpoint
+  is only reachable from inside the network.
+- **F-043 (pinned versions).** `pgvector/pgvector:0.8.1-pg16`, `redis:7.4.6-alpine`,
+  `caddy:2.10.2-alpine` and `python:3.12.13-slim-bookworm` (each confirmed to exist on
+  Docker Hub); a test fails on any floating third-party tag. Pinning by digest
+  (`@sha256:...`) is the next step and is an operator action at release time.
+- **F-044 (CSP).** Caddy sends HSTS (1 year, preload), `nosniff`, `X-Frame-Options:
+  DENY` and a strict Referrer-Policy, but no CSP. A
+  `Content-Security-Policy-Report-Only` header is added so violations are visible in
+  the browser without breaking anything; rename it to `Content-Security-Policy` after
+  one real session shows none. **Unverified in a browser** (Caddy could not be run here).
+- **F-045 (image size, open).** `requirements.txt` is a full `pip freeze` and every
+  target installs it, so the "zero ML dependencies" `web` image carries torch (with
+  CUDA libraries), paddle and sentence-transformers. It slows every deploy, enlarges
+  the attack surface and the disk bill. Fix (Phase 4): split requirements per target.
+- **Redis has no password.** It is reachable only on the compose network, so this is
+  defence in depth; adding `requirepass` is a Phase 4 item.
+- **F-024.** The migrate service now passes `ARCH40_CONTRACT` through from the
+  environment (default `0`, so production does not run the lossy step by accident;
+  staging sets `1` per owner decision N-009). RUNBOOK "First deploy" has the exact
+  one-time procedure. Production stays open until the owner answers whether a
+  production database with real data exists (N-009).

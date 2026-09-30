@@ -81,3 +81,55 @@ def test_the_application_module_gunicorn_serves_imports() -> None:
     target = web[web.index("gunicorn") + 1]
     module, _, attribute = target.partition(":")
     assert hasattr(importlib.import_module(module), attribute), target
+
+
+# ---------------------------------------------------------------------------
+# Pinned images and the migration flag (F-024, F-043)
+# ---------------------------------------------------------------------------
+
+#: Images this project builds itself are tagged by IMAGE_TAG; everything else must
+#: name a specific version, never a floating tag such as `latest` or `7`.
+_OWN_IMAGE = re.compile(r"^flowpilot/")
+
+
+def _third_party_images() -> list[str]:
+    compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+    return [
+        service["image"]
+        for service in compose["services"].values()
+        if "image" in service and not _OWN_IMAGE.match(service["image"])
+    ]
+
+
+def test_no_third_party_image_uses_a_floating_tag() -> None:
+    images = _third_party_images()
+    assert len(images) >= 3, images
+    floating = [
+        image
+        for image in images
+        if ":" not in image
+        or image.endswith(":latest")
+        or re.fullmatch(r".+:(\d+|\d+\.\d+|\d+-alpine|pg\d+)", image)  # `7`, `7.4`, `7-alpine`, `pg16`
+    ]
+    assert not floating, f"pin a specific version instead of: {floating}"
+
+
+def test_the_python_base_image_is_pinned_to_a_patch_release() -> None:
+    dockerfile = (BACKEND / "Dockerfile").read_text(encoding="utf-8")
+    base = re.search(r"^FROM (python:\S+) AS base", dockerfile, re.M).group(1)
+    assert re.fullmatch(r"python:3\.12\.\d+-slim-bookworm", base), base
+
+
+def test_the_migration_contract_step_is_off_by_default_in_production() -> None:
+    """Owner decision N-009 covers dev, test and staging only. Production runs the
+    step deliberately (RUNBOOK, 'First deploy'), never by default."""
+    compose = COMPOSE.read_text(encoding="utf-8")
+    assert "ARCH40_CONTRACT: ${ARCH40_CONTRACT:-0}" in compose
+
+
+def test_every_service_that_runs_the_app_gets_the_same_environment_block() -> None:
+    compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+    for name in ("migrate", "web", "worker-scheduler", "worker-light", "worker-ocr", "worker-enrich"):
+        env = compose["services"][name]["environment"]
+        assert env["ENVIRONMENT"] == "production", name
+        assert "ARCH40_CONTRACT" in env, name

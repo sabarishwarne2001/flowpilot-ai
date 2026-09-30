@@ -30,7 +30,7 @@ x-app-env: &app-env
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.1-pg16
     container_name: flowpilot-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.6-alpine
     container_name: flowpilot-redis
     ports:
       - "6379:6379"
