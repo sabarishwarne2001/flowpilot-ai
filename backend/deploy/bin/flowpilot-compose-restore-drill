@@ -21,6 +21,25 @@ DEFAULT_EXEC="docker compose -f ${COMPOSE_FILE} --env-file ${ENV_FILE} exec -T d
 read -r -a PGX <<< "${FLOWPILOT_PG_EXEC-${DEFAULT_EXEC}}"
 CORE_TABLES=(${FLOWPILOT_DRILL_TABLES:-organizations users work_items})
 
+# Dead-man's switch, as in flowpilot-compose-backup: with HEARTBEAT_BASE and
+# HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL set, every run reports success to <base>/<uuid> or
+# failure to <base>/<uuid>/fail. A monitor that cannot be reached never fails the drill.
+SCRATCH=""
+heartbeat() {
+    [[ -n "${HEARTBEAT_BASE:-}" && -n "${HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL:-}" ]] || return 0
+    curl -fsS -m 10 --retry 3 --retry-delay 2 -o /dev/null \
+        "${HEARTBEAT_BASE}/${HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL}$1" \
+        || echo "HEARTBEAT_PING_FAILED: could not reach the monitor" >&2
+}
+on_exit() {
+    local status=$?
+    if [[ -n "${SCRATCH}" ]]; then
+        "${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "DROP DATABASE IF EXISTS \"${SCRATCH}\"" >/dev/null 2>&1 || true
+    fi
+    if (( status == 0 )); then heartbeat ""; else heartbeat "/fail"; fi
+}
+trap on_exit EXIT
+
 [[ -n "${KEY_FILE}" && -r "${KEY_FILE}" ]] || { echo "FLOWPILOT_BACKUP_KEY_FILE must name a readable passphrase file" >&2; exit 64; }
 BACKUP="${1:-$(ls -1 "${BACKUP_DIR}"/flowpilot-*.dump.enc 2>/dev/null | sort -r | head -1)}"
 [[ -n "${BACKUP}" && -r "${BACKUP}" ]] || { echo "no backup found in ${BACKUP_DIR}" >&2; exit 66; }
@@ -32,8 +51,6 @@ fi
 
 SCRATCH="drill_$(date -u +%Y%m%d%H%M%S)_$$"
 sql() { "${PGX[@]}" psql -U "${DB_USER}" -tA -d "$1" -c "$2"; }
-cleanup() { "${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "DROP DATABASE IF EXISTS \"${SCRATCH}\"" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
 
 started="$(date -u +%s)"
 "${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "CREATE DATABASE \"${SCRATCH}\"" 

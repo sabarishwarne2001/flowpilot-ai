@@ -238,9 +238,14 @@ A Docker Compose VPS has neither: Python and Postgres live in containers.
   the live one, times it, and drops the scratch database.
 - New `deploy/cron.d/flowpilot-compose-backups`: the schedule (nightly backup,
   weekly drill). Install it *instead of* `flowpilot-backups`.
+- Both scripts can report to a dead-man's-switch monitor (a free Healthchecks.io check
+  works; `HEARTBEAT_BASE` plus one id per job): success pings `<base>/<id>`, failure
+  pings `<base>/<id>/fail`, and a run that never happens is the monitor's alarm. Cron
+  output goes to a log file, not nowhere (`MAILTO` is empty in these files, so anything
+  printed and not logged was lost). A monitor that cannot be reached never fails a backup.
 - `docs/RUNBOOK.md` gained "First deploy", "Backups" and "Scheduled jobs".
 
-**Evidence.** `tests/infra/test_compose_backup_scripts.py` (13 tests) runs the
+**Evidence.** `tests/infra/test_compose_backup_scripts.py` (20 tests) runs the
 scripts against a real PostgreSQL with real `pg_dump`, `pg_restore` and
 `openssl`: a backup is encrypted, checksummed and readable only with the key; a
 missing or empty key stops the run and writes nothing; a failing dump keeps
@@ -250,8 +255,11 @@ retention keeps 7 daily + 4 weekly; a failed mirror is reported while the local
 backup stays; the mirror command receives the backup path; a sweep runs through
 the configured container runner and a failing sweep is recorded as a failure;
 every cron entry names a sweeper the wrapper knows; the compose cron file
-schedules a nightly backup and a weekly drill. A mutation check (encryption
-removed from the script) makes the encryption test fail.
+schedules a nightly backup and a weekly drill; success, a failed dump, a missing
+key, a failed mirror and a failed drill each ping the right monitor address (5 of the
+7 monitor tests failed before the change; the other 2 are no-monitor and
+unreachable-monitor controls). A mutation check (encryption removed from the
+script) makes the encryption test fail.
 
 **Not verified.** A real `docker compose exec` / `run` against the production
 stack: this session has no Docker daemon that can pull images (Docker Hub rate

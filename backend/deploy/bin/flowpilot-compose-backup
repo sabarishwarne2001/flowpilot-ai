@@ -33,6 +33,24 @@ ENV_FILE="${FLOWPILOT_ENV_FILE:-/srv/flowpilot/backend/.env.production}"
 DEFAULT_EXEC="docker compose -f ${COMPOSE_FILE} --env-file ${ENV_FILE} exec -T db"
 read -r -a PGX <<< "${FLOWPILOT_PG_EXEC-${DEFAULT_EXEC}}"
 
+# Dead-man's switch. A backup that quietly stops is the failure nobody notices until the
+# day they need it. When HEARTBEAT_BASE and HEARTBEAT_UUID_COMPOSE_BACKUP are set (the same
+# variables flowpilot-sweep uses; a free Healthchecks.io check works), every run reports
+# success to <base>/<uuid> or failure to <base>/<uuid>/fail, and the monitor alerts you
+# when a run failed or did not happen. A monitor that cannot be reached never fails a backup.
+PARTIAL=""
+heartbeat() {
+    [[ -n "${HEARTBEAT_BASE:-}" && -n "${HEARTBEAT_UUID_COMPOSE_BACKUP:-}" ]] || return 0
+    curl -fsS -m 10 --retry 3 --retry-delay 2 -o /dev/null \
+        "${HEARTBEAT_BASE}/${HEARTBEAT_UUID_COMPOSE_BACKUP}$1" \
+        || echo "HEARTBEAT_PING_FAILED: could not reach the monitor" >&2
+}
+on_exit() {
+    local status=$?
+    if [[ -n "${PARTIAL}" ]]; then rm -f -- "${PARTIAL}"; fi
+    if (( status == 0 )); then heartbeat ""; else heartbeat "/fail"; fi
+}
+
 prune() {
     local -a files=()
     mapfile -t files < <(ls -1 "${BACKUP_DIR}"/flowpilot-*.dump.enc 2>/dev/null | sort -r)
@@ -55,6 +73,8 @@ if [[ "${1:-}" == "--prune-only" ]]; then
     exit 0
 fi
 
+trap on_exit EXIT
+
 [[ -n "${KEY_FILE}" && -r "${KEY_FILE}" ]] || { echo "FLOWPILOT_BACKUP_KEY_FILE must name a readable passphrase file" >&2; exit 64; }
 [[ -s "${KEY_FILE}" ]] || { echo "the backup key file is empty" >&2; exit 64; }
 
@@ -63,7 +83,6 @@ mkdir -p "${BACKUP_DIR}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${BACKUP_DIR}/flowpilot-${STAMP}.dump.enc"
 PARTIAL="${OUT}.partial"
-trap 'rm -f -- "${PARTIAL}"' EXIT
 
 started="$(date -u +%s)"
 "${PGX[@]}" pg_dump -Fc -U "${DB_USER}" -d "${DB_NAME}" \

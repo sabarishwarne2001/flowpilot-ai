@@ -270,3 +270,75 @@ def test_the_compose_cron_file_schedules_a_nightly_backup_and_a_weekly_drill() -
     text_ = (BIN.parent / "cron.d" / "flowpilot-compose-backups").read_text(encoding="utf-8")
     assert "flowpilot-compose-backup" in text_ and "flowpilot-compose-restore-drill" in text_
     assert "FLOWPILOT_RUNNER" in text_ and "FLOWPILOT_BACKUP_KEY_FILE" in text_
+
+
+# ---------------------------------------------------------------------------
+# A backup that stops happening must be noticed (F-006: "nothing tells you")
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def monitor(env: dict[str, str], tmp_path: Path):
+    """A stand-in `curl`, first on PATH, that records the URL each ping went to.
+
+    Returns a function listing the pings so far. `env` is changed in place, so a
+    test can still edit it (or drop HEARTBEAT_BASE) before it runs a script."""
+    fake_bin = tmp_path / "fakebin"
+    fake_bin.mkdir()
+    log = tmp_path / "pings.log"
+    curl = fake_bin / "curl"
+    curl.write_text(
+        f'#!/usr/bin/env bash\nfor last; do :; done\necho "$last" >> "{log}"\nexit "${{FAKE_CURL_EXIT:-0}}"\n',
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["HEARTBEAT_BASE"] = "https://hc.example.test"
+    env["HEARTBEAT_UUID_COMPOSE_BACKUP"] = "backup-uuid"
+    env["HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL"] = "drill-uuid"
+    return lambda: log.read_text(encoding="utf-8").split() if log.exists() else []
+
+
+def test_a_successful_backup_pings_the_monitor(env, monitor) -> None:
+    run(BACKUP, env, check=True)
+    assert monitor() == ["https://hc.example.test/backup-uuid"]
+
+
+def test_a_failed_backup_pings_the_failure_address(env, monitor) -> None:
+    assert run(BACKUP, {**env, "POSTGRES_DB": "this_database_does_not_exist"}).returncode != 0
+    assert monitor() == ["https://hc.example.test/backup-uuid/fail"]
+
+
+def test_a_backup_that_cannot_even_start_is_reported_as_failed(env, monitor, tmp_path: Path) -> None:
+    assert run(BACKUP, {**env, "FLOWPILOT_BACKUP_KEY_FILE": str(tmp_path / "nope.key")}).returncode == 64
+    assert monitor() == ["https://hc.example.test/backup-uuid/fail"]
+
+
+def test_a_failed_off_host_mirror_is_reported_as_failed(env, monitor) -> None:
+    result = run(BACKUP, {**env, "FLOWPILOT_BACKUP_MIRROR_CMD": "false"})
+    assert result.returncode == 2
+    assert monitor() == ["https://hc.example.test/backup-uuid/fail"]
+
+
+def test_without_a_monitor_configured_nothing_is_pinged_and_the_backup_still_works(env, monitor) -> None:
+    quiet = {k: v for k, v in env.items() if k != "HEARTBEAT_BASE"}
+    run(BACKUP, quiet, check=True)
+    assert monitor() == []
+
+
+def test_an_unreachable_monitor_does_not_fail_the_backup(env, monitor) -> None:
+    result = run(BACKUP, {**env, "FAKE_CURL_EXIT": "22"})
+    assert result.returncode == 0, result.stderr
+    assert len(backups(env)) == 1
+
+
+def test_the_restore_drill_pings_success_and_failure(env, monitor) -> None:
+    run(BACKUP, {**env, "HEARTBEAT_BASE": ""}, check=True)  # no ping for the setup step
+    assert monitor() == []
+    run(DRILL, env, check=True)
+    assert monitor() == ["https://hc.example.test/drill-uuid"]
+
+    (dump,) = backups(env)
+    Path(str(dump) + ".sha256").write_text("0" * 64 + f"  {dump.name}\n", encoding="utf-8")
+    assert run(DRILL, env).returncode != 0
+    assert monitor()[-1] == "https://hc.example.test/drill-uuid/fail"
