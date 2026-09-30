@@ -26,7 +26,8 @@ cd flowpilot-ai
 
 Open <http://localhost:5173> and sign in as `admin@flowpilot.ai` with the
 password the launcher prints (development default `FlowPilot!Dev123`).
-API health: <http://localhost:8000/api/v1/health>. API schema:
+API health: <http://localhost:8000/api/v1/health>. API schema (development
+only; production and staging do not serve it):
 <http://localhost:8000/api/v1/openapi.json>.
 
 No internet access to the model hosts? Put `ML_STUBS=true` in `backend/.env`
@@ -47,8 +48,13 @@ A hardening campaign is in progress. Its plan, findings and progress are in
 - [`NEEDS-OWNER.md`](docs/hardening/NEEDS-OWNER.md): open product decisions
 
 As of Phase 1 the app installs, migrates, starts and serves the web app from a
-fresh clone. The backend test suite and the verification gates are **not**
-green yet (FINDINGS F-016, F-029).
+fresh clone. Phase 2 (security and deployment) added a production start-up
+guard, tenant-isolation and plan-gating proofs, a hardened upload path, backup
+and scheduling scripts for a Docker Compose server, and a production guide:
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md) section 9. What it fixed and what is still
+open: [`02-security-deploy.md`](docs/hardening/02-security-deploy.md).
+The backend test suite and the verification gates are **not** fully green yet
+(FINDINGS F-016, F-029).
 
 ## Repository layout
 
