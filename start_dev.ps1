@@ -179,6 +179,20 @@ if (-not (Test-Path $venvPython)) {
 }
 Write-Ok 'Virtual environment present.'
 
+# Reinstall only when a requirements file changed since the last install.
+$reqFiles = @((Join-Path $BackendDir 'requirements.txt'), (Join-Path $BackendDir 'requirements-dev.txt'))
+$reqHash = ($reqFiles | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }) -join ''
+$reqStamp = Join-Path $VenvDir '.requirements.sha256'
+$installedHash = if (Test-Path $reqStamp) { (Get-Content $reqStamp -Raw).Trim() } else { '' }
+if ($installedHash -ne $reqHash) {
+    Write-Host '    installing backend requirements (the first run downloads several GB) ...'
+    & $venvPython -m pip install --upgrade pip | Out-Null
+    & $venvPython -m pip install -r $reqFiles[0] -r $reqFiles[1]
+    if ($LASTEXITCODE -ne 0) { Fail-Hard 'pip install failed.' }
+    Set-Content -Path $reqStamp -Value $reqHash -Encoding ascii
+}
+Write-Ok 'Backend dependencies installed.'
+
 # --- 3. Environment files --------------------------------------------------
 Write-Step '3/8  Environment configuration'
 
@@ -189,7 +203,8 @@ if (-not (Test-Path $backendEnv)) {
 }
 
 $generated = @()
-foreach ($key in @('JWT_SECRET_KEY', 'API_KEY_PEPPER', 'REDIS_IDENTITY_PEPPER')) {
+# RERANKER_INTERNAL_TOKEN: docker-compose.yml refuses to start any service without it.
+foreach ($key in @('JWT_SECRET_KEY', 'API_KEY_PEPPER', 'REDIS_IDENTITY_PEPPER', 'RERANKER_INTERNAL_TOKEN')) {
     if ([string]::IsNullOrWhiteSpace((Get-EnvValue $backendEnv $key))) {
         Set-EnvValue $backendEnv $key (New-HexSecret 32)
         $generated += $key
@@ -285,10 +300,15 @@ try {
     if ($SkipMigrations) {
         Write-Warn2 'Skipped by request.'
     } else {
-        & $venvPython -m alembic upgrade arch40_step2a_review_view_paths
+        # Upgrade to head, not a pinned revision: the old pin
+        # (arch40_step2a_review_view_paths) predates hm1 and ARCH-41..50, so
+        # a fresh database had none of their tables. head ends at the
+        # flag-gated ARCH-40 contract step; the models already assume it ran.
+        $env:ARCH40_CONTRACT = '1'
+        & $venvPython -m alembic upgrade head
         if ($LASTEXITCODE -ne 0) { Fail-Hard 'alembic upgrade failed.' }
         $currentRev = (& $venvPython -m alembic current 2>&1 | Out-String).Trim()
-        Write-Ok "Alembic at release head: arch40_step2a_review_view_paths"
+        Write-Ok "Alembic at: $currentRev"
     }
 } finally { Pop-Location }
 
@@ -300,13 +320,17 @@ try {
     # 1. Price Book
     if (Test-Path 'scripts/seed_price_book.py') {
         & $venvPython scripts/seed_price_book.py
-        Write-Ok "scripts/seed_price_book.py"
+        if ($LASTEXITCODE -eq 0) { Write-Ok "scripts/seed_price_book.py" }
+        else { Write-Warn2 "scripts/seed_price_book.py FAILED (exit $LASTEXITCODE, see output above)" }
     }
 
     # 2. Quota Tiers
     if (Test-Path 'scripts/seed_quota_tiers.py') {
-        & $venvPython scripts/seed_quota_tiers.py
-        Write-Ok "scripts/seed_quota_tiers.py"
+        # Dev has no payment gateway, so publish the tiers without gateway
+        # price ids; without the flag the script refuses and no tier exists.
+        & $venvPython scripts/seed_quota_tiers.py --allow-unpriced
+        if ($LASTEXITCODE -eq 0) { Write-Ok "scripts/seed_quota_tiers.py" }
+        else { Write-Warn2 "scripts/seed_quota_tiers.py FAILED (exit $LASTEXITCODE, see output above)" }
     }
 
     # 3. Admin User

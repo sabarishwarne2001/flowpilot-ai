@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 export type StatusTone = "ok" | "warn" | "danger" | "info" | "neutral";
 

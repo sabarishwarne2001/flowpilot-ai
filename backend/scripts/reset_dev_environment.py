@@ -1,4 +1,4 @@
-﻿"""Unified development environment reset — Postgres, Redis, MinIO."""
+"""Unified development environment reset — Postgres, Redis, MinIO."""
 
 from __future__ import annotations
 
@@ -10,20 +10,19 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from dotenv import dotenv_values
+
 BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 
-# Load backend/.env into environment
+# Load backend/.env into environment. python-dotenv, the parser Settings
+# uses, so an inline comment (`ENVIRONMENT=development   # ...`, as in
+# .env.example) is not copied into the value.
 env_file = BACKEND / ".env"
 if env_file.exists():
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            k = k.strip()
-            v = v.strip().strip('"').strip("'")
-            if k not in os.environ:
-                os.environ[k] = v
+    for k, v in dotenv_values(env_file).items():
+        if v is not None and k not in os.environ:
+            os.environ[k] = v
 
 DEFAULT_ORG_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 DEFAULT_WORKSPACE_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
@@ -45,11 +44,9 @@ def get_subprocess_env() -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(BACKEND)
     if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                env[k.strip()] = v.strip().strip('"').strip("'")
+        for k, v in dotenv_values(env_file).items():
+            if v is not None:
+                env[k] = v
     return env
 
 

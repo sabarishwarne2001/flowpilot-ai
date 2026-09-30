@@ -1,4 +1,4 @@
-﻿import { apiClient } from "@/services/api/client";
+import { apiClient } from "@/services/api/client";
 import { ASSISTANT_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   ConversationSummary,

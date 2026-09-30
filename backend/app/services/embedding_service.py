@@ -49,6 +49,12 @@ class EmbeddingService:
         with self._lock:
             if self._model is not None:
                 return self._model
+            if settings.ML_STUBS:
+                from app.services.ml_stubs import get_stub_embedding_model
+
+                logger.warning("embedding.test_stub_active")
+                self._model = get_stub_embedding_model()
+                return self._model
             try:
                 from sentence_transformers import SentenceTransformer
 

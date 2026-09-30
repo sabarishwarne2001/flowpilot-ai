@@ -66,6 +66,11 @@ SPECIAL_ORDER: dict[str, tuple[int, int]] = {
     "verify_sec1.py": (15, 50),
     "verify_arch16_full_compatibility.py": (16, 99),
     "verify_arch0g.py": (16, 100),
+    # No phase in the name, so without an entry discover() exits 2 before any
+    # gate runs. Placed after every phased gate and before the ARCH-0V
+    # aggregate; they have been in the tree since the ARCH 30 import.
+    "verify_dependency_resolution.py": (98, 1),
+    "verify_invitations.py": (98, 2),
     "verify_arch0v.py": (99, 0),
 }
 

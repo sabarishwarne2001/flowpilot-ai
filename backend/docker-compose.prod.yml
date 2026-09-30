@@ -164,7 +164,10 @@ services:
   # or Backblaze B2 and delete this service: object durability is not
   # something a single VPS disk provides.
   minio:
-    image: minio/minio:latest
+    # minio/minio and minio/mc were removed from Docker Hub (MinIO stopped
+    # publishing community images). pgsty/* rebuilds upstream MinIO from
+    # source. Pinned so a fresh clone gets the same bytes every time.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     profiles: ["self-hosted-storage"]
     command: server /data --console-address ":9001"
     environment:

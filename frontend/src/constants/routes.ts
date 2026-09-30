@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Global route constants for FlowPilot AI.
  */
 

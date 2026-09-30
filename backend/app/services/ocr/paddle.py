@@ -461,6 +461,12 @@ class PaddleOCRProvider(OCRProvider):
 def get_provider(*, language: str = "en") -> OCRProvider:
     from app.core.config import settings
 
+    if settings.ML_STUBS:
+        from app.services.ml_stubs import StubOCRProvider
+
+        logger.warning("ocr.test_stub_active")
+        return StubOCRProvider(language=language or settings.OCR_LANGUAGE)
+
     configured = (settings.OCR_PROVIDER or "paddleocr").strip().lower()
     if configured != "paddleocr":
         raise OCRUnavailableError(

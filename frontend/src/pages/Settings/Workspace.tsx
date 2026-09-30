@@ -1,4 +1,4 @@
-﻿import { formatTimestamp } from "@/utils/displayTime";
+import { formatTimestamp } from "@/utils/displayTime";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";

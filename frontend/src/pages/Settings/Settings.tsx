@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ARCH40-S2:settings-hub. One settings surface, grouped by scope.
  *
  *   Account        yours, everywhere: profile, sessions

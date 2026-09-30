@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ARCH-29 Slice 4 — the canonical class strings for this design system.
  */
 

@@ -63,7 +63,10 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    # minio/minio and minio/mc were removed from Docker Hub (MinIO stopped
+    # publishing community images). pgsty/* rebuilds upstream MinIO from
+    # source. Pinned so a fresh clone gets the same bytes every time.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: flowpilot-minio
     command: server /data --console-address ":9001"
     environment:
@@ -82,7 +85,7 @@ services:
     restart: unless-stopped
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     container_name: flowpilot-minio-init
     depends_on:
       minio:
@@ -103,6 +106,9 @@ services:
     environment:
       <<: *app-env
       SERVICE_ROLE: migrate
+      # Dev only: head ends at the flag-gated ARCH-40 contract step, which
+      # the models already assume. docker-compose.prod.yml does not set it.
+      ARCH40_CONTRACT: "1"
     depends_on:
       db:
         condition: service_healthy

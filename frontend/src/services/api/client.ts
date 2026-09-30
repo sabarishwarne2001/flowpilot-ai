@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared Axios instance and interceptors for the FlowPilot AI frontend.
  *
  * FE-0 extends the ARCH-03 client from "401 with one refresh" to the full
