@@ -24,6 +24,7 @@ from app.core.exception_handlers import (
 )
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
+from app.core.production_guard import HARDENED_ENVIRONMENTS
 from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
@@ -155,11 +156,18 @@ async def lifespan(app: FastAPI):
     logger.info("Stopping FlowPilot AI Backend Core...")
 
 
+# F-046. Swagger UI, ReDoc and the OpenAPI schema list every route and the exact shape of
+# each request. Useful on a developer's machine, a free map of the attack surface on the
+# internet, and nothing in the product reads them, so production and staging do not serve them.
+_serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
+
 app = FastAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if _serve_api_docs else None,
+    docs_url="/docs" if _serve_api_docs else None,
+    redoc_url="/redoc" if _serve_api_docs else None,
     lifespan=lifespan,
 )
 

@@ -58,6 +58,7 @@ How to read this file:
 | F-043 | P3 | **fixed** (Phase 2) | Containers | Floating image tags (`pg16`, `7-alpine`, `2-alpine`, `python:3.12-slim`) |
 | F-044 | P3 | **mitigated** (Phase 2) | Frontend/ingress | No Content-Security-Policy header |
 | F-045 | P3 | open | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
+| F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
 
 ---
 
@@ -1073,3 +1074,28 @@ file** (the daemon cannot pull images here, so nothing below was *run* in contai
   staging sets `1` per owner decision N-009). RUNBOOK "First deploy" has the exact
   one-time procedure. Production stays open until the owner answers whether a
   production database with real data exists (N-009).
+
+## F-046 — The API's documentation and full route map were public in production (P3, fixed)
+
+**Plain language.** FastAPI ships an interactive page (`/docs`), a second one
+(`/redoc`) and a machine-readable description of the whole API
+(`/api/v1/openapi.json`). By default all three are open to anyone, with no
+sign-in. FlowPilot has hundreds of routes (partner, operator, billing, SCIM), and
+that description lists every one with the exact shape of each request. It does not
+break anything by itself, but it is a free map for an attacker, and nothing in the
+product uses it: the public API's documentation is hosted elsewhere and the web app
+never reads the schema. The production ingress even forwarded `/docs` and
+`/openapi.json` to the API on purpose.
+**Proof.** `tests/security/test_api_docs_not_public_in_production.py` boots the app
+in a fresh interpreter per environment. Before the fix, with a complete production
+(or staging) configuration, `/docs`, `/redoc` and `/api/v1/openapi.json` all
+answered 200 (2 failed). After it, they answer 404, and the control (a development
+boot still serves them) passes.
+**Fixed.** `app/main.py` turns the three URLs off when `ENVIRONMENT` is `production`
+or `staging` (the same set the start-up guard treats as hardened). Development and
+test are unchanged, so the schema-driven security sweeps and the existing tests that
+read `/api/v1/openapi.json` still run.
+**Left as is.** `deploy/Caddyfile` still has `handle /docs*` and `handle
+/openapi.json` blocks; the API now answers 404 behind them. They were not removed
+because a historical gate script pins that file's content and gate scripts are never
+edited (N-010). Harmless, and worth deleting when the gate is retired.
