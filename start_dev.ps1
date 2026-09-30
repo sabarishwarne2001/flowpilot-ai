@@ -179,6 +179,20 @@ if (-not (Test-Path $venvPython)) {
 }
 Write-Ok 'Virtual environment present.'
 
+# Reinstall only when a requirements file changed since the last install.
+$reqFiles = @((Join-Path $BackendDir 'requirements.txt'), (Join-Path $BackendDir 'requirements-dev.txt'))
+$reqHash = ($reqFiles | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }) -join ''
+$reqStamp = Join-Path $VenvDir '.requirements.sha256'
+$installedHash = if (Test-Path $reqStamp) { (Get-Content $reqStamp -Raw).Trim() } else { '' }
+if ($installedHash -ne $reqHash) {
+    Write-Host '    installing backend requirements (the first run downloads several GB) ...'
+    & $venvPython -m pip install --upgrade pip | Out-Null
+    & $venvPython -m pip install -r $reqFiles[0] -r $reqFiles[1]
+    if ($LASTEXITCODE -ne 0) { Fail-Hard 'pip install failed.' }
+    Set-Content -Path $reqStamp -Value $reqHash -Encoding ascii
+}
+Write-Ok 'Backend dependencies installed.'
+
 # --- 3. Environment files --------------------------------------------------
 Write-Step '3/8  Environment configuration'
 
@@ -189,7 +203,8 @@ if (-not (Test-Path $backendEnv)) {
 }
 
 $generated = @()
-foreach ($key in @('JWT_SECRET_KEY', 'API_KEY_PEPPER', 'REDIS_IDENTITY_PEPPER')) {
+# RERANKER_INTERNAL_TOKEN: docker-compose.yml refuses to start any service without it.
+foreach ($key in @('JWT_SECRET_KEY', 'API_KEY_PEPPER', 'REDIS_IDENTITY_PEPPER', 'RERANKER_INTERNAL_TOKEN')) {
     if ([string]::IsNullOrWhiteSpace((Get-EnvValue $backendEnv $key))) {
         Set-EnvValue $backendEnv $key (New-HexSecret 32)
         $generated += $key
@@ -310,7 +325,9 @@ try {
 
     # 2. Quota Tiers
     if (Test-Path 'scripts/seed_quota_tiers.py') {
-        & $venvPython scripts/seed_quota_tiers.py
+        # Dev has no payment gateway, so publish the tiers without gateway
+        # price ids; without the flag the script refuses and no tier exists.
+        & $venvPython scripts/seed_quota_tiers.py --allow-unpriced
         Write-Ok "scripts/seed_quota_tiers.py"
     }
 

@@ -153,11 +153,25 @@ fi
 VENV_PY="${VENV_DIR}/bin/python"
 ok 'Virtual environment present.'
 
+# Reinstall only when a requirements file changed since the last install.
+REQ_STAMP="${VENV_DIR}/.requirements.sha256"
+REQ_HASH="$("${VENV_PY}" -c 'import hashlib, sys; print(hashlib.sha256(b"".join(open(p, "rb").read() for p in sys.argv[1:])).hexdigest())' \
+    "${BACKEND_DIR}/requirements.txt" "${BACKEND_DIR}/requirements-dev.txt")"
+if [[ "$(cat "${REQ_STAMP}" 2>/dev/null || true)" != "${REQ_HASH}" ]]; then
+    echo '    installing backend requirements (the first run downloads several GB) ...'
+    "${VENV_PY}" -m pip install --upgrade pip >/dev/null || die 'pip upgrade failed.'
+    "${VENV_PY}" -m pip install -r "${BACKEND_DIR}/requirements.txt" -r "${BACKEND_DIR}/requirements-dev.txt" \
+        || die 'pip install failed.'
+    printf '%s\n' "${REQ_HASH}" > "${REQ_STAMP}"
+fi
+ok 'Backend dependencies installed.'
+
 step '3/8  Environment configuration'
 BACKEND_ENV="${BACKEND_DIR}/.env"
 [[ -f "${BACKEND_ENV}" ]] || cp "${BACKEND_DIR}/.env.example" "${BACKEND_ENV}"
 
-for key in JWT_SECRET_KEY API_KEY_PEPPER REDIS_IDENTITY_PEPPER; do
+# RERANKER_INTERNAL_TOKEN: docker-compose.yml refuses to start any service without it.
+for key in JWT_SECRET_KEY API_KEY_PEPPER REDIS_IDENTITY_PEPPER RERANKER_INTERNAL_TOKEN; do
     if [[ -z "$(env_get "${BACKEND_ENV}" "${key}")" ]]; then
         env_set "${BACKEND_ENV}" "${key}" "$(hex_secret)"
     fi
@@ -235,7 +249,9 @@ fi
 
 step '6/8  Seeding commercial defaults'
 "${VENV_PY}" scripts/seed_price_book.py --version 1 >/dev/null 2>&1 && ok "scripts/seed_price_book.py" || warn "scripts/seed_price_book.py (already seeded)"
-"${VENV_PY}" scripts/seed_quota_tiers.py >/dev/null 2>&1 && ok "scripts/seed_quota_tiers.py" || warn "scripts/seed_quota_tiers.py (already seeded)"
+# Dev has no payment gateway, so publish the tiers without gateway price ids;
+# without the flag the script refuses and no plan tier exists at all.
+"${VENV_PY}" scripts/seed_quota_tiers.py --allow-unpriced >/dev/null 2>&1 && ok "scripts/seed_quota_tiers.py" || warn "scripts/seed_quota_tiers.py (already seeded)"
 
 ADMIN_EMAIL='admin@flowpilot.local'
 ADMIN_PASSWORD='FlowPilot!Dev123'
