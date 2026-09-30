@@ -32,7 +32,7 @@ How to read this file:
 | F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
 | F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (13 blockers) |
 | F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
-| F-020 | P1 | confirmed (live upload + ORM check) | Ingestion | Any chunk without a bounding box makes the whole document fail |
+| F-020 | P1 | **fixed** (Phase 2) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
 | F-022 | P2 | unverified (gate 0V-G13) | Tenancy | An AI agent tool selector takes no tenant scope |
 | F-023 | P2 | unverified (gate arch08_step6) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
@@ -419,9 +419,13 @@ ended `FAILED` with `CheckViolation … ck_document_chunks_bbox_is_object`
 (worker log, 10 occurrences). With boxes present, the same uploads reach
 `COMPLETED`.
 
-**Next step.** Phase 4: a failing test that writes a chunk with `bbox=None`,
-then `JSONB(none_as_null=True)` (or an explicit `sa.null()`), plus a check for
-other nullable JSONB columns with the same mistake.
+**Fixed (Phase 2), part 1: the chunk box.** The failing test
+(`tests/services/test_chunk_writer_bbox.py`) calls the real writer
+`replace_document_chunks` with a chunk that has no box and reproduced the exact
+production error (`CheckViolation … ck_document_chunks_bbox_is_object`). The
+column is now `JSONB(none_as_null=True)`, so a missing box is SQL NULL. Both
+tests pass, and the 19 vector tenancy tests still pass. Part 2 (the same
+mistake on 35 other nullable JSON columns) is the next commit below.
 
 ## F-021 — A rejected BYOK API key is echoed in the error response (P2, confirmed)
 
