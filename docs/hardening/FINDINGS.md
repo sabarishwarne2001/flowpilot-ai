@@ -60,6 +60,7 @@ How to read this file:
 | F-045 | P3 | open | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
 | F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
 | F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
+| F-048 | P3 | open (policy needs N-018) | Auth / availability | Sign-in is limited to 10 attempts per 5 minutes per IP, not the intended 20, because the limiter runs twice; one shared office network can lock everyone out |
 
 ---
 
@@ -876,9 +877,15 @@ cutoff is refused, an access token is not accepted as a refresh cookie.
 with the same message whether or not the address exists (and emails the existing
 owner instead); F-032 was the one place that undid that.
 
-**Not covered here (residual, Phase 3/4):** live rate-limit behaviour of login and
-forgot-password against Redis (the limiter is disabled by the test harness and the
-per-user token limit is unit-tested), MFA (the product has none), SSO/SAML
+**Rate limits, proven live against Redis** (`tests/security/test_rate_limits.py`, 4 tests; the
+test harness normally bypasses the limiter, so nothing else exercised it): password guessing is
+cut off with a 429 and a `Retry-After`; the refusal comes before the password is checked (a
+correct password after the cut-off does not sign in); a forged `X-Forwarded-For` does not buy a
+fresh allowance; the sign-in limiter fails closed when its store is broken while an ordinary
+route fails open. Finding F-048 came out of it. Registration, forgot-password and reset share
+the generic 300-per-minute-per-IP limit; each account also has its own reset-token issue limit
+in the token service (unit-tested).
+**Not covered here (residual, Phase 3/4):** MFA (the product has none), SSO/SAML
 end-to-end (an XML-signature-wrapping rig exists from ARCH-28), OIDC state and
 nonce handling, and invitation role-escalation edge cases beyond the existing
 suite (OWNER is not invitable by design).
@@ -1252,4 +1259,21 @@ are excluded, so a secret or customer data inside them would NOT be found: only 
 that (NEEDS-OWNER N-016). Binary files (the deleted `stripe.exe`, a public Stripe CLI build) are
 not scanned. Logs and API responses were covered separately: F-041 (the gunicorn access log wrote
 capability tokens and query strings) and F-021 (validation errors echoed submitted secrets).
+
+## F-048 — The sign-in allowance is half of what was intended (P3, open)
+
+**Plain language.** The sign-in route is limited to 20 attempts per 5 minutes per IP address
+(`POLICY_LOGIN_IP`). The limiter is applied twice on that route, once by the global middleware
+(the public-route registry maps `/auth/login` to that policy) and once by a `RateLimiter`
+dependency on the route itself, and both draw from the same counter. So each attempt costs 2 and
+the real allowance is **10 per 5 minutes per IP**, successful sign-ins included.
+**Why it matters.** Security-wise it is stricter, not weaker. But everyone behind one public
+address (an office, a school, a mobile carrier) shares that allowance: the 11th person to sign in
+within five minutes is told to wait, and a single attacker at the same address can lock a whole
+company out for five minutes.
+**Evidence.** `test_password_guessing_is_cut_off_with_a_429` measures the number of wrong sign-ins
+accepted before the 429 (it printed 10 against the real Redis backend) and only asserts it is
+between 3 and the documented 20, so it will not break whichever way you decide.
+**Not changed.** Raising it to the documented 20 would double an attacker's guesses per address,
+and the right rule (count only failures? per account? per address?) is a policy choice → N-018.
 

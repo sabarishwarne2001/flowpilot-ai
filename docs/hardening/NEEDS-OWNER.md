@@ -237,3 +237,13 @@ so I have not started any:
   or alert service. The monitors in RUNBOOK section 9.6 only watch the scheduled
   jobs, so a crashed API is noticed by a customer first.
 **Decide:** which of these come before launch, which after.
+
+## N-018 — How strict should the sign-in limit be? (F-048)
+Today one IP address may try to sign in 10 times per 5 minutes (successful sign-ins count too).
+That is safe, but a whole office behind one address shares it, and one attacker there can lock
+the others out for five minutes. The per-account back-off (which slows guessing at one account)
+is separate and stays.
+**Options:** (a) keep 10 per 5 minutes; (b) restore the intended 20; (c) count only *failed*
+sign-ins per address, and let the per-account back-off do the rest (best for offices, needs a
+code change). **Default until you decide:** no change (a).
+
