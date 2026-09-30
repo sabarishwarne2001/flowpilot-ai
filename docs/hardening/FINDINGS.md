@@ -49,6 +49,7 @@ How to read this file:
 | F-034 | P3 | **fixed** (Phase 2) | Billing | `/billing/webhooks/STRIPE` (any capitalisation but lowercase) crashed with an unhandled AttributeError |
 | F-035 | P2 | **fixed** (Phase 2) | Uploads | Page-level PDF actions (JavaScript, Launch, SubmitForm) survive the upload scrub into the stored, downloadable file |
 | F-036 | P2 | **fixed** (Phase 2) | Uploads | An upload over the size limit crashed the upload endpoint with a 500 instead of answering 413 |
+| F-037 | P3 | **fixed** (Phase 2) | Input handling | A NUL character (`%00`) in a search box crashed 19 routes with a 500 |
 
 ---
 
@@ -875,3 +876,46 @@ carries `X-Amz-Expires <= 900` and is scoped to one key.
 endpoints are Phase 3), virus scanning (none exists; an owner decision for
 enterprise sales), and the Caddy request-size ceiling (checked with the container
 audit).
+
+## F-037 — `%00` in a search box was an unhandled 500 on 19 routes (P3, fixed)
+
+**Plain language.** PostgreSQL cannot store the "NUL" character. If someone types it
+(or sends `%00` in the address), the database driver raises a Python error while it
+builds the query, no handler expects it, and the user gets an internal-server-error.
+Any signed-in user could do this on 19 routes (work-item search, obligations,
+entities, cases, assistant sessions, the review queue, ERP postings and more), which
+fills the error log and would trip alerting. It is **not** SQL injection: every value
+is passed as a bound parameter, which is exactly why it fails safely.
+**Fixed.** A small ASGI middleware (`app/middleware/nul_guard.py`) answers 400 "NUL
+characters are not allowed" for NUL in the path, the query string, and JSON or
+URL-encoded bodies (small ones; it recognises the JSON `\u0000` escape but not an
+escaped backslash followed by the letters `u0000`). Uploads (binary) are never
+inspected. **Proof:** the sweep found the 19 routes; 8 of 11 tests in
+`test_nul_byte_guard.py` fail with the middleware unregistered and all pass with it,
+and the sweep now records zero crashes.
+
+## Injection audit (Phase 2)
+
+**SQL injection: none found.** `tests/security/test_injection_sweep.py` calls every
+tenant-scoped GET route that takes a string query parameter (search boxes, filters,
+sort keys, cursors; 20+ parameters) with 16 payloads each (quote-or-true, stacked
+`DROP TABLE`, `pg_sleep`, LIKE wildcards, backslash, template markers, a log4j-style
+string, script tags, NUL, 5,000 characters, path traversal, `ORDER BY` injection):
+300+ probes, no 5xx after F-037, the users table intact afterwards, and a boolean
+probe (`' OR '1'='1`, `quarterly' OR '1'='1`) does not widen a search.
+**SSRF: the client is sound.** `tests/security/test_ssrf_hostile_destinations.py`
+(64 tests): loopback, the cloud metadata address, private, link-local, carrier-grade
+NAT, multicast and reserved ranges are refused in every notation an attacker uses
+(dotted, decimal `2130706433`, hex `0x7f000001`, octal, short `127.1`, bracketed
+IPv6, IPv4-mapped IPv6, NAT64, 6to4); a hostname that resolves to both a public and a
+private address is refused; only validated addresses are returned for connecting;
+non-https schemes, `file:`, `gopher:` and `javascript:` are refused before any
+connection; and ten hostile webhook URLs are refused at creation through the real
+API. Existing tests cover no-redirect-following, size and time caps.
+**Not covered here (residual):** template injection in tenant-editable email and
+branding templates, and prompt injection that steers an AI action into triggering an
+automation. The automation engine is deterministic and typed (see
+`02-security-deploy.md`); the AI tool selectors take ids and closed vocabularies and
+never retrieved text (an import-time check refuses otherwise), which is the design
+answer to prompt injection, but no test here drives a hostile document through the
+assistant end to end (Phase 3/4, needs the real model or a recorded one).

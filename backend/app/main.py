@@ -28,6 +28,7 @@ from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
+from app.middleware.nul_guard import NulByteGuardMiddleware
 from app.middleware.public_rate_limit import (
     RATE_LIMIT_HEADERS,
     PublicApiRateLimitMiddleware,
@@ -190,6 +191,9 @@ else:
 app.add_middleware(HostTenantMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(PublicApiRateLimitMiddleware)
+# F-037: a NUL character in the URL or a JSON/form body is a 400, not a 500. Sits
+# just inside RequestTrace so the refusal still carries a request id.
+app.add_middleware(NulByteGuardMiddleware)
 app.add_middleware(RequestTraceMiddleware)
 
 # ARCH-28 RFC 8594. Registered LAST, which in Starlette makes it the
