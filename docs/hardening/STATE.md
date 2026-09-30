@@ -17,8 +17,9 @@ checkpoint.** The next session starts Phase 2. Do not redo Phase 0 or 1.
   - Fresh-clone blockers fixed (F-001, F-018): workflow syntax, 44 encodings,
     Python 3.12, `POSTGRES_*` in CI, `ARCH40_CONTRACT` for throwaway/dev
     databases, removed MinIO images, gate runner ordering, a stale test import,
-    and launchers that never installed packages, generated the reranker token
-    or seeded plan tiers.
+    launchers that never installed packages, generated the reranker token or
+    seeded plan tiers (and hid the seed failures), a seed script that choked on
+    `.env.example` comments, and a non-executable `start_dev.sh`.
   - `ML_STUBS=true` stubs for OCR and embeddings (model hosts are blocked
     here), proven end to end with 4 uploads reaching COMPLETED.
   - Migrations: 1 head; upgrade → downgrade -1 → upgrade pass locally and in
@@ -28,6 +29,8 @@ checkpoint.** The next session starts Phase 2. Do not redo Phase 0 or 1.
   - Gates: 39 pass / 33 fail / 6 skip (F-029).
   - Frontend: tsc, lint, build pass (locally and in CI).
   - Playwright + headless Chromium work here (login and dashboard proven).
+  - Fresh clone → `./start_dev.sh` proven on Linux (8/8 steps, seeds, login).
+    `start_dev.ps1` has matching changes but is unverified on Windows.
   - Docs: `01-baseline.md`, `docs/RUNBOOK.md`, `README.md`.
   - Ledger: 151 migration rows → `smoke`; 2 config rows added (`ML_STUBS`,
     `ARCH40_CONTRACT`). Nothing else upgraded.

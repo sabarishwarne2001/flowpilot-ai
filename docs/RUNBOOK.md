@@ -3,6 +3,8 @@
 How to run FlowPilot AI on a developer machine from a fresh clone, how to check
 that it works, and what to do when it does not. Every command here was run
 during hardening Phase 1 (2026-09-30) unless it is marked *(not run here)*.
+`./start_dev.sh` was proven from a fresh clone on Linux; `start_dev.ps1` has
+not been run on Windows yet.
 
 Production deployment is not covered yet. Phase 2 writes that section (the
 target is a Linux host running Docker Compose; see
@@ -219,4 +221,5 @@ uploaded through the API all reach `COMPLETED`.
 | Login fails right after `seed_admin.py` says `already-seeded` | the script prints `(unchanged)` in place of the password | use the password from the first seed (default `FlowPilot!Dev123`) |
 | Upload ends `FAILED` with `ck_document_chunks_bbox_is_object` in the worker log | known bug F-020 | none yet; Phase 4 |
 | Postgres password errors after changing `backend/.env` | the data volume keeps the first user and password | `docker compose down -v` (deletes local data), then start again |
+| Launcher step 6 says `seed_… FAILED: …` | the seed script exited non-zero; the message is its last line | run the command from §3.5 by hand to see the full error |
 | Everything is slow on the first run | the first `pip install` downloads about 6.5 GB | wait; later runs skip it |

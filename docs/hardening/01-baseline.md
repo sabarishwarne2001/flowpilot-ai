@@ -11,6 +11,7 @@ by reading code. Anything not run is marked *unverified*.
 |---|---|---|
 | GitHub CI starts at all | **Fixed.** Before: 97 of 97 runs rejected with zero jobs | run 98 was the first ever to create jobs (F-001) |
 | Encodings (44 files) | **Fixed**, 0 findings | `normalize_encodings.py --check` locally and in CI |
+| **Fresh clone → `./start_dev.sh`** | **Works (Linux):** all 8 steps ok, app running, seeds applied, browser login ok | F-018 "Fresh-clone proof" |
 | Postgres 16 + pgvector, Redis, MinIO | **Up** (Docker) | all three `healthy`, bucket created |
 | Backend install | **Works on Python 3.12**; fails on 3.11 | `scipy==1.18.0` needs 3.12 |
 | Alembic: heads | **1 head** (`arch40_step3_contract_ai_settings`) | `alembic heads`, CI |
@@ -62,6 +63,8 @@ One logical fix per commit, each proven failing before and passing after:
 | `fix(tests): let a plain pytest migrate…` | `ARCH40_CONTRACT=1` in `pytest.ini` | F-018 #5 |
 | `fix(dev): launchers install backend packages, set the reranker token, seed tiers` | launchers never ran `pip install`, compose needs `RERANKER_INTERNAL_TOKEN`, tiers were never seeded | F-018 #10 |
 | `fix(dev): mark start_dev.sh executable in git` | `./start_dev.sh` → Permission denied on a fresh clone | F-018 #11 |
+| `fix(dev): parse backend/.env with python-dotenv…` | the price-book seed crashed on `.env.example`'s inline comments | F-018 #12 |
+| `fix(dev): launchers report a failed seed…` | seed failures were shown as "(already seeded)" / `[ok]` | F-018 #13 |
 
 No product feature code was changed except the two `ML_STUBS` hook points,
 which are off by default and refused in production. No test expectation was

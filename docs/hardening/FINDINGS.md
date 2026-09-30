@@ -30,7 +30,7 @@ How to read this file:
 | F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
 | F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
 | F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
-| F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (11 blockers) |
+| F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (13 blockers) |
 | F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | confirmed (live upload + ORM check) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | confirmed (failing test) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
@@ -373,6 +373,21 @@ Each item was proven failing, fixed in its own commit, and re-run.
     price ids, and both launchers reported success anyway.
 11. **`./start_dev.sh` gave "Permission denied"** from a fresh clone: git
     stored it without the executable bit (mode 100644). Now 100755.
+12. **`seed_price_book.py` crashed on the `.env` that `.env.example`
+    produces.** Its own `.env` reader kept inline comments
+    (`PLATFORM_SMTP_ENCRYPTION=TLS   # NONE | TLS | SSL`) and pushed them into
+    the environment, so Settings validation failed. `reset_dev_environment.py`
+    had the same reader. Both now use python-dotenv.
+13. **`start_dev.sh` printed "(already seeded)" for any seed failure**, and
+    `start_dev.ps1` printed `[ok]` regardless, so items 10 and 12 were
+    invisible. Both launchers now show the failure.
+
+**Fresh-clone proof (Linux).** `git clone` → `./start_dev.sh`, with no
+`backend/.env`, `.venv` or Docker volumes present: all 8 steps `[ok]`, 1 price
+book and 4 plan tiers seeded, `/api/v1/health` 200, and headless Chromium logs
+in to the dashboard. A second run skips the package install, and both seed
+scripts exit 0 when rerun. `start_dev.ps1` got the same changes but is
+**unverified** (no Windows here).
 
 ## F-019 — OCR silently returns invented text on one error class (P1, unverified: code read)
 
