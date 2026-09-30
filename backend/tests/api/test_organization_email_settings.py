@@ -7,7 +7,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from app.core.smtp import decrypt_password, resolve_smtp_config
+from app.core.encryption import decrypt_password
+from app.core.smtp import resolve_smtp_config
 from app.models.email_settings import EmailEncryption, EmailSettings
 from app.models.organization_email_settings import OrganizationEmailSettings
 from app.schemas.organization_email_settings import (
