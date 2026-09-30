@@ -1209,3 +1209,34 @@ did not change or judge them, and NEEDS-OWNER N-011 asks you to confirm them bef
 customer brings their own key is legitimate. The RUNBOOK checklist says what happens
 without one.
 
+## Secrets scan of the repository history (Phase 2) — no real credential found
+
+Tool: `docs/hardening/tools/scan_history_for_secrets.py` (prints masked samples only, never
+values). It scanned every line ever added in all 113 commits (706,674 diff lines) for Stripe,
+AWS, Groq, Google, GitHub and Slack keys, JWTs, private-key blocks, OpenAI-style keys, database
+URLs with passwords and secret-looking assignments. `git log --diff-filter=A` shows the only
+`.env`-style files ever added are `.env.example` (backend and frontend) and
+`.env.production.template`; no `.env`, `.pem` or `.key` file was ever committed.
+
+- **Keys and tokens: none.** No Stripe, Groq, Google, GitHub, Slack, OpenAI-style key and no JWT.
+- **AWS:** one access-key id, and it is the one from AWS's own documentation
+  (`AKIAIOSFODNN7EXAMPLE`), in a warehouse-sync test.
+- **Private-key blocks:** three test files, all fake stubs (`...\nMIIEvQ\n...` or `"A" * 2000`).
+- **Database URLs:** development defaults (`postgres:postgres@localhost` in CI and the launch
+  scripts), placeholders (`${POSTGRES_PASSWORD}`), and the dev compose file's
+  `${POSTGRES_PASSWORD:-flowpilot}` fallback (the scan labels that one "OTHER, length 43"
+  because of its shape; it is a template expression). The production compose file requires the
+  variable and has no fallback.
+- **Secret-looking assignments (20 files):** test passwords and fixtures, a benchmark constant,
+  a `localStorage` key name and generated type names. None is a live credential.
+- **The real exposure was not a leaked value but the three public defaults in `config.py`**
+  (F-003, fixed). They were committed on purpose as defaults, which is worse than a leak
+  because the app used them silently.
+
+**Limits, stated plainly.** Files the campaign rules forbid reading (the `apply_*.py` and
+`verify_*.py` scripts, `backend/evidence/`, `arch07_*`, `arch08_*`, PDFs, certification reports)
+are excluded, so a secret or customer data inside them would NOT be found: only you can check
+that (NEEDS-OWNER N-016). Binary files (the deleted `stripe.exe`, a public Stripe CLI build) are
+not scanned. Logs and API responses were covered separately: F-041 (the gunicorn access log wrote
+capability tokens and query strings) and F-021 (validation errors echoed submitted secrets).
+
