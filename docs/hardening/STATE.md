@@ -18,6 +18,7 @@ lot, re-run `docs/hardening/tools/regen_ledger.sh` (read its warning first).
   or git and GitHub metadata. None is fixed.
 - `NEEDS-OWNER.md`: N-001..N-007.
 - `tools/`: the scripts that regenerate the ledger (`regen_ledger.sh`).
+- PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/1 (docs only)
 
 ## Next action (exact)
 Phase 1 on branch `hardening/baseline` (see N-001 about branch names):
