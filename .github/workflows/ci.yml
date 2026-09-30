@@ -294,8 +294,12 @@ jobs:
     needs: [encoding, backend-gates, backend-tests, migrations, frontend]
     steps:
       - name: Fail if any upstream job failed
+        # Expressions accept only single-quoted strings. A double-quoted ","
+        # here made GitHub reject the whole file, so no job ever ran.
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
         run: |
-          if echo '${{ join(needs.*.result, ",") }}' | grep -qE 'failure|cancelled'; then
+          if echo "$RESULTS" | grep -qE 'failure|cancelled'; then
             echo "::error::One or more CI jobs failed."
             exit 1
           fi
