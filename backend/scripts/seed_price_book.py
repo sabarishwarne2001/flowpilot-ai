@@ -12,20 +12,19 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import dotenv_values
+
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-# Load backend/.env into environment
+# Load backend/.env into environment. python-dotenv, the parser Settings
+# uses, so an inline comment (`ENVIRONMENT=development   # ...`, as in
+# .env.example) is not copied into the value.
 env_file = BACKEND / ".env"
 if env_file.exists():
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            k = k.strip()
-            v = v.strip().strip('"').strip("'")
-            if k not in os.environ:
-                os.environ[k] = v
+    for k, v in dotenv_values(env_file).items():
+        if v is not None and k not in os.environ:
+            os.environ[k] = v
 
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.price_book import PriceBook  # noqa: E402
