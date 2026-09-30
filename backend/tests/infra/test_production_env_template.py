@@ -158,3 +158,17 @@ def test_the_exemptions_are_real_template_entries() -> None:
     """Control: the allow-list above cannot quietly grow to cover a real setting."""
     assert NOT_FORWARDED_ON_PURPOSE <= set(template_values())
     assert not (NOT_FORWARDED_ON_PURPOSE & _passed_to_containers())
+
+
+def test_the_template_names_every_price_id_the_plan_seeder_reads() -> None:
+    """F-047. `scripts/seed_quota_tiers.py` refuses to publish a paid plan whose gateway
+    price id is not in its environment. The template listed two of the three (Enterprise
+    is a self-serve paid plan there, though the template called it "sales-led"), so the
+    documented first-deploy seed stopped on the third."""
+    from scripts.seed_quota_tiers import COMMERCIALS
+
+    read_by_seeder = {terms["gateway_price_id_env"] for terms in COMMERCIALS.values() if terms.get("gateway_price_id_env")}
+    assert read_by_seeder, "expected the seeder to read at least one price id"
+    missing = sorted(read_by_seeder - set(template_values()))
+    assert not missing, f"read by scripts/seed_quota_tiers.py but absent from the template: {missing}"
+

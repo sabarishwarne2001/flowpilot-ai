@@ -1136,6 +1136,13 @@ no webhook secret is now refused at start-up as intended.
 "unset", and `llm_service.py` only refused None: a blank key built a client with an empty
 credential and failed at the first call with the provider's own error. Blank now reads as
 "GROQ_API_KEY is not configured" (same for Gemini), with 6 tests (4 failed before).
+**Follow-up.** The template listed two of the three price ids the plan seeder reads and
+called Enterprise "sales-led", but `scripts/seed_quota_tiers.py` sells it self-serve and
+refuses a paid plan with no id, so the documented first-deploy seed would have stopped on
+`GATEWAY_PRICE_ID_ENTERPRISE`. Added to the template and to the compose file, with a test
+that reads the seeder's own table (it failed before). The plan table and its prices
+(Developer $49, Business $299, Enterprise $799 per seat per month) live in that script; I
+did not change or judge them, and NEEDS-OWNER N-011 asks you to confirm them before launch.
 **Not done.** No guard makes a platform LLM key mandatory: a deployment where every
 customer brings their own key is legitimate. The RUNBOOK checklist says what happens
 without one.

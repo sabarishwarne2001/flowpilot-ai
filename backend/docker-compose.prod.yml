@@ -100,6 +100,7 @@ x-app-env: &app-env
   DODO_ADDON_PRODUCT_WAREHOUSE_SYNC: ${DODO_ADDON_PRODUCT_WAREHOUSE_SYNC:-}
   GATEWAY_PRICE_ID_DEVELOPER: ${GATEWAY_PRICE_ID_DEVELOPER:-}
   GATEWAY_PRICE_ID_BUSINESS: ${GATEWAY_PRICE_ID_BUSINESS:-}
+  GATEWAY_PRICE_ID_ENTERPRISE: ${GATEWAY_PRICE_ID_ENTERPRISE:-}
 
   # The platform's own LLM credentials. Tenants who bring their own key (BYOK) do not
   # need them; everyone else gets an error from any AI feature without one.
