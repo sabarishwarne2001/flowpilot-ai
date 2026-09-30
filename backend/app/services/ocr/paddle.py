@@ -208,9 +208,13 @@ class PaddleOCRProvider(OCRProvider):
         except Exception as exc:
             err_str = str(exc)
             if "ConvertPirAttribute2RuntimeAttribute" in err_str or "onednn_instruction" in err_str:
-                logger.warning("ocr.onednn_pir_fallback", extra={"image": str(image_path)})
-                polygon = [[10.0, 20.0], [90.0, 20.0], [90.0, 50.0], [10.0, 50.0]]
-                return [[[polygon, ("FLOWPILOT GATE INVOICE 12345", 0.99)]]]
+                # A known Paddle/CPU crash. Fail the job. Never substitute text
+                # that is not in the document (F-019).
+                logger.error(
+                    "ocr.onednn_pir_failure",
+                    extra={"image": str(image_path)},
+                    exc_info=True,
+                )
             raise OCRError(f"OCR failed for {image_path.name}: {exc}") from exc
 
     @staticmethod
