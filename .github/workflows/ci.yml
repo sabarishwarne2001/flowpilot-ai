@@ -324,6 +324,12 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      # F-038. A source map is the original TypeScript source and Caddy serves
+      # all of dist/, so a built map is a public map.
+      - name: No source maps in the production bundle
+        working-directory: frontend
+        run: node scripts/check-no-sourcemaps.mjs --dist
+
   # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a
   # job above does not require editing the protection rule.

@@ -94,7 +94,10 @@ export default defineConfig(({ mode, command }) => {
     },
 
     build: {
-      sourcemap: true,
+      // F-038. A source map is the original TypeScript source, and Caddy serves
+      // the whole dist folder, so a map that is built is a map that is public.
+      // scripts/check-no-sourcemaps.mjs fails CI if this is ever turned back on.
+      sourcemap: false,
       chunkSizeWarningLimit: 1000,
 
       rollupOptions: {
