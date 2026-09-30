@@ -166,7 +166,7 @@ class EnterpriseIdpConfig(Base):
     oidc_client_id = Column(Text)
     oidc_client_secret_encrypted = Column(LargeBinary)
     oidc_discovery_url = Column(Text)
-    oidc_jwks_json = Column(JSONB)
+    oidc_jwks_json = Column(JSONB(none_as_null=True))
     oidc_jwks_cached_at = Column(DateTime(timezone=True))
     oidc_authorization_endpoint = Column(Text)
     oidc_token_endpoint = Column(Text)

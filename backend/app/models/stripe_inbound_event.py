@@ -325,7 +325,7 @@ class StripeInboundEvent(Base, UUIDMixin, TimestampMixin):
     )
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     result: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB(none_as_null=True),
         nullable=True,
         doc="What the reconciler did, or why it declined to. Read by operators.",
     )

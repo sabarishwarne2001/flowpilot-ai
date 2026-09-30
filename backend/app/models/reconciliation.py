@@ -149,7 +149,7 @@ class ProviderStatement(Base, UUIDMixin, TimestampMixin):
         BigInteger, nullable=False, server_default=text("0")
     )
 
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     lines: Mapped[list["ProviderStatementLine"]] = relationship(
         "ProviderStatementLine",
@@ -211,7 +211,7 @@ class ProviderStatementLine(Base, UUIDMixin, TimestampMixin):
         String(3), nullable=False, server_default=text("'USD'")
     )
 
-    raw: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    raw: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     statement: Mapped[ProviderStatement] = relationship(
         "ProviderStatement", back_populates="lines"
@@ -318,7 +318,7 @@ class ReconciliationRun(Base, UUIDMixin, TimestampMixin):
         server_default=text(f"'{METHOD_ARCH14_SELL_SIDE}'"),
     )
 
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     findings: Mapped[list["ReconciliationFinding"]] = relationship(
         "ReconciliationFinding",
@@ -405,7 +405,7 @@ class ReconciliationFinding(Base, UUIDMixin, TimestampMixin):
     )
 
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     run: Mapped[ReconciliationRun] = relationship(
         "ReconciliationRun", back_populates="findings"

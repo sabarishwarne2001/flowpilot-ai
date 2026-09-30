@@ -238,7 +238,7 @@ class DocumentVerificationField(Base, UUIDMixin, TimestampMixin):
     agreed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
 
-    consensus_value: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    consensus_value: Mapped[Optional[Any]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     agent_values: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
@@ -251,7 +251,7 @@ class DocumentVerificationField(Base, UUIDMixin, TimestampMixin):
         ),
         nullable=True,
     )
-    resolved_value: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    resolved_value: Mapped[Optional[Any]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     verification: Mapped[DocumentVerification] = relationship(
         "DocumentVerification", back_populates="fields"

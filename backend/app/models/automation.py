@@ -136,7 +136,7 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
     #: them, and the "otherwise" actions. NULL for rules written before
     #: ARCH-37, which `graph_service.flatten_legacy_rule` runs unchanged.
     flow_spec: Mapped[Union[dict[str, Any], None]] = mapped_column(
-        JSONB, nullable=True
+        JSONB(none_as_null=True), nullable=True
     )
 
     trigger_rows: Mapped[list["AutomationRuleTrigger"]] = relationship(

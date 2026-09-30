@@ -200,7 +200,7 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
         Integer, nullable=False, server_default=text("0")
     )
     cost_basis_source_mix: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
+        JSONB(none_as_null=True), nullable=True
     )
 
     estimated_quantity: Mapped[Decimal] = mapped_column(
@@ -227,7 +227,7 @@ class UsageRollup(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     @property
     def measured_quantity(self) -> Decimal:
@@ -333,7 +333,7 @@ class RollupWindow(Base, UUIDMixin, TimestampMixin):
         Integer, nullable=False, server_default=text("0")
     )
 
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

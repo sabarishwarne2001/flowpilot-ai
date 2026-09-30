@@ -125,7 +125,7 @@ class ErasedSubject(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB(none_as_null=True),
         nullable=True,
     )
 

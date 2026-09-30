@@ -129,7 +129,7 @@ class SupplierInvoice(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     reconciliations: Mapped[list["SupplierReconciliation"]] = relationship(
         "SupplierReconciliation",
@@ -212,7 +212,7 @@ class SupplierReconciliation(Base, UUIDMixin, TimestampMixin):
     reconciled_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     supplier_invoice: Mapped[SupplierInvoice] = relationship(
         "SupplierInvoice", back_populates="reconciliations"

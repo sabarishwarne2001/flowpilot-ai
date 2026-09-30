@@ -83,7 +83,7 @@ class ExtractedTableCell(Base):
     base_confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     flags: Mapped[list[str]] = mapped_column(ARRAY(String(16)), nullable=False, default=list)
-    bbox: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    bbox: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     original_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrected_at: Mapped[Optional[datetime]] = _ts(nullable=True)
     corrected_by_user_id: Mapped[Optional[uuid.UUID]] = _uuid(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

@@ -227,7 +227,7 @@ class RedactionJob(Base, UUIDMixin, TimestampMixin):
     )
     #: Counts and page numbers from `LeakReport.summary()`. Never content.
     leak_check_detail: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
+        JSONB(none_as_null=True), nullable=True
     )
 
     #: `manifest.input_digest`. Present from the moment apply starts, so a

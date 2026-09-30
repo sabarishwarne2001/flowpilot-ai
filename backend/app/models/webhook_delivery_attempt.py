@@ -94,7 +94,7 @@ class WebhookDeliveryAttempt(Base, UUIDMixin, TimestampMixin):
 
     response_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     response_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
+        JSONB(none_as_null=True), nullable=True
     )
     response_body_excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

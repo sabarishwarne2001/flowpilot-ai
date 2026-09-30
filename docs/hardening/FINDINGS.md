@@ -427,6 +427,21 @@ column is now `JSONB(none_as_null=True)`, so a missing box is SQL NULL. Both
 tests pass, and the 19 vector tenancy tests still pass. Part 2 (the same
 mistake on 35 other nullable JSON columns) is the next commit below.
 
+**Fixed (Phase 2), part 2: the sweep.** Introspecting the model metadata found
+**35 more nullable JSON/JSONB columns** with the same default (for example
+`audit_logs.details`, `usage_events.details`, `automation_rules.flow_spec`,
+`jobs.result`, `work_items.extracted_entities`, `document_verification_fields.resolved_value`).
+Three of them (`usage_events.details`, `automation_rules.flow_spec` and
+`extracted_table_cells.bbox`) carry the same `IS NULL OR jsonb_typeof(...)` style of
+constraint, so they would have failed the same way on the first `None`. All 35 now
+use `none_as_null=True`. NOT NULL columns are left alone on purpose: there a JSON
+null is a legal value. The ORM already reads SQL NULL and JSON null both as `None`
+and no code queries for JSON null, so no behaviour is lost. The DDL is
+identical, and the drift ratchet still reports the same 314 known operations.
+A structural test (`tests/models/test_nullable_json_columns.py`) fails on any
+future nullable JSON column that forgets the flag; it failed listing all 35
+before the change.
+
 ## F-021 — A rejected BYOK API key is echoed in the error response (P2, confirmed)
 
 `PUT /organizations/{id}/byok/credentials` with an over-long key returns 422,

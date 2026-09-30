@@ -102,7 +102,7 @@ class AutomationNode(Base, UUIDMixin, TimestampMixin):
     config: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    position: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    position: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     topological_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     rule: Mapped["AutomationRule"] = relationship(

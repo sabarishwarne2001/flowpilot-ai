@@ -126,7 +126,7 @@ class QuotaTier(Base, UUIDMixin, TimestampMixin):
         """
         return self.unit_amount_micros is not None
     notes: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     entries: Mapped[list["QuotaTierEntry"]] = relationship(
         "QuotaTierEntry",

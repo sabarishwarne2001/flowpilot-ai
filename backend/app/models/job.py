@@ -131,7 +131,7 @@ class Job(Base, UUIDMixin, TimestampMixin):
     payload: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
-    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True
