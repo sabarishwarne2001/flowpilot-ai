@@ -8,6 +8,8 @@ import logging
 from typing import Any, Optional
 
 from fastapi import Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -230,3 +232,35 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 async def invitation_error_handler(request: Request, exc: InvitationError) -> JSONResponse:
     return await domain_exception_handler(request, exc)
+
+
+#: Keys of a pydantic error entry that carry what the caller submitted.
+_VALIDATION_ERROR_ECHO_KEYS = frozenset({"input"})
+
+
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """422 that never repeats the submitted value back (F-021).
+
+    FastAPI's default handler returns ``exc.errors()`` verbatim, and every entry
+    carries ``input``: the exact value the caller sent for the failing field.
+    For a field that holds a secret (a BYOK provider key, a password, a reset
+    token, an SMTP password, a webhook signing secret) a validation failure
+    therefore copied the secret into the response body, and from there into
+    browser devtools, proxy logs and error trackers. ``SecretStr`` does not
+    help: the error is built from the raw input, not from the model.
+
+    The body keeps the default shape (``{"detail": [{type, loc, msg, ...}]}``),
+    so clients that read ``loc`` and ``msg`` are unaffected. Only the echoed
+    value is removed, for every field of every endpoint, so a secret field
+    added later is covered without anyone remembering to opt in.
+    """
+    errors = [
+        {key: value for key, value in error.items() if key not in _VALIDATION_ERROR_ECHO_KEYS}
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": jsonable_encoder(errors)},
+    )

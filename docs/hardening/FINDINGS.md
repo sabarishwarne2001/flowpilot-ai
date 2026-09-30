@@ -33,7 +33,7 @@ How to read this file:
 | F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (13 blockers) |
 | F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | confirmed (live upload + ORM check) | Ingestion | Any chunk without a bounding box makes the whole document fail |
-| F-021 | P2 | confirmed (failing test) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
+| F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
 | F-022 | P2 | unverified (gate 0V-G13) | Tenancy | An AI agent tool selector takes no tenant scope |
 | F-023 | P2 | unverified (gate arch08_step6) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
 | F-024 | P2 | confirmed (same command fails live) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
@@ -431,6 +431,19 @@ test `tests/api/test_byok_endpoints.py::TestCredentialConfidentiality::test_a_re
 fails for exactly this reason. FastAPI's default validation error handler
 echoes input, and responses like this tend to be copied into logs, browser
 devtools and error trackers.
+
+**Fixed (Phase 2).** Root cause: FastAPI's default 422 handler returns pydantic's
+error list, and every entry carries `input`, the value the caller sent.
+`SecretStr` cannot prevent that, because the error is built from the raw input.
+So the same leak applied to **every** field on every endpoint: passwords on
+`/auth/register`, `/auth/reset-password` and `/auth/change-password`, reset
+tokens, SMTP passwords, webhook secrets. A global `RequestValidationError`
+handler (`app/core/exception_handlers.py`) now removes `input` from every 422
+and keeps `type`, `loc` and `msg`, so no field needs to opt in. Proof: the
+existing BYOK test plus 5 new tests in
+`tests/security/test_validation_errors_do_not_echo_input.py`; 5 of them failed
+before the change and all pass after. Nothing in the frontend or the tests read
+`input`.
 
 ## F-022 — AI agent tool selector without tenant scope (P2, unverified)
 

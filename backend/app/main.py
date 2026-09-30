@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -17,7 +18,10 @@ from app.api.v1 import scim as scim_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
 from app.core.config import settings
-from app.core.exception_handlers import domain_exception_handler
+from app.core.exception_handlers import (
+    domain_exception_handler,
+    request_validation_exception_handler,
+)
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.public_route_registry import is_public, registered_paths
@@ -204,6 +208,8 @@ app.add_middleware(RequestTraceMiddleware)
 # and this layer's rel="sunset" coexist.
 app.add_middleware(DeprecationMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
+# F-021: a 422 must not echo the submitted value (it may be a secret).
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 
 
 async def scim_error_handler(request: Request, exc: ScimError):
