@@ -88,7 +88,7 @@ async def upload_document(
     except file_validation_service.FileValidationError as exc:
         raise HTTPException(
             status_code=(
-                status.HTTP_413_PAYLOAD_TOO_LARGE
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
                 if exc.reason is file_validation_service.RejectionReason.TOO_LARGE
                 else status.HTTP_400_BAD_REQUEST
             ),
