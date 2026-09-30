@@ -23,6 +23,7 @@ Not proven here (needs the compose stack): running the programs through
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -50,15 +51,28 @@ def _admin_engine():
     return create_engine(uri, isolation_level="AUTOCOMMIT")
 
 
+def _pg_dump_major() -> int:
+    banner = subprocess.run(["pg_dump", "--version"], capture_output=True, text=True).stdout
+    match = re.search(r"\)\s*(\d+)", banner)
+    return int(match.group(1)) if match else 0
+
+
 @pytest.fixture()
 def live_database():
     name = "bk_live_" + uuid.uuid4().hex[:10]
     admin = _admin_engine()
     try:
         with admin.connect() as conn:
-            conn.execute(text(f'CREATE DATABASE "{name}"'))
+            server_major = int(conn.execute(text("SHOW server_version_num")).scalar()) // 10000
     except Exception as error:  # noqa: BLE001
         pytest.skip(f"no PostgreSQL to test against: {error}")
+    if _pg_dump_major() < server_major:
+        # pg_dump refuses to dump a newer server. On the production host the scripts run pg_dump
+        # inside the database container, so the two always match; a dev machine or CI runner
+        # with an older client would fail here for a reason that has nothing to do with the scripts.
+        pytest.skip(f"the local pg_dump is older than the PostgreSQL {server_major} server it would dump")
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE "{name}"'))
     engine = create_engine(settings.sqlalchemy_database_uri.rsplit("/", 1)[0] + f"/{name}", isolation_level="AUTOCOMMIT")
     with engine.connect() as conn:
         conn.execute(text("CREATE TABLE organizations (id int primary key, name text)"))
