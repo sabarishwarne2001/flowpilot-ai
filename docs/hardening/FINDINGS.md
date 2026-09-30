@@ -115,7 +115,7 @@ The ledger tags the affected endpoint rows with `F-002`.
 
 **Next step.** Phase 3 builds the harness. Until then these rows stay `untested`.
 
-## F-003 — Default secrets are hard-coded in the app config (P2, unverified)
+## F-003 — Default secrets are hard-coded in the app config (P2, fixed in Phase 2)
 
 **Plain language.** Three secrets have a default value written into the code:
 `API_KEY_PEPPER`, `REDIS_IDENTITY_PEPPER` and `EMAIL_ENCRYPTION_KEYS`. The
@@ -168,11 +168,11 @@ code refuses with 12 named problems. What changed:
   is refused, with secrets filled in it boots, and it ships no usable secret.
 
 Tests: `tests/core/test_production_config_guard.py` (72) and
-`tests/infra/test_production_env_template.py` (21) pass. The
+`tests/infra/test_production_env_template.py` (24) pass. The
 existing ML-stub, encryption-boundary and config tests pass; the only failures
 in the neighbouring test files are ones already in the Phase 1 baseline.
 
-## F-004 — Server-side plan gating gaps to prove (P2, unverified)
+## F-004 — Server-side plan gating gaps to prove (P2, fixed in Phase 2; see the resolution below)
 
 **Plain language.** A locked item in the sidebar only hides a feature. The
 server has to refuse the request too, or someone on a lower plan can call the
@@ -277,7 +277,7 @@ to 24 hours of data) → N-012. Also unverified: whether anything enqueues the j
 types `billing.reconcile`, `billing.assemble_invoice`, `usage.reconcile` and
 `billing.seat_sync` on a schedule (apart from scripts and gateway code paths).
 
-## F-007 — Repository hygiene (P3, confirmed from git)
+## F-007 — Repository hygiene (P3, partly fixed in Phase 2)
 
 - `backend/stripe.exe` (38 MB Stripe CLI binary) was committed in `d790047`
   and deleted in `1884891`. It is gone from the current tree but **still in git
@@ -342,7 +342,7 @@ the platform layout with an empty body.
 `VITE_ENVIRONMENT`, and nothing in `src/` reads them. The only variable the code
 reads, `VITE_API_URL` (`services/api/client.ts`), is missing from the template.
 
-## F-011 — Most settings are undocumented for production (P3, unverified)
+## F-011 — Most settings are undocumented for production (P3, partly fixed in Phase 2)
 
 `backend/app/core/config.py` defines 302 settings. 246 of them are not in
 `.env.production.template`, so their code defaults apply silently in
@@ -369,7 +369,7 @@ is forgotten). Each has a ledger row (`config_var`).
   security are covered by the guard (secrets, CORS, debug logging, protections that must
   stay on, storage, Redis, mail, billing consistency).
 
-## F-012 — WebSocket token in URL (P3, unverified)
+## F-012 — WebSocket token in URL (P3, not a defect; Phase 2)
 
 `app/services/collab/gate.py:extract_token` reads the bearer token from
 headers **or** from the query parameters `token`, `access_token`, `bearer` or
@@ -384,7 +384,7 @@ browser can set) or an `Authorization` header, and API keys are refused outright
 accepts a query-string token makes 8 of them fail. The Caddy access log also drops the
 `Sec-Websocket-Protocol` header where the token rides.
 
-## F-013 — Three billing webhook entry points (P3, unverified)
+## F-013 — Three billing webhook entry points (P3, verified in Phase 2)
 
 Stripe events can arrive at `POST /api/v1/billing/webhooks/stripe` and
 `POST /api/v1/billing/stripe/webhook` (both are the same handler in
@@ -537,7 +537,7 @@ in to the dashboard. A second run skips the package install, and both seed
 scripts exit 0 when rerun. `start_dev.ps1` got the same changes but is
 **unverified** (no Windows here).
 
-## F-019 — OCR silently returns invented text on one error class (P1, unverified: code read)
+## F-019 — OCR silently returns invented text on one error class (P1, fixed in Phase 2)
 
 **Plain language.** If the PaddleOCR engine raises an error that mentions
 `ConvertPirAttribute2RuntimeAttribute` or `onednn_instruction` (a known
@@ -564,7 +564,7 @@ proved nothing on such machines. It is not edited (N-010). On a machine whose
 Paddle works, or with `ML_STUBS=true`, G6.2 exercises the real path; on a
 crashing machine it now fails, which is the honest result.
 
-## F-020 — A chunk without a bounding box fails the whole document (P1, confirmed)
+## F-020 — A chunk without a bounding box fails the whole document (P1, fixed in Phase 2)
 
 **Plain language.** `DocumentChunk.bbox` is `mapped_column(JSONB,
 nullable=True)` without `none_as_null=True`, so SQLAlchemy stores Python `None`
@@ -603,7 +603,7 @@ A structural test (`tests/models/test_nullable_json_columns.py`) fails on any
 future nullable JSON column that forgets the flag; it failed listing all 35
 before the change.
 
-## F-021 — A rejected BYOK API key is echoed in the error response (P2, confirmed)
+## F-021 — A rejected BYOK API key is echoed in the error response (P2, fixed in Phase 2)
 
 `PUT /organizations/{id}/byok/credentials` with an over-long key returns 422,
 and the response body contains the full key under `"input"`. The existing
@@ -625,14 +625,14 @@ existing BYOK test plus 5 new tests in
 before the change and all pass after. Nothing in the frontend or the tests read
 `input`.
 
-## F-022 — AI agent tool selector without tenant scope (P2, unverified)
+## F-022 — AI agent tool selector without tenant scope (P2, not a defect; Phase 2)
 
 Gate `verify_arch0v.py` 0V-G13: `agent_selectors.py:resolve_review_item` is a
 registered tool selector with no `tenant` parameter. ARCH-13 required every
 selector to carry a `TenantScope`. Phase 2 must prove whether an agent in
 tenant A can resolve a review item from tenant B.
 
-## F-023 — Client IP read from `X-Forwarded-For` in five places (P2, unverified)
+## F-023 — Client IP read from `X-Forwarded-For` in five places (P2, not a defect; Phase 2)
 
 Gate `verify_arch08_step6.py`: `core/client_ip.py`,
 `services/identity/session_policy_service.py`, `api/v1/saml.py`,
@@ -641,7 +641,7 @@ applies the `TRUSTED_PROXY_HOPS` rule. A client can forge the header to evade
 IP-based rate limits, IP allow-lists or audit records. Phase 2: prove with a
 forged header.
 
-## F-024 — Production `migrate` fails on a fresh database (P2, confirmed: same command fails live)
+## F-024 — Production `migrate` fails on a fresh database (P2, mitigated in Phase 2)
 
 `docker-compose.prod.yml` runs `alembic upgrade head` without
 `ARCH40_CONTRACT`, so on a new production database the `migrate` container
