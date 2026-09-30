@@ -226,7 +226,9 @@ step '5/8  Database migrations'
 if (( SKIP_MIGRATIONS )); then
     warn 'Skipped by request.'
 else
-    "${VENV_PY}" -m alembic upgrade head || die 'alembic upgrade head failed.'
+    # head ends at the flag-gated ARCH-40 contract step. The models already
+    # assume it ran, and a dev database has no deploy window to protect.
+    ARCH40_CONTRACT=1 "${VENV_PY}" -m alembic upgrade head || die 'alembic upgrade head failed.'
     HEAD="$("${VENV_PY}" -m alembic current 2>&1 | grep -o '[a-z0-9_]* (head)' || true)"
     ok "Alembic at head: ${HEAD:-unknown}"
 fi

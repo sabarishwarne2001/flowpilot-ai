@@ -106,6 +106,9 @@ services:
     environment:
       <<: *app-env
       SERVICE_ROLE: migrate
+      # Dev only: head ends at the flag-gated ARCH-40 contract step, which
+      # the models already assume. docker-compose.prod.yml does not set it.
+      ARCH40_CONTRACT: "1"
     depends_on:
       db:
         condition: service_healthy

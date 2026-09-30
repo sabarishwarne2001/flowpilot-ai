@@ -285,10 +285,15 @@ try {
     if ($SkipMigrations) {
         Write-Warn2 'Skipped by request.'
     } else {
-        & $venvPython -m alembic upgrade arch40_step2a_review_view_paths
+        # Upgrade to head, not a pinned revision: the old pin
+        # (arch40_step2a_review_view_paths) predates hm1 and ARCH-41..50, so
+        # a fresh database had none of their tables. head ends at the
+        # flag-gated ARCH-40 contract step; the models already assume it ran.
+        $env:ARCH40_CONTRACT = '1'
+        & $venvPython -m alembic upgrade head
         if ($LASTEXITCODE -ne 0) { Fail-Hard 'alembic upgrade failed.' }
         $currentRev = (& $venvPython -m alembic current 2>&1 | Out-String).Trim()
-        Write-Ok "Alembic at release head: arch40_step2a_review_view_paths"
+        Write-Ok "Alembic at: $currentRev"
     }
 } finally { Pop-Location }
 
