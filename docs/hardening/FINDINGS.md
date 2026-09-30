@@ -28,7 +28,7 @@ How to read this file:
 | F-013 | P3 | unverified | Billing | Three webhook routes can receive Stripe events; each must be proven to verify signatures |
 | F-014 | P3 | unverified | Tenancy URLs | Organization slug `request` is not reserved and collides with the public `/request/:token` page |
 | F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
-| F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: full serial run in progress (numbers pending) |
+| F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
 | F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
 | F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (10 blockers) |
 | F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
@@ -278,8 +278,9 @@ stay as they are.
 
 ## F-016 — The backend test suite is red (P1, confirmed)
 
-**Plain language.** There are 2,538 backend tests. Run exactly as CI runs them,
-full serial run in progress (numbers pending). CI stops at the first 5 failures (`--maxfail=5`), so the
+**Plain language.** There are 2,546 backend tests (2,538 before Phase 1 plus 8
+new stub tests). Run as CI runs them, but without stopping early,
+2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546. CI stops at the first 5 failures (`--maxfail=5`), so the
 `pytest` job will stay red until these are worked through. Nothing in Phase 1
 changed a test's expectations; the only test edit fixed an import path
 (F-018 item 9).

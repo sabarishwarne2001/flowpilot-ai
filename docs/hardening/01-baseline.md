@@ -20,7 +20,7 @@ by reading code. Anything not run is marked *unverified*.
 | OpenAPI schema | **200**, 441 paths, 550 operations; all 550 match the ledger | §5 |
 | Worker starts | **Yes**, sweeps run, 0 errors | worker log |
 | Upload → OCR → embed → COMPLETED | **Works with `ML_STUBS=true`**; real models cannot download here | §4 |
-| Backend tests (2,538) | **Red:** full serial run in progress (numbers pending) | §6, F-016 |
+| Backend tests (2,546) | **Red:** 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 | §6, F-016 |
 | Verification gates (78) | **Red:** 39 pass, 33 fail, 6 skip | §7, F-029 |
 | Frontend `tsc` / lint / build | **Pass** (locally and in CI) | §8 |
 | Browser automation (Playwright) | **Works here:** headless Chromium logs in and renders the dashboard | §9 |
@@ -107,7 +107,38 @@ machine that can download them (your PC or GitHub runners).
 
 ## 6. Backend tests
 
-_Full serial run in progress; numbers pending._
+**Result (full serial run, same settings as CI but without `--maxfail`):**
+
+| Passed | Failed | Errors | Skipped | Total | Time |
+|---|---|---|---|---|---|
+| 2,285 | 219 | 33 | 9 | 2,546 | 18 min 52 s |
+
+(2,546 = the 2,538 tests that existed before Phase 1, plus the 8 new ML-stub
+tests, which all pass. Run on the RAM-disk Postgres from RUNBOOK §5 with
+`ML_STUBS=false`; on a normal disk the same run takes about 2 hours.)
+
+Grouped by the first error line (details and severities in FINDINGS F-016):
+
+| Count | Cause | Main files |
+|---|---|---|
+| 47 | No published quota tier / price book "in force" in the test DB (seed data wiped per test) | `test_arch15_gate_15_*` |
+| 38 | `ADDON_REQUIRED` / `CAPABILITY_REQUIRED`: plan gating newer than the tests' tenant plan | `test_arch25_endpoints.py`, `test_arch26_endpoints.py` |
+| 25 | `relation "users" does not exist`: tests on a separately named database that nothing migrated | `test_arch0g_endpoints.py`, `test_usage_api.py` |
+| 18 | Constructor signature drift (`AISettings`, `LLMReservation`, `FactSet`) | BYOK / LLM / assertion tests |
+| 7 | `slo_measurements.observed_value` written as NULL | `test_slo_service.py` |
+| 4 | Network blocked in the sandbox (model download) | would pass where Hugging Face is reachable |
+| ≈110 | Individual assertion failures (public API, isolation coverage, automation timeouts, BYOK, e-mail settings, …) | see `pytest -rfE` output |
+
+Notable single failures: `test_a_rejected_key_is_not_echoed` (secret echoed,
+F-021); `test_data_isolation.py` reports workspace-scoped collections with no
+isolation test (`verifications`, `usage`, `extraction-memory`, `erp`,
+`entities`, and more); SCIM writes the client address `"testclient"` into an
+`inet` column.
+
+**How the number was reached.** A first run split into 3 parallel shards gave
+337 failures + errors. 85 of those passed when re-run alone: some tests share
+a fixed database name, so parallel runs collided (F-030). The single serial
+run above is the baseline to compare against.
 
 ## 7. Verification gates
 

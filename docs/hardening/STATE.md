@@ -24,7 +24,7 @@ checkpoint.** The next session starts Phase 2. Do not redo Phase 0 or 1.
   - Migrations: 1 head; upgrade → downgrade -1 → upgrade pass locally and in
     CI; drift is 314 operations, recorded in `backend/alembic/drift_baseline.txt`
     and enforced as a ratchet (F-017).
-  - Tests: full serial run in progress (numbers pending) (F-016).
+  - Tests: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 (F-016).
   - Gates: 39 pass / 33 fail / 6 skip (F-029).
   - Frontend: tsc, lint, build pass (locally and in CI).
   - Playwright + headless Chromium work here (login and dashboard proven).
