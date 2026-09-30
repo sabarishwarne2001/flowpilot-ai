@@ -565,6 +565,11 @@ proved nothing on such machines. It is not edited (N-010). On a machine whose
 Paddle works, or with `ML_STUBS=true`, G6.2 exercises the real path; on a
 crashing machine it now fails, which is the honest result.
 
+**Parallel session.** A different Claude session pushed its own fix for this to the same branch
+(`04fa763`, with `tests/services/test_paddle_no_fabricated_text.py`, 7 tests). Both fixes make the
+engine crash raise `OCRError`; the merge (`3b0aad1`) kept this branch's wording and both test files,
+which pass together.
+
 ## F-020 — A chunk without a bounding box fails the whole document (P1, fixed in Phase 2)
 
 **Plain language.** `DocumentChunk.bbox` is `mapped_column(JSONB,
@@ -603,6 +608,11 @@ identical, and the drift ratchet still reports the same 314 known operations.
 A structural test (`tests/models/test_nullable_json_columns.py`) fails on any
 future nullable JSON column that forgets the flag; it failed listing all 35
 before the change.
+
+**Parallel session.** The other session's fix (`e298702`, with `tests/services/test_chunk_writer_bbox_null.py`)
+covered three of the columns (`document_chunks.bbox`, `usage_events.details`, `automation_rules.flow_spec`);
+this branch covers all 35 nullable JSON columns. The merge (`3b0aad1`) kept this branch's comments and both
+test files, which pass together.
 
 ## F-021 — A rejected BYOK API key is echoed in the error response (P2, fixed in Phase 2)
 
