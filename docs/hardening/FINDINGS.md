@@ -703,6 +703,19 @@ real and are listed above (F-022, F-023, F-025) or in `01-baseline.md`. CI's
 not read or edited under CLAUDE.md, so the triage needs an owner decision on
 which gates are still authoritative.
 
+**Phase 2 check (no gate regressed).** The static gate runner was run against `main` (a worktree
+of the Phase 1 head) and against this branch, with the same development database. Per-gate
+results are identical for 77 of 78 gates. The 78th, `verify_arch05_step0.py`, passed on `main`
+and failed on the branch only because the `main` run had just left data behind: the gate
+`verify_arch09_step9.py` creates organizations named `gate9-*` with no owner and never removes
+them, and `verify_arch05_step0.py` fails when any ownerless organization exists. Run against the
+same database, `main`'s own code fails identically (16 ownerless organizations), so it is state,
+not code. **Finding:** the gates are not idempotent: running the suite twice on one database turns
+a passing gate red (audit logs are append-only, so the leftovers cannot even be deleted). Fixing
+that means editing gate scripts, which the rules forbid (N-010). The `main` run here measured 38 pass / 34 fail / 6 skip against Phase 1's recorded
+39 / 33 / 6: one gate differs from that record, and because it is in the `main` run too it is
+not from Phase 2. I did not chase which one.
+
 ## F-030 — The test harness is slow and order-dependent (P3, confirmed)
 
 Every DB test runs `TRUNCATE … CASCADE` over about 200 tables twice (about
