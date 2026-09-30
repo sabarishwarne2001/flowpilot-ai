@@ -233,7 +233,8 @@ services:
       - --access-logfile=-
       - --error-logfile=-
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/v1/health || exit 1"]
+      # Readiness (F-042): Postgres and Redis answer, not merely "the process is up".
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/v1/health/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
