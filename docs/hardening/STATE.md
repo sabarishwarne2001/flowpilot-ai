@@ -4,7 +4,7 @@ _Last updated: 2026-09-30 (end of Phase 2)_
 
 ## Current phase
 **Phase 2 — Deployment blockers and security hardening: COMPLETE. Stopped at the
-Phase 2 checkpoint.** PR: PR_LINK_PLACEHOLDER (branch `hardening/security-deploy`). The next
+Phase 2 checkpoint.** PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/3 (branch `hardening/security-deploy`). The next
 session starts Phase 3 after you have read the PR. Do not redo Phases 0 to 2.
 
 ## What is done
