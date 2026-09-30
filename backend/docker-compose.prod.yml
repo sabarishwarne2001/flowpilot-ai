@@ -231,6 +231,10 @@ services:
       - --max-requests=2000
       - --max-requests-jitter=200
       - --access-logfile=-
+      # F-041. The stock access log prints the raw request line to stdout: capability
+      # tokens in public paths, query strings, the Referer. This one redacts them.
+      - --logger-class=app.core.gunicorn_logging.RedactingLogger
+      - '--access-logformat=%(h)s %(t)s "%(m)s %(U)s" %(s)s %(b)s %(L)s'
       - --error-logfile=-
     healthcheck:
       # Readiness (F-042): Postgres and Redis answer, not merely "the process is up".
