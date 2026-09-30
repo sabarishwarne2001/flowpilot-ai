@@ -135,6 +135,11 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32
     OCR_LANGUAGE: str = "en"
+    # TEST STUBS, not models: hashed bag-of-words embeddings and labelled
+    # placeholder OCR text (app/services/ml_stubs.py). For environments that
+    # cannot download the PaddleOCR / SentenceTransformers weights. Refused
+    # when ENVIRONMENT=production.
+    ML_STUBS: bool = False
 
     PLATFORM_SMTP_HOST: str = ""
     PLATFORM_SMTP_PORT: int = 587
@@ -940,6 +945,15 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [part.strip() for part in raw.split(",") if part.strip()]
+
+    @model_validator(mode="after")
+    def _refuse_ml_stubs_in_production(self) -> "Settings":
+        if self.ML_STUBS and (self.ENVIRONMENT or "").strip().lower() == "production":
+            raise ValueError(
+                "ML_STUBS=true replaces OCR and embeddings with test stubs and "
+                "is refused when ENVIRONMENT=production."
+            )
+        return self
 
     @model_validator(mode="after")
     def _align_dodo_mode_and_host(self) -> "Settings":
