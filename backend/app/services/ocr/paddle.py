@@ -208,9 +208,18 @@ class PaddleOCRProvider(OCRProvider):
         except Exception as exc:
             err_str = str(exc)
             if "ConvertPirAttribute2RuntimeAttribute" in err_str or "onednn_instruction" in err_str:
-                logger.warning("ocr.onednn_pir_fallback", extra={"image": str(image_path)})
-                polygon = [[10.0, 20.0], [90.0, 20.0], [90.0, 50.0], [10.0, 50.0]]
-                return [[[polygon, ("FLOWPILOT GATE INVOICE 12345", 0.99)]]]
+                # F-019. This class of error used to be answered with an
+                # invented page (a fixed fake invoice line) so that a
+                # verification gate could pass on a machine where Paddle
+                # crashes. That text then became the customer's extracted
+                # document. A crash is a failed job, never made-up content.
+                logger.error("ocr.onednn_pir_crash", extra={"image": image_path.name})
+                raise OCRError(
+                    f"OCR failed for {image_path.name}: PaddleOCR crashed inside its "
+                    "oneDNN/PIR runtime on this machine, so the page was NOT read "
+                    f"({exc}). Run OCR on a machine whose Paddle build supports this "
+                    "CPU, or use a different OCR provider."
+                ) from exc
             raise OCRError(f"OCR failed for {image_path.name}: {exc}") from exc
 
     @staticmethod

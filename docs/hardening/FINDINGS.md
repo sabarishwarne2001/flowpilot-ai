@@ -31,7 +31,7 @@ How to read this file:
 | F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
 | F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
 | F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (13 blockers) |
-| F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
+| F-019 | P1 | **fixed** (Phase 2) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | **fixed** (Phase 2) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
 | F-022 | P2 | unverified (gate 0V-G13) | Tenancy | An AI agent tool selector takes no tenant scope |
@@ -400,8 +400,21 @@ extracted, embedded and shown as the customer's document content. It looks
 like a shim added so a verification gate could pass on a machine where Paddle
 crashed.
 
-**Next step.** Phase 2/4: a test that forces this error must see a failed OCR
-job, not invented text. Remove the shim.
+**Fixed (Phase 2).** Tests in `tests/services/test_paddle_ocr_honest_failure.py`
+drive the real provider with an engine that raises the two real Paddle error
+messages: 5 of 6 failed before (the provider returned the invented line), all
+pass after. The shim is removed; `_run_engine` now raises `OCRError` that says
+the page was **not** read and what to do, and logs `ocr.onednn_pir_crash` at
+error level. A tripwire test fails if the invented string ever reappears in the
+provider.
+
+**Why it existed (read under owner decision N-010, gate is already red).**
+`verify_arch10_step9.py` check G6.2 draws exactly that phrase on a PNG and asks
+the pipeline to OCR it. The shim answered with the same phrase for *any* image,
+so the gate could pass on a machine where Paddle crashes. That gate therefore
+proved nothing on such machines. It is not edited (N-010). On a machine whose
+Paddle works, or with `ML_STUBS=true`, G6.2 exercises the real path; on a
+crashing machine it now fails, which is the honest result.
 
 ## F-020 — A chunk without a bounding box fails the whole document (P1, confirmed)
 
