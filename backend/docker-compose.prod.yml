@@ -83,6 +83,35 @@ x-app-env: &app-env
   STRIPE_WEBHOOK_SECRETS: ${STRIPE_WEBHOOK_SECRETS:-}
   STRIPE_LIVEMODE: ${STRIPE_LIVEMODE:-false}
 
+  # F-047. A container gets ONLY what is listed here; a value in .env.production that is
+  # not listed is used to fill in this file and then dropped, and the app runs on its
+  # code default without saying so. Everything the template asks for is passed on
+  # (tests/infra/test_production_env_template.py fails when one is not).
+  BILLING_GATEWAY: ${BILLING_GATEWAY:-STRIPE}
+  BILLING_DEFAULT_CURRENCY: ${BILLING_DEFAULT_CURRENCY:-USD}
+  BILLING_SEAT_SYNC_ENABLED: ${BILLING_SEAT_SYNC_ENABLED:-true}
+  BILLING_SEAT_PRORATION_BEHAVIOR: ${BILLING_SEAT_PRORATION_BEHAVIOR:-create_prorations}
+  BILLING_REAUTH_REQUIRED: ${BILLING_REAUTH_REQUIRED:-true}
+  DODO_API_KEY: ${DODO_API_KEY:-}
+  DODO_WEBHOOK_SECRET: ${DODO_WEBHOOK_SECRET:-}
+  DODO_LIVEMODE: ${DODO_LIVEMODE:-false}
+  DODO_API_BASE: ${DODO_API_BASE:-}
+  DODO_ADDON_PRODUCT_CUSTOM_DOMAIN: ${DODO_ADDON_PRODUCT_CUSTOM_DOMAIN:-}
+  DODO_ADDON_PRODUCT_WAREHOUSE_SYNC: ${DODO_ADDON_PRODUCT_WAREHOUSE_SYNC:-}
+  GATEWAY_PRICE_ID_DEVELOPER: ${GATEWAY_PRICE_ID_DEVELOPER:-}
+  GATEWAY_PRICE_ID_BUSINESS: ${GATEWAY_PRICE_ID_BUSINESS:-}
+
+  # The platform's own LLM credentials. Tenants who bring their own key (BYOK) do not
+  # need them; everyone else gets an error from any AI feature without one.
+  LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+  # Written out in the template "so they are visible"; they only take effect if passed on.
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-14}
+  MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-104857600}
+
   # Required: without mail, invitations, verification links and password resets are
   # generated and never delivered, and the UI shows no error. The application also
   # refuses to start without it in production.
@@ -98,6 +127,10 @@ x-app-env: &app-env
   PLATFORM_RESERVED_HOSTS: ${PLATFORM_RESERVED_HOSTS:-[]}
   ACME_AGENT_URL: ${ACME_AGENT_URL:-}
   ACME_CONTACT_EMAIL: ${ACME_CONTACT_EMAIL:-}
+  CUSTOM_DOMAIN_CHALLENGE_TTL_HOURS: ${CUSTOM_DOMAIN_CHALLENGE_TTL_HOURS:-168}
+  CUSTOM_DOMAIN_MAX_PER_ORG: ${CUSTOM_DOMAIN_MAX_PER_ORG:-10}
+  TLS_RENEWAL_WINDOW_DAYS: ${TLS_RENEWAL_WINDOW_DAYS:-30}
+  TLS_DEAD_MAN_DAYS: ${TLS_DEAD_MAN_DAYS:-7}
 
   LLM_METERING_ENABLED: "true"
   LOG_LEVEL: ${LOG_LEVEL:-INFO}

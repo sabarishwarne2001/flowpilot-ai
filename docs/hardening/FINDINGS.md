@@ -59,6 +59,7 @@ How to read this file:
 | F-044 | P3 | **mitigated** (Phase 2) | Frontend/ingress | No Content-Security-Policy header |
 | F-045 | P3 | open | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
 | F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
+| F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
 
 ---
 
@@ -1099,3 +1100,43 @@ read `/api/v1/openapi.json` still run.
 /openapi.json` blocks; the API now answers 404 behind them. They were not removed
 because a historical gate script pins that file's content and gate scripts are never
 edited (N-010). Harmless, and worth deleting when the gate is retired.
+
+## F-047 — 23 production settings never reached the app (P1, fixed)
+
+**Plain language.** Docker Compose gives a container only the variables listed under
+its `environment:`. Anything else in `.env.production` is used to fill in the compose
+file itself and then thrown away. `.env.production.template` asks you to fill in 70
+variables; 23 of them were not in that list, so the app never saw them and quietly ran
+on its built-in defaults. The important ones:
+
+- `GROQ_API_KEY`, `GEMINI_API_KEY`, `LLM_PROVIDER`: with no platform key, every AI
+  feature fails for any customer who has not brought their own key.
+- `BILLING_GATEWAY` and every `DODO_*` setting: Dodo Payments could not be selected
+  or configured at all (the default gateway is Stripe).
+- `GATEWAY_PRICE_ID_DEVELOPER` / `_BUSINESS`: the plan-seeding command could not see them.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `MAX_UPLOAD_SIZE`: the
+  template says these are "written out so they are visible", but changing them did nothing.
+- the other `BILLING_*`, `CUSTOM_DOMAIN_*` and `TLS_*` tuning values.
+
+Nothing failed loudly. It also hid a safety check: the start-up guard refuses a Dodo API
+key with no webhook secret, but it never ran because the container never got the key.
+**Proof.** `test_every_setting_the_template_asks_for_reaches_the_containers`
+(`tests/infra/test_production_env_template.py`) lists every template variable that no
+service receives; it failed naming exactly the 23 above and passes now. Two variables are
+exempt on purpose, with a control test that the exemption list only holds real template
+entries: `IMAGE_TAG` (read by Compose itself) and `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+(passed to the one-off seed command only, so a password is not in every container).
+**Fixed.** `docker-compose.prod.yml` passes all 23 on, each with the code's own default.
+Checked by rendering the file with `docker compose config` and starting the app from
+exactly the environment the `web` service receives: it boots in production with
+`BILLING_GATEWAY=DODO`, a Groq key, and a Dodo test-mode base URL derived from
+`DODO_LIVEMODE=false`; with every optional value blank it also boots; and a Dodo key with
+no webhook secret is now refused at start-up as intended.
+**Side fix.** Forwarding a blank `GROQ_API_KEY=` gives the app the empty string, not
+"unset", and `llm_service.py` only refused None: a blank key built a client with an empty
+credential and failed at the first call with the provider's own error. Blank now reads as
+"GROQ_API_KEY is not configured" (same for Gemini), with 6 tests (4 failed before).
+**Not done.** No guard makes a platform LLM key mandatory: a deployment where every
+customer brings their own key is legitimate. The RUNBOOK checklist says what happens
+without one.
+

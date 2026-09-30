@@ -17,6 +17,7 @@ import secrets
 from pathlib import Path
 
 import pytest
+import yaml
 from dotenv import dotenv_values
 from pydantic import ValidationError
 
@@ -42,6 +43,12 @@ MUST_BE_BLANK = {
     "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRETS", "DODO_API_KEY", "DODO_WEBHOOK_SECRET",
     "PLATFORM_SMTP_PASSWORD", "GROQ_API_KEY", "GEMINI_API_KEY", "SEED_ADMIN_PASSWORD",
 }
+
+#: Documented in the template but deliberately NOT given to the long-running containers:
+#: IMAGE_TAG is read by Docker Compose itself, and the bootstrap administrator's
+#: credentials go to the one-off seed command (docs/RUNBOOK.md, "First deploy") so a
+#: password does not sit in the environment of every service.
+NOT_FORWARDED_ON_PURPOSE = {"IMAGE_TAG", "SEED_ADMIN_EMAIL", "SEED_ADMIN_PASSWORD"}
 
 pytestmark = pytest.mark.no_db
 
@@ -120,3 +127,34 @@ def test_the_template_with_secrets_filled_in_boots(clean_env) -> None:
     assert settings.ENVIRONMENT == "production"
     assert settings.cors_origins == ["https://app.example.com"]
     assert settings.RATE_LIMIT_ENABLED is True
+
+
+def _passed_to_containers() -> set[str]:
+    """Every variable name some service's `environment:` gives its container (the shared
+    `x-app-env` block is merged into each service by YAML, so it is included)."""
+    names: set[str] = set()
+    for service in yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"].values():
+        environment = service.get("environment") or {}
+        if isinstance(environment, dict):
+            names |= set(environment)
+        else:  # the list form: ["NAME=value", "NAME"]
+            names |= {str(item).split("=", 1)[0] for item in environment}
+    return names
+
+
+def test_every_setting_the_template_asks_for_reaches_the_containers() -> None:
+    """F-047. Docker Compose hands a container ONLY the variables listed under its
+    `environment:`. A value in `.env.production` that is not listed there is used to
+    fill in the compose file and then thrown away: the app never sees it and runs on its
+    code default. Twenty-three settings the template tells the operator to fill in were
+    in that state, among them the LLM API keys, the Dodo Payments credentials and
+    BILLING_GATEWAY, so a founder could follow the template exactly and get a stack with
+    no AI provider and no way to select Dodo."""
+    dropped = sorted(set(template_values()) - _passed_to_containers() - NOT_FORWARDED_ON_PURPOSE)
+    assert not dropped, f"in the template but never passed to a container: {dropped}"
+
+
+def test_the_exemptions_are_real_template_entries() -> None:
+    """Control: the allow-list above cannot quietly grow to cover a real setting."""
+    assert NOT_FORWARDED_ON_PURPOSE <= set(template_values())
+    assert not (NOT_FORWARDED_ON_PURPOSE & _passed_to_containers())
