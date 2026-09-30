@@ -74,7 +74,8 @@ The production compose file does not run cron (F-006).
 platform (Render, Fly.io, Railway, Kubernetes)? The answer decides how Phase 2
 fixes scheduling and backups.
 
-**Owner decision 2026-09-30: a Linux host running Docker Compose (a VPS).**
+**Owner decision 2026-09-30 (confirmed again at the Phase 2 kickoff): a Linux
+host running Docker Compose (a VPS).**
 Phase 2 therefore keeps `docker-compose.prod.yml` and adds scheduling for the
 sweepers and backups that today live in host cron (F-006). The options are
 installing `backend/deploy/cron.d` on the VPS or adding a scheduler container;
@@ -92,6 +93,11 @@ development only.
 **Default until you decide:** pgsty images, pinned by release tag, for dev and
 for the optional `self-hosted-storage` profile in production.
 
+**Owner decision 2026-09-30 (Phase 2 kickoff): approved, keep the pinned
+community rebuild `pgsty/minio` (which includes `mc`).** Nothing to change.
+The recommendation to use a managed object store in production stays open as
+an option, but is not required.
+
 ## N-009 — When should production run the lossy ARCH-40 "contract" migration?
 The newest migration, `arch40_step3_contract_ai_settings`, drops three unused
 `ai_settings` columns. It refuses to run unless `ARCH40_CONTRACT=1` is set,
@@ -106,6 +112,16 @@ flag permanently.
 **Default until you decide:** production compose is unchanged. Phase 2 will not
 change it without your answer.
 
+**Owner decision 2026-09-30 (Phase 2 kickoff): keep `ARCH40_CONTRACT=1` enabled
+for dev, test and staging.** You did not say anything about production, so
+Phase 2 treats production as still open and does the safe thing: the flag is
+read from the environment (default `0`), so staging sets it in its own `.env`
+and production only runs the contract step when you deliberately set it after
+a backup (procedure in `docs/RUNBOOK.md`). **Still needed from you:** whether
+a production database with real customer data exists yet. If it does not, you
+can set the flag in the production `.env` for the first deploy and then remove
+it.
+
 ## N-010 — Which verification gates are still authoritative?
 33 of the 78 `verify_*.py` gates fail (F-029). Several look stale: they
 expect columns that later migrations removed. CLAUDE.md forbids reading or
@@ -115,3 +131,11 @@ regression by looking inside it.
 (b) retire gates that check a schema the product no longer has? Until then CI's
 `backend-gates` job stays red, and each failing gate is listed by name in
 `01-baseline.md`.
+
+**Owner decision 2026-09-30 (Phase 2 kickoff): (a) yes, the campaign MAY READ
+failing `verify_*.py` gate files to diagnose what they test. It must NEVER edit,
+weaken, delete or skip a gate script to make it pass.** (b) was not granted:
+no gate is retired. A stale gate is reported here and in FINDINGS.md, and you
+decide. The exception covers reading failing gates only; `apply_*.py`,
+`backend/evidence/`, `arch07_*`, `arch08_*`, PDFs and certification files stay
+off limits.
