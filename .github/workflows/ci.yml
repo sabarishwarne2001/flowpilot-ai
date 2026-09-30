@@ -330,6 +330,33 @@ jobs:
         working-directory: frontend
         run: node scripts/check-no-sourcemaps.mjs --dist
 
+      # F-039. Blocking at "high": the lockfile had 6 high advisories until the
+      # non-breaking `npm audit fix` in Phase 2. Keep it at zero.
+      - name: npm audit (high and critical)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------------
+  # Advisory: known vulnerabilities in the pinned Python packages (F-039).
+  # Not part of the required aggregate, on purpose: the remaining findings need
+  # a FastAPI/Starlette line upgrade and a cryptography major bump that must be
+  # done together with the full test suite (see docs/hardening/02-security-deploy.md).
+  # The job keeps the list visible on every pull request instead of stale.
+  # ---------------------------------------------------------------------
+  dependency-audit:
+    name: pip-audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --no-deps --disable-pip --progress-spinner off
+
   # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a
   # job above does not require editing the protection rule.

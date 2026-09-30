@@ -50,6 +50,8 @@ How to read this file:
 | F-035 | P2 | **fixed** (Phase 2) | Uploads | Page-level PDF actions (JavaScript, Launch, SubmitForm) survive the upload scrub into the stored, downloadable file |
 | F-036 | P2 | **fixed** (Phase 2) | Uploads | An upload over the size limit crashed the upload endpoint with a 500 instead of answering 413 |
 | F-037 | P3 | **fixed** (Phase 2) | Input handling | A NUL character (`%00`) in a search box crashed 19 routes with a 500 |
+| F-038 | P2 | **fixed** (Phase 2) | Frontend | Production builds shipped source maps (`index-*.js.map`), publishing the original TypeScript |
+| F-039 | P2 | **partly fixed** (Phase 2) | Dependencies | 7 npm advisories (fixed) and 13 Python packages with known advisories (4 bumped, rest tracked) |
 
 ---
 
@@ -919,3 +921,47 @@ automation. The automation engine is deterministic and typed (see
 never retrieved text (an import-time check refuses otherwise), which is the design
 answer to prompt injection, but no test here drives a hostile document through the
 assistant end to end (Phase 3/4, needs the real model or a recorded one).
+
+## F-038 — Production builds shipped source maps (P2, fixed)
+
+**Plain language.** The frontend was built with `sourcemap: true`, so `npm run build`
+wrote a `.js.map` next to every bundle. A source map is the application's original
+TypeScript source, comments included. Caddy serves the whole `dist` folder, so
+`https://app.example.com/assets/index-<hash>.js.map` would have handed anyone the
+readable source of the product, which makes finding bugs and business logic trivial.
+**Fixed.** `sourcemap: false`. `frontend/scripts/check-no-sourcemaps.mjs` checks the
+Vite config and (with `--dist`) the built folder for any `.map` file or
+`sourceMappingURL`; it exited 1 before the change ("build.sourcemap is true"), exits 0
+after, and runs in CI after the build. A real production build was made and `dist`
+holds zero map files. **If you want maps for an error tracker:** build them in a
+separate step and upload them, never into the served folder.
+
+## F-039 — Dependency audit (P2, partly fixed)
+
+**npm (frontend): 7 advisories (6 high), all fixed.** `npm audit fix` (no
+major-version change, 14 packages) took `npm audit` from 7 to 0. The two on
+production code were `react-router` and `react-router-dom` (an RSC-mode CSRF bypass;
+this app uses client-side routing only, so it was not reachable, but it is fixed
+anyway). tsc, lint and the production build pass after the update. CI now runs
+`npm audit --audit-level=high` and fails on any new one.
+
+**Python: 54 advisory entries in 13 of 194 pinned packages (pip-audit).** Bumped
+(security fix, no conflict, affected tests pass with no new failure against the
+Phase 1 baseline): `pypdf` 6.14.2 → 6.16.1 (five advisories; it parses **untrusted
+uploaded PDFs**), `pyasn1` 0.6.3 → 0.6.4, `anyio` 4.14.1 → 4.14.2, `aiohttp` 3.14.1 →
+3.14.3. **Not bumped, with the reason (these are the Phase 4 dependency items):**
+- `starlette` 0.41.3 (13 advisories; fixed in 0.47.2 to 1.3.1) is pinned by `fastapi`
+  0.115.6. Moving needs a FastAPI line upgrade and the full suite. It carries the
+  multipart parser used by uploads, so this is the most important remaining one.
+- `python-jose` 3.3.0 (algorithm-confusion and JWE-bomb advisories): the fix (3.4.0)
+  pins `pyasn1<0.5`, which conflicts with the patched pyasn1. The app uses it for
+  HS256 only with a fixed algorithm list and no JWE, so neither advisory is
+  reachable; the clean fix is to migrate to PyJWT.
+- `cryptography` 49 → 50 (major), `oauthlib` → 4 (major), `pyarrow` → 23, `torch`
+  2.12.1 → 2.13.0, `setuptools` → 83: upgrade with the suite; none is on a request
+  path that takes untrusted input except through the libraries above.
+- `paramiko` 3.5.1 and `ecdsa` 0.19.2 have no fixed version published. `paramiko` is
+  the ERP SFTP client (egress-checked, host key pinned); `ecdsa` comes with
+  python-jose and is not used for HS256.
+A `pip-audit` job now runs on every pull request as **advisory** (not required),
+so the list stays visible.
