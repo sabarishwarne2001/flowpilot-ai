@@ -25,7 +25,7 @@ How to read this file:
 | F-010 | P3 | confirmed (static) | Config | `frontend/.env.example` omits `VITE_API_URL`, the only variable the code reads |
 | F-011 | P3 | unverified | Config | 246 of 302 backend settings are missing from `.env.production.template` |
 | F-012 | P3 | unverified | Auth | Live-review WebSocket accepts the access token in the URL query string |
-| F-013 | P3 | unverified | Billing | Three webhook routes can receive Stripe events; each must be proven to verify signatures |
+| F-013 | P3 | **verified** (Phase 2; F-034 fixed) | Billing | Three webhook routes can receive Stripe events; each must be proven to verify signatures |
 | F-014 | P3 | unverified | Tenancy URLs | Organization slug `request` is not reserved and collides with the public `/request/:token` page |
 | F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
 | F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
@@ -45,6 +45,8 @@ How to read this file:
 | F-030 | P3 | confirmed (test runs) | Tests | The test harness is slow and order-dependent |
 | F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
 | F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
+| F-033 | P3 | confirmed (test); open | Billing | Dodo's "test event reached a live deployment" guard compares the deployment's config with itself and cannot fire |
+| F-034 | P3 | **fixed** (Phase 2) | Billing | `/billing/webhooks/STRIPE` (any capitalisation but lowercase) crashed with an unhandled AttributeError |
 
 ---
 
@@ -761,3 +763,51 @@ per-user token limit is unit-tested), MFA (the product has none), SSO/SAML
 end-to-end (an XML-signature-wrapping rig exists from ARCH-28), OIDC state and
 nonce handling, and invitation role-escalation edge cases beyond the existing
 suite (OWNER is not invitable by design).
+
+## F-034 — Stripe posted to the generic webhook route crashed (P3, fixed)
+
+`POST /billing/webhooks/{gateway}` is the gateway-neutral receiver added for Dodo.
+Stripe has its own literal route, registered first, so `/billing/webhooks/stripe`
+never reaches it. But `normalize_gateway` is case-insensitive, so
+`/billing/webhooks/STRIPE` or `/Stripe` did: the Stripe adapter has no Standard
+Webhooks verifier, and every delivery raised an unhandled `AttributeError` (a 500).
+It failed closed (nothing was trusted or stored), so it is not a hole, but a
+Stripe dashboard endpoint typed with a capital would have looked like a permanent
+Stripe outage. The generic route now answers 404 for Stripe (its endpoint is its
+own path). Three tests (three spellings) failed before, pass after.
+
+## F-033 — Dodo's mode guard cannot fire (P3, open, needs a real payload)
+
+The generic receiver refuses "an event from the other environment" by comparing
+`event.livemode` with `DODO_LIVEMODE`. For Dodo, `event.livemode` is set from
+`settings.DODO_LIVEMODE` (`dodo_gateway.verify_webhook_signature`), so the two
+values are the same variable and the check can never differ. A test-mode Dodo event
+posted to a deployment configured live is stored. What actually separates the two
+environments today is the signing secret, which differs per Dodo mode; a live
+deployment carrying the test-mode secret (or the reverse) would accept the wrong
+environment's events. **Not fixed here:** it needs a sample of a real Dodo event to
+see whether the envelope carries a mode flag (Dodo is blocked in this sandbox).
+**Mitigation now:** the production template says Dodo test and live keys and
+secrets are separate; keep exactly one set per environment. Decision for Phase 4
+once a payload is available.
+
+## Billing webhook audit (Phase 2)
+
+Tests: `tests/security/test_billing_webhooks.py`, 21 tests with real Stripe and
+Standard-Webhooks (Dodo) signatures. **Stripe** (both literal paths): valid event
+recorded once and a replay acknowledged as `duplicate: true` with no new row; no
+header, garbage header, empty scheme, wrong secret, tampered body, stale timestamp
+and a signature over a different body all answer 400 with the same generic message
+and write no row; secret rotation (either of two secrets); oversized body refused
+before any signature work (413); a test-mode event is refused by a live deployment
+and the reverse; **no secret configured means nothing is trusted (500, so Stripe
+retries)**; a verified body that is not an event is refused. **Dodo:** same set
+with 401 and an empty body (no information), replay adds no row, id swapped after
+signing refused, oversized body refused, no secret means 500.
+**Observation, not a defect:** a Stripe signature with a timestamp in the future
+verifies; that is the vendor SDK's own behaviour (it only rejects old ones), and a
+forged future timestamp needs the secret.
+**Not proven (residual):** out-of-order delivery, failed-payment dunning,
+cancellation, downgrade and quota enforcement are decided by the reconciler jobs,
+which fetch current state from the gateway; the gateways are blocked here. They
+are on the Phase 3 list and in `02-security-deploy.md`.
