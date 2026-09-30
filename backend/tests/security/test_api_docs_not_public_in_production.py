@@ -42,7 +42,11 @@ print("RESULT " + json.dumps({{p: client.get(p).status_code for p in paths}}))
 
 
 def _status_codes(tmp_path: Path, **environment: str) -> dict[str, int]:
-    inherited = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "LANG", "LC_ALL", "VIRTUAL_ENV", "TMPDIR")}
+    # Only what the interpreter itself needs: nothing from the developer's or CI's settings may leak
+    # into the environment under test. LD_LIBRARY_PATH is in the list because a Python installed
+    # by a CI tool cache finds its shared library through it.
+    passthrough = ("PATH", "HOME", "LANG", "LC_ALL", "VIRTUAL_ENV", "TMPDIR", "LD_LIBRARY_PATH", "PYTHONHOME")
+    inherited = {k: v for k, v in os.environ.items() if k in passthrough}
     env = {**inherited, "PYTHONPATH": str(BACKEND), "PYTHONDONTWRITEBYTECODE": "1", **environment}
     finished = subprocess.run(
         [sys.executable, "-c", _PROBE.format(paths=json.dumps(list(DOC_PATHS)))],
