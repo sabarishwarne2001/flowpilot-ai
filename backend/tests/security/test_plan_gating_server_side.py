@@ -97,9 +97,6 @@ ALLOWED_OPEN: dict[str, str] = {
     f"GET {WS}/extraction-memory/potential": UPSELL,
     f"POST {ORG}/email-settings/test": OWN_CONFIG_TEST,
     f"POST {WS}/email-settings/test": OWN_CONFIG_TEST,
-
-    # PENDING: fixed in the following commit of this series.
-    f"POST {ORG}/branding/sender-domain/verify": "PENDING F-004 fix (next commit)",
 }
 
 #: Valid bodies for routes whose schema is not enough (custom validators).
@@ -298,5 +295,15 @@ def test_a_free_tenant_cannot_run_enterprise_domain_verification(
     free_ids, _ = two_plans
     response = _free_owner_call(
         client, db_session, tenant, sweep, f"POST {ORG}/identity/domains/{{domain_id}}/verify", free_ids
+    )
+    assert _is_plan_refusal(response), (response.status_code, response.text[:200])
+
+
+def test_a_free_tenant_cannot_verify_a_custom_sender_domain(
+    client, db_session, tenant, sweep, two_plans
+) -> None:
+    free_ids, _ = two_plans
+    response = _free_owner_call(
+        client, db_session, tenant, sweep, f"POST {ORG}/branding/sender-domain/verify", free_ids
     )
     assert _is_plan_refusal(response), (response.status_code, response.text[:200])
