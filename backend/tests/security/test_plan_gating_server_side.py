@@ -98,9 +98,7 @@ ALLOWED_OPEN: dict[str, str] = {
     f"POST {ORG}/email-settings/test": OWN_CONFIG_TEST,
     f"POST {WS}/email-settings/test": OWN_CONFIG_TEST,
 
-    # PENDING: fixed in the following commits of this series; each fix removes its line.
-    f"PUT {ORG}/identity/security-policy": "PENDING F-004 fix (next commit)",
-    f"POST {ORG}/identity/domains/{{domain_id}}/verify": "PENDING F-004 fix (next commit)",
+    # PENDING: fixed in the following commit of this series.
     f"POST {ORG}/branding/sender-domain/verify": "PENDING F-004 fix (next commit)",
 }
 
@@ -282,5 +280,23 @@ def test_a_free_tenant_cannot_reassign_a_key_tier(client, db_session, tenant, sw
     free_ids, _ = two_plans
     response = _free_owner_call(
         client, db_session, tenant, sweep, f"PATCH {ORG}/developer/keys/{{key_id}}/tier", free_ids
+    )
+    assert _is_plan_refusal(response), (response.status_code, response.text[:200])
+
+
+def test_a_free_tenant_cannot_write_the_enterprise_security_policy(
+    client, db_session, tenant, sweep, two_plans
+) -> None:
+    free_ids, _ = two_plans
+    response = _free_owner_call(client, db_session, tenant, sweep, f"PUT {ORG}/identity/security-policy", free_ids)
+    assert _is_plan_refusal(response), (response.status_code, response.text[:200])
+
+
+def test_a_free_tenant_cannot_run_enterprise_domain_verification(
+    client, db_session, tenant, sweep, two_plans
+) -> None:
+    free_ids, _ = two_plans
+    response = _free_owner_call(
+        client, db_session, tenant, sweep, f"POST {ORG}/identity/domains/{{domain_id}}/verify", free_ids
     )
     assert _is_plan_refusal(response), (response.status_code, response.text[:200])
