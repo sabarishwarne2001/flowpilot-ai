@@ -194,7 +194,11 @@ class DocumentChunk(Base):
     #: Union of the OCR block boxes this chunk's span intersects.
     #: `{"page": int, "x0": float, "y0": float, "x1": float, "y1": float,
     #:   "blocks": [...]}` — normalised page coordinates, origin top-left.
-    bbox: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    # none_as_null: Python None must be SQL NULL. The default stores the JSON
+    # value `null`, which ck_document_chunks_bbox_is_object rejects (F-020).
+    bbox: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
 
     # --- content -----------------------------------------------------------
     content: Mapped[str] = mapped_column(Text, nullable=False)
