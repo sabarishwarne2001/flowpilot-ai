@@ -60,7 +60,8 @@ One logical fix per commit, each proven failing before and passing after:
 | `feat(dev): labelled ML test stubs…` + `fix(dev): make the OCR stub…` | `ML_STUBS=true` | §4 |
 | `fix(tests): import decrypt_password…` | a collection error stopped the whole pytest run | F-018 #9 |
 | `fix(tests): let a plain pytest migrate…` | `ARCH40_CONTRACT=1` in `pytest.ini` | F-018 #5 |
-| `fix(dev): install backend packages, set the reranker token, seed tiers…` | launchers never ran `pip install`, compose needs `RERANKER_INTERNAL_TOKEN`, tiers were never seeded | F-018 #10 |
+| `fix(dev): launchers install backend packages, set the reranker token, seed tiers` | launchers never ran `pip install`, compose needs `RERANKER_INTERNAL_TOKEN`, tiers were never seeded | F-018 #10 |
+| `fix(dev): mark start_dev.sh executable in git` | `./start_dev.sh` → Permission denied on a fresh clone | F-018 #11 |
 
 No product feature code was changed except the two `ML_STUBS` hook points,
 which are off by default and refused in production. No test expectation was

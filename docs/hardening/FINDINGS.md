@@ -30,7 +30,7 @@ How to read this file:
 | F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
 | F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
 | F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
-| F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (10 blockers) |
+| F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (11 blockers) |
 | F-019 | P1 | unverified (code read; unambiguous) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | confirmed (live upload + ORM check) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | confirmed (failing test) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
@@ -371,6 +371,8 @@ Each item was proven failing, fixed in its own commit, and re-run.
     `RERANKER_INTERNAL_TOKEN`** (compose refuses to start without it), **and
     never seeded plan tiers**: `seed_quota_tiers.py` refuses without gateway
     price ids, and both launchers reported success anyway.
+11. **`./start_dev.sh` gave "Permission denied"** from a fresh clone: git
+    stored it without the executable bit (mode 100644). Now 100755.
 
 ## F-019 — OCR silently returns invented text on one error class (P1, unverified: code read)
 
