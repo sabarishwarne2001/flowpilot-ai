@@ -19,12 +19,12 @@ How to read this file:
 | F-004 | P2 | **fixed** (Phase 2; reads/deletes await N-003) | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
 | F-005 | P3 | unverified | Plan gating / UX | Sidebar lock state does not match what the server enforces |
 | F-006 | P2 | **fixed for Compose** (Phase 2; a real `docker compose` run on the VPS is unverified) | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
-| F-007 | P3 | confirmed (git) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
+| F-007 | P3 | **partly fixed** (Phase 2; history rewrite and script retirement await N-005, N-016) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
 | F-008 | P3 | unverified | Frontend guards | Route-level role guard exists but is unused; org pages have no route-level role check |
 | F-009 | P3 | unverified | Frontend | `/admin` has no index route (likely an empty screen) |
 | F-010 | P3 | confirmed (static) | Config | `frontend/.env.example` omits `VITE_API_URL`, the only variable the code reads |
-| F-011 | P3 | unverified | Config | 246 of 302 backend settings are missing from `.env.production.template` |
-| F-012 | P3 | unverified | Auth | Live-review WebSocket accepts the access token in the URL query string |
+| F-011 | P3 | **partly fixed** (Phase 2; the long tail of harmless defaults is Phase 4) | Config | 246 of 302 backend settings are missing from `.env.production.template` |
+| F-012 | P3 | **not a defect** (Phase 2; guard tests) | Auth | Live-review WebSocket accepts the access token in the URL query string |
 | F-013 | P3 | **verified** (Phase 2; F-034 fixed) | Billing | Three webhook routes can receive Stripe events; each must be proven to verify signatures |
 | F-014 | P3 | unverified | Tenancy URLs | Organization slug `request` is not reserved and collides with the public `/request/:token` page |
 | F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
@@ -301,6 +301,25 @@ types `billing.reconcile`, `billing.assemble_invoice`, `usage.reconcile` and
 - Large tracked files: `frontend/public/flowpilot-logo.png` and `favicon.png`
   are 1.37 MB each. That is heavy for a favicon.
 
+**Phase 2 status.**
+
+- *`stripe.exe`*: still in history (N-005: no force-push without your say-so). The root
+  `.gitignore` now blocks `*.exe`, `*.msi`, `*.dll`, `*.bin`, `*.dmp` and key material
+  (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`). `git ls-files` shows no
+  tracked binary or key file today. **Unfixed**: the clone still downloads 36 MB.
+- *README and LICENSE*: the README was written in Phase 1. `LICENSE` is now the
+  proprietary, all-rights-reserved notice you chose (N-004), with "FlowPilot AI" as the
+  holder until you give the legal name. Have a lawyer read it before you rely on it.
+- *`requirements.txt`*: already plain ASCII since Phase 1. Its contents are unchanged
+  (F-045 covers the size problem).
+- *Historical scripts*: **not archived, because they are not unused.** 37 tracked
+  `apply_*.py` are named by 14 of your PowerShell runners (`run_arch*.ps1`,
+  `run_hardening*.ps1`), and the 107 tracked `verify_*.py` are executed by CI's
+  `backend-gates` job through `scripts/run_all_gates.py`. Moving either would break your
+  Windows workflow or the gate job. I did not read or edit them (CLAUDE.md, N-010).
+  Retiring them is your decision → N-016.
+- *Logo images*: unchanged (Phase 4).
+
 ## F-008 — Frontend route guards (P3, unverified)
 
 `frontend/src/routes/RequireWorkspaceRole.tsx` is defined but never used. Under
@@ -332,12 +351,38 @@ production. Defaults to review in Phase 2: `POSTGRES_PASSWORD='postgres'`,
 `ENVIRONMENT='development'` (the app starts in development mode if the variable
 is forgotten). Each has a ledger row (`config_var`).
 
+**Phase 2 status.**
+
+- `POSTGRES_PASSWORD='postgres'`: production refuses a weak or default database password
+  (F-003, tests in `tests/core/test_production_config_guard.py`).
+- `ENVIRONMENT='development'` when forgotten: the production compose file sets
+  `ENVIRONMENT: production`, the spelling is normalised (`Production`, `prod`), and the
+  guard treats `production` and `staging` alike.
+- `S3_DEV_FALLBACK_CREDENTIALS=True` and `SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT=True`: read
+  from the code, both apply only when the environment is development
+  (`config.py:1132`, `email_service.py:65`), so they are inert in production. No test pins
+  this yet.
+- The template now names every variable the compose file requires and the start-up guard
+  checks, and F-047 made sure everything in it reaches the containers.
+- **Still open:** about 230 other settings keep their code defaults and are not in the
+  template. I did not review each one for an unsafe default; the ones that matter for
+  security are covered by the guard (secrets, CORS, debug logging, protections that must
+  stay on, storage, Redis, mail, billing consistency).
+
 ## F-012 — WebSocket token in URL (P3, unverified)
 
 `app/services/collab/gate.py:extract_token` reads the bearer token from
 headers **or** from the query parameters `token`, `access_token`, `bearer` or
 `auth`. Tokens in URLs end up in proxy and access logs. Check whether the query
 form is actually used, and that logs redact it.
+
+**Phase 2 result: not a defect.** The code only names those four parameters in order to
+*refuse* them: a token in the query string raises `LiveRefused` and the handshake is closed
+(1008) without being accepted. The token travels in the WebSocket subprotocol list (what a
+browser can set) or an `Authorization` header, and API keys are refused outright.
+`tests/security/test_live_review_token_not_in_url.py` (13 tests) pins this; a mutation that
+accepts a query-string token makes 8 of them fail. The Caddy access log also drops the
+`Sec-Websocket-Protocol` header where the token rides.
 
 ## F-013 — Three billing webhook entry points (P3, unverified)
 
@@ -603,6 +648,15 @@ forged header.
 exits with an error (F-018 item 5). Phase 1 left production unchanged on
 purpose: when to run a lossy step on a real database is an owner decision →
 N-009.
+
+**Phase 2 status: mitigated.** The `migrate` service now reads `ARCH40_CONTRACT` from
+the environment (default `0`), so production never runs the lossy step by accident and
+staging can keep `1` (your N-009 answer for dev, test and staging). RUNBOOK section 9.2
+step 6 is the one-time procedure: back up if there are customers, run
+`ARCH40_CONTRACT=1 $COMPOSE run --rm migrate` once, leave the file at `0`. The step archives
+the three dropped columns' values first, and its `downgrade` restores them. **Still open:**
+you have not said whether a production database with real data exists (N-009), and the
+procedure has not been run against real containers.
 
 ## F-025 — `organization_addon` model not registered (P3, confirmed)
 
