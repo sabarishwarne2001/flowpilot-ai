@@ -1020,7 +1020,7 @@ string, script tags, NUL, 5,000 characters, path traversal, `ORDER BY` injection
 300+ probes, no 5xx after F-037, the users table intact afterwards, and a boolean
 probe (`' OR '1'='1`, `quarterly' OR '1'='1`) does not widen a search.
 **SSRF: the client is sound.** `tests/security/test_ssrf_hostile_destinations.py`
-(64 tests): loopback, the cloud metadata address, private, link-local, carrier-grade
+(63 tests): loopback, the cloud metadata address, private, link-local, carrier-grade
 NAT, multicast and reserved ranges are refused in every notation an attacker uses
 (dotted, decimal `2130706433`, hex `0x7f000001`, octal, short `127.1`, bracketed
 IPv6, IPv4-mapped IPv6, NAT64, 6to4); a hostname that resolves to both a public and a
@@ -1028,13 +1028,26 @@ private address is refused; only validated addresses are returned for connecting
 non-https schemes, `file:`, `gopher:` and `javascript:` are refused before any
 connection; and ten hostile webhook URLs are refused at creation through the real
 API. Existing tests cover no-redirect-following, size and time caps.
-**Not covered here (residual):** template injection in tenant-editable email and
-branding templates, and prompt injection that steers an AI action into triggering an
-automation. The automation engine is deterministic and typed (see
-`02-security-deploy.md`); the AI tool selectors take ids and closed vocabularies and
-never retrieved text (an import-time check refuses otherwise), which is the design
-answer to prompt injection, but no test here drives a hostile document through the
-assistant end to end (Phase 3/4, needs the real model or a recorded one).
+**The two other places a tenant types a destination are sound too**
+(`test_tenant_supplied_endpoints.py`, 23 tests): the BYOK Azure OpenAI
+`resource_endpoint` (which the server connects to with the tenant's key) accepts only a genuine
+Azure OpenAI hostname, and a tenant SMTP host and port cannot point at loopback, the cloud
+metadata address or a private address (that would have turned "send test email" into a probe of
+the platform's network).
+**Injection into automations: sound** (`test_automation_template_injection.py`, 22 tests). A
+workflow reacts to a document whose text an outsider wrote, and prompt injection can put any
+text into an extracted field. What matters is what the automation layer lets that text do: a
+template is a regex substitution over an allow-list of variables, not an engine, so nothing is
+executed; values are inserted in one pass, scalar-only, truncated and HTML-escaped, never
+re-expanded; the recipient of `email.send` and the endpoint of `webhook.send` are chosen by the
+rule's author, never taken from a document field (and `webhook.send` has no URL at all); an
+unknown variable is refused when the rule is saved.
+**Not covered here (residual):** template injection in tenant-editable email and branding
+templates that are rendered to the tenant's own users, and prompt injection driven end to end
+through the AI assistant. The AI tool selectors take ids and closed vocabularies and never
+retrieved text (an import-time check refuses otherwise), which is the design answer to prompt
+injection, but no test here drives a hostile document through the assistant with a real or
+recorded model (Phase 3/4).
 
 ## F-038 — Production builds shipped source maps (P2, fixed)
 
