@@ -605,11 +605,11 @@ your workspace), so this is not a leak, but it broke the rule every other route
 follows and would have hidden a future leak behind a friendly empty page.
 
 **How it was found.** A new sweep (`tests/security/test_idor_child_entities.py`)
-creates real objects in tenant B (12 kinds through the API, plus work items,
-API keys, automation rules and memberships through the ORM), then calls every
-route that addresses a child of those collections from tenant A's own
-organization, with B's ids, with every method. 44 child routes were probed and
-these two were the only ones that answered.
+creates real objects in tenant B (16 collections: 12 through the API, plus work
+items, API keys, automation rules and memberships through the ORM), then calls
+every route that addresses a child of those collections from tenant A's own
+organization, with B's ids. 47 child routes were probed (16 GET, 14 POST, 10
+DELETE, 6 PATCH, 1 PUT) and these two were the only ones that answered.
 
 **Fixed.** Both handlers now return `404 Document not found` unless the document
 is in the URL's workspace. Six new tests (three per route: foreign, unknown, and
@@ -626,12 +626,12 @@ also pass.
   user in no tenant is refused everywhere; anonymous callers get 401/403
   everywhere. A **mutation control** turns the membership check off and the
   sweep must then find crossings (it does), so a passing sweep is not vacuous.
-- **Object-level (IDOR):** F-031 above.
+- **Object-level (IDOR):** F-031 above; 16 object collections, 47 child routes.
 - **Platform routes:** 39+ super-admin operations, discovered from the
   dependency tree, refuse all tenant roles (`test_superadmin_only.py`).
 - **Partner programme:** 25 routes with route-level "any signed-in user" refuse
   non-members and lower partner roles (`test_partner_isolation.py`).
-- **Not covered here (honest limits):** object-level IDOR is proven for the 12
-  object kinds the API can create with a generated body plus four ORM-created
-  kinds; the remaining collections need hand-built fixtures (Phase 3/4). SCIM,
+- **Not covered here (honest limits):** object-level IDOR is proven for the 16
+  object collections above (12 the API can create from a generated body, 4
+  created through the ORM); the remaining collections need hand-built fixtures (Phase 3/4). SCIM,
   the public API-key gateway and the WebSocket are checked separately below.
