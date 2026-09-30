@@ -274,20 +274,22 @@ jobs:
         env: *migrate_env
         run: alembic upgrade head
 
-      - name: Zero autogenerate drift
+      - name: Downgrade one step and upgrade again
         working-directory: backend
         env: *migrate_env
         run: |
-          alembic revision --autogenerate -m "ci-drift-probe" --rev-id ci_drift_probe
-          probe="alembic/versions/ci_drift_probe.py"
-          if grep -qE "^\s+op\.(create|drop|add|alter|rename)_" "$probe"; then
-            echo "::error::Model/migration drift detected. Offending operations:"
-            grep -nE "^\s+op\.(create|drop|add|alter|rename)_" "$probe"
-            rm -f "$probe"
-            exit 1
-          fi
-          rm -f "$probe"
-          echo "No drift."
+          alembic downgrade -1
+          alembic upgrade head
+
+      - name: No new autogenerate drift
+        # The old inline check grepped ci_drift_probe.py, but alembic.ini
+        # names the probe <rev>_<slug>.py, so it never found the file and
+        # always passed. Known drift is listed in alembic/drift_baseline.txt
+        # (FINDINGS F-017); this fails on any new drift and on any listed
+        # line that no longer drifts.
+        working-directory: backend
+        env: *migrate_env
+        run: python scripts/check_migration_drift.py
 
   # ---------------------------------------------------------------------
   # Frontend — typecheck, lint (functional from ARCH-0V Tranche 3), build.
