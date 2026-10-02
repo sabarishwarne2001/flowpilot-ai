@@ -103,6 +103,9 @@ def verify_domain(organization_id: str, domain_id: str,
                   membership=Depends(deps.RequireOrgOwner),
                   db=Depends(deps.get_db),
                   user=Depends(deps.get_current_active_user)):
+    # F-004. Every other mutating identity route carries this gate; verifying a
+    # domain claim is part of the same Enterprise feature.
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.domain.verify")
     row = db.get(VerifiedDomain, domain_id)
     if row is None or str(row.organization_id) != str(organization_id):
         raise HTTPException(404, "Domain not found.")
@@ -509,6 +512,9 @@ def update_policy(organization_id: str, payload: dict = Body(...),
                   membership=Depends(deps.RequireOrgOwner),
                   db=Depends(deps.get_db),
                   user=Depends(deps.get_current_active_user)):
+    # F-004. The session and IP policy is the Enterprise identity feature; it
+    # was writable from any plan.
+    _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.security_policy.update")
     policy = session_policy_service.get_or_create_policy(
         db, organization_id=organization_id)
     try:

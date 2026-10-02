@@ -34,7 +34,9 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from app.api import capability_gate as _cap_gate
 from app.api import deps
+from app.core import entitlements as _ent
 from app.core.config import settings
 from app.core.exceptions import OrganizationPermissionDeniedError
 from app.core.principal import PrincipalKind, get_current_principal
@@ -314,6 +316,14 @@ def issue_key(
     """
     _assert_scope(context, organization_id)
     _assert_human_admin(request)
+    # F-004. Issuing a gateway key is the developer platform; POST /api-keys,
+    # which mints the same kind of key, has always required this capability.
+    _cap_gate.require_capability(
+        db,
+        context=context,
+        capability_key=_ent.DEVELOPER_API_CAPABILITY,
+        operation="developer.key.issue",
+    )
 
     # HARDENING-T2:D35. `uq_api_keys_organization_id_name_active` makes an
     # active key's name unique per organization, and the violation escaped as
@@ -379,6 +389,12 @@ def update_key_tier(
 ) -> Any:
     _assert_scope(context, organization_id)
     _assert_human_admin(request)
+    _cap_gate.require_capability(
+        db,
+        context=context,
+        capability_key=_ent.DEVELOPER_API_CAPABILITY,
+        operation="developer.key.tier",
+    )
 
     key = api_key_crud.get_api_key_by_id(
         db, organization_id=organization_id, key_id=key_id

@@ -1028,7 +1028,7 @@ class PartnerRevShareLedger(Base, UUIDMixin, TimestampMixin):
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
     cost_basis_source_mix: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
+        JSONB(none_as_null=True), nullable=True
     )
 
     @property

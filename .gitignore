@@ -49,3 +49,18 @@ backend/.env.production.*
 *.fpbk
 *.fpbk.partial
 
+# Hardening Phase 2 (F-007). No binaries and no key material in the repository.
+# A 38 MB Stripe CLI binary was committed once and now sits in history for good.
+# Download tools in setup scripts instead. (Nothing tracked matches these today.)
+*.exe
+*.msi
+*.dll
+*.bin
+*.dmp
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+

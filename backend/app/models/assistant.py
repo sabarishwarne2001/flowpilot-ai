@@ -184,12 +184,12 @@ class ConversationMessage(Base, UUIDMixin, TimestampMixin):
     )
 
     sources: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSON,
+        JSON(none_as_null=True),
         nullable=True,
     )
 
     token_usage: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+        JSON(none_as_null=True),
         nullable=True,
     )
 

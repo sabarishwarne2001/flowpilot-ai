@@ -128,7 +128,7 @@ class DunningAction(Base, UUIDMixin, TimestampMixin):
     )
     stripe_event_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notified_user_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    detail: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    detail: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

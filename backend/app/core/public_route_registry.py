@@ -37,6 +37,14 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="none",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
+    # F-042. Readiness: Postgres and Redis answer. No detail in the response.
+    PublicRoute(
+        path="/api/v1/health/ready",
+        methods=("GET",),
+        phase="CORE",
+        credential="none",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
     # Invitations
     PublicRoute(
         path="/api/v1/invitations/preview",

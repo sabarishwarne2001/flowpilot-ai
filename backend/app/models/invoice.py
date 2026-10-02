@@ -266,7 +266,7 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
     )
 
     assembly_notes: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB(none_as_null=True),
         nullable=True,
         doc=(
             "What the assembler could not do cleanly — an unpriceable seat "

@@ -281,6 +281,12 @@ class _RoutedAISettings:
         return cls(base, provider, model)
 
 
+def _key_is_blank(secret: Any) -> bool:
+    """F-047. A key left blank in `.env.production` reaches the app as the empty string,
+    not None, and must read as "not configured" rather than build a client with it."""
+    return secret is None or not secret.get_secret_value().strip()
+
+
 class LLMService:
     """
     Provider-agnostic gateway for all Large Language Model operations.
@@ -293,7 +299,7 @@ class LLMService:
     @property
     def groq_client(self) -> Any:
         if self._groq_client is None:
-            if settings.GROQ_API_KEY is None:
+            if _key_is_blank(settings.GROQ_API_KEY):
                 raise ValueError("GROQ_API_KEY is not configured.")
             from groq import Groq
 
@@ -316,7 +322,7 @@ class LLMService:
 
     @property
     def gemini_client(self) -> Any:
-        if settings.GEMINI_API_KEY is None:
+        if _key_is_blank(settings.GEMINI_API_KEY):
             raise ValueError("GEMINI_API_KEY is not configured.")
         if self._gemini_client is None:
             from google import genai

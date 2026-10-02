@@ -192,7 +192,7 @@ class UsageEvent(Base, UUIDMixin, TimestampMixin):
         ForeignKey("api_keys.id", ondelete="SET NULL"),
         nullable=True,
     )
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 

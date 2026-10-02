@@ -6,6 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -17,13 +18,18 @@ from app.api.v1 import scim as scim_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1.router import api_router
 from app.core.config import settings
-from app.core.exception_handlers import domain_exception_handler
+from app.core.exception_handlers import (
+    domain_exception_handler,
+    request_validation_exception_handler,
+)
 from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
+from app.core.production_guard import HARDENED_ENVIRONMENTS
 from app.core.public_route_registry import is_public, registered_paths
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
+from app.middleware.nul_guard import NulByteGuardMiddleware
 from app.middleware.public_rate_limit import (
     RATE_LIMIT_HEADERS,
     PublicApiRateLimitMiddleware,
@@ -150,11 +156,18 @@ async def lifespan(app: FastAPI):
     logger.info("Stopping FlowPilot AI Backend Core...")
 
 
+# F-046. Swagger UI, ReDoc and the OpenAPI schema list every route and the exact shape of
+# each request. Useful on a developer's machine, a free map of the attack surface on the
+# internet, and nothing in the product reads them, so production and staging do not serve them.
+_serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
+
 app = FastAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if _serve_api_docs else None,
+    docs_url="/docs" if _serve_api_docs else None,
+    redoc_url="/redoc" if _serve_api_docs else None,
     lifespan=lifespan,
 )
 
@@ -186,6 +199,9 @@ else:
 app.add_middleware(HostTenantMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(PublicApiRateLimitMiddleware)
+# F-037: a NUL character in the URL or a JSON/form body is a 400, not a 500. Sits
+# just inside RequestTrace so the refusal still carries a request id.
+app.add_middleware(NulByteGuardMiddleware)
 app.add_middleware(RequestTraceMiddleware)
 
 # ARCH-28 RFC 8594. Registered LAST, which in Starlette makes it the
@@ -204,6 +220,8 @@ app.add_middleware(RequestTraceMiddleware)
 # and this layer's rel="sunset" coexist.
 app.add_middleware(DeprecationMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
+# F-021: a 422 must not echo the submitted value (it may be a secret).
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 
 
 async def scim_error_handler(request: Request, exc: ScimError):

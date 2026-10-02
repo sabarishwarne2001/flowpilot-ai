@@ -11,7 +11,8 @@
 # -----------------------------------------------------------------------------
 # Base Stage: Shared Python 3.12 runtime, dependencies & non-root user
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS base
+# Pinned to a patch release on the distribution the packages were built for (F-043).
+FROM python:3.12.13-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

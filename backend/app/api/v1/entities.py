@@ -443,6 +443,12 @@ def work_item_entities(workspace_id: uuid.UUID, work_item_id: uuid.UUID, db: Ses
                        context: TenantContext = Depends(RequireViewer)) -> WorkItemEntities:
     _assert_workspace(context, workspace_id)
     _gate(db, context, "entities.work_item")
+    # A document that is not in THIS workspace is a 404, whoever owns it. The
+    # mention query below is workspace-scoped, so nothing leaked, but a foreign
+    # or unknown id used to answer 200 with an empty list.
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None or work_item.workspace_id != workspace_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     mentions = list(db.execute(select(EntityMention).where(
         EntityMention.work_item_id == work_item_id, EntityMention.workspace_id == workspace_id)
         .order_by(EntityMention.field_path, EntityMention.ordinal)).scalars())

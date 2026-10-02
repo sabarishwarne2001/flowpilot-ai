@@ -48,6 +48,7 @@ from app.models.extraction_memory import (
     ExtractionMemoryTrial,
     ExtractionTemplate,
 )
+from app.models.work_item import WorkItem
 from app.models.workspace import WorkspaceRole
 from app.schemas.extraction_memory import (
     FieldMetric,
@@ -328,6 +329,10 @@ def work_item_memory(workspace_id: uuid.UUID, work_item_id: uuid.UUID, db: Sessi
                      context: TenantContext = Depends(RequireViewer)) -> WorkItemMemoryResponse:
     _assert_workspace(context, workspace_id)
     _gate(db, context, "extraction_memory.provenance")
+    # 404 for a document outside THIS workspace, foreign or unknown alike.
+    work_item = db.get(WorkItem, work_item_id)
+    if work_item is None or work_item.workspace_id != workspace_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     app = db.execute(select(ExtractionMemoryApplication).where(
         ExtractionMemoryApplication.work_item_id == work_item_id,
         ExtractionMemoryApplication.workspace_id == workspace_id)).scalar_one_or_none()

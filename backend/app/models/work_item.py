@@ -108,7 +108,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     extracted_entities: Mapped[Union[dict[str, Any], None]] = mapped_column(
-        JSON, 
+        JSON(none_as_null=True), 
         nullable=True
     )
 
@@ -127,7 +127,7 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     extraction_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB(none_as_null=True),
         nullable=True,
     )
     

@@ -303,7 +303,7 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
     )
 
     details: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB(none_as_null=True),
         nullable=True,
     )
 

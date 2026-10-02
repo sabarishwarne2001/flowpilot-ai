@@ -163,7 +163,7 @@ class RevenueSchedule(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     entries: Mapped[list["RecognizedRevenueEntry"]] = relationship(
         "RecognizedRevenueEntry",
@@ -245,7 +245,7 @@ class RecognizedRevenueEntry(Base, UUIDMixin, TimestampMixin):
     )
 
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
     schedule: Mapped[RevenueSchedule] = relationship(
         "RevenueSchedule", back_populates="entries"

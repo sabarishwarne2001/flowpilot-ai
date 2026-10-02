@@ -180,7 +180,46 @@ jobs:
           SERVICE_ROLE: web
         run: alembic upgrade head
 
+      # Phase 2 proofs (tenant isolation, plan gating, auth, uploads, webhooks, the production
+      # start-up guard, deployment files, backups). Run FIRST and on their own: the full suite
+      # below stops at its first 5 failures, and the Phase 1 baseline is red (F-016), so it would
+      # otherwise never reach these on a pull request. See docs/hardening/02-security-deploy.md.
+      - name: Phase 2 security and deployment proofs
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_test
+          ARCH40_CONTRACT: "1"
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          SERVICE_ROLE: web
+          AUTH_LOGIN_MIN_DURATION_MS: "250"
+        run: |
+          pytest -q -p no:cacheprovider \
+            tests/security \
+            tests/core/test_production_config_guard.py \
+            tests/infra/test_production_env_template.py \
+            tests/infra/test_production_compose_commands.py \
+            tests/infra/test_gunicorn_access_log.py \
+            tests/infra/test_compose_backup_scripts.py \
+            tests/api/test_health_readiness.py \
+            tests/models/test_nullable_json_columns.py \
+            tests/services/test_chunk_writer_bbox.py \
+            tests/services/test_chunk_writer_bbox_null.py \
+            tests/services/test_paddle_ocr_honest_failure.py \
+            tests/services/test_paddle_no_fabricated_text.py \
+            tests/services/test_llm_blank_platform_key.py
+
       - name: pytest
+        # Still runs when the proofs above fail, so one red step does not hide the other.
+        if: always()
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
@@ -323,6 +362,39 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+      # F-038. A source map is the original TypeScript source and Caddy serves
+      # all of dist/, so a built map is a public map.
+      - name: No source maps in the production bundle
+        working-directory: frontend
+        run: node scripts/check-no-sourcemaps.mjs --dist
+
+      # F-039. Blocking at "high": the lockfile had 6 high advisories until the
+      # non-breaking `npm audit fix` in Phase 2. Keep it at zero.
+      - name: npm audit (high and critical)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------------
+  # Advisory: known vulnerabilities in the pinned Python packages (F-039).
+  # Not part of the required aggregate, on purpose: the remaining findings need
+  # a FastAPI/Starlette line upgrade and a cryptography major bump that must be
+  # done together with the full test suite (see docs/hardening/02-security-deploy.md).
+  # The job keeps the list visible on every pull request instead of stale.
+  # ---------------------------------------------------------------------
+  dependency-audit:
+    name: pip-audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --no-deps --disable-pip --progress-spinner off
 
   # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a

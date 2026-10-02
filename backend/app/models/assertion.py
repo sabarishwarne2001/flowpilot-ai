@@ -308,7 +308,7 @@ class AssertionEvaluation(Base, UUIDMixin):
     )
 
     verdict: Mapped[str] = mapped_column(String(12), nullable=False)
-    extracted_value: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    extracted_value: Mapped[Optional[Any]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     raw_score: Mapped[Decimal] = mapped_column(Numeric(6, 5), nullable=False)
     calibrated_probability: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(6, 5), nullable=True

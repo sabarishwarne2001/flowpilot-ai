@@ -28,6 +28,20 @@ GATEWAY = "/api/v1/public"
 ALL_PUBLIC_SCOPES = [scope.value for scope in PUBLIC_API_SCOPES]
 
 
+@pytest.fixture()
+def developer_plan(db_session, tenant):
+    """The tenant's organization on the seeded DEVELOPER plan.
+
+    F-004: issuing and re-tiering gateway keys through the developer portal now
+    requires `capability.developer_api`, exactly as POST /api-keys always did.
+    These tests exercise the portal's behaviour once the capability is held, so
+    their arrangement has to hold it. Nothing they assert has changed.
+    """
+    from tests.security.plans import put_on_plan
+
+    return put_on_plan(db_session, tenant.organization, "developer")
+
+
 # ===========================================================================
 # Helpers
 # ===========================================================================
@@ -588,7 +602,7 @@ def test_an_admin_reads_the_portal_and_sees_the_plan_ceiling(
     assert assignable == {ApiRateTier.FREE.value}
 
 
-def test_raising_a_tier_above_the_ceiling_is_409(client, db_session, tenant) -> None:
+def test_raising_a_tier_above_the_ceiling_is_409(client, db_session, tenant, developer_plan) -> None:
     key, _token = _mint(
         db_session,
         tenant.organization.id,
@@ -606,7 +620,7 @@ def test_raising_a_tier_above_the_ceiling_is_409(client, db_session, tenant) -> 
 
 
 def test_enabling_the_gateway_without_a_public_scope_is_refused(
-    client, db_session, tenant
+    client, db_session, tenant, developer_plan
 ) -> None:
     key, _token = _mint(
         db_session,
@@ -643,7 +657,7 @@ def test_the_explorer_returns_snippets_in_three_languages(
 
 
 def test_issuing_a_key_returns_the_token_exactly_once(
-    client, db_session, tenant
+    client, db_session, tenant, developer_plan
 ) -> None:
     response = client.post(
         f"/api/v1/organizations/{tenant.organization.id}/developer/keys",

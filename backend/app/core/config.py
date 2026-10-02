@@ -18,6 +18,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # rather than at the first encrypted assertion.
 from typing import Literal  # noqa: E402
 from app.core.constants import APP_VERSION
+from app.core.production_guard import (
+    HARDENED_ENVIRONMENTS,
+    UnsafeConfigurationError,
+    derive_missing_development_secrets,
+    format_refusal,
+    normalise_environment,
+    production_config_problems,
+)
 
 LEAKED_JWT_SECRET_KEYS: frozenset[str] = frozenset(
     {
@@ -46,6 +54,16 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "flowpilot"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def _normalise_environment(cls, v: str) -> str:
+        """`Production` and `prod` mean `production`; a typo is refused.
+
+        Many checks compare against the literal "production". A different
+        spelling used to turn all of them off without a word.
+        """
+        return normalise_environment(v)
 
     JWT_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
@@ -88,8 +106,12 @@ class Settings(BaseSettings):
 
         return v
 
-    API_KEY_PEPPER: SecretStr = SecretStr("flowpilot_default_api_key_pepper_secret_2026")
-    REDIS_IDENTITY_PEPPER: SecretStr = SecretStr("flowpilot_default_redis_identity_pepper_2026")
+    # No committed defaults (F-003). Production and staging must set all three
+    # (production_guard refuses to boot otherwise). Development and test derive
+    # a private value from JWT_SECRET_KEY when one is not set, so nothing
+    # public can ever be the key.
+    API_KEY_PEPPER: Optional[SecretStr] = None
+    REDIS_IDENTITY_PEPPER: Optional[SecretStr] = None
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
@@ -150,7 +172,7 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
 
     FRONTEND_URL: str = "http://localhost:3000"
-    EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = SecretStr("v3-Q90I2S6bXpL9_L3_0V8gJ0Z1P8yL1_L3_0V8gJ0Z=")
+    EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
 
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_BACKEND: str = "redis"
@@ -886,6 +908,32 @@ class Settings(BaseSettings):
         return cleaned
 
     @model_validator(mode="after")
+    def _refuse_ml_stubs_in_production(self) -> "Settings":
+        if self.ML_STUBS and (self.ENVIRONMENT or "").strip().lower() == "production":
+            raise ValueError(
+                "ML_STUBS=true replaces OCR and embeddings with test stubs and "
+                "is refused when ENVIRONMENT=production."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _refuse_unsafe_config_or_derive_dev_secrets(self) -> "Settings":
+        """F-003. Runs before every other model validator on purpose.
+
+        production / staging: list everything unsafe or missing and refuse to
+        boot. development / test: fill the three unset secrets from this
+        checkout's JWT secret instead of a public default. See
+        app/core/production_guard.py.
+        """
+        if self.ENVIRONMENT in HARDENED_ENVIRONMENTS:
+            problems = production_config_problems(self, self.ENVIRONMENT)
+            if problems:
+                raise UnsafeConfigurationError(format_refusal(self.ENVIRONMENT, problems))
+        else:
+            derive_missing_development_secrets(self)
+        return self
+
+    @model_validator(mode="after")
     def _resolve_encryption_keys(self) -> "Settings":
         if os.environ.get("EMAIL_ENCRYPTION_KEY") is not None:
             raise ValueError(
@@ -945,15 +993,6 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [part.strip() for part in raw.split(",") if part.strip()]
-
-    @model_validator(mode="after")
-    def _refuse_ml_stubs_in_production(self) -> "Settings":
-        if self.ML_STUBS and (self.ENVIRONMENT or "").strip().lower() == "production":
-            raise ValueError(
-                "ML_STUBS=true replaces OCR and embeddings with test stubs and "
-                "is refused when ENVIRONMENT=production."
-            )
-        return self
 
     @model_validator(mode="after")
     def _align_dodo_mode_and_host(self) -> "Settings":

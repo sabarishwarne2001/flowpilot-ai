@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# FlowPilot AI: encrypted, verified Postgres backup for a Docker Compose host.
+#
+#   flowpilot-compose-backup              # dump, encrypt, verify, prune, optionally mirror
+#   flowpilot-compose-backup --prune-only # apply the retention rule and stop
+#
+# What it does, in order (any failure stops the run and leaves no half-written file):
+#   1. pg_dump -Fc of the application database, taken INSIDE the database container so
+#      the client always matches the server's major version.
+#   2. Encrypts it with AES-256 (PBKDF2) using the passphrase in FLOWPILOT_BACKUP_KEY_FILE.
+#   3. VERIFIES it: decrypts the file again and asks pg_restore to list its contents. A
+#      backup that cannot be read back is deleted, not kept.
+#   4. Writes a .sha256 next to it.
+#   5. Keeps the newest 7 backups and the newest of each of the 4 weeks before them.
+#   6. If FLOWPILOT_BACKUP_MIRROR_CMD is set, runs it with the file path as $1
+#      (for example: `aws s3 cp "$1" s3://my-bucket/flowpilot/`), so a copy leaves the host.
+#
+# Configuration (environment; see docs/RUNBOOK.md, "Backups"):
+#   FLOWPILOT_BACKUP_DIR        where backups live          (default /srv/flowpilot/backups)
+#   FLOWPILOT_BACKUP_KEY_FILE   file holding the passphrase (REQUIRED, chmod 600; keep a copy OFF this host)
+#   FLOWPILOT_PG_EXEC           prefix that runs a program next to Postgres. Default runs it in the
+#                               compose "db" container. Set it to an empty string to use the local
+#                               pg_dump / pg_restore with PGHOST, PGPORT, PGUSER, PGPASSWORD.
+#   POSTGRES_USER, POSTGRES_DB  (default flowpilot)
+set -euo pipefail
+
+BACKUP_DIR="${FLOWPILOT_BACKUP_DIR:-/srv/flowpilot/backups}"
+KEY_FILE="${FLOWPILOT_BACKUP_KEY_FILE:-}"
+DB_USER="${POSTGRES_USER:-flowpilot}"
+DB_NAME="${POSTGRES_DB:-flowpilot}"
+COMPOSE_FILE="${FLOWPILOT_COMPOSE_FILE:-/srv/flowpilot/backend/docker-compose.prod.yml}"
+ENV_FILE="${FLOWPILOT_ENV_FILE:-/srv/flowpilot/backend/.env.production}"
+DEFAULT_EXEC="docker compose -f ${COMPOSE_FILE} --env-file ${ENV_FILE} exec -T db"
+read -r -a PGX <<< "${FLOWPILOT_PG_EXEC-${DEFAULT_EXEC}}"
+
+# Dead-man's switch. A backup that quietly stops is the failure nobody notices until the
+# day they need it. When HEARTBEAT_BASE and HEARTBEAT_UUID_COMPOSE_BACKUP are set (the same
+# variables flowpilot-sweep uses; a free Healthchecks.io check works), every run reports
+# success to <base>/<uuid> or failure to <base>/<uuid>/fail, and the monitor alerts you
+# when a run failed or did not happen. A monitor that cannot be reached never fails a backup.
+PARTIAL=""
+heartbeat() {
+    [[ -n "${HEARTBEAT_BASE:-}" && -n "${HEARTBEAT_UUID_COMPOSE_BACKUP:-}" ]] || return 0
+    curl -fsS -m 10 --retry 3 --retry-delay 2 -o /dev/null \
+        "${HEARTBEAT_BASE}/${HEARTBEAT_UUID_COMPOSE_BACKUP}$1" \
+        || echo "HEARTBEAT_PING_FAILED: could not reach the monitor" >&2
+}
+on_exit() {
+    local status=$?
+    if [[ -n "${PARTIAL}" ]]; then rm -f -- "${PARTIAL}"; fi
+    if (( status == 0 )); then heartbeat ""; else heartbeat "/fail"; fi
+}
+
+prune() {
+    local -a files=()
+    mapfile -t files < <(ls -1 "${BACKUP_DIR}"/flowpilot-*.dump.enc 2>/dev/null | sort -r)
+    local kept_daily=0 weeks_kept=0 f stamp week
+    declare -A seen_week=()
+    for f in "${files[@]}"; do
+        if (( kept_daily < 7 )); then kept_daily=$((kept_daily + 1)); continue; fi
+        stamp="$(basename "${f}" | sed -E 's/^flowpilot-([0-9]{8})T.*$/\1/')"
+        week="$(date -u -d "${stamp:0:4}-${stamp:4:2}-${stamp:6:2}" +%G-%V)"
+        if [[ -z "${seen_week[${week}]:-}" ]] && (( weeks_kept < 4 )); then
+            seen_week[${week}]=1; weeks_kept=$((weeks_kept + 1)); continue
+        fi
+        rm -f -- "${f}" "${f}.sha256"
+        echo "pruned ${f}"
+    done
+}
+
+if [[ "${1:-}" == "--prune-only" ]]; then
+    prune
+    exit 0
+fi
+
+trap on_exit EXIT
+
+[[ -n "${KEY_FILE}" && -r "${KEY_FILE}" ]] || { echo "FLOWPILOT_BACKUP_KEY_FILE must name a readable passphrase file" >&2; exit 64; }
+[[ -s "${KEY_FILE}" ]] || { echo "the backup key file is empty" >&2; exit 64; }
+
+umask 077
+mkdir -p "${BACKUP_DIR}"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+OUT="${BACKUP_DIR}/flowpilot-${STAMP}.dump.enc"
+PARTIAL="${OUT}.partial"
+
+started="$(date -u +%s)"
+"${PGX[@]}" pg_dump -Fc -U "${DB_USER}" -d "${DB_NAME}" \
+    | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:${KEY_FILE}" -out "${PARTIAL}"
+
+# Verify: it must decrypt and pg_restore must be able to read its table of contents.
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:${KEY_FILE}" -in "${PARTIAL}" \
+    | "${PGX[@]}" pg_restore --list > /dev/null \
+    || { echo "VERIFY FAILED: the backup cannot be read back; nothing was kept" >&2; exit 1; }
+
+mv -- "${PARTIAL}" "${OUT}"
+( cd "${BACKUP_DIR}" && sha256sum "$(basename "${OUT}")" > "$(basename "${OUT}").sha256" )
+echo "backup ok: ${OUT} ($(stat -c %s "${OUT}") bytes, $(( $(date -u +%s) - started ))s)"
+
+prune
+
+if [[ -n "${FLOWPILOT_BACKUP_MIRROR_CMD:-}" ]]; then
+    bash -c "${FLOWPILOT_BACKUP_MIRROR_CMD}" -- "${OUT}" \
+        || { echo "MIRROR FAILED: the local backup is fine but no off-host copy was made" >&2; exit 2; }
+    echo "mirrored ${OUT}"
+fi

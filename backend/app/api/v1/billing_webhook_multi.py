@@ -108,6 +108,16 @@ async def receive_gateway_webhook(
         logger.warning("gateway_webhook.unknown_gateway", extra={"path": gateway})
         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
+    # Stripe has its own receiver at /billing/webhooks/stripe (verification,
+    # size limit and persistence are different, and it is registered first, so
+    # it wins for the lowercase spelling). Any other spelling of "stripe"
+    # ("STRIPE", "Stripe") normalises to STRIPE here, where the adapter has no
+    # Standard Webhooks verifier: it raised AttributeError, an unhandled 500 on
+    # every delivery. It fails closed, but a webhook URL typed with a capital
+    # would never have worked and would have looked like a Stripe outage.
+    if resolved == "STRIPE":
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+
     # -- 2. Bound the body BEFORE reading it all --------------------------
     limit = _max_body_bytes(resolved)
     declared = request.headers.get("content-length")

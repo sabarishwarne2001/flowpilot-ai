@@ -395,6 +395,9 @@ def verify_sender_domain(
     visible degradation. Raising would replace that sentence with a generic
     error toast.
     """
+    # F-004. Setting the sender domain is gated on custom email; checking it is
+    # part of the same feature.
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.CUSTOM_EMAIL_CAPABILITY, operation="email.sender_domain.verify")
     _assert_scope(context, organization_id)
     branding = branding_service.get_or_create_branding(
         db, organization_id=organization_id
