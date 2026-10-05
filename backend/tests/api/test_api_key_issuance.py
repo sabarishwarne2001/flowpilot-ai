@@ -6,6 +6,18 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditAction, AuditLog, AuditResourceType
 
 
+
+@pytest.fixture(autouse=True)
+def _developer_api_plan(db_session, tenant):
+    """PHASE 4: issuing API keys requires the developer API capability
+    (Developer plan and up) since HM-S1; on the default free plan these tests
+    were refused 402 before reaching what they test. Assertions unchanged.
+    The refusal itself is covered by tests/security/test_plan_gating_server_side.py."""
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "developer")
+    db_session.commit()
+
 def test_api_key_issuance_and_authentication(client: TestClient, tenant):
     org_id = tenant.organization.id
     headers = tenant.org_admin.headers
