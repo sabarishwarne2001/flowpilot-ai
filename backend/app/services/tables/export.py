@@ -28,7 +28,7 @@ from typing import Any, Iterable, Optional, Sequence
 from xml.sax.saxutils import escape
 
 from app.services.tables import vocabulary as v
-from app.services.tables.values import format_number
+from app.services.tables.values import format_number, parse_number
 
 _INJECTION = ("=", "+", "-", "@", "\t", "\r")
 _XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -39,11 +39,30 @@ def _label(column: Any) -> str:
     return " / ".join(column.path) if column.path else column.key
 
 
+def number_text(cell: Any) -> str:
+    """PHASE 4: the value with the decimals the document printed.
+
+    Stored values come back from numeric(24, 6) as 10.000000; exporting that
+    turned "10.00" into "10.000000" in every CSV, XLSX and JSON. The cell's own
+    text says how many decimals were printed (and is rewritten with a
+    correction); without a readable text, the padding zeros are dropped.
+    """
+    number = Decimal(cell.number)
+    parsed = parse_number(cell.text or "")
+    if parsed is not None and parsed.number is not None and parsed.decimals <= 6:
+        try:
+            return format_number(number.quantize(Decimal(1).scaleb(-parsed.decimals)))
+        except ArithmeticError:
+            pass
+    normalised = number.normalize()
+    return format_number(normalised if normalised.as_tuple().exponent <= 0 else number.quantize(Decimal(1)))
+
+
 def _typed(cell: Any) -> str:
     if cell is None:
         return ""
     if cell.value_type in v.NUMERIC_TYPES and cell.number is not None:
-        return format_number(Decimal(cell.number))
+        return number_text(cell)
     if cell.value_type == v.TYPE_DATE and cell.when is not None:
         return cell.when.isoformat()
     return cell.text or ""
@@ -78,7 +97,7 @@ def _json_value(cell: Any) -> Optional[str]:
     if cell is None:
         return None
     if cell.value_type in v.NUMERIC_TYPES and cell.number is not None:
-        return format_number(Decimal(cell.number))
+        return number_text(cell)
     if cell.value_type == v.TYPE_DATE and cell.when is not None:
         return cell.when.isoformat()
     return cell.text or None
@@ -164,7 +183,7 @@ def _cell_xml(ref: str, cell: Any, kind: str) -> str:
     bold = kind in (v.ROW_TOTAL, v.ROW_SUBTOTAL, v.ROW_SECTION)
     if cell.value_type in v.NUMERIC_TYPES and cell.number is not None:
         style = S_NUMBER_FLAG if flagged else (S_NUMBER_BOLD if bold else S_NUMBER)
-        return f'<c r="{ref}" s="{style}"><v>{format_number(Decimal(cell.number))}</v></c>'
+        return f'<c r="{ref}" s="{style}"><v>{number_text(cell)}</v></c>'
     if cell.value_type == v.TYPE_DATE and cell.when is not None:
         return f'<c r="{ref}" s="{S_DATE}"><v>{(cell.when - _EXCEL_EPOCH).days}</v></c>'
     style = S_TEXT_FLAG if flagged else (S_BOLD if bold else 0)
