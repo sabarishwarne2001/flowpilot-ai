@@ -131,6 +131,19 @@ async def resolve_verification(
     # `automation:execute:{event.id}` idempotency key, and `job_service.enqueue`
     # returns the existing job for a key it has already seen, so the two
     # cannot produce two walks.
+    # PHASE 4: say why, for a verification that exists but is not waiting on a
+    # person. Delegating it to the review hub answered 404 "Review item not
+    # found" - telling an API client a verification it had just read does not
+    # exist, instead of that only a DISAGREED one can be resolved.
+    if verification.status is not VerificationStatus.DISAGREED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Only a DISAGREED verification can be resolved; this one is "
+                f"{getattr(verification.status, 'value', verification.status)}."
+            ),
+        )
+
     from app.services.review import resolution as review_resolution
 
     try:
