@@ -103,6 +103,12 @@ export const API_KEY_ENDPOINTS = {
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
 } as const;
 
+/** PHASE 4 — global search (Ctrl+K) across the caller's workspaces. */
+export const SEARCH_ENDPOINTS = {
+  organization: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/search`,
+} as const;
+
 export const WEBHOOK_ENDPOINTS = {
   endpoints: (organizationId: string): string =>
     `${webhookBase(organizationId)}/endpoints`,

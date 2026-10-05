@@ -25,6 +25,7 @@ from app.api.v1 import (
     automation,
     avatar,
     byok,
+    global_search,
     compliance,
     custom_domains,
     dashboard,
@@ -88,6 +89,7 @@ api_router.include_router(compliance.router)
 api_router.include_router(developer.router)  # ARCH-21 Tenant Developer Portal
 api_router.include_router(public_gateway_router)  # ARCH-21 Public Developer Gateway
 api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routing
+api_router.include_router(global_search.router)  # PHASE 4 global search (Ctrl+K)
 
 # ARCH-25 White-label. Two routers rather than one because the role
 # boundary differs: every domain write is OWNER-gated (a vanity hostname

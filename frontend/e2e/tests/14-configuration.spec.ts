@@ -97,13 +97,13 @@ test.describe("Global search (Ctrl+K)", () => {
     await page.goto(ws("C"));
     await expect(page.locator("main")).toContainText("Recent Activity");
     await page.keyboard.press("Control+k");
-    const palette = page.getByRole("dialog", { name: "Search pages" });
+    const palette = page.getByRole("dialog", { name: /Search pages/ });
     await expect(palette).toBeVisible();
-    await page.getByPlaceholder("Jump to a page…").fill("obligations");
+    await page.getByPlaceholder(/Jump to a page/).fill("obligations");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/obligations$/);
     await page.keyboard.press("Control+k");
-    await page.getByPlaceholder("Jump to a page…").fill("tolerance");
+    await page.getByPlaceholder(/Jump to a page/).fill("tolerance");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/procurement\/policies$/);
     await page.keyboard.press("Control+k");
@@ -115,9 +115,9 @@ test.describe("Global search (Ctrl+K)", () => {
     await page.goto(ws("C"));
     await expect(page.locator("main")).toContainText("Recent Activity");
     await page.getByRole("button", { name: /Search pages/ }).click();
-    await page.getByPlaceholder("Jump to a page…").fill("INV-E2E-1001");
+    await page.getByPlaceholder(/Jump to a page/).fill("INV-E2E-1001");
     await settle(page, 800);
-    await expect(page.getByRole("dialog", { name: "Search pages" })).toContainText("invoice-INV-E2E-1001", {
+    await expect(page.getByRole("dialog", { name: /Search pages/ })).toContainText("invoice-INV-E2E-1001", {
       timeout: 5_000,
     });
   });
