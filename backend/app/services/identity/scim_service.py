@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from sqlalchemy import text as sql_text
 
+from app.core.client_ip import normalise_ip
 from app.core import security
 from app.models.identity import (
     DirectoryIdentity, EnterpriseIdpConfig, ProvisionedVia, ScimApiKey,
@@ -118,7 +119,11 @@ def authenticate(db, *, bearer: str, source_ip: str | None = None) -> ScimApiKey
 
     if hmac.compare_digest(bytes(key.secret_hmac), candidate):
         key.last_used_at = now
-        key.last_used_ip = source_ip
+        # PHASE 4: last_used_ip is INET. client_ip() falls back to the raw
+        # socket peer ("unknown" without one, a unix-socket path behind a
+        # local proxy), and writing a non-address failed the whole SCIM
+        # request with a database error. A non-address is recorded as unknown.
+        key.last_used_ip = normalise_ip(source_ip)
     elif (key.previous_secret_hmac is not None
           and key.previous_secret_expires_at is not None
           and key.previous_secret_expires_at > now

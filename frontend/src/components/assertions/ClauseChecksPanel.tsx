@@ -162,7 +162,12 @@ export const ClauseChecksPanel: React.FC<ClauseChecksPanelProps> = ({ workspaceI
                     nodeKey={check.node_key}
                     existing={check.definition}
                     onSaved={() => {
-                      toast.success("Clause saved. Switch the check on when ready.");
+                      toast.success(
+                        // The first sentence switches a check on (server rule); later edits keep the user's choice.
+                        !check.definition || check.is_active
+                          ? "Clause saved. The check is on and runs on every new document."
+                          : "Clause saved. The check is off; switch it on to run it.",
+                      );
                       refresh();
                     }}
                     onCancel={() => setEditing(null)}

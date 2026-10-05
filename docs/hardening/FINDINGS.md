@@ -1357,7 +1357,7 @@ in a child process: killed by SIGABRT 3 runs out of 3 before the fix, passes 3 o
 `tests/security/test_plan_gating_server_side.py` passes. The full backend suite was **not** re-run
 for this commit (see `03-coverage.md`, "What was not done"). Other call sites: F-066.
 
-## F-051 — Accepting a team invitation fails with HTTP 500 on paid organizations (P1, confirmed)
+## F-051 — Accepting a team invitation fails with HTTP 500 on paid organizations (P1, fixed in Phase 4)
 
 **Plain language.** When someone accepts an invitation, the app records "a seat was added" for
 billing. It writes that as an internal event called `billing.seat_added`, but the database only
@@ -1375,7 +1375,7 @@ why this was not caught. **Fix idea (Phase 4).** A migration adding `billing.sea
 `billing.seat_removed` to the vocabulary constraint (or emitting them with the right visibility),
 plus a regression test; check `jit_service.py` and `deprovision_service.py`, which emit the same.
 
-## F-052 — Audit log export never works (P2, confirmed)
+## F-052 — Audit log export never works (P2, fixed in Phase 4)
 
 **Plain language.** On Organization → Audit log, the CSV and NDJSON buttons send `format=CSV`. The
 server only accepts lowercase `csv` or `jsonl`, answers 422, and the page throws an uncaught error.
@@ -1447,7 +1447,7 @@ shown; no upgrade control asserted); screenshot `e2e-screenshots/F-059-lock-card
 The button should be hidden or explain this up front.
 **Evidence.** `tests/20-organization.spec.ts` "claim a custom domain…".
 
-## F-061 — Capabilities in the Phase 3 brief that the product does not have (P3, confirmed)
+## F-061 — Capabilities in the Phase 3 brief that the product does not have (P3, partly built in Phase 4)
 
 Not bugs in existing code, but things the brief expected and the tests looked for:
 - **Global search (Ctrl+K) only finds pages**, not documents: searching "INV-E2E-1001" says "No
@@ -1462,6 +1462,11 @@ Not bugs in existing code, but things the brief expected and the tests looked fo
 - **No field correction in the document viewer**: extracted values can only be corrected on review
   queue items, which only exist for low-confidence extractions (none with stub OCR, see F-063).
 Decide which you want before launch → N-020.
+**Phase 4:** built the three you asked for in the Phase 4 brief - global search finds documents
+(also by invoice number), entities and cases (F-091); webhooks have "Send test event" (F-080); the
+review workbench shows the page image with each agent's reading highlighted (F-092). Still open:
+notification filters / mark-unread, promo code at checkout, invite from Organization → Members,
+field correction in the document viewer (N-020).
 
 ## F-062 — Unsaved workspace settings are lost without warning (P3, confirmed)
 
@@ -1488,7 +1493,7 @@ response fixture so CI can cover them.
 the limits are fixed numbers in `app/core/rate_limit/policy.py`. Changing the setting has no effect
 (found when raising it for the test stack had none). Same area as F-048 (N-018).
 
-## F-065 — Members may create ERP postings (P2, needs your decision)
+## F-065 — Members may create ERP postings (P2, fixed in Phase 4 — your decision: Admin/Owner only)
 
 **Plain language.** The Phase 3 brief says Members must not trigger mutating ERP posts. The server
 lets a MEMBER whose workspace role is CONTRIBUTOR create a posting (it answered "ERP target not
@@ -1496,9 +1501,206 @@ found", i.e. it got past the permission check); VIEWER is refused (403, correct)
 contributors may post to the ERP is a product rule → N-019.
 **Evidence.** `tests/03-role-matrix.spec.ts` "ERP posting: a workspace VIEWER and a MEMBER may not post".
 
-## F-066 — Other PDFium call sites have no lock (P2, unverified)
+## F-066 — Other PDFium call sites have no lock (P2, fixed in Phase 4)
 
 Same class as F-050. Unprotected: `services/redaction/rasterize.py` (2), `redaction/leakcheck.py`,
 `tables/reader.py`, `tables/geometry.py`, `corroboration/synthetic.py`, `ocr/paddle.py` (2),
 `ocr/pdf_text_layer.py`. Whether they can run concurrently in one process (API thread pool or a
 threaded worker) was not tested. Phase 4: a stress test per site, then the same lock.
+
+---
+
+# Phase 4 — live engine hardening (branch `hardening/phase-4-core-engines`)
+
+Every "fixed" below has the four Evidence-Rule steps: a test that failed before the fix (named),
+the fix (commit), the same test passing, and the rest of the suite still passing (see
+`04-core-engines.md` §6 for the full-suite comparison). Commits are on the branch.
+
+## F-067 — Opening Document settings switched extraction off; verification could not be turned on (P1, fixed)
+
+**Plain language.** The Document settings page saved its form with "summarise" and "extract
+entities" unticked by default, so simply opening and saving it turned extraction off for the
+workspace, and multi-agent verification had no switch at all in the page. **Fix** `03fff2b`.
+**Proof** `tests/engines/test_document_settings_live.py`.
+
+## F-068 — Verification agents were told every document was "Other" (P2, fixed)
+
+The agents re-reading a document were prompted with type "Other" instead of the document's type,
+so invoice-specific instructions never applied. **Fix** `d21f95f`. **Proof**
+`tests/engines/test_verification_live.py::test_agents_are_prompted_with_the_documents_type`.
+
+## F-069 — A field the agents split on evenly was approved automatically (P1, fixed)
+
+With two agents disagreeing 1–1 on a field, "majority" picked one and the document was released
+without a person. Now an even split always goes to review. **Fix** `82f755e`. **Proof**
+`test_verification_live.py::test_an_even_split_on_a_field_is_never_auto_approved`.
+
+## F-070 — Extraction memory's nightly sweep crashed on values of different lengths (P2, fixed)
+
+**Fix** `792317e`. **Proof** `tests/engines/test_extraction_memory_live.py::test_values_of_different_lengths_under_one_label_do_not_break_the_sweep`.
+
+## F-071 — The rule extraction memory applied was not the one it measured (P2, fixed)
+
+**Fix** `781a7af`. **Proof** `tests/engines/test_extraction_memory_rules.py::test_a_rule_promoted_at_volume_is_the_one_applied_and_measured`.
+
+## F-072 — Extraction memory never filled a field the model left empty (P2, built)
+
+Learned layouts were measured but never used. An ACTIVE layout now fills fields the model left
+empty. **Commit** `65e7884`. **Proof** `test_extraction_memory_rules.py::test_an_active_layout_fills_the_field_the_model_left_empty`.
+
+## F-073 — Cases ignored the model's classification when deciding a document's type (P2, fixed)
+
+**Fix** `f1de2e2`. **Proof** `tests/engines/test_cases_live.py::test_a_documents_type_comes_from_the_models_classification`.
+
+## F-074 — Table exports dropped printed decimals ("1,250.50" became "1250.5") (P3, fixed)
+
+**Fix** `e745c70`. **Proof** `tests/engines/test_tables_live.py`.
+
+## F-075 — The radar flagged a supplier's next monthly invoice as a duplicate (P2, fixed)
+
+Same supplier, same layout, different month and amount → "duplicate". The similarity layer now
+also requires compatible dates and totals. **Fix** `22c201b`. **Proof**
+`tests/engines/test_radar_live.py::test_the_suppliers_next_monthly_invoice_is_not_a_duplicate`.
+
+## F-076 — A new workspace could not build "only if" conditions on extracted fields (P2, fixed)
+
+The condition builder offered only fields already seen in documents, so a new workspace had none.
+Standard fields are always offered now. **Fix** `fcadf73`. **Proof**
+`tests/engines/test_automation_live.py::test_a_new_workspace_can_build_data_conditions_before_its_first_document`.
+
+## F-077 — A saved clause check stayed switched off (P2, fixed)
+
+Saving the first sentence of a clause check left it inactive ("Switch the check on when ready"),
+so an authored check silently never ran. **Fix** `e8e7592`. **Proof**
+`tests/engines/test_clause_assertions_live.py`.
+
+## F-078 — A refused role change hung the request and locked the organization (P1, fixed)
+
+An ADMIN trying to grant ADMIN (only an OWNER may) waited forever: the organization row was locked
+`FOR UPDATE` and the independent audit write's foreign-key check waited on that lock while the
+request waited on the audit write. **Fix** `9fa6006` (`FOR NO KEY UPDATE` + a bounded wait for
+independent audit writes). **Proof** `tests/engines/test_team_and_audit_live.py`.
+
+## F-079 — No service-level (SLO) measurement could ever be recorded (P1, fixed)
+
+Every new measurement window was refused by a NOT NULL constraint, so the 99.9% availability and
+latency pages were empty and the hourly recorder failed for every organization. **Fix** `b4e9d13`.
+**Proof** `tests/services/test_slo_service.py` (7 red on main).
+
+## F-080 — Webhooks had no "send test event" (built; was F-061)
+
+**Commit** `07f2a9c` (+ migration `p4a2`). **Proof** `tests/engines/test_webhooks_live.py`, which
+also proves HMAC-SHA256 signing, retry after backoff and redaction of the signature in the log.
+
+## F-081 — A voided invoice could not be corrected, and a retried invoice job crashed (P1, fixed)
+
+Re-assembling a voided period returned the voided invoice itself; on a retried job the invoice
+assembler returned the wrong type and the monthly billing job died on every retry. **Fix**
+`5a32dc0`. **Proof** `test_arch15_gate_15_5_15_6_invoices.py::TestGate155Immutability::test_void_and_reassemble_is_the_correction_path`.
+
+## F-082 — Creating a billing account froze the whole organization while Stripe answered (P2, fixed)
+
+**Fix** `667fa5c`. **Proof** `tests/services/test_billing_account_lock.py` (new; red before).
+
+## F-083 — Public API responses carried no rate-limit headers, and their body said "FREE, 0 left" (P2, fixed)
+
+**Fix** `13fb68d`. **Proof** `test_public_api_endpoints.py` (header/body tests) and
+`tests/engines/test_api_keys_live.py` (headers count 2, 1, 0 with the real limiter).
+
+## F-084 — A security violation inside an automation action did not stop the rule (P1, fixed)
+
+When an action tried to use a value taken from a document as, say, an email recipient (rule R33),
+the action was refused - but a rule set to "continue on error" carried on to its next actions and
+the record lost its security marker. **Fix** `5d27323`. **Proof**
+`test_arch13_gate_13_5_13_6_engine.py::test_r33_violation_halts_regardless_of_on_error`.
+
+## F-085 — Resolving an already-settled verification answered "not found" (P3, fixed)
+
+**Fix** `b7c08b3`. **Proof** `test_arch13_gate_13_8_verification_api.py::test_resolve_conflict_returns_409`.
+
+## F-086 — Radar and erasure read/deleted text chunks without the workspace filter (P2, fixed)
+
+Correct only while every id was right; no defence if a wrong id arrived, and every query scanned
+all partitions. **Fix** `cca3a3b`. **Proof** `test_vector_scoping.py::test_no_unscoped_chunk_access_in_app`.
+
+## F-087 — A retried document could be refused at the spend ceiling for tokens already paid (P2, fixed)
+
+**Fix** `15cb0f3`. **Proof** `test_embedding_metering.py::test_a_replay_at_the_ceiling_is_not_refused` (new).
+
+## F-088 — A tiny "image bomb" avatar could exhaust the server's memory (P1, fixed)
+
+A 6 KB PNG declaring 12000×12000 pixels was accepted and used 1.8 GB of memory. **Fix** `4fec6db`.
+**Proof** `test_avatar_upload.py::...::test_a_decompression_bomb_is_refused_before_it_is_decoded`.
+
+## F-089 — SCIM provisioning failed with 500 when the caller's address was not an IP (P2, fixed)
+
+**Fix** `4e53f00`. **Proof** `test_arch16_scim_dunning.py::test_scim_content_type_is_scim_json`.
+
+## F-090 — Saving a BYOK route before adding the provider key answered 500 and broke the list (P2, fixed)
+
+**Fix** `d2fa768`. **Proof** `test_arch23_endpoints.py::test_embedding_route_accepted_for_openai`.
+
+## F-091 — Global search (Ctrl+K) finds documents, entities and cases (built; was F-061)
+
+Across every workspace the user may open and never another; matches file names and extracted
+values (invoice numbers); the text is matched literally. **Proof**
+`tests/engines/test_global_search_live.py`.
+
+## F-092 — Reviewers see the page with each agent's reading highlighted (built; was F-061)
+
+New `GET …/work-items/{id}/evidence` and `…/pages/{n}.png`; the review workbench shows the page
+with one coloured box per agent's reading and says when a reading is not printed at all.
+**Proof** `tests/engines/test_review_evidence_live.py`.
+
+## F-093 — The radar did not flag a vendor's changed bank account or round totals (built)
+
+New payment-risk flags (separate store; ARCH-34's pinned vocabulary untouched): BANK_ACCOUNT_CHANGED
+(HIGH; accounts shown masked to the last four) and ROUND_AMOUNT (LOW); confirm / dismiss with a
+reason; on the Radar page. **Proof** `tests/engines/test_payment_risk_live.py`.
+
+## F-094 — About 230 backend tests were red on main for stale reasons, hiding real coverage (P2, mostly fixed)
+
+They predated deliberate changes (paid-plan gates, removed columns, a renamed field, idempotent
+writes, a date baked into fixtures) or used the development database instead of the test one.
+Aligned without weakening any assertion; each gate is now covered by an explicit refusal test.
+The few left red are design questions (F-095 to F-099, N-021 to N-025).
+
+## F-095 — Is BYOK an Enterprise feature? (open → N-021)
+
+The pages call it "Enterprise BYOK" but the server lets any plan store keys and routes.
+
+## F-096 — Locked-out sign-in answers 401, not 429 (open → N-022)
+
+The brute-force lockout works (proven: `tests/engines/test_login_lockout_live.py`) and answers
+exactly like a wrong password; the older test expects 429 with Retry-After.
+
+## F-097 — Oversized avatars: refuse, or shrink? (open → N-023)
+
+5000×5000 images are shrunk to 1024 px; the older test expects a refusal. (Image bombs are refused
+either way, F-088.)
+
+## F-098 — Public token links live under the API-key gateway's `/api/v1/public` prefix (open → N-024)
+
+Calendar-feed and document-request links are public by design but share the prefix the gateway
+test reserves for API-key routes. Moving them would break links already sent.
+
+## F-099 — Remaining stale engineering invariants (open, engineering)
+
+- `test_owner_set_concurrency::test_for_update_appears_only_in_the_lock_helper` (ARCH-05 gate):
+  says no file but the owner helper may lock rows; 14 later services lock their own rows
+  legitimately. Proposal: restrict it to locks on organizations / members (N-025).
+- `test_storage_boundary::test_no_direct_filesystem_calls_outside_driver`: flags bundled schemas,
+  release manifests and a PDF object's `read_bytes()` (not files); needs an allowlist decision.
+- `test_pipeline_and_profiles::test_terminal_stages_only_return_to_queued`: the dead-letter retry
+  resumes a failed document without `document.queued`; code and test disagree since day one.
+- BYOK suites (`test_byok_credential_service.py`, `test_byok_endpoints.py`, 13 tests): assert the
+  old "only Groq is routable" rule; ARCH-23 made all six providers routable. Live proof of the
+  current behaviour: `tests/engines/test_byok_live.py`.
+- `test_storage_validation_ocr::test_registration_does_not_import_paddleocr`: the OCR test module
+  itself imports the OCR package (which eagerly loads paddle/torch); registration in a clean
+  process loads neither.
+- `test_email_change::test_confirming_signs_every_session_out`: timing-dependent - its token has
+  no session id, so it fails when minted in the same second as the revocation (passed in the final
+  run); real tokens are proven signed out (`tests/engines/test_session_revocation_live.py`).
+- `test_pool_profiles::test_unknown_role_warns_outside_production`: passes alone, fails after
+  other tests in the same run (order-dependent warning capture).

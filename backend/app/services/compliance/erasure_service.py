@@ -29,6 +29,7 @@ from app.models.organization import (
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 from app.models.user_session import SessionRevokedReason, UserSession
+from app.db.chunk_scope import count_chunks, delete_chunks_for_work_item
 from app.models.work_item import WorkItem
 from app.models.workspace import Workspace
 from app.services import audit_service
@@ -169,16 +170,13 @@ def preview_subject(
             "sessions": 0,
         }
 
-    work_item_ids = list(
-        db.execute(
-            select(WorkItem.id).where(
-                WorkItem.workspace_id.in_(workspace_ids),
-                WorkItem.created_by_user_id == subject.id,
-            )
+    subject_items = db.execute(
+        select(WorkItem.id, WorkItem.workspace_id).where(
+            WorkItem.workspace_id.in_(workspace_ids),
+            WorkItem.created_by_user_id == subject.id,
         )
-        .scalars()
-        .all()
-    )
+    ).all()
+    work_item_ids = [row.id for row in subject_items]
 
     conversation_ids = list(
         db.execute(
@@ -191,15 +189,15 @@ def preview_subject(
         .all()
     )
 
-    chunk_count = 0
-    if work_item_ids:
-        chunk_count = db.execute(
-            text(
-                "SELECT count(*) FROM document_chunks "
-                "WHERE work_item_id = ANY(:ids)"
-            ),
-            {"ids": work_item_ids},
-        ).scalar_one()
+    # PHASE 4: counted per workspace through the scoped helper - the tenancy
+    # predicate and the partition key - instead of raw SQL on work item ids.
+    by_workspace: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for row in subject_items:
+        by_workspace.setdefault(row.workspace_id, []).append(row.id)
+    chunk_count = sum(
+        count_chunks(db, workspace_id=workspace, work_item_ids=ids)
+        for workspace, ids in by_workspace.items()
+    )
 
     message_count = 0
     if conversation_ids:
@@ -270,12 +268,12 @@ def _destroy_documents(
 
     work_item_ids = [item.id for item in work_items]
 
-    chunk_rows = 0
-    if work_item_ids:
-        chunk_rows = db.execute(
-            text("DELETE FROM document_chunks WHERE work_item_id = ANY(:ids)"),
-            {"ids": work_item_ids},
-        ).rowcount or 0
+    # PHASE 4: deleted under each document's own workspace through the scoped
+    # helper (tenancy predicate + partition key) instead of raw SQL on ids.
+    chunk_rows = sum(
+        delete_chunks_for_work_item(db, workspace_id=item.workspace_id, work_item_id=item.id)
+        for item in work_items
+    )
 
     for item in work_items:
         item.extracted_text = None
@@ -294,6 +292,16 @@ def _destroy_documents(
 
     counts["work_items"] = len(work_items)
     counts["document_chunks"] = int(chunk_rows)
+    # PHASE 4: payment-risk flags quote the vendor and the (masked) accounts
+    # these documents named; they go with the documents' content.
+    if work_item_ids:
+        from sqlalchemy import delete as _delete_flags
+
+        from app.models.payment_risk import PaymentRiskFlag as _Flag
+
+        counts["payment_risk_flags"] = int(
+            db.execute(_delete_flags(_Flag).where(_Flag.work_item_id.in_(work_item_ids))).rowcount or 0
+        )
     # ARCH42-S1:erasure-entities. The documents' entity mentions, the edges
     # they evidenced, and every identifier and record only they supported.
     from app.services.entities import erasure as _entity_erasure

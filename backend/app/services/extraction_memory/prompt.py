@@ -155,13 +155,24 @@ def _prepare(db: Session, *, work_item: Any, text: str, document_type: str) -> O
     arm = choose_arm(mode, template.state, trial, work_item.id)
 
     lines = anchors.document_lines(text)
-    rules = _rules(db, template.id)
+    # PHASE 4: one candidate per field, from the rule that counts. ACTIVE first
+    # (its live precision is what drift detection reads, and it only gets
+    # measured when its candidate is the one recorded), then the best replay
+    # bound, then support; never "whichever row the database returned first".
+    rules = sorted(
+        _rules(db, template.id),
+        key=lambda r: (r.state != v.RULE_ACTIVE, -float(r.wilson_lower or 0), -int(r.support or 0), str(r.id)),
+    )
+    shown = anchors.display_lines(text)
     candidates = {}
     hints: list[tuple[str, str]] = []
     for rule in rules:
         value = anchors.apply_rule(lines, _key(rule))
         if value is not None:
-            candidates.setdefault(rule.field_path, {"rule_id": str(rule.id), "value": value, "state": rule.state})
+            candidates.setdefault(rule.field_path, {
+                "rule_id": str(rule.id), "value": value, "state": rule.state,
+                "display": anchors.apply_rule_display(lines, shown, _key(rule)),
+            })
         if rule.state == v.RULE_ACTIVE:
             hints.append((rule.field_path, rule.anchor_norm))
 
@@ -184,6 +195,47 @@ def _prepare(db: Session, *, work_item: Any, text: str, document_type: str) -> O
     application.memory_tokens = _count(block) if block else 0
     db.flush()
     return block or None
+
+
+def _is_empty(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (list, dict, tuple)):
+        return not value
+    return False
+
+
+def fill_missing(db: Session, *, work_item: Any, entities: dict[str, Any]) -> list[str]:
+    """PHASE 4: fill the fields the model left EMPTY from this layout's ACTIVE rules.
+
+    Before this, an ACTIVE rule only became a hint in the prompt: when the
+    model still returned nothing for the field (or the provider was down), the
+    value memory had learned was never used. Gated exactly like the hints —
+    the document's arm is ACTIVE or TRIAL_ON, which needs AUTO mode and a
+    template that is active or on trial — and a rule is ACTIVE only after its
+    replay precision's one-sided 95% Wilson bound reached 0.95 on reviewed
+    documents. A value the model did return is never replaced. Never raises:
+    a memory fault costs the fill, not the document.
+    """
+    try:
+        application = db.get(ExtractionMemoryApplication, work_item.id)
+        if application is None or application.arm not in v.INJECTING_ARMS:
+            return []
+        filled: list[str] = []
+        for field_path, candidate in sorted((application.anchor_candidates or {}).items()):
+            candidate = candidate or {}
+            if candidate.get("state") != v.RULE_ACTIVE or "." in field_path:
+                continue
+            value = candidate.get("display") or candidate.get("value")
+            if value and _is_empty(entities.get(field_path)):
+                entities[field_path] = value
+                filled.append(field_path)
+        return filled
+    except Exception:  # noqa: BLE001
+        logger.exception("extraction_memory.fill_failed", extra={"work_item_id": str(getattr(work_item, "id", ""))})
+        return []
 
 
 def context_for_verification(db: Session, *, work_item: Any) -> Optional[str]:

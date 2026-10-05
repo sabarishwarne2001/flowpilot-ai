@@ -127,9 +127,11 @@ def handle_document_verify(payload: dict[str, Any]) -> dict[str, Any]:
             return {"outcome": Outcome.SKIPPED, "reason": "no extracted text"}
 
         agent_count = dv.agent_count_for(document_settings)
-        classification = (work_item.extracted_entities or {}).get(
-            "document_classification", "Other"
-        )
+        # PHASE 4: enrichment stores the type under `classification_details`;
+        # reading only the top-level key prompted every agent as "Other".
+        from app.services.extraction_memory.templates import document_type_of
+
+        classification = document_type_of(work_item)
         base_prompt = _base_prompt_for(classification)
         # ARCH41-S2:memory-verification. The agents see the same learned
         # examples the primary extraction saw; agents that did not would

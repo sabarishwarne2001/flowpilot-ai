@@ -26,9 +26,10 @@ interface OutcomeCardProps {
   readonly outcome: OutcomeRow;
   readonly targets: readonly TargetRow[];
   readonly canPost: boolean;
+  readonly canPreview: boolean;
 }
 
-const OutcomeCard: React.FC<OutcomeCardProps> = ({ workspaceId, outcome, targets, canPost }) => {
+const OutcomeCard: React.FC<OutcomeCardProps> = ({ workspaceId, outcome, targets, canPost, canPreview }) => {
   const { orgSlug = "", workspaceSlug = "" } = useParams<{ orgSlug: string; workspaceSlug: string }>();
   const queryClient = useQueryClient();
   const [picked, setTargetId] = useState(targets[0]?.id ?? "");
@@ -86,7 +87,7 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ workspaceId, outcome, targets
                 {existing?.posting_id ? (
                   <Link to={erpPostingPath(orgSlug, workspaceSlug, existing.posting_id)}><PostingStateBadge state={existing.state} /></Link>
                 ) : <PostingStateBadge state={null} />}
-                {canPost ? (
+                {canPreview ? (
                   <button type="button" className="text-muted-foreground hover:text-foreground" aria-label={`Preview ${OBJECT_LABELS[kind]}`}
                     disabled={look.isPending} onClick={() => look.mutate(kind)}>
                     <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -130,8 +131,8 @@ const OutcomeCard: React.FC<OutcomeCardProps> = ({ workspaceId, outcome, targets
   );
 };
 
-export const ReadyToPost: React.FC<{ readonly workspaceId: string; readonly targets: readonly TargetRow[]; readonly canPost: boolean }> = ({
-  workspaceId, targets, canPost,
+export const ReadyToPost: React.FC<{ readonly workspaceId: string; readonly targets: readonly TargetRow[]; readonly canPost: boolean; readonly canPreview: boolean }> = ({
+  workspaceId, targets, canPost, canPreview,
 }) => {
   const query = useQuery({
     queryKey: erpKeys.outcomes(workspaceId),
@@ -154,7 +155,7 @@ export const ReadyToPost: React.FC<{ readonly workspaceId: string; readonly targ
       </p>
       {items.length === 0 ? <p className={HINT}>Nothing approved to post yet.</p> : null}
       {items.map((outcome) => (
-        <OutcomeCard key={`${outcome.kind}:${outcome.id}`} workspaceId={workspaceId} outcome={outcome} targets={active} canPost={canPost} />
+        <OutcomeCard key={`${outcome.kind}:${outcome.id}`} workspaceId={workspaceId} outcome={outcome} targets={active} canPost={canPost} canPreview={canPreview} />
       ))}
     </div>
   );

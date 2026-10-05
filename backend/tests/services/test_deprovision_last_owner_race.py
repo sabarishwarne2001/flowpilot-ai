@@ -2,8 +2,7 @@ import threading
 import uuid
 
 from sqlalchemy import text as sql_text
-
-from app.db.session import SessionLocal
+from sqlalchemy.orm import sessionmaker
 from app.models.organization import (
     MembershipStatus,
     Organization,
@@ -36,6 +35,10 @@ def _make_org_with_two_owners(db):
 
 
 def test_concurrent_deprovision_cannot_strand_an_org(engine):
+    # PHASE 4: sessions on the test database the `engine` fixture migrated. The
+    # app's own SessionLocal points at the development database, where (in CI
+    # and here) no tables exist, so the race was never run.
+    SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as setup_db:
         org_id, owner_a, owner_b = _make_org_with_two_owners(setup_db)
 

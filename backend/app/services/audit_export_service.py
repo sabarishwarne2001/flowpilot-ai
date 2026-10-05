@@ -47,6 +47,20 @@ class AuditExportFormat(str, Enum):
     CSV = "csv"
     JSONL = "jsonl"
 
+    @classmethod
+    def _missing_(cls, value: object) -> "AuditExportFormat | None":
+        # F-052: the console sends `CSV` / `NDJSON`. Accept any case, and
+        # `ndjson` as the other common name for JSON Lines, rather than
+        # answering 422 to a spelling every client is likely to use.
+        if isinstance(value, str):
+            key = value.strip().lower()
+            if key == "ndjson":
+                key = "jsonl"
+            for member in cls:
+                if member.value == key:
+                    return member
+        return None
+
 
 def neutralise_csv_value(value: Any) -> Any:
     """Prefixes formula trigger characters (=, +, -, @, \\t, \\r) with an apostrophe."""

@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, BookUp, Download, Loader2 } from "lucide-react";
 
-import { ErpLocked, JsonBlock, PostingStateBadge, canContribute, money, sourcePath } from "@/components/erp/common";
+import { ErpLocked, JsonBlock, PostingStateBadge, canAdminister, canContribute, money, sourcePath } from "@/components/erp/common";
 import { CAPABILITY } from "@/constants/capabilities";
 import {
   BUTTON_DESTRUCTIVE, BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, PAGE_TITLE, SECTION_TITLE,
@@ -46,6 +46,8 @@ const ErpPostingDetail: React.FC = () => {
   const { orgSlug = "", workspaceSlug = "", postingId = "" } = useParams<{ orgSlug: string; workspaceSlug: string; postingId: string }>();
   const capability = useCapabilityAccess(workspace?.organizationId ?? "", CAPABILITY.erpPosting);
   const canAct = canContribute(workspace?.role);
+  // Retry / accept / cancel / acknowledge change the books: workspace admins and the owner only (F-065).
+  const canDecide = canAdminister(workspace?.role);
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>("file");
   const [note, setNote] = useState("");
@@ -158,7 +160,7 @@ const ErpPostingDetail: React.FC = () => {
       {p.erased ? <p className={HINT}>The content of this posting was erased under a data-subject request; its ledger entry remains.</p> : null}
       {d.review_note ? <p className={HINT}>Reviewer&apos;s note: {d.review_note}</p> : null}
 
-      {canAct && (verdicts.length > 0 || manualAck) ? (
+      {canDecide && (verdicts.length > 0 || manualAck) ? (
         <section className={`${SURFACE} space-y-3 p-4`} aria-labelledby="posting-decide">
           <h2 id="posting-decide" className={SECTION_TITLE}>Decide</h2>
           {p.state === "UNCERTAIN" ? (

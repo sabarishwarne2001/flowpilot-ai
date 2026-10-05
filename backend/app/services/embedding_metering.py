@@ -230,6 +230,24 @@ def record_batch_usage(
     """Check the ceiling, then record one batch. Returns False if already billed."""
     key = idempotency_key(work_item_id, batch, prefix=idempotency_prefix)
 
+    # PHASE 4: a replay is recognised BEFORE the guard. Since SEAM-I-1,
+    # record_usage returns the existing row for a repeated key instead of
+    # raising, so the IntegrityError branch below no longer sees a replay:
+    # a re-run batch was reported as newly billed (True), and was checked
+    # against the spend ceiling again, so a reaped job for a document already
+    # paid for could be refused at the ceiling.
+    prior = _existing_event(db, organization_id=organization_id, key=key)
+    if prior is not None:
+        logger.info(
+            "embedding.already_billed",
+            extra={
+                "work_item_id": str(work_item_id),
+                "idempotency_key": key,
+                "prior_usage_event_id": str(prior.id),
+            },
+        )
+        return False
+
     with spend.guard_usage(
         db,
         organization_id=organization_id,

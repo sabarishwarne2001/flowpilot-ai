@@ -101,8 +101,6 @@ def test_settings_are_independent_per_workspace(
             "top_p": 1.0,
             "frequency_penalty": 0.0,
             "presence_penalty": 0.0,
-            "input_cost_per_1k_tokens": 0.0,
-            "output_cost_per_1k_tokens": 0.0,
             # ARCH40-S1:test-payload-contract.
             "enable_streaming": True
         },

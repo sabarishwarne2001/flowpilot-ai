@@ -25,6 +25,9 @@ from app.api.v1 import (
     automation,
     avatar,
     byok,
+    global_search,
+    payment_risk,
+    document_evidence,
     compliance,
     custom_domains,
     dashboard,
@@ -88,6 +91,7 @@ api_router.include_router(compliance.router)
 api_router.include_router(developer.router)  # ARCH-21 Tenant Developer Portal
 api_router.include_router(public_gateway_router)  # ARCH-21 Public Developer Gateway
 api_router.include_router(byok.router)  # ARCH-22 Enterprise BYOK & Model Routing
+api_router.include_router(global_search.router)  # PHASE 4 global search (Ctrl+K)
 
 # ARCH-25 White-label. Two routers rather than one because the role
 # boundary differs: every domain write is OWNER-gated (a vanity hostname
@@ -139,6 +143,7 @@ api_router.include_router(assertions.router)
 # tenant without the capability read every duplicate the engine found and
 # simply not act on them, which is the product.
 api_router.include_router(anomalies.router)
+api_router.include_router(payment_risk.router)  # PHASE 4 bank-account change / round totals
 
 # ARCH41-S3:extraction-memory-router. Every route but /potential is capability-gated.
 api_router.include_router(extraction_memory.router)
@@ -202,6 +207,7 @@ _SCOPED = (
     # be registered ahead of the catch-all.
     (ingestion.work_item_router, "/work-items",        "Work Items"),
     (work_items.router,        "/work-items",         "Work Items"),
+    (document_evidence.router, "/work-items",         "Work Items"),  # PHASE 4 review evidence
     (ingestion.session_router,  "/upload-sessions",    "Batch Ingestion"),
     (ingestion.batch_router,    "/ingestion-batches",  "Batch Ingestion"),
     (ingestion.preset_router,   "/document-presets",   "Document Presets"),

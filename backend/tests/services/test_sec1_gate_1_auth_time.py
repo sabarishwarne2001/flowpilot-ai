@@ -17,6 +17,27 @@ from app.services.billing import portal_service
 from app.services.billing.portal_service import ReauthenticationRequiredError
 
 
+def _legacy_token(account) -> str:
+    """A token minted before auth_time existed: signed, valid, no claim.
+
+    PHASE 4: create_access_token now always stamps auth_time (it defaults to
+    the mint time), so calling it no longer produces a legacy token. Tokens
+    issued before that change are still in circulation until they expire,
+    and these tests are about them.
+    """
+    from jose import jwt
+
+    payload = jwt.get_unverified_claims(
+        create_access_token(subject=account.id, session_id=uuid.uuid4())
+    )
+    payload.pop(AUTH_TIME_CLAIM)
+    return jwt.encode(
+        payload,
+        settings.JWT_SECRET_KEY.get_secret_value(),
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
 @pytest.fixture()
 def account(db) -> User:
     user = User(
@@ -114,7 +135,7 @@ class TestAuthTimeClaim:
         assert claims.issued_at - claims.auth_time > timedelta(days=269)
 
     def test_legacy_token_without_the_claim_still_decodes(self, account):
-        token = create_access_token(subject=account.id, session_id=uuid.uuid4())
+        token = _legacy_token(account)
 
         claims = security.decode_access_token_claims(token)
         assert claims is not None
@@ -199,9 +220,7 @@ class TestPortalReauthGate:
         )
 
     def test_token_without_auth_time_is_refused(self, db, account):
-        legacy_token = create_access_token(
-            subject=account.id, session_id=uuid.uuid4()
-        )
+        legacy_token = _legacy_token(account)
 
         with pytest.raises(ReauthenticationRequiredError):
             portal_service.assert_recent_authentication(

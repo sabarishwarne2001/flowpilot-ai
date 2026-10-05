@@ -281,7 +281,9 @@ def sweep_document(
 
     subject = candidates_module.to_candidate(
         subject_row,
-        chunks=candidates_module.load_chunks(db, work_item_id=work_item_id),
+        chunks=candidates_module.load_chunks(
+            db, workspace_id=subject_row.workspace_id, work_item_id=work_item_id
+        ),
     )
     counterparts = candidates_module.load_candidates(
         db, workspace_id=subject_row.workspace_id, subject=subject_row
@@ -330,7 +332,7 @@ def sweep_document(
             enriched_counterpart = candidates_module.to_candidate(
                 _fingerprint_row(db, counterpart_id) or subject_row,
                 chunks=candidates_module.load_chunks(
-                    db, work_item_id=counterpart_id
+                    db, workspace_id=subject_row.workspace_id, work_item_id=counterpart_id
                 ),
             )
             hit = strongest(subject, enriched_counterpart, settings=resolved) or hit
@@ -558,7 +560,7 @@ def sweep_workspace_drift(
         # the question a customer asks is "what changed in the latest one".
         newest = rows[-1]
         newest_chunks = candidates_module.load_chunks(
-            db, work_item_id=newest.work_item_id
+            db, workspace_id=workspace_id, work_item_id=newest.work_item_id
         )
         newest_item = db.execute(
             select(WorkItem).where(WorkItem.id == newest.work_item_id)
@@ -582,7 +584,7 @@ def sweep_workspace_drift(
                 continue
 
             earlier_chunks = candidates_module.load_chunks(
-                db, work_item_id=earlier.work_item_id
+                db, workspace_id=workspace_id, work_item_id=earlier.work_item_id
             )
             readings = drift_module.evaluate(
                 newest_chunks,

@@ -16,6 +16,8 @@ import { Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { corroborationPath, erpPostingPath, obligationPath, tablePath } from "@/routes/tenantPaths";
+import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
+import { canAdminister } from "@/components/erp/common";
 
 import type {
   AnomalyVerdict,
@@ -38,6 +40,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
   const [reason, setReason] = useState("");
   const [ttlDays, setTtlDays] = useState("");
   const { orgSlug = "", workspaceSlug = "" } = useParams<{ orgSlug: string; workspaceSlug: string }>();
+  const workspace = useActiveWorkspace();
 
   if (item.kind === "ASSERTION") {
     const verdict = (value: AssertionVerdict): void => {
@@ -212,6 +215,23 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
   // UNCERTAIN. RETRY sends it again (for an unknown outcome: only after you
   // checked the ERP does not have it); ACCEPT marks it posted with the ERP's
   // reference; CANCEL means it will not be posted.
+  if (item.kind === "POSTING" && !canAdminister(workspace?.role)) {
+    // F-065: settling a posting changes the books; the server refuses anyone below workspace admin.
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold">{item.headline}</p>
+        <p className="text-xs text-muted-foreground">
+          Only a workspace administrator or the organization owner can retry, accept or cancel an ERP posting. The
+          details are on the{" "}
+          <Link className="underline" to={erpPostingPath(orgSlug, workspaceSlug, item.item_id)}>posting page</Link>.
+        </p>
+        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+          Close
+        </button>
+      </div>
+    );
+  }
+
   if (item.kind === "POSTING") {
     const reference = quote.trim();
     return (

@@ -266,6 +266,16 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
             ),
         )
     entities = entities or {}
+    if enrichment["entities"]:
+        # PHASE 4: fields the model left empty, from this layout's ACTIVE
+        # memory rules (same gate as the prompt hints; never overrides).
+        filled = memory_prompt.fill_missing(db, work_item=work_item, entities=entities)
+        if filled:
+            stats["memory_filled"] = filled
+            work_item.extraction_metadata = {
+                **(work_item.extraction_metadata or {}),
+                "extraction_memory_filled": filled,
+            }
     entities["classification_details"] = classification
 
     summary = None

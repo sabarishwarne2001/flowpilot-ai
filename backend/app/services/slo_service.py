@@ -393,6 +393,10 @@ def record_measurement(
         # The get-or-return shape was already here; what was missing is the
         # savepoint. Two recorders sampling the same window concurrently
         # both see `existing is None` and both insert.
+        # PHASE 4: the row is built COMPLETE. `insert_or_get` flushes it inside
+        # its savepoint, and a row carrying only its keys broke the NOT NULL on
+        # observed_value (and the rest), so no new window could ever be
+        # recorded and the service-level pages stayed empty.
         measurement, _created = insert_or_get(
             db,
             instance=SLOMeasurement(
@@ -401,6 +405,15 @@ def record_measurement(
                 slo_key=slo_key,
                 window_start=start,
                 window_end=end,
+                observed_value=observed,
+                target_value=effective.target_value,
+                unit=effective.unit,
+                method=method,
+                sample_count=histogram.sample_count,
+                error_count=histogram.error_count,
+                breached=breached,
+                is_contractual=effective.is_contractual,
+                details=details,
             ),
             lookup=lambda: db.execute(
                 select(SLOMeasurement)

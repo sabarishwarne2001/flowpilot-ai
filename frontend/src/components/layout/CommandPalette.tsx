@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CornerDownLeft, Lock, Search, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Briefcase,
+  CornerDownLeft,
+  FileText,
+  Loader2,
+  Lock,
+  Network,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
   buildCreateWorkspaceItem,
@@ -17,6 +27,12 @@ import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { useIsSuperAdmin } from "@/routes/SuperAdminGuard";
 import { OVERLAY, SURFACE_DIALOG } from "@/components/ui/primitives";
+import { casePath, entityPath, workItemDetailsPath } from "@/routes/tenantPaths";
+import {
+  MIN_SEARCH_LENGTH,
+  searchOrganization,
+  type SearchHit,
+} from "@/services/api/search";
 
 interface PaletteEntry {
   readonly key: string;
@@ -30,6 +46,20 @@ interface PaletteEntry {
 }
 
 const MAX_RESULTS = 12;
+/** Pages shown above the data hits once the query is long enough to search. */
+const MAX_PAGE_RESULTS_WITH_DATA = 5;
+const SEARCH_DEBOUNCE_MS = 250;
+
+const HIT_ICON: Record<SearchHit["kind"], LucideIcon> = {
+  DOCUMENT: FileText,
+  ENTITY: Network,
+  CASE: Briefcase,
+};
+const HIT_SECTION: Record<SearchHit["kind"], string> = {
+  DOCUMENT: "Documents",
+  ENTITY: "Entities",
+  CASE: "Cases",
+};
 
 /**
  * ARCH36-S1:command-palette — jump to any page with Ctrl+K / ⌘K.
@@ -61,6 +91,22 @@ const CommandPalette: React.FC = () => {
 
   const orgSlug = organization.organization_slug;
   const workspaceSlug = workspace.slug;
+
+  // PHASE 4: documents, entities and cases across the workspaces this user
+  // may open, searched on the server once the query is long enough.
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(query.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+  const searchEnabled = open && debounced.length >= MIN_SEARCH_LENGTH;
+  const dataSearch = useQuery({
+    queryKey: ["global-search", organization.organization_id, debounced],
+    queryFn: ({ signal }) =>
+      searchOrganization(organization.organization_id, debounced, signal),
+    enabled: searchEnabled,
+    staleTime: 15_000,
+  });
 
   const entries = useMemo((): readonly PaletteEntry[] => {
     const out: PaletteEntry[] = [];
@@ -143,7 +189,29 @@ const CommandPalette: React.FC = () => {
     isSuperAdmin,
   ]);
 
-  const results = useMemo(() => {
+  const dataEntries = useMemo((): readonly PaletteEntry[] => {
+    if (!searchEnabled || !dataSearch.data) {
+      return [];
+    }
+    const { documents, entities, cases } = dataSearch.data;
+    return [...documents, ...entities, ...cases].map((hit) => ({
+      key: `${hit.kind.toLowerCase()}:${hit.id}`,
+      name: hit.title,
+      section: HIT_SECTION[hit.kind],
+      path:
+        hit.kind === "DOCUMENT"
+          ? workItemDetailsPath(orgSlug, hit.workspace_slug, hit.id)
+          : hit.kind === "ENTITY"
+            ? entityPath(orgSlug, hit.workspace_slug, hit.id)
+            : casePath(orgSlug, hit.workspace_slug, hit.id),
+      description: [hit.subtitle, hit.workspace_name].filter(Boolean).join(" · "),
+      haystack: "",
+      locked: false,
+      icon: HIT_ICON[hit.kind],
+    }));
+  }, [searchEnabled, dataSearch.data, orgSlug]);
+
+  const pageResults = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (terms.length === 0) {
       return entries.slice(0, MAX_RESULTS);
@@ -166,6 +234,15 @@ const CommandPalette: React.FC = () => {
       .slice(0, MAX_RESULTS)
       .map((row) => row.entry);
   }, [entries, query]);
+
+  const results = useMemo(
+    () =>
+      dataEntries.length === 0
+        ? pageResults
+        : [...pageResults.slice(0, MAX_PAGE_RESULTS_WITH_DATA), ...dataEntries],
+    [pageResults, dataEntries],
+  );
+  const searching = searchEnabled && dataSearch.isFetching;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -265,7 +342,7 @@ const CommandPalette: React.FC = () => {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Search pages"
+        aria-label="Search pages and records"
         className={`${SURFACE_DIALOG} w-full max-w-xl overflow-hidden`}
       >
         <div className="flex items-center gap-2 border-b border-border px-4">
@@ -275,7 +352,7 @@ const CommandPalette: React.FC = () => {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder="Jump to a page…"
+            placeholder="Jump to a page, or find a document, entity or case…"
             className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             role="combobox"
             aria-expanded="true"
@@ -283,6 +360,9 @@ const CommandPalette: React.FC = () => {
             aria-activedescendant={activeId}
             aria-autocomplete="list"
           />
+          {searching && (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Searching" />
+          )}
           <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
             Esc
           </kbd>
@@ -291,12 +371,14 @@ const CommandPalette: React.FC = () => {
         <ul
           id="command-palette-results"
           role="listbox"
-          aria-label="Pages"
+          aria-label="Results"
           className="max-h-[50vh] overflow-y-auto p-2"
         >
           {results.length === 0 ? (
             <li className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No page matches “{query.trim()}”.
+              {searching
+                ? "Searching…"
+                : `Nothing matches “${query.trim()}”.`}
             </li>
           ) : (
             results.map((entry, index) => {

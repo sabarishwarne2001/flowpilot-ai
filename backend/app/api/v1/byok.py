@@ -158,9 +158,18 @@ def _credential_payload(credential: Any) -> ProviderCredentialResponse:
 def _route_payload(
     db: Session, *, organization_id: uuid.UUID, route: Any
 ) -> ModelRouteResponse:
-    decision = model_routing_service.resolve(
-        db, organization_id=organization_id, task_type=route.task_type
-    )
+    # PHASE 4: a rule that cannot run yet is reported, not raised. resolve()
+    # RAISES when the plan has no platform inference and the tenant key the
+    # rule needs is not configured; this payload is built after the rule is
+    # committed (PUT) and for every rule in the list (GET), so the raise
+    # answered 500 for a rule that had been saved - and broke the whole list.
+    try:
+        decision = model_routing_service.resolve(
+            db, organization_id=organization_id, task_type=route.task_type
+        )
+        effective, reason = decision.use_tenant_key, decision.downgrade_reason
+    except RoutingError as exc:
+        effective, reason = False, str(exc)
     return ModelRouteResponse(
         id=route.id,
         task_type=route.task_type,
@@ -169,8 +178,8 @@ def _route_payload(
         model_name=route.model_name,
         use_tenant_key=route.use_tenant_key,
         is_enabled=route.is_enabled,
-        effective_tenant_key=decision.use_tenant_key,
-        downgrade_reason=decision.downgrade_reason,
+        effective_tenant_key=effective,
+        downgrade_reason=reason,
         created_at=route.created_at,
         updated_at=route.updated_at,
     )

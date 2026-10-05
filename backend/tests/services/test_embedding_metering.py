@@ -257,6 +257,36 @@ def test_ceiling_refuses_before_the_batch(db_session, org_id, workspace_id, mode
     assert len(rows) == 1, "the refused batch must leave no usage row behind"
 
 
+def test_a_replay_at_the_ceiling_is_not_refused(db_session, org_id, workspace_id, model):
+    """PHASE 4. A batch already billed is not new spend: replaying it (a reaped
+    enrich job) at a full ceiling must skip, not fail the document."""
+    work_item_id = uuid.uuid4()
+    plan = plan_embedding_usage([_words(3)], model=model, batch_size=1)
+    batch = plan.batches[0]
+    spend.set_limit(  # the first batch fills the ceiling exactly
+        db_session,
+        organization_id=org_id,
+        limit_key="embedding.token",
+        period=SpendLimitPeriod.MONTH,
+        max_quantity=Decimal(batch.billable_tokens),
+        hard_stop=True,
+    )
+
+    assert record_batch_usage(
+        db_session, organization_id=org_id, workspace_id=workspace_id,
+        work_item_id=work_item_id, batch=batch, plan=plan,
+    ) is True
+    assert record_batch_usage(
+        db_session, organization_id=org_id, workspace_id=workspace_id,
+        work_item_id=work_item_id, batch=batch, plan=plan,
+    ) is False
+
+    rows = db_session.execute(
+        select(UsageEvent).where(UsageEvent.organization_id == org_id)
+    ).scalars().all()
+    assert len(rows) == 1
+
+
 def test_details_carry_the_truncation_evidence(db_session, org_id, workspace_id, model):
     work_item_id = uuid.uuid4()
     plan = plan_embedding_usage([_words(20)], model=model, batch_size=4)

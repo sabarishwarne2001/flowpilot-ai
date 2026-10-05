@@ -299,3 +299,37 @@ The brief asked the tests to exercise these, and the product does not have them:
 7. **Correcting an extracted field** directly in the document viewer (today: review queue only).
 **Decide:** which of these to build before the first paying customer, and which to drop.
 **Default:** none are built; Phase 4 fixes bugs, not new features, unless you list them here.
+
+**Phase 4 status of N-019 and N-020.**
+- N-019, ERP part: **answered** by the Phase 4 brief ("restrict execution to Admin/Owner") and
+  done (F-065). N-019, viewers part (Workflows / Run history / Review queue for viewers, F-053):
+  **still open**; the current rule stands (viewers are refused, the sidebar still shows them).
+- N-020: items **1, 4 and 6 were requested** by the Phase 4 brief and are built (F-091, F-080,
+  F-092). Items 2, 3, 5 and 7 are **still open**.
+
+## N-021 — Is BYOK (bring your own AI key) an Enterprise-only feature? (Phase 4, F-095)
+The console calls it "Enterprise BYOK & models", but the server lets every plan, Free included,
+store provider keys and routing rules. **Decide:** (a) Enterprise only, (b) Business and up, or
+(c) every plan. **Default:** unchanged (every plan).
+
+## N-022 — What should a locked-out sign-in answer? (Phase 4, F-096)
+After repeated wrong passwords the account is refused from that address for a growing time. Today
+the refusal looks exactly like a wrong password (401): an attacker learns nothing, but a real user
+is not told to wait. An older test expects 429 "too many attempts, retry after N seconds".
+**Decide:** keep the silent 401, or say "too many attempts" with the wait time.
+**Default:** unchanged (silent 401).
+
+## N-023 — Oversized avatars: refuse or shrink? (Phase 4, F-097)
+A 5000×5000 picture is shrunk to 1024 px today; an older test expects a refusal. Giant "image bomb"
+files are refused either way (F-088). **Default:** unchanged (shrink).
+
+## N-024 — Public links under `/api/v1/public` (Phase 4, F-098)
+Calendar-feed and document-request links are public on purpose but share the prefix the API-key
+gateway test reserves. Moving them breaks links already sent to people. **Decide:** keep them and
+let the test exempt token links, or move them with redirects. **Default:** unchanged.
+
+## N-025 — Narrow the ARCH-05 lock invariant? (Phase 4, F-099)
+The ARCH-05 verification test says only the owner-change helper may lock database rows; 14 later
+features legitimately lock their own rows, so it has been red since. Proposal: keep its intent and
+check only locks on organizations and members. It is a verification gate, so it is not changed
+without you (N-010). **Default:** unchanged (stays red).

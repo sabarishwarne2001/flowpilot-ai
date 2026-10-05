@@ -398,10 +398,17 @@ def lock_organization_for_owner_change(
     organization_id: uuid.UUID,
     refresh: Sequence[OrganizationMember] = (),
 ) -> None:
+    # PHASE 4: FOR NO KEY UPDATE, not FOR UPDATE. It serialises owner and role
+    # changes exactly as before (it conflicts with itself), but does not block
+    # the KEY SHARE lock a foreign-key check takes. With FOR UPDATE, a refused
+    # role change deadlocked against itself: the refusal is audited in an
+    # independent session whose INSERT into audit_logs (organization_id FK)
+    # waited for this lock, while this request waited for that INSERT - the
+    # request hung forever and the organization row stayed locked.
     locked = db.execute(
         select(Organization.id)
         .where(Organization.id == organization_id)
-        .with_for_update()
+        .with_for_update(key_share=True)
     ).scalar_one_or_none()
 
     if locked is None:

@@ -97,7 +97,12 @@ def evaluate(
     settings: "LayerSettings",
 ) -> Optional["LayerHit"]:
     """Fire on a mean-embedding cosine at or above the threshold."""
-    from app.services.radar.layers import LayerHit, _clip  # noqa: PLC0415
+    from app.services.radar.layers import (  # noqa: PLC0415
+        LayerHit,
+        _clip,
+        _dates_compatible,
+        _totals_compatible,
+    )
 
     left = subject.fingerprint
     right = counterpart.fingerprint
@@ -113,6 +118,20 @@ def evaluate(
 
     similarity = fp.cosine(left.embedding, right.embedding)
     if similarity < settings.l3_cosine_min:
+        return None
+
+    # PHASE 4: L2's guards, applied here too. This header names the trap
+    # ("two monthly retainer invoices from the same supplier are legitimately
+    # near identical in embedding space") and nothing here avoided it: every
+    # new monthly invoice was flagged as a 99% duplicate of the last one. A
+    # different total, or a date outside the window, is a new bill. Absence on
+    # either side stays compatible (missing evidence is not contrary
+    # evidence), so a re-sent copy with a new number is still caught.
+    totals_ok, _ = _totals_compatible(left, right, settings.total_tolerance)
+    if not totals_ok:
+        return None
+    dates_ok, _ = _dates_compatible(left, right, settings.date_window_days)
+    if not dates_ok:
         return None
 
     evidence: list[dict[str, Any]] = [

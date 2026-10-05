@@ -9,6 +9,7 @@ import {
   resolveVerification,
 } from "@/services/api/verification";
 import { verificationKeys } from "@/services/api/queryKeys";
+import { DocumentEvidence } from "@/components/review/DocumentEvidence";
 import {
   formatFieldValue,
   parseScore,
@@ -45,6 +46,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
+  // PHASE 4: which field the page evidence shows (null = the first under review).
+  const [evidenceField, setEvidenceField] = useState<string | null>(null);
 
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -62,6 +65,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   );
 
   const activeId = focusVerificationId ?? listed[cursor]?.id ?? "";
+  useEffect(() => setEvidenceField(null), [activeId]);
 
   const detailQuery = useQuery({
     queryKey: verificationKeys.detail(workspaceId, activeId),
@@ -351,6 +355,18 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
               </p>
             ) : null}
 
+            {detail.fields.filter(isReviewable).length > 0 && (
+              <div className="mt-3">
+                <DocumentEvidence
+                  workspaceId={workspaceId}
+                  workItemId={detail.work_item_id}
+                  fields={detail.fields.filter(isReviewable)}
+                  fieldPath={evidenceField}
+                  onSelectField={setEvidenceField}
+                />
+              </div>
+            )}
+
             <ul className="mt-3 space-y-3">
               {detail.fields
                 .filter(isReviewable)
@@ -358,6 +374,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
                   <FieldDiff
                     key={field.field_path}
                     field={field}
+                    onSelect={() => setEvidenceField(field.field_path)}
                     editing={editing}
                     value={edits[field.field_path]}
                     onChange={(value) =>
@@ -412,6 +429,7 @@ const DISAGREEMENT_COPY: Record<string, string> = {
 
 interface FieldDiffProps {
   readonly field: VerificationFieldResponse;
+  readonly onSelect: () => void;
   readonly editing: boolean;
   readonly value: string | undefined;
   readonly onChange: (value: string) => void;
@@ -419,6 +437,7 @@ interface FieldDiffProps {
 
 const FieldDiff: React.FC<FieldDiffProps> = ({
   field,
+  onSelect,
   editing,
   value,
   onChange,
@@ -426,11 +445,16 @@ const FieldDiff: React.FC<FieldDiffProps> = ({
   const confidence = parseScore(field.confidence);
 
   return (
-    <li className="rounded-md border border-border bg-card p-3">
+    <li className="rounded-md border border-border bg-card p-3" onFocusCapture={onSelect}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-mono text-xs font-medium">
+        <button
+          type="button"
+          onClick={onSelect}
+          title="Show this field on the page"
+          className="font-mono text-xs font-medium underline-offset-2 hover:underline"
+        >
           {field.field_path}
-        </span>
+        </button>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           {field.disagreement_kind && (
             <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-800">

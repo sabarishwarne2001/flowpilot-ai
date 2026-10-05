@@ -229,6 +229,19 @@ def record(
     return entry
 
 
+#: PHASE 4: the longest an independent audit write may wait for a row lock.
+#: Its caller usually holds locks of its own; if one of them is ever needed by
+#: this INSERT (a foreign-key check on a locked parent row) the two would wait
+#: on each other forever. Bounded, the write fails loudly and the request goes on.
+INDEPENDENT_LOCK_TIMEOUT = "5s"
+
+
+def _bound_lock_wait(session: Session) -> None:
+    from sqlalchemy import text as _text
+
+    session.execute(_text(f"SET LOCAL lock_timeout = '{INDEPENDENT_LOCK_TIMEOUT}'"))
+
+
 def record_independently(
     db: Optional[Session] = None,
     *,
@@ -267,6 +280,7 @@ def record_independently(
     if db is not None:
         session = Session(bind=db.get_bind())
         try:
+            _bound_lock_wait(session)
             session.add(entry)
             session.commit()
             return entry.id
@@ -279,6 +293,7 @@ def record_independently(
 
     session = SessionLocal()
     try:
+        _bound_lock_wait(session)
         session.add(entry)
         session.commit()
         return entry.id

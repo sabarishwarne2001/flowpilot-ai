@@ -60,6 +60,7 @@ from app.services.ocr.base import (
     OCRUnsupportedError,
 )
 from app.services.ocr.pdf_text_layer import extract_page as extract_text_layer_page
+from app.core.pdfium_lock import PDFIUM_LOCK
 
 logger = logging.getLogger("app.services.ocr.paddle")
 
@@ -347,77 +348,79 @@ class PaddleOCRProvider(OCRProvider):
         # at chunk time, so closing this later would mean a second backfill
         # over a larger corpus — and the page text changing under existing
         # chunks would invalidate their page_start_char offsets.
-        text_layer_document = None
-        if settings.PDF_TEXT_LAYER_BBOXES_ENABLED:
-            try:
-                import pypdfium2 as pdfium  # noqa: PLC0415
-
-                text_layer_document = pdfium.PdfDocument(str(path))
-            except Exception:  # noqa: BLE001
-                logger.warning("ocr.text_layer_open_failed", exc_info=True)
-                text_layer_document = None
-
-        boxed_pages = 0
-        try:
-            for index in range(limit):
-                boxed = None
-                if text_layer_document is not None:
-                    try:
-                        boxed = extract_text_layer_page(
-                            text_layer_document[index], raster_dpi=RASTER_DPI
-                        )
-                    except Exception:  # noqa: BLE001
-                        logger.warning(
-                            "ocr.text_layer_page_failed",
-                            extra={"page": index + 1},
-                            exc_info=True,
-                        )
-                        boxed = None
-
-                if boxed is not None and len(boxed.text) >= MIN_TEXT_LAYER_CHARS:
-                    pages.append(
-                        OCRPage(
-                            page_number=index + 1,
-                            text=boxed.text,
-                            blocks=boxed.blocks,
-                            ocr_applied=False,
-                            width=boxed.width,
-                            height=boxed.height,
-                        )
-                    )
-                    boxed_pages += 1
-                    continue
-
-                # Fallback: the pre-ARCH-12 path. A page with a text layer
-                # pypdfium2 could not geometrically resolve still yields text,
-                # just without boxes — which is strictly what shipped before
-                # and therefore not a regression.
+        # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+        with PDFIUM_LOCK:
+            text_layer_document = None
+            if settings.PDF_TEXT_LAYER_BBOXES_ENABLED:
                 try:
-                    layer = (reader.pages[index].extract_text() or "").strip()
-                except Exception:
-                    layer = ""
+                    import pypdfium2 as pdfium  # noqa: PLC0415
 
-                if len(layer) >= MIN_TEXT_LAYER_CHARS:
-                    pages.append(
-                        OCRPage(
-                            page_number=index + 1,
-                            text=layer,
-                            blocks=[],
-                            ocr_applied=False,
+                    text_layer_document = pdfium.PdfDocument(str(path))
+                except Exception:  # noqa: BLE001
+                    logger.warning("ocr.text_layer_open_failed", exc_info=True)
+                    text_layer_document = None
+
+            boxed_pages = 0
+            try:
+                for index in range(limit):
+                    boxed = None
+                    if text_layer_document is not None:
+                        try:
+                            boxed = extract_text_layer_page(
+                                text_layer_document[index], raster_dpi=RASTER_DPI
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.warning(
+                                "ocr.text_layer_page_failed",
+                                extra={"page": index + 1},
+                                exc_info=True,
+                            )
+                            boxed = None
+
+                    if boxed is not None and len(boxed.text) >= MIN_TEXT_LAYER_CHARS:
+                        pages.append(
+                            OCRPage(
+                                page_number=index + 1,
+                                text=boxed.text,
+                                blocks=boxed.blocks,
+                                ocr_applied=False,
+                                width=boxed.width,
+                                height=boxed.height,
+                            )
                         )
-                    )
-                else:
-                    pages.append(
-                        OCRPage(
-                            page_number=index + 1, text="", blocks=[], ocr_applied=True
+                        boxed_pages += 1
+                        continue
+
+                    # Fallback: the pre-ARCH-12 path. A page with a text layer
+                    # pypdfium2 could not geometrically resolve still yields text,
+                    # just without boxes — which is strictly what shipped before
+                    # and therefore not a regression.
+                    try:
+                        layer = (reader.pages[index].extract_text() or "").strip()
+                    except Exception:
+                        layer = ""
+
+                    if len(layer) >= MIN_TEXT_LAYER_CHARS:
+                        pages.append(
+                            OCRPage(
+                                page_number=index + 1,
+                                text=layer,
+                                blocks=[],
+                                ocr_applied=False,
+                            )
                         )
-                    )
-                    needs_ocr.append(index)
-        finally:
-            if text_layer_document is not None:
-                close = getattr(text_layer_document, "close", None)
-                if callable(close):
-                    close()
+                    else:
+                        pages.append(
+                            OCRPage(
+                                page_number=index + 1, text="", blocks=[], ocr_applied=True
+                            )
+                        )
+                        needs_ocr.append(index)
+            finally:
+                if text_layer_document is not None:
+                    close = getattr(text_layer_document, "close", None)
+                    if callable(close):
+                        close()
 
         if needs_ocr:
             self._ocr_pdf_pages(path, pages, needs_ocr)
@@ -444,27 +447,29 @@ class PaddleOCRProvider(OCRProvider):
                 "to the OCR worker image (it is a self-contained wheel)."
             ) from exc
 
-        document = pdfium.PdfDocument(str(path))
-        try:
-            scale = RASTER_DPI / 72.0
-            with tempfile.TemporaryDirectory(prefix="fp-ocr-") as workdir:
-                for index in indices:
-                    page = document[index]
-                    bitmap = page.render(scale=scale)
-                    image = bitmap.to_pil()
-                    frame = Path(workdir) / f"page-{index + 1:05d}.png"
-                    image.save(frame, format="PNG")
+        # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+        with PDFIUM_LOCK:
+            document = pdfium.PdfDocument(str(path))
+            try:
+                scale = RASTER_DPI / 72.0
+                with tempfile.TemporaryDirectory(prefix="fp-ocr-") as workdir:
+                    for index in indices:
+                        page = document[index]
+                        bitmap = page.render(scale=scale)
+                        image = bitmap.to_pil()
+                        frame = Path(workdir) / f"page-{index + 1:05d}.png"
+                        image.save(frame, format="PNG")
 
-                    blocks = self._blocks_from_raw(self._run_engine(frame))
-                    target = pages[index]
-                    target.text = "\n".join(b.text for b in blocks)
-                    target.blocks = blocks
-                    target.ocr_applied = True
-                    target.width, target.height = image.size
-        finally:
-            close = getattr(document, "close", None)
-            if callable(close):
-                close()
+                        blocks = self._blocks_from_raw(self._run_engine(frame))
+                        target = pages[index]
+                        target.text = "\n".join(b.text for b in blocks)
+                        target.blocks = blocks
+                        target.ocr_applied = True
+                        target.width, target.height = image.size
+            finally:
+                close = getattr(document, "close", None)
+                if callable(close):
+                    close()
 
 
 def get_provider(*, language: str = "en") -> OCRProvider:

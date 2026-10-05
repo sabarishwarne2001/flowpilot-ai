@@ -14,6 +14,7 @@ import {
   TEXTAREA,
 } from "@/components/ui/primitives";
 import CapabilityLockCard from "@/components/radar/CapabilityLockCard";
+import PaymentRiskPanel from "@/components/radar/PaymentRiskPanel";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { ApiError } from "@/services/api/errors";
@@ -419,6 +420,8 @@ export const ForensicAuditRadar: React.FC = () => {
           </p>
         ) : null}
       </header>
+
+      <PaymentRiskPanel workspaceId={workspaceId} role={workspace?.role ?? "VIEWER"} />
 
       <div className={`${SURFACE} flex flex-wrap items-center gap-2 p-3`}>
         <div className="flex flex-wrap gap-1">

@@ -97,6 +97,36 @@ def stub_s3_connector(monkeypatch):
     monkeypatch.setitem(CONNECTORS, "S3", _StubConnector())
 
 
+@pytest.fixture(autouse=True)
+def _warehouse_sync_plan(db_session, tenant):
+    """PHASE 4: warehouse sync is an add-on included from the Business plan up.
+
+    HM-S1 made these routes refuse (402 ADDON_REQUIRED) an organization
+    without it, after these tests were written; on the default free plan
+    every destination write was refused before reaching the behaviour under
+    test. The assertions are unchanged; the refusal itself is covered by
+    test_the_free_plan_is_refused_warehouse_sync.
+    """
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "business")
+    db_session.commit()
+
+
+def test_the_free_plan_is_refused_warehouse_sync(client, db_session, tenant):
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "free")
+    db_session.commit()
+    response = client.post(
+        base(tenant.organization.id) + "/destinations",
+        json=s3_payload(),
+        headers=tenant.owner.headers,
+    )
+    assert response.status_code == 402, response.text
+    assert response.json()["code"] == "ADDON_REQUIRED"
+
+
 @pytest.fixture()
 def destination(client, tenant) -> dict[str, Any]:
     response = client.post(
@@ -375,8 +405,15 @@ def test_two_schedules_at_one_cadence_to_one_destination_are_refused(
 
 
 def test_a_schedule_cannot_point_at_another_tenants_destination(
-    client, tenant, destination
+    client, db_session, tenant, destination
 ):
+    # PHASE 4: the other organization holds the add-on too, so its request is
+    # refused for the cross-tenant reference (404), not for billing (402).
+    from app.models.organization import Organization
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, db_session.get(Organization, tenant.foreign_workspace.organization_id), "business")
+    db_session.commit()
     response = client.post(
         base(tenant.foreign_workspace.organization_id) + "/schedules",
         json={

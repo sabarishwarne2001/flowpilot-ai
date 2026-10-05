@@ -7,24 +7,27 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Optional
 
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.storage import ObjectNotFoundError, get_storage_driver
 from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 
 logger = logging.getLogger("app.services.avatar")
 
-AVATAR_DIR = Path(settings.UPLOAD_DIR) / "avatars"
 MIN_DIMENSION = 32
 MAX_DIMENSION = 1024
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
+#: PHASE 4. The largest SOURCE image accepted, in pixels, read from the header
+#: before anything is decoded. A flat image compresses to almost nothing, so
+#: the byte limit alone admitted a 2 MB PNG of 144 M pixels - under Pillow's
+#: own bomb error, and over a gigabyte once converted to RGBA. 50 M pixels
+#: still admits a 48 MP phone photo, which is then downscaled as before.
+MAX_SOURCE_PIXELS = 50_000_000
 OUTPUT_FORMAT = "PNG"
 OUTPUT_MIME = "image/png"
 OUTPUT_EXTENSION = "png"
@@ -65,9 +68,15 @@ def _validate_and_normalise(raw: bytes) -> bytes:
 
     try:
         with Image.open(io.BytesIO(raw)) as probe:
+            width, height = probe.size
             probe.verify()
     except Exception as exc:
         raise InvalidImageError("File is not a valid image.") from exc
+    if width * height > MAX_SOURCE_PIXELS:
+        raise ImageTooLargeError(
+            f"Avatar source image is too large ({width}x{height}). "
+            "Use an image under 50 megapixels."
+        )
 
     try:
         with Image.open(io.BytesIO(raw)) as image:

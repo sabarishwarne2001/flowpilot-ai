@@ -45,8 +45,10 @@ const ErpPosting: React.FC = () => {
   const { orgSlug = "", workspaceSlug = "" } = useParams<{ orgSlug: string; workspaceSlug: string }>();
   const navigate = useNavigate();
   const capability = useCapabilityAccess(workspace?.organizationId ?? "", CAPABILITY.erpPosting);
-  const canPost = canContribute(workspace?.role);
-  const isAdmin = canAdminister(workspace?.role);
+  // Owner rule (Phase 4, F-065): only a workspace admin (or the organization owner) posts to the ERP.
+  const canPost = canAdminister(workspace?.role);
+  const canPreview = canContribute(workspace?.role);
+  const isAdmin = canPost;
   const [tab, setTab] = useState<Tab>("postings");
   const [state, setState] = useState("");
   const [targetId, setTargetId] = useState("");
@@ -142,7 +144,7 @@ const ErpPosting: React.FC = () => {
 
       {tab === "ready" ? (
         targets.isLoading ? <Loader2 className="h-5 w-5 animate-spin" aria-label="Loading" /> : (
-          <ReadyToPost workspaceId={workspaceId} targets={targetRows} canPost={canPost} />
+          <ReadyToPost workspaceId={workspaceId} targets={targetRows} canPost={canPost} canPreview={canPreview} />
         )
       ) : null}
 

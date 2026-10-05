@@ -116,6 +116,23 @@ export const redeliverWebhookDelivery = async (
   return response.data;
 };
 
+/**
+ * Queues one signed `webhook.test` event for this endpoint. It is signed,
+ * retried and logged exactly like a real event, so it appears in the
+ * endpoint's delivery log. 409 when the endpoint is disabled or a test event
+ * is already on its way.
+ */
+export const sendWebhookTestEvent = async (
+  organizationId: string,
+  endpointId: string,
+): Promise<WebhookDelivery> => {
+  const response = await apiClient.post<WebhookDelivery>(
+    WEBHOOK_ENDPOINTS.testEvent(organizationId, endpointId),
+    {},
+  );
+  return response.data;
+};
+
 /*
  * The webhooksApi namespace wrapper was removed here, with its default export.
  *

@@ -50,7 +50,9 @@ def upsert_document_settings(
     db_obj = get_document_settings(db, workspace_id=workspace_id)
     if db_obj is None:
         return create_document_settings(db, workspace_id=workspace_id, updated_by_user_id=updated_by_user_id, settings_in=settings_in)
-    update_in = DocumentSettingsUpdate(**settings_in.model_dump())
+    # Only what the caller sent: a client that does not know a setting (an
+    # older console, a script) must not reset it to its default.
+    update_in = DocumentSettingsUpdate(**settings_in.model_dump(exclude_unset=True))
     return update_document_settings(db, db_obj=db_obj, updated_by_user_id=updated_by_user_id, settings_in=update_in)
 
 def delete_document_settings(db: Session, *, db_obj: DocumentSettings) -> None:

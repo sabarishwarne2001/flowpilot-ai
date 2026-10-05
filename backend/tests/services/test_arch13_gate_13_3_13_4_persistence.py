@@ -259,6 +259,8 @@ def test_budget_exhausted_carries_the_numbers(db_session, tenant, rule_factory) 
 
 N = gs.NodeSpec
 E = gs.EdgeSpec
+#: PHASE 4: ARCH-37's ck_automation_nodes_action_has_type refuses an action node that names no action.
+ACTION = {"action_type": "email", "config": {"recipient": "ops@acme.test"}}
 
 
 def test_cycle_is_refused_at_save_and_names_the_cycle() -> None:
@@ -441,7 +443,7 @@ def test_resaving_replaces_the_graph_wholesale(db_session, rule_factory) -> None
     gs.save_graph(
         db_session,
         rule=rule,
-        nodes=[N("trigger", "trigger"), N("a", "action")],
+        nodes=[N("trigger", "trigger"), N("a", "action", ACTION)],
         edges=[E("trigger", "a")],
     )
     db_session.commit()
@@ -449,7 +451,7 @@ def test_resaving_replaces_the_graph_wholesale(db_session, rule_factory) -> None
     gs.save_graph(
         db_session,
         rule=rule,
-        nodes=[N("trigger", "trigger"), N("b", "action")],
+        nodes=[N("trigger", "trigger"), N("b", "action", ACTION)],
         edges=[E("trigger", "b")],
     )
     db_session.commit()
@@ -476,13 +478,13 @@ def test_edges_cannot_cross_rules(db_session, rule_factory) -> None:
     gs.save_graph(
         db_session,
         rule=rule_a,
-        nodes=[N("trigger", "trigger"), N("a", "action")],
+        nodes=[N("trigger", "trigger"), N("a", "action", ACTION)],
         edges=[E("trigger", "a")],
     )
     gs.save_graph(
         db_session,
         rule=rule_b,
-        nodes=[N("trigger", "trigger"), N("b", "action")],
+        nodes=[N("trigger", "trigger"), N("b", "action", ACTION)],
         edges=[E("trigger", "b")],
     )
     db_session.commit()

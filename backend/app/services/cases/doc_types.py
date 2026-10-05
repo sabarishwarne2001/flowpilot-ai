@@ -43,7 +43,11 @@ def document_type_of(db: Session, work_item: Any) -> Optional[str]:
     if role and role != "OTHER":
         return normalise(role)
     fields = work_item.extracted_entities if isinstance(work_item.extracted_entities, dict) else {}
-    classified = normalise(fields.get("document_classification") or fields.get("document_type"))
+    # PHASE 4: enrichment writes the model's type under `classification_details`;
+    # reading only the top level fell through to the page heuristic.
+    details = fields.get("classification_details") if isinstance(fields.get("classification_details"), dict) else {}
+    classified = normalise(fields.get("document_classification") or fields.get("document_type")
+                           or details.get("document_classification"))
     if classified:
         return classified
     first = "\n".join((work_item.extracted_text or "").splitlines()[:80])

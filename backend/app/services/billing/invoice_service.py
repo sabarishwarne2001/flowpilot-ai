@@ -573,11 +573,16 @@ def assemble(
     invoice, created = insert_or_get(
         db,
         instance=invoice,
+        # PHASE 4: VOID rows are excluded, exactly as the unique index
+        # excludes them. Without this, re-assembling a voided period (the
+        # documented correction path) found the VOID invoice and handed it
+        # back instead of writing the replacement.
         lookup=lambda: db.execute(
             select(Invoice)
             .where(Invoice.subscription_id == subscription.id)
             .where(Invoice.period_start == start)
             .where(Invoice.period_end == end)
+            .where(Invoice.status != InvoiceStatus.VOID)
             .limit(1)
         ).scalar_one_or_none(),
         label="billing.invoice_assemble",
@@ -589,8 +594,9 @@ def assemble(
     if not created:
         # The prior attempt already wrote this invoice and its line items.
         # Re-running the line loop would duplicate them under
-        # uq_invoice_line_items_number.
-        return invoice
+        # uq_invoice_line_items_number. Same shape as every other return:
+        # callers read `.invoice` and `.lines`.
+        return AssemblyResult(invoice=invoice, lines=_lines_of(db, invoice))
 
     lines: list[InvoiceLineItem] = []
     for index, draft in enumerate(drafts, start=1):

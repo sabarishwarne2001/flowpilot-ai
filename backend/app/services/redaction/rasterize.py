@@ -57,6 +57,7 @@ from app.services.redaction.vocabulary import (
     MAX_RENDER_DPI,
     MIN_RENDER_DPI,
 )
+from app.core.pdfium_lock import PDFIUM_LOCK
 
 __all__ = [
     "Box",
@@ -239,41 +240,43 @@ def render_pages(
     scale = dpi / POINTS_PER_INCH
     rendered: list[RenderedPage] = []
 
-    document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
-    try:
-        total = len(document)
-        wanted = list(pages) if pages is not None else list(range(1, total + 1))
-        for page_number in wanted:
-            if not 1 <= page_number <= total:
-                raise RasterizeError(
-                    f"page {page_number} is outside the document's 1-{total}"
+    # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
+        try:
+            total = len(document)
+            wanted = list(pages) if pages is not None else list(range(1, total + 1))
+            for page_number in wanted:
+                if not 1 <= page_number <= total:
+                    raise RasterizeError(
+                        f"page {page_number} is outside the document's 1-{total}"
+                    )
+                page = document[page_number - 1]
+                width_points, height_points = page.get_size()
+                bitmap = page.render(
+                    scale=scale,
+                    grayscale=grayscale,
+                    # See the module header. These two flags are the difference
+                    # between "annotations are gone" and "annotations are gone
+                    # except the visible ones".
+                    draw_annots=False,
+                    may_draw_forms=False,
                 )
-            page = document[page_number - 1]
-            width_points, height_points = page.get_size()
-            bitmap = page.render(
-                scale=scale,
-                grayscale=grayscale,
-                # See the module header. These two flags are the difference
-                # between "annotations are gone" and "annotations are gone
-                # except the visible ones".
-                draw_annots=False,
-                may_draw_forms=False,
-            )
-            try:
-                array = np.array(bitmap.to_numpy(), copy=True, dtype=np.uint8)
-            finally:
-                bitmap.close()
-            rendered.append(
-                RenderedPage(
-                    page_number=page_number,
-                    pixels=array,
-                    width_points=float(width_points),
-                    height_points=float(height_points),
-                    dpi=dpi,
+                try:
+                    array = np.array(bitmap.to_numpy(), copy=True, dtype=np.uint8)
+                finally:
+                    bitmap.close()
+                rendered.append(
+                    RenderedPage(
+                        page_number=page_number,
+                        pixels=array,
+                        width_points=float(width_points),
+                        height_points=float(height_points),
+                        dpi=dpi,
+                    )
                 )
-            )
-    finally:
-        document.close()
+        finally:
+            document.close()
 
     return rendered
 
@@ -373,12 +376,14 @@ def page_dimensions(pdf_bytes: bytes) -> list[tuple[int, float, float]]:
     """
     import pypdfium2 as pdfium
 
-    document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
-    try:
-        sizes: list[tuple[int, float, float]] = []
-        for index in range(len(document)):
-            width, height = document[index].get_size()
-            sizes.append((index + 1, float(width), float(height)))
-        return sizes
-    finally:
-        document.close()
+    # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
+        try:
+            sizes: list[tuple[int, float, float]] = []
+            for index in range(len(document)):
+                width, height = document[index].get_size()
+                sizes.append((index + 1, float(width), float(height)))
+            return sizes
+        finally:
+            document.close()

@@ -203,8 +203,14 @@ def test_threshold_is_configurable(
 ) -> None:
     work_item = work_item_factory()
     db_session.commit()
-    consensus = dv.derive_consensus([{"a": "1", "b": "2"}, {"a": "1", "b": "9"}])
-    assert consensus.confidence == Decimal("0.7500")
+    # PHASE 4: a 2-of-3 majority on "b", not a 1:1 tie. A tie has no
+    # consensus and is never auto-approved at any threshold (see
+    # tests/engines/test_verification_live.py); this test is about the
+    # threshold, so it uses a field that does have a majority.
+    consensus = dv.derive_consensus(
+        [{"a": "1", "b": "2"}, {"a": "1", "b": "2"}, {"a": "1", "b": "9"}]
+    )
+    assert consensus.confidence == Decimal("0.8334")
 
     monkeypatch.setattr(settings, "AUTOMATION_AUTO_APPROVE_THRESHOLD", 0.70)
     v1 = _verification(db_session, tenant, work_item)

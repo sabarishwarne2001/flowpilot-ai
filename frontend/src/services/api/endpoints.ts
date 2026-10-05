@@ -103,6 +103,29 @@ export const API_KEY_ENDPOINTS = {
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
 } as const;
 
+/** PHASE 4 — payment-risk flags (radar): bank-account changes, round totals. */
+export const PAYMENT_RISK_ENDPOINTS = {
+  list: (workspaceId: string): string => `${scoped(workspaceId)}/payment-risk`,
+  confirm: (workspaceId: string, flagId: string): string =>
+    `${scoped(workspaceId)}/payment-risk/${seg(flagId)}/confirm`,
+  dismiss: (workspaceId: string, flagId: string): string =>
+    `${scoped(workspaceId)}/payment-risk/${seg(flagId)}/dismiss`,
+} as const;
+
+/** PHASE 4 — where values are printed on a document, and its page images. */
+export const EVIDENCE_ENDPOINTS = {
+  evidence: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/evidence`,
+  pageImage: (workspaceId: string, workItemId: string, page: number): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/pages/${page}.png`,
+} as const;
+
+/** PHASE 4 — global search (Ctrl+K) across the caller's workspaces. */
+export const SEARCH_ENDPOINTS = {
+  organization: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/search`,
+} as const;
+
 export const WEBHOOK_ENDPOINTS = {
   endpoints: (organizationId: string): string =>
     `${webhookBase(organizationId)}/endpoints`,
@@ -116,6 +139,8 @@ export const WEBHOOK_ENDPOINTS = {
     `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/attempts`,
   redeliver: (organizationId: string, deliveryId: string): string =>
     `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/redeliver`,
+  testEvent: (organizationId: string, endpointId: string): string =>
+    `${webhookBase(organizationId)}/endpoints/${seg(endpointId)}/test`,
 } as const;
 
 export const WORKSPACE_ENDPOINTS = {

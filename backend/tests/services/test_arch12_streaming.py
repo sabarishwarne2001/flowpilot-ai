@@ -22,14 +22,35 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
 
-from app.db.session import engine
 from app.models.assistant import Conversation, ConversationMessage, StreamState
 from app.models.usage_event import UsageEvent
 from app.schemas.assistant import TokenUsage
-from app.services import stream_session
+from app.services import pricing_service, stream_session
 from app.services.llm_metering import LLMReservation
+from tests.conftest import TEST_DB_URL, TestSessionLocal
+
+#: Settlement sessions come from a POOLED engine on the test database, so the
+#: connection-leak checks below count real checkouts (the suite's own test
+#: engine uses NullPool and has nothing to count).
+_settlement_engine = create_engine(TEST_DB_URL, pool_size=5, max_overflow=0)
+_SettlementSession = sessionmaker(autocommit=False, autoflush=False, bind=_settlement_engine)
+
+
+@pytest.fixture(autouse=True)
+def _settlement_on_the_test_database(db_session, monkeypatch):
+    """PHASE 4. Settlement opens its own session (settlement_session), from the
+    app's SessionLocal - the development database. These tests read what it
+    wrote from the test database, so it is pointed there; and ARCH-14 prices
+    LLM usage from the published price book, so the seed's book is put in force.
+    """
+    from tests.security.plans import _ensure_price_book
+
+    monkeypatch.setattr(stream_session, "SessionLocal", _SettlementSession)
+    _ensure_price_book(db_session)
+    db_session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -38,10 +59,18 @@ from app.services.llm_metering import LLMReservation
 
 
 def _open_sessions() -> int:
-    return engine.pool.checkedout()
+    # The engine settlement sessions now come from (see the autouse fixture).
+    return _settlement_engine.pool.checkedout()
 
 
 def _reservation(conversation_id: uuid.UUID, message_id: uuid.UUID, org_id) -> LLMReservation:
+    # PHASE 4: a reservation carries the prices resolved from the book in force
+    # (ARCH-14), not per-1k cost floats.
+    with TestSessionLocal() as db:
+        prices = {
+            event: pricing_service.resolve(db, event_type=event, provider="groq", model="llama-3.1-8b")
+            for event in ("llm.input_token", "llm.output_token")
+        }
     return LLMReservation(
         organization_id=org_id,
         workspace_id=None,
@@ -50,8 +79,8 @@ def _reservation(conversation_id: uuid.UUID, message_id: uuid.UUID, org_id) -> L
         resource_id=conversation_id,
         estimated_input_tokens=420,
         max_output_tokens=1024,
-        input_cost_per_1k=0.05,
-        output_cost_per_1k=0.08,
+        input_price=prices["llm.input_token"],
+        output_price=prices["llm.output_token"],
     )
 
 
