@@ -254,6 +254,7 @@ from app.models.assertion import (  # noqa: F401
     AssertionEvaluation,
     AssertionRetrievalPhrase,
 )
+from app.models.payment_risk import PaymentRiskFlag  # noqa: F401  PHASE 4
 from app.models.radar import (  # noqa: F401
     AnomalyFinding,
     AnomalySuppression,

@@ -103,6 +103,15 @@ export const API_KEY_ENDPOINTS = {
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
 } as const;
 
+/** PHASE 4 — payment-risk flags (radar): bank-account changes, round totals. */
+export const PAYMENT_RISK_ENDPOINTS = {
+  list: (workspaceId: string): string => `${scoped(workspaceId)}/payment-risk`,
+  confirm: (workspaceId: string, flagId: string): string =>
+    `${scoped(workspaceId)}/payment-risk/${seg(flagId)}/confirm`,
+  dismiss: (workspaceId: string, flagId: string): string =>
+    `${scoped(workspaceId)}/payment-risk/${seg(flagId)}/dismiss`,
+} as const;
+
 /** PHASE 4 — where values are printed on a document, and its page images. */
 export const EVIDENCE_ENDPOINTS = {
   evidence: (workspaceId: string, workItemId: string): string =>

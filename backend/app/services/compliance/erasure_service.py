@@ -292,6 +292,16 @@ def _destroy_documents(
 
     counts["work_items"] = len(work_items)
     counts["document_chunks"] = int(chunk_rows)
+    # PHASE 4: payment-risk flags quote the vendor and the (masked) accounts
+    # these documents named; they go with the documents' content.
+    if work_item_ids:
+        from sqlalchemy import delete as _delete_flags
+
+        from app.models.payment_risk import PaymentRiskFlag as _Flag
+
+        counts["payment_risk_flags"] = int(
+            db.execute(_delete_flags(_Flag).where(_Flag.work_item_id.in_(work_item_ids))).rowcount or 0
+        )
     # ARCH42-S1:erasure-entities. The documents' entity mentions, the edges
     # they evidenced, and every identifier and record only they supported.
     from app.services.entities import erasure as _entity_erasure

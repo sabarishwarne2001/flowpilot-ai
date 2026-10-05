@@ -104,9 +104,16 @@ def handle_anomaly_scan_document(db: Any, payload: dict[str, Any]) -> dict[str, 
     if work_item is None:
         return {"status": "SKIPPED", "reason": "work_item_missing"}
 
+    # PHASE 4: payment-risk checks (bank account changed, round total). They
+    # read the extracted fields, not the text chunks, so they run before the
+    # fingerprint step can return early. A separate store; see payment_risk.
+    from app.services.radar import payment_risk
+
+    payment_flags = payment_risk.scan(db, work_item=work_item)
+
     row = sweep_module.fingerprint_document(db, work_item=work_item)
     if row is None:
-        return {"status": "SKIPPED", "reason": "no_chunks"}
+        return {"status": "SKIPPED", "reason": "no_chunks", "payment_risk": payment_flags}
 
     outcome = sweep_module.sweep_document(db, work_item_id=work_item_id)
 
@@ -128,7 +135,7 @@ def handle_anomaly_scan_document(db: Any, payload: dict[str, Any]) -> dict[str, 
     # HARDENING-T1:D34. Nested under one key: the payload has a `created`
     # count, which collides with LogRecord.created and raised KeyError.
     logger.info("radar.scan_document", extra={"radar_outcome": outcome.as_payload()})
-    return {"status": "OK", **outcome.as_payload()}
+    return {"status": "OK", **outcome.as_payload(), "payment_risk": payment_flags}
 
 
 def handle_anomaly_nightly(db: Any, payload: dict[str, Any]) -> dict[str, Any]:

@@ -26,6 +26,7 @@ from app.api.v1 import (
     avatar,
     byok,
     global_search,
+    payment_risk,
     document_evidence,
     compliance,
     custom_domains,
@@ -142,6 +143,7 @@ api_router.include_router(assertions.router)
 # tenant without the capability read every duplicate the engine found and
 # simply not act on them, which is the product.
 api_router.include_router(anomalies.router)
+api_router.include_router(payment_risk.router)  # PHASE 4 bank-account change / round totals
 
 # ARCH41-S3:extraction-memory-router. Every route but /potential is capability-gated.
 api_router.include_router(extraction_memory.router)
