@@ -331,10 +331,15 @@ class TestSeatPriceDisclosureContract:
             for name in dir(seat_service)
             if name.startswith("PRORATION_SOURCE_")
         }
+        # PHASE 4: ARCH-30 (A7) added the Dodo gateway's own preview - a
+        # vendor quote, like Stripe's, not a figure computed here.
         assert sources == {
             "PRORATION_SOURCE_STRIPE",
+            "PRORATION_SOURCE_DODO",
             "PRORATION_SOURCE_UNAVAILABLE",
         }
+        values = {getattr(seat_service, name) for name in sources}
+        assert not any("COMPUT" in v or "LOCAL" in v or "ESTIMAT" in v for v in values), values
 
     def test_preview_timeout_is_short_enough_for_a_page_load(self) -> None:
         """A human is waiting. A slow honest unknown beats a fast invented
