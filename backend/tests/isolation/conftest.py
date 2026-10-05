@@ -53,8 +53,6 @@ def make_workspace(db, organization, slug):
         top_p=1.0,
         frequency_penalty=0.0,
         presence_penalty=0.0,
-        input_cost_per_1k_tokens=0.0,
-        output_cost_per_1k_tokens=0.0,
         # ARCH40-S1:test-fixture-contract. Dropped by arch40_step3.
         enable_streaming=True,
     )
