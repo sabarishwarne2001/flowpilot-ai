@@ -39,6 +39,12 @@ export interface AuditLogQuery {
 
 export type AuditExportFormat = "CSV" | "NDJSON";
 
+/** The server's spelling of each export format (F-052: it answered 422 to "CSV"). */
+const EXPORT_FORMAT_PARAM: Readonly<Record<AuditExportFormat, "csv" | "jsonl">> = {
+  CSV: "csv",
+  NDJSON: "jsonl",
+};
+
 const seg = (value: string): string => encodeURIComponent(value);
 
 const org = (organizationId: string): string => {
@@ -99,7 +105,7 @@ export const exportAuditLogs = async (
   const response = await apiClient.get<Blob>(
     AUDIT_ENDPOINTS.export(organizationId),
     {
-      params: { ...clean(query), format },
+      params: { ...clean(query), format: EXPORT_FORMAT_PARAM[format] },
       responseType: "blob",
       timeout: 300_000,
     },

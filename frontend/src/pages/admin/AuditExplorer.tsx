@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, Download, Filter, Loader2, User } from "lucide-react";
 
@@ -78,6 +79,8 @@ export const AuditExplorer: React.FC = () => {
           blob,
           `audit-${stamp}.${format === "CSV" ? "csv" : "ndjson"}`,
         );
+      } catch (error) {
+        toast.error(errorMessage(error, "The audit log could not be exported."));
       } finally {
         setExporting(false);
       }
