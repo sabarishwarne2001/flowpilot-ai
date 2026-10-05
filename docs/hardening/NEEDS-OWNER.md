@@ -276,3 +276,26 @@ is separate and stays.
 sign-ins per address, and let the per-account back-off do the rest (best for offices, needs a
 code change). **Default until you decide:** no change (a).
 
+
+## N-019 — What may Viewers and Members do? (Phase 3, F-053, F-065)
+The browser tests found two places where the code and the Phase 3 brief disagree:
+- **Viewers and workflows / review queue.** A workspace VIEWER sees Workflows, Run history and
+  Review queue in the sidebar, but the server refuses them, so the pages show errors (F-053).
+  **Decide:** (a) viewers may *read* workflows, run history and the review queue (the server
+  should allow GET), or (b) viewers may not (the sidebar should hide them).
+- **Members and ERP posting.** A MEMBER whose workspace role is CONTRIBUTOR may create ERP
+  postings today; your brief said Members must not trigger mutating ERP posts (F-065).
+  **Decide:** should posting to the ERP require workspace ADMIN (or organization OWNER/ADMIN)?
+**Default until you decide:** nothing changes; both are recorded as open findings.
+
+## N-020 — Which missing capabilities do you want before launch? (Phase 3, F-061)
+The brief asked the tests to exercise these, and the product does not have them:
+1. Global search (Ctrl+K) that finds **documents** (for example by invoice number), not only pages.
+2. Notification **category filters** and **mark as unread**.
+3. A **promo code** field at checkout.
+4. A **"send test ping"** button for webhooks.
+5. **Invite from Organization → Members** (today invitations live in workspace Settings → General).
+6. A **page image beside the extracted text** in the document viewer, with the fields highlighted.
+7. **Correcting an extracted field** directly in the document viewer (today: review queue only).
+**Decide:** which of these to build before the first paying customer, and which to drop.
+**Default:** none are built; Phase 4 fixes bugs, not new features, unless you list them here.
