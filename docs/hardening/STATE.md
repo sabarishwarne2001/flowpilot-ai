@@ -4,7 +4,7 @@ _Last updated: 2026-10-05 (end of Phase 3)_
 
 ## Current phase
 **Phase 3 — Browser test harness and coverage: COMPLETE. Stopped at the Phase 3 checkpoint.**
-PR: PR_LINK_PLACEHOLDER (branch `hardening/e2e`). The next session starts Phase 4 after you have
+PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/4 (branch `hardening/e2e`). The next session starts Phase 4 after you have
 read the PR and answered N-019 and N-020. Do not redo Phases 0 to 3.
 
 ## What is done
