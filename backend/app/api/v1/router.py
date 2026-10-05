@@ -26,6 +26,7 @@ from app.api.v1 import (
     avatar,
     byok,
     global_search,
+    document_evidence,
     compliance,
     custom_domains,
     dashboard,
@@ -204,6 +205,7 @@ _SCOPED = (
     # be registered ahead of the catch-all.
     (ingestion.work_item_router, "/work-items",        "Work Items"),
     (work_items.router,        "/work-items",         "Work Items"),
+    (document_evidence.router, "/work-items",         "Work Items"),  # PHASE 4 review evidence
     (ingestion.session_router,  "/upload-sessions",    "Batch Ingestion"),
     (ingestion.batch_router,    "/ingestion-batches",  "Batch Ingestion"),
     (ingestion.preset_router,   "/document-presets",   "Document Presets"),

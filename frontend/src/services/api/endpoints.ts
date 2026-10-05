@@ -103,6 +103,14 @@ export const API_KEY_ENDPOINTS = {
     `/organizations/${seg(organizationId)}/api-keys/${seg(keyId)}`,
 } as const;
 
+/** PHASE 4 — where values are printed on a document, and its page images. */
+export const EVIDENCE_ENDPOINTS = {
+  evidence: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/evidence`,
+  pageImage: (workspaceId: string, workItemId: string, page: number): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/pages/${page}.png`,
+} as const;
+
 /** PHASE 4 — global search (Ctrl+K) across the caller's workspaces. */
 export const SEARCH_ENDPOINTS = {
   organization: (organizationId: string): string =>
