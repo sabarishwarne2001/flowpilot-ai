@@ -63,6 +63,7 @@ test.describe("login and logout", () => {
   test("the seeded Enterprise owner signs in through the form and lands in a workspace", async ({ page }) => {
     await loginThroughForm(page, USERS["C.owner"].email, PASSWORD);
     await expect(page).toHaveURL(/\/caretakers-global\/(operations|finance)|\/workspaces/, { timeout: 20_000 });
+    await expect(page.locator("body")).toContainText(/Recent Activity|Choose a workspace/, { timeout: 20_000 });
     await expectHealthyPage(page);
   });
 

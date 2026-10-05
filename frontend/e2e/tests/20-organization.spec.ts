@@ -413,7 +413,12 @@ test.describe("Webhooks", () => {
 test.describe("Enterprise identity", () => {
   test("claim a domain and open the SSO, SCIM and security sections", async ({ page }) => {
     await page.goto(org("C", "identity"));
-    await page.getByRole("textbox", { name: "Domain to claim" }).fill(`caretakers-e2e-${runId()}.co.uk`);
+    const domain = `caretakers-e2e-${runId()}.co.uk`;
+    await expect(async () => {
+      // The form re-renders once its data loads; fill again until the button arms.
+      await page.getByRole("textbox", { name: "Domain to claim" }).fill(domain);
+      await expect(page.getByRole("button", { name: "Claim domain" })).toBeEnabled({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await page.getByRole("button", { name: "Claim domain" }).click();
     await expect(page.locator("main")).toContainText(/TXT|verification|pending/i, { timeout: 15_000 });
     for (const section of ["Single sign-on", "Provisioning", "SCIM", "Security", "Audit log", "Domains"]) {

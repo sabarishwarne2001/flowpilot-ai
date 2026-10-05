@@ -9,6 +9,14 @@ import { C_SECOND_WS, STATE_FILE, runId, ws } from "../support/env";
 
 test.use({ user: "C.owner" });
 
+/** Open Settings → General once the page has finished loading (the click can race hydration). */
+async function openGeneral(page: import("@playwright/test").Page): Promise<void> {
+  await expect(async () => {
+    await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
+    await expect(page.getByRole("textbox", { name: "Workspace Name" })).toHaveValue(/\S/, { timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
 test.describe("Settings", () => {
   test("profile: change the display name and save", async ({ page }) => {
     await page.goto(ws("C", "settings"));
@@ -22,7 +30,7 @@ test.describe("Settings", () => {
 
   test("workspace general: rename, save, and rename back", async ({ page }) => {
     await page.goto(ws("C", "settings"));
-    await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
+    await openGeneral(page);
     const field = page.getByRole("textbox", { name: "Workspace Name" });
     await field.fill(`Operations ${runId()}`);
     await page.getByRole("button", { name: "Save Workspace" }).click();
@@ -50,7 +58,7 @@ test.describe("Settings", () => {
 
   test("unsaved changes block navigation until confirmed", async ({ page }) => {
     await page.goto(ws("C", "settings"));
-    await page.getByRole("button", { name: /^General Name, locale/ }).click();
+    await openGeneral(page);
     await page.getByRole("textbox", { name: "Workspace Name" }).fill(`Unsaved ${runId()}`);
     await expect(page.getByRole("button", { name: "Save Workspace" }), "the form knows it is dirty").toBeEnabled();
     await page.getByRole("link", { name: "Documents", exact: true }).click();
