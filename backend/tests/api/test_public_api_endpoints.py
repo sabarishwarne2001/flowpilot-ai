@@ -28,7 +28,7 @@ GATEWAY = "/api/v1/public"
 ALL_PUBLIC_SCOPES = [scope.value for scope in PUBLIC_API_SCOPES]
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def developer_plan(db_session, tenant):
     """The tenant's organization on the seeded DEVELOPER plan.
 
@@ -36,6 +36,11 @@ def developer_plan(db_session, tenant):
     requires `capability.developer_api`, exactly as POST /api-keys always did.
     These tests exercise the portal's behaviour once the capability is held, so
     their arrangement has to hold it. Nothing they assert has changed.
+
+    PHASE 4: autouse. HM-S1 also gates the public gateway itself
+    (public_api.authenticate), so every gateway test - not only the portal
+    ones - was refused 402 on the default free plan. The refusal is covered
+    by test_a_free_plan_key_is_refused_at_the_gateway.
     """
     from tests.security.plans import put_on_plan
 
@@ -172,6 +177,22 @@ def test_an_enabled_key_reaches_the_gateway(client, db_session, tenant) -> None:
     body = response.json()
     assert body["items"] == []
     assert body["total"] == 0
+
+
+def test_a_free_plan_key_is_refused_at_the_gateway(client, db_session, tenant) -> None:
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "free")
+    db_session.commit()
+    _key, token = _mint(
+        db_session, tenant.organization.id, tenant.org_admin.user.id
+    )
+    response = client.get(
+        f"{GATEWAY}/documents",
+        params={"workspace_id": str(tenant.workspace.id)},
+        headers=_auth(token),
+    )
+    assert response.status_code == status.HTTP_402_PAYMENT_REQUIRED, response.text
 
 
 # ===========================================================================
@@ -587,6 +608,14 @@ def test_a_member_cannot_read_the_portal(client, tenant) -> None:
 def test_an_admin_reads_the_portal_and_sees_the_plan_ceiling(
     client, db_session, tenant
 ) -> None:
+    # An organization with no plan at all is the point of this test; developer_plan is autouse, so
+    # its assignment is undone here to restore the arrangement the test was written against.
+    from app.services import quota_service
+
+    tenant.organization.quota_tier_id = None
+    db_session.add(tenant.organization)
+    db_session.commit()
+    quota_service.clear_cache()
     _mint(db_session, tenant.organization.id, tenant.org_admin.user.id)
     response = client.get(
         f"/api/v1/organizations/{tenant.organization.id}/developer",

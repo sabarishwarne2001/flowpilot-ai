@@ -31,6 +31,37 @@ def utcnow() -> datetime:
 
 
 @pytest.fixture(autouse=True)
+def _custom_domain_plan(db_session, tenant):
+    """PHASE 4: custom domains are an add-on included from the Developer plan up, and a
+    branded sender domain also needs custom email (Business and up).
+
+    HM-S1 made these routes refuse (402) an organization without them, after
+    these tests were written; on the default free plan every claim was
+    refused before reaching the behaviour under test. The assertions are
+    unchanged; the refusal itself is covered by
+    test_the_free_plan_is_refused_custom_domains.
+    """
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "business")
+    db_session.commit()
+
+
+def test_the_free_plan_is_refused_custom_domains(client, db_session, tenant):
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "free")
+    db_session.commit()
+    response = client.post(
+        f"{API}/organizations/{tenant.organization.id}/custom-domains",
+        json={"hostname": "ai.acme.com"},
+        headers=tenant.owner.headers,
+    )
+    assert response.status_code == 402, response.text
+    assert response.json()["code"] == "ADDON_REQUIRED"
+
+
+@pytest.fixture(autouse=True)
 def _enable_custom_domains(monkeypatch):
     from app.core.config import settings
 
@@ -532,6 +563,14 @@ def test_manifest_body_carries_no_tenant_identifier(client, tenant):
 def test_a_verified_vanity_host_gets_that_tenants_manifest(
     client, tenant, monkeypatch
 ):
+    # PHASE 4: HostTenantMiddleware resolves the Host with its own
+    # app.db.session.SessionLocal (middleware runs outside get_db), so it must
+    # read the test database the domain was verified in, not the development
+    # one the `client` fixture never redirects.
+    from app.db import session as db_session_module
+    from tests.conftest import TestSessionLocal
+
+    monkeypatch.setattr(db_session_module, "SessionLocal", TestSessionLocal)
     org_id = tenant.organization.id
     body = _claim(client, tenant)
     _stub_txt(
