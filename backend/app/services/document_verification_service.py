@@ -194,6 +194,15 @@ def compare_field(field_path: str, agent_values: Sequence[Any]) -> FieldConsensu
     )
 
 
+def unresolved_conflicts(consensus: ConsensusResult) -> list[str]:
+    """Fields whose agents gave different values with no strict majority."""
+    return [
+        f.field_path
+        for f in consensus.fields
+        if f.disagreement_kind == DisagreementKind.CONFLICT and f.confidence * 2 <= 1
+    ]
+
+
 def derive_consensus(agent_outputs: Sequence[dict[str, Any]]) -> ConsensusResult:
     if len(agent_outputs) < 2:
         raise VerificationError(
@@ -315,6 +324,20 @@ def triage(
     else:
         verification.status = VerificationStatus.DISAGREED
         verification.auto_approved = False
+
+    # PHASE 4: no consensus, no autonomy. A field the agents gave DIFFERENT
+    # values for, with no strict majority (1:1, 1:1:1, 2:2), has no consensus:
+    # `_majority` breaks the tie by order, so approving it writes an arbitrary
+    # agent's value into the record. The document AVERAGE can still clear the
+    # threshold (4 fields at 1.0 and one at 0.5 is 0.9), which is how a split
+    # on the invoice number used to be auto-approved. Such a document goes to a
+    # person, whatever the threshold or the calibrated model says. A real
+    # majority (2 of 3) still auto-approves, as before.
+    unresolved = unresolved_conflicts(consensus)
+    if verification.auto_approved and unresolved:
+        verification.status = VerificationStatus.DISAGREED
+        verification.auto_approved = False
+        verification.details = {**(verification.details or {}), "unresolved_conflicts": unresolved}
 
     # ARCH41-S2:memory-autonomy-hold. A document on an extraction-memory
     # trial, or extracted with memory on a layout activated since the

@@ -47,3 +47,24 @@ def test_agents_are_prompted_with_the_documents_type(engines: Engines) -> None:
     assert engines.llm.agent_prompts, "no verification agent ran"
     for prompt in engines.llm.agent_prompts:
         assert "Document Type:\n\nInvoice" in prompt, prompt[:400]
+
+
+def test_an_even_split_on_a_field_is_never_auto_approved(engines: Engines) -> None:
+    _setup(engines, agents=2)
+    work_item_id = engines.process("v.pdf", [TEXT], marker="INV-VER-1", classification="Invoice", entities=WRONG,
+                                   agents=[WRONG, TRUTH])
+    verification = _verification(engines, work_item_id)
+    assert verification.status.value == "DISAGREED", (verification.status, verification.details)
+    assert verification.auto_approved is False
+    assert verification.details["unresolved_conflicts"] == ["invoice_number"]
+    queue = engines.get("/review", params={"kind": "EXTRACTION"}).json()["items"]
+    assert [str(i["work_item_id"]) for i in queue] == [str(work_item_id)]
+
+
+def test_a_real_majority_is_still_auto_approved(engines: Engines) -> None:
+    _setup(engines, agents=3)
+    work_item_id = engines.process("v.pdf", [TEXT], marker="INV-VER-1", classification="Invoice", entities=WRONG,
+                                   agents=[TRUTH, WRONG, TRUTH])
+    verification = _verification(engines, work_item_id)
+    assert verification.status.value == "AUTO_APPROVED", (verification.status, verification.details)
+    assert engines.item(work_item_id).extracted_entities["invoice_number"] == "INV-VER-1"
