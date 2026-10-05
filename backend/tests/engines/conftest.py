@@ -91,6 +91,7 @@ class RecordedLLM:
     memory_contexts: list[Optional[str]] = field(default_factory=list)
 
     agent_turns: dict[str, int] = field(default_factory=dict)
+    agent_prompts: list[str] = field(default_factory=list)
 
     def record(self, marker: str, classification: str, entities: dict[str, Any], summary: str = "Recorded summary.",
                agents: Optional[list[dict[str, Any]]] = None) -> None:
@@ -127,6 +128,7 @@ class RecordedLLM:
         from app.schemas.assistant import TokenUsage
 
         self.calls.append(("agent", prompt[-40:]))
+        self.agent_prompts.append(prompt)
         found = None
         marker_hit = None
         for marker, recording in reversed(list(self.recordings.items())):
