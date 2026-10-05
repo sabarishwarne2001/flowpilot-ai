@@ -114,6 +114,32 @@ class AlreadyResolvedError(ReviewResolutionError):
     code = "ALREADY_RESOLVED"
 
 
+class ReviewPermissionError(ReviewResolutionError):
+    """PHASE 4 (F-065). The reviewer's workspace role may not take this decision: a 403, not a 409."""
+
+    code = "FORBIDDEN"
+
+
+def _require_workspace_admin(db: Session, *, workspace_id: uuid.UUID, actor_user_id: uuid.UUID, what: str) -> None:
+    """Refuse unless the actor is a workspace ADMIN (organization OWNERs and ADMINs are).
+
+    The hub admits CONTRIBUTORs, which is right for extraction and clause
+    reviews, but an ERP posting decision changes the customer's books, and the
+    owner's rule (Phase 4, answering N-019) is that only an Admin or Owner may
+    execute one. Checked here, in the resolver, so the hub, its bulk action
+    and any future caller all meet the same rule as the ERP routes.
+    """
+    from app.core.workspace_permissions import is_at_least
+    from app.models.workspace import Workspace, WorkspaceRole
+    from app.services.workspace_member_service import resolve_workspace_access
+
+    workspace = db.get(Workspace, workspace_id)
+    access = resolve_workspace_access(db, workspace=workspace, user_id=actor_user_id) if workspace else None
+    role = access.effective_role if access is not None else None
+    if role is None or not is_at_least(role, WorkspaceRole.ADMIN):
+        raise ReviewPermissionError(f"Only a workspace administrator or the organization owner may {what}.")
+
+
 @dataclass
 class ResolvePayload:
     """Everything the three sources between them need, validated per kind."""
@@ -642,6 +668,8 @@ def _resolve_posting(
     from app.services.erp import service as erp_service
     from app.services.erp import vocabulary as ev
 
+    _require_workspace_admin(db, workspace_id=item.workspace_id, actor_user_id=actor_user_id,
+                             what="retry, accept or cancel an ERP posting")
     verdict = (payload.posting_verdict or "").strip().upper()
     if verdict not in ev.VERDICTS:
         raise ReviewResolutionError("A posting review needs posting_verdict: RETRY, ACCEPT or CANCEL.")

@@ -491,7 +491,7 @@ def list_postings(workspace_id: uuid.UUID, state: Optional[str] = Query(default=
 
 @router.post("/workspaces/{workspace_id}/erp/postings", response_model=PostResponse, status_code=201)
 def create_postings(workspace_id: uuid.UUID, body: PostRequest, db: Session = Depends(get_db),
-                    context: TenantContext = Depends(RequireContributor)) -> PostResponse:
+                    context: TenantContext = Depends(RequireAdmin)) -> PostResponse:
     _ws(context, workspace_id)
     _gate(db, context, "erp.postings.create")
     t = _target(db, workspace_id, body.target_id)
@@ -619,7 +619,7 @@ def _review(db: Session, context: TenantContext, workspace_id: uuid.UUID, postin
 
 @router.post("/workspaces/{workspace_id}/erp/postings/{posting_id}/retry", response_model=PostingDetail)
 def retry_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optional[ReviewAction] = None,
-                  db: Session = Depends(get_db), context: TenantContext = Depends(RequireContributor)) -> PostingDetail:
+                  db: Session = Depends(get_db), context: TenantContext = Depends(RequireAdmin)) -> PostingDetail:
     _ws(context, workspace_id)
     _gate(db, context, "erp.postings.retry")
     return _review(db, context, workspace_id, posting_id, v.VERDICT_RETRY, body)
@@ -627,7 +627,7 @@ def retry_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optional
 
 @router.post("/workspaces/{workspace_id}/erp/postings/{posting_id}/accept", response_model=PostingDetail)
 def accept_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optional[ReviewAction] = None,
-                   db: Session = Depends(get_db), context: TenantContext = Depends(RequireContributor)) -> PostingDetail:
+                   db: Session = Depends(get_db), context: TenantContext = Depends(RequireAdmin)) -> PostingDetail:
     _ws(context, workspace_id)
     _gate(db, context, "erp.postings.accept")
     return _review(db, context, workspace_id, posting_id, v.VERDICT_ACCEPT, body)
@@ -635,7 +635,7 @@ def accept_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optiona
 
 @router.post("/workspaces/{workspace_id}/erp/postings/{posting_id}/cancel", response_model=PostingDetail)
 def cancel_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optional[ReviewAction] = None,
-                   db: Session = Depends(get_db), context: TenantContext = Depends(RequireContributor)) -> PostingDetail:
+                   db: Session = Depends(get_db), context: TenantContext = Depends(RequireAdmin)) -> PostingDetail:
     _ws(context, workspace_id)
     _gate(db, context, "erp.postings.cancel")
     return _review(db, context, workspace_id, posting_id, v.VERDICT_CANCEL, body)
@@ -644,7 +644,7 @@ def cancel_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: Optiona
 @router.post("/workspaces/{workspace_id}/erp/postings/{posting_id}/acknowledge", response_model=PostingDetail)
 def acknowledge_posting(workspace_id: uuid.UUID, posting_id: uuid.UUID, body: AcknowledgeRequest,
                         db: Session = Depends(get_db),
-                        context: TenantContext = Depends(RequireContributor)) -> PostingDetail:
+                        context: TenantContext = Depends(RequireAdmin)) -> PostingDetail:
     _ws(context, workspace_id)
     _gate(db, context, "erp.postings.acknowledge")
     p = _posting(db, workspace_id, posting_id)

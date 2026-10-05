@@ -483,6 +483,11 @@ def resolve_one(
     except _TURN_ERRORS as exc:
         db.rollback()
         raise _conflict(exc) from exc
+    except resolution.ReviewPermissionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+        ) from exc
     except resolution.ReviewResolutionError as exc:
         db.rollback()
         raise HTTPException(
