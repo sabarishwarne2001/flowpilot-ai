@@ -255,23 +255,40 @@ def test_dead_letters_are_queryable_per_organization(db_session, tenant, notific
 
 
 def test_dispatch_is_idempotent_per_channel(db_session, tenant, notification):
-    from sqlalchemy.exc import IntegrityError
+    # PHASE 4: SEAM-I-2 made dispatch idempotent on purpose - a replay returns
+    # the existing deliveries (and queues no second send job) instead of
+    # raising, so a retried job cannot fail on its own earlier write. The
+    # guarantee is asserted directly: one delivery per channel, one send job.
+    from sqlalchemy import func, select
 
-    with db_session.begin_nested():
-        outbox_dispatcher.dispatch(
-            db_session,
-            notification=notification,
-            user=tenant.contributor.user,
-            organization_id=tenant.organization.id,
-            workspace_id=tenant.workspace.id,
-        )
+    from app.models.job import Job
 
-    with pytest.raises(IntegrityError):
+    def _dispatch():
         with db_session.begin_nested():
-            outbox_dispatcher.dispatch(
+            return outbox_dispatcher.dispatch(
                 db_session,
                 notification=notification,
                 user=tenant.contributor.user,
                 organization_id=tenant.organization.id,
                 workspace_id=tenant.workspace.id,
             )
+
+    def _counts():
+        deliveries = db_session.execute(
+            select(func.count()).select_from(NotificationDelivery).where(
+                NotificationDelivery.notification_id == notification.id
+            )
+        ).scalar_one()
+        jobs = db_session.execute(
+            select(func.count()).select_from(Job).where(
+                Job.job_type == outbox_dispatcher.JOB_TYPE
+            )
+        ).scalar_one()
+        return deliveries, jobs
+
+    first = _dispatch()
+    after_first = _counts()
+    assert after_first[0] >= 1
+    replay = _dispatch()
+    assert sorted(replay.deliveries) == sorted(first.deliveries)
+    assert _counts() == after_first
