@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 
 from tests.engines.conftest import Engines, drain, make_pdf
+from tests.engines.isolation import assert_workspace_isolated
 
 
 def _invoice(number: str, total: str, date: str, *, po: str = "PO-RADAR-1") -> list[str]:
@@ -59,6 +60,7 @@ def test_exact_and_identifier_duplicates_are_found(engines: Engines) -> None:
     third = _process(engines, "INV-R-100", "12500.00", "2026-08-01", filename="resent.pdf", data=retyped)
     by_number = [f for f in _findings(engines) if third in (f["subject_work_item_id"], f["counterpart_work_item_id"])]
     assert by_number and by_number[0]["kind"] == "DUPLICATE_DOCUMENT", _findings(engines)
+    assert_workspace_isolated(engines, collections=("anomalies",))
 
 
 def test_the_suppliers_next_monthly_invoice_is_not_a_duplicate(engines: Engines) -> None:

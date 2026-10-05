@@ -18,6 +18,7 @@ from decimal import Decimal
 import pytest
 
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 
 def _po(n: str, vendor: str, qty: int, price: str) -> tuple[list[str], dict]:
@@ -108,6 +109,7 @@ def test_within_tolerance_matches_and_approves_cleanly(engines: Engines, policy)
     approved = engines.post(f"/procurement/cases/{case['id']}/approve", {})
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "APPROVED"
+    assert_workspace_isolated(engines, collections=("procurement",))
 
 
 def test_over_tolerance_needs_a_reason_to_approve(engines: Engines, policy) -> None:

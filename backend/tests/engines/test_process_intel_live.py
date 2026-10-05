@@ -14,6 +14,7 @@ three-way match; the case is approved. Then an administrator runs the sweep:
 from __future__ import annotations
 
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 from tests.engines.test_three_way_matching_live import _set
 
 
@@ -55,3 +56,4 @@ def test_the_event_log_discovery_and_sla(engines: Engines) -> None:
     assert saved.status_code == 200, saved.text
     sla = engines.get("/process/sla").json()
     assert any(p["object_type"] == "CASE" and p["target_hours"] == 4 for p in sla["policies"]), sla
+    assert_workspace_isolated(engines, collections=("process",))

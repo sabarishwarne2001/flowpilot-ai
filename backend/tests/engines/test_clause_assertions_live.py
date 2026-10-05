@@ -19,6 +19,7 @@ An administrator writes "The notice period for termination must be at least
 from __future__ import annotations
 
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 SENTENCE = "The notice period for termination must be at least 30 days."
 
@@ -69,6 +70,7 @@ def test_a_saved_clause_check_is_on_and_escalates_a_violating_contract(engines: 
     queue = engines.get("/review", params={"kind": "ASSERTION"}).json()["items"]
     held = [i for i in queue if str(i["work_item_id"]) == short]
     assert held and held[0]["review_reason"] == "CLAUSE_TRIAGE", queue
+    assert_workspace_isolated(engines, collections=("assertions", "review"))
 
     resolved = engines.post(f"/review/ASSERTION/{held[0]['item_id']}/resolve", {"reviewer_verdict": "FAIL"},
                             as_user=engines.tenant.contributor)

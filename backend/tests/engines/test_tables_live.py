@@ -25,6 +25,7 @@ from decimal import Decimal
 import pytest
 
 from tests.engines.conftest import Engines, drain
+from tests.engines.isolation import assert_workspace_isolated
 
 ROWS = 40
 BAD_ROW = 7
@@ -133,3 +134,4 @@ def test_correct_review_and_export(engines: Engines, table: dict) -> None:
         assert "xl/workbook.xml" in names, names
         sheet = book.read(next(n for n in names if n.startswith("xl/worksheets/"))).decode()
     assert "Part 007" in sheet and f"<v>{GOOD:.2f}</v>" in sheet, sheet[:400]
+    assert_workspace_isolated(engines, collections=("tables",))

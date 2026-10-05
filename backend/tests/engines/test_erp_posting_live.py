@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from app.models.erp import ErpPosting
 from tests.conftest import TestSessionLocal
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 from tests.engines.test_three_way_matching_live import _set
 
 
@@ -169,6 +170,7 @@ def test_posting_is_exactly_once(engines: Engines, approved_case) -> None:
     count = engines.db.execute(select(func.count()).select_from(ErpPosting).where(
         ErpPosting.target_id == uuid.UUID(target["id"]), ErpPosting.object_kind == "PURCHASE_ORDER")).scalar_one()
     assert count == 1
+    assert_workspace_isolated(engines, collections=("erp",))
 
 
 def test_only_workspace_admins_may_execute_postings(engines: Engines, approved_case) -> None:

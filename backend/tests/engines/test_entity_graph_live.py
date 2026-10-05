@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 GSTIN = "27AAPCA1234F1ZV"
 
@@ -70,6 +71,7 @@ def test_two_spellings_with_one_tax_id_are_one_record_with_relationships(graph: 
 
     per_document = engines.get(f"/work-items/{detail['documents'][0]['work_item_id']}/entities")
     assert per_document.status_code == 200, per_document.text
+    assert_workspace_isolated(graph, collections=("entities",))
 
 
 def test_merge_and_unmerge_are_exact_and_role_gated(graph: Engines) -> None:

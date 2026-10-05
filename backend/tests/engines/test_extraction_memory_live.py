@@ -32,6 +32,7 @@ from app.models.extraction_memory import ExtractionAnchorRule, ExtractionMemoryA
 from app.services.extraction_memory import sweep
 from tests.conftest import TestSessionLocal
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 
 def _layout(n: int, customer: str = "Contoso Retail") -> list[str]:
@@ -119,6 +120,7 @@ def test_corrections_become_a_shadow_rule_that_is_evaluated_on_the_next_document
 
     shown = engines.get(f"/work-items/{fifth}/extraction-memory").json()
     assert shown["applied"] is True and shown["layout_documents"] >= 5, shown
+    assert_workspace_isolated(memory, collections=("extraction-memory",))
 
 
 def test_values_of_different_lengths_under_one_label_do_not_break_the_sweep(memory: Engines) -> None:

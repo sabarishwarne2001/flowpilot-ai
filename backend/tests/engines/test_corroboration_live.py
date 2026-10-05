@@ -15,6 +15,7 @@ Singapore; B also drops the audit clause. The comparison must:
 from __future__ import annotations
 
 from tests.engines.conftest import Engines, drain
+from tests.engines.isolation import assert_workspace_isolated
 
 COMMON = [
     "1. Parties. This Supply Agreement is between Contoso Retail Private Limited and Acme Supplies Ltd.",
@@ -84,3 +85,4 @@ def test_two_versions_are_compared_clause_by_clause(engines: Engines) -> None:
     triggers = [e for e in engines.db.execute(select(OutboxEvent.event_type)).scalars()
                 if e == "trigger.corroboration.discrepancies"]
     assert len(triggers) == 1, triggers
+    assert_workspace_isolated(engines, collections=("corroboration",))

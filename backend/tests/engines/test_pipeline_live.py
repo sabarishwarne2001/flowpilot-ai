@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.models.document_role import DocumentRole
 from app.models.job import Job
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 INVOICE = [
     "ACME SUPPLIES LTD",
@@ -36,3 +37,12 @@ def test_an_uploaded_invoice_reaches_every_engine(engines: Engines) -> None:
     job_types = set(engines.db.execute(select(Job.job_type)).scalars())
     assert {"document.extract", "document.enrich", "anomaly.scan_document", "procurement.score",
             "entities.resolve_document", "cases.assemble_document"} <= job_types, job_types
+
+    # Usage is metered per workspace: the real rollup turns this document's metered events into usage
+    # lines that workspace A reports and a second workspace of the same organization never does.
+    from app.services.rollup_service import run_rollup
+
+    run_rollup(engines.db)
+    engines.refresh()
+    assert_workspace_isolated(engines, collections=("work-items", "usage"),
+                              aggregates=("usage/summary", "usage/series"))

@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.models.verification import DocumentVerification
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 TEXT = ["ACME SUPPLIES LTD", "TAX INVOICE", "Invoice No: INV-VER-1", "PO Reference: PO-777", "Total: 120.00 INR"]
 TRUTH = {"vendor_name": "Acme Supplies Ltd", "invoice_number": "INV-VER-1", "total_amount": "120.00",
@@ -59,6 +60,7 @@ def test_an_even_split_on_a_field_is_never_auto_approved(engines: Engines) -> No
     assert verification.details["unresolved_conflicts"] == ["invoice_number"]
     queue = engines.get("/review", params={"kind": "EXTRACTION"}).json()["items"]
     assert [str(i["work_item_id"]) for i in queue] == [str(work_item_id)]
+    assert_workspace_isolated(engines, collections=("verifications", "review"))
 
 
 def test_a_real_majority_is_still_auto_approved(engines: Engines) -> None:

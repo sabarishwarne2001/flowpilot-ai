@@ -28,6 +28,7 @@ from app.models.outbox_event import OutboxEvent
 from app.services.obligations import service as obligation_service
 from tests.conftest import TestSessionLocal
 from tests.engines.conftest import Engines, drain
+from tests.engines.isolation import assert_workspace_isolated
 
 CONTRACT = [
     "MASTER SERVICES AGREEMENT CTR-OBL-1",
@@ -105,6 +106,10 @@ def test_exports_and_a_personal_calendar_feed(engines: Engines, contract: list[d
     assert "BEGIN:VCALENDAR" in public.text and "20261030" in public.text
     assert engines.client.get("/api/v1/public/calendar-feeds/not-a-real-token.ics").status_code == 404
 
+    holidays = engines.post("/holiday-calendars", {"name": "Plant shutdown", "holidays": [
+        {"date": "2026-12-28", "name": "Shutdown"}]})
+    assert holidays.status_code in (200, 201), holidays.text
+    assert_workspace_isolated(engines, collections=("obligations", "calendar-feeds", "holiday-calendars"))
     revoked = engines.delete(f"/calendar-feeds/{issued.json()['feed']['id']}")
     assert revoked.status_code in (200, 204)
     assert engines.client.get(f"/api/v1/public/calendar-feeds/{token}.ics").status_code in (404, 410)

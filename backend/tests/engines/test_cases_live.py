@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.models.outbox_event import OutboxEvent
 from tests.engines.conftest import Engines
+from tests.engines.isolation import assert_workspace_isolated
 
 RULES = [
     {"id": "same-vendor", "op": "FUZZY_EQUAL", "label": "Invoice vendor matches the PO",
@@ -98,6 +99,7 @@ def test_consistent_inconsistent_and_incomplete_bundles(engines: Engines) -> Non
     assert engines.post(f"/cases/{complete['case']['id']}/evaluate", as_user=engines.tenant.viewer).status_code == 403
     listing = engines.get("/cases").json()
     assert listing["counts_by_status"].get("COMPLETE") == 1 and listing["counts_by_status"].get("INCONSISTENT") == 1
+    assert_workspace_isolated(engines, collections=("cases", "case-templates", "work-items"))
 
 
 def test_an_entity_anchored_template_assembles_cases_by_itself(engines: Engines) -> None:

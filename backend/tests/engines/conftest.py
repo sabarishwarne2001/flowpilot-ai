@@ -332,7 +332,7 @@ class Engines:
 
 @pytest.fixture()
 def engines(client: TestClient, db_session: Session, tenant: Fixture, test_sessions, recorded_llm,
-            monkeypatch: pytest.MonkeyPatch) -> Engines:
+            monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> Engines:
     """An Enterprise-plan tenant with the live pipeline wired to the test DB."""
     from app.core.config import settings
     from app.services.embedding_service import embedding_service
@@ -341,6 +341,14 @@ def engines(client: TestClient, db_session: Session, tenant: Fixture, test_sessi
     # embedding service cached (if any) is put back afterwards so no other test inherits the stub.
     monkeypatch.setattr(settings, "ML_STUBS", True)
     monkeypatch.setattr(embedding_service, "_model", None)
+    # The live-collaboration broker caches an asyncio Redis client bound to the event loop of the first
+    # request that used it. A server has one loop per worker; the TestClient starts a fresh loop per
+    # request, so a cached client fails later tests with "Event loop is closed". Each engine test gets
+    # the in-process broker (what the product uses without REDIS_URL) and the previous one is restored.
+    from app.services.collab import broker as collab_broker
+
+    previous_broker = collab_broker.set_broker(collab_broker.MemoryBroker())
+    request.addfinalizer(lambda: collab_broker.set_broker(previous_broker))
     harness = Engines(client=client, db=db_session, tenant=tenant, llm=recorded_llm)
     harness.plan("enterprise")
     return harness

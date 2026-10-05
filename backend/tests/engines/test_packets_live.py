@@ -20,6 +20,7 @@ from app.core.storage import get_storage_driver
 from app.models.document_role import DocumentRole
 from app.models.work_item import WorkItem
 from tests.engines.conftest import Engines, drain, make_pdf
+from tests.engines.isolation import assert_workspace_isolated
 
 PAGES = [
     ["ACME SUPPLIES LTD", "TAX INVOICE", "Invoice Number: INV-PK-1", "Page 1 of 2", "Steel bolts M8  100  2.50"],
@@ -71,3 +72,4 @@ def test_a_bundle_is_detected_split_and_each_part_processed(engines: Engines) ->
 
     thumb = engines.get(f"/packet-splits/{split['id']}/pages/1/thumbnail")
     assert thumb.status_code == 200 and thumb.headers["content-type"].startswith("image/")
+    assert_workspace_isolated(engines, collections=("packet-splits",))

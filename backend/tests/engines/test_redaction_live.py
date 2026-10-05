@@ -25,6 +25,7 @@ from app.core.storage import get_storage_driver
 from app.models.redaction import RedactionJob
 from app.models.uploaded_file import UploadedFile
 from tests.engines.conftest import Engines, drain, make_pdf
+from tests.engines.isolation import assert_workspace_isolated
 
 SECRETS = ["123-45-6789", "ABCPE1234F", "GB82 WEST 1234 5698 7654 32", "jane.doe@example.com", "PROJECT ORION BUDGET"]
 LINES = [
@@ -81,6 +82,7 @@ def test_detect_draw_apply_and_prove_nothing_leaks(engines: Engines) -> None:
         assert secret not in raw and secret.encode() not in streams, secret
     bundle = engines.get(f"/redactions/{job_id}/bundle").json()
     assert bundle["output_sha256"] == row.output_sha256
+    assert_workspace_isolated(engines, collections=("redactions",), known={"redactions": [job_id]})
 
 
 def test_the_default_searchable_output_also_seals_without_leaking(engines: Engines) -> None:
