@@ -122,7 +122,9 @@ FINDINGS_BY_ROW = {
     "team.accept": "F-051", "team.role-change": "F-051", "team.remove": "F-051", "/invitations/accept": "F-051",
     "audit.browse-export": "F-052", "ws:run-history": "F-053", "ws:workflows": "F-053", "ws:review-queue": "F-053",
     "assistant.ask": "F-056", "assistant.stream": "F-056", "webhooks.test": "F-061",
-    "settings.unsaved-guard": "F-062", "docs.correct-field": "F-063", "review.approve": "F-063",
+    "settings.unsaved-guard": "F-062", "docs.correct-field": "F-063;F-061", "review.approve": "F-063",
+    "team.invite": "F-051", "/organizations/:orgSlug/branding": "F-058", "org:branding": "F-058",
+    "settings.ai": "F-058", "settings.document": "F-058",
     "review.reject": "F-063", "review.escalate": "F-063", "settings.email": "F-058", "branding.domain": "F-058",
 }
 
