@@ -47,6 +47,12 @@ def org_id(db_session: Session) -> uuid.UUID:
     )
     db_session.add(org)
     db_session.flush([org])
+    # PHASE 4: ARCH-14 prices every LLM call from the published price book (the
+    # per-workspace cost columns are gone) and refuses an unpriced call, so
+    # these tests need a book in force - the seed's, with its Groq default.
+    from tests.security.plans import _ensure_price_book
+
+    _ensure_price_book(db_session)
     return org.id
 
 
@@ -56,8 +62,6 @@ def ai_settings() -> SimpleNamespace:
         provider=SimpleNamespace(value="groq"),
         model="llama-3.3-70b",
         max_output_tokens=1000,
-        input_cost_per_1k_tokens=0.05,
-        output_cost_per_1k_tokens=0.08,
         temperature=0.2,
     )
 
