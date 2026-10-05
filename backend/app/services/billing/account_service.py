@@ -225,10 +225,16 @@ def ensure_billing_account(
     # call, so a slow Stripe blocks concurrent callers for that organization.
     # That is a real cost and it is the cheaper one — an orphaned customer is
     # silent, permanent, and reconciles against nothing.
+    #
+    # PHASE 4: FOR NO KEY UPDATE, not FOR UPDATE. Two creators still exclude
+    # each other, but plain FOR UPDATE also conflicts with the KEY SHARE lock
+    # every foreign-key check takes: while Stripe answered, no row referencing
+    # this organization (workspace, document, job, audit entry) could be
+    # inserted anywhere. Nothing here changes the organization's key.
     organization = db.execute(
         select(Organization)
         .where(Organization.id == organization_id)
-        .with_for_update()
+        .with_for_update(key_share=True)
     ).scalar_one_or_none()
     if organization is None:
         raise BillingAccountError(f"Organization {organization_id} does not exist.")
