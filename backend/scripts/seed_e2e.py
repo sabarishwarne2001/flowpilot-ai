@@ -166,7 +166,9 @@ def _ensure_catalog(db) -> None:
         pricing_service.clear_cache()
 
     for name, value in E2E_PRICE_IDS.items():
-        os.environ.setdefault(name, value)
+        # Empty counts as unset: backend/.env lists these keys with no value.
+        if not os.environ.get(name, "").strip():
+            os.environ[name] = value
     if _load_seed_module("seed_quota_tiers").main([]) != 0:
         raise RuntimeError("seed_quota_tiers.py failed")
     quota_service.clear_cache()
