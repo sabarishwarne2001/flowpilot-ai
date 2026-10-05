@@ -140,6 +140,20 @@ class TestE9MagicByteValidation:
         )
         assert response.status_code == 400
 
+    def test_a_decompression_bomb_is_refused_before_it_is_decoded(self, client, tenant):
+        """PHASE 4. A flat 12000x12000 image is a few hundred KB of PNG but
+        144 M pixels: below Pillow's own bomb error, and about 1 GB once
+        converted to RGBA. It is refused from its header, before decoding."""
+        buffer = io.BytesIO()
+        Image.new("1", (12000, 12000), 0).save(buffer, format="PNG")
+        assert len(buffer.getvalue()) < 2 * 1024 * 1024
+        response = client.post(
+            "/api/v1/me/avatar",
+            files={"file": ("avatar.png", buffer.getvalue(), "image/png")},
+            headers=tenant.ws_admin.headers,
+        )
+        assert response.status_code == 400, response.text
+
     def test_unauthenticated_upload_is_refused(self, client):
         response = client.post(
             "/api/v1/me/avatar",
