@@ -248,6 +248,21 @@ def save_assertion(
     except definition_service.AssertionError_ as exc:
         raise _bad_request(exc) from exc
 
+    # PHASE 4: a clause check's FIRST sentence switches it on. It was created
+    # off only because an empty check has nothing to evaluate; leaving it off
+    # after the sentence was saved meant an authored check silently never ran.
+    # A later save keeps whatever the user chose (an edit never re-enables a
+    # check someone switched off).
+    from app.services.assertions import clause_check_service
+
+    if (
+        node_key == clause_check_service.CLAUSE_NODE_KEY
+        and int(getattr(definition, "version", 0) or 0) == 1
+        and not rule.is_active
+    ):
+        rule.is_active = True
+        db.flush([rule])
+
     db.commit()
     db.refresh(definition)
     return _definition_payload(definition)
