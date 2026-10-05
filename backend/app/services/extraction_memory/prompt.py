@@ -155,7 +155,14 @@ def _prepare(db: Session, *, work_item: Any, text: str, document_type: str) -> O
     arm = choose_arm(mode, template.state, trial, work_item.id)
 
     lines = anchors.document_lines(text)
-    rules = _rules(db, template.id)
+    # PHASE 4: one candidate per field, from the rule that counts. ACTIVE first
+    # (its live precision is what drift detection reads, and it only gets
+    # measured when its candidate is the one recorded), then the best replay
+    # bound, then support; never "whichever row the database returned first".
+    rules = sorted(
+        _rules(db, template.id),
+        key=lambda r: (r.state != v.RULE_ACTIVE, -float(r.wilson_lower or 0), -int(r.support or 0), str(r.id)),
+    )
     candidates = {}
     hints: list[tuple[str, str]] = []
     for rule in rules:
