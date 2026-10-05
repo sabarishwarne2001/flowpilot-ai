@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import (
@@ -17,6 +17,7 @@ from app.core.exceptions import (
 from app.core.principal import Principal, system_principal
 from app.core.usage_events import USAGE_EVENT_TYPES, EmissionKind
 from app.models.spend_limit import SpendLimitPeriod
+from app.models.usage_event import UsageEvent
 from app.models.user import User
 from app.services import spend_control_service as spend
 from app.services import usage_service
@@ -94,23 +95,33 @@ def test_sampled_type_cannot_be_emitted_inline(db, org_id):
 
 
 def test_idempotency_key_blocks_a_double_bill(db, org_id):
+    # PHASE 4: SEAM-I-1 made record_usage idempotent - a repeated key returns
+    # the row already written instead of raising (a retried job must not fail
+    # because its usage was recorded the first time). The guarantee is the
+    # same: one key, one billable row.
     key = f"ocr:{uuid.uuid4()}:1"
-    usage_service.record_usage(
+    first = usage_service.record_usage(
         db,
         organization_id=org_id,
         event_type="ocr.page",
         quantity=1,
         idempotency_key=key,
     )
-    with pytest.raises(IntegrityError):
-        usage_service.record_usage(
-            db,
-            organization_id=org_id,
-            event_type="ocr.page",
-            quantity=1,
-            idempotency_key=key,
+    second = usage_service.record_usage(
+        db,
+        organization_id=org_id,
+        event_type="ocr.page",
+        quantity=1,
+        idempotency_key=key,
+    )
+    db.flush()
+    assert second.id == first.id
+    rows = db.execute(
+        select(UsageEvent).where(
+            UsageEvent.organization_id == org_id, UsageEvent.idempotency_key == key
         )
-        db.flush()
+    ).scalars().all()
+    assert len(rows) == 1
 
 
 def test_system_principal_is_recorded_without_the_caller_saying_so(db, org_id):
