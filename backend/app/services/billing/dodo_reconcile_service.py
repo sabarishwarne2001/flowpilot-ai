@@ -192,7 +192,9 @@ def _adopt_account(
 ) -> BillingAccount:
     """Bind the Dodo customer to the organization, under the organization lock."""
     organization = db.execute(
-        select(Organization).where(Organization.id == organization_id).with_for_update()
+        # FOR NO KEY UPDATE: serialises reconciliations without blocking FK checks
+        # (e.g. an independent audit write) that reference this organization.
+        select(Organization).where(Organization.id == organization_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if organization is None:
         raise ReconcileRefused(f"Organization {organization_id} does not exist.")

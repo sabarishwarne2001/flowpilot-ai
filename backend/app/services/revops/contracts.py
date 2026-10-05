@@ -133,7 +133,9 @@ def activate(db: Session, *, contract_id: uuid.UUID, actor_id: Optional[uuid.UUI
     if c["status"] != "DRAFT":
         raise RevOpsError(f"contract {c['contract_number']} is {c['status']}", "CONTRACT_NOT_DRAFT")
     org = c["organization_id"]
-    db.execute(text("SELECT 1 FROM organizations WHERE id = :o FOR UPDATE"), {"o": org})
+    # FOR NO KEY UPDATE: serialises contract changes without blocking FK checks
+    # (e.g. an independent audit write) that reference this organization.
+    db.execute(text("SELECT 1 FROM organizations WHERE id = :o FOR NO KEY UPDATE"), {"o": org})
     if _live_subscription(db, org):
         raise RevOpsError("the organization has a live gateway subscription; cancel it before an invoiced contract "
                           "carries the plan", "SUBSCRIPTION_ACTIVE")
