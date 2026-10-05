@@ -281,6 +281,13 @@ def seed(db) -> dict[str, Any]:
         organization.quota_tier_id = tier.id
         db.add(organization)
         db.flush()
+        # A test may point the organization at its own SMTP server; converge back
+        # to the platform sender so invitation and reset mail reach the test sink.
+        from app.models.organization_email_settings import OrganizationEmailSettings
+
+        db.query(OrganizationEmailSettings).filter(
+            OrganizationEmailSettings.organization_id == organization.id
+        ).delete(synchronize_session=False)
 
         workspaces = []
         for ws_slug, ws_name in tenant.workspaces:

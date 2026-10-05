@@ -32,7 +32,18 @@ const server = net.createServer((socket) => {
 
   reply("220 flowpilot-e2e-smtp ready");
 
+  let authStep = 0; // AUTH LOGIN: 1 = expecting username, 2 = expecting password
   const handleLine = (line) => {
+    if (authStep === 1) {
+      authStep = 2;
+      reply("334 UGFzc3dvcmQ6");
+      return;
+    }
+    if (authStep === 2) {
+      authStep = 0;
+      reply("235 Authentication successful");
+      return;
+    }
     if (inData) {
       if (line === ".") {
         inData = false;
@@ -51,7 +62,7 @@ const server = net.createServer((socket) => {
     }
     const upper = line.toUpperCase();
     if (upper.startsWith("EHLO")) {
-      socket.write("250-flowpilot-e2e-smtp\r\n250-8BITMIME\r\n250 SMTPUTF8\r\n");
+      socket.write("250-flowpilot-e2e-smtp\r\n250-8BITMIME\r\n250-AUTH PLAIN LOGIN\r\n250 SMTPUTF8\r\n");
     } else if (upper.startsWith("HELO")) {
       reply("250 flowpilot-e2e-smtp");
     } else if (upper.startsWith("MAIL FROM:")) {
@@ -74,6 +85,11 @@ const server = net.createServer((socket) => {
     } else if (upper === "QUIT") {
       reply("221 Bye");
       socket.end();
+    } else if (upper.startsWith("AUTH LOGIN")) {
+      // Any credentials are accepted: this sink only records mail.
+      const inline = line.split(" ")[2];
+      authStep = inline ? 2 : 1;
+      reply(inline ? "334 UGFzc3dvcmQ6" : "334 VXNlcm5hbWU6");
     } else if (upper.startsWith("AUTH")) {
       reply("235 Authentication successful");
     } else {

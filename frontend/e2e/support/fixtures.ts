@@ -37,7 +37,7 @@ import { BROWSER_API_ORIGIN, TENANTS, type UserKey } from "./env";
 
 export interface Problem {
   readonly kind: "pageerror" | "unhandledrejection" | "console" | "http" | "requestfailed";
-  readonly message: string;
+  message: string;
   readonly url?: string;
   readonly status?: number;
   readonly method?: string;
@@ -60,8 +60,10 @@ export class ProblemTracker {
     this.pageUrl = url;
   }
 
-  record(problem: Omit<Problem, "at">): void {
-    this.all.push({ ...problem, at: this.pageUrl });
+  record(problem: Omit<Problem, "at">): Problem {
+    const recorded: Problem = { ...problem, at: this.pageUrl };
+    this.all.push(recorded);
+    return recorded;
   }
 
   /** Declare an HTTP error this test expects. `statuses: "any"` for any >= 400. */
@@ -180,13 +182,20 @@ export function attachProblemListeners(page: Page, tracker: ProblemTracker): voi
   page.on("response", (response) => {
     const status = response.status();
     if (status < 400) return;
-    tracker.record({
+    const problem = tracker.record({
       kind: "http",
       status,
       url: response.url(),
       method: response.request().method(),
       message: response.statusText() || `HTTP ${status}`,
     });
+    // The body is the evidence (validation detail, error code); keep its start.
+    response
+      .text()
+      .then((body) => {
+        if (body) problem.message = `${problem.message} body=${body.replace(/\s+/g, " ").slice(0, 300)}`;
+      })
+      .catch(() => undefined);
   });
   page.on("requestfailed", (request) => {
     const failure = request.failure()?.errorText ?? "unknown";

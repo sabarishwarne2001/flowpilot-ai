@@ -14,8 +14,26 @@ import { STATE_FILE, runId, ws } from "../support/env";
 
 test.use({ user: "C.owner" });
 
+const LLM_AVAILABLE = process.env.E2E_LLM === "1";
+const NO_LLM = "Blocked here: no LLM provider key in this sandbox (Groq/Gemini hosts unreachable). Set E2E_LLM=1 where the API has a key.";
+
 test.describe("AI Assistant", () => {
   test.setTimeout(150_000);
+
+  test("when the AI provider is down the user sees a clear error and keeps the question", async ({ page, problems }) => {
+    test.skip(LLM_AVAILABLE, "only meaningful when the provider is unavailable");
+    problems.allowHttp(/\/assistant\/conversations\/[^/]+\/messages/, [503], "no LLM provider in this sandbox");
+    await page.goto(ws("C", "assistant"));
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const box = page.getByPlaceholder("Ask anything about your knowledge base...");
+    const question = "What is the total amount due on invoice INV-E2E-1001?";
+    await box.fill(question);
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.locator("body")).toContainText(/temporarily unavailable|try again|could not|failed/i, { timeout: 30_000 });
+    await page.waitForTimeout(6_000); // past the 4-second toast
+    const kept = (await box.inputValue()) === question || (await page.locator("main").innerText()).includes(question);
+    expect(kept, "the question is still on screen after the error (not silently lost)").toBe(true);
+  });
 
   async function newConversation(page: import("@playwright/test").Page) {
     await page.goto(ws("C", "assistant"));
@@ -24,6 +42,7 @@ test.describe("AI Assistant", () => {
   }
 
   test("an answerable question gets a streamed answer that cites the invoice", async ({ page }) => {
+    test.skip(!LLM_AVAILABLE, NO_LLM);
     await newConversation(page);
     await page.getByPlaceholder("Ask anything about your knowledge base...").fill(
       "What is the total amount due on invoice INV-E2E-1001?",
@@ -34,6 +53,7 @@ test.describe("AI Assistant", () => {
   });
 
   test("an unanswerable question gets a truthful refusal, not an invention", async ({ page }) => {
+    test.skip(!LLM_AVAILABLE, NO_LLM);
     await newConversation(page);
     await page.getByPlaceholder("Ask anything about your knowledge base...").fill(
       "What is the name of the CEO's dog mentioned in our documents?",
@@ -134,7 +154,7 @@ test.describe("Tables", () => {
   test("the tables page filters by status", async ({ page }) => {
     await page.goto(ws("C", "tables"));
     for (const tab of [/^Needs review/, /^Reconciles/, /^Extracted/, /^Reviewed/, /^All$/]) {
-      await page.getByRole("button", { name: tab }).click();
+      await page.getByRole("tab", { name: tab }).click();
     }
     await expectHealthyPage(page);
   });
@@ -151,7 +171,7 @@ test.describe("Obligations", () => {
     await page.goto(ws("C", "obligations"));
     await page.getByRole("button", { name: "All" }).last().click();
     await expect(page.locator("main")).toContainText(/contract-MSA-E2E-2026\.pdf|Report|Payment|Renewal/);
-    await page.getByRole("tab", { name: "Calendar" }).click();
+    await page.getByRole("tab", { name: "Calendar", exact: true }).click();
     await settle(page);
     await page.getByRole("tab", { name: "Holiday calendars" }).click();
     await settle(page);
@@ -165,10 +185,11 @@ test.describe("Obligations", () => {
     await page.goto(ws("C", "obligations"));
     await page.getByRole("button", { name: "New obligation" }).click();
     const what = `E2E deliver quarterly report ${runId()}`;
-    await page.getByRole("textbox", { name: "What is due" }).fill(what);
-    await page.getByRole("combobox", { name: "Kind" }).selectOption({ label: "Report" });
-    await page.getByRole("textbox", { name: "Due date" }).fill("2026-12-15");
-    await page.getByRole("button", { name: "Save obligation" }).click();
+    const form = page.locator("form").filter({ has: page.getByRole("textbox", { name: "What is due" }) });
+    await form.getByRole("textbox", { name: "What is due" }).fill(what);
+    await form.getByRole("combobox", { name: "Kind" }).selectOption({ label: "Report" });
+    await form.getByRole("textbox", { name: "Due date" }).fill("2026-12-15");
+    await form.getByRole("button", { name: "Save obligation" }).click();
     await expect(page.locator("main")).toContainText(what, { timeout: 15_000 });
     await page.getByText(what).first().click();
     await expect(page).toHaveURL(/\/obligations\/[0-9a-f-]{36}/);
