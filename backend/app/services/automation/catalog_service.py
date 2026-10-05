@@ -29,6 +29,26 @@ OBSERVED_SAMPLE = 200
 MAX_OBSERVED_FIELDS = 120
 SKIPPED_ENTITY_KEYS = frozenset({"verification", "_meta"})
 
+#: PHASE 4: the fields the platform's extraction prompt asks for
+#: (llm_service.ENTITY_EXTRACTION_PROMPT_TEMPLATE) plus the classification,
+#: offered even before a workspace has processed a document. Observed fields
+#: were the only source, so a new workspace's builder had nothing to put after
+#: "only if" until its first documents arrived.
+STANDARD_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("classification_details.document_classification", "string", "Invoice"),
+    ("vendor_name", "string", "Acme Supplies Ltd"),
+    ("total_amount", "number", "12500.00"),
+    ("currency", "string", "INR"),
+    ("tax_amount", "number", "2250.00"),
+    ("date", "date", "2026-09-01"),
+    ("invoice_number", "string", "INV-2231"),
+    ("po_number", "string", "PO-5001"),
+    ("candidate_name", "string", "Jane Doe"),
+    ("agreement_date", "date", "2026-01-01"),
+    ("termination_date", "date", "2027-01-01"),
+    ("governing_law", "string", "India"),
+)
+
 
 def authoring_for(db: Session, *, context: Any) -> Authoring:
     from app.api import capability_gate
@@ -112,10 +132,14 @@ def observed_fields(db: Session, *, workspace_id: uuid.UUID) -> list[dict[str, A
                 note(key, value)
 
     fields = sorted(seen.values(), key=lambda e: (-e["count"], e["key"]))[:MAX_OBSERVED_FIELDS]
-    return [
+
+    def _label(key: str) -> str:
+        return key.replace("classification_details.", "").replace("_", " ").replace(".", " › ").capitalize()
+
+    out = [
         {
             "key": entry["key"],
-            "label": entry["key"].replace("classification_details.", "").replace("_", " ").replace(".", " › ").capitalize(),
+            "label": _label(entry["key"]),
             "type": entry["type"],
             "example": entry["example"],
             "description": f"Seen on {entry['count']} recent document(s).",
@@ -123,6 +147,17 @@ def observed_fields(db: Session, *, workspace_id: uuid.UUID) -> list[dict[str, A
         }
         for entry in fields
     ]
+    for key, kind, example in STANDARD_FIELDS:
+        if key not in seen and len(out) < MAX_OBSERVED_FIELDS:
+            out.append({
+                "key": key,
+                "label": _label(key),
+                "type": kind,
+                "example": example,
+                "description": "A standard extracted field (not yet seen in this workspace).",
+                "source": "document",
+            })
+    return out
 
 
 def _endpoints(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID) -> list[dict[str, Any]]:
