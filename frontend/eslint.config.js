@@ -17,6 +17,8 @@ export default [
       "postcss.config.js",
       "tailwind.config.js",
       "public/**",
+      // Phase 3 browser tests: Node code with its own tsconfig (npx tsc -p e2e/tsconfig.json).
+      "e2e/**",
     ],
   },
   js.configs.recommended,

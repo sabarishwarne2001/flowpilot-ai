@@ -355,6 +355,10 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
+      - name: Typecheck the browser tests
+        working-directory: frontend
+        run: npx tsc -p e2e/tsconfig.json
+
       - name: Lint
         working-directory: frontend
         run: npm run lint
@@ -396,6 +400,121 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.txt --no-deps --disable-pip --progress-spinner off
+
+  # ---------------------------------------------------------------------
+  # Phase 3 browser tests (Playwright, headless Chromium) against the real API,
+  # worker, Postgres and Redis, with ML_STUBS=true and a local SMTP sink. See
+  # frontend/e2e/README.md and docs/hardening/03-coverage.md.
+  #
+  # ADVISORY: not in the aggregate `ci` job below. The suite is strict (any
+  # console error or unexpected 4xx/5xx fails a test) and records today's open
+  # findings as red tests; making it required now would block every PR. Add it
+  # to `needs` once the Phase 4 fix loop has turned it green.
+  # ---------------------------------------------------------------------
+  e2e:
+    name: Browser tests (advisory)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: encoding
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U flowpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      ENVIRONMENT: development
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: flowpilot
+      POSTGRES_PASSWORD: flowpilot
+      POSTGRES_DB: flowpilot_e2e
+      REDIS_URL: redis://localhost:6379/0
+      ARCH40_CONTRACT: "1"
+      JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+      API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+      REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+      RERANKER_INTERNAL_TOKEN: ci-only-not-a-real-token-0123456789abcdef01234567
+      EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      ML_STUBS: "true"
+      STORAGE_BACKEND: local
+      RATE_LIMIT_ENABLED: "false"
+      PLATFORM_SMTP_HOST: 127.0.0.1
+      PLATFORM_SMTP_PORT: "1025"
+      PLATFORM_SMTP_USERNAME: e2e-relay
+      PLATFORM_SMTP_PASSWORD: e2e-relay-password
+      PLATFORM_SMTP_ENCRYPTION: NONE
+      E2E_PYTHON: python
+      E2E_LOG_DIR: ${{ github.workspace }}/e2e-logs
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Start the API, worker and mail sink
+        run: frontend/e2e/scripts/start-stack.sh
+
+      - name: Run the browser tests
+        working-directory: frontend
+        env:
+          CI: "1"
+        run: npx playwright test -c e2e
+
+      - name: Upload the report, screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            frontend/e2e/playwright-report
+            frontend/e2e/test-results
+            e2e-logs
+          retention-days: 14
 
   # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a
