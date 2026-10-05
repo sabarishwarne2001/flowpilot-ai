@@ -16,10 +16,16 @@ def test_all_tenant_routes_are_workspace_scoped():
     assert res.returncode == 0
 
 
-def test_vector_collections_are_workspace_partitioned():
+def test_vector_collections_are_workspace_partitioned(test_database):
+    import os
     import subprocess
     import sys
-    res = subprocess.run([sys.executable, "scripts/audit_vector_isolation.py"])
+
+    from tests.conftest import TEST_DB_URL
+
+    # PHASE 4: the audit reads the database it is given; this is the suite's migrated test database.
+    res = subprocess.run([sys.executable, "scripts/audit_vector_isolation.py"],
+                         env={**os.environ, "AUDIT_DATABASE_URL": TEST_DB_URL})
     assert res.returncode == 0
 
 

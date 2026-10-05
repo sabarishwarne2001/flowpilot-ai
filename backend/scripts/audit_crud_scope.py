@@ -9,8 +9,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import importlib
 import inspect
 
+# PHASE 4: "job" removed - app/crud/job.py no longer exists (jobs are created
+# by app.services.job_queue, which takes the work item's workspace), and the
+# import error made this audit fail before it checked anything.
 TENANT_MODULES = (
-    "work_item", "assistant", "automation", "notification", "job",
+    "work_item", "assistant", "automation", "notification",
     "ai_settings", "email_settings", "document_settings",
 )
 
@@ -21,12 +24,11 @@ SCOPE_INHERITED = {
     "assistant.delete_conversation_messages":"conversation fetched under scope",
     "assistant.update_conversation_title":   "conversation fetched under scope",
     "assistant.delete_conversation":         "conversation fetched under scope",
-    "job.create_job":                        "work_item fetched under scope",
-    "job.update_job":                        "job fetched under scope",
     "notification.update_notification_read_status":     "notification fetched under scope",
     "notification.update_notification_delivery_status": "notification fetched under scope",
     "notification.delete_notification":                 "notification fetched under scope",
     "notification.list_organization_scoped_for_user":  "organization-scoped notifications query where workspace_id is null",
+    "notification.get_organization_scoped_for_user":   "one organization-scoped notification: organization_id + user_id + workspace_id is null",
 }
 
 failures = []
