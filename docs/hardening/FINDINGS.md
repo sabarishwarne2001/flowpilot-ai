@@ -62,7 +62,7 @@ How to read this file:
 | F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
 | F-048 | P3 | open (policy needs N-018) | Auth / availability | Sign-in is limited to 10 attempts per 5 minutes per IP, not the intended 20, because the limiter runs twice; one shared office network can lock everyone out |
 | F-049 | P3 | confirmed (Phase 3 e2e) | Frontend / noise | Every page requests the signed-in user's avatar and logs a 404 when they have none (most users) |
-| F-050 | P0 | **fixed** (Phase 3) | API stability | Opening a scanned packet's review screen aborted the whole API process (PDFium used from several threads) |
+| F-050 | P0 | **fixed** (Phase 3; full backend suite re-run pending) | API stability | Opening a scanned packet's review screen aborted the whole API process (PDFium used from several threads) |
 | F-051 | P1 | confirmed (Phase 3 e2e) | Team / billing | Accepting a team invitation fails with HTTP 500 on any organization with a live subscription |
 | F-052 | P2 | confirmed (Phase 3 e2e) | Audit log | Audit log export (CSV and NDJSON) always fails: the page sends `format=CSV`, the API only accepts `csv`/`jsonl` |
 | F-053 | P2 | confirmed (Phase 3 e2e) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |

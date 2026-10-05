@@ -1,35 +1,29 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-09-30 (end of Phase 2)_
+_Last updated: 2026-10-05 (end of Phase 3)_
 
 ## Current phase
-**Phase 2 — Deployment blockers and security hardening: COMPLETE. Stopped at the
-Phase 2 checkpoint.** PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/3 (branch `hardening/security-deploy`). The next
-session starts Phase 3 after you have read the PR. Do not redo Phases 0 to 2.
+**Phase 3 — Browser test harness and coverage: COMPLETE. Stopped at the Phase 3 checkpoint.**
+PR: PR_LINK_PLACEHOLDER (branch `hardening/e2e`). The next session starts Phase 4 after you have
+read the PR and answered N-019 and N-020. Do not redo Phases 0 to 3.
 
 ## What is done
 - **Phase 0:** `00-map.md`, `COVERAGE.csv`, `FINDINGS.md`, `NEEDS-OWNER.md` (PR #1, merged).
-- **Phase 1:** boot and honest baseline (PR #2, merged): CI runs, a fresh clone installs,
-  migrates, tests and starts; 2,285 passed / 219 failed / 33 errors (F-016); 39 of 78 gates pass.
-- **Phase 2** (this branch; the full report is `02-security-deploy.md`):
-  - P1 bugs fixed: F-020 (bbox), F-019 (fake OCR), F-021 (echoed secrets), F-040 (no `gunicorn`),
-    F-047 (23 production settings never reached the containers).
-  - Production refuses to start on unsafe config; public default secrets removed (F-003).
-  - Tenant isolation proven over all 423 tenant routes; IDOR, roles, super-admin and partner
-    routes proven; two soft-IDOR routes and five plan-gating holes closed (F-031, F-004).
-  - Upload path hardened (F-035, F-036, F-037); SSRF, SQL injection and automation injection
-    checked and pinned; billing webhook signatures, replay and secret rotation proven.
-  - Sign-in rate limit proven against real Redis (F-048 recorded).
-  - Deployment for a Docker Compose VPS: backups with a restore drill, container job scheduler,
-    heartbeats, readiness probe, pinned images, no source maps, no public API docs, LICENSE,
-    `docs/RUNBOOK.md` section 9 (F-006, F-024, F-038, F-041 to F-044, F-046, F-007).
-  - Secrets scan of all 113 commits: no real credential found (limits in FINDINGS).
-  - 494 new tests in 35 files (11 from the parallel session); no existing assertion changed.
-    Full serial run: 2,769 passed, 214 failed, 33 errors; nothing red that was not already red in
-    Phase 1, and 5 tests that were red now pass. CI runs the Phase 2 proofs in a step of their own.
-  - `COVERAGE.csv`: 26 rows now `deep` and 32 more `smoke` (production settings, the upload and
-    billing-webhook endpoints, the readiness probe); everything else is still `untested`.
-  - `FINDINGS.md` now holds F-001 to F-048; `NEEDS-OWNER.md` holds N-001 to N-018.
+- **Phase 1:** boot and honest baseline (PR #2, merged).
+- **Phase 2:** security and deployment blockers (PR #3, merged); full report `02-security-deploy.md`.
+- **Phase 3** (this branch; full report `03-coverage.md`):
+  - Owner decisions N-009, N-011, N-012, N-014 (approved), N-016 recorded.
+  - Playwright harness in `frontend/e2e` with a strict failure fixture, fresh session per test,
+    idempotent seed (`backend/scripts/seed_e2e.py`), real sample documents, a local SMTP sink, stack
+    scripts, a known-issue registry, inventory tools, README; advisory `e2e` CI job.
+  - **275 browser tests; final full run 233 passed, 40 failed, 2 skipped** (10.4 min). All 40
+    failures are product findings; the 2 skips need an LLM key.
+  - **F-050 (P0) fixed**: concurrent packet thumbnails aborted the whole API (PDFium thread safety);
+    regression test red 3/3 before, green 3/3 after. Full backend suite NOT re-run after it.
+  - New findings F-049 to F-066; the worst open one is **F-051 (P1)**: accepting a team invitation
+    returns 500 on every organization with a live subscription.
+  - `COVERAGE.csv`: 147 rows moved by passing/failing browser tests; ledger now 55 `deep`,
+    287 `smoke`, 967 `untested` (endpoints, jobs and integrations untouched).
 
 ## Owner decisions in force (do not re-ask)
 - **N-004** proprietary, all rights reserved ("FlowPilot AI" until the legal name is given).
@@ -43,31 +37,33 @@ session starts Phase 3 after you have read the PR. Do not redo Phases 0 to 2.
   `backend/evidence/`, `arch07_*`, `arch08_*`, PDFs and certification files stay off limits.
 
 ## Next action (exact)
-Phase 3, per THE_MASTER_PROMPT. From the Phase 2 residual risks, in this order:
-1. **N-014** FastAPI/Starlette upgrade (13 advisories, including the upload parser) and the
-   python-jose to PyJWT swap, with the whole suite as the safety net. Needs the owner's go-ahead.
-2. **Billing lifecycle proof** with recorded gateway payloads: failed payment, dunning,
-   cancellation, downgrade, out-of-order events, quota enforcement (needs N-013 for Dodo).
-3. **Triage the ~215 red tests** (F-016) and the 33 failing gates (F-029, N-010 allows reading
-   the failing gates); fix or get the owner to retire, never weaken.
-4. Object-level isolation for the remaining collections; tenant-edited email and branding
-   template injection; prompt injection through the assistant with a recorded model.
-5. Watch the first real deploy with the owner (RUNBOOK 9.2) and fix what it teaches.
-6. Phase 4 candidates already logged: F-045 (split the images), F-015 (sidebar vs API roles),
-   F-005, F-008 to F-010, F-014, F-028, the Redis password, digest pinning.
+Phase 4 (fix loop), in this order:
+1. Run the full backend suite on `hardening/e2e` and compare with `main` (F-050 Evidence Rule step 4).
+2. **F-051** (P1): add `billing.seat_added`/`billing.seat_removed` to the outbox visibility
+   vocabulary by migration (one head), with a failing test first; check `jit_service` and
+   `deprovision_service`, which emit the same event. Then re-run `tests/20-organization.spec.ts`.
+3. **F-052** (audit export format), **F-056** (assistant keeps the question), **F-066** (PDFium
+   lock at the other call sites, stress test each); **F-053/F-065** once N-019 is answered.
+4. P3 list from `03-coverage.md` §5; then remove F-049 from `KNOWN_ISSUES` and make the `e2e`
+   CI job required.
+5. **N-014** FastAPI/Starlette upgrade (approved) with the backend and browser suites as nets.
+6. Endpoint coverage from OpenAPI and background-job tests (not done in Phase 3).
 
-Before starting: read `docs/RUNBOOK.md` sections 3 and 5 and `02-security-deploy.md` section 5.
+How to bring the test stack up in a fresh sandbox: `frontend/e2e/scripts/start-db.sh`, create
+`backend/.env` (RUNBOOK §3.1 + the block in `frontend/e2e/README.md`), `pip install` into
+`backend/.venv` (Python 3.12), `npm ci` in `frontend`, then `frontend/e2e/scripts/start-stack.sh`
+and `cd frontend && npx playwright test -c e2e` (about 50 minutes with 2 workers).
 
 ## Blockers
-None for Phase 3 (`BLOCKERS.md`: no fix needed three attempts). Open owner decisions:
-N-002, N-003, N-005, N-009 (production answer), N-011 to N-018, and the legal name in N-004.
-N-014 blocks only the framework upgrade; N-013 blocks only the Dodo mode-guard fix.
+None for Phase 4. Open owner decisions: N-002, N-003, N-005, N-013, N-015, N-017, N-018, N-019
+(viewer access, ERP posting by members), N-020 (missing capabilities), and the legal name in N-004.
 
 ## Budget notes
-Phase 2 budget was about $15. Phase 2 ran the whole suite several times (about 25 minutes each),
-built PostgreSQL extension `pgvector` from source, ran the gates twice, scanned the git history and
-wrote 494 tests. The exact spend is not visible from inside the session; check your usage page.
-If it went over, Phase 3 should start with item 1 or 3 only.
+Phase 3 budget was about $30. It installed the stack twice (one container restart), ran the browser
+suite in parts while writing it and once in full (about 50 minutes), and read only the parts of the
+58k-line frontend it needed (inventory tools dumped page and form accessibility trees instead). The
+exact spend is not visible from inside the session; check your usage page. If it went over, Phase 4
+should start with items 1 and 2 only.
 
 ## Environment notes (for the next session)
 - Branch pushes to `hardening/*` work from the cloud session (Phase 1 and 2 pushed there).
@@ -79,6 +75,12 @@ If it went over, Phase 3 should start with item 1 or 3 only.
 - **Docker:** the `docker compose` CLI works (use `docker compose ... config` to render and check a
   compose file), but the daemon cannot pull images (Docker Hub rate limit), so nothing was run in
   containers. Do not spend time on `docker compose up` here.
+- **Phase 3 scripts replace the manual steps below:** `frontend/e2e/scripts/start-db.sh` (native
+  Postgres on /dev/shm port 5433 + Redis) and `start-stack.sh` (migrate, API, worker, mail sink).
+  pgvector must still be built from source once per container (apt has 0.6.0; `apt-get update`
+  first, then `postgresql-server-dev-16`, then `make && make install` in a v0.8.0 checkout).
+- **The `verify_*.py` gates rewrite their evidence JSON** under `backend/evidence/` when run;
+  `git checkout -- backend/evidence` afterwards (those files are off limits).
 - **Postgres and Redis are native, not Docker:** PostgreSQL 16 with `pgvector` 0.8.0 built from source
   (the apt package is 0.6.0 and the app raises below 0.8), Redis 7.0, all on the RAM disk. Start a
   cluster with `setsid nohup /usr/lib/postgresql/16/bin/postgres -D /dev/shm/pgdata -p 5433 -c fsync=off
