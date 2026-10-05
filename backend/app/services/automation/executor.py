@@ -428,6 +428,14 @@ def _execute_node(
         started = time.perf_counter()
         try:
             outcome = _run_action_node(state, node_key=node.node_key, config=config, perform=perform)
+        except (ToolContractViolation, ExecutionHalted, budget_service.BudgetExhausted):
+            # PHASE 4: control flow, not a node failure. run_execution has a
+            # dedicated handler for each - an R33 violation or a halt FAILS the
+            # execution whatever on_error says (and marks r33_violation), budget
+            # exhaustion stops it - and wrapping them below hid them from those
+            # handlers: with on_error=CONTINUE the rule carried on past a
+            # document-derived recipient and past its cost ceiling.
+            raise
         except Exception as exc:
             # Recorded here, with what was attempted and for how long, then
             # re-raised for run_execution's on_error policy. The outer
