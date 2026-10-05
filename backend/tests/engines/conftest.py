@@ -78,6 +78,8 @@ class Recording:
     classification: str
     entities: dict[str, Any]
     summary: str = "Recorded summary."
+    #: What each verification agent answers, in turn; None = every agent repeats `entities`.
+    agents: Optional[list[dict[str, Any]]] = None
 
 
 @dataclass
@@ -88,8 +90,11 @@ class RecordedLLM:
     calls: list[tuple[str, str]] = field(default_factory=list)
     memory_contexts: list[Optional[str]] = field(default_factory=list)
 
-    def record(self, marker: str, classification: str, entities: dict[str, Any], summary: str = "Recorded summary.") -> None:
-        self.recordings[marker] = Recording(classification, entities, summary)
+    agent_turns: dict[str, int] = field(default_factory=dict)
+
+    def record(self, marker: str, classification: str, entities: dict[str, Any], summary: str = "Recorded summary.",
+               agents: Optional[list[dict[str, Any]]] = None) -> None:
+        self.recordings[marker] = Recording(classification, entities, summary, agents)
 
     def _find(self, text: str) -> Optional[Recording]:
         # Newest first: a document often quotes another's marker (an invoice
@@ -115,6 +120,31 @@ class RecordedLLM:
         found = self._find(text)
         return found.summary if found else "A document."
 
+    def execute_prompt(self, *, prompt: str, temperature: float = 0.0, ai_settings: Any = None):
+        """A verification agent's answer: the prompt carries the document text."""
+        import json
+
+        from app.schemas.assistant import TokenUsage
+
+        self.calls.append(("agent", prompt[-40:]))
+        found = None
+        marker_hit = None
+        for marker, recording in reversed(list(self.recordings.items())):
+            if marker in prompt:
+                found, marker_hit = recording, marker
+                break
+        if found is None:
+            answer: dict[str, Any] = {}
+        elif found.agents:
+            turn = self.agent_turns.get(marker_hit, 0)
+            self.agent_turns[marker_hit] = turn + 1
+            answer = found.agents[turn % len(found.agents)]
+        else:
+            answer = found.entities
+        usage = TokenUsage(provider="groq", model="recorded", prompt_tokens=100, completion_tokens=50,
+                           total_tokens=150, estimated_cost=0.0)
+        return json.dumps(answer), usage
+
 
 @pytest.fixture()
 def recorded_llm(monkeypatch: pytest.MonkeyPatch) -> RecordedLLM:
@@ -124,6 +154,7 @@ def recorded_llm(monkeypatch: pytest.MonkeyPatch) -> RecordedLLM:
     monkeypatch.setattr(llm_service, "classify_document", fake.classify_document)
     monkeypatch.setattr(llm_service, "extract_entities", fake.extract_entities)
     monkeypatch.setattr(llm_service, "generate_summary", fake.generate_summary)
+    monkeypatch.setattr(llm_service, "execute_prompt", fake.execute_prompt)
     return fake
 
 
@@ -258,10 +289,11 @@ class Engines:
 
     def process(self, filename: str, pages: Sequence[Sequence[str]], *, marker: Optional[str] = None,
                 classification: Optional[str] = None, entities: Optional[dict[str, Any]] = None,
+                agents: Optional[list[dict[str, Any]]] = None,
                 drain_jobs: bool = True, allow_failures: bool = False) -> uuid.UUID:
         """Upload a PDF whose model reading is recorded, and run the pipeline."""
         if marker is not None:
-            self.llm.record(marker, classification or "Other", entities or {})
+            self.llm.record(marker, classification or "Other", entities or {}, agents=agents)
         work_item_id = self.upload(filename, make_pdf(pages))
         if drain_jobs:
             drain(allow_failures=allow_failures)
@@ -297,8 +329,16 @@ class Engines:
 
 
 @pytest.fixture()
-def engines(client: TestClient, db_session: Session, tenant: Fixture, test_sessions, recorded_llm) -> Engines:
+def engines(client: TestClient, db_session: Session, tenant: Fixture, test_sessions, recorded_llm,
+            monkeypatch: pytest.MonkeyPatch) -> Engines:
     """An Enterprise-plan tenant with the live pipeline wired to the test DB."""
+    from app.core.config import settings
+    from app.services.embedding_service import embedding_service
+
+    # Deterministic OCR for scanned pages and embeddings, whatever the environment says; the model the
+    # embedding service cached (if any) is put back afterwards so no other test inherits the stub.
+    monkeypatch.setattr(settings, "ML_STUBS", True)
+    monkeypatch.setattr(embedding_service, "_model", None)
     harness = Engines(client=client, db=db_session, tenant=tenant, llm=recorded_llm)
     harness.plan("enterprise")
     return harness
