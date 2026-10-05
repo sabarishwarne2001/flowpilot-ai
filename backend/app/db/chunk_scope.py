@@ -147,9 +147,31 @@ def delete_chunks_for_work_item(
     return int(result.rowcount or 0)
 
 
+def chunks_of_document(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID | str,
+    work_item_id: uuid.UUID | str,
+    limit: Optional[int] = None,
+) -> list[DocumentChunk]:
+    """One document's chunks in reading order, always under its workspace.
+
+    PHASE 4. Radar's fingerprint and evidence loaders read chunks by work item
+    alone; through here they carry the workspace predicate too (the tenancy
+    rule, and the partition key of document_chunks).
+    """
+    statement = scoped_chunk_query(db, workspace_id, work_item_ids=[work_item_id]).order_by(
+        DocumentChunk.chunk_index
+    )
+    if limit is not None:
+        statement = statement.limit(limit)
+    return list(db.execute(statement).scalars().all())
+
+
 __all__ = [
     "COSINE_DISTANCE",
     "VectorScopeError",
+    "chunks_of_document",
     "count_chunks",
     "delete_chunks_for_work_item",
     "ensure_iterative_scan",

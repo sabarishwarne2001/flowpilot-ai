@@ -55,7 +55,7 @@ from typing import Any, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.document_chunk import DocumentChunk
+from app.db.chunk_scope import chunks_of_document
 from app.models.procurement import ProcurementCase, ProcurementCaseLine
 from app.models.radar import DocumentFingerprint
 from app.models.uploaded_file import UploadedFile
@@ -169,11 +169,7 @@ def build_fingerprint(
     with a cosine of 0 against everything, which fires nothing but costs a row
     and a scan.
     """
-    chunk_rows = db.execute(
-        select(DocumentChunk)
-        .where(DocumentChunk.work_item_id == work_item.id)
-        .order_by(DocumentChunk.chunk_index)
-    ).scalars().all()
+    chunk_rows = chunks_of_document(db, workspace_id=work_item.workspace_id, work_item_id=work_item.id)
     if not chunk_rows:
         return None
 
@@ -350,15 +346,18 @@ def load_candidates(
 
 
 def load_chunks(
-    db: Session, *, work_item_id: uuid.UUID, limit: int = MAX_CHUNKS_FOR_EVIDENCE
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    work_item_id: uuid.UUID,
+    limit: int = MAX_CHUNKS_FOR_EVIDENCE,
 ) -> tuple[fp.ChunkVector, ...]:
-    """Chunks for L3 and drift evidence. Bounded; see MAX_CHUNKS_FOR_EVIDENCE."""
-    rows = db.execute(
-        select(DocumentChunk)
-        .where(DocumentChunk.work_item_id == work_item_id)
-        .order_by(DocumentChunk.chunk_index)
-        .limit(limit)
-    ).scalars().all()
+    """Chunks for L3 and drift evidence. Bounded; see MAX_CHUNKS_FOR_EVIDENCE.
+
+    PHASE 4: scoped to the workspace being swept, so a counterpart id can never
+    pull another workspace's text into a finding's evidence.
+    """
+    rows = chunks_of_document(db, workspace_id=workspace_id, work_item_id=work_item_id, limit=limit)
     return tuple(
         fp.ChunkVector(
             chunk_id=str(row.id),
