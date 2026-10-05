@@ -9,8 +9,9 @@ from sqlalchemy import select
 
 from app.core.encryption import decrypt_password
 from app.core.smtp import resolve_smtp_config
-from app.models.email_settings import EmailEncryption, EmailSettings
+from app.models.email_settings import EmailEncryption
 from app.models.organization_email_settings import OrganizationEmailSettings
+from app.models.workspace_email_override import WorkspaceEmailOverride
 from app.schemas.organization_email_settings import (
     OrganizationEmailSettingsUpdate,
 )
@@ -18,6 +19,21 @@ from app.services import organization_email_settings_service as org_smtp
 
 
 RELAY_PASSWORD = "s3cr3t-relay-password"
+
+
+@pytest.fixture(autouse=True)
+def _custom_email_plan(db_session, tenant):
+    """PHASE 4: custom email is a paid capability (HM-S1 gates PATCH with 402).
+
+    These tests were written before the gate and ran on the default free plan,
+    so every write was refused before reaching the behaviour under test. The
+    organization is put on a plan that includes the capability; the
+    assertions are unchanged.
+    """
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "enterprise")
+    db_session.commit()
 
 
 def _url(organization_id) -> str:
@@ -45,6 +61,30 @@ def _stored(db, organization_id) -> OrganizationEmailSettings:
             OrganizationEmailSettings.organization_id == organization_id
         )
     ).scalar_one()
+
+
+# ===========================================================================
+# Plan gate
+# ===========================================================================
+
+def test_the_free_plan_is_refused_custom_email(client, db_session, tenant):
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "free")
+    db_session.commit()
+    response = client.patch(
+        _url(tenant.organization.id),
+        json=_complete_payload(),
+        headers=tenant.org_admin.headers,
+    )
+    assert response.status_code == 402, response.text
+    assert response.json()["code"] == "CAPABILITY_REQUIRED"
+    stored = db_session.execute(
+        select(OrganizationEmailSettings).where(
+            OrganizationEmailSettings.organization_id == tenant.organization.id
+        )
+    ).scalar_one_or_none()
+    assert stored is None or not stored.is_enabled
 
 
 # ===========================================================================
@@ -222,15 +262,19 @@ class TestResolutionOrder:
     def test_workspace_row_wins_over_the_organization_row(
         self, db_session, tenant, enabled_org_smtp
     ):
+        # PHASE 4: ARCH-40 moved workspace email to `workspace_email_overrides`
+        # (app/api/v1/email_settings.py); the old `email_settings` table has no
+        # readers left, so a row there could never win. The override is the row.
         db_session.add(
-            EmailSettings(
+            WorkspaceEmailOverride(
                 workspace_id=tenant.workspace.id,
+                organization_id=tenant.organization.id,
                 smtp_host="smtp.workspace.test",
                 smtp_port=25,
                 smtp_username="team@workspace-mail.com",
-                encrypted_password=org_smtp.encrypt_password("workspace-pw"),
+                smtp_password_encrypted=org_smtp.encrypt_password("workspace-pw"),
                 sender_name="Team",
-                encryption=EmailEncryption.TLS,
+                encryption=EmailEncryption.TLS.value,
                 is_enabled=True,
             )
         )
