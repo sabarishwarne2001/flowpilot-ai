@@ -119,3 +119,41 @@ def test_a_rule_promoted_at_volume_is_the_one_applied_and_measured(db_session, t
     db.refresh(rule)
     assert (rule.live_hits, rule.live_total) == (1, 1)
 
+
+def test_an_active_layout_fills_the_field_the_model_left_empty(engines) -> None:
+    """Through the live pipeline: the model returns no invoice number; memory fills it, as printed."""
+    from app.models.extraction_memory import ExtractionTemplate
+
+    db, tenant = engines.db, engines.tenant
+    db.add(ExtractionMemorySettings(workspace_id=tenant.workspace.id, organization_id=tenant.organization.id,
+                                    mode="AUTO"))
+    db.commit()
+    for n in range(1, 56):
+        _review(db, tenant, _item(db, tenant, n), n)
+    db.commit()
+    sweep.run(db, workspace_ids=[tenant.workspace.id])
+    # The layout's A/B trial (30+ documents per arm) is out of scope here: mark it decided in memory's favour.
+    for template in db.execute(select(ExtractionTemplate).where(
+            ExtractionTemplate.workspace_id == tenant.workspace.id)).scalars():
+        template.state = "ACTIVE"
+        template.activated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    model_reading = {"vendor_name": "Acme Supplies Ltd", "total_amount": "257.00", "currency": "INR"}
+    gap = engines.process("inv-57.pdf", [_text(57).splitlines()], marker="INV-00057", classification="Invoice",
+                          entities=model_reading)
+    item = engines.item(gap)
+    assert item.extracted_entities["invoice_number"] == "INV-00057", item.extracted_entities
+    assert item.extraction_metadata.get("extraction_memory_filled") == ["invoice_number"]
+
+    # A value the model did return is never replaced, even when memory disagrees.
+    kept = engines.process("inv-58.pdf", [_text(58).splitlines()], marker="INV-00058", classification="Invoice",
+                           entities={**model_reading, "invoice_number": "MODEL-SAYS-58"})
+    assert engines.item(kept).extracted_entities["invoice_number"] == "MODEL-SAYS-58"
+
+    # SHADOW mode never changes an extraction.
+    db.get(ExtractionMemorySettings, tenant.workspace.id).mode = "SHADOW"
+    db.commit()
+    shadow = engines.process("inv-59.pdf", [_text(59).splitlines()], marker="INV-00059", classification="Invoice",
+                             entities=model_reading)
+    assert "invoice_number" not in engines.item(shadow).extracted_entities

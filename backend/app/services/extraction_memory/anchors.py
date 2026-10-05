@@ -38,12 +38,25 @@ def norm_token(token: str) -> str:
 
 def document_lines(text: str) -> list[list[str]]:
     """Normalised tokens per non-empty line."""
-    lines: list[list[str]] = []
+    return [[norm for norm, _ in line] for line in _token_pairs(text)]
+
+
+def display_lines(text: str) -> list[list[str]]:
+    """The same tokens as `document_lines`, position for position, with their case kept.
+
+    A rule is matched on normalised tokens; the value it fills into a document
+    is read from these, so "INV-00056" is filled as printed, not "inv-00056".
+    """
+    return [[shown for _, shown in line] for line in _token_pairs(text)]
+
+
+def _token_pairs(text: str) -> list[list[tuple[str, str]]]:
+    lines: list[list[tuple[str, str]]] = []
     for raw in (text or "").splitlines():
-        tokens = [norm_token(t) for t in raw.split()]
-        tokens = [t for t in tokens if t]
-        if tokens:
-            lines.append(tokens)
+        pairs = [(norm_token(t), (t or "").strip(_STRIP)) for t in raw.split()]
+        pairs = [(norm, shown) for norm, shown in pairs if norm]
+        if pairs:
+            lines.append(pairs)
     return lines
 
 
@@ -133,7 +146,8 @@ def learn(examples: Iterable[tuple[Sequence[Sequence[str]], str, Any]]) -> Count
     return support
 
 
-def apply_rule(lines: Sequence[Sequence[str]], key: RuleKey) -> Optional[str]:
+def locate(lines: Sequence[Sequence[str]], key: RuleKey) -> Optional[tuple[int, int]]:
+    """(line, first token) of the value the rule points at, or None."""
     for i, line in enumerate(lines):
         for k, token in enumerate(line):
             if token != key.anchor_norm:
@@ -142,11 +156,27 @@ def apply_rule(lines: Sequence[Sequence[str]], key: RuleKey) -> Optional[str]:
             start = k + key.offset_dx
             if target_line >= len(lines) or start < 0:
                 return None
-            target = lines[target_line]
-            if start + key.value_token_count > len(target):
+            if start + key.value_token_count > len(lines[target_line]):
                 return None
-            return " ".join(target[start:start + key.value_token_count])
+            return target_line, start
     return None
+
+
+def apply_rule(lines: Sequence[Sequence[str]], key: RuleKey) -> Optional[str]:
+    found = locate(lines, key)
+    if found is None:
+        return None
+    i, start = found
+    return " ".join(lines[i][start:start + key.value_token_count])
+
+
+def apply_rule_display(lines: Sequence[Sequence[str]], shown: Sequence[Sequence[str]], key: RuleKey) -> Optional[str]:
+    """`apply_rule`, read back from `display_lines` (case kept)."""
+    found = locate(lines, key)
+    if found is None:
+        return None
+    i, start = found
+    return " ".join(shown[i][start:start + key.value_token_count])
 
 
 def wilson_lower(hits: int, total: int, z: float = WILSON_Z) -> float:
