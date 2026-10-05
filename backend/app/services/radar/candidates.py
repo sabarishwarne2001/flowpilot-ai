@@ -205,10 +205,19 @@ def build_fingerprint(
     # so the vendor+number layer read None for real extractions.
     from app.models.document_role import DocumentRole
 
+    # PHASE 4: also its date, total and currency. Raw entities carry `date` /
+    # `total_amount`, never `document_date` / `total_micros`, so the near-
+    # duplicate layers' guards ("same template, different amount or month is a
+    # new bill") never had values, and every monthly invoice from one supplier
+    # was flagged as a 99% duplicate of the last one.
     role_row = db.execute(
-        select(DocumentRole.vendor_key, DocumentRole.document_number).where(
-            DocumentRole.work_item_id == work_item.id
-        )
+        select(
+            DocumentRole.vendor_key,
+            DocumentRole.document_number,
+            DocumentRole.document_date,
+            DocumentRole.total_micros,
+            DocumentRole.currency,
+        ).where(DocumentRole.work_item_id == work_item.id)
     ).one_or_none()
     vendor_key = (role_row.vendor_key if role_row else None) or _text(
         entities.get("vendor_key")
@@ -235,9 +244,12 @@ def build_fingerprint(
         ),
         line_count=line_count,
         page_count=work_item.page_count,
-        document_date=_as_date(entities.get("document_date")),
-        total_micros=_as_int(entities.get("total_micros")),
-        currency=_text(entities.get("currency")),
+        document_date=(role_row.document_date if role_row else None)
+        or _as_date(entities.get("document_date")),
+        total_micros=(role_row.total_micros if role_row else None)
+        if (role_row and role_row.total_micros is not None)
+        else _as_int(entities.get("total_micros")),
+        currency=(role_row.currency if role_row else None) or _text(entities.get("currency")),
         embedding_model=chunk_rows[0].embedding_model,
     )
 
