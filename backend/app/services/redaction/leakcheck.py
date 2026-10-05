@@ -58,6 +58,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from app.services.redaction.vocabulary import FORBIDDEN_OUTPUT_KEYS
+from app.core.pdfium_lock import PDFIUM_LOCK
 
 __all__ = [
     "LeakReport",
@@ -146,21 +147,23 @@ def extract_text_per_page(pdf_bytes: bytes) -> list[str]:
     """Text a reader's copy-paste would produce, one string per page."""
     import pypdfium2 as pdfium
 
-    document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
-    try:
-        pages: list[str] = []
-        for index in range(len(document)):
-            page = document[index]
-            textpage = page.get_textpage()
-            try:
-                pages.append(textpage.get_text_range() or "")
-            finally:
-                textpage.close()
-        return pages
-    except Exception as exc:  # noqa: BLE001
-        raise LeakCheckError(f"could not extract text: {type(exc).__name__}") from exc
-    finally:
-        document.close()
+    # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
+        try:
+            pages: list[str] = []
+            for index in range(len(document)):
+                page = document[index]
+                textpage = page.get_textpage()
+                try:
+                    pages.append(textpage.get_text_range() or "")
+                finally:
+                    textpage.close()
+            return pages
+        except Exception as exc:  # noqa: BLE001
+            raise LeakCheckError(f"could not extract text: {type(exc).__name__}") from exc
+        finally:
+            document.close()
 
 
 def scan_object_tree(pdf_bytes: bytes) -> tuple[str, ...]:

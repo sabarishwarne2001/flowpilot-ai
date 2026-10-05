@@ -45,6 +45,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional
 
 from app.services.tables.synthetic import COURIER, Canvas, build_pdf, inr, western
+from app.core.pdfium_lock import PDFIUM_LOCK
 
 W, H = 612.0, 792.0
 LEFT = 54.0
@@ -159,17 +160,19 @@ def text_layer_pages(pdf: bytes) -> list[dict]:
     from app.services.ocr.base import OCRPage
     from app.services.ocr.pdf_text_layer import extract_page
 
-    document = pdfium.PdfDocument(pdf)
-    try:
-        out = []
-        for index in range(len(document)):
-            page = extract_page(document[index], raster_dpi=200)
-            assert page is not None, "synthetic page without a text layer"
-            out.append(OCRPage(page_number=index + 1, text=page.text, blocks=page.blocks, ocr_applied=False,
-                               width=page.width, height=page.height).as_dict())
-        return out
-    finally:
-        document.close()
+    # F-066: PDFium is not thread-safe; hold the process lock for the document's lifetime.
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(pdf)
+        try:
+            out = []
+            for index in range(len(document)):
+                page = extract_page(document[index], raster_dpi=200)
+                assert page is not None, "synthetic page without a text layer"
+                out.append(OCRPage(page_number=index + 1, text=page.text, blocks=page.blocks, ocr_applied=False,
+                                   width=page.width, height=page.height).as_dict())
+            return out
+        finally:
+            document.close()
 
 
 def _doc(doc_id: str, label: str, writer: Writer, fields: dict, mentions: Optional[list[dict]] = None) -> SynDoc:
