@@ -54,15 +54,30 @@ def learn_rules(db: Session, template: ExtractionTemplate, *, promote: bool) -> 
         (r.field_path, r.anchor_norm, r.offset_dx, r.offset_dy): r
         for r in db.execute(select(ExtractionAnchorRule).where(ExtractionAnchorRule.template_id == template.id)).scalars()
     }
-    best: dict[str, tuple[float, ExtractionAnchorRule]] = {}
-    now = datetime.now(timezone.utc)
-    counts = {"rules": 0, "promoted": 0, "retired": 0}
+    # PHASE 4: one candidate per rule IDENTITY. `uq_extraction_anchor_rules_identity`
+    # is (template, field, anchor, dx, dy) with no token count, but `learn` keys
+    # candidates by token count too, so a layout whose values under one label
+    # differ in length ("Contoso Retail" / "Fabrikam Retail Group") produced two
+    # candidates with one identity: the second INSERT broke the UNIQUE key and
+    # the whole sweep failed. Keep the length that replays best (then the
+    # better supported, then the shorter), in a fixed order.
+    chosen: dict[tuple[str, str, int, int], tuple[tuple, anchors.RuleKey, int, int, int, float]] = {}
     for key, count in support.items():
         if count < v.RULE_MIN_SUPPORT:
             continue
         hits, total = anchors.replay(key, truth[key.field_path])
         lower = anchors.wilson_lower(hits, total)
-        rule = existing.get((key.field_path, key.anchor_norm, key.offset_dx, key.offset_dy))
+        identity = (key.field_path, key.anchor_norm, key.offset_dx, key.offset_dy)
+        rank = (lower, hits, count, -key.value_token_count)
+        if identity not in chosen or rank > chosen[identity][0]:
+            chosen[identity] = (rank, key, count, hits, total, lower)
+
+    best: dict[str, tuple[float, ExtractionAnchorRule]] = {}
+    now = datetime.now(timezone.utc)
+    counts = {"rules": 0, "promoted": 0, "retired": 0}
+    for identity in sorted(chosen):
+        _, key, count, hits, total, lower = chosen[identity]
+        rule = existing.get(identity)
         if rule is None:
             rule = ExtractionAnchorRule(
                 id=uuid.uuid4(), workspace_id=template.workspace_id, template_id=template.id,
