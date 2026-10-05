@@ -168,6 +168,22 @@ pytest tests/services/test_ml_stubs.py -q    # one file (this one needs no datab
 
 ---
 
+### 5.1 Browser tests (Playwright)
+
+The end-to-end browser suite lives in `frontend/e2e` and has its own guide:
+`frontend/e2e/README.md` (what to add to `backend/.env`, how to start the API, worker
+and mail catcher, and how to read the report). Short version, with Postgres and Redis up:
+
+```bash
+frontend/e2e/scripts/start-stack.sh          # API + worker + mail catcher
+cd frontend && npx playwright test -c e2e     # ~45 minutes, 2 browsers
+npx playwright show-report e2e/playwright-report
+```
+
+What it covers and what it found: `docs/hardening/03-coverage.md`.
+
+---
+
 ## 6. Things that are unusual about this project
 
 - **`ARCH40_CONTRACT=1`.** The newest migration drops three old columns and

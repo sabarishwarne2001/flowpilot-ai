@@ -61,6 +61,24 @@ How to read this file:
 | F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
 | F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
 | F-048 | P3 | open (policy needs N-018) | Auth / availability | Sign-in is limited to 10 attempts per 5 minutes per IP, not the intended 20, because the limiter runs twice; one shared office network can lock everyone out |
+| F-049 | P3 | confirmed (Phase 3 e2e) | Frontend / noise | Every page requests the signed-in user's avatar and logs a 404 when they have none (most users) |
+| F-050 | P0 | **fixed** (Phase 3; full backend suite re-run pending) | API stability | Opening a scanned packet's review screen aborted the whole API process (PDFium used from several threads) |
+| F-051 | P1 | confirmed (Phase 3 e2e) | Team / billing | Accepting a team invitation fails with HTTP 500 on any organization with a live subscription |
+| F-052 | P2 | confirmed (Phase 3 e2e) | Audit log | Audit log export (CSV and NDJSON) always fails: the page sends `format=CSV`, the API only accepts `csv`/`jsonl` |
+| F-053 | P2 | confirmed (Phase 3 e2e) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |
+| F-054 | P3 | confirmed (Phase 3 e2e) | Roles / UX | Admin-only organization pages opened by a MEMBER say "couldn't be loaded. Try again" instead of "you don't have permission"; Branding shows a full edit form |
+| F-055 | P3 | confirmed (Phase 3 e2e) | Roles / UX | The BILLING role gets a 403 on every organization page (the header bell asks for organization notifications it may not read) |
+| F-056 | P2 | confirmed (Phase 3 e2e) | AI assistant | When the AI provider is unavailable the user's question disappears; only a 4-second toast says why |
+| F-057 | P3 | confirmed (Phase 3 e2e) | Error messages | Forms show "Request failed with status code 422" instead of the server's explanation (ERP target, corroborator rules) |
+| F-058 | P3 | confirmed (Phase 3 e2e) | Frontend / noise | Normal pages use 404 as "nothing configured" (workspace email override, branding logo), so the console shows errors on healthy pages |
+| F-059 | P3 | confirmed (Phase 3 e2e) | Plan gating / UX | A locked feature opened by URL shows a lock card with no upgrade button; the upgrade path exists only in the sidebar |
+| F-060 | P3 | confirmed (Phase 3 e2e) | Custom domains / UX | "Claim domain" is offered on a deployment where custom domains are switched off; the click returns 501 |
+| F-061 | P3 | confirmed (Phase 3 e2e) | Product gaps | Capabilities in the Phase 3 brief that do not exist: global search by invoice number, notification filters and mark-unread, promo code, webhook test ping, page image and field correction in the document viewer |
+| F-062 | P3 | confirmed (Phase 3 e2e) | Settings | The unsaved-changes guard does not cover the workspace General form: a rename is lost silently on sidebar navigation |
+| F-063 | P2 | blocked (environment) | Test coverage | With `ML_STUBS=true` and no LLM key, several features cannot be exercised end to end here (entities, tables, three-way match cases, radar flags, extraction review items, assistant answers) |
+| F-064 | P3 | confirmed (code + e2e) | Config | `RATE_LIMIT_LOGIN_IP_PER_5MIN` and the other `RATE_LIMIT_*_PER_*` settings are never read; the limits are hard-coded in `policy.py` |
+| F-065 | P2 | open (needs owner, N-019) | Roles / ERP | A MEMBER (workspace CONTRIBUTOR) may create ERP postings; the Phase 3 brief expected only admins/owners to |
+| F-066 | P2 | unverified | API stability | Seven other pypdfium2 call sites (redaction, tables, corroboration, OCR) have no PDFium lock; same class as F-050 |
 
 ---
 
@@ -1300,3 +1318,187 @@ between 3 and the documented 20, so it will not break whichever way you decide.
 **Not changed.** Raising it to the documented 20 would double an attacker's guesses per address,
 and the right rule (count only failures? per account? per address?) is a policy choice → N-018.
 
+
+---
+
+# Phase 3 findings (browser tests)
+
+Found by the Playwright suite in `frontend/e2e` (see `03-coverage.md`). Screenshots are in
+`docs/hardening/e2e-screenshots/`; the full report with traces is the `e2e-report` CI artifact
+or `frontend/e2e/playwright-report` after a local run. "Repro" steps work on a fresh clone with
+the seed from `backend/scripts/seed_e2e.py`.
+
+## F-049 — Every page logs a 404 for the user's missing avatar (P3, confirmed)
+
+**Plain language.** The sidebar shows your avatar. Most people never upload one, so on every page
+the browser asks for `/users/{id}/avatar`, gets "404 Not Found" and prints a red error in the
+console. The app then shows initials, so a user sees nothing wrong. The comment in
+`components/common/Avatar.tsx` says this is deliberate.
+**Why it matters.** Error monitoring (Sentry or similar) and anyone debugging will see a red error
+on every page view for almost every user, which hides real errors. It also made every browser test
+fail, so the suite lists it as a known issue (it is still reported on each test).
+**Repro.** Sign in as `c-admin@e2e.example.com`, open any page, open the browser console.
+**Evidence.** `tests/known-issues.spec.ts` (proves it still happens); the `known-issue` annotation on
+every test. **Fix idea (Phase 4).** Return `has_avatar` in `/auth/me`, or answer 204 instead of 404.
+
+## F-050 — Opening a scanned packet's review screen crashed the whole API (P0, fixed)
+
+**Plain language.** The "Scanned packets" review screen shows small pictures of every page. The
+browser asks for all of them at once; the server drew them at the same time on several threads
+with PDFium, a PDF library that must never be used by two threads at once. Its memory got
+corrupted and the API process died (`free(): unaligned chunk detected in tcache 2`), for every
+customer, until someone restarted it.
+**Repro (before the fix).** Upload a multi-page PDF; open Scanned packets; click the packet.
+**Evidence.** The browser suite stopped with "connection refused" mid-run; the API log ended with
+the abort. `backend/tests/services/test_packet_thumbnail_thread_safety.py` renders from 8 threads
+in a child process: killed by SIGABRT 3 runs out of 3 before the fix, passes 3 of 3 after.
+**Fix.** `app/core/pdfium_lock.py`, a process-wide lock held for the document's whole lifetime in
+`render_thumbnail` (commit `834f99e`). The ARCH-43 gate passes 12/12 before and after;
+`tests/security/test_plan_gating_server_side.py` passes. The full backend suite was **not** re-run
+for this commit (see `03-coverage.md`, "What was not done"). Other call sites: F-066.
+
+## F-051 — Accepting a team invitation fails with HTTP 500 on paid organizations (P1, confirmed)
+
+**Plain language.** When someone accepts an invitation, the app records "a seat was added" for
+billing. It writes that as an internal event called `billing.seat_added`, but the database only
+allows a fixed list of internal event names (`ck_outbox_events_visibility_vocabulary`) and that
+name is not on it. The insert is refused, the whole acceptance rolls back, and the invitee sees an
+error. Any organization with a live subscription is affected, so **no paying customer can add a
+team member through an invitation.**
+**Repro.** As `c-owner`: Settings → General → invite a new email. Sign up as that email, verify,
+open the invitation link, click Accept → stays on `/invitations/accept`; API log:
+`CheckViolation ... ck_outbox_events_visibility_vocabulary ... billing.seat_added`.
+**Evidence.** `tests/20-organization.spec.ts` "full member lifecycle through email".
+The existing backend test file for seats (`test_arch15_gate_15_3_15_4_subscriptions_seats.py`) is
+red for an unrelated, date-dependent reason (a test tier "not in force at 2026-08-01"), which is
+why this was not caught. **Fix idea (Phase 4).** A migration adding `billing.seat_added` and
+`billing.seat_removed` to the vocabulary constraint (or emitting them with the right visibility),
+plus a regression test; check `jit_service.py` and `deprovision_service.py`, which emit the same.
+
+## F-052 — Audit log export never works (P2, confirmed)
+
+**Plain language.** On Organization → Audit log, the CSV and NDJSON buttons send `format=CSV`. The
+server only accepts lowercase `csv` or `jsonl`, answers 422, and the page throws an uncaught error.
+Enterprise customers and auditors cannot export the audit trail.
+**Repro.** Audit log → click CSV. **Evidence.** `tests/20-organization.spec.ts` "filter by action
+and actor, inspect an entry, export CSV and NDJSON": `422 ... Input should be 'csv' or 'jsonl'`,
+plus `pageerror ApiError` and an unhandled rejection.
+
+## F-053 — Viewers see pages they cannot use (P2, confirmed)
+
+**Plain language.** A workspace VIEWER has Workflows, Run history and Review queue in the sidebar,
+but the server refuses them (403), so the pages show "Failed to load rules metrics" or "The review
+queue could not be loaded". Either the sidebar should hide them, or viewers should get read-only
+access. **Repro.** Sign in as `c-viewer@e2e.example.com`; open Workflows. **Evidence.**
+`tests/03-role-matrix.spec.ts` "workspace pages shown to a VIEWER must work for a VIEWER".
+(Decision needed: should viewers read workflows and the review queue? → N-019.)
+
+## F-054 — Forbidden organization pages say "couldn't be loaded" (P3, confirmed)
+
+**Plain language.** A MEMBER who opens an admin-only organization page by URL (email settings,
+service levels, developer platform, API keys, webhooks) sees "… couldn't be loaded. Try again",
+which suggests an outage. Members and Billing pages already show a proper "requires an owner or
+administrator" message; the rest should too. Branding shows the whole edit form, whose saves then
+fail. **Evidence.** `tests/03-role-matrix.spec.ts` "forbidden organization pages by URL".
+
+## F-055 — The BILLING role gets a 403 on every organization page (P3, confirmed)
+
+**Plain language.** The organization header's notification bell asks for organization
+notifications, which the BILLING role may not read, so every page logs a 403 for that role.
+**Evidence.** `tests/03-role-matrix.spec.ts` "organization sidebar — A.billing".
+
+## F-056 — The assistant loses the user's question when the AI is unavailable (P2, confirmed)
+
+**Plain language.** If the AI provider is down (or no key is set) the server answers 503 "The AI
+service is temporarily unavailable". The page shows a short toast for 4 seconds, and the question
+the user typed is gone: not in the box, not in the conversation (still "0 msg"). Users will think
+the product ignored them. **Repro.** With no `GROQ_API_KEY`, ask any question.
+**Evidence.** `tests/11-assistant-intelligence.spec.ts` "when the AI provider is down…";
+screenshot `e2e-screenshots/F-056-assistant-question-lost.jpg`.
+
+## F-057 — Forms hide the server's explanation behind "status code 422" (P3, confirmed)
+
+**Plain language.** The server explains what is wrong (for example "a Tally target needs
+tally.company (the company to import into)", or "this sentence could not be read as a checkable
+rule"), but the ERP target form and the corroborator show only "Request failed with status code
+422". **Evidence.** `tests/12-processing.spec.ts` "an invalid target shows the server's reason…",
+"a rule the engine cannot read is explained…"; screenshot `e2e-screenshots/F-057-erp-422.jpg`.
+
+## F-058 — Healthy pages log 404 errors for "not configured" (P3, confirmed)
+
+**Plain language.** Settings → Email asks for the workspace's email override and gets 404 "This
+workspace has no email override"; Organization → Branding asks for `/branding/logo` and gets 404.
+Like F-049, a normal state is reported as an error in the console and in error monitoring.
+**Evidence.** `tests/14-configuration.spec.ts` "every settings section opens", the Branding page
+smoke test and `tests/20-organization.spec.ts` branding tests.
+
+## F-059 — Locked pages opened by URL have no upgrade button (P3, confirmed)
+
+**Plain language.** Clicking a locked item in the sidebar opens a dialog with "View plans". Opening
+the same page by URL (a bookmark, a shared link) shows only a lock card ("It's included on the
+Business and Enterprise plans") with no button; Tables shows just a sentence. Data is not leaked
+and the server refuses with 402 (good). **Evidence.** `tests/02-plan-matrix.spec.ts` (lock card
+shown; no upgrade control asserted); screenshot `e2e-screenshots/F-059-lock-card.jpg`.
+
+## F-060 — "Claim domain" is offered where custom domains are off (P3, confirmed)
+
+**Plain language.** With `CUSTOM_DOMAINS_ENABLED=false` (the default) the Branding page still offers
+"Claim domain"; the server then answers 501 "Custom domains are not enabled on this deployment".
+The button should be hidden or explain this up front.
+**Evidence.** `tests/20-organization.spec.ts` "claim a custom domain…".
+
+## F-061 — Capabilities in the Phase 3 brief that the product does not have (P3, confirmed)
+
+Not bugs in existing code, but things the brief expected and the tests looked for:
+- **Global search (Ctrl+K) only finds pages**, not documents: searching "INV-E2E-1001" says "No
+  page matches". (`tests/14-configuration.spec.ts`)
+- **Notifications** have "Mark all read" and remove, but **no mark-unread toggle and no category
+  filters**. (`tests/10-workspace-documents.spec.ts`)
+- **Billing has no promo-code field.** (`tests/20-organization.spec.ts`)
+- **Webhooks have no "send test ping"** button (Deliveries, Rotate secret, Delete only).
+- **Organization members are invited from workspace settings**, not from Organization → Members.
+- **The document viewer has no page image**: the OCR tab shows the extracted text, but there is no
+  rendered page with highlighted boxes beside it. (`tests/10-workspace-documents.spec.ts`)
+- **No field correction in the document viewer**: extracted values can only be corrected on review
+  queue items, which only exist for low-confidence extractions (none with stub OCR, see F-063).
+Decide which you want before launch → N-020.
+
+## F-062 — Unsaved workspace settings are lost without warning (P3, confirmed)
+
+**Plain language.** The app has an "unsaved changes" guard, but it does not cover Settings →
+General: rename the workspace, click Documents in the sidebar, and the edit is gone with no
+question asked (the Save button had become active, so the form knew it was changed).
+**Evidence.** `tests/14-configuration.spec.ts` "unsaved changes block navigation until confirmed".
+
+## F-063 — Some features cannot be proven end to end in this sandbox (P2, blocked)
+
+**Plain language.** The sandbox runs `ML_STUBS=true` (no real OCR or embeddings) and has no LLM
+key. So the processed sample documents produce no entity records, no tables, no three-way match
+case and no radar flags, no low-confidence extraction lands in the review queue, and the assistant
+cannot answer. The pages for all of these were tested (render, filters, lock states, forms), but
+the *results* were not. These rows are `blocked` or only `smoke` in the ledger.
+**What to do.** Run `npx playwright test -c e2e` on your own PC with real models and
+`E2E_LLM=1` once (RUNBOOK §7 and `frontend/e2e/README.md`), or provide a recorded model
+response fixture so CI can cover them.
+
+## F-064 — The `RATE_LIMIT_*` settings do nothing (P3, confirmed)
+
+**Plain language.** `config.py` and `.env.example` offer `RATE_LIMIT_LOGIN_IP_PER_5MIN`,
+`RATE_LIMIT_GLOBAL_IP_PER_MINUTE`, `RATE_LIMIT_USER_PER_MINUTE` and others, but nothing reads them:
+the limits are fixed numbers in `app/core/rate_limit/policy.py`. Changing the setting has no effect
+(found when raising it for the test stack had none). Same area as F-048 (N-018).
+
+## F-065 — Members may create ERP postings (P2, needs your decision)
+
+**Plain language.** The Phase 3 brief says Members must not trigger mutating ERP posts. The server
+lets a MEMBER whose workspace role is CONTRIBUTOR create a posting (it answered "ERP target not
+found", i.e. it got past the permission check); VIEWER is refused (403, correct). Whether
+contributors may post to the ERP is a product rule → N-019.
+**Evidence.** `tests/03-role-matrix.spec.ts` "ERP posting: a workspace VIEWER and a MEMBER may not post".
+
+## F-066 — Other PDFium call sites have no lock (P2, unverified)
+
+Same class as F-050. Unprotected: `services/redaction/rasterize.py` (2), `redaction/leakcheck.py`,
+`tables/reader.py`, `tables/geometry.py`, `corroboration/synthetic.py`, `ocr/paddle.py` (2),
+`ocr/pdf_text_layer.py`. Whether they can run concurrently in one process (API thread pool or a
+threaded worker) was not tested. Phase 4: a stress test per site, then the same lock.

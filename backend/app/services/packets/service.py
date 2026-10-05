@@ -299,18 +299,25 @@ def render_thumbnail(work_item: WorkItem, page: int, scale: float = 0.35) -> byt
 
     from app.core.storage import get_storage_driver
 
+    from app.core.pdfium_lock import PDFIUM_LOCK
+
     if (work_item.file_type or "").split(";")[0].strip().lower() != v.PDF_MIME:
         raise PacketError("NOT_PDF", "Only PDF packets have page thumbnails.")
-    pdf = pdfium.PdfDocument(get_storage_driver().get(work_item.stored_filename))
-    try:
-        if not 1 <= page <= len(pdf):
-            raise PacketError("NO_PAGE", "page out of range")
-        image = pdf[page - 1].render(scale=scale).to_pil()
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG", optimize=True)
-        return buffer.getvalue()
-    finally:
-        pdf.close()
+    source = get_storage_driver().get(work_item.stored_filename)
+    # F-050. The review screen requests every page at once and the route runs on
+    # a thread pool; PDFium is not thread-safe, so concurrent renders aborted the
+    # whole API process. Serialise the PDFium work for the document's lifetime.
+    with PDFIUM_LOCK:
+        pdf = pdfium.PdfDocument(source)
+        try:
+            if not 1 <= page <= len(pdf):
+                raise PacketError("NO_PAGE", "page out of range")
+            image = pdf[page - 1].render(scale=scale).to_pil()
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG", optimize=True)
+            return buffer.getvalue()
+        finally:
+            pdf.close()
 
 
 def mark_failed(db: Session, *, split_id: uuid.UUID, reason: str) -> None:

@@ -98,7 +98,7 @@ community rebuild `pgsty/minio` (which includes `mc`).** Nothing to change.
 The recommendation to use a managed object store in production stays open as
 an option, but is not required.
 
-## N-009 — When should production run the lossy ARCH-40 "contract" migration?
+## N-009 — When should production run the lossy ARCH-40 "contract" migration? (DECIDED)
 The newest migration, `arch40_step3_contract_ai_settings`, drops three unused
 `ai_settings` columns. It refuses to run unless `ARCH40_CONTRACT=1` is set,
 so that "add new columns" and "drop old columns" ship in different deploys.
@@ -121,6 +121,12 @@ a backup (procedure in `docs/RUNBOOK.md`). **Still needed from you:** whether
 a production database with real customer data exists yet. If it does not, you
 can set the flag in the production `.env` for the first deploy and then remove
 it.
+
+**Owner decision 2026-10-02 (Phase 3 kickoff): DECIDED. This is pre-launch; no
+production database with real customer data exists.** So the first production
+deploy may set `ARCH40_CONTRACT=1` in the production `.env` (nothing real can be
+lost), run `migrate` once, and then remove the flag again. Phase 3 did not change
+any compose file; the runbook procedure still applies.
 
 ## N-010 — Which verification gates are still authoritative?
 33 of the 78 `verify_*.py` gates fail (F-029). Several look stale: they
@@ -146,7 +152,7 @@ logged as a finding (F-022, F-023, F-025). Phase 2 only made sure it did not add
 a failing gate: the gate list before and after is compared in
 `02-security-deploy.md`.
 
-## N-011 — Confirm the plan table and prices before launch
+## N-011 — Confirm the plan table and prices before launch (DECIDED)
 The plan names, limits and prices live in `backend/scripts/seed_quota_tiers.py`.
 At the time of writing: **Free** $0; **Developer** $49; **Business** $299;
 **Enterprise** $799 per seat per month, and Enterprise is sold **self-serve**
@@ -161,7 +167,17 @@ exactly what the script says, using the price ids you create in your Stripe or
 Dodo **test** dashboard (RUNBOOK section 9.2 step 8). A published plan version
 cannot be edited, only replaced by a new version.
 
-## N-012 — How much data can you afford to lose in a disaster?
+**Owner decision 2026-10-02 (Phase 3 kickoff): DECIDED. The four tiers and prices
+in `backend/scripts/seed_quota_tiers.py` and `frontend/src/constants/planFeatures.ts`
+are confirmed for launch:** Free $0 (standard extraction, OCR, workspace chat);
+Developer $49 (API keys, webhooks, custom branding); Business $299 (extraction
+memory, entity graph, cases, scanned packets, tables, obligations, ERP posting,
+analytics warehouse egress); Enterprise $799 (universal corroborator, process
+intelligence, calibrated autonomy, egress lockdown, collaborative review, clause
+assertions, SAML/SCIM identity, priority SLO). **All paid tiers, Enterprise
+included, are self-serve checkout.** Phase 3 tests the lock matrix against this table.
+
+## N-012 — How much data can you afford to lose in a disaster? (DECIDED)
 The Compose setup takes an encrypted database backup every night and restores
 the newest one into a scratch database every week. If the server dies at 23:00,
 you lose up to 24 hours of customers' work. Losing less needs "point-in-time
@@ -176,6 +192,10 @@ backups be kept (today: the newest 7 daily and 4 weekly)?
 **Default until you decide:** nightly encrypted backup, weekly restore drill,
 off-server copy, alerts through a monitor you configure.
 
+**Owner decision 2026-10-02 (Phase 3 kickoff): DECIDED. A 24-hour recovery point
+(nightly backup) is accepted for launch.** Point-in-time recovery stays off;
+backup retention is unchanged (7 daily, 4 weekly) until you say otherwise.
+
 ## N-013 — Send me one real Dodo test webhook so a safety check can be fixed (F-033)
 The check that should refuse a Dodo *test-mode* event on a *live* deployment
 compares your own setting with itself, so it can never fire. I cannot see in
@@ -187,7 +207,7 @@ removed. **Default until then:** the risk is recorded; the runbook keeps you in
 test mode with `DODO_LIVEMODE=false`, and the app refuses to start when a
 Dodo API key has no webhook secret.
 
-## N-014 — Approve a dedicated framework upgrade (F-039)
+## N-014 — Approve a dedicated framework upgrade (F-039) (APPROVED)
 `pip-audit` lists known problems in 13 Python packages. Four were bumped safely.
 The important ones left need a real upgrade, not a one-line change:
 - **FastAPI 0.115.6 / Starlette 0.41.3** (13 advisories, including the
@@ -199,6 +219,11 @@ The important ones left need a real upgrade, not a one-line change:
 **Decide:** schedule the upgrade before launch (I recommend yes, as the first
 job of Phase 3) or accept the risk for now. **Default:** no change; the
 advisory-only `pip-audit` CI job keeps the list visible on every pull request.
+
+**Owner decision 2026-10-02 (Phase 3 kickoff): APPROVED. Upgrading safe
+dependencies, FastAPI/Starlette included, is allowed.** Phase 3 (browser tests)
+did not do the upgrade, so the browser suite can serve as an extra safety net
+for it; it is the first item of the next phase (see STATE.md).
 
 ## N-015 — Turn on the Content-Security-Policy
 Caddy now sends the policy in *report-only* mode: a browser lists what it
@@ -220,6 +245,10 @@ files and the `*.pdf` files are off limits to me, and this repository is
 customer data, real email addresses, tokens or credentials**. If any do, the
 repository should be made private now and the files removed from history (see
 N-005).
+
+**Owner decision 2026-10-02 (Phase 3 kickoff): (part) DECIDED. You confirmed
+that `backend/evidence/` and the sample PDFs contain no customer credentials.**
+(a)/(b) were not answered, so every script is kept.
 
 ## N-017 — Extras you may want before the first paying customer
 None of these blocks a test deployment. Each is a product or budget decision,
@@ -247,3 +276,26 @@ is separate and stays.
 sign-ins per address, and let the per-account back-off do the rest (best for offices, needs a
 code change). **Default until you decide:** no change (a).
 
+
+## N-019 — What may Viewers and Members do? (Phase 3, F-053, F-065)
+The browser tests found two places where the code and the Phase 3 brief disagree:
+- **Viewers and workflows / review queue.** A workspace VIEWER sees Workflows, Run history and
+  Review queue in the sidebar, but the server refuses them, so the pages show errors (F-053).
+  **Decide:** (a) viewers may *read* workflows, run history and the review queue (the server
+  should allow GET), or (b) viewers may not (the sidebar should hide them).
+- **Members and ERP posting.** A MEMBER whose workspace role is CONTRIBUTOR may create ERP
+  postings today; your brief said Members must not trigger mutating ERP posts (F-065).
+  **Decide:** should posting to the ERP require workspace ADMIN (or organization OWNER/ADMIN)?
+**Default until you decide:** nothing changes; both are recorded as open findings.
+
+## N-020 — Which missing capabilities do you want before launch? (Phase 3, F-061)
+The brief asked the tests to exercise these, and the product does not have them:
+1. Global search (Ctrl+K) that finds **documents** (for example by invoice number), not only pages.
+2. Notification **category filters** and **mark as unread**.
+3. A **promo code** field at checkout.
+4. A **"send test ping"** button for webhooks.
+5. **Invite from Organization → Members** (today invitations live in workspace Settings → General).
+6. A **page image beside the extracted text** in the document viewer, with the fields highlighted.
+7. **Correcting an extracted field** directly in the document viewer (today: review queue only).
+**Decide:** which of these to build before the first paying customer, and which to drop.
+**Default:** none are built; Phase 4 fixes bugs, not new features, unless you list them here.
