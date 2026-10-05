@@ -59,13 +59,27 @@ export const DOCUMENT_FIELD_HELP = {
     title: "Automatic Summarization",
     description:
       "Generate AI summaries immediately after document processing.",
-    recommended: "Disabled",
+    recommended: "Enabled",
   },
 
   automatic_entity_extraction: {
     title: "Automatic Entity Extraction",
     description:
-      "Extract entities such as people, organizations, dates and locations during processing.",
-    recommended: "Disabled",
+      "Extract fields such as vendor, invoice number, dates, amounts and line items during processing. Three-way matching, ERP posting, the entity graph, cases, the audit radar and obligations all read these fields; with this off they receive nothing.",
+    recommended: "Enabled",
+  },
+
+  verification_enabled: {
+    title: "Multi-agent Verification",
+    description:
+      "Several independent AI readings of each document are compared field by field. Fields they disagree on go to the review queue, and reviewers' corrections teach extraction memory. Each agent is one more AI call per document.",
+    recommended: "Enabled for invoices and contracts you post or pay",
+  },
+
+  verification_agents: {
+    title: "Verification Agents",
+    description:
+      "How many independent readings to compare (2 to 5). More agents catch more errors and cost more.",
+    recommended: "3",
   },
 } as const;

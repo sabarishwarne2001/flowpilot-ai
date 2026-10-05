@@ -68,8 +68,16 @@ class DocumentSettingsBase(BaseModel):
 
     duplicate_detection: bool = True
     automatic_classification: bool = True
-    automatic_summarization: bool = False
-    automatic_entity_extraction: bool = False
+    # PHASE 4: the worker's defaults (workers/handlers/enrich.py). These were
+    # False, so a workspace whose settings page was opened before its first
+    # upload extracted no fields, and every engine reading fields got nothing.
+    automatic_summarization: bool = True
+    automatic_entity_extraction: bool = True
+    # PHASE 4: multi-agent extraction verification had no API and no control.
+    # Off by default (each agent is a model call); 2 to 5 agents, None = the
+    # platform default (AUTOMATION_VERIFICATION_AGENTS).
+    verification_enabled: bool = False
+    verification_agents: Optional[int] = Field(default=None, ge=2, le=5)
 
     @field_validator("intent_config")
     @classmethod
@@ -131,6 +139,8 @@ class DocumentSettingsUpdate(BaseModel):
     automatic_classification: bool | None = None
     automatic_summarization: bool | None = None
     automatic_entity_extraction: bool | None = None
+    verification_enabled: bool | None = None
+    verification_agents: int | None = Field(default=None, ge=2, le=5)
 
     @field_validator("intent_config")
     @classmethod

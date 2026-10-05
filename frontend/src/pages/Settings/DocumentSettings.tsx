@@ -43,8 +43,10 @@ export const DocumentSettings: React.FC = () => {
       allowed_file_types: "pdf,png,jpg,jpeg",
       duplicate_detection: true,
       automatic_classification: true,
-      automatic_summarization: false,
-      automatic_entity_extraction: false,
+      automatic_summarization: true,
+      automatic_entity_extraction: true,
+      verification_enabled: false,
+      verification_agents: null,
     },
   });
 
@@ -73,6 +75,8 @@ export const DocumentSettings: React.FC = () => {
       automatic_classification: documentSettings.automatic_classification,
       automatic_summarization: documentSettings.automatic_summarization,
       automatic_entity_extraction: documentSettings.automatic_entity_extraction,
+      verification_enabled: documentSettings.verification_enabled ?? false,
+      verification_agents: documentSettings.verification_agents ?? null,
     });
   }, [documentSettings, reset]);
 
@@ -316,6 +320,47 @@ export const DocumentSettings: React.FC = () => {
                 {...register("automatic_entity_extraction")}
                 className="h-5 w-5 disabled:opacity-50"
               />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div>
+                <h3 className="font-medium">{renderLabel("verification_enabled", "Multi-agent Verification")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Compare independent AI readings; disagreements go to the review queue.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                aria-label="Multi-agent verification"
+                disabled={!canManageSettings}
+                {...register("verification_enabled")}
+                className="h-5 w-5 disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div>
+                <h3 className="font-medium">
+                  <label htmlFor="verification-agents">{renderLabel("verification_agents", "Verification Agents")}</label>
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">Independent readings per document.</p>
+              </div>
+              <select
+                id="verification-agents"
+                disabled={!canManageSettings || !watch("verification_enabled")}
+                {...register("verification_agents", {
+                  setValueAs: (value: string | number | null) =>
+                    value === "" || value === null ? null : Number(value),
+                })}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+              >
+                <option value="">Platform default</option>
+                {[2, 3, 4, 5].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

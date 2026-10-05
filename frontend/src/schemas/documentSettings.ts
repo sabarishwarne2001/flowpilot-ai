@@ -38,6 +38,11 @@ export const documentSettingsSchema = z.object({
     automatic_summarization: z.boolean(),
 
     automatic_entity_extraction: z.boolean(),
+
+    verification_enabled: z.boolean(),
+
+    /** 2 to 5 agents; null = the platform default. */
+    verification_agents: z.number().int().min(2).max(5).nullable(),
 });
 
 export type DocumentSettingsFormData =

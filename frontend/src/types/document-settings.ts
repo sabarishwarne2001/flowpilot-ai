@@ -21,6 +21,12 @@ export interface DocumentSettings {
 
   automatic_entity_extraction: boolean;
 
+  /** Multi-agent extraction verification (Phase 4: had no control before). */
+  verification_enabled: boolean;
+
+  /** 2 to 5 agents; null = the platform default. */
+  verification_agents: number | null;
+
   created_at: string;
   updated_at: string;
   /** HARDENING-T2:D13 — platform facts the pipeline actually uses (read-only). */
