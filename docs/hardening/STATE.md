@@ -4,7 +4,8 @@ _Last updated: 2026-10-05 (end of Phase 4)_
 
 ## Current phase
 **Phase 4 — Live engine hardening and core feature verification: COMPLETE. Stopped at the Phase 4
-checkpoint.** Branch `hardening/phase-4-core-engines`; full report `04-core-engines.md`.
+checkpoint.** PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/5 (branch
+`hardening/phase-4-core-engines`); full report `04-core-engines.md`.
 The next session starts after you have read the PR and answered N-021 to N-025 (and, if you want
 them, N-019 viewers part and N-020 items 2/3/5/7). Do not redo Phases 0 to 4.
 
