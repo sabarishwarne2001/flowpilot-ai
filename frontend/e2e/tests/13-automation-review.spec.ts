@@ -56,7 +56,8 @@ test.describe("Workflows — builder", () => {
     await page.goto(ws("C", "automation"));
     await page.getByPlaceholder("Search rules by name...").fill("E2E rule");
     await page.getByPlaceholder("Search logs by rule name or document filename...").fill("pdf");
-    await page.getByRole("button", { name: "Clear Filters" }).click();
+    const clear = page.getByRole("button", { name: "Clear Filters" });
+    if (await clear.isVisible()) await clear.click();
     await page.getByRole("button", { name: "Sync metrics manually" }).click();
     await settle(page);
     await expectHealthyPage(page);

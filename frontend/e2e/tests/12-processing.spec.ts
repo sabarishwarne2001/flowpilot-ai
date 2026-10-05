@@ -143,18 +143,15 @@ test.describe("Document corroborator", () => {
     await expect(page.locator("main")).toContainText(/could not be read as a checkable rule/, { timeout: 10_000 });
   });
 
-  test("compare the PO with the invoice and open the result", async ({ page }) => {
+  test("compare the PO with the invoice and see the comparison", async ({ page }) => {
     await page.goto(ws("C", "corroboration"));
     await page.getByRole("button", { name: "New comparison" }).click();
     await page.getByRole("checkbox", { name: "purchase-order-PO-E2E-5001.pdf" }).check();
     await page.getByRole("checkbox", { name: "invoice-INV-E2E-1002.pdf" }).check();
     await page.getByRole("button", { name: "Compare" }).click();
-    await expect(page.locator("main")).toContainText(/purchase-order-PO-E2E-5001\.pdf/, { timeout: 30_000 });
-    const run = page.locator("main").getByRole("link", { name: /purchase-order-PO-E2E-5001|invoice-INV-E2E-1002/ }).first();
-    await run.click();
-    await expect(page).toHaveURL(/\/corroboration\/[0-9a-f-]{36}/);
-    await expect(page.locator("main")).toContainText(/difference|material|confidence|score|current|comparing|queued/i, {
-      timeout: 60_000,
-    });
+    // The comparison lists each document with its share of the differences.
+    await expect(page.getByRole("row", { name: /purchase-order-PO-E2E/ }).first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator("main")).toContainText(/\d+%/);
+    await expectHealthyPage(page);
   });
 });

@@ -78,7 +78,7 @@ RULES: list[tuple[str, list[str], str]] = [
     (r"new obligation can be created", ["/:orgSlug/:workspaceSlug/obligations/:obligationId"], "smoke"),
     # ---- processing (12) ----
     (r"create a CSV download target", ["/:orgSlug/:workspaceSlug/erp/targets/:targetId"], "smoke"),
-    (r"compare the PO with the invoice and open the result", ["/:orgSlug/:workspaceSlug/corroboration/:runId"], "smoke"),
+    (r"compare the PO with the invoice and see the comparison", ["ws:corroboration"], "smoke"),
     # ---- automation and review (13) ----
     (r"create a rule: trigger, action", ["wf.create"], "deep"),
     (r"rule without a trigger or an action cannot be saved", ["wf.validate"], "deep"),
@@ -104,7 +104,7 @@ RULES: list[tuple[str, list[str], str]] = [
     (r"plan cards show the four tiers", ["/organizations/:orgSlug/billing"], "smoke"),
     (r"a spend limit can be saved", ["billing.quota-reached"], "smoke"),
     (r"plan switches are disabled with the reason shown", ["billing.checkout"], "smoke"),
-    (r"seat count can be edited", ["billing.seats"], "smoke"),
+    (r"seat count is shown with the plan picker", ["billing.seats"], "smoke"),
     (r"create a key: the secret is shown once; then revoke", ["keys.create", "keys.revoke"], "deep"),
     (r"register an endpoint, see the signing secret once", ["webhooks.create"], "deep"),
     (r"an endpoint can be sent a test ping", ["webhooks.test"], "deep"),

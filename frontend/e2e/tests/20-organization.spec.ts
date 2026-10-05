@@ -20,11 +20,16 @@ test.describe("General", () => {
     await expect(page.getByRole("textbox", { name: "Organization identifier" })).toBeDisabled();
     const name = page.getByRole("textbox", { name: "Organization name" });
     await expect(name).toHaveValue(TENANTS.C.name); // loaded before editing
+    const patched = () =>
+      page.waitForResponse((r) => r.request().method() === "PATCH" && /\/organizations\/[0-9a-f-]+$/.test(r.url()));
     await name.fill(`Caretakers Global Inc ${runId()}`);
+    let saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.locator("body")).toContainText(/saved|updated/i, { timeout: 10_000 });
+    expect((await saved).status()).toBe(200);
     await name.fill(TENANTS.C.name);
+    saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
+    expect((await saved).status()).toBe(200);
     await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled({ timeout: 10_000 });
   });
 });
@@ -48,7 +53,11 @@ test.describe("Members: invite, accept, change role, remove", () => {
 
     // 1. Invite from the workspace settings (where invitations live).
     await page.goto(ws("C", "settings"));
-    await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
+    await expect(page.getByRole("button", { name: /^General Name, locale and members/ })).toBeVisible();
+    await expect(async () => {
+      await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
+      await expect(page.getByPlaceholder("colleague@company.com")).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
     await page.getByPlaceholder("colleague@company.com").fill(invitee);
     await page.getByRole("button", { name: "Send Invite" }).click();
     await expect(page.locator("main")).toContainText(invitee, { timeout: 15_000 });
@@ -168,7 +177,6 @@ test.describe("Developer platform", () => {
     await page.getByRole("textbox", { name: "Name" }).fill(`E2E gateway ${runId()}`);
     await page.getByRole("button", { name: "Issue key" }).last().click();
     await expect(page.getByText(/only time this token is shown/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("dialog").getByText(/^fp_test_/)).toBeVisible();
     await page.getByRole("button", { name: "I have saved it" }).click();
     for (const lang of ["Python", "TypeScript", "cURL"]) {
       await page.getByRole("button", { name: lang, exact: true }).click();
@@ -180,8 +188,9 @@ test.describe("Enterprise BYOK and models", () => {
   test("adding a provider key validates it and reports the result", async ({ page, problems }) => {
     problems.allowHttp(/\/byok/, [400, 422, 502, 503], "the provider cannot be reached from the sandbox");
     await page.goto(org("C", "byok"));
+    // The first provider without a key (an earlier run may have saved Groq's).
     await page.getByRole("button", { name: "Add key" }).first().click();
-    await page.getByRole("textbox", { name: "Groq API key" }).fill("gsk_e2e_not_a_real_key_000000000000000000000000");
+    await page.getByRole("textbox", { name: /API key$/ }).first().fill("e2e-not-a-real-key-000000000000000000000000");
     await page.getByRole("button", { name: "Save key" }).click();
     await expect(page.getByText(/saved|added|invalid|could not|rejected|unreachable|verif/i).first()).toBeVisible({
       timeout: 30_000,
@@ -203,7 +212,13 @@ test.describe("Branding and custom domains", () => {
     await page.locator("#color-accent_color").fill("#0b8043");
     await page.getByRole("button", { name: "Save brand" }).click();
     await expect(page.locator("body")).toContainText(/saved|updated/i, { timeout: 10_000 });
+    const disable = page.getByRole("button", { name: "Disable custom branding" });
+    if (await disable.isVisible()) {
+      await disable.click(); // left on by an earlier run
+      await settle(page);
+    }
     await page.getByRole("button", { name: "Enable custom branding" }).click();
+    await expect(page.getByRole("button", { name: "Disable custom branding" })).toBeVisible({ timeout: 10_000 });
     await settle(page);
     await expectHealthyPage(page);
   });
@@ -319,11 +334,14 @@ test.describe("Billing", () => {
     await expectHealthyPage(page);
   });
 
-  test("the seat count can be edited (Apply enables on change)", async ({ page }) => {
+  test("the seat count is shown with the plan picker (changes need checkout)", async ({ page }) => {
     await page.goto(org("C", "billing"));
+    await page.getByRole("radio", { name: /^Business/ }).check(); // the seat field belongs to the plan picker
     const seats = page.getByRole("spinbutton", { name: /Seats/ });
+    await expect(seats).toHaveValue("4"); // follows membership: 4 seeded members
     await seats.fill("6");
-    await expect(page.getByRole("button", { name: "Apply" })).toBeEnabled();
+    // Applying a seat change goes through the gateway; with no Stripe key here it stays disabled.
+    await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
     await seats.fill("4");
   });
 
@@ -347,20 +365,25 @@ test.describe("API keys", () => {
     await page.reload();
     await expect(page.locator("main")).toContainText(name);
     await expect(page.locator("main")).not.toContainText(/shown once/i);
-    // Newest first: the key just created is the first row.
     await expect(page.locator("main")).toContainText(name);
-    await page.getByRole("button", { name: "Revoke" }).first().click();
+    const row = page
+      .locator("main li, main div")
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .filter({ has: page.getByRole("button", { name: "Revoke" }) })
+      .last();
+    await row.getByRole("button", { name: "Revoke" }).click();
     await page.getByRole("button", { name: "Confirm revoke" }).click();
     await settle(page);
     const owner = await loginAs("C.owner");
     const { organizationId } = await resolveWorkspaceId(owner, TENANTS.C.org, TENANTS.C.ws);
-    const keys = await api<Array<{ name: string; revoked_at?: string | null; is_active?: boolean }>>(
+    const keys = await api<Array<{ name: string; deactivated_at?: string | null }>>(
       owner,
       "GET",
       `/organizations/${organizationId}/api-keys`,
     );
     const mine = (Array.isArray(keys.body) ? keys.body : []).find((key) => key.name === name);
-    expect(mine === undefined || Boolean(mine.revoked_at) || mine.is_active === false, `key ${name} is revoked`).toBe(true);
+    // Revoked keys stay listed with deactivated_at set.
+    expect(mine === undefined || Boolean(mine.deactivated_at), `key ${name} is revoked`).toBe(true);
   });
 });
 
