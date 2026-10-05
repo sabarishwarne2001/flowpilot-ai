@@ -217,6 +217,64 @@ jobs:
             tests/services/test_paddle_no_fabricated_text.py \
             tests/services/test_llm_blank_platform_key.py
 
+      # Phase 4 proofs: every core engine driven live (upload -> worker -> database -> API) with a
+      # recorded model, plus the defects fixed in Phase 4 and the invariants repaired there. Own
+      # step for the same reason as the Phase 2 proofs. See docs/hardening/04-core-engines.md.
+      - name: Phase 4 engine proofs
+        if: always()
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: flowpilot
+          POSTGRES_PASSWORD: flowpilot
+          POSTGRES_DB: flowpilot_test
+          ARCH40_CONTRACT: "1"
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
+          API_KEY_PEPPER: ci-only-not-a-real-pepper-0123456789abcdef0123456789
+          REDIS_IDENTITY_PEPPER: ci-only-not-real-0123456789abcdef0123456789ab
+          EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
+          SERVICE_ROLE: web
+          AUTH_LOGIN_MIN_DURATION_MS: "250"
+        run: |
+          pytest -q -p no:cacheprovider \
+            tests/engines \
+            tests/isolation/test_data_isolation.py \
+            tests/isolation/test_notification_organization_scope.py \
+            tests/isolation/test_structural_invariants.py \
+            tests/services/test_billing_account_lock.py \
+            tests/services/test_vector_scoping.py \
+            tests/services/test_embedding_metering.py \
+            tests/services/test_usage_and_spend.py \
+            tests/services/test_slo_service.py \
+            tests/services/test_pdfium_call_sites_thread_safety.py \
+            tests/services/test_arch11_5_hardening.py \
+            tests/services/test_arch12_streaming.py \
+            tests/services/test_arch12_notifications.py \
+            tests/services/test_arch13_gate_13_3_13_4_persistence.py \
+            tests/services/test_arch13_gate_13_5_13_6_engine.py \
+            tests/services/test_arch15_gate_15_1_15_2_inbound.py \
+            tests/services/test_arch15_gate_15_3_15_4_subscriptions_seats.py \
+            tests/services/test_arch15_gate_15_5_15_6_invoices.py \
+            tests/services/test_arch15_gate_15_7_15_8_portal_dunning.py \
+            tests/services/test_deprovision_last_owner_race.py \
+            tests/services/test_sec1_gate_1_auth_time.py \
+            tests/services/test_cost_truth_consolidation.py \
+            tests/api/test_invitation_paid_org.py \
+            tests/api/test_audit_export.py \
+            tests/api/test_organization_email_settings.py \
+            tests/api/test_arch13_gate_13_8_verification_api.py \
+            tests/api/test_arch16_scim_dunning.py \
+            tests/api/test_arch23_endpoints.py \
+            tests/api/test_arch25_endpoints.py \
+            tests/api/test_arch26_endpoints.py \
+            tests/api/test_arch0g_endpoints.py \
+            tests/api/test_api_key_issuance.py \
+            tests/api/test_api_key_rate_limit.py \
+            tests/services/test_usage_api.py
+
       - name: pytest
         # Still runs when the proofs above fail, so one red step does not hide the other.
         if: always()
