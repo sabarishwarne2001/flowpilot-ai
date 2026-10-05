@@ -11,6 +11,7 @@ import {
   PowerOff,
   RefreshCw,
   RotateCcw,
+  Send,
   ShieldAlert,
   Trash2,
   Webhook as WebhookIcon,
@@ -24,6 +25,7 @@ import {
   listWebhookEndpoints,
   redeliverWebhookDelivery,
   rotateWebhookSecret,
+  sendWebhookTestEvent,
   updateWebhookEndpoint,
 } from "@/services/api/webhooks";
 import { webhookKeys } from "@/services/api/queryKeys";
@@ -88,6 +90,26 @@ const DeliveryLog: React.FC<{
       ),
   });
 
+  const [testNotice, setTestNotice] = useState<string | null>(null);
+  const sendTest = useMutation({
+    mutationFn: () => sendWebhookTestEvent(organizationId, endpointId),
+    onSuccess: () => {
+      setRedeliverError(null);
+      setTestNotice(
+        "Test event queued. It is signed like a real event and appears below within a few seconds.",
+      );
+      void queryClient.invalidateQueries({
+        queryKey: webhookKeys.all(organizationId),
+      });
+    },
+    onError: (error) => {
+      setTestNotice(null);
+      setRedeliverError(
+        detailOf(error, "The test event couldn't be queued. Please try again."),
+      );
+    },
+  });
+
   const deliveries = data ?? [];
 
   return (
@@ -108,7 +130,31 @@ const DeliveryLog: React.FC<{
           <option value="FAILED">Failed</option>
           <option value="DEAD">Dead</option>
         </select>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => sendTest.mutate()}
+            disabled={sendTest.isPending}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+          >
+            {sendTest.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+            Send test event
+          </button>
+        )}
       </div>
+
+      {testNotice && (
+        <p
+          role="status"
+          className="mb-3 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground"
+        >
+          {testNotice}
+        </p>
+      )}
 
       {redeliverError && (
         <p

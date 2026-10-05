@@ -396,6 +396,77 @@ def rotate_secret(
 
 
 # ======================================================================
+# Test event ("Send test event")
+# ======================================================================
+#: PHASE 4. The ping's event type. Deliberately NOT in WEBHOOK_EVENT_TYPES: an
+#: endpoint cannot subscribe to it and the outbox relay never fans it out. The
+#: only way to receive one is to ask for it, for one endpoint, here.
+TEST_EVENT_TYPE = "webhook.test"
+
+
+@router.post(
+    "/endpoints/{endpoint_id}/test",
+    response_model=DeliveryOut,
+    status_code=202,
+    dependencies=[Depends(RequireScope(ApiKeyScope.WEBHOOKS_WRITE))],
+)
+def send_test_event(
+    endpoint_id: uuid.UUID,
+    context: OrgAdminCtx,
+    db: DbSession,
+) -> DeliveryOut:
+    """Queue one signed webhook.test event for this endpoint.
+
+    It travels the same path as a real event (the delivery loop signs it
+    with the endpoint's secret, retries it on failure and records every
+    attempt), so a passing test proves the receiver, its TLS and its
+    signature check, not just that the URL answers.
+    """
+    _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.test")
+    endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
+    if not endpoint.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "The endpoint is disabled: "
+                f"{endpoint.disabled_reason or 'no reason recorded'} "
+                "Re-enable it before sending a test event."
+            ),
+        )
+    in_flight = db.execute(
+        select(WebhookDelivery.id).where(
+            WebhookDelivery.webhook_endpoint_id == endpoint.id,
+            WebhookDelivery.event_type == TEST_EVENT_TYPE,
+            WebhookDelivery.status.in_(
+                (WebhookDeliveryStatus.PENDING, WebhookDeliveryStatus.CLAIMED)
+            ),
+        ).limit(1)
+    ).first()
+    if in_flight is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A test event for this endpoint is already on its way. Check its delivery below.",
+        )
+
+    delivery = WebhookDelivery(
+        webhook_endpoint_id=endpoint.id,
+        outbox_event_id=None,
+        organization_id=context.organization_id,
+        event_type=TEST_EVENT_TYPE,
+        payload={
+            "endpoint_id": str(endpoint.id),
+            "message": "This is a test event from FlowPilot. No action is needed.",
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+        },
+        status=WebhookDeliveryStatus.PENDING,
+    )
+    db.add(delivery)
+    db.commit()
+    db.refresh(delivery)
+    return DeliveryOut.of(delivery)
+
+
+# ======================================================================
 # Delivery history
 # ======================================================================
 @router.get(

@@ -116,6 +116,8 @@ export const WEBHOOK_ENDPOINTS = {
     `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/attempts`,
   redeliver: (organizationId: string, deliveryId: string): string =>
     `${webhookBase(organizationId)}/deliveries/${seg(deliveryId)}/redeliver`,
+  testEvent: (organizationId: string, endpointId: string): string =>
+    `${webhookBase(organizationId)}/endpoints/${seg(endpointId)}/test`,
 } as const;
 
 export const WORKSPACE_ENDPOINTS = {
