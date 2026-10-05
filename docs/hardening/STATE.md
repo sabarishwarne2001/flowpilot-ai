@@ -24,8 +24,10 @@ them, N-019 viewers part and N-020 items 2/3/5/7). Do not redo Phases 0 to 4.
     memory fills empty fields (F-072). Migrations `p4a1`, `p4a2`, `p4a3`; one head.
   - About 230 backend tests that were red on `main` for stale reasons were aligned (no assertion
     weakened; every plan gate they now pass has an explicit refusal test) (F-094).
-  - `COVERAGE.csv`: endpoint and job rows the engine tests actually called are `deep`
-    (tools/coverage_from_engines.py).
+  - Full backend suite: `main` 2795 passed / 204 failed / 33 errors → this branch **3132 passed /
+    21 failed / 0 errors**; no new failure; the 21 are listed in F-099 and N-021 to N-025.
+  - `COVERAGE.csv`: 241 deep, 401 smoke, 674 untested (was 55 / 287 / 967); `deep` means an engine
+    test got a successful answer from that route (tools/coverage_from_engines.py).
 
 ## Owner decisions in force (do not re-ask)
 - **N-004** proprietary, all rights reserved ("FlowPilot AI" until the legal name is given).

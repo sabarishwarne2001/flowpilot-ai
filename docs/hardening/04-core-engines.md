@@ -110,7 +110,30 @@ works, ADMIN/OWNER-only actions refused below, platform consoles invisible to te
 
 ## 6. Full backend suite: main vs this branch
 
-FULL_SUITE_PLACEHOLDER
+Same machine, same command (`pytest -q -p no:cacheprovider -rfE`), failures compared by test id:
+
+| | `main` (Phase 4 baseline) | this branch |
+|---|---|---|
+| passed | 2795 | **3132** |
+| failed | 204 | **21** |
+| errors | 33 | **0** |
+| skipped | 9 | 9 |
+
+- **No test that passes on `main` fails on this branch.**
+- **216** tests red on `main` are green here (the fixes in §3 and the aligned stale tests, F-094).
+- The **21 still red** are all listed with their reason in F-099 / N-021 to N-025: 13 BYOK tests that
+  assert the old "only Groq is routable" rule; the lockout answer (N-022); oversized avatars
+  (N-023); the public token links (N-024); the ARCH-05 lock invariant (N-025); the storage-boundary
+  scanner, the dead-letter resume path and the OCR-import test (F-099); and
+  `test_pool_profiles::test_unknown_role_warns_outside_production`, which passes alone and fails
+  only after other tests in the same run (order-dependent; not a product defect).
+- Three features (F-091, F-092, F-093) were committed while that run was in progress. On the final
+  code: `tests/engines` 67 passed; `tests/security` + `tests/isolation` + compliance + radar suites
+  562 passed (the 2 failures are the known N-024 / N-025 items) — the new routes pass the
+  cross-tenant and injection sweeps.
+- `COVERAGE.csv` now: **241 deep, 401 smoke, 674 untested** (Phase 3: 55 / 287 / 967). A route counts
+  as `deep` only if an engine test got a successful answer from it; one only ever refused (a role,
+  plan or tenant check) counts as `smoke` "refusal proven".
 
 ## 7. How to run
 

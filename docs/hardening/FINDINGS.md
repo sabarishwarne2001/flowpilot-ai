@@ -1693,12 +1693,14 @@ test reserves for API-key routes. Moving them would break links already sent.
   release manifests and a PDF object's `read_bytes()` (not files); needs an allowlist decision.
 - `test_pipeline_and_profiles::test_terminal_stages_only_return_to_queued`: the dead-letter retry
   resumes a failed document without `document.queued`; code and test disagree since day one.
-- BYOK suites (`test_byok_credential_service.py`, `test_byok_endpoints.py`, 16 tests): assert the
+- BYOK suites (`test_byok_credential_service.py`, `test_byok_endpoints.py`, 13 tests): assert the
   old "only Groq is routable" rule; ARCH-23 made all six providers routable. Live proof of the
   current behaviour: `tests/engines/test_byok_live.py`.
 - `test_storage_validation_ocr::test_registration_does_not_import_paddleocr`: the OCR test module
   itself imports the OCR package (which eagerly loads paddle/torch); registration in a clean
   process loads neither.
-- `test_email_change::test_confirming_signs_every_session_out`: its token has no session id and
-  is minted in the same second as the revocation; real tokens are proven signed out
-  (`tests/engines/test_session_revocation_live.py`).
+- `test_email_change::test_confirming_signs_every_session_out`: timing-dependent - its token has
+  no session id, so it fails when minted in the same second as the revocation (passed in the final
+  run); real tokens are proven signed out (`tests/engines/test_session_revocation_live.py`).
+- `test_pool_profiles::test_unknown_role_warns_outside_production`: passes alone, fails after
+  other tests in the same run (order-dependent warning capture).
