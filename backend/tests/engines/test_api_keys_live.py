@@ -61,6 +61,8 @@ def test_a_read_only_key_is_scoped_rate_limited_and_revocable(engines: Engines, 
     codes = [engines.client.get(f"{PUBLIC}/documents", params={"workspace_id": str(engines.ws)},
                                 headers=_bearer(token)) for _ in range(5)]
     assert [c.status_code for c in codes][:3] == [200, 200, 200], [c.status_code for c in codes]
+    assert [c.headers.get("X-RateLimit-Remaining") for c in codes[:3]] == ["2", "1", "0"], codes[0].headers
+    assert codes[0].json()["rate_limit"]["limit"] == 3 and codes[0].json()["rate_limit"]["tier"] == "FREE"
     limited = codes[-1]
     assert limited.status_code == 429, [c.status_code for c in codes]
     assert int(limited.headers["Retry-After"]) >= 0 and limited.headers["X-RateLimit-Limit"] == "3"

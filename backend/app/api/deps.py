@@ -674,7 +674,10 @@ async def require_api_key(
 
     key, membership = result
     if not key.is_public_api_enabled:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This API key is not enabled for the public API.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This API key is not enabled for the public API. An organization admin can enable it in the developer portal.",
+        )
 
     organization = crud.get_organization_by_id(db, organization_id=key.organization_id)
     if organization is None:
@@ -734,6 +737,18 @@ async def require_api_key(
                 "X-RateLimit-Tier": tier.value,
             },
         )
+
+    # PHASE 4. The snapshot PublicApiRateLimitMiddleware turns into the
+    # X-RateLimit-* / RateLimit-* headers and the gateway echoes in each
+    # body's `rate_limit`. Nothing ever recorded it: successful responses
+    # carried no rate limit headers at all and every body reported tier FREE,
+    # limit 0, remaining 0, whatever the key's real tier.
+    request.state.public_rate_limit = {
+        "tier": tier.value,
+        "limit": int(policy.limit),
+        "remaining": max(0, int(decision.remaining)),
+        "reset_seconds": int(decision.reset_seconds),
+    }
 
     # ARCH30-T4F:api-key-billing-gate — A6.
     #
