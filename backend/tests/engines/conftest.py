@@ -174,6 +174,16 @@ class JobRun:
     error: Optional[str] = None
 
 
+def _record(kind: str, value: str) -> None:
+    """Coverage ledger support: with ENGINE_ROUTE_LOG set, append what the engine tests exercised."""
+    import os
+
+    target = os.environ.get("ENGINE_ROUTE_LOG")
+    if target:
+        with open(target, "a", encoding="utf-8") as handle:
+            handle.write(f"{kind}\t{value}\n")
+
+
 def drain(
     *,
     include_delayed: bool = True,
@@ -205,6 +215,7 @@ def drain(
         if not snapshot:
             break
         for job_id, job_type, payload, attempts, org_id in snapshot:
+            _record("JOB", job_type)
             handler = JOB_HANDLERS.get(job_type)
             assert handler is not None, f"no handler for {job_type}"
             body = dict(payload)
@@ -349,6 +360,17 @@ def engines(client: TestClient, db_session: Session, tenant: Fixture, test_sessi
 
     previous_broker = collab_broker.set_broker(collab_broker.MemoryBroker())
     request.addfinalizer(lambda: collab_broker.set_broker(previous_broker))
+    import os
+
+    if os.environ.get("ENGINE_ROUTE_LOG"):
+        original_request = client.request
+
+        def recording_request(method, url, *args, **kwargs):
+            response = original_request(method, url, *args, **kwargs)
+            _record("HTTP", f"{method.upper()} {str(url).split('?')[0]} {response.status_code}")
+            return response
+
+        monkeypatch.setattr(client, "request", recording_request)
     harness = Engines(client=client, db=db_session, tenant=tenant, llm=recorded_llm)
     harness.plan("enterprise")
     return harness
