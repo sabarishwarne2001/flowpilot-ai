@@ -91,6 +91,12 @@ export default defineConfig(({ mode, command }) => {
       host: true,
       port: 3000,
       strictPort: true,
+      // Phase 3 browser tests. `vite preview` serves the production bundle,
+      // which calls /api/v1 same-origin (as behind Caddy); E2E_API_PROXY
+      // forwards that to a local API. Unset, preview behaves as before.
+      ...(process.env.E2E_API_PROXY
+        ? { proxy: { "/api": { target: process.env.E2E_API_PROXY, changeOrigin: false } } }
+        : {}),
     },
 
     build: {
