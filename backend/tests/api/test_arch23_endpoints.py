@@ -136,3 +136,9 @@ def test_embedding_route_accepted_for_openai(client: TestClient, tenant: Fixture
     data = response.json()
     assert data["task_type"] == "EMBEDDING"
     assert data["provider"] == "OPENAI"
+    # PHASE 4: no OpenAI key is stored yet, so the saved rule cannot run on
+    # the tenant's key - reported, not raised (this used to be a 500 after
+    # the rule had been committed) - and the routes list still loads.
+    assert data["effective_tenant_key"] is False and data["downgrade_reason"]
+    listed = client.get(f"{base(tenant.organization.id)}/routes", headers=tenant.owner.headers)
+    assert listed.status_code == 200, listed.text
