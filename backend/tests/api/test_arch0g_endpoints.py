@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.main import app
 from app.models.email_change_request import EmailChangeRequest, EmailChangeStatus
 from app.models.notification import (
     Notification,
@@ -34,9 +33,12 @@ from app.services import email_change_service as ecs
 from app.services import spend_control_service
 
 
-@pytest.fixture()
-def client() -> TestClient:
-    return TestClient(app)
+# PHASE 4: this module used to define its own `client` as a bare
+# TestClient(app). That client talks to the DEVELOPMENT database through the
+# app's real get_db, while the users and organizations the tests create live
+# in the test database, so every request was 401 and nothing below was
+# exercised. The suite's shared `client` fixture (tests/conftest.py) points
+# get_db at the test session.
 
 
 @pytest.fixture()
