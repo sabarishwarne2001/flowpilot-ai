@@ -245,7 +245,15 @@ def stripe_settings(monkeypatch):
 def billing_org(db):
     """An organization with a published tier, a price book, and an account."""
     suffix = uuid.uuid4().hex[:8]
-    now = datetime.now(timezone.utc) - timedelta(days=30)
+    # PHASE 4: anchored, not relative. The subscriptions these tests build have
+    # hard-coded periods from 2026-08-01, and the product refuses (correctly)
+    # to pin a subscription to a tier not yet in force at its period start.
+    # "30 days ago" passed 2026-08-01 on 2026-08-31, and from then on every
+    # test using this fixture failed with UnmappableTierError.
+    now = min(
+        datetime.now(timezone.utc) - timedelta(days=30),
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
+    )
 
     owner = User(
         email=f"owner-{suffix}@acme.test",
