@@ -11,6 +11,7 @@ import { ApiError } from "@/services/api/errors";
 import {
   CONFLICT_MESSAGES, STATUS_LABELS, STATUS_TONES, type CostSummary, type ProposalConflictCode, type ProposalStatus,
 } from "@/types/process";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 export const ProcessLocked: React.FC<{ readonly compact?: boolean }> = ({ compact = false }) =>
   compact ? (
@@ -31,6 +32,7 @@ export const ProcessLocked: React.FC<{ readonly compact?: boolean }> = ({ compac
         it proposes is applied without a person, except the few decisions your own calibration bounds.
       </p>
       <p className={HINT}>It&apos;s included on the Enterprise plan.</p>
+      <ViewPlansAction />
     </section>
   );
 

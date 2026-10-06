@@ -40,6 +40,7 @@ import {
   type Decision, type DiscrepancyRow, type ExportFormat, type Layer, type RunDetail, type RunDocument, type RunVerdict,
 } from "@/types/corroboration";
 import { formatDateTime } from "@/utils/formatters";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 type LayerFilter = Layer | "ALL";
 
@@ -241,7 +242,7 @@ const CorroborationRun: React.FC = () => {
   };
 
   if (!capability.granted) {
-    return <p className={`${SURFACE} m-4 p-6 text-sm`}>The document corroborator is included on the Enterprise plan.</p>;
+    return <div className={`${SURFACE} m-4 p-6 text-sm`}><p>The document corroborator is included on the Enterprise plan.</p><ViewPlansAction /></div>;
   }
   if (query.isLoading) {
     return <Loader2 className="m-6 h-5 w-5 animate-spin" aria-label="Loading" />;

@@ -33,6 +33,7 @@ import { errorMessage } from "@/services/api/errors";
 import { RELATION_LABELS } from "@/types/entities";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
 import { formatTimestampDate } from "@/utils/displayTime";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const DECISION_LABEL: Readonly<Record<string, string>> = {
   AUTO: "linked automatically",
@@ -122,6 +123,7 @@ const Entity360: React.FC = () => {
       <section className={`${SURFACE} mx-auto max-w-xl space-y-2 p-6`}>
         <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
         <p className="text-sm">The entity graph is included on the Business and Enterprise plans.</p>
+        <ViewPlansAction />
       </section>
     );
   }

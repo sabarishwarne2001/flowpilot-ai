@@ -96,6 +96,8 @@ for (const tenant of ["A", "B", "C"] as const) {
           await page.goto(ws(tenant, target.sub));
           await settle(page);
           await expect(page.locator("main")).toContainText(LOCK_TEXT);
+          // F-059: the page opened by URL offers the upgrade path too.
+          await expect(page.locator("main").getByRole("link", { name: "View plans" }).first()).toBeVisible();
         }
         await expectHealthyPage(page);
       });

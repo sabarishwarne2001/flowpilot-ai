@@ -20,6 +20,7 @@ import { errorMessage } from "@/services/api/errors";
 import { getWorkItemDetails } from "@/services/api/workItem";
 import { STATUS_LABELS, STATUS_TONE, isPending, type RequestResult, type RunStatus } from "@/types/corroboration";
 import { formatDateTime } from "@/utils/formatters";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const FILTERS: readonly { readonly id: RunStatus | undefined; readonly label: string }[] = [
   { id: undefined, label: "All" },
@@ -81,6 +82,7 @@ const Corroborations: React.FC = () => {
           and a PDF report of what disagrees.
         </p>
         <p className={HINT}>It&apos;s included on the Enterprise plan.</p>
+        <ViewPlansAction />
       </section>
     );
   }

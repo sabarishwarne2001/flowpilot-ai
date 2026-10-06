@@ -29,6 +29,7 @@ import {
   type TenantChannel,
 } from "@/types/sovereign";
 import { formatTimestamp } from "@/utils/displayTime";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const COUNT = new Intl.NumberFormat();
 
@@ -38,7 +39,9 @@ const channelLabel = (channel: string | null): string =>
 const reasonLabel = (reason: string | null): string =>
   reason ? (REASON_LABELS[reason as RefusalReason] ?? reason) : "";
 
-const EgressLocked: React.FC = () => (
+const EgressLocked: React.FC = () => {
+  const { organization, organizationRole } = useResolvedOrganization();
+  return (
   <section className={`${SURFACE} mx-auto mt-6 max-w-2xl space-y-3 p-6`} aria-labelledby="egress-lock">
     <div className="flex items-center gap-2">
       <Lock className="h-4 w-4" aria-hidden />
@@ -50,8 +53,10 @@ const EgressLocked: React.FC = () => (
       before it connects, and every refusal is recorded and audited.
     </p>
     <p className={HINT}>It&apos;s included on the Enterprise plan.</p>
+    <ViewPlansAction organizationSlug={organization.organization_slug} organizationRole={organizationRole} />
   </section>
-);
+  );
+};
 
 const OrganizationEgress: React.FC = () => {
   const { organizationId, organizationRole } = useResolvedOrganization();

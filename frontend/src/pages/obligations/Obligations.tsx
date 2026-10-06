@@ -24,6 +24,7 @@ import { obligationPath, verificationPath } from "@/routes/tenantPaths";
 import { downloadObligations, listObligations, obligationKeys, type ObligationFilters } from "@/services/api/obligations";
 import { errorMessage } from "@/services/api/errors";
 import { KINDS, KIND_LABELS, STATE_LABELS, type ObligationDetail, type ObligationState } from "@/types/obligations";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 type Tab = "list" | "calendar" | "holidays" | "feeds";
 
@@ -80,6 +81,7 @@ const Obligations: React.FC = () => {
           calendar app.
         </p>
         <p className={HINT}>It&apos;s included on the Business and Enterprise plans.</p>
+        <ViewPlansAction />
       </section>
     );
   }

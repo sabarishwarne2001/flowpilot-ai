@@ -40,6 +40,7 @@ import {
   resetMemoryTemplate,
 } from "@/services/api/extractionMemory";
 import type { MemoryMode } from "@/types/extractionMemory";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const MODES: ReadonlyArray<{ readonly mode: MemoryMode; readonly label: string; readonly help: string }> = [
   { mode: "OFF", label: "Off", help: "Nothing is learned and nothing is applied." },
@@ -113,6 +114,7 @@ const LockedView: React.FC<{ readonly workspaceId: string; readonly canChangePla
           ? "It's included on the Business and Enterprise plans. Change your plan to turn it on."
           : "It's included on the Business and Enterprise plans. Ask an organization owner to change your plan."}
       </p>
+      <ViewPlansAction />
     </section>
   );
 };

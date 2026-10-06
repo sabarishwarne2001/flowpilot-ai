@@ -19,6 +19,7 @@ import {
 } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { CASE_STATUSES, CASE_STATUS_LABELS, type TemplateWrite } from "@/types/cases";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const EXAMPLE: TemplateWrite = {
   key: "purchase-file",
@@ -64,6 +65,7 @@ const Cases: React.FC = () => {
           checklist of what is missing and rules that catch documents that disagree.
         </p>
         <p className={HINT}>It&apos;s included on the Business and Enterprise plans.</p>
+        <ViewPlansAction />
       </section>
     );
   }

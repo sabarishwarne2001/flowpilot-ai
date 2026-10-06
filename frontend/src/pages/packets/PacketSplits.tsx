@@ -12,6 +12,7 @@ import { packetSplitPath } from "@/routes/tenantPaths";
 import { caseKeys } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { listPacketSplits } from "@/services/api/packets";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const PacketSplits: React.FC = () => {
   const workspace = useActiveWorkspace();
@@ -24,7 +25,7 @@ const PacketSplits: React.FC = () => {
     enabled: Boolean(workspaceId && capability.granted),
   });
   if (!capability.granted) {
-    return <p className={`${SURFACE} p-6 text-sm`}>The packet dicer is included on the Business and Enterprise plans.</p>;
+    return <div className={`${SURFACE} p-6 text-sm`}><p>The packet dicer is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }
   return (
     <div className="space-y-4 p-4">
