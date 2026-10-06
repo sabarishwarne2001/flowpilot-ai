@@ -37,6 +37,12 @@ export const RESERVED_ROUTE_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "partners",
   "profile",
   "register",
+  // F-014. Public pages, reserved here and in app/core/slugs.py together.
+  "request",
+  "verify-email",
+  "forgot-password",
+  "reset-password",
+  "confirm-email-change",
   "settings",
   "work-items",
   "workspaces",

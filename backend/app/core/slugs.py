@@ -132,6 +132,14 @@ RESERVED_SLUGS: frozenset[str] = frozenset(
         "plans",
         "profile",
         "register",
+        # F-014: public pages of the web app. An organization holding one of
+        # these slugs would have every workspace URL answered by that page
+        # (`/request/:token` is the document-request upload page).
+        "request",
+        "verify-email",
+        "forgot-password",
+        "reset-password",
+        "confirm-email-change",
         "search",
         "session",
         "sessions",
