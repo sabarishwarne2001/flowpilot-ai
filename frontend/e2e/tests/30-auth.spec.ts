@@ -53,6 +53,17 @@ test.describe("sign-up, verification and first organization", () => {
     await expectHealthyPage(page);
   });
 
+  test("a common password is refused at sign-up with a plain reason (ASVS V2.1)", async ({ page, problems }) => {
+    problems.allowHttp(/\/auth\/register$/, [422], "a too-easy password is refused");
+    await page.goto("/register");
+    await page.locator("#email").fill(`weak-${runId()}@e2e.example.com`);
+    await page.locator("#password").fill("Password123!");
+    await page.locator("#confirmPassword").fill("Password123!");
+    await page.locator("form").getByRole("button", { name: /create|sign up|register/i }).click();
+    await expect(page.locator("body")).toContainText(/too easy to guess/i, { timeout: 15_000 });
+    await expect(page.locator("body")).not.toContainText(/check your (email|inbox)/i);
+  });
+
   test("signing up twice with the same email does not reveal that the account exists", async ({ page }) => {
     await signUp(page, USERS["C.owner"].email);
     await expect(page.locator("body")).toContainText(/check your (email|inbox)|verification|sent/i);
