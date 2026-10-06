@@ -50,7 +50,7 @@ x-app-env: &app-env
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_BACKEND: redis
   # F-048 / N-018: sign-in attempts per address per 5 minutes.
-  RATE_LIMIT_LOGIN_IP_PER_5MIN: ${RATE_LIMIT_LOGIN_IP_PER_5MIN:-10}
+  RATE_LIMIT_LOGIN_IP_PER_5MIN: ${RATE_LIMIT_LOGIN_IP_PER_5MIN:-20}
 
   # Caddy adds exactly one X-Forwarded-For hop. Leave
   # TRUSTED_PROXY_HOPS_CONFIRMED false until you have verified the header

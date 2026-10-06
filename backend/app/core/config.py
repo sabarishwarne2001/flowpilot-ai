@@ -209,7 +209,10 @@ class Settings(BaseSettings):
     # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
     # allowance the product had in effect while each attempt was counted twice
     # against a limit of 20; the owner chooses the final value (N-018).
-    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 10
+    # N-018 (decided in the final release): the intended 20 attempts per address per 5 minutes.
+    # Guessing one account is slowed and then refused per account+address (login_account_ip,
+    # login_account), so the per-address allowance only has to stop a sweep, not an office.
+    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
     RATE_LIMIT_CREDENTIAL_PER_HOUR: int = 10
     RATE_LIMIT_EXPORT_PER_HOUR: int = 5
 

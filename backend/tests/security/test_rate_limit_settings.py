@@ -66,10 +66,13 @@ def test_every_rate_limit_setting_reaches_its_policy() -> None:
     }
 
 
-def test_the_sign_in_default_is_the_allowance_already_in_effect() -> None:
+def test_the_sign_in_default_is_the_decided_allowance() -> None:
+    """N-018, decided in the final release: the intended 20 per address per 5 minutes (option b).
+
+    Until the decision this pinned 10, the allowance that happened to be in effect."""
     from app.core.config import Settings
 
-    assert Settings.model_fields["RATE_LIMIT_LOGIN_IP_PER_5MIN"].default == 10
+    assert Settings.model_fields["RATE_LIMIT_LOGIN_IP_PER_5MIN"].default == 20
 
 
 def test_one_sign_in_attempt_costs_one_unit(client, limiter_on) -> None:  # noqa: F811
