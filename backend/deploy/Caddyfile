@@ -43,6 +43,8 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
+        # The app uses none of these browser features (clipboard writes only).
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
         # F-044 / N-015. Enforced. It ran report-only first; the whole browser suite
         # (E2E_CSP=1 serves the bundle with this exact header, read from this file)
         # passes with it enforced and no violation. Uploaded PDFs render with pdf.js
@@ -155,6 +157,7 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
         # N-015. The same app as the platform host, so the same enforced policy.
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         -Server
