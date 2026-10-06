@@ -22,3 +22,5 @@ MAILTO=""
 # empty, so anything printed and not logged would be lost).
 11 2 * * *  flowpilot  set -a; . /etc/flowpilot/sweepers.env; set +a; /srv/flowpilot/backend/deploy/bin/flowpilot-compose-backup >> "${FLOWPILOT_LOG_DIR:-/srv/flowpilot/logs}/compose_backup.log" 2>&1
 37 4 * * 0  flowpilot  set -a; . /etc/flowpilot/sweepers.env; set +a; /srv/flowpilot/backend/deploy/bin/flowpilot-compose-restore-drill >> "${FLOWPILOT_LOG_DIR:-/srv/flowpilot/logs}/compose_restore_drill.log" 2>&1
+# N-017: the API answers its public readiness check (alerts through HEARTBEAT_UUID_UPTIME).
+* * * * *  flowpilot  set -a; . /etc/flowpilot/sweepers.env; set +a; /srv/flowpilot/backend/deploy/bin/flowpilot-uptime-heartbeat >> "${FLOWPILOT_LOG_DIR:-/srv/flowpilot/logs}/uptime.log" 2>&1
