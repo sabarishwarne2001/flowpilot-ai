@@ -73,10 +73,15 @@ def test_the_sign_in_default_is_the_allowance_already_in_effect() -> None:
 
 
 def test_one_sign_in_attempt_costs_one_unit(client, limiter_on) -> None:  # noqa: F811
-    response = client.post(
-        LOGIN,
-        data={"username": f"nobody-{uuid.uuid4().hex[:10]}@example.com", "password": "wrong"},
-    )
-    assert response.status_code == 401
+    """The middleware writes its own RateLimit-Remaining last, so one attempt
+    reads limit-1 either way; the second attempt shows what the first cost."""
+    for attempt in (1, 2):
+        response = client.post(
+            LOGIN,
+            data={"username": f"nobody-{uuid.uuid4().hex[:10]}@example.com", "password": "wrong"},
+        )
+        assert response.status_code == 401
     assert response.headers["RateLimit-Limit"] == str(POLICY_LOGIN_IP.limit)
-    assert response.headers["RateLimit-Remaining"] == str(POLICY_LOGIN_IP.limit - 1)
+    assert response.headers["RateLimit-Remaining"] == str(POLICY_LOGIN_IP.limit - 2), (
+        "each sign-in attempt must cost exactly one unit of the allowance"
+    )
