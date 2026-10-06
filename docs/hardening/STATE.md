@@ -6,7 +6,7 @@ _Last updated: 2026-10-06 (end of Phase 5)_
 **Phase 5 — Production readiness: every open finding worked. COMPLETE; stopped at the Phase 5
 checkpoint.** Branch `claude/blissful-goldberg-hsqxy1` (the only branch this cloud session may push
 to; per N-001 the PR title names the intended `hardening/phase-5-production-readiness`).
-PR: PH_PR_LINK. Full report: `05-production-readiness.md`.
+PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/6. Full report: `05-production-readiness.md`.
 Do not redo Phases 0 to 5. The next session starts after you have read the PR.
 
 ## What is done
