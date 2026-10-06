@@ -40,7 +40,7 @@ from app.schemas.corroboration import (
 from app.services import audit_service
 from app.services.corroboration import loader, report, service
 from app.services.corroboration import vocabulary as v
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
 router = APIRouter(tags=["Document Corroborator"])
 
@@ -325,7 +325,8 @@ def page_image(workspace_id: uuid.UUID, run_id: uuid.UUID, work_item_id: uuid.UU
             try:
                 if not 1 <= page <= len(pdf):
                     raise HTTPException(status_code=404, detail={"code": "NO_PAGE", "message": "Page out of range."})
-                pdf[page - 1].render(scale=dpi / 72.0).to_pil().save(buffer, format="PNG", optimize=True)
+                with pdfium_page(pdf, page - 1) as pdf_page:
+                    pdf_page.render(scale=dpi / 72.0).to_pil().save(buffer, format="PNG", optimize=True)
             finally:
                 pdf.close()
     else:

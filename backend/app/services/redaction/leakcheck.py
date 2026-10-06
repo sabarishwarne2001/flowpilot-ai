@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from app.services.redaction.vocabulary import FORBIDDEN_OUTPUT_KEYS
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
 __all__ = [
     "LeakReport",
@@ -153,12 +153,12 @@ def extract_text_per_page(pdf_bytes: bytes) -> list[str]:
         try:
             pages: list[str] = []
             for index in range(len(document)):
-                page = document[index]
-                textpage = page.get_textpage()
-                try:
-                    pages.append(textpage.get_text_range() or "")
-                finally:
-                    textpage.close()
+                with pdfium_page(document, index) as page:
+                    textpage = page.get_textpage()
+                    try:
+                        pages.append(textpage.get_text_range() or "")
+                    finally:
+                        textpage.close()
             return pages
         except Exception as exc:  # noqa: BLE001
             raise LeakCheckError(f"could not extract text: {type(exc).__name__}") from exc

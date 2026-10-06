@@ -299,7 +299,7 @@ def render_thumbnail(work_item: WorkItem, page: int, scale: float = 0.35) -> byt
 
     from app.core.storage import get_storage_driver
 
-    from app.core.pdfium_lock import PDFIUM_LOCK
+    from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
     if (work_item.file_type or "").split(";")[0].strip().lower() != v.PDF_MIME:
         raise PacketError("NOT_PDF", "Only PDF packets have page thumbnails.")
@@ -312,7 +312,8 @@ def render_thumbnail(work_item: WorkItem, page: int, scale: float = 0.35) -> byt
         try:
             if not 1 <= page <= len(pdf):
                 raise PacketError("NO_PAGE", "page out of range")
-            image = pdf[page - 1].render(scale=scale).to_pil()
+            with pdfium_page(pdf, page - 1) as pdf_page:
+                image = pdf_page.render(scale=scale).to_pil()
             buffer = io.BytesIO()
             image.save(buffer, format="PNG", optimize=True)
             return buffer.getvalue()

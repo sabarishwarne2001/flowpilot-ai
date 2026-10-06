@@ -45,7 +45,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional
 
 from app.services.tables.synthetic import COURIER, Canvas, build_pdf, inr, western
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
 W, H = 612.0, 792.0
 LEFT = 54.0
@@ -166,7 +166,8 @@ def text_layer_pages(pdf: bytes) -> list[dict]:
         try:
             out = []
             for index in range(len(document)):
-                page = extract_page(document[index], raster_dpi=200)
+                with pdfium_page(document, index) as pdf_page:
+                    page = extract_page(pdf_page, raster_dpi=200)
                 assert page is not None, "synthetic page without a text layer"
                 out.append(OCRPage(page_number=index + 1, text=page.text, blocks=page.blocks, ocr_applied=False,
                                    width=page.width, height=page.height).as_dict())
