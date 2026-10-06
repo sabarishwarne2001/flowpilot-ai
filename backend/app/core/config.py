@@ -204,7 +204,10 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS_CONFIRMED: bool = False
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
     RATE_LIMIT_USER_PER_MINUTE: int = 300
-    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
+    # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
+    # allowance the product had in effect while each attempt was counted twice
+    # against a limit of 20; the owner chooses the final value (N-018).
+    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 10
     RATE_LIMIT_CREDENTIAL_PER_HOUR: int = 10
     RATE_LIMIT_EXPORT_PER_HOUR: int = 5
 

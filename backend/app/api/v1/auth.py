@@ -25,7 +25,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.api.rate_limit_deps import RateLimiter
 from app.core.client_ip import client_ip, trusted_client_ip
 from app.core.config import settings
 from app.core.cookies import (
@@ -33,7 +32,6 @@ from app.core.cookies import (
     clear_refresh_cookie,
     set_refresh_cookie,
 )
-from app.core.rate_limit.policy import POLICY_LOGIN_IP
 from app.core.redirects import sanitize_redirect_path
 from app.core.security import create_access_token
 from app.db.session import SessionLocal
@@ -202,10 +200,12 @@ def _send_verification_safely(
 # Login, Refresh, Logout, Devices, Verify, Password
 # ===========================================================================
 
+# F-048: limited once, by the global middleware (the public-route registry
+# maps /auth/login to POLICY_LOGIN_IP). A second RateLimiter here drew from the
+# same counter, so every attempt cost two and the allowance was halved.
 @router.post(
     "/login",
     response_model=TokenResponse,
-    dependencies=[Depends(RateLimiter(POLICY_LOGIN_IP))],
 )
 async def login(
     request: Request,
