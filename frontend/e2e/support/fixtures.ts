@@ -306,8 +306,14 @@ export { expect };
 export async function expectHealthyPage(page: Page): Promise<void> {
   await expect(page.getByText("Something went wrong", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Page not found" })).toHaveCount(0);
-  const text = (await page.locator("body").innerText()).trim();
-  expect(text.length, "page body is blank").toBeGreaterThan(20);
+  // Polled: right after a navigation the next screen may still be loading its code.
+  // A page that stays blank still fails.
+  await expect
+    .poll(async () => (await page.locator("body").innerText()).trim().length, {
+      message: "page body is blank",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
 }
 
 /** Wait until no spinner-only splash is shown and the network is quiet. */
