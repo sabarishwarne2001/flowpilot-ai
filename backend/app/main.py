@@ -26,6 +26,7 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.production_guard import HARDENED_ENVIRONMENTS
 from app.core.public_route_registry import is_public, registered_paths
+from app.middleware.client_gone import ClientGoneMiddleware
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
@@ -161,7 +162,21 @@ async def lifespan(app: FastAPI):
 # internet, and nothing in the product reads them, so production and staging do not serve them.
 _serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
 
-app = FastAPI(
+
+class FlowPilotAPI(FastAPI):
+    """F-106. Wraps the whole built stack, outside every registered middleware.
+
+    A send to a client that has hung up becomes a no-op, so the request still
+    runs to its end and its background emails are still sent. It produces no
+    response of its own, so DeprecationMiddleware stays the outermost layer that
+    stamps every response (ARCH-28).
+    """
+
+    def build_middleware_stack(self):  # type: ignore[no-untyped-def]
+        return ClientGoneMiddleware(super().build_middleware_stack())
+
+
+app = FlowPilotAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
