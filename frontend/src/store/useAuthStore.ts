@@ -133,6 +133,12 @@ interface AuthState {
   readonly clearUserCache: () => void;
 
   /**
+   * F-049. Records an avatar upload or removal on the cached user, so the
+   * sidebars and the profile preview request the image only when it exists.
+   */
+  readonly setHasAvatar: (hasAvatar: boolean) => void;
+
+  /**
    * Simple role helper.
    */
   readonly hasRole: (
@@ -224,6 +230,12 @@ export const useAuthStore = create<AuthState>()(
           set((state) => ({
             ...state,
             user: null,
+          })),
+
+        setHasAvatar: (hasAvatar) =>
+          set((state) => ({
+            ...state,
+            user: state.user ? { ...state.user, has_avatar: hasAvatar } : state.user,
           })),
 
         /**
