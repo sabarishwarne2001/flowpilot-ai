@@ -442,8 +442,8 @@ server.
 
 ## N-015 — Enforce the Content-Security-Policy: DECIDED, enforced
 The browser suite now runs the whole product under the production policy **enforced**
-(`E2E_CSP=1`, policy read from `deploy/Caddyfile`): 285 of 287 passed with no policy violation (the
-one failure was an unrelated test expectation, since fixed). `Content-Security-Policy` is now
+(`E2E_CSP=1`, policy read from `deploy/Caddyfile`): no policy violation in any run; the final run
+passed 290 of 291 tests (one skipped by design). `Content-Security-Policy` is now
 enforced in the Caddyfile on the platform host **and** on tenant custom domains, which had sent no
 policy at all (commit c47ae3f).
 
