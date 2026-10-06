@@ -16,13 +16,14 @@ import type {
   WorkspaceEmailOverrideUpdate,
 } from "@/types/emailSettings";
 
+/** F-058: null when the workspace has no override (the normal state). */
 export const getEmailSettings = async (
   workspaceId: string,
-): Promise<WorkspaceEmailOverride> => {
-  const response = await apiClient.get<WorkspaceEmailOverride>(
+): Promise<WorkspaceEmailOverride | null> => {
+  const response = await apiClient.get<WorkspaceEmailOverride | null>(
     SETTINGS_ENDPOINTS.emailSettings(workspaceId),
   );
-  return response.data;
+  return response.data ?? null;
 };
 
 export const saveEmailSettings = async (

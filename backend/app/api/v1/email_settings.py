@@ -40,6 +40,8 @@ the response model entirely, the same decision
 
 from __future__ import annotations
 
+from typing import Optional
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -76,19 +78,19 @@ def _load(db: Session, *, workspace_id) -> WorkspaceEmailOverride | None:
 
 @router.get(
     "",
-    response_model=WorkspaceEmailOverrideResponse,
-    summary="Get the workspace email override",
+    response_model=Optional[WorkspaceEmailOverrideResponse],
+    summary="Get the workspace email override (null when none is set)",
 )
 async def get_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
-) -> WorkspaceEmailOverrideResponse:
+) -> Optional[WorkspaceEmailOverrideResponse]:
+    # F-058: "no override" is the normal state of most workspaces, not an
+    # error. It was a 404, so the settings page logged an error on every visit
+    # and error monitoring counted a healthy page as broken.
     row = _load(db, workspace_id=context.workspace_id)
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This workspace has no email override.",
-        )
+        return None
     return WorkspaceEmailOverrideResponse.model_validate(row)
 
 

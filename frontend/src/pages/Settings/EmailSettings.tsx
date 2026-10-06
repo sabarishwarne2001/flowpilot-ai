@@ -158,7 +158,7 @@ export const EmailSettings: React.FC = () => {
   const overrideQuery = useQuery({
     queryKey: settingsKeys.email(workspaceId),
     queryFn: () => getEmailSettings(workspaceId),
-    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
+    retry: (count) => count < 2,
   });
   const resolutionQuery = useQuery({
     queryKey: settingsKeys.emailResolution(workspaceId),

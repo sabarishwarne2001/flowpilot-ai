@@ -83,6 +83,7 @@ ALLOWED_OPEN: dict[str, str] = {
        for leaf in ("domains", "idp-configs", "scim-keys", "security-policy", "directory")},
     f"DELETE {ORG}/identity/scim-keys/{{key_id}}": READ_AFTER_DOWNGRADE,
     **{f"GET {ORG}/branding": READ_AFTER_DOWNGRADE, f"DELETE {ORG}/branding/logo": READ_AFTER_DOWNGRADE,
+       f"GET {ORG}/branding/logo": READ_AFTER_DOWNGRADE, f"GET {ORG}/branding/favicon": READ_AFTER_DOWNGRADE,
        f"DELETE {ORG}/branding/favicon": READ_AFTER_DOWNGRADE},
     **{f"GET {ORG}/analytics/{leaf}": READ_AFTER_DOWNGRADE
        for leaf in ("destinations", "destinations/{destination_id}", "schedules", "runs", "consumption", "datasets")},

@@ -1,6 +1,8 @@
 """ARCH-25 §3, §4, §6 — tenant branding endpoints.
 
     GET    /organizations/{id}/branding                       read    [ADMIN]
+    GET    /organizations/{id}/branding/logo                  preview [ADMIN]
+    GET    /organizations/{id}/branding/favicon               preview [ADMIN]
     PUT    /organizations/{id}/branding                       tokens  [ADMIN]
     POST   /organizations/{id}/branding/logo                  upload  [ADMIN]
     DELETE /organizations/{id}/branding/logo                  clear   [ADMIN]
@@ -239,6 +241,54 @@ def _upload_asset(
     db.commit()
     db.refresh(branding)
     return _response(branding)
+
+
+def _serve_own_asset(db: Session, *, organization_id: uuid.UUID, kind: str) -> Response:
+    """F-058. The console preview of the organization's own logo or favicon.
+
+    The public /branding/logo resolves the tenant ONLY from a verified custom
+    domain, so on the normal app host it is always a 404: the branding page's
+    preview pointed at it and logged a 404 on every visit. This route reads the
+    caller's own organization, behind the same admin gate as the page.
+    """
+    organization = db.get(Organization, organization_id)
+    branding = branding_service.get_branding(db, organization_id=organization_id)
+    if organization is None or branding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No branding asset.")
+    try:
+        record = branding_service.resolve_asset(db, branding=branding, kind=kind)
+        payload = branding_service.read_asset_bytes(organization=organization, record=record)
+    except CrossTenantAssetError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No branding asset.")
+    return Response(
+        content=payload,
+        media_type=branding_service.LOGO_MIME,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, max-age=60",
+        },
+    )
+
+
+@router.get(BASE + "/logo", response_class=Response)
+def read_own_logo(
+    organization_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
+) -> Response:
+    _assert_scope(context, organization_id)
+    return _serve_own_asset(db, organization_id=organization_id, kind=branding_service.ASSET_LOGO)
+
+
+@router.get(BASE + "/favicon", response_class=Response)
+def read_own_favicon(
+    organization_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
+) -> Response:
+    _assert_scope(context, organization_id)
+    return _serve_own_asset(db, organization_id=organization_id, kind=branding_service.ASSET_FAVICON)
 
 
 @router.post(BASE + "/logo", response_model=TenantBrandingResponse)
