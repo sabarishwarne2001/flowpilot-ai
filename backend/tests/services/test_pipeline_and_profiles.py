@@ -67,9 +67,19 @@ def test_every_stage_is_reachable_from_queued():
     assert not unreachable, f"stages that can never be entered: {unreachable}"
 
 
-def test_terminal_stages_only_return_to_queued():
+def test_terminal_stages_only_return_to_queued_or_resume_a_working_stage():
+    """F-099. A COMPLETED document leaves only by being re-queued. A FAILED or
+    QUOTA_BLOCKED one may also be resumed by a retried job at the working
+    stage that failed (OCR -> EXTRACTING, enrichment -> ENRICHING), so a retry
+    neither re-runs OCR nor re-bills tokens already paid (F-087). What no
+    terminal stage may ever do is jump to a stage whose output it never
+    produced (EXTRACTED or COMPLETED)."""
+    assert STAGE_TRANSITIONS[PipelineStage.COMPLETED] == frozenset({PipelineStage.QUEUED})
+    resumable = frozenset({PipelineStage.QUEUED, PipelineStage.EXTRACTING, PipelineStage.ENRICHING})
+    for stage in TERMINAL_STAGES - {PipelineStage.COMPLETED}:
+        assert STAGE_TRANSITIONS[stage] == resumable, stage
     for stage in TERMINAL_STAGES:
-        assert STAGE_TRANSITIONS[stage] == frozenset({PipelineStage.QUEUED})
+        assert not STAGE_TRANSITIONS[stage] & {PipelineStage.EXTRACTED, PipelineStage.COMPLETED}, stage
 
 
 @pytest.mark.parametrize("stage", list(PipelineStage))
