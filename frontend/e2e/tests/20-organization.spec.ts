@@ -44,6 +44,26 @@ test.describe("Notifications (organization)", () => {
   });
 });
 
+test.describe("Members: invite from the organization page (N-020 item 5)", () => {
+  test("invite with an organization role and workspace access, then resend and revoke", async ({ page }) => {
+    const invitee = `org-invitee-${runId()}@e2e.example.com`;
+    await page.goto(org("C", "members"));
+    const panel = page.getByRole("region", { name: "Invite people" });
+    await panel.getByRole("textbox", { name: "Email address" }).fill(invitee);
+    await panel.getByRole("combobox", { name: "Organization role" }).selectOption("ADMIN");
+    await panel.getByRole("checkbox", { name: "Finance" }).check();
+    await panel.getByRole("combobox", { name: "Role in Finance" }).selectOption("CONTRIBUTOR");
+    await panel.getByRole("button", { name: "Send invitation" }).click();
+    const pending = panel.getByRole("list", { name: "Pending invitations" }).getByRole("listitem").filter({ hasText: invitee });
+    await expect(pending).toContainText("Admin · Finance (Contributor)", { timeout: 15_000 });
+    await pending.getByRole("button", { name: `Resend the invitation to ${invitee}` }).click();
+    await expect(page.getByText("Invitation sent again.").first()).toBeVisible();
+    await pending.getByRole("button", { name: `Revoke the invitation to ${invitee}` }).click();
+    await expect(panel.getByRole("list", { name: "Pending invitations" }).getByText(invitee)).toHaveCount(0, { timeout: 15_000 });
+    await expectHealthyPage(page);
+  });
+});
+
 test.describe("Members: invite, accept, change role, remove", () => {
   test.setTimeout(240_000);
 

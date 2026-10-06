@@ -19,6 +19,7 @@ import {
 } from "@/permissions/organizationPermissions";
 import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
 import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
+import InviteMembersPanel from "@/components/organization/InviteMembersPanel";
 
 const ALL_ROLES: readonly OrganizationRole[] = [
   "OWNER",
@@ -206,8 +207,9 @@ export const OrganizationMembers: React.FC = () => {
             <AlertTriangle className="mx-auto h-6 w-6 text-muted-foreground" />
             <p className="mt-2 text-sm font-medium text-foreground">No members yet</p>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Invite people from a workspace&apos;s settings — an invitation
-              grants membership to this organization.
+              {canManage
+                ? "Invite people below. An invitation grants membership to this organization and, optionally, to its workspaces."
+                : "Ask an owner or administrator to invite people."}
             </p>
           </div>
         ) : (
@@ -314,6 +316,9 @@ export const OrganizationMembers: React.FC = () => {
             })}
           </ul>
         )}
+
+        {/* N-020 item 5: invite from here, not only from a workspace's settings. */}
+        {canManage && <InviteMembersPanel organizationId={organizationId} />}
 
         {/* Ownership Transfer Panel */}
         <OwnershipTransferPanel
