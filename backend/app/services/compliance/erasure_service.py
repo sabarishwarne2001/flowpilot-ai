@@ -148,6 +148,37 @@ def _guard(
             "before erasing this one."
         )
 
+    # F-108. Erasure destroys the content of every document the subject
+    # uploaded. A document under a legal hold must survive (GDPR Art. 17(3)(e):
+    # erasure does not apply where the data is needed for legal claims), and a
+    # partial erasure would record the subject as erased while data remains.
+    # So the request is refused until the hold is released.
+    from app.models.work_item import WorkItem as _WorkItem
+    from app.services.ingestion import retention_service
+
+    held_total = 0
+    reason = None
+    for workspace_id in _workspace_ids(db, organization_id):
+        ids = list(
+            db.execute(
+                select(_WorkItem.id).where(
+                    _WorkItem.workspace_id == workspace_id,
+                    _WorkItem.created_by_user_id == subject.id,
+                )
+            ).scalars()
+        )
+        holds = retention_service.active_holds(
+            db, organization_id=organization_id, workspace_id=workspace_id, work_item_ids=ids
+        )
+        if holds:
+            held_total += len(holds)
+            reason = reason or next(iter(holds.values())).reason
+    if held_total:
+        raise SubjectProtectedError(
+            f"{held_total} document(s) this person uploaded are under a legal hold "
+            f"({reason}). Release the hold before erasing this person."
+        )
+
 
 def preview_subject(
     db: Session,

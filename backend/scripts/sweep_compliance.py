@@ -75,6 +75,16 @@ def _policies(session_factory, *, require_auto_purge: bool) -> list[dict]:
         ]
 
 
+#: F-108. No active hold names the document, and none covers its workspace.
+_NOT_HELD = """NOT EXISTS (
+            SELECT 1 FROM retention_holds h
+            WHERE h.organization_id = w.organization_id
+              AND h.released_at IS NULL
+              AND (h.work_item_id = wi.id
+                   OR (h.work_item_id IS NULL AND h.workspace_id = wi.workspace_id))
+          )"""
+
+
 def _purge_work_items(
     session_factory,
     *,
@@ -88,6 +98,9 @@ def _purge_work_items(
     work_items has no organization_id, so the predicate joins through
     workspaces. document_chunks has no FK to work_items either, so the chunks
     are deleted explicitly first — nothing cascades.
+
+    F-108: a document under an active legal hold (its own, or one covering its
+    whole workspace) is never purged, however old it is.
     """
     from sqlalchemy import text
 
@@ -99,6 +112,7 @@ def _purge_work_items(
         JOIN workspaces w ON w.id = wi.workspace_id
         WHERE w.organization_id = :org
           AND wi.created_at < :cutoff
+          AND """ + _NOT_HELD + """
         LIMIT :batch
         """
     )
@@ -111,7 +125,7 @@ def _purge_work_items(
                 FROM work_items wi
                 JOIN workspaces w ON w.id = wi.workspace_id
                 WHERE w.organization_id = :org AND wi.created_at < :cutoff
-                """
+                  AND """ + _NOT_HELD
             ),
             {"org": organization_id, "cutoff": cutoff},
         ).scalar_one()

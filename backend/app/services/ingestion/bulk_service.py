@@ -125,11 +125,31 @@ def bulk_delete(
     organization_id: uuid.UUID,
     workspace_id: uuid.UUID,
     ids: Sequence[uuid.UUID],
+    user_id: Optional[uuid.UUID] = None,
+    is_admin: bool = True,
 ) -> list[ItemResult]:
     from app import crud
 
     items = _scoped_items(db, workspace_id=workspace_id, ids=ids)
     results: list[ItemResult] = _missing(ids, items)
+
+    # F-108: the single-document route lets only the uploader or a workspace
+    # ADMIN delete; the bulk route must not be a way around that rule.
+    if not is_admin:
+        allowed = []
+        for item in items:
+            if item.created_by_user_id is not None and item.created_by_user_id == user_id:
+                allowed.append(item)
+            else:
+                results.append(
+                    ItemResult(
+                        str(item.id),
+                        "refused",
+                        "FORBIDDEN",
+                        "Only the uploader or a workspace administrator may delete this document.",
+                    )
+                )
+        items = allowed
 
     blocks = retention_service.blocking_reasons(
         db,
@@ -340,6 +360,7 @@ def run(
     tags: Sequence[str] = (),
     export_format: str = "csv",
     user_id: Optional[uuid.UUID] = None,
+    is_admin: bool = True,
 ) -> dict[str, Any]:
     if action not in BULK_ACTIONS:
         raise BulkError("UNKNOWN_ACTION", f"{action!r} is not a bulk action.")
@@ -357,6 +378,8 @@ def run(
             organization_id=organization_id,
             workspace_id=workspace_id,
             ids=ids,
+            user_id=user_id,
+            is_admin=is_admin,
         )
     elif action == "tag":
         results = bulk_tag(
