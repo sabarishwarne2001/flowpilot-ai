@@ -524,6 +524,10 @@ jobs:
       PLATFORM_SMTP_ENCRYPTION: NONE
       E2E_PYTHON: python
       E2E_LOG_DIR: ${{ github.workspace }}/e2e-logs
+      # F-063: a deterministic local model stand-in (frontend/e2e/support/llm-mock.mjs) behind the
+      # sovereign edition's LOCAL_LLM_MODE=exclusive, so extraction, verification, the review queue,
+      # tables, matching and the assistant run end to end without a provider key.
+      E2E_LLM: "1"
 
     steps:
       - uses: actions/checkout@v4

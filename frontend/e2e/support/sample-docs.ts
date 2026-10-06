@@ -26,7 +26,17 @@ function escapePdfText(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-/** Build a minimal, valid multi-page PDF with Helvetica text lines. */
+/**
+ * A table row: "|cell|cell|...". Each cell is drawn at its own column position, as a
+ * real invoice prints its line items, so the table engine (which reads the PDF word by
+ * word and groups words into columns) sees a table rather than one long line.
+ */
+const TABLE_COLUMNS: Readonly<Record<number, readonly number[]>> = {
+  3: [56, 80, 330],
+  5: [56, 80, 330, 400, 490],
+};
+
+/** Build a minimal, valid multi-page PDF with Helvetica text lines (and "|"-rows as table rows). */
 export function buildPdf(pages: readonly Page[]): Buffer {
   const objects: string[] = [];
   // 1: catalog, 2: pages, 3: font, then per page: page object + content stream
@@ -37,10 +47,17 @@ export function buildPdf(pages: readonly Page[]): Buffer {
     const pageId = nextId++;
     const contentId = nextId++;
     pageObjectIds.push(pageId);
-    const ops: string[] = ["BT", "/F1 11 Tf", "14 TL", "56 780 Td"];
-    for (const line of lines) {
-      ops.push(`(${escapePdfText(line)}) Tj`, "T*");
-    }
+    const ops: string[] = ["BT", "/F1 11 Tf"];
+    lines.forEach((line, index) => {
+      const y = 780 - index * 16;
+      if (line.startsWith("|")) {
+        const cells = line.slice(1).split("|");
+        const xs = TABLE_COLUMNS[cells.length] ?? cells.map((_, i) => 56 + i * 100);
+        cells.forEach((cell, i) => ops.push(`1 0 0 1 ${xs[i]} ${y} Tm (${escapePdfText(cell)}) Tj`));
+      } else {
+        ops.push(`1 0 0 1 56 ${y} Tm (${escapePdfText(line)}) Tj`);
+      }
+    });
     ops.push("ET");
     const stream = ops.join("\n");
     bodies[pageId] =
@@ -80,8 +97,9 @@ const INVOICE_1001: Page = [
   "PO Number: PO-E2E-5001",
   "Currency: USD",
   "Line items:",
-  "1. Industrial safety gloves  Qty 100  Unit Price 5.00  Amount 500.00",
-  "2. Steel toe boots  Qty 10  Unit Price 60.00  Amount 600.00",
+  "|#|Description|Qty|Unit Price|Amount",
+  "|1|Industrial safety gloves|100|5.00|500.00",
+  "|2|Steel toe boots|10|60.00|600.00",
   "Subtotal: 1100.00",
   "Tax (VAT 13.64%): 150.00",
   "Total Amount Due: 1250.00 USD",
@@ -100,8 +118,9 @@ const INVOICE_1002_CHANGED_BANK: Page = [
   "PO Number: PO-E2E-5001",
   "Currency: USD",
   "Line items:",
-  "1. Industrial safety gloves  Qty 100  Unit Price 5.00  Amount 500.00",
-  "2. Steel toe boots  Qty 10  Unit Price 60.00  Amount 600.00",
+  "|#|Description|Qty|Unit Price|Amount",
+  "|1|Industrial safety gloves|100|5.00|500.00",
+  "|2|Steel toe boots|10|60.00|600.00",
   "Subtotal: 1100.00",
   "Tax (VAT 13.64%): 150.00",
   "Total Amount Due: 1250.00 USD",
@@ -115,8 +134,9 @@ const PURCHASE_ORDER_5001: Page = [
   "PO Number: PO-E2E-5001",
   "PO Date: 2026-09-01",
   "Currency: USD",
-  "1. Industrial safety gloves  Qty 100  Unit Price 5.00  Amount 500.00",
-  "2. Steel toe boots  Qty 10  Unit Price 60.00  Amount 600.00",
+  "|#|Description|Qty|Unit Price|Amount",
+  "|1|Industrial safety gloves|100|5.00|500.00",
+  "|2|Steel toe boots|10|60.00|600.00",
   "PO Total: 1100.00 USD",
 ];
 
@@ -127,8 +147,9 @@ const GOODS_RECEIPT_7001: Page = [
   "Receipt Number: GR-E2E-7001",
   "PO Number: PO-E2E-5001",
   "Received Date: 2026-09-12",
-  "1. Industrial safety gloves  Qty received 98",
-  "2. Steel toe boots  Qty received 10",
+  "|#|Description|Qty received",
+  "|1|Industrial safety gloves|98",
+  "|2|Steel toe boots|10",
 ];
 
 const CONTRACT_MSA: Page = [
@@ -159,6 +180,9 @@ const TABLE_CSV = [
   "2,Steel toe boots,10,60.00,600.00",
   "",
 ].join("\n");
+
+/** The invoice whose bank details changed, for tests that need a fresh disputed copy. */
+export const DISPUTED_INVOICE_PAGE: Page = INVOICE_1002_CHANGED_BANK;
 
 export const SAMPLE = {
   invoice1001: "invoice-INV-E2E-1001.pdf",
