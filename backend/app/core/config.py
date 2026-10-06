@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
+    # text: one line per event with its context as key=value; json: one JSON object per line.
+    LOG_FORMAT: str = "text"
 
     CORS_ORIGINS: str = "http://localhost:3000"
 

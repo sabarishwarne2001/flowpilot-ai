@@ -10,7 +10,7 @@ Every setting can be set as an environment variable of the same name (or in `bac
 that `.env.production.template` asks for (F-047); a setting outside the template keeps its default
 in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.
 
-303 settings. Columns: name, type, default, where it appears (`example` =
+304 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -24,6 +24,7 @@ guard), and the comment written above it in the code.
 | `HOST` | `str` | `'0.0.0.0'` | example |  |
 | `PORT` | `int` | `8000` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
+| `LOG_FORMAT` | `str` | `'text'` | production | text: one line per event with its context as key=value; json: one JSON object per line. |
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `POSTGRES_USER` | `str` | `'postgres'` | example, production |  |
 | `POSTGRES_PASSWORD` | `str` | `'postgres'` | example, production, guard |  |

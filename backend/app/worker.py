@@ -468,10 +468,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    # The API's logging set-up, with the worker's level and line format: the same context
+    # formatter (extra= fields on every line) and the same secret-path redaction.
+    from app.core.logging_config import setup_logging
+
+    setup_logging(level=args.log_level, fmt="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     register_all()
     profile = get_profile(args.profile)
