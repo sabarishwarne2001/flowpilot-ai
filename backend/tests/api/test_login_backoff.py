@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.core.rate_limit.policy import POLICY_LOGIN_ACCOUNT_IP
 from app.services.login_backoff_service import (
     _pair_hmac,
     check_login_backoff,
@@ -9,7 +10,13 @@ from app.services.login_backoff_service import (
 )
 
 
-def test_login_backoff_schedule_and_retry_after(client: TestClient, monkeypatch):
+def test_login_backoff_engages_and_answers_like_a_wrong_password(
+    client: TestClient, monkeypatch
+):
+    """Owner decision N-022 (F-096): a backed-off sign-in keeps the generic
+    OWASP answer. The back-off engages (the service reports it), but the HTTP
+    response is the same 401 a wrong password gets, with no Retry-After, so an
+    attacker cannot tell a locked pair from a wrong guess."""
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
 
@@ -22,19 +29,22 @@ def test_login_backoff_schedule_and_retry_after(client: TestClient, monkeypatch)
     status_initial = check_login_backoff(ip, email)
     assert status_initial.is_backed_off is False
 
-    res1 = client.post(
+    first = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": "wrongpassword"},
     )
-    assert res1.status_code == 401
+    assert first.status_code == 401
 
-    res2 = client.post(
-        "/api/v1/auth/login",
-        data={"username": email, "password": "wrongpassword"},
-    )
-    assert res2.status_code == 429
-    assert "Retry-After" in res2.headers
-    assert res2.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+    for _ in range(POLICY_LOGIN_ACCOUNT_IP.threshold + 2):
+        refused = client.post(
+            "/api/v1/auth/login",
+            data={"username": email, "password": "wrongpassword"},
+        )
+
+    assert check_login_backoff(ip, email).is_backed_off is True
+    assert refused.status_code == 401
+    assert refused.json() == first.json()
+    assert "retry-after" not in {key.lower() for key in refused.headers}
 
     clear_login_backoff(ip, email)
     clear_login_backoff("127.0.0.1", email)
