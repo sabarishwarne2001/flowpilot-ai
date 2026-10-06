@@ -96,14 +96,28 @@ test.describe("Workspace — notifications", () => {
     await expect(page.getByText("Alert Center")).toBeHidden();
   });
 
-  test("notifications can be filtered by category and marked unread (requested capability)", async ({ page }) => {
+  test("notifications can be filtered by category and marked unread (N-020 item 2)", async ({ page }) => {
     await page.goto(ws("C", "notifications"));
     await settle(page);
-    // The brief asks for category filters and a read/unread toggle. Assert they exist.
-    await expect(page.getByRole("button", { name: /unread|mark as unread/i }).first()).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByRole("tab").or(page.getByRole("combobox", { name: /category|type/i })).first()).toBeVisible({
-      timeout: 5_000,
-    });
+    const categories = page.getByRole("tablist", { name: "Category" });
+    for (const name of ["Documents", "Automation", "Email", "System", "Security", "All categories"]) {
+      await categories.getByRole("tab", { name }).click();
+      await expect(categories.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    }
+    const first = page.getByRole("article").first();
+    await expect(first).toBeVisible({ timeout: 15_000 });
+    // Mark it read (if it is not), then unread again; the Unread tab follows.
+    const markRead = first.getByRole("button", { name: "Mark as read" });
+    if (await markRead.isVisible()) {
+      await markRead.click();
+      await expect(first.getByRole("button", { name: "Mark as unread" })).toBeVisible();
+    }
+    const title = (await first.getByRole("heading").textContent()) ?? "";
+    await first.getByRole("button", { name: "Mark as unread" }).click();
+    await expect(first.getByRole("button", { name: "Mark as read" })).toBeVisible();
+    await page.getByRole("tablist", { name: "Read state" }).getByRole("tab", { name: "Unread" }).click();
+    await expect(page.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
+    await expectHealthyPage(page);
   });
 });
 

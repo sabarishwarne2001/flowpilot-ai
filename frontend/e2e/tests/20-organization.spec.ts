@@ -346,9 +346,34 @@ test.describe("Billing", () => {
     await seats.fill("4");
   });
 
-  test("a promo code can be entered at checkout (requested capability)", async ({ page }) => {
+  test("a promo code can be entered at checkout and is priced for the chosen plan (N-020 item 3)", async ({ page, problems }) => {
+    // The platform super-admin publishes a code with a gateway coupon (RevOps console); idempotent.
+    const admin = await loginAs("P.superadmin");
+    const created = await api(admin, "POST", "/admin/revops/promo-codes", {
+      code: "E2ELAUNCH20",
+      description: "Browser suite launch offer",
+      percent_off: 20,
+      duration: "REPEATING",
+      duration_in_months: 3,
+      gateway_coupon_id: "e2e_coupon_launch20",
+    });
+    expect([201, 409]).toContain(created.status);
+
     await page.goto(org("C", "billing"));
-    await expect(page.getByRole("textbox", { name: /promo|coupon/i })).toBeVisible({ timeout: 5_000 });
+    const code = page.getByRole("textbox", { name: /promo code/i });
+    await expect(code).toBeVisible({ timeout: 5_000 });
+    await code.fill("e2elaunch20");
+    // A code is priced for a plan: Apply waits for one.
+    await expect(page.getByRole("button", { name: "Apply" })).toBeDisabled();
+    await page.getByRole("radio", { name: /^Business/ }).check();
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "E2ELAUNCH20" })).toContainText(/for 3 months/);
+
+    // An unknown code is refused with the server's reason.
+    problems.allowHttp(/\/billing\/promo-quote$/, [404], "an unknown promo code is refused");
+    await code.fill("NO-SUCH-CODE");
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /doesn.t exist/ })).toBeVisible();
   });
 });
 
