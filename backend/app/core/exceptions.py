@@ -309,6 +309,15 @@ class EmailImmutableError(UserError):
     pass
 
 
+class WeakPasswordError(UserError):
+    """
+    Raised when a new password fails the password policy (ASVS V2.1):
+    shorter than 12 characters, or a common password or easy pattern.
+    The message says why in plain words and never repeats the password.
+    """
+    pass
+
+
 class ReauthenticationFailedError(UserError):
     """
     Raised when a sensitive action's password confirmation is wrong.

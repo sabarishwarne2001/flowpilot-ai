@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
+from app.core.password_policy import MIN_LENGTH as MIN_PASSWORD_LENGTH
+
 class UserBase(BaseModel):
     """
     Base properties shared across user validation schemas.
@@ -20,7 +22,9 @@ class UserRegister(UserBase):
     """
     Validation schema used to process signup registration requests.
     """
-    password: str = Field(..., min_length=8, max_length=128, description="Plaintext security password.")
+    # ASVS V2.1: length here (12, the standard 422 shape), strength in
+    # app.core.password_policy (422 PASSWORD_TOO_WEAK, in plain words).
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128, description="Plaintext security password.")
 
     redirect: str | None = Field(
         default=None,
@@ -153,7 +157,7 @@ class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -163,7 +167,7 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     current_password: str = Field(..., min_length=1, max_length=128)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
 
 
 class PasswordActionResponse(BaseModel):

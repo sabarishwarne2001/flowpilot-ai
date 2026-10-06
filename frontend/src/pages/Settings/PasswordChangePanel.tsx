@@ -5,6 +5,7 @@ import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { changePasswordRequest } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { errorMessage } from "@/services/api/errors";
+import { MIN_PASSWORD_LENGTH } from "@/utils/validation";
 
 /**
  * ARCH-29 Slice 2 — password change.
@@ -45,7 +46,7 @@ function detailOf(error: unknown, fallback: string): string {
 }
 
 export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
-  minimumLength = 12,
+  minimumLength = MIN_PASSWORD_LENGTH,
 }) => {
   const setToken = useAuthStore((state) => state.setToken);
 

@@ -20,8 +20,8 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 import { useAuthStore } from "@/store/useAuthStore";
+import { MIN_PASSWORD_LENGTH } from "@/utils/validation";
 
-const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * Reads the token from the fragment and strips it from the address bar.

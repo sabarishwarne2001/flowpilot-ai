@@ -17,6 +17,7 @@ from app.core.public_route_registry import redact_path
 from app.core.exceptions import (
     CannotTransferToSelfError,
     EmailImmutableError,
+    WeakPasswordError,
     FlowPilotError,
     InvalidInvitationTokenError,
     InvalidSlugError,
@@ -144,6 +145,7 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
 
     # --- Users ---------------------------------------------------------------
     EmailImmutableError: (409, "EMAIL_IMMUTABLE"),
+    WeakPasswordError: (422, "PASSWORD_TOO_WEAK"),
     ReauthenticationFailedError: (401, "REAUTHENTICATION_FAILED"),
     UserError: (400, "USER_ERROR"),
 

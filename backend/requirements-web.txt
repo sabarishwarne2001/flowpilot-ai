@@ -144,3 +144,4 @@ uvicorn==0.28.0
 watchfiles==1.2.0
 websockets==15.0
 wrapt==2.4.1
+zxcvbn==4.5.0

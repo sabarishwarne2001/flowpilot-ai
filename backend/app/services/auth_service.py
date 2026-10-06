@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.core import security
+from app.core import password_policy, security
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.auth import UserRegister
@@ -34,6 +34,9 @@ def register_new_user(
     db: Session, *, user_in: UserRegister
 ) -> RegistrationOutcome:
     normalized = (user_in.email or "").strip().lower()
+    # ASVS V2.1. Checked before the account lookup, on the password alone, so the
+    # answer is the same whether or not the address already has an account.
+    password_policy.check_new_password(user_in.password, email=normalized)
     hashed_password: str = security.get_password_hash(user_in.password)
 
     existing_user = crud.get_user_by_email(db, email=normalized)
