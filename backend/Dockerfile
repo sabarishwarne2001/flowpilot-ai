@@ -27,10 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install base Python dependencies
-COPY requirements.txt ./
+# Install base Python dependencies. F-045: the web set only (generated from
+# requirements.txt by scripts/image_requirements.py); the ocr target adds the
+# OCR engine. Development and CI still install the full requirements.txt.
+COPY requirements-web.txt requirements-ocr.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements-web.txt
 
 # Copy application codebase
 COPY alembic.ini ./
@@ -49,7 +51,8 @@ USER flowpilot
 
 
 # -----------------------------------------------------------------------------
-# Target: web (FastAPI API Web Tier — Zero ML dependencies)
+# Target: web (FastAPI API Web Tier — no OCR engine; it embeds search queries,
+# so it carries sentence-transformers and torch)
 # -----------------------------------------------------------------------------
 FROM base AS web
 
@@ -140,6 +143,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
+# F-045: PaddleOCR, PaddleX and OpenCV live in this image only.
+RUN pip install --no-cache-dir -r requirements-ocr.txt
 
 RUN mkdir -p /home/flowpilot/.cache/paddle && \
     mkdir -p /home/flowpilot/.paddlex && \
