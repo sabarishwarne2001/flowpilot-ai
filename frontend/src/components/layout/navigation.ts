@@ -593,6 +593,16 @@ export const buildOrganizationNavigationItems = (
       capability: CAPABILITY.egressLockdown,
       icon: ShieldCheck,
     });
+    // F-015 / owner decision N-006: OWNER and ADMIN may both create and
+    // revoke API keys (the API has always allowed ADMIN). Webhooks, the audit
+    // log and enterprise identity stay OWNER-only in the sidebar until the
+    // owner decides them; their pages still open for an ADMIN by URL.
+    items.push({
+      name: "API keys",
+      path: organizationApiKeysPath(orgSlug),
+      capability: CAPABILITY.developerApi,
+      icon: KeyRound,
+    });
   }
 
   if (role === "OWNER" || role === "BILLING") {
@@ -604,12 +614,6 @@ export const buildOrganizationNavigationItems = (
   }
 
   if (role === "OWNER") {
-    items.push({
-      name: "API keys",
-      path: organizationApiKeysPath(orgSlug),
-      capability: CAPABILITY.developerApi,
-      icon: KeyRound,
-    });
     items.push({
       name: "Webhooks",
       path: organizationWebhooksPath(orgSlug),

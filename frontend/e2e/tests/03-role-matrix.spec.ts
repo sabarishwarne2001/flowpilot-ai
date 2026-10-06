@@ -23,7 +23,7 @@ const ORG_NAV_BY_ROLE: Record<string, { visible: string[]; hidden: string[] }> =
     visible: ["General", "Members", "Billing", "API keys", "Webhooks", "Audit log", "Developer platform"],
     hidden: [],
   },
-  // N-006: OWNER and ADMIN may both mint API keys; F-015 records that the sidebar hides it from ADMIN.
+  // N-006: OWNER and ADMIN may both mint API keys, so the sidebar shows API keys to ADMIN (F-015, fixed).
   "A.admin": { visible: ["General", "Members", "Developer platform", "API keys"], hidden: ["Billing"] },
   "A.billing": { visible: ["General", "Billing"], hidden: ["Members", "API keys", "Audit log"] },
   "A.member": {
