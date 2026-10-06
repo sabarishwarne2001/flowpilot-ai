@@ -385,6 +385,12 @@ function AppRoutes() {
                 sibling of this element would ship without both.
               */}
               <Route element={<PlatformLayout />}>
+                {/* F-009: /admin had no index route and rendered an empty
+                    body; it opens the first platform console. */}
+                <Route
+                  index
+                  element={<Navigate to={ROUTE_PATTERNS.platformMargins} replace />}
+                />
                 <Route
                   path={ROUTE_PATTERNS.platformMargins}
                   element={<AdminMarginsHub />}
