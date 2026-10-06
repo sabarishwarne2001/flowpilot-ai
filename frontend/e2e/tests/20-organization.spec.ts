@@ -229,13 +229,14 @@ test.describe("Branding and custom domains", () => {
     await expect(page.locator("body")).toContainText(/uploaded|saved|logo/i, { timeout: 15_000 });
   });
 
-  test("claim a custom domain: DNS instructions, or a clear 'not enabled' message", async ({ page, problems }) => {
-    // CUSTOM_DOMAINS_ENABLED=false here (no Caddy/ACME), so the server answers 501.
-    problems.allowHttp(/\/custom-domains$/, [501], "custom domains are disabled on this deployment");
+  test("custom domains switched off: no claim button, and the page says why (F-060)", async ({ page }) => {
+    // CUSTOM_DOMAINS_ENABLED=false here (no Caddy/ACME). Before F-060 the page
+    // offered "Claim domain" and the click answered 501.
     await page.goto(org("C", "branding"));
-    await page.locator("#hostname").fill(`ai-${runId()}.caretakers-e2e.co.uk`);
-    await page.getByRole("button", { name: "Claim domain" }).click();
-    await expect(page.locator("main")).toContainText(/TXT|CNAME|record|not enabled on this deployment/i, { timeout: 15_000 });
+    await settle(page);
+    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this FlowPilot deployment/);
+    await expect(page.getByRole("button", { name: "Claim domain" })).toHaveCount(0);
+    await expect(page.locator("#hostname")).toHaveCount(0);
   });
 });
 

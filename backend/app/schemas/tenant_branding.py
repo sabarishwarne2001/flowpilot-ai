@@ -245,6 +245,11 @@ class TenantBrandingResponse(BaseModel):
 
     updated_at: datetime
 
+    #: F-060. Whether this deployment serves custom domains at all
+    #: (CUSTOM_DOMAINS_ENABLED). False, the console hides "Claim domain" and
+    #: says why, instead of offering a button that answers 501.
+    custom_domains_enabled: bool = False
+
 
 class BrandingManifest(BaseModel):
     """The unauthenticated, host-resolved theme payload.

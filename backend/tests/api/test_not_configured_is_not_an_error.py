@@ -81,3 +81,17 @@ def test_the_preview_is_admin_only_and_tenant_scoped(client, db_session, tenant,
     assert client.get(f"{base}/logo", headers=tenant.contributor.headers).status_code == 403
     assert client.get(f"{base}/logo", headers=tenant.other_org_member.headers).status_code in (403, 404)
     assert client.get(f"{base}/favicon", headers=tenant.org_admin.headers).status_code == 404
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_branding_says_whether_custom_domains_are_served(client, db_session, tenant, monkeypatch, enabled) -> None:
+    """F-060: the console offered "Claim domain" where the deployment has custom
+    domains switched off, and the click answered 501. The branding read now
+    carries the deployment's switch so the page can hide the button."""
+    monkeypatch.setattr(settings, "CUSTOM_DOMAINS_ENABLED", enabled)
+    put_on_plan(db_session, tenant.organization, "developer")
+    response = client.get(
+        f"{API}/organizations/{tenant.organization.id}/branding", headers=tenant.org_admin.headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["custom_domains_enabled"] is enabled

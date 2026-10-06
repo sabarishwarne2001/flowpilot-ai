@@ -135,6 +135,7 @@ def _response(branding: Any) -> TenantBrandingResponse:
         is_enabled=branding.is_enabled,
         sender=branding_service.sender_status(branding),
         updated_at=branding.updated_at,
+        custom_domains_enabled=bool(getattr(settings, "CUSTOM_DOMAINS_ENABLED", False)),
     )
 
 

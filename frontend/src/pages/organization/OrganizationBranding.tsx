@@ -717,7 +717,17 @@ const OrganizationBranding: React.FC = () => {
           requested after that verification succeeds.
         </p>
 
-        {isOwner && domainCanCreate ? (
+        {/* F-060: the deployment's switch, from the branding read. Unknown
+            (older server) behaves as before. */}
+        {branding?.custom_domains_enabled === false ? (
+          <p className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground" role="status">
+            Custom domains are not switched on for this FlowPilot deployment, so a hostname
+            cannot be claimed here yet. Ask your platform administrator to enable custom
+            domains (CUSTOM_DOMAINS_ENABLED).
+          </p>
+        ) : null}
+
+        {isOwner && domainCanCreate && branding?.custom_domains_enabled !== false ? (
           <div className="mt-4 flex flex-wrap items-end gap-2">
             <div className="min-w-64 flex-1">
               <label className={LABEL} htmlFor="hostname">
