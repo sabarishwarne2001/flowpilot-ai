@@ -91,6 +91,7 @@ import {
   workspaceSettingsPath,
 } from "@/routes/tenantPaths";
 import type { WorkspaceRole } from "@/types/tenancy";
+import type { AddonFeatureKey } from "@/constants/planFeatures";
 
 export interface NavigationItem {
   readonly name: string;
@@ -101,6 +102,11 @@ export interface NavigationItem {
    * Absent from the plan, the row shows a lock and opens the upgrade dialog.
    */
   readonly capability?: CapabilityKey;
+  /**
+   * F-005. An `addon.*` grant the page's writes need (Analytics needs the
+   * warehouse add-on). Locked the same way as a capability.
+   */
+  readonly addon?: AddonFeatureKey;
 }
 
 /**
@@ -562,6 +568,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Analytics & BI egress",
       path: organizationAnalyticsPath(orgSlug),
+      addon: "addon.warehouse_sync",
       icon: BarChart3,
     });
     // ARCH-27. ADMIN sees the catalog because reading which third-party
