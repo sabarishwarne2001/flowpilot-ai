@@ -1,6 +1,7 @@
 """N-020 items 6 and 7 — the document viewer: its text, and correcting its extracted fields.
 
     GET   /workspaces/{wid}/work-items/{id}/text             the extracted text        [VIEWER]
+    GET   /workspaces/{wid}/work-items/{id}/fields           may the caller correct?   [VIEWER]
     PATCH /workspaces/{wid}/work-items/{id}/fields           correct extracted fields  [CONTRIBUTOR]
     GET   /workspaces/{wid}/work-items/{id}/fields/history   who corrected what        [VIEWER]
 
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
+from app.models.workspace import WorkspaceRole
 from app.services import field_correction_service
 
 router = APIRouter(tags=["Work Items"])
@@ -57,6 +59,13 @@ class FieldCorrectionOut(BaseModel):
     created_at: datetime
 
 
+class FieldEditabilityOut(BaseModel):
+    work_item_id: uuid.UUID
+    editable: bool
+    code: Optional[str] = None
+    message: Optional[str] = None
+
+
 class FieldCorrectionResult(BaseModel):
     work_item_id: uuid.UUID
     extracted_entities: dict[str, Any]
@@ -85,6 +94,28 @@ def document_text(
         characters=len(text),
         truncated=len(text) > MAX_TEXT_CHARS,
     )
+
+
+@router.get(
+    "/{work_item_id}/fields",
+    response_model=FieldEditabilityOut,
+    summary="Whether the caller may correct this document's fields now, and if not why",
+)
+def field_editability(
+    work_item_id: uuid.UUID,
+    db: Session = Depends(deps.get_read_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
+) -> FieldEditabilityOut:
+    item = _item(db, context, work_item_id)
+    if context.role is WorkspaceRole.VIEWER:
+        return FieldEditabilityOut(
+            work_item_id=item.id, editable=False, code="READ_ONLY_ROLE",
+            message="You have view-only access to this workspace. Ask a workspace administrator to correct a field.",
+        )
+    blocked = field_correction_service.editability(db, work_item=item, organization_id=context.organization_id)
+    if blocked is not None:
+        return FieldEditabilityOut(work_item_id=item.id, editable=False, code=blocked.code, message=blocked.message)
+    return FieldEditabilityOut(work_item_id=item.id, editable=True)
 
 
 @router.patch(

@@ -75,6 +75,10 @@ def test_a_contributor_corrects_a_field_and_everything_records_it(engines: Engin
 
 def test_a_viewer_cannot_correct(engines: Engines) -> None:
     work_item_id = _invoice(engines)
+    assert engines.get(f"/work-items/{work_item_id}/fields", as_user=engines.tenant.contributor).json()["editable"]
+    assert engines.get(f"/work-items/{work_item_id}/fields", as_user=engines.tenant.viewer).json()["code"] == (
+        "READ_ONLY_ROLE"
+    )
     response = engines.patch(f"/work-items/{work_item_id}/fields", {"corrections": {"invoice_number": "X"}},
                              as_user=engines.tenant.viewer)
     assert response.status_code == 403, response.text
@@ -100,6 +104,9 @@ def test_a_document_in_the_review_queue_is_corrected_there(engines: Engines) -> 
     response = engines.patch(f"/work-items/{work_item_id}/fields", {"corrections": {"invoice_number": "INV-FIX-1"}})
 
     assert response.status_code == 409 and response.json()["detail"]["code"] == "REVIEW_PENDING", response.text
+    # The viewer is told before it offers an Edit button.
+    asked = engines.get(f"/work-items/{work_item_id}/fields").json()
+    assert asked["editable"] is False and asked["code"] == "REVIEW_PENDING", asked
 
 
 def test_a_document_under_legal_hold_is_frozen(engines: Engines) -> None:

@@ -51,3 +51,65 @@ export const getDocumentPageImage = async (
   );
   return response.data;
 };
+
+/* N-020 items 6/7 — the document viewer. */
+
+export interface DocumentText {
+  work_item_id: string;
+  text: string;
+  characters: number;
+  truncated: boolean;
+}
+
+export interface FieldCorrection {
+  id: string;
+  field_path: string;
+  previous_value: unknown;
+  corrected_value: unknown;
+  corrected_by_user_id: string | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface FieldCorrectionResult {
+  work_item_id: string;
+  extracted_entities: Record<string, unknown>;
+  corrected: FieldCorrection[];
+  extraction_memory_fields: string[];
+}
+
+export const getDocumentText = async (workspaceId: string, workItemId: string): Promise<DocumentText> => {
+  const response = await apiClient.get<DocumentText>(EVIDENCE_ENDPOINTS.text(workspaceId, workItemId));
+  return response.data;
+};
+
+export const getFieldHistory = async (workspaceId: string, workItemId: string): Promise<FieldCorrection[]> => {
+  const response = await apiClient.get<FieldCorrection[]>(EVIDENCE_ENDPOINTS.fieldHistory(workspaceId, workItemId));
+  return response.data;
+};
+
+export const correctFields = async (
+  workspaceId: string,
+  workItemId: string,
+  corrections: Record<string, string | number | boolean | null>,
+  reason?: string,
+): Promise<FieldCorrectionResult> => {
+  const response = await apiClient.patch<FieldCorrectionResult>(EVIDENCE_ENDPOINTS.fields(workspaceId, workItemId), {
+    corrections,
+    ...(reason ? { reason } : {}),
+  });
+  return response.data;
+};
+
+export interface FieldEditability {
+  work_item_id: string;
+  editable: boolean;
+  code: string | null;
+  message: string | null;
+}
+
+/** Whether the caller may correct this document's fields now, and if not, why (review queue, legal hold, role). */
+export const getFieldEditability = async (workspaceId: string, workItemId: string): Promise<FieldEditability> => {
+  const response = await apiClient.get<FieldEditability>(EVIDENCE_ENDPOINTS.fields(workspaceId, workItemId));
+  return response.data;
+};

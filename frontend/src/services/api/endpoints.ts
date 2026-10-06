@@ -118,6 +118,13 @@ export const EVIDENCE_ENDPOINTS = {
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}/evidence`,
   pageImage: (workspaceId: string, workItemId: string, page: number): string =>
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}/pages/${page}.png`,
+  // N-020 items 6/7: the viewer's text and in-place field corrections.
+  text: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/text`,
+  fields: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/fields`,
+  fieldHistory: (workspaceId: string, workItemId: string): string =>
+    `${scoped(workspaceId)}/work-items/${seg(workItemId)}/fields/history`,
 } as const;
 
 /** PHASE 4 — global search (Ctrl+K) across the caller's workspaces. */

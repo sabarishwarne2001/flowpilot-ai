@@ -262,6 +262,19 @@ def correct_fields(
     return outcome
 
 
+def editability(db: Session, *, work_item: WorkItem, organization_id: uuid.UUID) -> Optional[FieldCorrectionError]:
+    """Why this document's fields cannot be corrected right now, or None when they can.
+
+    The viewer asks before it offers an Edit button, so a person is told "it is in the review
+    queue" or "a legal hold freezes it" up front instead of after typing a value.
+    """
+    try:
+        _guard(db, work_item=work_item, organization_id=organization_id)
+    except FieldCorrectionError as exc:
+        return exc
+    return None
+
+
 def history(db: Session, *, work_item: WorkItem, limit: int = 200) -> list[WorkItemFieldCorrection]:
     return list(
         db.execute(
@@ -280,5 +293,6 @@ __all__ = [
     "CorrectionOutcome",
     "FieldCorrectionError",
     "correct_fields",
+    "editability",
     "history",
 ]
