@@ -40,6 +40,7 @@
  * intelligence. A `proposal.changed` event on the live channel refetches it.
  */
 
+import { useSearchParams } from "react-router-dom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -151,7 +152,28 @@ export const ReviewHub: React.FC = () => {
   const { user } = useResolvedTenant();
   const queryClient = useQueryClient();
 
-  const [tab, setTab] = useState<TabId>("ALL");
+  // The view lives in the URL (?view=EXTRACTION): a tab clicked while the page is still loading
+  // survives a remount of the hub (it was lost before), and a view can be linked to.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get("view");
+  const tab: TabId = TABS.some((entry) => entry.id === requested) ? (requested as TabId) : "ALL";
+  const setTab = useCallback(
+    (next: TabId) => {
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current);
+          if (next === "ALL") {
+            params.delete("view");
+          } else {
+            params.set("view", next);
+          }
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [severities, setSeverities] = useState<readonly ReviewSeverity[]>([]);
   const [assignee, setAssignee] = useState<string>("");
   const [tag, setTag] = useState("");

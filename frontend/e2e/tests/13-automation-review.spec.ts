@@ -153,8 +153,14 @@ test.describe("Review queue", () => {
     await page.goto(ws("C", "verification"));
     await page.getByRole("tab", { name: "Extraction", exact: true }).click();
     await settle(page);
-    const row = page.getByRole("list", { name: "Review items" }).getByRole("listitem").filter({ hasText: name });
-    await expect(row).toContainText("Agents disagreed", { timeout: 30_000 });
+    await expect(page).toHaveURL(/view=EXTRACTION/);
+    // Only the extraction item: the radar also (rightly) flags the copy's invoice number as a duplicate.
+    const row = page
+      .getByRole("list", { name: "Review items" })
+      .getByRole("listitem")
+      .filter({ hasText: name })
+      .filter({ hasText: "Agents disagreed" });
+    await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole("button", { name: /Extracted fields disagree/ }).click();
     const evidence = row.getByRole("region", { name: "Where the values are printed" });
     await expect(evidence.getByRole("img", { name: /Page 1 of the document/ })).toBeVisible({ timeout: 20_000 });
@@ -163,9 +169,7 @@ test.describe("Review queue", () => {
     await row.getByRole("button", { name: "Edit", exact: true }).click();
     await row.getByRole("textbox", { name: "Value for vendor_bank_account" }).fill("GB94 BARC 1020 1530 0934 59");
     await row.getByRole("button", { name: "Submit corrections" }).click();
-    await expect(
-      page.getByRole("list", { name: "Review items" }).getByRole("listitem").filter({ hasText: name }),
-    ).toHaveCount(0, { timeout: 15_000 });
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
     // Calibration holds are not disagreements: they are listed under Autonomy audits (F-111).
     await page.getByRole("tab", { name: "Autonomy audits", exact: true }).click();
     await expect(page.getByRole("list", { name: "Review items" })).toContainText("Held for review: confirm every field");
