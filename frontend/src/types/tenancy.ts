@@ -184,13 +184,19 @@ export interface WorkspaceInvitationPreview {
   expires_at: string;
 }
 
-export interface WorkspaceInvitationAccepted {
-  invitation: WorkspaceInvitation;
+/**
+ * Result of accepting an organization invitation (POST /invitations/accept).
+ * Mirrors OrganizationInvitationAcceptResponse in app/schemas/organization_invitation.py.
+ * F-107: `workspace_slug` is the first workspace granted, or null when none was.
+ */
+export interface OrganizationInvitationAccepted {
+  invitation_id: string;
   organization_id: string;
   organization_slug: string;
-  workspace_id: string;
-  workspace_slug: string;
-  workspace_role: WorkspaceRole;
+  organization_role: string;
+  provisioned_grants: ReadonlyArray<{ workspace_name: string; role: string }>;
+  skipped_grant_count: number;
+  workspace_slug: string | null;
 }
 
 /**
