@@ -46,7 +46,9 @@ x-app-env: &app-env
   DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
   DATABASE_REPLICA_ENFORCE_READ_ONLY: ${DATABASE_REPLICA_ENFORCE_READ_ONLY:-true}
 
-  REDIS_URL: redis://redis:6379/0
+  # N-017 (decided): Redis requires a password even inside the private network (defence in depth).
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set. openssl rand -hex 32}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_BACKEND: redis
   # F-048 / N-018: sign-in attempts per address per 5 minutes.
@@ -193,11 +195,15 @@ services:
     # noeviction is deliberate. Rate-limit counters and idempotency markers
     # must not be silently dropped under memory pressure; a hard failure is
     # recoverable, a silently-reset rate limiter is not.
-    command: redis-server --maxmemory 512mb --maxmemory-policy noeviction --appendonly yes
+    # N-017: requirepass from the environment (the shell expands it inside the container, so the
+    # password is not written into the compose configuration).
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set. openssl rand -hex 32}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 512mb --maxmemory-policy noeviction --appendonly yes"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 10

@@ -319,6 +319,7 @@ openssl rand -hex 32   # JWT_SECRET_KEY
 openssl rand -hex 32   # API_KEY_PEPPER
 openssl rand -hex 32   # REDIS_IDENTITY_PEPPER
 openssl rand -hex 32   # RERANKER_INTERNAL_TOKEN
+openssl rand -hex 32   # REDIS_PASSWORD (hex only: it is placed inside a URL)
 openssl rand -hex 24   # POSTGRES_PASSWORD (hex only: it is placed inside a URL)
 python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"   # EMAIL_ENCRYPTION_KEYS
 ```
@@ -576,6 +577,9 @@ FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
 # HEARTBEAT_UUID_COMPOSE_BACKUP=<check id>
 # HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL=<check id>
 # HEARTBEAT_UUID_COMPLIANCE=<check id>
+# Is the site up? A check with a 1-minute period and a 5-minute grace (N-017):
+# FLOWPILOT_PUBLIC_URL=https://app.example.com
+# HEARTBEAT_UUID_UPTIME=<check id>
 EOF
 sudo chown root:flowpilot /etc/flowpilot/sweepers.env && sudo chmod 640 /etc/flowpilot/sweepers.env
 sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-sweepers /etc/cron.d/flowpilot-sweepers
@@ -595,6 +599,14 @@ tail -n 20 /srv/flowpilot/logs/sweep_compliance.log                      # a "SW
 
 After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 `compose_backup.log`, `compose_restore_drill.log`), or better, let the monitor tell you.
+
+**Know when the site is down (N-017).** `flowpilot-compose-backups` also runs
+`flowpilot-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
+through Caddy (the API, Postgres and Redis must all answer) and pings `HEARTBEAT_UUID_UPTIME`.
+Create that check in Healthchecks.io with a **1 minute** period and a **5 minute** grace, and add
+your phone or email to it: when the site goes down you get an alert within about five minutes,
+before a customer has to tell you. Test it: `/srv/flowpilot/backend/deploy/bin/flowpilot-uptime-heartbeat; echo $?`
+prints nothing and `0` when the site is up.
 
 ### 9.7 What to look at when something is wrong
 
