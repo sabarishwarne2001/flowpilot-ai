@@ -46,6 +46,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.semanticAssertions]: "Semantic clause assertions",
   [CAPABILITY.enterpriseIdentity]: "Enterprise SAML SSO & SCIM directory sync",
   [CAPABILITY.prioritySlo]: "Priority 99.9% SLO",
+  // N-021:plan-feature-label
+  [CAPABILITY.byok]: "Bring your own AI key (your OpenAI, Anthropic, Groq, Azure OpenAI, Mistral or Gemini account, routed per task)",
 };
 
 /** Display order: the order in which the tiers add them. */
@@ -70,6 +72,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.obligations,
   // ARCH47-S2:plan-feature-order — Business and Enterprise.
   CAPABILITY.erpPosting,
+  // N-021:plan-feature-order — Business and Enterprise.
+  CAPABILITY.byok,
   CAPABILITY.calibratedAutonomy,
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,

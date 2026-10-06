@@ -47,6 +47,8 @@ export const CAPABILITY = {
   processIntelligence: "capability.process_intelligence",
   // ARCH50-S2:capability-constant
   egressLockdown: "capability.egress_lockdown",
+  // N-021:capability-constant — bring your own AI key, Business and Enterprise.
+  byok: "capability.byok",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

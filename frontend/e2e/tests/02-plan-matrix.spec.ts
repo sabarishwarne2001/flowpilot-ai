@@ -54,6 +54,8 @@ const ORG_NAV_LABEL: Record<string, string> = {
   "org:api-keys": "API keys",
   "org:webhooks": "Webhooks",
   "org:identity": "Enterprise identity",
+  // N-021: bring your own AI key is Business and Enterprise.
+  "org:byok": "Enterprise BYOK & models",
 };
 
 const TENANT_OWNER: Record<"A" | "B" | "C", UserKey> = { A: "A.owner", B: "B.owner", C: "C.owner" };

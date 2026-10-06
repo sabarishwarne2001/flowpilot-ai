@@ -535,9 +535,11 @@ export const buildOrganizationNavigationItems = (
     // by RequireOrgOwner on the route. An administrator has to be able to
     // read which provider account the tenant's traffic is running on during
     // an audit, and hiding the link is not what protects the credentials.
+    // N-021: Business and Enterprise; the writes refuse with 402 below that.
     items.push({
       name: "Enterprise BYOK & models",
       path: organizationBYOKPath(orgSlug),
+      capability: CAPABILITY.byok,
       icon: KeySquare,
     });
     // ARCH-25. ADMIN sees the console because visual branding is an
