@@ -18,6 +18,18 @@ pytestmark = pytest.mark.usefixtures("test_database")
 BOUNDS = list(DEFAULT_LATENCY_BOUNDS_MS)
 
 
+@pytest.fixture(autouse=True)
+def _enterprise(db_session: Session, tenant):
+    """N-002: setting a tenant's own targets is the Enterprise priority-SLO capability.
+
+    These tests configure targets, so the tenant is on Enterprise; the plan gate itself is
+    proven by the two tests at the end of this file."""
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "enterprise")
+    db_session.commit()
+
+
 def _auth(persona) -> dict[str, str]:
     return {"Authorization": f"Bearer {persona.token}"}
 
@@ -333,3 +345,37 @@ def test_job_scope_rehydrates_an_inherited_trace():
     with job_scope(job_id=uuid.uuid4(), job_type="test.noop",
                    context=trace_context_from(payload)):
         assert get_trace_id() == trace_id
+
+
+def test_setting_a_target_needs_the_enterprise_priority_slo(client: TestClient, db_session, tenant):
+    """N-002: below Enterprise a tenant reads its service levels but cannot set its own targets."""
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db_session, tenant.organization, "business")
+    db_session.commit()
+
+    assert client.get(_url(tenant.organization.id), headers=_auth(tenant.org_admin)).status_code == 200
+    response = client.put(
+        _url(tenant.organization.id, "rag.retrieval.p95_ms"),
+        headers=_auth(tenant.org_admin),
+        json={"target_value": "150"},
+    )
+    assert response.status_code == 402, response.text
+    assert response.json()["details"]["capability_key"] == "capability.priority_slo"
+
+
+def test_a_downgraded_tenant_can_still_remove_its_override(client: TestClient, db_session, tenant):
+    from tests.security.plans import put_on_plan
+
+    created = client.put(
+        _url(tenant.organization.id, "rag.retrieval.p95_ms"),
+        headers=_auth(tenant.org_admin),
+        json={"target_value": "150"},
+    )
+    assert created.status_code == 200
+    put_on_plan(db_session, tenant.organization, "developer")
+    db_session.commit()
+
+    removed = client.delete(_url(tenant.organization.id, "rag.retrieval.p95_ms"), headers=_auth(tenant.org_admin))
+    assert removed.status_code == 204
+

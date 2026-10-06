@@ -14,7 +14,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.api import capability_gate
 from app.api.deps import OrganizationContext, RequireOrgAdmin, get_db
+from app.core import entitlements
 from app.core.slo_registry import SLORegistryError, SLO_REGISTRY
 from app.models.slo import SLOWindow
 from app.schemas.slo import (
@@ -114,6 +116,16 @@ def set_organization_slo(
     context: OrganizationContext = Depends(RequireOrgAdmin),
 ) -> SLOTarget:
     _assert_scope(context, organization_id)
+    # N-002 (decided in the final release): every plan sees the platform's service levels and its
+    # own compliance; setting the organization's own (contractual) targets is the Enterprise
+    # "Priority 99.9% SLO" capability. Removing an override stays open (the N-003 pattern), so a
+    # tenant that downgrades can fall back to the platform targets.
+    capability_gate.require_capability(
+        db,
+        context=context,
+        capability_key=entitlements.PRIORITY_SLO_CAPABILITY,
+        operation="slo.set_target",
+    )
 
     try:
         definition = slo_service.set_target(
