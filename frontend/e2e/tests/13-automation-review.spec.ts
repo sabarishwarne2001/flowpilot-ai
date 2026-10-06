@@ -87,12 +87,15 @@ test.describe("Workflows — run history", () => {
     await expect(page.getByText(/Selected files/i)).toBeVisible();
     await page.getByRole("button", { name: "Start Ingestion" }).click();
     await page.goto(ws("C", "automation/timeline"));
+    // Wait for a run to be listed. (Waiting for "No automation has run yet" to be absent also
+    // passed while the page was still loading, and then found nothing to open.)
+    const firstChain = page.locator("main").getByRole("button").filter({ hasNotText: "Blocked only" }).first();
     await expect(async () => {
       await page.reload();
-      await expect(page.locator("main")).not.toContainText("No automation has run yet", { timeout: 2_000 });
+      await expect(firstChain).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 120_000, intervals: [3_000] });
     // Open the first chain and its steps.
-    await page.locator("main").getByRole("button").filter({ hasNotText: "Blocked only" }).first().click();
+    await firstChain.click();
     await settle(page);
     await page.getByRole("button", { name: "Blocked only" }).click();
     await expectHealthyPage(page);
