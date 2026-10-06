@@ -12,10 +12,18 @@ import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from jose import jwt
+import jwt  # F-039: PyJWT replaced python-jose
 
 from app.core import security
 from app.core.config import settings
+
+
+def _unverified_claims(token):
+    """python-jose's get_unverified_claims, in PyJWT terms."""
+    import jwt
+
+    return jwt.decode(token, options={"verify_signature": False})
+
 
 KEY = settings.JWT_SECRET_KEY.get_secret_value()
 ALG = settings.JWT_ALGORITHM
@@ -29,7 +37,7 @@ def _b64(data: dict) -> str:
 
 def _raw(token: str) -> dict:
     """Decodes without verification, to inspect what was actually emitted."""
-    return jwt.get_unverified_claims(token)
+    return _unverified_claims(token)
 
 
 # ===========================================================================
