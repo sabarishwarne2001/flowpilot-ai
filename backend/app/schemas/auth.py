@@ -54,6 +54,11 @@ class UserResponse(UserBase):
 
     email_verified_at: Union[datetime, None] = None
 
+    #: F-049. Whether the user has an avatar, so the web app requests
+    #: /users/{id}/avatar only when there is one instead of logging a 404 on
+    #: every page for every user without one. Read from `User.has_avatar`.
+    has_avatar: bool = False
+
     model_config = {
         "from_attributes": True
     }

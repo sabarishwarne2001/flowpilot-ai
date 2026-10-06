@@ -220,7 +220,7 @@ const OrganizationSidebarNavigation: React.FC<
       {onLogout ? (
         <div className="shrink-0 border-t border-border/60 px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <Avatar userId={user?.id} email={user?.email} size="md" />
+            <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} size="md" />
 
             <div className="min-w-0 flex-1">
               <span className="block text-xs font-semibold text-muted-foreground">

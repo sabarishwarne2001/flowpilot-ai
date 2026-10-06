@@ -53,7 +53,7 @@ const MobileSidebarContent: React.FC<MobileSidebarContentProps> = ({
       {/* Bottom Profile & Sign Out Section */}
       <div className="border-t border-border/40 bg-muted/20 p-4">
         <div className="mb-3 flex min-w-0 items-center gap-2.5 text-xs">
-          <Avatar userId={user?.id} email={user?.email} size="md" />
+          <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} size="md" />
           <div className="min-w-0 truncate">
             <span className="block font-semibold text-muted-foreground">Signed in as</span>
             <span className="block truncate font-bold text-foreground">

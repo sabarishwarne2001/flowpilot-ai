@@ -145,19 +145,12 @@ export interface KnownIssue {
   readonly matches: (problem: Problem) => boolean;
 }
 
-const AVATAR_URL = /\/api\/v1\/users\/[0-9a-f-]+\/avatar(\?|$)/;
-
-export const KNOWN_ISSUES: readonly KnownIssue[] = [
-  {
-    finding: "F-049",
-    summary: "every page requests the signed-in user's avatar and logs a 404 when they have none",
-    matches: (problem) =>
-      (problem.kind === "http" && problem.status === 404 && AVATAR_URL.test(problem.url ?? "")) ||
-      (problem.kind === "console" &&
-        AVATAR_URL.test(problem.url ?? "") &&
-        problem.message.includes("status of 404")),
-  },
-];
+/**
+ * Empty since F-049 was fixed (has_avatar on /auth/me; the sidebar asks for an
+ * avatar only when there is one). Add an entry only for a finding that is
+ * recorded in FINDINGS.md and not fixed yet, with a proof in known-issues.spec.ts.
+ */
+export const KNOWN_ISSUES: readonly KnownIssue[] = [];
 
 const STRICT_KNOWN = process.env.E2E_STRICT_KNOWN === "1";
 

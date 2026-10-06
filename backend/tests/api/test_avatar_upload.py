@@ -353,3 +353,26 @@ class TestB7ServingHeaders:
 
         assert set(body) == {"file_id", "mime_type", "file_size"}
         assert "uploads/" not in response.text
+
+
+class TestHasAvatarFlag:
+    """F-049 / F-028. The app asked for /users/{id}/avatar on every page and
+    logged a 404 for every user without one (most users). /auth/me now says
+    whether there is an avatar, so the app only asks when there is."""
+
+    def test_me_reports_no_avatar_until_one_is_uploaded(self, client, tenant):
+        before = client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers)
+        assert before.status_code == 200
+        assert before.json()["has_avatar"] is False
+
+        uploaded = client.post(
+            "/api/v1/me/avatar",
+            files={"file": ("avatar.png", make_png(), "image/png")},
+            headers=tenant.ws_admin.headers,
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        assert client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers).json()["has_avatar"] is True
+
+        removed = client.delete("/api/v1/me/avatar", headers=tenant.ws_admin.headers)
+        assert removed.status_code == 204
+        assert client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers).json()["has_avatar"] is False
