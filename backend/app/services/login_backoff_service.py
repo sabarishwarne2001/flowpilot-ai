@@ -328,6 +328,27 @@ def record_second_factor_failure(email: str) -> int:
         return 0
 
 
+def check_second_step(ip: str, email: str) -> BackoffStatus:
+    """The second sign-in step's guard: the (ip, email) ladder of the first
+    step, plus the per-account cap on wrong codes. `is_backed_off` means refuse."""
+    status = check_login_backoff(ip, email)
+    if status.is_backed_off:
+        return status
+    if second_factor_locked(email):
+        return BackoffStatus(is_backed_off=True, retry_after_seconds=SECOND_FACTOR_WINDOW_SECONDS)
+    return status
+
+
+def record_second_step_failure(ip: str, email: str) -> None:
+    record_login_failure(ip, email)
+    record_second_factor_failure(email)
+
+
+def clear_second_step(ip: str, email: str) -> None:
+    clear_login_backoff(ip, email)
+    clear_second_factor_failures(email)
+
+
 def clear_second_factor_failures(email: str) -> None:
     try:
         _store().delete(_second_factor_key(email))

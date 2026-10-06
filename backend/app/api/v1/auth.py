@@ -64,11 +64,11 @@ from app.services.auth_service import authenticate_user, register_new_user
 from app.services.login_backoff_service import (
     apply_delay,
     check_login_backoff,
+    check_second_step,
     clear_login_backoff,
-    clear_second_factor_failures,
+    clear_second_step,
     record_login_failure,
-    record_second_factor_failure,
-    second_factor_locked,
+    record_second_step_failure,
 )
 
 logger = logging.getLogger("app.api.v1.auth")
@@ -306,9 +306,9 @@ async def login_second_factor(
         raise _second_step_refused()
 
     email = user.email.strip().lower()
-    backoff = check_login_backoff(ip, email)
+    backoff = check_second_step(ip, email)
     apply_delay(backoff.delay_ms)
-    if backoff.is_backed_off or second_factor_locked(email):
+    if backoff.is_backed_off:
         logger.info("AUTH_LOGIN_MFA_REFUSED | reason=locked | user=%s | ip=%s", user.id, ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -320,13 +320,11 @@ async def login_second_factor(
 
     if not mfa_service.verify_second_factor(db, user=user, code=payload.code):
         db.commit()
-        record_login_failure(ip, email)
-        record_second_factor_failure(email)
+        record_second_step_failure(ip, email)
         logger.info("AUTH_LOGIN_MFA_REFUSED | reason=bad_code | user=%s | ip=%s", user.id, ip)
         raise _second_step_refused()
 
-    clear_login_backoff(ip, email)
-    clear_second_factor_failures(email)
+    clear_second_step(ip, email)
     return _open_session(db, request, response, user=user, ip=ip)
 
 
