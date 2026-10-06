@@ -5,7 +5,7 @@ _Last updated: 2026-10-06 (final commercial release)_
 ## Current phase
 **Final release — COMPLETE. Verdict: GO for production deployment** (`05-release-readiness.md`).
 Branch `hardening/final-commercial-release` (mirrored to the session branch
-`claude/vigilant-heisenberg-ytagy4`). PR: {{PR_URL}}.
+`claude/vigilant-heisenberg-ytagy4`). PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/7.
 Run under founder authority: every open owner decision was taken and is recorded in
 NEEDS-OWNER.md ("Final release"). The campaign's engineering work is done; what remains is the
 first deployment (RUNBOOK §9) and the post-launch list in `05-release-readiness.md` §6.
