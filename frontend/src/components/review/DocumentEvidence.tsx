@@ -57,7 +57,9 @@ export const DocumentEvidence: React.FC<DocumentEvidenceProps> = ({
     staleTime: 60_000,
   });
 
-  const field = fields.find((f) => f.field_path === fieldPath) ?? fields[0];
+  // Until the reviewer picks one, show the first field the agents actually disagree on: on a
+  // calibration hold every field is listed, and the first one is rarely the one in dispute.
+  const field = fields.find((f) => f.field_path === fieldPath) ?? fields.find((f) => !f.agreed) ?? fields[0];
   const readings = useMemo(
     () => (field ? field.agent_values.map((value) => formatFieldValue(value)) : []),
     [field],
