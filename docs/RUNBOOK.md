@@ -127,10 +127,9 @@ flag with `$env:ARCH40_CONTRACT = '1'` before `alembic upgrade head`.
 | API schema | `curl -o openapi.json http://127.0.0.1:8000/api/v1/openapi.json` | `200`; 441 paths / 550 operations at Phase 1 |
 | One migration head | `cd backend && alembic heads` | exactly one line ending `(head)` |
 | Migration round trip | `ARCH40_CONTRACT=1 alembic downgrade -1 && ARCH40_CONTRACT=1 alembic upgrade head` | both exit 0 |
-| No new schema drift | `ARCH40_CONTRACT=1 python scripts/check_migration_drift.py` | `No new drift. 314 known operation(s) remain` (see F-017) |
+| No new schema drift | `ARCH40_CONTRACT=1 python scripts/check_migration_drift.py` | `No new drift. 283 known operation(s) remain` (see F-017) |
 | Encodings | `cd backend && python scripts/normalize_encodings.py --check` | `Encoding clean` |
-| Verification gates | `cd backend && python scripts/run_all_gates.py --static-only` | runs all 78; **33 fail today** (F-029) |
-| Backend tests | `cd backend && pytest -q` | **red today** (F-016); see §5 |
+| Backend tests | `cd backend && pytest -q` | all pass (about 25 minutes); see §5 |
 | Frontend types | `cd frontend && npx tsc --noEmit` | no output, exit 0 |
 | Frontend lint | `cd frontend && npm run lint` | exit 0 |
 | Frontend build | `cd frontend && npm run build` | `✓ built`, exit 0 |
