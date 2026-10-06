@@ -174,6 +174,15 @@ test.describe("Data governance and compliance", () => {
     expect((await saved).status()).toBeLessThan(300);
     await page.reload();
     await expect(page.locator("#retention-work-items")).toHaveValue("90");
+
+    // Put it back ("Forever"): a 90-day floor makes every younger document undeletable
+    // (F-108), which would break any later test, or re-run, that deletes a document.
+    await page.locator("#retention-work-items").fill("");
+    const cleared = page.waitForResponse((r) => /\/compliance/.test(r.url()) && r.request().method() !== "GET");
+    await page.getByRole("button", { name: "Save retention policy" }).click();
+    expect((await cleared).status()).toBeLessThan(300);
+    await page.reload();
+    await expect(page.locator("#retention-work-items")).toHaveValue("");
   });
 
   test("generate a DPA export bundle (GDPR data export)", async ({ page }) => {
