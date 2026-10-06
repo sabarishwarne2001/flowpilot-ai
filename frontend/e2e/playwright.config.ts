@@ -1,4 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * FlowPilot AI browser tests (Phase 3). See e2e/README.md for how to run them.
@@ -13,6 +18,20 @@ import { defineConfig, devices } from "@playwright/test";
 const MODE = process.env.E2E_MODE === "dev" ? "dev" : "preview";
 const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3000);
 const API_ORIGIN = process.env.E2E_API_ORIGIN ?? "http://127.0.0.1:8000";
+
+/**
+ * N-015. E2E_CSP=1 serves the bundle with the production Content-Security-Policy enforced. The
+ * policy is read from the Caddyfile, the one place production takes it from, so the suite tests
+ * exactly what customers get.
+ */
+function productionCsp(): string | undefined {
+  if (process.env.E2E_CSP !== "1") return undefined;
+  const caddyfile = fs.readFileSync(path.resolve(HERE, "..", "..", "backend", "deploy", "Caddyfile"), "utf8");
+  const match = /Content-Security-Policy(?:-Report-Only)?\s+"([^"]+)"/.exec(caddyfile);
+  if (!match) throw new Error("E2E_CSP=1 but no Content-Security-Policy header was found in backend/deploy/Caddyfile");
+  return match[1];
+}
+const CSP = productionCsp();
 
 const webCommand =
   MODE === "dev"
@@ -57,6 +76,7 @@ export default defineConfig({
     env: {
       BROWSER: "none",
       E2E_API_PROXY: API_ORIGIN,
+      ...(CSP ? { E2E_CSP_HEADER: CSP } : {}),
       ...(MODE === "dev" ? { VITE_API_URL: `${API_ORIGIN}/api/v1` } : {}),
     },
     stdout: "ignore",

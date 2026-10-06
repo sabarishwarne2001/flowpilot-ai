@@ -97,6 +97,12 @@ export default defineConfig(({ mode, command }) => {
       ...(process.env.E2E_API_PROXY
         ? { proxy: { "/api": { target: process.env.E2E_API_PROXY, changeOrigin: false } } }
         : {}),
+      // N-015: the browser suite can serve the bundle under the production Content-Security-Policy
+      // (read from backend/deploy/Caddyfile by e2e/playwright.config.ts, E2E_CSP=1), ENFORCED, so
+      // any violation fails a test as a console error before the policy is enforced for customers.
+      ...(process.env.E2E_CSP_HEADER
+        ? { headers: { "Content-Security-Policy": process.env.E2E_CSP_HEADER } }
+        : {}),
     },
 
     build: {
