@@ -161,6 +161,15 @@ const isRefreshExempt = (url: string | undefined): boolean =>
   !!url && NO_REFRESH_PATHS.some((path) => url.includes(path));
 
 /**
+ * A 401 from a sign-in call (`/auth/login`, `/auth/login/mfa`) is a wrong
+ * password or code: an answer for the form to show, not a lost session. The
+ * sign-in page has no session to end, and the step-up modal is protecting one
+ * that is still good, so a typo there must not sign the user out (F-117).
+ */
+const isSignInAttempt = (url: string | undefined): boolean =>
+  !!url && url.includes("/auth/login");
+
+/**
  * Per-request bookkeeping.
  *
  * Two independent flags rather than one counter: a request may legitimately be
@@ -519,6 +528,10 @@ apiClient.interceptors.response.use(
 
           return reject("Session expired. Please sign in again.");
         }
+      }
+
+      if (isSignInAttempt(config?.url)) {
+        return reject();
       }
 
       endSession();
