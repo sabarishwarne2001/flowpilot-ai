@@ -91,3 +91,39 @@ def test_a_copy_resent_under_a_new_number_is_still_caught(engines: Engines) -> N
     hits = [f for f in _findings(engines) if f["kind"] == "DUPLICATE_DOCUMENT"
             and {f["subject_work_item_id"], f["counterpart_work_item_id"]} == {original, renumbered}]
     assert hits and hits[0]["layer"] in ("L2", "L3"), _findings(engines)
+
+
+def test_a_goods_receipt_is_not_a_duplicate_of_the_po_it_quotes(engines: Engines) -> None:
+    """F-115. A goods receipt prints the PO number it delivers against. Its own document number is
+    the receipt number; the role row took the first number-like key (po_number) instead, so every
+    receipt was flagged as a duplicate of its own purchase order (L1, HIGH)."""
+    po_text = ["ACME SUPPLIES LTD", "PURCHASE ORDER", "PO Number: PO-RADAR-77", "PO Date: 2026-08-01",
+               "Bolts M8 Qty 100 Unit Price 5.00 Amount 500.00", "PO Total: 500.00 INR"]
+    gr_text = ["GOODS RECEIPT NOTE", "Vendor: Acme Supplies Ltd", "Receipt Number: GR-RADAR-9",
+               "PO Number: PO-RADAR-77", "Received Date: 2026-08-05", "Bolts M8 Qty received 100"]
+    engines.llm.record("PO Date: 2026-08-01", "Purchase Order",
+                       {"vendor_name": "Acme Supplies Ltd", "po_number": "PO-RADAR-77", "date": "2026-08-01",
+                        "total_amount": "500.00", "currency": "INR"})
+    po = engines.upload("po-77.pdf", make_pdf([po_text]))
+    drain()
+    engines.llm.record("Receipt Number: GR-RADAR-9", "Receipt",
+                       {"vendor_name": "Acme Supplies Ltd", "po_number": "PO-RADAR-77",
+                        "receipt_number": "GR-RADAR-9", "date": "2026-08-05"})
+    gr = engines.upload("gr-9.pdf", make_pdf([gr_text]))
+    drain()
+
+    pair = {str(po), str(gr)}
+    identifier_hits = [f for f in _findings(engines) if f["layer"] == "L1"
+                       and {f["subject_work_item_id"], f["counterpart_work_item_id"]} == pair]
+    assert identifier_hits == [], identifier_hits
+
+    from sqlalchemy import select
+
+    from app.models.document_role import DocumentRole
+
+    engines.refresh()
+    numbers = dict(engines.db.execute(
+        select(DocumentRole.work_item_id, DocumentRole.document_number).where(DocumentRole.work_item_id.in_([po, gr]))
+    ).all())
+    assert numbers[po] != numbers[gr], numbers
+    assert "77" in numbers[po] and "9" in numbers[gr], numbers

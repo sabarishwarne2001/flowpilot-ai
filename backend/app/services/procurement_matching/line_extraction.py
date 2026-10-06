@@ -58,6 +58,8 @@ __all__ = [
     "extract_lines",
     "self_consistency_findings",
     "LINE_CONTAINER_KEYS",
+    "ROLE_NUMBER_KEYS",
+    "document_number_for_role",
 ]
 
 #: Where the list of lines might be hiding. Ordered: the first key that holds
@@ -108,6 +110,19 @@ _DOCUMENT_NUMBER_KEYS: tuple[str, ...] = (
     "order_number", "grn_number", "receipt_number", "reference_number",
     "number", "invoice_no", "bill_number",
 )
+#: F-115. Which printed number IS the document, by its role. A goods receipt quotes the PO it
+#: delivers against and an invoice the PO it bills; neither is its own number. Taking the first
+#: number-like key (po_number before receipt_number) gave every receipt its PO's number, and the
+#: radar then reported each receipt as a duplicate of its own purchase order. For these roles there
+#: is deliberately no fallback to the generic order: a missing number is missing evidence.
+ROLE_NUMBER_KEYS: dict[str, tuple[str, ...]] = {
+    "INVOICE": ("invoice_number", "invoice_no", "bill_number", "document_number", "number", "reference_number"),
+    "CREDIT_NOTE": ("credit_note_number", "credit_number", "document_number", "number", "reference_number"),
+    "PURCHASE_ORDER": ("po_number", "purchase_order_number", "order_number", "document_number", "number"),
+    "GOODS_RECEIPT": ("grn_number", "receipt_number", "goods_receipt_number", "delivery_note_number",
+                      "document_number", "number", "reference_number"),
+}
+
 _PO_REFERENCE_KEYS: tuple[str, ...] = (
     "po_number", "purchase_order_number", "purchase_order", "po_reference",
     "po_ref", "order_number", "buyer_order_number", "reference_po",
@@ -395,6 +410,20 @@ def _line_from(
         currency=currency,
         warnings=tuple(warnings),
     )
+
+
+def document_number_for_role(entities: Mapping[str, Any], role: str, fallback: Optional[str]) -> Optional[str]:
+    """The document's own number for its role (F-115); `fallback` (the generic pick) for other roles."""
+    keys = ROLE_NUMBER_KEYS.get(str(role or "").upper())
+    if keys is None:
+        return fallback
+    raw = _as_text(_first(entities or {}, keys))
+    if not raw:
+        return None
+    try:
+        return nz.document_number(raw)
+    except nz.NormalizationError:
+        return None
 
 
 def _header_from(
