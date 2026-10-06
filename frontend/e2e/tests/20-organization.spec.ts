@@ -45,7 +45,8 @@ test.describe("Notifications (organization)", () => {
 });
 
 test.describe("Members: invite from the organization page (N-020 item 5)", () => {
-  test("invite with an organization role and workspace access, then resend and revoke", async ({ page }) => {
+  test("invite with an organization role and workspace access, then resend and revoke", async ({ page, problems }) => {
+    problems.allowHttp(/\/invitations\/[^/]+\/resend$/, [429], "a resend within the cooldown is refused by design");
     const invitee = `org-invitee-${runId()}@e2e.example.com`;
     await page.goto(org("C", "members"));
     const panel = page.getByRole("region", { name: "Invite people" });
@@ -57,7 +58,9 @@ test.describe("Members: invite from the organization page (N-020 item 5)", () =>
     const pending = panel.getByRole("list", { name: "Pending invitations" }).getByRole("listitem").filter({ hasText: invitee });
     await expect(pending).toContainText("Admin · Finance (Contributor)", { timeout: 15_000 });
     await pending.getByRole("button", { name: `Resend the invitation to ${invitee}` }).click();
-    await expect(page.getByText("Invitation sent again.").first()).toBeVisible();
+    // Sent seconds ago: the anti-spam cooldown (INVITATION_RESEND_COOLDOWN_MINUTES) answers, and the
+    // panel says so in plain words instead of sending a second email.
+    await expect(page.getByText("This invitation was sent recently. Try again in a few minutes.").first()).toBeVisible();
     await pending.getByRole("button", { name: `Revoke the invitation to ${invitee}` }).click();
     await expect(panel.getByRole("list", { name: "Pending invitations" }).getByText(invitee)).toHaveCount(0, { timeout: 15_000 });
     await expectHealthyPage(page);
