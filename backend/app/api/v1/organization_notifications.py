@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireOrgMember, get_db, get_read_db
+from app.api.deps import RequireAnyOrgRole, get_db, get_read_db
 from app.crud import notification as notification_crud
 from app.schemas.notification import (
     ORG_NOTIFICATIONS_DEFAULT_PAGE_SIZE,
@@ -31,7 +31,7 @@ router = APIRouter(tags=["Notifications"])
 def list_organization_notifications(
     organization_id: uuid.UUID,
     db: Session = Depends(get_read_db),
-    context=Depends(RequireOrgMember),
+    context=Depends(RequireAnyOrgRole),  # F-055: BILLING reads its own feed too
     is_read: Optional[bool] = Query(
         None, description="Filter by read state. Omit for all."
     ),
@@ -68,7 +68,7 @@ def update_organization_notification(
     notification_id: uuid.UUID,
     payload: OrganizationNotificationUpdate,
     db: Session = Depends(get_db),
-    context=Depends(RequireOrgMember),
+    context=Depends(RequireAnyOrgRole),  # F-055: BILLING reads its own feed too
 ) -> NotificationRead:
     notification = notification_crud.get_organization_scoped_for_user(
         db,

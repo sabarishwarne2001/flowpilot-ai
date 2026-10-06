@@ -616,6 +616,17 @@ RequireOrgAdmin = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN]
 )
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
+#: Every organization role, BILLING included: for reads of the caller's own
+#: data (their notifications, the plan's entitlements), where no role is less
+#: entitled than another.
+RequireAnyOrgRole = RequireOrgRole(
+    [
+        OrganizationRole.OWNER,
+        OrganizationRole.ADMIN,
+        OrganizationRole.BILLING,
+        OrganizationRole.MEMBER,
+    ]
+)
 
 
 async def require_superadmin(
