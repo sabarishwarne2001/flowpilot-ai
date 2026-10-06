@@ -452,6 +452,18 @@ $COMPOSE ps && $COMPOSE logs --tail 30 web
 If `migrate` fails, the new API does not start. Read `$COMPOSE logs migrate`. If the database
 was left half-changed, restore the backup you just took (section 9.5).
 
+**When a release changes the plan table** (`backend/scripts/seed_quota_tiers.py`), publish the new
+tier versions and move live subscribers onto them. Phase 5 is such a release: Business and
+Enterprise now include `capability.byok` (owner decision N-021). A database seeded before it keeps the
+old versions, and its Business/Enterprise tenants are refused BYOK writes until you run:
+
+```bash
+$COMPOSE run --rm web python scripts/seed_quota_tiers.py --carry-forward
+```
+
+The seed publishes only the tiers that changed; `--carry-forward` moves a live subscription only
+when the new version costs the same and takes nothing away.
+
 ### 9.4 Backups
 
 | What | How | Where it ends up |
@@ -595,3 +607,5 @@ After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 | Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
+| People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 10 per address per 5 minutes; NEEDS-OWNER N-018), then `$COMPOSE up -d web` |
+| A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |
