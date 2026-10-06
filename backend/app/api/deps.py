@@ -166,9 +166,17 @@ def _token_predates_revocation(
     if user.sessions_revoked_at is None:
         return False
 
-    return int(claims.issued_at.timestamp()) < int(
-        user.sessions_revoked_at.timestamp()
-    )
+    issued = int(claims.issued_at.timestamp())
+    cutoff = int(user.sessions_revoked_at.timestamp())
+    # F-099. `iat` has one-second resolution. A token that carries a session is
+    # also refused through its revoked session row, so a token minted in the
+    # same second as the cutoff (a fresh sign-in right after a reset) is kept.
+    # A token WITHOUT a session has no other way to be revoked, so for it the
+    # cutoff second itself counts as "before": otherwise a token minted in the
+    # same second as a revocation would outlive it until it expired.
+    if claims.session_id is None:
+        return issued <= cutoff
+    return issued < cutoff
 
 
 def _session_is_revoked(
