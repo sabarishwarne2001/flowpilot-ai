@@ -532,7 +532,9 @@ def test_sender_verification_returns_state_rather_than_raising(
 def test_manifest_is_reachable_without_authentication(client):
     response = client.get(f"{API}/branding/manifest")
     assert response.status_code == 200, response.text
-    assert response.headers.get("vary") == "Host"
+    # Cached per tenant host. Starlette 1.x's CORS layer also appends "Origin" (F-039 upgrade).
+    vary = {token.strip().lower() for token in response.headers.get("vary", "").split(",")}
+    assert "host" in vary, response.headers.get("vary")
 
 
 def test_manifest_on_the_platform_origin_is_the_platform_default(client, tenant):
