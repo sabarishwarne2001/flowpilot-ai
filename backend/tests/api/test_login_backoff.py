@@ -2,7 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.core.rate_limit import limiter as limiter_module
 from app.core.rate_limit.policy import POLICY_LOGIN_ACCOUNT_IP
+from app.core.redis_client import get_redis_client
 from app.services.login_backoff_service import (
     _pair_hmac,
     check_login_backoff,
@@ -10,8 +12,25 @@ from app.services.login_backoff_service import (
 )
 
 
+@pytest.fixture()
+def fresh_ip_allowance():
+    """The per-address sign-in limiter starts empty, so a re-run within its
+    5-minute window tests the back-off rather than the address limit."""
+
+    def clean() -> None:
+        redis = get_redis_client()
+        if redis is not None:
+            for key in redis.scan_iter("rl:v1:*"):
+                redis.delete(key)
+        limiter_module.reset_rate_limit_backend()
+
+    clean()
+    yield
+    clean()
+
+
 def test_login_backoff_engages_and_answers_like_a_wrong_password(
-    client: TestClient, monkeypatch
+    client: TestClient, monkeypatch, fresh_ip_allowance
 ):
     """Owner decision N-022 (F-096): a backed-off sign-in keeps the generic
     OWASP answer. The back-off engages (the service reports it), but the HTTP
