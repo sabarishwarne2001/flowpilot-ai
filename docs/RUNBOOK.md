@@ -435,6 +435,22 @@ has no webhook secret.
 - Upload a small PDF. The first document is slow because the OCR and search models download on
   first use, so the server needs outbound internet until they are cached.
 - Set up backups and scheduled jobs the same day (sections 9.4 and 9.6).
+- Open the app in a browser with the developer console open and click through the main pages:
+  the Content-Security-Policy is **enforced** (N-015), so a blocked resource shows as a red
+  "Refused to load" line. The browser suite runs every page under this exact policy, so there
+  should be none; if there is one, send it to support with the page it appeared on.
+
+**11. Pin the images you deployed (N-017)** *(not run here: needs a machine that can pull)*.
+Tags such as `redis:7.4.6-alpine` can be re-pointed by their publisher; a digest cannot. After the
+first successful deploy, record the exact images that are running and pin them:
+
+```bash
+$COMPOSE images --format json | python3 -c 'import json,sys; [print(i["Repository"]+":"+i["Tag"]) for i in json.load(sys.stdin)]' | sort -u \
+  | while read -r image; do docker image inspect --format '{{index .RepoDigests 0}}' "$image"; done
+```
+
+Each line is `name@sha256:...`. Replace the matching `image:` lines in `docker-compose.prod.yml`
+(Postgres, Redis, MinIO, Caddy) with these, commit, and from then on change a digest only on purpose.
 
 ### 9.3 Deploying a new version
 
