@@ -492,3 +492,31 @@ def test_recorder_never_raises_into_the_request(monkeypatch):
                 pass
     finally:
         request_context.set_stage_sink(None)
+
+
+def test_a_series_for_a_vanished_organization_does_not_discard_the_rest(db_session, tenant):
+    """One series whose organization no longer exists (deleted between the
+    observation and the flush) made the whole flush fail on the foreign key,
+    and every other organization's measurements for that window were thrown
+    away ("SLO shutdown flush failed; observations discarded"). Now that one
+    series is skipped and the rest are written."""
+    from sqlalchemy import select
+
+    from app.models.slo import SLOObservation
+
+    slo_recorder.recorder.drain()
+    slo_recorder.recorder.observe(
+        organization_id=uuid.uuid4(), slo_key="api.availability", value=1.0
+    )
+    slo_recorder.recorder.observe(
+        organization_id=tenant.organization.id, slo_key="api.availability", value=1.0
+    )
+
+    written = slo_recorder.flush(db_session)
+    db_session.commit()
+
+    assert written == 1
+    rows = db_session.execute(
+        select(SLOObservation).where(SLOObservation.organization_id == tenant.organization.id)
+    ).scalars().all()
+    assert len(rows) == 1 and rows[0].sample_count == 1
