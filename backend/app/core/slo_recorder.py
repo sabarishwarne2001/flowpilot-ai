@@ -192,25 +192,40 @@ def flush(db: Any) -> int:
     if not drained:
         return 0
 
+    from sqlalchemy.exc import IntegrityError
+
     written = 0
+    skipped = 0
     for key, series in drained:
         if series.sample_count == 0:
             continue
-        db.execute(
-            sa_text(_UPSERT_SQL),
-            {
-                "id": str(uuid.uuid4()),
-                "organization_id": key.organization_id,
-                "slo_key": key.slo_key,
-                "window_start": key.window_start,
-                "sample_count": series.sample_count,
-                "error_count": series.error_count,
-                "sum_value": round(series.sum_value, 4),
-                "bucket_bounds": json.dumps(list(series.bounds)),
-                "bucket_counts": json.dumps(series.counts),
-            },
-        )
+        # One savepoint per series: an organization deleted between the
+        # observation and the flush fails its own foreign key and is skipped,
+        # instead of rolling back (and discarding) every other organization's
+        # measurements for the window.
+        try:
+            with db.begin_nested():
+                db.execute(
+                    sa_text(_UPSERT_SQL),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "organization_id": key.organization_id,
+                        "slo_key": key.slo_key,
+                        "window_start": key.window_start,
+                        "sample_count": series.sample_count,
+                        "error_count": series.error_count,
+                        "sum_value": round(series.sum_value, 4),
+                        "bucket_bounds": json.dumps(list(series.bounds)),
+                        "bucket_counts": json.dumps(series.counts),
+                    },
+                )
+        except IntegrityError:
+            skipped += 1
+            continue
         written += 1
+
+    if skipped:
+        logger.warning("slo.flush_skipped_unknown_organization", extra={"series": skipped})
 
     logger.info("slo.flushed", extra={"series": written})
     return written

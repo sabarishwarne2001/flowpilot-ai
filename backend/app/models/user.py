@@ -130,6 +130,11 @@ class User(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
+    @property
+    def has_avatar(self) -> bool:
+        """F-049: whether an avatar is set (UserResponse.has_avatar)."""
+        return self.avatar_file_id is not None
+
     display_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,

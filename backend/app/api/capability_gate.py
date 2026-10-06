@@ -74,6 +74,8 @@ _DISPLAY_NAMES = {
     entitlements.PROCESS_INTELLIGENCE_CAPABILITY: "Process intelligence and the exception agent",
     # ARCH50-S1:capability-display
     entitlements.EGRESS_LOCKDOWN_CAPABILITY: "Egress lockdown",
+    # N-021:capability-display
+    entitlements.BYOK_CAPABILITY: "Bring your own AI key (BYOK)",
 }
 
 

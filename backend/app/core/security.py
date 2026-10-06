@@ -82,7 +82,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Union
 
-from jose import jwt
+# F-039: PyJWT, not the unmaintained python-jose. Same HS256 contract.
+import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -327,13 +328,9 @@ def decode_access_token(token: str) -> Union[dict[str, Any], None]:
             token,
             settings.JWT_SECRET_KEY.get_secret_value(),
             algorithms=[settings.JWT_ALGORITHM],
-            options={
-                "require_sub": True,
-                "require_exp": True,
-                "require_iat": True,
-            },
+            options={"require": ["sub", "exp", "iat"]},
         )
-    except (jwt.JWTError, ValueError):
+    except (jwt.PyJWTError, ValueError, TypeError):
         return None
 
     if payload.get("type") != ACCESS_TOKEN_TYPE:

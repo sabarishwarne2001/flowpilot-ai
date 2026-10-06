@@ -158,14 +158,15 @@ const OrganizationSidebarNavigation: React.FC<
             </p>
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const locked = upgrade.isLocked(item.capability);
+                const lockKey: string | undefined = item.capability ?? item.addon;
+                const locked = upgrade.isLocked(lockKey);
                 const content = (
                   <>
                     <item.icon className="h-4 w-4 flex-shrink-0" />
                     <span className="ml-3 min-w-0 flex-1 truncate text-left font-medium">
                       {item.name}
                     </span>
-                    {item.capability !== undefined ? (
+                    {lockKey !== undefined ? (
                       <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
                         {locked ? (
                           <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden data-testid="nav-lock" />
@@ -174,11 +175,11 @@ const OrganizationSidebarNavigation: React.FC<
                     ) : null}
                   </>
                 );
-                return locked && item.capability ? (
+                return locked && lockKey ? (
                   <button
                     key={item.path}
                     type="button"
-                    onClick={() => upgrade.prompt(item.capability as string, item.name)}
+                    onClick={() => upgrade.prompt(lockKey, item.name)}
                     aria-label={`${item.name} (not included in your plan)`}
                     aria-haspopup="dialog"
                     title="Not included in your plan"
@@ -220,7 +221,7 @@ const OrganizationSidebarNavigation: React.FC<
       {onLogout ? (
         <div className="shrink-0 border-t border-border/60 px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <Avatar userId={user?.id} email={user?.email} size="md" />
+            <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} size="md" />
 
             <div className="min-w-0 flex-1">
               <span className="block text-xs font-semibold text-muted-foreground">

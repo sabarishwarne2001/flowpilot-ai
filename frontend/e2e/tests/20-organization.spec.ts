@@ -92,8 +92,8 @@ test.describe("Members: invite, accept, change role, remove", () => {
     await role.selectOption("ADMIN");
     await expect(page.locator("body")).toContainText(/updated|changed|saved|ADMIN/i);
     await page.getByRole("button", { name: `Remove ${invitee}` }).click();
-    const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog"));
-    await confirm.getByRole("button", { name: /remove/i }).click();
+    // Removal is confirmed inline in the member's row (Confirm removal / Cancel).
+    await page.getByRole("button", { name: "Confirm removal" }).click();
     await expect(page.getByRole("button", { name: `Remove ${invitee}` })).toHaveCount(0, { timeout: 15_000 });
   });
 });
@@ -229,13 +229,14 @@ test.describe("Branding and custom domains", () => {
     await expect(page.locator("body")).toContainText(/uploaded|saved|logo/i, { timeout: 15_000 });
   });
 
-  test("claim a custom domain: DNS instructions, or a clear 'not enabled' message", async ({ page, problems }) => {
-    // CUSTOM_DOMAINS_ENABLED=false here (no Caddy/ACME), so the server answers 501.
-    problems.allowHttp(/\/custom-domains$/, [501], "custom domains are disabled on this deployment");
+  test("custom domains switched off: no claim button, and the page says why (F-060)", async ({ page }) => {
+    // CUSTOM_DOMAINS_ENABLED=false here (no Caddy/ACME). Before F-060 the page
+    // offered "Claim domain" and the click answered 501.
     await page.goto(org("C", "branding"));
-    await page.locator("#hostname").fill(`ai-${runId()}.caretakers-e2e.co.uk`);
-    await page.getByRole("button", { name: "Claim domain" }).click();
-    await expect(page.locator("main")).toContainText(/TXT|CNAME|record|not enabled on this deployment/i, { timeout: 15_000 });
+    await settle(page);
+    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this FlowPilot deployment/);
+    await expect(page.getByRole("button", { name: "Claim domain" })).toHaveCount(0);
+    await expect(page.locator("#hostname")).toHaveCount(0);
   });
 });
 
@@ -404,9 +405,20 @@ test.describe("Webhooks", () => {
     await expectHealthyPage(page);
   });
 
-  test("an endpoint can be sent a test ping (requested capability)", async ({ page }) => {
+  test("an endpoint can be sent a signed test event (F-080)", async ({ page, problems }) => {
+    problems.allowHttp(/\/webhooks\//, [400, 422, 502], "the receiver is unreachable from the sandbox");
     await page.goto(org("C", "webhooks"));
-    await expect(page.getByRole("button", { name: /send test|test ping|ping/i }).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: "New endpoint" }).click();
+    const url = `https://hooks.caretakers.example.com/ping-${runId()}`;
+    await page.getByRole("textbox", { name: "Endpoint URL" }).fill(url);
+    await page.getByRole("checkbox", { name: "work_item.created" }).check();
+    await page.getByRole("button", { name: /create|save|add endpoint/i }).last().click();
+    await page.getByRole("button", { name: "I've saved it" }).click();
+    const endpoint = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${url}` }) });
+    await endpoint.getByRole("button", { name: "Deliveries" }).click();
+    await endpoint.getByRole("button", { name: "Send test event" }).click();
+    await expect(page.getByText(/Test event queued/)).toBeVisible({ timeout: 15_000 });
+    await expectHealthyPage(page);
   });
 });
 

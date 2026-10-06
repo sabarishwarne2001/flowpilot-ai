@@ -154,7 +154,8 @@ class AssertionDefinition(Base, UUIDMixin):
         ),
         CheckConstraint("version >= 1", name="ck_ad_version_positive"),
         CheckConstraint("btrim(sentence) <> ''", name="ck_ad_sentence_present"),
-        UniqueConstraint("node_id", "version", name="uq_ad_node_version"),
+        # F-017: a unique INDEX in the database, not a constraint.
+        Index("uq_ad_node_version", "node_id", "version", unique=True),
         Index("ix_ad_workspace_node", "workspace_id", "node_id"),
         Index("ix_ad_organization_family", "organization_id", "family"),
     )

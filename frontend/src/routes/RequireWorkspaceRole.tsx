@@ -17,7 +17,8 @@
  */
 
 import React from "react";
-import { ShieldAlert } from "lucide-react";
+
+import { AccessRestricted } from "@/components/common/AccessRestricted";
 
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
@@ -38,19 +39,15 @@ interface RequireWorkspaceRoleProps {
   fallback?: React.ReactNode;
 }
 
+const ROLE_WORDS: Readonly<Record<WorkspaceRole, string>> = {
+  ADMIN: "workspace administrators",
+  CONTRIBUTOR: "workspace contributors and administrators",
+  VIEWER: "every workspace member",
+};
+
+// F-053: the same Access restricted screen the organization pages use.
 const PermissionDenied: React.FC<{ minimum: WorkspaceRole }> = ({ minimum }) => (
-  <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border/60 bg-muted/10 px-6 py-12 text-center">
-    <ShieldAlert className="h-6 w-6 text-muted-foreground" />
-    <div className="space-y-1">
-      <p className="text-sm font-semibold text-foreground">
-        You do not have access to this section
-      </p>
-      <p className="text-xs text-muted-foreground">
-        This requires the {minimum.toLowerCase()} role or higher in this
-        workspace. Ask a workspace admin if you need access.
-      </p>
-    </div>
-  </div>
+  <AccessRestricted allowedFor={ROLE_WORDS[minimum]} askWho="a workspace administrator" />
 );
 
 export const RequireWorkspaceRole: React.FC<RequireWorkspaceRoleProps> = ({

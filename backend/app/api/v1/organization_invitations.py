@@ -261,6 +261,7 @@ async def accept_invitation(
                 for g in accepted.provisioned_grants
             ],
             skipped_grant_count=accepted.skipped_grant_count,
+            workspace_slug=accepted.first_workspace_slug,
         )
     except SeatLimitExceededError:
         blocked = organization_invitation_service.describe_seat_blocked(db, token=payload.token)

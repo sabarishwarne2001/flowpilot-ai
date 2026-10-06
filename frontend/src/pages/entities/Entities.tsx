@@ -21,6 +21,7 @@ import { errorMessage } from "@/services/api/errors";
 import { ENTITY_KIND_LABELS, ENTITY_KINDS, type EntityKind } from "@/types/entities";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
 import { formatTimestampDate } from "@/utils/displayTime";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const PAGE_SIZE = 25;
 
@@ -49,6 +50,7 @@ const LockedView: React.FC<{ readonly workspaceId: string }> = ({ workspaceId })
         </p>
       ) : null}
       <p className={HINT}>It&apos;s included on the Business and Enterprise plans.</p>
+      <ViewPlansAction />
     </section>
   );
 };

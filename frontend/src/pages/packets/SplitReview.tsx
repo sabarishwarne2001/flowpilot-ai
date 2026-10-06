@@ -20,6 +20,7 @@ import { caseKeys } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { approvePacketSplit, correctPacketSplit, getPacketSplit, rejectPacketSplit } from "@/services/api/packets";
 import type { PageScore } from "@/types/packets";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const PageThumb: React.FC<{ readonly workspaceId: string; readonly splitId: string; readonly score: PageScore }> = ({
   workspaceId, splitId, score,
@@ -83,7 +84,7 @@ const SplitReview: React.FC = () => {
   };
 
   if (!capability.granted) {
-    return <p className={`${SURFACE} p-6 text-sm`}>The packet dicer is included on the Business and Enterprise plans.</p>;
+    return <div className={`${SURFACE} p-6 text-sm`}><p>The packet dicer is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }
   if (query.isLoading) {return <Loader2 className="m-6 h-5 w-5 animate-spin" aria-label="Loading" />;}
   if (query.isError || !detail) {return <p className="text-sm text-destructive">{errorMessage(query.error, "Something went wrong.")}</p>;}

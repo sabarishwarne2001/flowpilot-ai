@@ -192,27 +192,30 @@ def exchange_code(*, token_endpoint: str, client_id: str, client_secret: str,
 def validate_id_token(*, id_token: str, jwks_key: dict, issuer: str,
                       audience: str, expected_nonce: str,
                       clock_skew_s: int = 120) -> OidcClaims:
-    from jose import jwt
-    from jose.exceptions import JWTError
+    # F-039: PyJWT. The JWK becomes a key object first (python-jose took the
+    # dict directly); leeway is a parameter, not an option.
+    import jwt
+    from jwt import PyJWTError as JWTError
 
     digest = "sha256:" + hashlib.sha256(id_token.encode("ascii")).hexdigest()
 
     try:
+        signing_key = jwt.PyJWK.from_dict(jwks_key).key
         claims = jwt.decode(
             id_token,
-            jwks_key,
+            signing_key,
             algorithms=[jwks_key.get("alg", "RS256")],
             audience=audience,
             issuer=issuer,
+            leeway=clock_skew_s,
             options={
                 "verify_signature": True,
                 "verify_aud": True,
                 "verify_iss": True,
                 "verify_exp": True,
-                "leeway": clock_skew_s,
             },
         )
-    except JWTError as exc:
+    except (JWTError, ValueError, TypeError) as exc:
         raise AssertionRejected("REJECTED_SIGNATURE",
                                 f"ID token validation failed: {exc}") from exc
 

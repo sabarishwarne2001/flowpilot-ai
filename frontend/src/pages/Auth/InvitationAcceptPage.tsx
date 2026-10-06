@@ -156,9 +156,14 @@ export const InvitationAcceptPage: React.FC = () => {
 
       await queryClient.invalidateQueries({ queryKey: ["me"] });
 
-      navigate(workspacePath(result.organization_slug, result.workspace_slug || "default"), {
-        replace: true,
-      });
+      // F-107: open the workspace the invitation granted. With none granted there is
+      // nothing to open yet, so show the chooser (not a "no longer available" warning).
+      navigate(
+        result.workspace_slug
+          ? workspacePath(result.organization_slug, result.workspace_slug)
+          : ROUTES.WORKSPACES,
+        { replace: true },
+      );
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError) {

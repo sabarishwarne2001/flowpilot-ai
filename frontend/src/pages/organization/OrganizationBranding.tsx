@@ -34,6 +34,8 @@ import {
 } from "@/services/api/branding";
 import { brandingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { BRANDING_ENDPOINTS } from "@/services/api/endpoints";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
 import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
@@ -446,6 +448,16 @@ const OrganizationBranding: React.FC = () => {
   });
 
   const branding: TenantBrandingResponse | undefined = brandingQuery.data;
+  // F-058. The preview reads the organization's own logo through the
+  // authenticated console route. `logo_url` is the PUBLIC path, which answers
+  // only on a verified custom domain, so on the app host it was always a 404.
+  // Keyed by the file id, so a new upload is fetched fresh; no request when
+  // there is no logo.
+  const logoPreviewSrc = useAuthenticatedImage(
+    branding?.logo_file_id
+      ? `${BRANDING_ENDPOINTS.logo(organizationId)}?v=${branding.logo_file_id}`
+      : null,
+  );
 
   const colors = useMemo(() => {
     const resolved = {} as Record<ColorKey, string>;
@@ -705,7 +717,17 @@ const OrganizationBranding: React.FC = () => {
           requested after that verification succeeds.
         </p>
 
-        {isOwner && domainCanCreate ? (
+        {/* F-060: the deployment's switch, from the branding read. Unknown
+            (older server) behaves as before. */}
+        {branding?.custom_domains_enabled === false ? (
+          <p className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground" role="status">
+            Custom domains are not switched on for this FlowPilot deployment, so a hostname
+            cannot be claimed here yet. Ask your platform administrator to enable custom
+            domains (CUSTOM_DOMAINS_ENABLED).
+          </p>
+        ) : null}
+
+        {isOwner && domainCanCreate && branding?.custom_domains_enabled !== false ? (
           <div className="mt-4 flex flex-wrap items-end gap-2">
             <div className="min-w-64 flex-1">
               <label className={LABEL} htmlFor="hostname">
@@ -892,7 +914,7 @@ const OrganizationBranding: React.FC = () => {
               <ThemePreview
                 draft={colors}
                 brandName={brandName}
-                logoUrl={branding?.logo_url ?? null}
+                logoUrl={logoPreviewSrc}
               />
             </div>
 

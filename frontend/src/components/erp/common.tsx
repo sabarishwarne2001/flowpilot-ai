@@ -8,6 +8,7 @@ import { Lock } from "lucide-react";
 import { HINT, SECTION_TITLE, SURFACE, SURFACE_INSET } from "@/components/ui/primitives";
 import { casePath, procurementCasePath, tablePath } from "@/routes/tenantPaths";
 import { STATE_LABELS, STATE_TONES, type PostingState, type SourceKind } from "@/types/erp";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 export const PostingStateBadge: React.FC<{ readonly state: PostingState | null | undefined }> = ({ state }) =>
   state ? (
@@ -38,6 +39,7 @@ export const ErpLocked: React.FC<{ readonly compact?: boolean }> = ({ compact = 
         folders or a CSV / Excel import, exactly once, and marked posted only when the ERP says so.
       </p>
       <p className={HINT}>It&apos;s included on the Business and Enterprise plans.</p>
+      <ViewPlansAction />
     </section>
   );
 

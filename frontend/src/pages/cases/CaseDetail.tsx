@@ -20,6 +20,7 @@ import { errorMessage } from "@/services/api/errors";
 import { CASE_STATUS_LABELS, type RuleOutcome } from "@/types/cases";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
 import { formatTimestamp } from "@/utils/displayTime";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const OUTCOME_STYLE: Readonly<Record<RuleOutcome, string>> = {
   PASS: "bg-green-100 text-green-800", FAIL: "bg-red-100 text-red-800", MISSING: "bg-muted text-muted-foreground", ERROR: "bg-amber-100 text-amber-800",
@@ -47,7 +48,7 @@ const CaseDetailPage: React.FC = () => {
   const revoke = useMutation({ mutationFn: (id: string) => revokeDocumentRequest(workspaceId, caseId, id), onSuccess: done });
   const failure = evaluate.error ?? close.error ?? add.error ?? remove.error ?? request.error ?? revoke.error;
 
-  if (!capability.granted) {return <p className={`${SURFACE} m-4 p-6 text-sm`}>Case intelligence is included on the Business and Enterprise plans.</p>;}
+  if (!capability.granted) {return <div className={`${SURFACE} m-4 p-6 text-sm`}><p>Case intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;}
   if (query.isLoading) {return <Loader2 className="m-6 h-5 w-5 animate-spin" aria-label="Loading" />;}
   if (query.isError || !query.data) {return <p className="m-4 text-sm text-destructive">{errorMessage(query.error, "The case could not be loaded.")}</p>;}
   const { case: c, checklist, documents, rules, requests, template } = query.data;

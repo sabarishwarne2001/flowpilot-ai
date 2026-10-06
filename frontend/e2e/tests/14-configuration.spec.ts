@@ -66,7 +66,7 @@ test.describe("Settings", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: /stay|cancel|keep editing/i }).click();
     await expect(page.getByRole("textbox", { name: "Workspace Name" })).toHaveValue(/Unsaved/);
-    await page.getByRole("button", { name: "Reset" }).click();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
   });
 });
 

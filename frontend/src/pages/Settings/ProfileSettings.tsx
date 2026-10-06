@@ -23,6 +23,7 @@ import { bumpAvatarVersion } from "@/store/useAvatarVersionStore";
 import { errorMessage } from "@/services/api/errors";
 import { LOCALES, TimezoneField, isKnownTimezone } from "@/components/forms/TimezoneField";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useAuthStore } from "@/store/useAuthStore";
 
 function detailOf(error: unknown, fallback: string): string {
   return errorMessage(error, fallback);
@@ -58,6 +59,8 @@ export const ProfileSettings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(0);
+  const hasAvatar = useAuthStore((state) => state.user?.has_avatar);
+  const setHasAvatar = useAuthStore((state) => state.setHasAvatar);
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: profileKeys.me(),
@@ -82,7 +85,9 @@ export const ProfileSettings: React.FC = () => {
     setLocale(profile.locale);
   }, [profile, dirty]);
 
-  const avatarUrl = profile
+  // F-049: only when there is an avatar to show, so a user without one does
+  // not log a 404 every time they open their profile.
+  const avatarUrl = profile && hasAvatar !== false
     ? `${PROFILE_ENDPOINTS.userAvatar(profile.id)}?v=${avatarVersion}`
     : null;
 
@@ -110,6 +115,7 @@ export const ProfileSettings: React.FC = () => {
     mutationFn: (file: File) => uploadAvatar(file),
     onSuccess: () => {
       setAvatarError(null);
+      setHasAvatar(true);
       broadcastAvatarChange();
       queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
@@ -126,6 +132,7 @@ export const ProfileSettings: React.FC = () => {
     mutationFn: deleteAvatar,
     onSuccess: () => {
       setAvatarError(null);
+      setHasAvatar(false);
       broadcastAvatarChange();
       queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },

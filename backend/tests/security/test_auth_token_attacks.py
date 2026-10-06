@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt  # F-039: PyJWT replaced python-jose
 from sqlalchemy.orm import Session
 
 from app.core import security

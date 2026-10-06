@@ -121,6 +121,8 @@ __all__ = [
     "PROCESS_INTELLIGENCE_CAPABILITY",
     # ARCH50-S1:capability-egress-lockdown-export
     "EGRESS_LOCKDOWN_CAPABILITY",
+    # N-021:capability-byok-export
+    "BYOK_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -326,6 +328,13 @@ PROCESS_INTELLIGENCE_CAPABILITY: str = "capability.process_intelligence"
 #: are the operator's (environment), not a plan feature.
 EGRESS_LOCKDOWN_CAPABILITY: str = "capability.egress_lockdown"
 
+#: N-021:capability-byok. Bring your own AI key: storing, validating and routing
+#: the tenant's own provider credentials (ARCH-22/23). Owner decision N-021:
+#: Business and Enterprise. Reading what is configured and retiring a stored key
+#: stay open on every plan, so a tenant that downgrades can still see and remove
+#: its credentials (the N-003 read/delete pattern every paid console follows).
+BYOK_CAPABILITY: str = "capability.byok"
+
 #: Every capability key. Disjoint from ADDON_KEYS by construction;
 #: verify_arch31_step0 asserts the two sets never intersect.
 CAPABILITY_KEYS: tuple[str, ...] = (
@@ -350,6 +359,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     COLLABORATIVE_REVIEW_CAPABILITY,
     PROCESS_INTELLIGENCE_CAPABILITY,  # ARCH49-S1:capability-keys
     EGRESS_LOCKDOWN_CAPABILITY,  # ARCH50-S1:capability-keys
+    BYOK_CAPABILITY,  # N-021:capability-keys
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -545,6 +555,14 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Egress lockdown: every connection the platform makes for your organization -- webhooks, warehouses, "
             "ERP targets, SSO metadata, your SMTP server and AI model providers -- is confined to the destinations "
             "you allow; anything else is refused before it connects, recorded and audited. Bundled into a tier."
+        ),
+    ),
+    # N-021:capability-byok-entitlement
+    Entitlement(
+        name=BYOK_CAPABILITY,
+        description=(
+            "Bring your own AI key: store your own provider keys (OpenAI, Anthropic, Groq, Azure OpenAI, "
+            "Mistral, Gemini), validate them and route each task to the model you choose. Bundled into a tier."
         ),
     ),
 )

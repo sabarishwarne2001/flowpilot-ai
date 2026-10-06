@@ -12,6 +12,7 @@ import { tablePath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { listTables, tableKeys } from "@/services/api/tables";
 import { STATUS_LABELS, STATUS_TONE, type TableStatus } from "@/types/tables";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const FILTERS: readonly { readonly id: TableStatus | undefined; readonly label: string }[] = [
   { id: undefined, label: "All" },
@@ -33,7 +34,7 @@ const Tables: React.FC = () => {
     enabled: Boolean(workspaceId && capability.granted),
   });
   if (!capability.granted) {
-    return <p className={`${SURFACE} p-6 text-sm`}>Table intelligence is included on the Business and Enterprise plans.</p>;
+    return <div className={`${SURFACE} p-6 text-sm`}><p>Table intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }
   return (
     <div className="space-y-4 p-4">

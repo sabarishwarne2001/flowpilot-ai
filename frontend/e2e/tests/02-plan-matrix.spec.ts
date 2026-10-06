@@ -44,7 +44,8 @@ const ORG_PROBES: Record<string, { path: string; plan: Plan }> = {
 };
 
 const GATED_WS = WORKSPACE_PAGES.filter((p) => p.plan !== "any" && p.navId && NAV_LABEL[p.navId]);
-const GATED_ORG = ORGANIZATION_PAGES.filter((p) => p.plan !== "any" && p.navId !== "org:analytics");
+// F-005 fixed: Analytics is locked in the sidebar on the warehouse add-on too.
+const GATED_ORG = ORGANIZATION_PAGES.filter((p) => p.plan !== "any");
 const ORG_NAV_LABEL: Record<string, string> = {
   "org:transactional-email": "Transactional email",
   "org:developer": "Developer platform",
@@ -54,6 +55,9 @@ const ORG_NAV_LABEL: Record<string, string> = {
   "org:api-keys": "API keys",
   "org:webhooks": "Webhooks",
   "org:identity": "Enterprise identity",
+  // N-021: bring your own AI key is Business and Enterprise.
+  "org:byok": "Enterprise BYOK & models",
+  "org:analytics": "Analytics & BI egress",
 };
 
 const TENANT_OWNER: Record<"A" | "B" | "C", UserKey> = { A: "A.owner", B: "B.owner", C: "C.owner" };
@@ -92,6 +96,8 @@ for (const tenant of ["A", "B", "C"] as const) {
           await page.goto(ws(tenant, target.sub));
           await settle(page);
           await expect(page.locator("main")).toContainText(LOCK_TEXT);
+          // F-059: the page opened by URL offers the upgrade path too.
+          await expect(page.locator("main").getByRole("link", { name: "View plans" }).first()).toBeVisible();
         }
         await expectHealthyPage(page);
       });

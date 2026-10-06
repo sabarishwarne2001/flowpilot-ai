@@ -10,9 +10,15 @@ from sqlalchemy import (
     Index, Integer, LargeBinary, PrimaryKeyConstraint, Text, UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
+from sqlalchemy.dialects.postgresql import CIDR, ENUM, INET, JSONB, UUID
 
 from app.db.base import Base
+
+# F-017. The role columns below are Postgres enum columns in the database
+# (the ARCH-16 migrations created them with the existing role types); the
+# models now say so. String values in, string values out, as before.
+_ORG_ROLE_DB = ENUM("OWNER", "ADMIN", "BILLING", "MEMBER", name="organization_role", create_type=False)
+_WS_ROLE_DB = ENUM("ADMIN", "CONTRIBUTOR", "VIEWER", name="workspace_role", create_type=False)
 
 TBL_JOBS = "jobs"
 TBL_SESSIONS = "sessions"
@@ -175,7 +181,8 @@ class EnterpriseIdpConfig(Base):
     # JIT / Seats
     jit_provisioning_mode = Column(_jit_mode, nullable=False,
                                    default=JitProvisioningMode.CAPPED)
-    jit_default_org_role = Column(Text, nullable=False, default="MEMBER")
+    jit_default_org_role = Column(_ORG_ROLE_DB, nullable=False, default="MEMBER",
+                                  server_default="MEMBER")
     jit_seat_cap = Column(Integer)
 
     force_reauth_max_age_s = Column(Integer)
@@ -230,7 +237,7 @@ class IdpRoleMapping(Base):
     attribute_name = Column(Text, nullable=False)
     match_kind = Column(Text, nullable=False)
     match_value = Column(Text, nullable=False)
-    organization_role = Column(Text, nullable=False)
+    organization_role = Column(_ORG_ROLE_DB, nullable=False)
     created_at = _created()
 
     __table_args__ = (
@@ -290,7 +297,7 @@ class ScimGroup(Base):
     display_name = Column(Text, nullable=False)
     workspace_id = Column(UUID(as_uuid=True),
                           ForeignKey("workspaces.id", ondelete="SET NULL"))
-    workspace_role = Column(Text)
+    workspace_role = Column(_WS_ROLE_DB)
     created_at = _created()
     updated_at = _updated()
 
@@ -316,6 +323,8 @@ class ScimGroupMember(Base):
 
 class ScimApiKey(Base):
     __tablename__ = "scim_api_keys"
+    # F-017: the constraint's name in the database.
+    __table_args__ = (UniqueConstraint("key_prefix", name="uq_scim_key_prefix"),)
 
     id = _uuid_pk()
     organization_id = Column(UUID(as_uuid=True),
@@ -325,7 +334,7 @@ class ScimApiKey(Base):
                            ForeignKey("enterprise_idp_configs.id", ondelete="CASCADE"),
                            nullable=False)
 
-    key_prefix = Column(Text, nullable=False, unique=True)
+    key_prefix = Column(Text, nullable=False)
     secret_hmac = Column(LargeBinary, nullable=False)
     previous_secret_hmac = Column(LargeBinary)
     previous_secret_expires_at = Column(DateTime(timezone=True))
@@ -355,11 +364,13 @@ class ScimApiKey(Base):
 
 class TenantSecurityPolicy(Base):
     __tablename__ = "tenant_security_policies"
+    # F-017: the constraint's name in the database.
+    __table_args__ = (UniqueConstraint("organization_id", name="uq_policy_per_org"),)
 
     id = _uuid_pk()
     organization_id = Column(UUID(as_uuid=True),
                              ForeignKey("organizations.id", ondelete="CASCADE"),
-                             nullable=False, unique=True)
+                             nullable=False)
 
     require_sso = Column(Boolean, nullable=False, default=False)
     sso_bypass_for_owners = Column(Boolean, nullable=False, default=True)
@@ -380,13 +391,15 @@ class TenantSecurityPolicy(Base):
 
 class SsoAuthRequest(Base):
     __tablename__ = "sso_auth_requests"
+    # F-017: the constraint's name in the database.
+    __table_args__ = (UniqueConstraint("request_id", name="uq_sso_auth_request_id"),)
 
     id = _uuid_pk()
     idp_config_id = Column(UUID(as_uuid=True),
                            ForeignKey("enterprise_idp_configs.id", ondelete="CASCADE"),
                            nullable=False)
     protocol = Column(Text, nullable=False)
-    request_id = Column(Text, nullable=False, unique=True)
+    request_id = Column(Text, nullable=False)
     nonce = Column(Text)
     code_verifier_encrypted = Column(LargeBinary)
     relay_state = Column(Text)

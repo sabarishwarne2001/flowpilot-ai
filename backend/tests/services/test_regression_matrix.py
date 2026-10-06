@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from jose import jwt
+import jwt  # F-039: PyJWT replaced python-jose
 from sqlalchemy import inspect, text
 
 from app.core import security

@@ -12,7 +12,9 @@ from app.models import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # F-099: keep loggers created before migrations ran (the app imports its
+    # modules first when alembic runs in-process); the default disables them all.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

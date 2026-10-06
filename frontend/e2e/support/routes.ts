@@ -50,7 +50,7 @@ export const ORGANIZATION_PAGES: readonly OrganizationPage[] = [
   { id: "/organizations/:orgSlug/service-levels", sub: "service-levels", title: /Service levels/, plan: "any", navId: "org:service-levels" },
   { id: "/organizations/:orgSlug/compliance", sub: "compliance", title: /Data governance/, plan: "any", navId: "org:compliance" },
   { id: "/organizations/:orgSlug/developer", sub: "developer", title: /Developer platform/, plan: "developer", navId: "org:developer" },
-  { id: "/organizations/:orgSlug/byok", sub: "byok", title: /BYOK/, plan: "any", navId: "org:byok" },
+  { id: "/organizations/:orgSlug/byok", sub: "byok", title: /BYOK/, plan: "business", navId: "org:byok" },
   { id: "/organizations/:orgSlug/branding", sub: "branding", title: /Branding & custom domains/, plan: "developer", navId: "org:branding" },
   { id: "/organizations/:orgSlug/analytics", sub: "analytics", title: /Analytics & BI egress/, plan: "business", navId: "org:analytics" },
   { id: "/organizations/:orgSlug/marketplace", sub: "marketplace", title: /Partner marketplace/, plan: "any", navId: "org:marketplace" },

@@ -31,6 +31,7 @@ import {
   type ObligationDetail as Detail, type ObligationUpdate,
 } from "@/types/obligations";
 import { formatDateTime } from "@/utils/formatters";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const EVENT_LABELS: Readonly<Record<string, string>> = {
   CREATED: "Created", UPDATED: "Edited", DUE_SOON: "Became due soon", OVERDUE: "Became overdue", REOPENED: "Reopened",
@@ -78,9 +79,12 @@ const ObligationDetail: React.FC = () => {
 
   if (!capability.granted) {
     return (
-      <p className="m-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Lock className="h-4 w-4" aria-hidden /> Obligations are included on the Business and Enterprise plans.
-      </p>
+      <div className="m-6">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Lock className="h-4 w-4" aria-hidden /> Obligations are included on the Business and Enterprise plans.
+        </p>
+        <ViewPlansAction />
+      </div>
     );
   }
   if (query.isLoading) {

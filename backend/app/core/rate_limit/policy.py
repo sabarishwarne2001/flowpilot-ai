@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from app.core.config import settings
+
 
 class FailureMode(str, Enum):
     FAIL_OPEN = "FAIL_OPEN"
@@ -32,10 +34,13 @@ class RateLimitPolicy:
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
 
 
+# F-064. The five configurable limits are read from their RATE_LIMIT_* settings
+# (config.py, .env); before, they were the numbers written here and changing
+# the setting did nothing. Read once at import, like every other setting.
 POLICY_GLOBAL_IP = RateLimitPolicy(
     name="global_ip",
     scope=RateLimitScope.GLOBAL_IP,
-    limit=600,
+    limit=settings.RATE_LIMIT_GLOBAL_IP_PER_MINUTE,
     window_seconds=60,
     failure_mode=FailureMode.FAIL_OPEN,
 )
@@ -43,7 +48,7 @@ POLICY_GLOBAL_IP = RateLimitPolicy(
 POLICY_USER_DEFAULT = RateLimitPolicy(
     name="user_default",
     scope=RateLimitScope.USER,
-    limit=300,
+    limit=settings.RATE_LIMIT_USER_PER_MINUTE,
     window_seconds=60,
     failure_mode=FailureMode.FAIL_OPEN,
 )
@@ -51,7 +56,7 @@ POLICY_USER_DEFAULT = RateLimitPolicy(
 POLICY_LOGIN_IP = RateLimitPolicy(
     name="login_ip",
     scope=RateLimitScope.LOGIN_IP,
-    limit=20,
+    limit=settings.RATE_LIMIT_LOGIN_IP_PER_5MIN,
     window_seconds=300,
     failure_mode=FailureMode.FAIL_CLOSED,
 )
@@ -59,7 +64,7 @@ POLICY_LOGIN_IP = RateLimitPolicy(
 POLICY_CREDENTIAL_OPS = RateLimitPolicy(
     name="credential_ops",
     scope=RateLimitScope.CREDENTIAL,
-    limit=10,
+    limit=settings.RATE_LIMIT_CREDENTIAL_PER_HOUR,
     window_seconds=3600,
     failure_mode=FailureMode.FAIL_CLOSED,
 )
@@ -67,7 +72,7 @@ POLICY_CREDENTIAL_OPS = RateLimitPolicy(
 POLICY_AUDIT_EXPORT = RateLimitPolicy(
     name="audit_export",
     scope=RateLimitScope.EXPORT,
-    limit=5,
+    limit=settings.RATE_LIMIT_EXPORT_PER_HOUR,
     window_seconds=3600,
     failure_mode=FailureMode.FAIL_CLOSED,
 )

@@ -783,6 +783,11 @@ class DodoGateway:
             id=webhook_id,
             type=normalised,
             gateway=GATEWAY_NAME,
+            # F-033. Dodo's envelope (business_id, type, timestamp, data) carries no
+            # test/live flag, so this is the deployment's own mode and the receiver's
+            # mode comparison can never differ for Dodo. What keeps a test event out
+            # of a live deployment is the signing secret, which Dodo issues per mode,
+            # and DODO_API_BASE, which config.py forces to match DODO_LIVEMODE.
             livemode=bool(getattr(settings, "DODO_LIVEMODE", False)),
             created_epoch=sent_at,
             payload=body,

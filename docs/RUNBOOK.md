@@ -234,7 +234,7 @@ uploaded through the API all reach `COMPLETED`.
 | `required variable RERANKER_INTERNAL_TOKEN is missing a value` | `backend/.env` has no token | `openssl rand -hex 32` → `RERANKER_INTERNAL_TOKEN=` in `backend/.env` |
 | `alembic upgrade head` → `RuntimeError: arch40_step3_contract_ai_settings drops columns…` | the contract flag is not set | `ARCH40_CONTRACT=1 alembic upgrade head` (dev and test databases only) |
 | `No matching distribution found for scipy==1.18.0` | Python 3.11 or older | use Python 3.12 |
-| Uploads fail with `InvalidAccessKeyId` | your shell exports `AWS_ACCESS_KEY_ID`; Docker Compose used it as the MinIO root user (F-027) | `unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY` (PowerShell: `Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY`), then `docker compose rm -sf minio minio-init && docker volume rm flowpilot_minio_data && docker compose up -d minio minio-init` |
+| Uploads fail with `InvalidAccessKeyId` | a MinIO data volume created before F-027 was fixed still has your shell's `AWS_ACCESS_KEY_ID` as its root user (the dev compose now uses `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, default `minioadmin`) | `docker compose rm -sf minio minio-init && docker volume rm flowpilot_minio_data && docker compose up -d minio minio-init` |
 | Web app shows "blocked by CORS policy" | `CORS_ORIGINS` does not list `http://localhost:5173` (the code default is only `:3000`) | keep the `CORS_ORIGINS` line from `.env.example` |
 | Login fails right after `seed_admin.py` says `already-seeded` | the script prints `(unchanged)` in place of the password | use the password from the first seed (default `FlowPilot!Dev123`) |
 | Upload ends `FAILED` with `ck_document_chunks_bbox_is_object` in the worker log | bug F-020, fixed in Phase 2 | you are running an old build: `git pull`, then restart the worker |
@@ -452,6 +452,18 @@ $COMPOSE ps && $COMPOSE logs --tail 30 web
 If `migrate` fails, the new API does not start. Read `$COMPOSE logs migrate`. If the database
 was left half-changed, restore the backup you just took (section 9.5).
 
+**When a release changes the plan table** (`backend/scripts/seed_quota_tiers.py`), publish the new
+tier versions and move live subscribers onto them. Phase 5 is such a release: Business and
+Enterprise now include `capability.byok` (owner decision N-021). A database seeded before it keeps the
+old versions, and its Business/Enterprise tenants are refused BYOK writes until you run:
+
+```bash
+$COMPOSE run --rm web python scripts/seed_quota_tiers.py --carry-forward
+```
+
+The seed publishes only the tiers that changed; `--carry-forward` moves a live subscription only
+when the new version costs the same and takes nothing away.
+
 ### 9.4 Backups
 
 | What | How | Where it ends up |
@@ -595,3 +607,5 @@ After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 | Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
+| People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 10 per address per 5 minutes; NEEDS-OWNER N-018), then `$COMPOSE up -d web` |
+| A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |

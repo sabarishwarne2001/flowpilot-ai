@@ -25,9 +25,9 @@ def _legacy_token(account) -> str:
     issued before that change are still in circulation until they expire,
     and these tests are about them.
     """
-    from jose import jwt
+    import jwt  # F-039: PyJWT replaced python-jose
 
-    payload = jwt.get_unverified_claims(
+    payload = _unverified_claims(
         create_access_token(subject=account.id, session_id=uuid.uuid4())
     )
     payload.pop(AUTH_TIME_CLAIM)
@@ -36,6 +36,14 @@ def _legacy_token(account) -> str:
         settings.JWT_SECRET_KEY.get_secret_value(),
         algorithm=settings.JWT_ALGORITHM,
     )
+
+
+def _unverified_claims(token):
+    """python-jose's get_unverified_claims, in PyJWT terms."""
+    import jwt
+
+    return jwt.decode(token, options={"verify_signature": False})
+
 
 
 @pytest.fixture()

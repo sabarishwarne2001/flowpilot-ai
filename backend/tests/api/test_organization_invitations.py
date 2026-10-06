@@ -248,6 +248,33 @@ class TestAcceptSuccess:
         assert response.status_code == 200
         assert response.json()["organization_slug"]
 
+    def test_response_names_the_granted_workspace_to_open(
+        self, client, db_session, invitee_context, pending_invitation, workspace
+    ):
+        """F-107. The accept page navigated to `workspace_slug || "default"`, but the
+        response carried no slug, so every invitee landed on "That workspace is no
+        longer available to you" instead of the workspace they were just given."""
+        db_session.add(InvitationWorkspaceGrant(
+            invitation_id=pending_invitation.id, workspace_id=workspace.id, role=WorkspaceRole.VIEWER,
+        ))
+        db_session.commit()
+        response = client.post(
+            "/api/v1/invitations/accept",
+            json={"token": pending_invitation.plaintext_token},
+            headers=invitee_context["auth_headers"],
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["workspace_slug"] == workspace.slug
+
+    def test_an_organization_only_invitation_names_no_workspace(self, client, invitee_context, pending_invitation):
+        response = client.post(
+            "/api/v1/invitations/accept",
+            json={"token": pending_invitation.plaintext_token},
+            headers=invitee_context["auth_headers"],
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["workspace_slug"] is None
+
 
 class TestCreateInvitation:
     def test_cross_organization_grant_rejected_with_400(

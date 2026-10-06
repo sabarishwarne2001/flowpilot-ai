@@ -26,6 +26,11 @@ locked in the sidebar (F-005).
 **Decide:** for each page, which plan should include it? The campaign will then
 make the sidebar and the server agree.
 
+**Phase 5 status.** BYOK is decided (N-021: Business and Enterprise) and done. "Analytics & BI
+egress" is now locked in the sidebar where the warehouse add-on is missing, matching the server
+(F-005). **Still open:** Partner marketplace, Service levels and Data governance have no plan gating
+anywhere; they stay open on every plan until you decide.
+
 ## N-003 — What may a customer do after downgrading?
 Reads and deletes of premium data (API keys, webhooks, analytics destinations,
 custom domains, branding, email settings) are allowed on any plan, while
@@ -66,6 +71,10 @@ API match, with tests.
 already allows this; the sidebar must show API keys to ADMIN (F-015, Phase 4).
 Webhooks, audit log and enterprise identity were not covered and stay as they
 are until you decide.
+
+**Phase 5 status.** Done: the sidebar shows API keys to ADMIN (F-015, `782d0e3`). Webhooks, audit
+log and enterprise identity stay OWNER-only in the sidebar (an ADMIN who opens them by URL is served,
+as the API allows) until you decide them.
 
 ## N-007 — Where will production run? (DECIDED)
 Sweepers, retention and backups run from host cron (`backend/deploy/cron.d`).
@@ -127,6 +136,10 @@ production database with real customer data exists.** So the first production
 deploy may set `ARCH40_CONTRACT=1` in the production `.env` (nothing real can be
 lost), run `migrate` once, and then remove the flag again. Phase 3 did not change
 any compose file; the runbook procedure still applies.
+
+**Phase 5 note.** Nothing changes: production still runs the contract step only when you set
+`ARCH40_CONTRACT=1` for the first deploy (RUNBOOK 9.2 step 6). The schema-alignment migration added in
+Phase 5 (`p5a1_schema_drift_alignment`) is not lossy and runs on every deploy.
 
 ## N-010 — Which verification gates are still authoritative?
 33 of the 78 `verify_*.py` gates fail (F-029). Several look stale: they
@@ -196,7 +209,14 @@ off-server copy, alerts through a monitor you configure.
 (nightly backup) is accepted for launch.** Point-in-time recovery stays off;
 backup retention is unchanged (7 daily, 4 weekly) until you say otherwise.
 
-## N-013 — Send me one real Dodo test webhook so a safety check can be fixed (F-033)
+## N-013 — Send me one real Dodo test webhook so a safety check can be fixed (F-033) (NO LONGER NEEDED)
+**Phase 5:** Dodo's published webhook format answers the question without a live sample: the
+envelope is `business_id`, `type`, `timestamp`, `data` and has no test/live field at all, so there
+is nothing to check in the payload. Test and live are kept apart by their separate signing secrets
+(and API host, which the app already ties to `DODO_LIVEMODE`). F-033 is closed; the code says so.
+**Your only action:** keep one Dodo key and one webhook secret per environment (never copy the
+test secret into production). Original text below.
+
 The check that should refuse a Dodo *test-mode* event on a *live* deployment
 compares your own setting with itself, so it can never fire. I cannot see in
 Dodo's documentation which field of a real event says "test" or "live", and I
@@ -276,6 +296,12 @@ is separate and stays.
 sign-ins per address, and let the per-account back-off do the rest (best for offices, needs a
 code change). **Default until you decide:** no change (a).
 
+**Phase 5 status (no decision taken for you).** Two engineering bugs under this question are fixed:
+each attempt was counted twice (F-048) and the `RATE_LIMIT_*` settings were never read (F-064). To
+keep today's behaviour, the default is now **10 per 5 minutes per address counted once**, which is
+exactly the allowance that was in effect. Your choice is now one line in `.env.production`:
+`RATE_LIMIT_LOGIN_IP_PER_5MIN=10` (option a, current) or `=20` (option b). Option (c), counting only
+failed sign-ins per address, is still a code change and still needs your go-ahead.
 
 ## N-019 — What may Viewers and Members do? (Phase 3, F-053, F-065)
 The browser tests found two places where the code and the Phase 3 brief disagree:
@@ -287,6 +313,11 @@ The browser tests found two places where the code and the Phase 3 brief disagree
   postings today; your brief said Members must not trigger mutating ERP posts (F-065).
   **Decide:** should posting to the ERP require workspace ADMIN (or organization OWNER/ADMIN)?
 **Default until you decide:** nothing changes; both are recorded as open findings.
+
+**Phase 5 status.** Viewers no longer see error pages: Workflows, Run history and Review queue show an
+"Access restricted - ask a workspace administrator" screen for a VIEWER instead of firing requests
+the server refuses (F-053, `cc48275`). **Still open:** whether viewers should get read-only access to
+those three pages (then the server must allow GET), or have them hidden from the sidebar.
 
 ## N-020 — Which missing capabilities do you want before launch? (Phase 3, F-061)
 The brief asked the tests to exercise these, and the product does not have them:
@@ -312,6 +343,17 @@ The console calls it "Enterprise BYOK & models", but the server lets every plan,
 store provider keys and routing rules. **Decide:** (a) Enterprise only, (b) Business and up, or
 (c) every plan. **Default:** unchanged (every plan).
 
+**Owner decision 2026-10-06 (Phase 5 kickoff): DECIDED. BYOK is approved for the Business and
+Enterprise tiers.** Done (F-095): a new `capability.byok` is bundled into Business and
+Enterprise (`seed_quota_tiers.py`) and required by the four BYOK writes (store or rotate a key,
+validate it, change its fallback, save a routing rule; 402 `CAPABILITY_REQUIRED` below Business).
+Reading the console and retiring a key stay open on every plan, so a tenant that downgrades can
+still see and remove its keys (the N-003 pattern). The sidebar locks the page below Business and
+the page shows the "not included in your plan" banner. Commits `24a0fb2`, `ea13d14`.
+**One consequence to know:** like every other paid console, a downgrade does not switch off what is
+already configured; stored keys keep serving until the owner retires them (N-003 still decides the
+general downgrade rule).
+
 ## N-022 — What should a locked-out sign-in answer? (Phase 4, F-096)
 After repeated wrong passwords the account is refused from that address for a growing time. Today
 the refusal looks exactly like a wrong password (401): an attacker learns nothing, but a real user
@@ -319,17 +361,39 @@ is not told to wait. An older test expects 429 "too many attempts, retry after N
 **Decide:** keep the silent 401, or say "too many attempts" with the wait time.
 **Default:** unchanged (silent 401).
 
+**Owner decision 2026-10-06: DECIDED. Keep the generic OWASP answer** (a locked-out sign-in looks
+exactly like a wrong password: 401, same body, no Retry-After). The code already did this; the old
+test that expected 429 now proves the decided behaviour (`3864de5`). F-096 closed.
+
 ## N-023 — Oversized avatars: refuse or shrink? (Phase 4, F-097)
 A 5000×5000 picture is shrunk to 1024 px today; an older test expects a refusal. Giant "image bomb"
 files are refused either way (F-088). **Default:** unchanged (shrink).
+
+**Owner decision 2026-10-06: DECIDED. Refuse image bombs over 50 megapixels; downscale normal
+images up to 50 MP to 1024 px.** The code already did exactly this (Phase 4, F-088); the old test that
+expected a 5000×5000 image to be refused now proves both sides of the 50 MP line and that the stored
+copy is 1024 px (`41e8f99`). F-097 closed.
 
 ## N-024 — Public links under `/api/v1/public` (Phase 4, F-098)
 Calendar-feed and document-request links are public on purpose but share the prefix the API-key
 gateway test reserves. Moving them breaks links already sent to people. **Decide:** keep them and
 let the test exempt token links, or move them with redirects. **Default:** unchanged.
 
+**Owner decision 2026-10-06: DECIDED. Keep the public token URLs as they are.** The gateway test now
+exempts exactly the two token links (document request, calendar feed) and proves each is a
+token-in-path link that is not an API-key route; any other public route under `/api/v1/public` still
+fails it (`23e1c69`). F-098 closed.
+
 ## N-025 — Narrow the ARCH-05 lock invariant? (Phase 4, F-099)
 The ARCH-05 verification test says only the owner-change helper may lock database rows; 14 later
 features legitimately lock their own rows, so it has been red since. Proposal: keep its intent and
 check only locks on organizations and members. It is a verification gate, so it is not changed
 without you (N-010). **Default:** unchanged (stays red).
+
+**Owner decision 2026-10-06: DECIDED. Narrow the ARCH-05 row-lock check to organization/member
+rows.** Done (`6f65363`): the check reads every lock in `app/` and polices only locks on
+`organizations` and `organization_members`. Each must be in a reasoned allowlist (owner-change
+helper, billing-account creation, Dodo reconciliation, RevOps contracts) and must be
+`FOR NO KEY UPDATE` (the F-078 deadlock came from plain `FOR UPDATE` there); a lock whose target
+cannot be read fails. It is a pytest test (`tests/isolation/`), not a `verify_*.py` gate, so N-010
+is not touched. F-099 item closed.

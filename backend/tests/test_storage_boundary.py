@@ -32,6 +32,31 @@ FS_ALLOWLIST = {
     "app/utils.py",
 }
 
+#: F-099. Calls the regex matches that are not access to tenant storage, each
+#: with its reason, pinned to the exact line so a NEW call in the same file is
+#: still caught. E10 protects tenant documents: everything a customer uploads
+#: goes through the storage driver. None of these reads or writes one.
+NOT_TENANT_STORAGE: dict[tuple[str, str], str] = {
+    ("app/evaluation/golden_set.py", "raw = resolved.read_bytes()"):
+        "reads the operator's labelled golden-set JSON for offline evaluation",
+    ("app/services/erp/formats/xsd.py", 'text = path.read_text(encoding="utf-8")'):
+        "reads the UBL 2.1 XSD schemas bundled with the application",
+    ("app/services/ml_stubs.py", "fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()[:12]"):
+        "development/test OCR stub hashing a temp file the OCR handler made; refuses in production",
+    ("app/services/redaction/leakcheck.py", "raw = obj.read_bytes()"):
+        "pikepdf Stream.read_bytes() on an in-memory PDF object, not a file",
+    ("app/services/sovereign/release.py", "raw = path.read_bytes()"):
+        "reads the operator's signed offline release manifest (Sovereign edition)",
+    ("app/services/sovereign/release.py", 'sums_text = sums_path.read_bytes().decode("utf-8")'):
+        "reads the release checksum file shipped with the Sovereign edition",
+    ("app/services/sovereign/release.py", 'out["release"] = json.loads((release_dir / RELEASE).read_text(encoding="utf-8"))'):
+        "reads the release description shipped with the Sovereign edition",
+    ("app/services/sovereign/release.py", 'sig = json.loads(sig_path.read_text(encoding="utf-8"))'):
+        "reads the release signature shipped with the Sovereign edition",
+    ("app/workers/handlers/ocr.py", "temp_path.unlink(missing_ok=True)"):
+        "deletes the private temp copy the driver downloaded for the OCR engine",
+}
+
 
 def _iter_app_sources():
     for path in sorted(APP_ROOT.rglob("*.py")):
@@ -50,12 +75,22 @@ def test_no_direct_filesystem_calls_outside_driver():
         for index, line in enumerate(source.splitlines(), start=1):
             if line.lstrip().startswith("#"):
                 continue
-            if FORBIDDEN_FS.search(line):
+            if FORBIDDEN_FS.search(line) and (rel, line.strip()) not in NOT_TENANT_STORAGE:
                 offenders.append(f"{rel}:{index}  {line.strip()}")
     assert not offenders, (
         "E10 violation — direct filesystem access outside the storage "
         "driver:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_every_documented_exception_still_exists():
+    sources = dict(_iter_app_sources())
+    stale = [
+        f"{rel}: {line}"
+        for (rel, line) in NOT_TENANT_STORAGE
+        if line not in {candidate.strip() for candidate in sources.get(rel, "").splitlines()}
+    ]
+    assert not stale, "NOT_TENANT_STORAGE names lines that are gone:\n  " + "\n  ".join(stale)
 
 
 def test_upload_dir_is_referenced_only_by_the_driver():

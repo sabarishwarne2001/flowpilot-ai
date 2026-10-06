@@ -125,6 +125,35 @@ const isValidationEnvelope = (value: unknown): value is ValidationEnvelope =>
   isRecord(value) && Array.isArray(value.detail);
 
 /**
+ * F-057. `HTTPException(detail={"code", "message", "problems"})`, the shape
+ * the ARCH-41+ modules (ERP posting, the corroborator, tables, cases ...) use.
+ * It matched none of the three shapes above, so the user saw axios's own
+ * "Request failed with status code 422" instead of the server's explanation.
+ */
+interface NestedDetailEnvelope {
+  detail: { code?: unknown; message: string; problems?: unknown };
+}
+
+const isNestedDetailEnvelope = (value: unknown): value is NestedDetailEnvelope =>
+  isRecord(value) && isRecord(value.detail) && typeof value.detail.message === "string";
+
+const MAX_PROBLEMS_SHOWN = 5;
+
+const formatNestedDetail = (detail: NestedDetailEnvelope["detail"]): string => {
+  const problems = Array.isArray(detail.problems)
+    ? detail.problems.filter((problem): problem is string => typeof problem === "string")
+    : [];
+  if (problems.length === 0) {
+    return detail.message;
+  }
+  // The message often already is the first problem; do not repeat it.
+  const extra = problems.filter((problem) => !detail.message.includes(problem));
+  const shown = extra.slice(0, MAX_PROBLEMS_SHOWN);
+  const more = extra.length > shown.length ? ` (and ${extra.length - shown.length} more)` : "";
+  return shown.length > 0 ? `${detail.message}: ${shown.join("; ")}${more}` : detail.message;
+};
+
+/**
  * Formats FastAPI's validation issues into a single readable line.
  *
  * The `loc` array begins with the request part ("body", "query", "path"),
@@ -181,6 +210,16 @@ export const parseErrorEnvelope = (
       message: formatValidationIssues(body.detail),
       code: API_ERROR_CODES.VALIDATION_ERROR,
       details: { issues: body.detail },
+    };
+  }
+
+  // 2b. HTTPException with a structured detail (F-057).
+  if (isNestedDetailEnvelope(body)) {
+    const { detail } = body;
+    return {
+      message: formatNestedDetail(detail),
+      code: typeof detail.code === "string" ? detail.code : API_ERROR_CODES.BAD_REQUEST,
+      details: { ...detail },
     };
   }
 

@@ -91,6 +91,7 @@ import {
   workspaceSettingsPath,
 } from "@/routes/tenantPaths";
 import type { WorkspaceRole } from "@/types/tenancy";
+import type { AddonFeatureKey } from "@/constants/planFeatures";
 
 export interface NavigationItem {
   readonly name: string;
@@ -101,6 +102,11 @@ export interface NavigationItem {
    * Absent from the plan, the row shows a lock and opens the upgrade dialog.
    */
   readonly capability?: CapabilityKey;
+  /**
+   * F-005. An `addon.*` grant the page's writes need (Analytics needs the
+   * warehouse add-on). Locked the same way as a capability.
+   */
+  readonly addon?: AddonFeatureKey;
 }
 
 /**
@@ -535,9 +541,11 @@ export const buildOrganizationNavigationItems = (
     // by RequireOrgOwner on the route. An administrator has to be able to
     // read which provider account the tenant's traffic is running on during
     // an audit, and hiding the link is not what protects the credentials.
+    // N-021: Business and Enterprise; the writes refuse with 402 below that.
     items.push({
       name: "Enterprise BYOK & models",
       path: organizationBYOKPath(orgSlug),
+      capability: CAPABILITY.byok,
       icon: KeySquare,
     });
     // ARCH-25. ADMIN sees the console because visual branding is an
@@ -560,6 +568,7 @@ export const buildOrganizationNavigationItems = (
     items.push({
       name: "Analytics & BI egress",
       path: organizationAnalyticsPath(orgSlug),
+      addon: "addon.warehouse_sync",
       icon: BarChart3,
     });
     // ARCH-27. ADMIN sees the catalog because reading which third-party
@@ -591,6 +600,16 @@ export const buildOrganizationNavigationItems = (
       capability: CAPABILITY.egressLockdown,
       icon: ShieldCheck,
     });
+    // F-015 / owner decision N-006: OWNER and ADMIN may both create and
+    // revoke API keys (the API has always allowed ADMIN). Webhooks, the audit
+    // log and enterprise identity stay OWNER-only in the sidebar until the
+    // owner decides them; their pages still open for an ADMIN by URL.
+    items.push({
+      name: "API keys",
+      path: organizationApiKeysPath(orgSlug),
+      capability: CAPABILITY.developerApi,
+      icon: KeyRound,
+    });
   }
 
   if (role === "OWNER" || role === "BILLING") {
@@ -602,12 +621,6 @@ export const buildOrganizationNavigationItems = (
   }
 
   if (role === "OWNER") {
-    items.push({
-      name: "API keys",
-      path: organizationApiKeysPath(orgSlug),
-      capability: CAPABILITY.developerApi,
-      icon: KeyRound,
-    });
     items.push({
       name: "Webhooks",
       path: organizationWebhooksPath(orgSlug),

@@ -131,14 +131,41 @@ class TestE9MagicByteValidation:
         assert len(written) == 1
         assert b"SECRET-CAMERA-MAKE" not in written[0].read_bytes()
 
-    @pytest.mark.parametrize("size", [(8, 8), (5000, 5000)])
-    def test_dimension_bounds_are_enforced(self, client, tenant, size):
+    def test_an_image_below_the_minimum_size_is_refused(self, client, tenant):
         response = client.post(
             "/api/v1/me/avatar",
-            files={"file": ("avatar.png", make_png(size), "image/png")},
+            files={"file": ("avatar.png", make_png((8, 8)), "image/png")},
             headers=tenant.ws_admin.headers,
         )
         assert response.status_code == 400
+
+    def test_a_large_normal_image_is_downscaled_to_1024(self, client, tenant):
+        """Owner decision N-023: an image up to 50 megapixels is accepted and
+        shrunk so its longer side is 1024 px (a 5000x5000 photo is 25 MP)."""
+        response = client.post(
+            "/api/v1/me/avatar",
+            files={"file": ("avatar.png", make_png((5000, 5000)), "image/png")},
+            headers=tenant.ws_admin.headers,
+        )
+        assert response.status_code == 200, response.text
+
+        written = _get_avatar_files()
+        assert len(written) == 1
+        with Image.open(written[0]) as stored:
+            assert max(stored.size) == avatar_service.MAX_DIMENSION
+
+    def test_an_image_over_50_megapixels_is_refused(self, client, tenant):
+        """Owner decision N-023: anything over 50 megapixels is an image bomb."""
+        buffer = io.BytesIO()
+        Image.new("1", (7100, 7100), 0).save(buffer, format="PNG")  # 50.41 MP
+        response = client.post(
+            "/api/v1/me/avatar",
+            files={"file": ("avatar.png", buffer.getvalue(), "image/png")},
+            headers=tenant.ws_admin.headers,
+        )
+        assert response.status_code == 400, response.text
+        assert "50 megapixels" in response.json()["detail"]
+        assert _get_avatar_files() == []
 
     def test_a_decompression_bomb_is_refused_before_it_is_decoded(self, client, tenant):
         """PHASE 4. A flat 12000x12000 image is a few hundred KB of PNG but
@@ -326,3 +353,26 @@ class TestB7ServingHeaders:
 
         assert set(body) == {"file_id", "mime_type", "file_size"}
         assert "uploads/" not in response.text
+
+
+class TestHasAvatarFlag:
+    """F-049 / F-028. The app asked for /users/{id}/avatar on every page and
+    logged a 404 for every user without one (most users). /auth/me now says
+    whether there is an avatar, so the app only asks when there is."""
+
+    def test_me_reports_no_avatar_until_one_is_uploaded(self, client, tenant):
+        before = client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers)
+        assert before.status_code == 200
+        assert before.json()["has_avatar"] is False
+
+        uploaded = client.post(
+            "/api/v1/me/avatar",
+            files={"file": ("avatar.png", make_png(), "image/png")},
+            headers=tenant.ws_admin.headers,
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        assert client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers).json()["has_avatar"] is True
+
+        removed = client.delete("/api/v1/me/avatar", headers=tenant.ws_admin.headers)
+        assert removed.status_code == 204
+        assert client.get("/api/v1/auth/me", headers=tenant.ws_admin.headers).json()["has_avatar"] is False

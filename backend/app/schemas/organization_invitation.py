@@ -228,6 +228,9 @@ class OrganizationInvitationAcceptResponse(BaseModel):
     organization_role: OrganizationRole
     provisioned_grants: list[AcceptedGrantSummary]
     skipped_grant_count: int
+    # F-107. Slug of the first workspace granted, for the client to open; null when
+    # the invitation granted none (or every granted workspace was archived).
+    workspace_slug: str | None = None
 
 
 class MyPendingInvitation(BaseModel):

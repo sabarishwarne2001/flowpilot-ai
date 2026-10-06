@@ -133,6 +133,8 @@ export interface TenantBrandingResponse {
   readonly is_enabled: boolean;
   readonly sender: SenderDomainStatusResponse;
   readonly updated_at: string;
+  /** F-060. False when this deployment does not serve custom domains at all. */
+  readonly custom_domains_enabled?: boolean;
 }
 
 /**

@@ -26,6 +26,7 @@ from app.core.exceptions import FlowPilotError
 from app.core.logging_config import setup_logging
 from app.core.production_guard import HARDENED_ENVIRONMENTS
 from app.core.public_route_registry import is_public, registered_paths
+from app.middleware.client_gone import ClientGoneMiddleware
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
@@ -161,7 +162,21 @@ async def lifespan(app: FastAPI):
 # internet, and nothing in the product reads them, so production and staging do not serve them.
 _serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
 
-app = FastAPI(
+
+class FlowPilotAPI(FastAPI):
+    """F-106. Wraps the whole built stack, outside every registered middleware.
+
+    A send to a client that has hung up becomes a no-op, so the request still
+    runs to its end and its background emails are still sent. It produces no
+    response of its own, so DeprecationMiddleware stays the outermost layer that
+    stamps every response (ARCH-28).
+    """
+
+    def build_middleware_stack(self):  # type: ignore[no-untyped-def]
+        return ClientGoneMiddleware(super().build_middleware_stack())
+
+
+app = FlowPilotAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
@@ -278,6 +293,60 @@ app.include_router(scim_v1.router)
 # passwords, BYOK keys) fail as a bare 500. It is a configuration problem the
 # operator can fix, so it answers 503 and names the setting.
 from app.core.encryption import EncryptionNotConfiguredError  # noqa: E402
+from app.core.storage import (  # noqa: E402
+    InvalidStorageKeyError,
+    ObjectNotFoundError,
+    StorageError,
+)
+
+
+def _storage_error_status(exc: StorageError) -> int:
+    """F-026. What an unhandled storage error means to the caller."""
+    if isinstance(exc, ObjectNotFoundError):
+        return 404
+    if isinstance(exc, InvalidStorageKeyError):
+        return 500  # a key the server built is malformed: a bug, not an outage
+    return 503
+
+
+@app.exception_handler(StorageError)
+async def _storage_unavailable(request, exc):  # type: ignore[no-untyped-def]
+    """F-026: an object-store failure was a bare 500 with a traceback.
+
+    Uploads write the object before any database row, so a refused write
+    leaves nothing behind; the caller is told to retry. The store's own error
+    text (bucket, key id) is logged, never returned.
+    """
+    from fastapi.responses import JSONResponse
+
+    from app.core.public_route_registry import redact_path
+
+    status_code = _storage_error_status(exc)
+    log = __import__("logging").getLogger("app.main")
+    log.error(
+        "storage.request_failed",
+        extra={"path": redact_path(request.url.path), "error_type": type(exc).__name__, "status": status_code},
+        exc_info=status_code >= 500,
+    )
+    if status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "The stored file could not be found.", "code": "STORED_OBJECT_NOT_FOUND"},
+        )
+    if status_code == 500:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error.", "code": "INTERNAL_ERROR"},
+        )
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "30"},
+        content={
+            "detail": "File storage is temporarily unavailable, so nothing was saved. "
+                      "Please try again in a moment.",
+            "code": "STORAGE_UNAVAILABLE",
+        },
+    )
 
 
 @app.exception_handler(EncryptionNotConfiguredError)

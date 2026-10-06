@@ -62,6 +62,8 @@ LOCKED_PREFIXES = (
     ORG + "/analytics", ORG + "/autonomy", ORG + "/branding", ORG + "/custom-domains",
     ORG + "/developer", ORG + "/egress", ORG + "/email-settings", ORG + "/identity",
     ORG + "/webhooks", ORG + "/api-keys",
+    # N-021: bring your own AI key, Business and above
+    ORG + "/byok",
 )
 
 READ_AFTER_DOWNGRADE = "N-003: read or delete of the tenant's own data after a downgrade"
@@ -81,6 +83,7 @@ ALLOWED_OPEN: dict[str, str] = {
        for leaf in ("domains", "idp-configs", "scim-keys", "security-policy", "directory")},
     f"DELETE {ORG}/identity/scim-keys/{{key_id}}": READ_AFTER_DOWNGRADE,
     **{f"GET {ORG}/branding": READ_AFTER_DOWNGRADE, f"DELETE {ORG}/branding/logo": READ_AFTER_DOWNGRADE,
+       f"GET {ORG}/branding/logo": READ_AFTER_DOWNGRADE, f"GET {ORG}/branding/favicon": READ_AFTER_DOWNGRADE,
        f"DELETE {ORG}/branding/favicon": READ_AFTER_DOWNGRADE},
     **{f"GET {ORG}/analytics/{leaf}": READ_AFTER_DOWNGRADE
        for leaf in ("destinations", "destinations/{destination_id}", "schedules", "runs", "consumption", "datasets")},
@@ -93,6 +96,10 @@ ALLOWED_OPEN: dict[str, str] = {
     f"GET {ORG}/email-settings": READ_AFTER_DOWNGRADE,
     f"GET {WS}/email-settings": READ_AFTER_DOWNGRADE,
     f"GET {WS}/email-settings/resolution": READ_AFTER_DOWNGRADE,
+    **{f"GET {ORG}/byok{leaf}": READ_AFTER_DOWNGRADE
+       for leaf in ("", "/providers", "/credentials", "/routes", "/savings")},
+    f"DELETE {ORG}/byok/credentials/{{provider}}": READ_AFTER_DOWNGRADE,
+    f"DELETE {ORG}/byok/routes/{{task_type}}": READ_AFTER_DOWNGRADE,
     f"GET {WS}/entities/potential": UPSELL,
     f"GET {WS}/extraction-memory/potential": UPSELL,
     f"POST {ORG}/email-settings/test": OWN_CONFIG_TEST,

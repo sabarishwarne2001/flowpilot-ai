@@ -161,6 +161,9 @@ import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 import { SessionBootstrap } from "@/routes/SessionBootstrap";
 import OrganizationGuard from "@/routes/OrganizationGuard";
+// F-008 / F-053 / F-054: role screens instead of 403 error pages.
+import { OWNERS_AND_ADMINS, RequireOrganizationRole } from "@/routes/RequireOrganizationRole";
+import { RequireWorkspaceRole } from "@/routes/RequireWorkspaceRole";
 import SuperAdminGuard from "@/routes/SuperAdminGuard";
 import TenantGuard from "@/routes/TenantGuard";
 
@@ -297,15 +300,15 @@ function AppRoutes() {
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationApiKeys}
-                  element={<OrganizationApiKeys />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationApiKeys /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationWebhooks}
-                  element={<OrganizationWebhooks />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationWebhooks /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationEmail}
-                  element={<OrganizationEmailSettings />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationEmailSettings /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationNotifications}
@@ -321,51 +324,51 @@ function AppRoutes() {
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationIdentity}
-                  element={<IdentityAdminHub />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><IdentityAdminHub /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationAudit}
-                  element={<AuditExplorer />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AuditExplorer /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationSLOs}
-                  element={<OrganizationSLOs />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationSLOs /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationCompliance}
-                  element={<OrganizationCompliance />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationCompliance /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationDeveloper}
-                  element={<OrganizationDeveloperPortal />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationDeveloperPortal /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationBYOK}
-                  element={<OrganizationBYOK />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationBYOK /></RequireOrganizationRole>}
                 />
                 {/* ARCH50-S2:route-egress */}
                 <Route
                   path={ROUTE_PATTERNS.organizationEgress}
-                  element={<OrganizationEgress />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationEgress /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationAnalytics}
-                  element={<OrganizationAnalytics />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationAnalytics /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationBranding}
-                  element={<OrganizationBranding />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><OrganizationBranding /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationMarketplace}
-                  element={<MarketplaceCatalog />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><MarketplaceCatalog /></RequireOrganizationRole>}
                 />
                 {/* ARCH-35. The page resolves the organization and the
                     capability from the same hooks every gated page
                     uses, so the gate cannot be forgotten at a call site. */}
                 <Route
                   path={ROUTE_PATTERNS.organizationAutonomy}
-                  element={<AutonomySettings />}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AutonomySettings /></RequireOrganizationRole>}
                 />
               </Route>
             </Route>
@@ -382,6 +385,12 @@ function AppRoutes() {
                 sibling of this element would ship without both.
               */}
               <Route element={<PlatformLayout />}>
+                {/* F-009: /admin had no index route and rendered an empty
+                    body; it opens the first platform console. */}
+                <Route
+                  index
+                  element={<Navigate to={ROUTE_PATTERNS.platformMargins} replace />}
+                />
                 <Route
                   path={ROUTE_PATTERNS.platformMargins}
                   element={<AdminMarginsHub />}
@@ -444,15 +453,15 @@ function AppRoutes() {
                 />
                 <Route
                   path={ROUTE_PATTERNS.workspaceAutomation}
-                  element={<Automation />}
+                  element={<RequireWorkspaceRole minimum="CONTRIBUTOR"><Automation /></RequireWorkspaceRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.workspaceAutomationTimeline}
-                  element={<ExecutionTimeline />}
+                  element={<RequireWorkspaceRole minimum="CONTRIBUTOR"><ExecutionTimeline /></RequireWorkspaceRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.workspaceVerification}
-                  element={<ReviewHub />}
+                  element={<RequireWorkspaceRole minimum="CONTRIBUTOR"><ReviewHub /></RequireWorkspaceRole>}
                 />
                 {/* ARCH-36. ARCH-33's queue, routed for the first time. */}
                 <Route

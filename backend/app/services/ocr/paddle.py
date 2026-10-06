@@ -60,7 +60,7 @@ from app.services.ocr.base import (
     OCRUnsupportedError,
 )
 from app.services.ocr.pdf_text_layer import extract_page as extract_text_layer_page
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
 logger = logging.getLogger("app.services.ocr.paddle")
 
@@ -366,9 +366,8 @@ class PaddleOCRProvider(OCRProvider):
                     boxed = None
                     if text_layer_document is not None:
                         try:
-                            boxed = extract_text_layer_page(
-                                text_layer_document[index], raster_dpi=RASTER_DPI
-                            )
+                            with pdfium_page(text_layer_document, index) as text_layer_page:
+                                boxed = extract_text_layer_page(text_layer_page, raster_dpi=RASTER_DPI)
                         except Exception:  # noqa: BLE001
                             logger.warning(
                                 "ocr.text_layer_page_failed",
@@ -454,11 +453,11 @@ class PaddleOCRProvider(OCRProvider):
                 scale = RASTER_DPI / 72.0
                 with tempfile.TemporaryDirectory(prefix="fp-ocr-") as workdir:
                     for index in indices:
-                        page = document[index]
-                        bitmap = page.render(scale=scale)
-                        image = bitmap.to_pil()
-                        frame = Path(workdir) / f"page-{index + 1:05d}.png"
-                        image.save(frame, format="PNG")
+                        with pdfium_page(document, index) as page:
+                            bitmap = page.render(scale=scale)
+                            image = bitmap.to_pil()
+                            frame = Path(workdir) / f"page-{index + 1:05d}.png"
+                            image.save(frame, format="PNG")
 
                         blocks = self._blocks_from_raw(self._run_engine(frame))
                         target = pages[index]

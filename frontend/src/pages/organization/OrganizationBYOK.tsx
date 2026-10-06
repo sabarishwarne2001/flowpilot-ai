@@ -22,6 +22,9 @@ import {
 } from "@/services/api/byok";
 import { byokKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import {
   credentialFor,
   explainDowngrade,
@@ -220,8 +223,9 @@ const ProviderCard: React.FC<{
   entry: ProviderCatalogEntry;
   credential: ProviderCredentialResponse | undefined;
   canWrite: boolean;
+  canRemove: boolean;
   organizationId: string;
-}> = ({ entry, credential, canWrite, organizationId }) => {
+}> = ({ entry, credential, canWrite, canRemove, organizationId }) => {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -406,7 +410,7 @@ const ProviderCard: React.FC<{
               <button
                 type="button"
                 className={DANGER}
-                disabled={!canWrite || busy}
+                disabled={!canRemove || busy}
                 onClick={() => remove.mutate()}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -430,8 +434,9 @@ const RouteRow: React.FC<{
   route: ModelRouteResponse | undefined;
   providers: readonly ProviderCatalogEntry[];
   canWrite: boolean;
+  canRemove: boolean;
   organizationId: string;
-}> = ({ taskType, taskLabel, route, providers, canWrite, organizationId }) => {
+}> = ({ taskType, taskLabel, route, providers, canWrite, canRemove, organizationId }) => {
   const queryClient = useQueryClient();
 
   const eligibleProviders = useMemo(
@@ -557,7 +562,7 @@ const RouteRow: React.FC<{
             <button
               type="button"
               className={DANGER}
-              disabled={!canWrite || remove.isPending}
+              disabled={!canRemove || remove.isPending}
               onClick={() => remove.mutate()}
             >
               Clear
@@ -580,8 +585,9 @@ const RouteRow: React.FC<{
 const RoutingTable: React.FC<{
   overview: BYOKOverviewResponse;
   canWrite: boolean;
+  canRemove: boolean;
   organizationId: string;
-}> = ({ overview, canWrite, organizationId }) => {
+}> = ({ overview, canWrite, canRemove, organizationId }) => {
   const labels = useMemo(() => {
     const map = new Map<BYOKTaskType, string>();
     overview.tasks.forEach((task: TaskCatalogEntry) => map.set(task.task_type, task.label));
@@ -615,6 +621,7 @@ const RoutingTable: React.FC<{
                 route={routeFor(overview.routes, taskType)}
                 providers={overview.providers}
                 canWrite={canWrite}
+                canRemove={canRemove}
                 organizationId={organizationId}
               />
             ))}
@@ -631,7 +638,12 @@ const RoutingTable: React.FC<{
 
 const OrganizationBYOK: React.FC = () => {
   const { organizationId, organizationRole } = useResolvedOrganization();
-  const canWrite = String(organizationRole).toUpperCase() === "OWNER";
+  // N-021: storing keys and routes needs a plan that includes BYOK. Reading
+  // and retiring a key stay available, so the owner of a downgraded
+  // organization can still remove what it stored.
+  const byokAccess = useCapabilityAccess(organizationId, CAPABILITY.byok);
+  const canRemove = String(organizationRole).toUpperCase() === "OWNER";
+  const canWrite = canRemove && (byokAccess.isLoading || byokAccess.granted);
 
   const overview = useQuery({
     queryKey: byokKeys.overview(organizationId, WINDOW_DAYS),
@@ -679,6 +691,8 @@ const OrganizationBYOK: React.FC = () => {
         </div>
       </header>
 
+      <PlanLockBanner capability={CAPABILITY.byok} feature="Bring your own AI key" />
+
       <SavingsCard overview={data} />
 
       <section>
@@ -690,6 +704,7 @@ const OrganizationBYOK: React.FC = () => {
               entry={entry}
               credential={credentialFor(data.credentials, entry.provider)}
               canWrite={canWrite}
+              canRemove={canRemove}
               organizationId={organizationId}
             />
           ))}
@@ -699,6 +714,7 @@ const OrganizationBYOK: React.FC = () => {
       <RoutingTable
         overview={data}
         canWrite={canWrite}
+        canRemove={canRemove}
         organizationId={organizationId}
       />
     </div>

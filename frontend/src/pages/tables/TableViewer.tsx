@@ -29,6 +29,7 @@ import {
   CHECK_LABELS, COLUMN_ROLES, ROLE_LABELS, STATUS_LABELS, STATUS_TONE, confidenceTone,
   type ColumnRole, type ExportFormat, type RowKind, type TableCell, type TableDetail, type TableValidationRow,
 } from "@/types/tables";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const ROW_STYLE: Readonly<Record<RowKind, string>> = {
   HEADER: "",
@@ -245,7 +246,7 @@ const TableViewer: React.FC = () => {
     }
   };
   if (!capability.granted) {
-    return <p className={`${SURFACE} p-6 text-sm`}>Table intelligence is included on the Business and Enterprise plans.</p>;
+    return <div className={`${SURFACE} p-6 text-sm`}><p>Table intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }
   if (query.isLoading) {return <Loader2 className="m-6 h-5 w-5 animate-spin" aria-label="Loading" />;}
   if (query.isError || !query.data) {

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 from app.services import document_evidence_service
 
 router = APIRouter(tags=["Work Items"])
@@ -121,7 +121,8 @@ def document_page_image(
             try:
                 if not 1 <= page <= len(pdf):
                     raise HTTPException(status.HTTP_404_NOT_FOUND, {"code": "NO_PAGE", "message": "Page out of range."})
-                pdf[page - 1].render(scale=dpi / 72.0).to_pil().save(buffer, format="PNG", optimize=True)
+                with pdfium_page(pdf, page - 1) as pdf_page:
+                    pdf_page.render(scale=dpi / 72.0).to_pil().save(buffer, format="PNG", optimize=True)
             finally:
                 pdf.close()
     else:

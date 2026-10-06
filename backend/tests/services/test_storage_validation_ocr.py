@@ -477,13 +477,28 @@ def test_register_all_is_idempotent():
 
 
 def test_registration_does_not_import_paddleocr():
+    """F-099. Checked in a fresh interpreter: in the shared test process this
+    module's own imports (and earlier tests) have already loaded the OCR stack,
+    so sys.modules there says nothing about what registration pulls in."""
+    import json
+    import subprocess
     import sys
-    from app.workers.handlers import register_all
 
-    register_all()
-    leaked = [
-        name
-        for name in ("paddleocr", "paddle", "torch", "chromadb")
-        if name in sys.modules
-    ]
+    probe = (
+        "import json, sys\n"
+        "from app.workers.handlers import register_all\n"
+        "register_all()\n"
+        "print(json.dumps([n for n in ('paddleocr', 'paddle', 'torch', 'chromadb') if n in sys.modules]))\n"
+    )
+    backend_root = pathlib.Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=backend_root,
+        env={**os.environ, "PYTHONPATH": str(backend_root)},
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    leaked = json.loads(completed.stdout.strip().splitlines()[-1])
     assert not leaked, f"heavy modules pulled in by registration: {leaked}"

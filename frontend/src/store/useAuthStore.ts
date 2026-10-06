@@ -43,6 +43,13 @@ export interface User {
    * account works, it simply cannot reach a workspace yet (ARCH-03 §B.4).
    */
   readonly email_verified_at: string | null;
+
+  /**
+   * F-049. Whether the user has an avatar. Optional because a session cached
+   * by an older build lacks it; absent means "unknown", and the avatar is
+   * requested as before.
+   */
+  readonly has_avatar?: boolean;
 }
 
 interface AuthState {
@@ -124,6 +131,12 @@ interface AuthState {
    * is fine. Clearing forces the next /auth/me to repopulate it.
    */
   readonly clearUserCache: () => void;
+
+  /**
+   * F-049. Records an avatar upload or removal on the cached user, so the
+   * sidebars and the profile preview request the image only when it exists.
+   */
+  readonly setHasAvatar: (hasAvatar: boolean) => void;
 
   /**
    * Simple role helper.
@@ -217,6 +230,12 @@ export const useAuthStore = create<AuthState>()(
           set((state) => ({
             ...state,
             user: null,
+          })),
+
+        setHasAvatar: (hasAvatar) =>
+          set((state) => ({
+            ...state,
+            user: state.user ? { ...state.user, has_avatar: hasAvatar } : state.user,
           })),
 
         /**

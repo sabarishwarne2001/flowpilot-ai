@@ -57,7 +57,7 @@ from app.services.redaction.vocabulary import (
     MAX_RENDER_DPI,
     MIN_RENDER_DPI,
 )
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 
 __all__ = [
     "Box",
@@ -251,30 +251,30 @@ def render_pages(
                     raise RasterizeError(
                         f"page {page_number} is outside the document's 1-{total}"
                     )
-                page = document[page_number - 1]
-                width_points, height_points = page.get_size()
-                bitmap = page.render(
-                    scale=scale,
-                    grayscale=grayscale,
-                    # See the module header. These two flags are the difference
-                    # between "annotations are gone" and "annotations are gone
-                    # except the visible ones".
-                    draw_annots=False,
-                    may_draw_forms=False,
-                )
-                try:
-                    array = np.array(bitmap.to_numpy(), copy=True, dtype=np.uint8)
-                finally:
-                    bitmap.close()
-                rendered.append(
-                    RenderedPage(
-                        page_number=page_number,
-                        pixels=array,
-                        width_points=float(width_points),
-                        height_points=float(height_points),
-                        dpi=dpi,
+                with pdfium_page(document, page_number - 1) as page:
+                    width_points, height_points = page.get_size()
+                    bitmap = page.render(
+                        scale=scale,
+                        grayscale=grayscale,
+                        # See the module header. These two flags are the difference
+                        # between "annotations are gone" and "annotations are gone
+                        # except the visible ones".
+                        draw_annots=False,
+                        may_draw_forms=False,
                     )
-                )
+                    try:
+                        array = np.array(bitmap.to_numpy(), copy=True, dtype=np.uint8)
+                    finally:
+                        bitmap.close()
+                    rendered.append(
+                        RenderedPage(
+                            page_number=page_number,
+                            pixels=array,
+                            width_points=float(width_points),
+                            height_points=float(height_points),
+                            dpi=dpi,
+                        )
+                    )
         finally:
             document.close()
 
@@ -382,7 +382,8 @@ def page_dimensions(pdf_bytes: bytes) -> list[tuple[int, float, float]]:
         try:
             sizes: list[tuple[int, float, float]] = []
             for index in range(len(document)):
-                width, height = document[index].get_size()
+                with pdfium_page(document, index) as page:
+                    width, height = page.get_size()
                 sizes.append((index + 1, float(width), float(height)))
             return sizes
         finally:

@@ -102,6 +102,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
           <div className="flex min-w-0 items-center gap-2.5">
             <Avatar
               userId={user?.id}
+              hasAvatar={user?.has_avatar}
               email={user?.email}
               size={isDesktopCollapsed ? "sm" : "md"}
             />

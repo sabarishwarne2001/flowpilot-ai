@@ -14,7 +14,27 @@ processes each have their own PDFium and their own lock.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
 PDFIUM_LOCK = threading.RLock()
 
-__all__ = ["PDFIUM_LOCK"]
+
+@contextmanager
+def pdfium_page(document: Any, index: int) -> Iterator[Any]:
+    """F-105. Page `index` (0-based) of an open PdfDocument, closed when the block ends.
+
+    A pypdfium2 page sits in a reference cycle, so a page that is only dropped
+    is not freed when the line ends: the cycle collector frees it later, on
+    whichever thread allocates at that moment and without this lock, and its
+    finaliser then calls into PDFium. Open pages with this, inside the lock.
+    """
+    page = document[index]
+    try:
+        yield page
+    finally:
+        page.close()
+
+
+__all__ = ["PDFIUM_LOCK", "pdfium_page"]

@@ -145,19 +145,12 @@ export interface KnownIssue {
   readonly matches: (problem: Problem) => boolean;
 }
 
-const AVATAR_URL = /\/api\/v1\/users\/[0-9a-f-]+\/avatar(\?|$)/;
-
-export const KNOWN_ISSUES: readonly KnownIssue[] = [
-  {
-    finding: "F-049",
-    summary: "every page requests the signed-in user's avatar and logs a 404 when they have none",
-    matches: (problem) =>
-      (problem.kind === "http" && problem.status === 404 && AVATAR_URL.test(problem.url ?? "")) ||
-      (problem.kind === "console" &&
-        AVATAR_URL.test(problem.url ?? "") &&
-        problem.message.includes("status of 404")),
-  },
-];
+/**
+ * Empty since F-049 was fixed (has_avatar on /auth/me; the sidebar asks for an
+ * avatar only when there is one). Add an entry only for a finding that is
+ * recorded in FINDINGS.md and not fixed yet, with a proof in known-issues.spec.ts.
+ */
+export const KNOWN_ISSUES: readonly KnownIssue[] = [];
 
 const STRICT_KNOWN = process.env.E2E_STRICT_KNOWN === "1";
 
@@ -313,8 +306,14 @@ export { expect };
 export async function expectHealthyPage(page: Page): Promise<void> {
   await expect(page.getByText("Something went wrong", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Page not found" })).toHaveCount(0);
-  const text = (await page.locator("body").innerText()).trim();
-  expect(text.length, "page body is blank").toBeGreaterThan(20);
+  // Polled: right after a navigation the next screen may still be loading its code.
+  // A page that stays blank still fails.
+  await expect
+    .poll(async () => (await page.locator("body").innerText()).trim().length, {
+      message: "page body is blank",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
 }
 
 /** Wait until no spinner-only splash is shown and the network is quiet. */

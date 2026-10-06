@@ -112,7 +112,7 @@ def _account_for_jwt(account: str) -> str:
 def _mint_jwt(
     *, account: str, user: str, private_key_pem: str, passphrase: Optional[str]
 ) -> str:
-    from jose import jwt as jose_jwt
+    import jwt as pyjwt  # F-039: PyJWT replaces python-jose
 
     key = _load_private_key(private_key_pem, passphrase)
     qualified = f"{_account_for_jwt(account)}.{user.upper()}"
@@ -124,8 +124,11 @@ def _mint_jwt(
         "exp": now + JWT_LIFETIME_SECONDS,
     }
     try:
-        return jose_jwt.encode(claims, private_key_pem, algorithm="RS256")
-    except Exception as exc:  # noqa: BLE001 - jose raises several types
+        # The loaded key object, not the PEM text: python-jose was handed the
+        # PEM and could not open a passphrase-protected key, although the
+        # error message above promises those work.
+        return pyjwt.encode(claims, key, algorithm="RS256")
+    except Exception as exc:  # noqa: BLE001 - the signer raises several types
         raise ConnectorConfigError(
             f"Snowflake JWT could not be signed: {scrub(exc)}"
         ) from exc

@@ -2,6 +2,7 @@ import React from "react";
 import { Lock } from "lucide-react";
 
 import { HINT, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
+import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 /**
  * ARCH-32 — what a workspace sees in place of redaction it does not have.
@@ -33,6 +34,7 @@ export const RedactionLockCard: React.FC<{ readonly canChangePlan: boolean }> = 
         ? "It's included on the Enterprise plan. Change your plan to turn it on."
         : "It's included on the Enterprise plan. Ask an organization owner to change your plan."}
     </p>
+    <ViewPlansAction />
   </section>
 );
 

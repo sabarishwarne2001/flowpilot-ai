@@ -90,6 +90,15 @@ interface AvatarProps {
    */
   readonly version?: number | string | undefined;
 
+  /**
+   * F-049. `false` when the server says this user has no avatar (`has_avatar`
+   * on /auth/me): no request is made, so the console does not log a 404 on
+   * every page for every user without one. `undefined` means unknown and the
+   * avatar is requested as before. The flag is kept current on upload and
+   * removal by the auth store's setHasAvatar.
+   */
+  readonly hasAvatar?: boolean | undefined;
+
   readonly className?: string | undefined;
 }
 
@@ -145,6 +154,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   displayName = null,
   size = "sm",
   version,
+  hasAvatar,
   className = "",
 }) => {
   // ARCH-29 Tranche 3. The shared version, so an upload in ProfileSettings
@@ -154,7 +164,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   const sharedVersion = useAvatarVersion(userId);
   const effectiveVersion = version ?? (sharedVersion > 0 ? sharedVersion : undefined);
 
-  const path = userId
+  // The cached user's flag is updated on upload and removal (setHasAvatar),
+  // so only an explicit `version` from a caller driving its own preview
+  // overrides it.
+  const mayHaveAvatar = hasAvatar !== false || version !== undefined;
+  const path = userId && mayHaveAvatar
     ? `${PROFILE_ENDPOINTS.userAvatar(userId)}${
         effectiveVersion === undefined ? "" : `?v=${effectiveVersion}`
       }`

@@ -93,9 +93,35 @@ def test_the_app_boots_with_the_gateway_mounted(client) -> None:
     assert response.status_code == status.HTTP_200_OK
 
 
+#: Owner decision N-024 (F-098): the document-request upload link and the
+#: calendar feed are public on purpose and keep their URLs, so links already
+#: sent to people keep working. Their credential is a token in the path, not
+#: an API key, and neither is a gateway route.
+TOKEN_LINK_ROUTES = frozenset(
+    {
+        "/api/v1/public/document-requests/{token}",
+        "/api/v1/public/calendar-feeds/{token}.ics",
+    }
+)
+
+
 def test_no_gateway_route_is_registered_as_public() -> None:
-    offenders = [r.path for r in PUBLIC_ROUTES if r.path.startswith(GATEWAY)]
+    offenders = [
+        r.path
+        for r in PUBLIC_ROUTES
+        if r.path.startswith(GATEWAY) and r.path not in TOKEN_LINK_ROUTES
+    ]
     assert offenders == []
+
+
+def test_the_exempt_public_links_are_token_links_outside_the_gateway() -> None:
+    registered = {r.path: r for r in PUBLIC_ROUTES}
+    gateway_paths = {path for (_method, path) in ROUTE_SCOPE_MAP}
+    for path in TOKEN_LINK_ROUTES:
+        assert path in registered, f"{path} is no longer registered; drop the exemption"
+        assert "{token}" in path
+        assert "token" in registered[path].credential
+        assert path.removeprefix(settings.API_V1_STR) not in gateway_paths
 
 
 def test_rate_limit_headers_are_cors_exposed() -> None:

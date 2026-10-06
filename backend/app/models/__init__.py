@@ -716,6 +716,10 @@ from app.models.process_intel import (  # noqa: E402,F401
     ProcessSlaPolicy,
 )
 
+# F-025: the add-on ledger table had no registered model, so autogenerate
+# proposed dropping it and metadata-based tooling could not see it.
+from app.models.organization_addon import OrganizationAddon  # noqa: E402,F401
+
 # ARCH50-S1:models-registry
 from app.models.sovereign import (  # noqa: E402,F401
     DrDrill,

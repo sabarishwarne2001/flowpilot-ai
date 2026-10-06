@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     Text,
     UniqueConstraint,
     text,
@@ -127,6 +128,9 @@ class DunningAction(Base, UUIDMixin, TimestampMixin):
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
     stripe_event_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # F-017: the gateway-neutral event id (Dodo), in the database since the
+    # gateway migration and now mapped.
+    gateway_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notified_user_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     detail: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
 

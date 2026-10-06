@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ApiError } from "@/services/api/client";
 import { uploadLogo } from "@/services/api/upload";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
 import {
@@ -123,6 +124,10 @@ export const Workspace: React.FC = () => {
 
     setLogoPreview(workspaceDetail.company_logo_url ?? null);
   }, [workspaceDetail, organization.organization_name, reset]);
+
+  // F-062: in-app navigation (the sidebar) asks before discarding a rename,
+  // as the other settings forms do; beforeunload below covers closing the tab.
+  useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {

@@ -18,7 +18,7 @@ import logging
 from typing import Any, Optional
 
 from app.services.tables import vocabulary as v
-from app.core.pdfium_lock import PDFIUM_LOCK
+from app.core.pdfium_lock import PDFIUM_LOCK, pdfium_page
 from app.services.tables.geometry import PageInput, page_from_ocr, page_from_pdf, rules_from_bitmap
 
 logger = logging.getLogger("app.services.tables.reader")
@@ -59,10 +59,12 @@ def pages_for(*, pdf_bytes: Optional[bytes], metadata: Optional[dict], raster_ru
                 if entry is not None and entry.get("ocr_applied") and entry.get("blocks"):
                     page_input = page_from_ocr(entry)
                     if page_input is not None and document is not None and raster_rules:
-                        page_input.rules = _raster_rules(document[number - 1], page_input.width)
+                        with pdfium_page(document, number - 1) as pdf_page:
+                            page_input.rules = _raster_rules(pdf_page, page_input.width)
                 elif document is not None:
                     try:
-                        page_input = page_from_pdf(document[number - 1], number)
+                        with pdfium_page(document, number - 1) as pdf_page:
+                            page_input = page_from_pdf(pdf_page, number)
                     except Exception:  # noqa: BLE001 - one bad page must not lose the document
                         logger.warning("tables.page_unreadable", extra={"page": number}, exc_info=True)
                 elif entry is not None and entry.get("blocks"):

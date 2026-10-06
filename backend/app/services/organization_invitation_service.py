@@ -112,6 +112,8 @@ class AcceptedInvitation:
     organization_role: OrganizationRole
     provisioned_grants: list[GrantLine] = field(default_factory=list)
     skipped_grant_count: int = 0
+    # F-107. Where the client should take the new member: the first workspace granted.
+    first_workspace_slug: str | None = None
 
 
 @dataclass(frozen=True)
@@ -528,6 +530,7 @@ def accept_invitation(
         )
 
         provisioned: list[GrantLine] = []
+        first_workspace_slug: str | None = None
         skipped = 0
 
         for grant in invitation.grants:
@@ -559,6 +562,8 @@ def accept_invitation(
                 workspace_name=workspace.workspace_name,
                 role_display=grant.role.value,
             ))
+            if first_workspace_slug is None:
+                first_workspace_slug = workspace.slug
 
         if owners_before >= 1:
             owners_after = organization_members_crud.count_active_owners(
@@ -612,6 +617,7 @@ def accept_invitation(
             organization_role=applied_role,
             provisioned_grants=provisioned,
             skipped_grant_count=skipped,
+            first_workspace_slug=first_workspace_slug,
         )
 
     except Exception as exc:

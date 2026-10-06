@@ -11,7 +11,7 @@ import {
 import type {
   InvitationTokenRequest,
   WorkspaceInvitation,
-  WorkspaceInvitationAccepted,
+  OrganizationInvitationAccepted,
   WorkspaceInvitationCreateRequest,
   WorkspaceInvitationPreview,
 } from "@/types/tenancy";
@@ -89,8 +89,8 @@ export const previewInvitation = async (
  */
 export const acceptInvitation = async (
   token: string,
-): Promise<WorkspaceInvitationAccepted> => {
-  const response = await apiClient.post<WorkspaceInvitationAccepted>(
+): Promise<OrganizationInvitationAccepted> => {
+  const response = await apiClient.post<OrganizationInvitationAccepted>(
     INVITATION_ENDPOINTS.accept,
     { token } satisfies InvitationTokenRequest,
     { headers: { Accept: "application/json" } },

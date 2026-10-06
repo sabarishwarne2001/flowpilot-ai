@@ -14,71 +14,112 @@ How to read this file:
 | ID | Sev | Status | Area | Title |
 |----|-----|--------|------|-------|
 | F-001 | P1 | **fixed** (Phase 1, PR #2) | CI | CI on `main` fails instantly with zero jobs; the encoding gate would also fail (44 files) |
-| F-002 | P1 | confirmed (static count) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
+| F-002 | P1 | **mitigated** (Phases 3–5: browser suite, live engine harness, Phase 5 tests; ledger in COVERAGE.csv) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
 | F-003 | P2 | **fixed** (Phase 2) | Config/secrets | Hard-coded default secrets are used if the env var is missing |
 | F-004 | P2 | **fixed** (Phase 2; reads/deletes await N-003) | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
-| F-005 | P3 | unverified | Plan gating / UX | Sidebar lock state does not match what the server enforces |
+| F-005 | P3 | **fixed** (Phase 5, `7adf7b3`; three consoles await N-002) | Plan gating / UX | Sidebar lock state does not match what the server enforces |
 | F-006 | P2 | **fixed for Compose** (Phase 2; a real `docker compose` run on the VPS is unverified) | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
-| F-007 | P3 | **partly fixed** (Phase 2; history rewrite and script retirement await N-005, N-016) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
-| F-008 | P3 | unverified | Frontend guards | Route-level role guard exists but is unused; org pages have no route-level role check |
-| F-009 | P3 | unverified | Frontend | `/admin` has no index route (likely an empty screen) |
-| F-010 | P3 | confirmed (static) | Config | `frontend/.env.example` omits `VITE_API_URL`, the only variable the code reads |
+| F-007 | P3 | **partly fixed** (Phase 5: logo/favicon `1a98cdb`; history rewrite and script retirement await N-005, N-016) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
+| F-008 | P3 | **fixed** (Phase 5, `cc48275`) | Frontend guards | Route-level role guard exists but is unused; org pages have no route-level role check |
+| F-009 | P3 | **fixed** (Phase 5, `0074f74`; no automated test) | Frontend | `/admin` has no index route (likely an empty screen) |
+| F-010 | P3 | **fixed** (Phase 5, `7c7933f`; checked by grep, no automated test) | Config | `frontend/.env.example` omits `VITE_API_URL`, the only variable the code reads |
 | F-011 | P3 | **partly fixed** (Phase 2; the long tail of harmless defaults is Phase 4) | Config | 246 of 302 backend settings are missing from `.env.production.template` |
 | F-012 | P3 | **not a defect** (Phase 2; guard tests) | Auth | Live-review WebSocket accepts the access token in the URL query string |
 | F-013 | P3 | **verified** (Phase 2; F-034 fixed) | Billing | Three webhook routes can receive Stripe events; each must be proven to verify signatures |
-| F-014 | P3 | unverified | Tenancy URLs | Organization slug `request` is not reserved and collides with the public `/request/:token` page |
-| F-015 | P3 | unverified | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
-| F-016 | P1 | confirmed (full pytest run) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
-| F-017 | P2 | confirmed (autogenerate) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
+| F-014 | P3 | **fixed** (Phase 5, `39fb0d5`) | Tenancy URLs | Organization slug `request` is not reserved and collides with the public `/request/:token` page |
+| F-015 | P3 | **fixed** (Phase 5, `782d0e3`, N-006) | UI/API roles | Sidebar hides some pages from ADMIN that the API allows ADMIN to use |
+| F-016 | P1 | **fixed** (Phase 5: full suite 3,223 passed, 0 failed, 9 skipped; `main` 3,134 passed, 22 failed) | Tests | The backend test suite is red: 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546 |
+| F-017 | P2 | **fixed for the 22 real differences** (Phase 5, `b2accf1`, `ad411ec`; 283 undeclared-index/constraint lines remain, harmless and ratcheted) | Schema | 314 model/migration drift operations; the CI drift gate could never fail |
 | F-018 | P1 | **fixed** (Phase 1, PR #2) | Startup / CI | A fresh clone could not install, migrate, test or start (13 blockers) |
 | F-019 | P1 | **fixed** (Phase 2) | OCR | On one engine error class, OCR silently returns invented text |
 | F-020 | P1 | **fixed** (Phase 2) | Ingestion | Any chunk without a bounding box makes the whole document fail |
 | F-021 | P2 | **fixed** (Phase 2) | Secrets | A rejected BYOK API key is echoed back in the 422 response |
 | F-022 | P2 | **not a defect** (Phase 2; guard tests) | Tenancy | An AI agent tool selector takes no tenant scope |
 | F-023 | P2 | **not a defect** (Phase 2; guard tests) | Security | Five modules read `X-Forwarded-For` themselves (spoofable client IP) |
-| F-024 | P2 | **mitigated** (Phase 2; production still needs N-009) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
-| F-025 | P3 | confirmed (gate arch20 + drift) | Models | `organization_addon` model is not registered in `app/models/__init__` |
-| F-026 | P3 | confirmed (live) | Uploads | Storage errors surface as a raw 500 on upload |
-| F-027 | P3 | confirmed (live) | Dev env | Dev compose makes the shell's `AWS_ACCESS_KEY_ID` the MinIO root user |
-| F-028 | P3 | confirmed (Playwright) | Frontend | Dashboard fires 4 failing avatar requests for users without an avatar |
-| F-029 | P3 | confirmed (gate run) | Gates | 33 of 78 verification gates fail; several are stale |
-| F-030 | P3 | confirmed (test runs) | Tests | The test harness is slow and order-dependent |
+| F-024 | P2 | **resolved by N-009** (pre-launch; RUNBOOK 9.2 step 6) | Deployment | Production `migrate` fails on a fresh database (ARCH-40 contract flag) |
+| F-025 | P3 | **fixed** (Phase 5, `b2accf1`) | Models | `organization_addon` model is not registered in `app/models/__init__` |
+| F-026 | P3 | **fixed** (Phase 5, `02a67de`) | Uploads | Storage errors surface as a raw 500 on upload |
+| F-027 | P3 | **fixed** (Phase 5, `f6e4b36`) | Dev env | Dev compose makes the shell's `AWS_ACCESS_KEY_ID` the MinIO root user |
+| F-028 | P3 | **fixed** (Phase 5, `a8a05ec`) | Frontend | Dashboard fires 4 failing avatar requests for users without an avatar |
+| F-029 | P3 | confirmed (gate run); **no gate regressed in Phase 5** (main 37/35/6 → branch 38/34/6); retiring stale gates is N-016 | Gates | 33 of 78 verification gates fail; several are stale |
+| F-030 | P3 | **partly fixed** (Phase 5: the order dependence was F-100, fixed; the suite still takes ~25 min on a RAM disk) | Tests | The test harness is slow and order-dependent |
 | F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
 | F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
-| F-033 | P3 | confirmed (test); open | Billing | Dodo's "test event reached a live deployment" guard compares the deployment's config with itself and cannot fire |
+| F-033 | P3 | **closed** (Phase 5, `e80c900`: Dodo's envelope has no mode flag; the per-mode secret separates them) | Billing | Dodo's "test event reached a live deployment" guard compares the deployment's config with itself and cannot fire |
 | F-034 | P3 | **fixed** (Phase 2) | Billing | `/billing/webhooks/STRIPE` (any capitalisation but lowercase) crashed with an unhandled AttributeError |
 | F-035 | P2 | **fixed** (Phase 2) | Uploads | Page-level PDF actions (JavaScript, Launch, SubmitForm) survive the upload scrub into the stored, downloadable file |
 | F-036 | P2 | **fixed** (Phase 2) | Uploads | An upload over the size limit crashed the upload endpoint with a 500 instead of answering 413 |
 | F-037 | P3 | **fixed** (Phase 2) | Input handling | A NUL character (`%00`) in a search box crashed 19 routes with a 500 |
 | F-038 | P2 | **fixed** (Phase 2) | Frontend | Production builds shipped source maps (`index-*.js.map`), publishing the original TypeScript |
-| F-039 | P2 | **partly fixed** (Phase 2) | Dependencies | 7 npm advisories (fixed) and 13 Python packages with known advisories (4 bumped, rest tracked) |
+| F-039 | P2 | **fixed for 12 of 13 packages** (Phase 5, `936ff0e`, `f80b517`, `8bb9c9b`; torch/setuptools/paramiko left with reasons) | Dependencies | 7 npm advisories (fixed) and 13 Python packages with known advisories (4 bumped, rest tracked) |
 | F-040 | P1 | **fixed** (Phase 2) | Deployment | The production API container cannot start: `gunicorn` is in no requirements file |
 | F-041 | P2 | **fixed** (Phase 2) | Logs | gunicorn's access log wrote capability tokens (public upload and calendar-feed paths), query strings and the Referer to stdout |
 | F-042 | P3 | **fixed** (Phase 2) | Ops | No readiness probe: `/health` reported "healthy" with Postgres down |
 | F-043 | P3 | **fixed** (Phase 2) | Containers | Floating image tags (`pg16`, `7-alpine`, `2-alpine`, `python:3.12-slim`) |
 | F-044 | P3 | **mitigated** (Phase 2) | Frontend/ingress | No Content-Security-Policy header |
-| F-045 | P3 | open | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
+| F-045 | P3 | **partly fixed** (Phase 5, `3d8cff5`: OCR engine only in the `ocr` image, 1.2 GB less per other image; the CUDA build of torch remains, see the entry) | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
 | F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
 | F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
-| F-048 | P3 | open (policy needs N-018) | Auth / availability | Sign-in is limited to 10 attempts per 5 minutes per IP, not the intended 20, because the limiter runs twice; one shared office network can lock everyone out |
-| F-049 | P3 | confirmed (Phase 3 e2e) | Frontend / noise | Every page requests the signed-in user's avatar and logs a 404 when they have none (most users) |
+| F-048 | P3 | **fixed** (Phase 5, `53d9267`; the allowance itself is N-018) | Auth / availability | Sign-in is limited to 10 attempts per 5 minutes per IP, not the intended 20, because the limiter runs twice; one shared office network can lock everyone out |
+| F-049 | P3 | **fixed** (Phase 5, `a8a05ec`) | Frontend / noise | Every page requests the signed-in user's avatar and logs a 404 when they have none (most users) |
 | F-050 | P0 | **fixed** (Phase 3; full backend suite re-run pending) | API stability | Opening a scanned packet's review screen aborted the whole API process (PDFium used from several threads) |
-| F-051 | P1 | confirmed (Phase 3 e2e) | Team / billing | Accepting a team invitation fails with HTTP 500 on any organization with a live subscription |
-| F-052 | P2 | confirmed (Phase 3 e2e) | Audit log | Audit log export (CSV and NDJSON) always fails: the page sends `format=CSV`, the API only accepts `csv`/`jsonl` |
-| F-053 | P2 | confirmed (Phase 3 e2e) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |
-| F-054 | P3 | confirmed (Phase 3 e2e) | Roles / UX | Admin-only organization pages opened by a MEMBER say "couldn't be loaded. Try again" instead of "you don't have permission"; Branding shows a full edit form |
-| F-055 | P3 | confirmed (Phase 3 e2e) | Roles / UX | The BILLING role gets a 403 on every organization page (the header bell asks for organization notifications it may not read) |
-| F-056 | P2 | confirmed (Phase 3 e2e) | AI assistant | When the AI provider is unavailable the user's question disappears; only a 4-second toast says why |
-| F-057 | P3 | confirmed (Phase 3 e2e) | Error messages | Forms show "Request failed with status code 422" instead of the server's explanation (ERP target, corroborator rules) |
-| F-058 | P3 | confirmed (Phase 3 e2e) | Frontend / noise | Normal pages use 404 as "nothing configured" (workspace email override, branding logo), so the console shows errors on healthy pages |
-| F-059 | P3 | confirmed (Phase 3 e2e) | Plan gating / UX | A locked feature opened by URL shows a lock card with no upgrade button; the upgrade path exists only in the sidebar |
-| F-060 | P3 | confirmed (Phase 3 e2e) | Custom domains / UX | "Claim domain" is offered on a deployment where custom domains are switched off; the click returns 501 |
-| F-061 | P3 | confirmed (Phase 3 e2e) | Product gaps | Capabilities in the Phase 3 brief that do not exist: global search by invoice number, notification filters and mark-unread, promo code, webhook test ping, page image and field correction in the document viewer |
-| F-062 | P3 | confirmed (Phase 3 e2e) | Settings | The unsaved-changes guard does not cover the workspace General form: a rename is lost silently on sidebar navigation |
+| F-051 | P1 | **fixed** (Phase 4) | Team / billing | Accepting a team invitation fails with HTTP 500 on any organization with a live subscription |
+| F-052 | P2 | **fixed** (Phase 4) | Audit log | Audit log export (CSV and NDJSON) always fails: the page sends `format=CSV`, the API only accepts `csv`/`jsonl` |
+| F-053 | P2 | **fixed as error pages** (Phase 5, `cc48275`; read access for viewers is N-019) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |
+| F-054 | P3 | **fixed** (Phase 5, `cc48275`) | Roles / UX | Admin-only organization pages opened by a MEMBER say "couldn't be loaded. Try again" instead of "you don't have permission"; Branding shows a full edit form |
+| F-055 | P3 | **fixed** (Phase 5, `53f383a`) | Roles / UX | The BILLING role gets a 403 on every organization page (the header bell asks for organization notifications it may not read) |
+| F-056 | P2 | **fixed** (Phase 5, `1e52864`) | AI assistant | When the AI provider is unavailable the user's question disappears; only a 4-second toast says why |
+| F-057 | P3 | **fixed** (Phase 5, `84f3074`) | Error messages | Forms show "Request failed with status code 422" instead of the server's explanation (ERP target, corroborator rules) |
+| F-058 | P3 | **fixed** (Phase 5, `07e768b`) | Frontend / noise | Normal pages use 404 as "nothing configured" (workspace email override, branding logo), so the console shows errors on healthy pages |
+| F-059 | P3 | **fixed** (Phase 5, `4192ad8`) | Plan gating / UX | A locked feature opened by URL shows a lock card with no upgrade button; the upgrade path exists only in the sidebar |
+| F-060 | P3 | **fixed** (Phase 5, `903ea97`) | Custom domains / UX | "Claim domain" is offered on a deployment where custom domains are switched off; the click returns 501 |
+| F-061 | P3 | **partly built** (Phase 4: items 1, 4, 6; items 2, 3, 5, 7 await N-020) | Product gaps | Capabilities in the Phase 3 brief that do not exist: global search by invoice number, notification filters and mark-unread, promo code, webhook test ping, page image and field correction in the document viewer |
+| F-062 | P3 | **fixed** (Phase 5, `32b3721`) | Settings | The unsaved-changes guard does not cover the workspace General form: a rename is lost silently on sidebar navigation |
 | F-063 | P2 | blocked (environment) | Test coverage | With `ML_STUBS=true` and no LLM key, several features cannot be exercised end to end here (entities, tables, three-way match cases, radar flags, extraction review items, assistant answers) |
-| F-064 | P3 | confirmed (code + e2e) | Config | `RATE_LIMIT_LOGIN_IP_PER_5MIN` and the other `RATE_LIMIT_*_PER_*` settings are never read; the limits are hard-coded in `policy.py` |
-| F-065 | P2 | open (needs owner, N-019) | Roles / ERP | A MEMBER (workspace CONTRIBUTOR) may create ERP postings; the Phase 3 brief expected only admins/owners to |
-| F-066 | P2 | unverified | API stability | Seven other pypdfium2 call sites (redaction, tables, corroboration, OCR) have no PDFium lock; same class as F-050 |
+| F-064 | P3 | **fixed** (Phase 5, `53d9267`) | Config | `RATE_LIMIT_LOGIN_IP_PER_5MIN` and the other `RATE_LIMIT_*_PER_*` settings are never read; the limits are hard-coded in `policy.py` |
+| F-065 | P2 | **fixed** (Phase 4, owner decision N-019 ERP part) | Roles / ERP | A MEMBER (workspace CONTRIBUTOR) may create ERP postings; the Phase 3 brief expected only admins/owners to |
+| F-066 | P2 | **fixed** (Phase 4) | API stability | Seven other pypdfium2 call sites (redaction, tables, corroboration, OCR) have no PDFium lock; same class as F-050 |
+| F-067 | P1 | **fixed** (Phase 4) | Document settings | Opening Document settings switched extraction off; verification could not be turned on |
+| F-068 | P2 | **fixed** (Phase 4) | Verification | Verification agents were told every document was "Other" |
+| F-069 | P1 | **fixed** (Phase 4) | Verification | A field the agents split on evenly was approved automatically |
+| F-070 | P2 | **fixed** (Phase 4) | Extraction memory | The nightly sweep crashed on values of different lengths |
+| F-071 | P2 | **fixed** (Phase 4) | Extraction memory | The rule applied was not the one measured |
+| F-072 | P2 | **built** (Phase 4) | Extraction memory | Learned layouts never filled an empty field |
+| F-073 | P2 | **fixed** (Phase 4) | Cases | Cases ignored the model's classification |
+| F-074 | P3 | **fixed** (Phase 4) | Tables | Table exports dropped printed decimals |
+| F-075 | P2 | **fixed** (Phase 4) | Radar | A supplier's next monthly invoice was flagged as a duplicate |
+| F-076 | P2 | **fixed** (Phase 4) | Workflows | A new workspace could not build data conditions |
+| F-077 | P2 | **fixed** (Phase 4) | Clause checks | A saved clause check stayed switched off |
+| F-078 | P1 | **fixed** (Phase 4) | Team | A refused role change hung the request and locked the organization |
+| F-079 | P1 | **fixed** (Phase 4) | SLO | No SLO measurement could be recorded |
+| F-080 | P3 | **built** (Phase 4; e2e drives it since Phase 5, `5a21282`) | Webhooks | "Send test event" |
+| F-081 | P1 | **fixed** (Phase 4) | Billing | Voided invoice could not be corrected; retried invoice job crashed |
+| F-082 | P2 | **fixed** (Phase 4) | Billing | Creating a billing account froze the organization while Stripe answered |
+| F-083 | P2 | **fixed** (Phase 4) | Public API | No rate-limit headers; body said "FREE, 0 left" |
+| F-084 | P1 | **fixed** (Phase 4) | Workflows | A security violation inside an action did not stop the rule |
+| F-085 | P3 | **fixed** (Phase 4) | Verification | Resolving a settled verification answered "not found" |
+| F-086 | P2 | **fixed** (Phase 4) | Tenancy | Radar and erasure read chunks without the workspace filter |
+| F-087 | P2 | **fixed** (Phase 4) | Metering | A retried document could be refused at the ceiling for tokens already paid |
+| F-088 | P1 | **fixed** (Phase 4) | Uploads | A tiny image-bomb avatar could exhaust memory |
+| F-089 | P2 | **fixed** (Phase 4) | SCIM | SCIM failed with 500 when the caller's address was not an IP |
+| F-090 | P2 | **fixed** (Phase 4) | BYOK | Saving a route before its key answered 500 |
+| F-091 | P3 | **built** (Phase 4) | Search | Global search finds documents, entities and cases |
+| F-092 | P3 | **built** (Phase 4) | Review | Page evidence with each agent's reading highlighted |
+| F-093 | P2 | **built** (Phase 4) | Radar | Bank-account-changed and round-total flags |
+| F-094 | P2 | **fixed** (Phase 4; the rest in F-099) | Tests | ~230 tests red on main for stale reasons |
+| F-095 | P2 | **fixed** (Phase 5, `24a0fb2`, `ea13d14`, N-021) | Plan gating | BYOK was writable on every plan |
+| F-096 | P3 | **closed by N-022** (Phase 5, `3864de5`) | Auth | Locked-out sign-in answers like a wrong password |
+| F-097 | P3 | **closed by N-023** (Phase 5, `41e8f99`) | Uploads | Oversized avatars are shrunk, image bombs refused |
+| F-098 | P3 | **closed by N-024** (Phase 5, `23e1c69`) | Public API | Token links under `/api/v1/public` stay |
+| F-099 | P3 | **fixed** (Phase 5, 7 commits) | Tests | Remaining stale engineering invariants |
+| F-100 | P2 | **fixed** (Phase 5, `af6d9c8`) | Logging | Running migrations in-process silenced every app logger |
+| F-101 | P3 | **fixed** (Phase 5, `306fc51`) | Auth | A session-less token minted in the revocation second outlived it |
+| F-102 | P2 | **fixed** (Phase 5, `deb494c`) | SLO | One unknown organization discarded every SLO measurement in a flush |
+| F-103 | P2 | **fixed** (Phase 5, `ad411ec`) | Schema | Deleting a user row cascaded to the file records of their uploads |
+| F-104 | P2 | **fixed** (Phase 5, `f80b517`) | Warehouse sync | Snowflake could not sign with a passphrase-protected key |
+| F-105 | P2 | **fixed** (Phase 5, `3b83fc8`) | Documents | PDF pages were freed by the garbage collector outside the PDFium lock |
+| F-106 | P1 | **fixed** (Phase 5, `8a4253a`) | Email | A client that hung up before the reply was written silently cancelled the request's verification, reset or invitation email |
+| F-107 | P2 | **fixed** (Phase 5, `8541f0a`) | Invitations | Every invitee landed on "That workspace is no longer available to you" after accepting |
 
 ---
 
@@ -217,8 +258,7 @@ column in COVERAGE.csv). Rows marked `UNGATED in a <plan>-plan module`.
 
 **Next step.** Phase 2: call each of these with a Free-plan token and expect 402/403.
 
-## F-005 — Sidebar lock state does not match server enforcement (P3, unverified)
-
+## F-005 — Sidebar lock state does not match server enforcement (P3, fixed in Phase 5)
 - "Analytics & BI egress" shows **no** lock, but every write behind it needs the
   `addon.warehouse_sync` grant (Business and above). A Free or Developer tenant
   sees an open page whose buttons fail.
@@ -339,8 +379,7 @@ types `billing.reconcile`, `billing.assemble_invoice`, `usage.reconcile` and
   Retiring them is your decision → N-016.
 - *Logo images*: unchanged (Phase 4).
 
-## F-008 — Frontend route guards (P3, unverified)
-
+## F-008 — Frontend route guards (P3, fixed in Phase 5)
 `frontend/src/routes/RequireWorkspaceRole.tsx` is defined but never used. Under
 `/organizations/:orgSlug/*`, `OrganizationGuard` checks membership and archived
 status but not role. Pages such as Audit log, Service levels, Marketplace and
@@ -349,14 +388,12 @@ deep-links to `/organizations/x/audit` may see an error or an empty state
 instead of a clear permission screen. The server still refuses the data, so
 this is not a leak. Phase 3 renders every page as a forbidden role.
 
-## F-009 — `/admin` has no index route (P3, unverified)
-
+## F-009 — `/admin` has no index route (P3, fixed in Phase 5)
 The platform shell `/admin` has only `margins`, `sovereign` and `revops`
 children and no index route. A super admin who opens `/admin` probably sees
 the platform layout with an empty body.
 
-## F-010 — Frontend env template is wrong (P3, confirmed by static read)
-
+## F-010 — Frontend env template is wrong (P3, fixed in Phase 5)
 `frontend/.env.example` lists `VITE_APP_NAME`, `VITE_APP_VERSION` and
 `VITE_ENVIRONMENT`, and nothing in `src/` reads them. The only variable the code
 reads, `VITE_API_URL` (`services/api/client.ts`), is missing from the template.
@@ -413,15 +450,13 @@ it is registered first. Phase 2 must prove, for every path, that there are no
 unsigned or replayed events, that events are idempotent, and that out-of-order
 events are handled.
 
-## F-014 — Organization slug `request` collides with a public route (P3, unverified)
-
+## F-014 — Organization slug `request` collides with a public route (P3, fixed in Phase 5)
 `/request/:token` is the public document-request upload page. Workspace URLs
 are `/:orgSlug/:workspaceSlug`. The backend reserved-slug list
 (`app/core/slugs.py`) does not include `request`. An organization named
 `request` would have every workspace URL shadowed by the public upload page.
 
-## F-015 — Sidebar and API disagree on ADMIN access (P3, unverified)
-
+## F-015 — Sidebar and API disagree on ADMIN access (P3, fixed in Phase 5)
 The sidebar shows Webhooks, Audit log, API keys and Enterprise identity only to
 OWNER, while several of those endpoints accept `OWNER,ADMIN` (see
 `roles_allowed` in the ledger). The most important case: **an ADMIN can create,
@@ -443,8 +478,7 @@ stay as they are.
 
 # Phase 1 findings (2026-09-30)
 
-## F-016 — The backend test suite is red (P1, confirmed)
-
+## F-016 — The backend test suite is red (P1, fixed in Phase 5)
 **Plain language.** There are 2,546 backend tests (2,538 before Phase 1 plus 8
 new stub tests). Run as CI runs them, but without stopping early,
 2,285 passed, 219 failed, 33 errors, 9 skipped of 2,546. CI stops at the first 5 failures (`--maxfail=5`), so the
@@ -475,8 +509,7 @@ changed a test's expectations; the only test edit fixed an import path
 **Next step.** Phase 3/4: triage each group. Fix the harness (seed data,
 database naming) first, because it hides the real failures.
 
-## F-017 — Model/migration drift; the drift gate could never fail (P2, confirmed)
-
+## F-017 — Model/migration drift; the drift gate could never fail (P2, real differences fixed in Phase 5)
 **Plain language.** The database built by the migrations and the database the
 Python models describe are not the same. `alembic revision --autogenerate`
 proposes **314 operations**: 292 are indexes and constraints that migrations
@@ -687,23 +720,20 @@ the three dropped columns' values first, and its `downgrade` restores them. **St
 you have not said whether a production database with real data exists (N-009), and the
 procedure has not been run against real containers.
 
-## F-025 — `organization_addon` model not registered (P3, confirmed)
-
+## F-025 — `organization_addon` model not registered (P3, fixed in Phase 5)
 Gate `verify_arch20.py` G10: the model module with a table is not imported by
 `app/models/__init__.py`. That is why autogenerate wants to drop the
 `organization_addons` table (F-017), and why relationships or metadata that
 rely on the registry can miss it.
 
-## F-026 — Storage errors surface as a raw 500 on upload (P3, confirmed)
-
+## F-026 — Storage errors surface as a raw 500 on upload (P3, fixed in Phase 5)
 When MinIO rejected the credentials, `POST /workspaces/{id}/work-items`
 returned a bare 500 with an unhandled `StorageError` traceback in the log. A
 storage outage should give the user a clear 503-style error and not leave a
 half-created work item. (Seen live; the credential cause itself was a sandbox
 artefact, F-027.)
 
-## F-027 — Dev compose uses the shell's AWS key as the MinIO root user (P3, confirmed)
-
+## F-027 — Dev compose uses the shell's AWS key as the MinIO root user (P3, fixed in Phase 5)
 `backend/docker-compose.yml` sets `MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}`.
 Docker Compose prefers the shell's environment over `backend/.env`. A
 developer with real AWS credentials exported gets a local MinIO whose root
@@ -712,8 +742,7 @@ uploads fail with `InvalidAccessKeyId`, and the real key id is copied into a
 container. The RUNBOOK documents the workaround. Phase 2: use MinIO-specific
 variable names.
 
-## F-028 — Four failing avatar requests on every dashboard load (P3, confirmed)
-
+## F-028 — Four failing avatar requests on every dashboard load (P3, fixed in Phase 5)
 Headless Chromium after login: `GET /api/v1/users/{id}/avatar` returns 404
 four times for a user without an avatar, and each logs a console error. Phase
 3's fixture fails any test on console errors, so this must be fixed (don't
@@ -743,6 +772,12 @@ a passing gate red (audit logs are append-only, so the leftovers cannot even be 
 that means editing gate scripts, which the rules forbid (N-010). The `main` run here measured 38 pass / 34 fail / 6 skip against Phase 1's recorded
 39 / 33 / 6: one gate differs from that record, and because it is in the `main` run too it is
 not from Phase 2. I did not chase which one.
+
+**Phase 5 check (no gate regressed).** `run_all_gates.py --static-only` on two fresh databases on
+the same server: `main` (with `main`'s own package versions) **37 pass / 35 fail / 6 skip**, this
+branch **38 / 34 / 6**. 77 of 78 gates give the same result; `verify_arch20.py` went from FAIL to
+PASS. The remaining failures are the stale gates described above (they expect older schema heads,
+a component that was redesigned, or arguments), which only the owner can retire (N-010, N-016).
 
 ## F-030 — The test harness is slow and order-dependent (P3, confirmed)
 
@@ -1111,8 +1146,7 @@ after, and runs in CI after the build. A real production build was made and `dis
 holds zero map files. **If you want maps for an error tracker:** build them in a
 separate step and upload them, never into the served folder.
 
-## F-039 — Dependency audit (P2, partly fixed)
-
+## F-039 — Dependency audit (P2, fixed in Phase 5 except torch/setuptools/paramiko)
 **npm (frontend): 7 advisories (6 high), all fixed.** `npm audit fix` (no
 major-version change, 14 packages) took `npm audit` from 7 to 0. The two on
 production code were `react-router` and `react-router-dom` (an RSC-mode CSRF bypass;
@@ -1301,8 +1335,7 @@ that (NEEDS-OWNER N-016). Binary files (the deleted `stripe.exe`, a public Strip
 not scanned. Logs and API responses were covered separately: F-041 (the gunicorn access log wrote
 capability tokens and query strings) and F-021 (validation errors echoed submitted secrets).
 
-## F-048 — The sign-in allowance is half of what was intended (P3, open)
-
+## F-048 — The sign-in allowance is half of what was intended (P3, fixed in Phase 5; the allowance is N-018)
 **Plain language.** The sign-in route is limited to 20 attempts per 5 minutes per IP address
 (`POLICY_LOGIN_IP`). The limiter is applied twice on that route, once by the global middleware
 (the public-route registry maps `/auth/login` to that policy) and once by a `RateLimiter`
@@ -1328,8 +1361,7 @@ Found by the Playwright suite in `frontend/e2e` (see `03-coverage.md`). Screensh
 or `frontend/e2e/playwright-report` after a local run. "Repro" steps work on a fresh clone with
 the seed from `backend/scripts/seed_e2e.py`.
 
-## F-049 — Every page logs a 404 for the user's missing avatar (P3, confirmed)
-
+## F-049 — Every page logs a 404 for the user's missing avatar (P3, fixed in Phase 5)
 **Plain language.** The sidebar shows your avatar. Most people never upload one, so on every page
 the browser asks for `/users/{id}/avatar`, gets "404 Not Found" and prints a red error in the
 console. The app then shows initials, so a user sees nothing wrong. The comment in
@@ -1384,8 +1416,7 @@ Enterprise customers and auditors cannot export the audit trail.
 and actor, inspect an entry, export CSV and NDJSON": `422 ... Input should be 'csv' or 'jsonl'`,
 plus `pageerror ApiError` and an unhandled rejection.
 
-## F-053 — Viewers see pages they cannot use (P2, confirmed)
-
+## F-053 — Viewers see pages they cannot use (P2, error pages fixed in Phase 5; read access is N-019)
 **Plain language.** A workspace VIEWER has Workflows, Run history and Review queue in the sidebar,
 but the server refuses them (403), so the pages show "Failed to load rules metrics" or "The review
 queue could not be loaded". Either the sidebar should hide them, or viewers should get read-only
@@ -1393,22 +1424,19 @@ access. **Repro.** Sign in as `c-viewer@e2e.example.com`; open Workflows. **Evid
 `tests/03-role-matrix.spec.ts` "workspace pages shown to a VIEWER must work for a VIEWER".
 (Decision needed: should viewers read workflows and the review queue? → N-019.)
 
-## F-054 — Forbidden organization pages say "couldn't be loaded" (P3, confirmed)
-
+## F-054 — Forbidden organization pages say "couldn't be loaded" (P3, fixed in Phase 5)
 **Plain language.** A MEMBER who opens an admin-only organization page by URL (email settings,
 service levels, developer platform, API keys, webhooks) sees "… couldn't be loaded. Try again",
 which suggests an outage. Members and Billing pages already show a proper "requires an owner or
 administrator" message; the rest should too. Branding shows the whole edit form, whose saves then
 fail. **Evidence.** `tests/03-role-matrix.spec.ts` "forbidden organization pages by URL".
 
-## F-055 — The BILLING role gets a 403 on every organization page (P3, confirmed)
-
+## F-055 — The BILLING role gets a 403 on every organization page (P3, fixed in Phase 5)
 **Plain language.** The organization header's notification bell asks for organization
 notifications, which the BILLING role may not read, so every page logs a 403 for that role.
 **Evidence.** `tests/03-role-matrix.spec.ts` "organization sidebar — A.billing".
 
-## F-056 — The assistant loses the user's question when the AI is unavailable (P2, confirmed)
-
+## F-056 — The assistant loses the user's question when the AI is unavailable (P2, fixed in Phase 5)
 **Plain language.** If the AI provider is down (or no key is set) the server answers 503 "The AI
 service is temporarily unavailable". The page shows a short toast for 4 seconds, and the question
 the user typed is gone: not in the box, not in the conversation (still "0 msg"). Users will think
@@ -1416,32 +1444,28 @@ the product ignored them. **Repro.** With no `GROQ_API_KEY`, ask any question.
 **Evidence.** `tests/11-assistant-intelligence.spec.ts` "when the AI provider is down…";
 screenshot `e2e-screenshots/F-056-assistant-question-lost.jpg`.
 
-## F-057 — Forms hide the server's explanation behind "status code 422" (P3, confirmed)
-
+## F-057 — Forms hide the server's explanation behind "status code 422" (P3, fixed in Phase 5)
 **Plain language.** The server explains what is wrong (for example "a Tally target needs
 tally.company (the company to import into)", or "this sentence could not be read as a checkable
 rule"), but the ERP target form and the corroborator show only "Request failed with status code
 422". **Evidence.** `tests/12-processing.spec.ts` "an invalid target shows the server's reason…",
 "a rule the engine cannot read is explained…"; screenshot `e2e-screenshots/F-057-erp-422.jpg`.
 
-## F-058 — Healthy pages log 404 errors for "not configured" (P3, confirmed)
-
+## F-058 — Healthy pages log 404 errors for "not configured" (P3, fixed in Phase 5)
 **Plain language.** Settings → Email asks for the workspace's email override and gets 404 "This
 workspace has no email override"; Organization → Branding asks for `/branding/logo` and gets 404.
 Like F-049, a normal state is reported as an error in the console and in error monitoring.
 **Evidence.** `tests/14-configuration.spec.ts` "every settings section opens", the Branding page
 smoke test and `tests/20-organization.spec.ts` branding tests.
 
-## F-059 — Locked pages opened by URL have no upgrade button (P3, confirmed)
-
+## F-059 — Locked pages opened by URL have no upgrade button (P3, fixed in Phase 5)
 **Plain language.** Clicking a locked item in the sidebar opens a dialog with "View plans". Opening
 the same page by URL (a bookmark, a shared link) shows only a lock card ("It's included on the
 Business and Enterprise plans") with no button; Tables shows just a sentence. Data is not leaked
 and the server refuses with 402 (good). **Evidence.** `tests/02-plan-matrix.spec.ts` (lock card
 shown; no upgrade control asserted); screenshot `e2e-screenshots/F-059-lock-card.jpg`.
 
-## F-060 — "Claim domain" is offered where custom domains are off (P3, confirmed)
-
+## F-060 — "Claim domain" is offered where custom domains are off (P3, fixed in Phase 5)
 **Plain language.** With `CUSTOM_DOMAINS_ENABLED=false` (the default) the Branding page still offers
 "Claim domain"; the server then answers 501 "Custom domains are not enabled on this deployment".
 The button should be hidden or explain this up front.
@@ -1468,8 +1492,7 @@ review workbench shows the page image with each agent's reading highlighted (F-0
 notification filters / mark-unread, promo code at checkout, invite from Organization → Members,
 field correction in the document viewer (N-020).
 
-## F-062 — Unsaved workspace settings are lost without warning (P3, confirmed)
-
+## F-062 — Unsaved workspace settings are lost without warning (P3, fixed in Phase 5)
 **Plain language.** The app has an "unsaved changes" guard, but it does not cover Settings →
 General: rename the workspace, click Documents in the sidebar, and the edit is gone with no
 question asked (the Save button had become active, so the form knew it was changed).
@@ -1486,8 +1509,7 @@ the *results* were not. These rows are `blocked` or only `smoke` in the ledger.
 `E2E_LLM=1` once (RUNBOOK §7 and `frontend/e2e/README.md`), or provide a recorded model
 response fixture so CI can cover them.
 
-## F-064 — The `RATE_LIMIT_*` settings do nothing (P3, confirmed)
-
+## F-064 — The `RATE_LIMIT_*` settings do nothing (P3, fixed in Phase 5)
 **Plain language.** `config.py` and `.env.example` offer `RATE_LIMIT_LOGIN_IP_PER_5MIN`,
 `RATE_LIMIT_GLOBAL_IP_PER_MINUTE`, `RATE_LIMIT_USER_PER_MINUTE` and others, but nothing reads them:
 the limits are fixed numbers in `app/core/rate_limit/policy.py`. Changing the setting has no effect
@@ -1665,27 +1687,22 @@ writes, a date baked into fixtures) or used the development database instead of 
 Aligned without weakening any assertion; each gate is now covered by an explicit refusal test.
 The few left red are design questions (F-095 to F-099, N-021 to N-025).
 
-## F-095 — Is BYOK an Enterprise feature? (open → N-021)
-
+## F-095 — Is BYOK an Enterprise feature? (fixed in Phase 5, N-021)
 The pages call it "Enterprise BYOK" but the server lets any plan store keys and routes.
 
-## F-096 — Locked-out sign-in answers 401, not 429 (open → N-022)
-
+## F-096 — Locked-out sign-in answers 401, not 429 (closed in Phase 5, N-022)
 The brute-force lockout works (proven: `tests/engines/test_login_lockout_live.py`) and answers
 exactly like a wrong password; the older test expects 429 with Retry-After.
 
-## F-097 — Oversized avatars: refuse, or shrink? (open → N-023)
-
+## F-097 — Oversized avatars: refuse, or shrink? (closed in Phase 5, N-023)
 5000×5000 images are shrunk to 1024 px; the older test expects a refusal. (Image bombs are refused
 either way, F-088.)
 
-## F-098 — Public token links live under the API-key gateway's `/api/v1/public` prefix (open → N-024)
-
+## F-098 — Public token links live under the API-key gateway's `/api/v1/public` prefix (closed in Phase 5, N-024)
 Calendar-feed and document-request links are public by design but share the prefix the gateway
 test reserves for API-key routes. Moving them would break links already sent.
 
-## F-099 — Remaining stale engineering invariants (open, engineering)
-
+## F-099 — Remaining stale engineering invariants (fixed in Phase 5)
 - `test_owner_set_concurrency::test_for_update_appears_only_in_the_lock_helper` (ARCH-05 gate):
   says no file but the owner helper may lock rows; 14 later services lock their own rows
   legitimately. Proposal: restrict it to locks on organizations / members (N-025).
@@ -1704,3 +1721,194 @@ test reserves for API-key routes. Moving them would break links already sent.
   run); real tokens are proven signed out (`tests/engines/test_session_revocation_live.py`).
 - `test_pool_profiles::test_unknown_role_warns_outside_production`: passes alone, fails after
   other tests in the same run (order-dependent warning capture).
+
+---
+
+# Phase 5 — production readiness: every open finding worked (branch `claude/blissful-goldberg-hsqxy1`)
+
+Started from `main` at `f86a96c` (Phase 4 merged) with the owner's answers to N-021 to N-025.
+"Fixed" below follows the Evidence Rule unless it says otherwise: a test that failed before (named),
+the fix (commit), the same test passing, and the rest of the suite still passing (full-suite
+comparison in `05-production-readiness.md` §5). Where a fix has no automated test, the entry says
+"no automated test" and how it was checked, as CLAUDE.md requires.
+
+## Owner decisions applied (N-021 to N-025)
+
+- **F-095 — BYOK is a Business and Enterprise feature (N-021): fixed.** New `capability.byok` in both
+  tiers; the four BYOK writes refuse below Business with 402 `CAPABILITY_REQUIRED`; reads and retiring
+  a key stay open after a downgrade (N-003). Sidebar lock, page banner, plan-card label. **Proof** the
+  plan-gating sweep with `/byok` as a locked area was red (`PUT /byok/routes` answered 200 to a Free
+  tenant), green after; `tests/api/test_byok_plan_gate.py` (8 tests). **Commits** `24a0fb2`, `ea13d14`.
+- **F-096 — locked-out sign-in answer (N-022: keep the generic 401): closed.** Behaviour unchanged;
+  the stale test now proves the decided behaviour. `3864de5`.
+- **F-097 — oversized avatars (N-023: refuse > 50 MP, shrink the rest to 1024 px): closed.** The code
+  already did this; the test proves both sides of the line and the stored size. `41e8f99`.
+- **F-098 — public token links (N-024: keep them): closed.** The gateway test exempts exactly the two
+  token routes and proves they are token links outside the gateway. `23e1c69`.
+- **F-099 — remaining stale invariants: all fixed.**
+  - ARCH-05 lock invariant narrowed to organization/member rows (N-025), FK-safe locks required: `6f65363`.
+  - 12 BYOK tests asserted the ARCH-22 "only Groq is routable" rule: aligned to ARCH-23 (all six
+    routable), the unroutable-disclosure rules still proven with a simulated unroutable provider: `947ee81`.
+  - Storage-boundary scan: nine non-tenant file reads listed with reasons, pinned to their exact line: `25ad73b`.
+  - Pipeline terminal stages: the test now pins the retry-resumes-the-failed-stage design and the
+    "never jump to EXTRACTED/COMPLETED" property: `663073c`.
+  - OCR import check runs in a fresh interpreter: `8ee83b1`.
+  - The email-change sign-out race was a real gap (F-101 below): `306fc51`.
+  - The order-dependent pool-profile warning was a real bug (F-100 below): `af6d9c8`.
+
+## New findings from this phase (all fixed)
+
+## F-100 — Running migrations in-process silenced every app logger (P2, fixed)
+
+**Plain language.** `alembic/env.py` loaded its logging file with Python's default
+`disable_existing_loggers=True`. Any process that ran migrations itself (the test harness, any script
+that migrates and keeps working) switched off every logger the app had already created, so warnings
+and errors from those modules vanished. That is why `test_unknown_role_warns_outside_production`
+passed alone and failed after any database test. **Proof** red when a DB test runs first, green after.
+**Fix** `af6d9c8`. Re-enabling the logs surfaced F-102.
+
+## F-101 — A session-less access token minted in the revocation second outlived the revocation (P3, fixed)
+
+**Plain language.** The revocation cutoff compares whole seconds (`iat < cutoff`), so a token with no
+session minted in the same second as a password reset or e-mail change stayed valid until it expired.
+Production tokens always carry a session (also revoked through the session row), so the exposure was
+test personas and any future session-less issuer. **Proof** `tests/security/test_revocation_cutoff_second.py`
+red before, green after. **Fix** `306fc51` (session-less: the cutoff second counts as "before").
+
+## F-102 — One unknown organization made the SLO flush discard every organization's measurements (P2, fixed)
+
+**Plain language.** The SLO recorder wrote all series in one transaction; one series for an
+organization deleted between the measurement and the flush failed its foreign key and rolled back the
+whole window for everyone ("SLO shutdown flush failed; observations discarded"). Each series now has
+its own savepoint and an unknown organization is skipped and counted. **Proof**
+`test_a_series_for_a_vanished_organization_does_not_discard_the_rest` red before, green after. **Fix** `deb494c`.
+
+## F-103 — Deleting a user row would have deleted the file records of every document they uploaded (P2, fixed)
+
+**Plain language.** `uploaded_files.owner_id` was `ON DELETE CASCADE` in the database (the model said
+`SET NULL`). Every document upload records the uploader as owner, so deleting one user row would have
+deleted the company's file records for all their uploads. The app anonymises rather than deletes
+users, so this only affected a manual `DELETE`, but that is exactly what an operator does under
+pressure. Found by the F-017 drift work. **Fix** migration `p5a1_schema_drift_alignment` (`ad411ec`),
+upgrade, downgrade and upgrade run on a real database; the drift gate proves model and database now agree.
+
+## F-104 — Snowflake warehouse sync could not sign with a passphrase-protected key (P2, fixed)
+
+**Plain language.** The connector promises "an unencrypted or passphrase-protected PKCS#8 PEM", but it
+handed python-jose the PEM text, which fails on an encrypted key ("Password was not given but private
+key is encrypted", reproduced with python-jose 3.3.0). It now signs with the loaded key (PyJWT).
+**Proof** `tests/services/test_jwt_library_migration.py::test_the_snowflake_jwt_is_signed_with_the_tenants_key[...]`
+(with and without a passphrase). **Fix** `f80b517`.
+
+## F-105 — PDF pages were freed by the garbage collector outside the PDFium lock (P2, fixed)
+
+**Plain language.** PDFium (the PDF library behind thumbnails, OCR, redaction, tables and the
+comparison views) must only be used by one thread at a time, so F-050/F-066 put every use behind one
+lock. But a PDFium page object is in a reference cycle, so a page that is only dropped is not freed
+when the line ends: Python's garbage collector frees it later, on whichever thread happens to be
+running, without the lock, and that call goes into PDFium while another thread may be inside it.
+That is the same class of fault that crashed the API process in F-050. It surfaced once in the full
+suite as "Set changed size during iteration" in the 8-thread stress test. Every page is now opened
+with `pdfium_page()`, which closes it inside the lock. **Proof**
+`tests/services/test_pdfium_pages_closed_under_lock.py` pauses the collector and checks that no
+document closes with a page still open (red at 7 call sites before, green after) and that no file
+indexes a PDF document directly (red at 6 places). **Fix** `3b83fc8`.
+
+## F-106 — A client that hung up silently cancelled the request's email (P1, fixed)
+
+**Plain language.** Sign-up, password reset, e-mail change and invitations send their e-mail as a
+"background task", which the web framework runs only after the reply has been written to the
+browser. When the browser, a phone that switched networks or a proxy closed the connection just
+before the reply's last byte was written, the server's write failed, the framework skipped the
+background task, and the server swallowed the error: **the person never got the link, and nothing
+was logged.** It is not rare: behind the browser suite's proxy it happened to 2 of 4 sign-ups in one
+run, and 11 times in two runs of one test. A sign-up that never receives its verification link is a
+lost customer. **Proof** `tests/security/test_work_survives_client_disconnect.py` drives the real
+sign-up route with a connection that behaves like one the client has left: no verification e-mail
+before, one after; e2e "full member lifecycle through email" and "password reset" receive their
+mail. **Fix** `8a4253a`: a write to a departed client is now ignored, so the request finishes and
+its e-mail goes out; the layer sits outside every other (the ARCH-28 deprecation layer is still the
+outermost one that stamps responses).
+
+## F-107 — Every invitee landed on "That workspace is no longer available to you" (P2, fixed)
+
+**Plain language.** After clicking Accept, the page sent the new member to a workspace called
+"default", because it expected a field (`workspace_slug`) the server never sent. Every invitee saw
+a warning that their access had been revoked, seconds after joining. The server now says which
+workspace the invitation granted and the page opens it (or the workspace list, without a warning,
+when the invitation granted none). **Proof** `test_response_names_the_granted_workspace_to_open`
+and `test_an_organization_only_invitation_names_no_workspace` red before, green after; e2e "full
+member lifecycle through email" passes end to end (it had never got past Accept: F-051, then this).
+**Fix** `8541f0a`.
+
+## Earlier findings resolved in this phase
+
+- **F-005 (sidebar lock vs server): fixed.** Analytics & BI egress is locked on the warehouse add-on
+  (`7adf7b3`); BYOK is locked below Business (N-021). Proof: e2e `02-plan-matrix` now includes both.
+  The other three ungated consoles are owner decision N-002.
+- **F-007 (repo hygiene): logo/favicon fixed** (1.37 MB each → 14 KB / 12 KB, `1a98cdb`; no automated
+  test, compared visually). History rewrite (N-005) and script retirement (N-016) stay with the owner.
+- **F-008 / F-054 (no route-level role check; "couldn't be loaded" for members): fixed.**
+  `RequireOrganizationRole` wraps the 14 admin-only organization pages and shows "Access restricted"
+  with who to ask, before any request (`cc48275`). Proof: e2e `03-role-matrix` "forbidden organization
+  pages by URL".
+- **F-009 (`/admin` empty): fixed** (`0074f74`; redirect to `/admin/margins`; no automated test,
+  checked with the type-checked route table).
+- **F-010 (frontend env template): fixed** (`7c7933f`; only `VITE_API_URL` is read; checked by grep).
+- **F-014 (slug `request`): fixed** (`39fb0d5`). Proof: `tests/core/test_reserved_slugs_cover_frontend_routes.py`
+  reads every top-level route of the web app; red with five missing segments, green after.
+- **F-015 (API keys hidden from ADMIN): fixed** (`782d0e3`, N-006). Proof: e2e `03-role-matrix`
+  "organization sidebar — A.admin".
+- **F-017 (model/migration drift): the 22 real differences fixed** (`b2accf1`, `ad411ec`): 31 lines
+  leave the drift baseline (314 → 283). The 283 left are indexes and constraints the database has and
+  the models do not declare; they change nothing at run time and the gate stops them growing.
+- **F-025 (`organization_addons` model unregistered): fixed** (`b2accf1`; the drift gate proves it).
+- **F-026 (storage error = raw 500): fixed** (`02a67de`). Proof: `tests/security/test_upload_storage_outage.py`.
+- **F-027 (dev MinIO took the shell's AWS key): fixed** (`f6e4b36`). Proof:
+  `tests/infra/test_dev_compose_minio_credentials.py`; rendered with `AWS_ACCESS_KEY_ID` exported.
+- **F-028 / F-049 (avatar 404 on every page): fixed** (`a8a05ec`). Proof: `TestHasAvatarFlag`; the e2e
+  KNOWN_ISSUES entry is removed and `known-issues.spec.ts` proves no avatar request is made.
+- **F-033 (Dodo mode guard): closed.** Dodo's published webhook envelope is `{business_id, type,
+  timestamp, data}` with no test/live flag (docs.dodopayments.com, "Webhooks"), so there is nothing in
+  the payload to compare; the real N-013 question is answered without a live payload. What keeps a
+  test event out of a live deployment is the signing secret, which Dodo issues per mode, and
+  `DODO_API_BASE`, which `config.py` already forces to match `DODO_LIVEMODE`. The code now says so
+  (`e80c900`, comment only). Keep exactly one Dodo key and secret per environment (RUNBOOK).
+- **F-045 (8 GB images): partly fixed** (`3d8cff5`). `scripts/image_requirements.py` derives
+  `requirements-web.txt` (web, worker, enrich) and `requirements-ocr.txt` (added in the `ocr` image)
+  from `requirements.txt` and the installed dependency graph, so a pin can never differ. Left out
+  of the web set: the OCR engine (PaddleOCR, PaddleX, OpenCV, ModelScope and their own
+  dependencies), the test tools (moto, pytest) and an unused Kubernetes client: **1.2 GB less in
+  each of the web, worker and enrich images**. torch and sentence-transformers stay: the API embeds
+  search queries itself (`hybrid_search_service.py`, `chunk_retrieval_service.py`), so the old
+  "web: zero ML dependencies" label was wrong and is corrected. **Proof**
+  `tests/infra/test_image_requirements.py` (the files match `requirements.txt`; the Dockerfile uses
+  them; the API, every non-OCR module and the light and enrich worker start-up checks run with
+  everything outside the web set made un-importable), plus a fresh virtualenv built from
+  `requirements-web.txt` alone (`pip check` clean, 5.7 GB vs 6.9 GB) in which the full backend
+  suite was run (`05-production-readiness.md` §5). **Not done, needs a machine that can reach
+  download.pytorch.org (blocked here):** installing the CPU-only build of torch, which would drop
+  the 3.7 GB CUDA stack (`nvidia-*`, `triton`) from every image on a server without a GPU.
+- **F-039 (dependency advisories): fixed for 12 of 13 packages.** FastAPI 0.136.3 + Starlette 1.7.0
+  (`936ff0e`, N-014; pip-audit clean for both), python-jose → PyJWT (`f80b517`; also drops ecdsa),
+  pypdf, urllib3, multidict, werkzeug, cryptography, oauthlib, pyarrow (`8bb9c9b`). **Left, with the
+  reason:** torch 2.12.1 (2.13 pulls a new CUDA 13 stack; its advisory needs loading untrusted model
+  files, which the app never does), setuptools 81 (torch pins < 82), paramiko 3.5.1 (no fixed release).
+- **F-048 / F-064 (sign-in limiter counted twice; `RATE_LIMIT_*` ignored): fixed** (`53d9267`, `0f3cfd3`).
+  Proof: `tests/security/test_rate_limit_settings.py` (red before for both). Default kept at the
+  allowance in effect (10 per 5 min); the owner's N-018 choice is one `.env` line.
+- **F-053 (viewer pages fail): fixed as error pages** (`cc48275`): an Access restricted screen instead
+  of 403s. Whether viewers get read access stays N-019. Proof: e2e `03-role-matrix` viewer tests.
+- **F-055 (BILLING 403 on every organization page): fixed** (`53f383a`). Proof:
+  `tests/api/test_billing_role_notifications.py` red before, green after.
+- **F-056 (assistant loses the question): fixed** (`1e52864`). Proof: e2e `11-assistant-intelligence`
+  "when the AI provider is down…".
+- **F-057 (422 hidden behind "status code 422"): fixed** (`84f3074`): the client parser reads the
+  `detail={code, message, problems}` shape. Proof: e2e `12-processing` ERP target and corroborator tests.
+- **F-058 (404 for "not configured"): fixed** (`07e768b`). Proof: `tests/api/test_not_configured_is_not_an_error.py`
+  (3 red before) and the e2e settings and branding tests.
+- **F-059 (no upgrade button by URL): fixed** (`4192ad8`). Proof: e2e `02-plan-matrix` asserts "View plans".
+- **F-060 ("Claim domain" where domains are off): fixed** (`903ea97`). Proof:
+  `test_branding_says_whether_custom_domains_are_served`; e2e `20-organization` expects the message.
+- **F-062 (unsaved guard misses workspace General): fixed** (`32b3721`). Proof: e2e `14-configuration`
+  "unsaved changes block navigation until confirmed".
