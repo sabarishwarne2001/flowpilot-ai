@@ -88,9 +88,13 @@ started="$(date -u +%s)"
 "${PGX[@]}" pg_dump -Fc -U "${DB_USER}" -d "${DB_NAME}" \
     | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:${KEY_FILE}" -out "${PARTIAL}"
 
-# Verify: it must decrypt and pg_restore must be able to read its table of contents.
+# Verify: the WHOLE file must decrypt (the final block carries the padding check) and
+# pg_restore must be able to read its table of contents. `pg_restore --list` stops reading
+# once it has the table of contents, so the rest of the stream is drained with `cat`:
+# without that, openssl wrote into a closed pipe, reported "bad decrypt" and every
+# backup larger than a pipe buffer was thrown away as unreadable.
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:${KEY_FILE}" -in "${PARTIAL}" \
-    | "${PGX[@]}" pg_restore --list > /dev/null \
+    | { "${PGX[@]}" pg_restore --list > /dev/null; listed=$?; cat > /dev/null; exit "${listed}"; } \
     || { echo "VERIFY FAILED: the backup cannot be read back; nothing was kept" >&2; exit 1; }
 
 mv -- "${PARTIAL}" "${OUT}"
