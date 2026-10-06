@@ -2,6 +2,18 @@
  * In-App Notification Center Data Transfer Objects (DTOs) for FlowPilot AI.
  */
 
+/** The server's `NotificationType`: the categories the inbox filters by. */
+export const NOTIFICATION_CATEGORIES = ["DOCUMENT", "AUTOMATION", "EMAIL", "SYSTEM", "SECURITY"] as const;
+export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+
+export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
+  DOCUMENT: "Documents",
+  AUTOMATION: "Automation",
+  EMAIL: "Email",
+  SYSTEM: "System",
+  SECURITY: "Security",
+};
+
 export interface Notification {
   readonly id: string;
   readonly user_id: string;
