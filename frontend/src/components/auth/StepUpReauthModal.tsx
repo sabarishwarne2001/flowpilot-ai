@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ShieldAlert, X } from "lucide-react";
 
+import { loginSecondFactorRequest } from "@/services/api/auth";
 import apiClient from "@/services/api/client";
 import { ApiError } from "@/services/api/errors";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
+import { isMfaChallenge, type LoginResponse } from "@/types/auth";
 
 /**
  * Step-up re-authentication.
@@ -68,10 +70,14 @@ const StepUpReauthModal: React.FC = () => {
   const setToken = useAuthStore((state) => state.setToken);
 
   const [password, setPassword] = useState("");
+  // N-017: set once the password was right for a user with two-factor sign-in on.
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const passwordRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const open = challenge !== null;
@@ -86,6 +92,8 @@ const StepUpReauthModal: React.FC = () => {
       // the modal unmounts keeps it in the React tree and in any devtools
       // snapshot taken afterwards.
       setPassword("");
+      setMfaToken(null);
+      setCode("");
       setError(null);
       setSubmitting(false);
       return;
@@ -150,7 +158,47 @@ const StepUpReauthModal: React.FC = () => {
   /* Submission                                                          */
   /* ------------------------------------------------------------------ */
 
+  const finish = useCallback(
+    (accessToken: string) => {
+      setToken(accessToken);
+
+      // Close first, then replay. The replayed request surfaces its own errors,
+      // and rendering those behind a modal that has not yet unmounted puts a
+      // toast underneath an overlay.
+      const retry = resolveStepUp();
+      setPassword("");
+      setCode("");
+      setMfaToken(null);
+      retry?.();
+    },
+    [resolveStepUp, setToken],
+  );
+
+  const handleCodeSubmit = useCallback(async () => {
+    if (submitting || !mfaToken || code.trim().length === 0) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await loginSecondFactorRequest(mfaToken, code, { skipStepUp: true });
+      finish(response.access_token);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError ? caught.message : "Could not verify the code. Try again.",
+      );
+      setCode("");
+      codeRef.current?.focus();
+    } finally {
+      setSubmitting(false);
+    }
+  }, [code, finish, mfaToken, submitting]);
+
   const handleSubmit = useCallback(async () => {
+    if (mfaToken) {
+      await handleCodeSubmit();
+      return;
+    }
     if (submitting || password.length === 0) {
       return;
     }
@@ -168,31 +216,23 @@ const StepUpReauthModal: React.FC = () => {
         password,
       });
 
-      const response = await apiClient.post<{ access_token: string }>(
-        "/auth/login",
-        body,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-          },
-          _skipStepUp: true,
-        } as never,
-      );
+      const response = await apiClient.post<LoginResponse>("/auth/login", body, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        _skipStepUp: true,
+      } as never);
 
-      setToken(response.data.access_token);
-
-      // Close first, then replay. The replayed request surfaces its own errors,
-      // and rendering those behind a modal that has not yet unmounted puts a
-      // toast underneath an overlay.
-      const retry = resolveStepUp();
-      setPassword("");
-      retry?.();
+      if (isMfaChallenge(response.data)) {
+        setPassword("");
+        setMfaToken(response.data.mfa_token);
+        return;
+      }
+      finish(response.data.access_token);
     } catch (caught) {
       const message =
-        caught instanceof ApiError
-          ? caught.message
-          : "Could not verify your password. Try again.";
+        caught instanceof ApiError ? caught.message : "Could not verify your password. Try again.";
 
       setError(message);
       setPassword("");
@@ -200,7 +240,13 @@ const StepUpReauthModal: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [password, resolveStepUp, setToken, submitting, userEmail]);
+  }, [finish, handleCodeSubmit, mfaToken, password, submitting, userEmail]);
+
+  useEffect(() => {
+    if (mfaToken) {
+      codeRef.current?.focus();
+    }
+  }, [mfaToken]);
 
   if (!challenge) {
     return null;
@@ -243,10 +289,7 @@ const StepUpReauthModal: React.FC = () => {
             <h2 id="stepup-title" className="text-lg font-semibold">
               Confirm it&apos;s you
             </h2>
-            <p
-              id="stepup-reason"
-              className="mt-1 text-sm text-muted-foreground"
-            >
+            <p id="stepup-reason" className="mt-1 text-sm text-muted-foreground">
               {challenge.reason}
             </p>
           </div>
@@ -262,48 +305,71 @@ const StepUpReauthModal: React.FC = () => {
           </button>
         </div>
 
-        <div className="mt-5 space-y-3">
-          <label
-            htmlFor="stepup-password"
-            className="block text-sm font-medium"
-          >
-            Password for {userEmail || "your account"}
-          </label>
+        {mfaToken ? (
+          <div className="mt-5 space-y-3">
+            <label htmlFor="stepup-code" className="block text-sm font-medium">
+              Code from your authenticator app, or a recovery code
+            </label>
+            <input
+              ref={codeRef}
+              id="stepup-code"
+              autoComplete="one-time-code"
+              value={code}
+              disabled={submitting}
+              onChange={(event) => setCode(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleCodeSubmit();
+                }
+              }}
+              aria-invalid={error !== null}
+              aria-errormessage={error ? "stepup-error" : undefined}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            />
+            {error && (
+              <p id="stepup-error" role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            <label htmlFor="stepup-password" className="block text-sm font-medium">
+              Password for {userEmail || "your account"}
+            </label>
 
-          {/*
+            {/*
             No <form>. A nested form inside an application that already has one
             mounted produces a DOM validation error in React 19, and the Enter
             key is handled explicitly below regardless.
           */}
-          <input
-            ref={passwordRef}
-            id="stepup-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            disabled={submitting}
-            onChange={(event) => setPassword(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleSubmit();
-              }
-            }}
-            aria-invalid={error !== null}
-            aria-errormessage={error ? "stepup-error" : undefined}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          />
+            <input
+              ref={passwordRef}
+              id="stepup-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              disabled={submitting}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+              aria-invalid={error !== null}
+              aria-errormessage={error ? "stepup-error" : undefined}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            />
 
-          {error && (
-            <p
-              id="stepup-error"
-              role="alert"
-              className="text-sm text-destructive"
-            >
-              {error}
-            </p>
-          )}
-        </div>
+            {error && (
+              <p id="stepup-error" role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mt-6 flex justify-end gap-3">
           <button
@@ -318,7 +384,7 @@ const StepUpReauthModal: React.FC = () => {
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={submitting || password.length === 0}
+            disabled={submitting || (mfaToken ? code.trim().length === 0 : password.length === 0)}
             className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? "Confirming…" : "Confirm"}
@@ -326,8 +392,8 @@ const StepUpReauthModal: React.FC = () => {
         </div>
 
         <p className="mt-4 text-xs text-muted-foreground">
-          Signing in through your company&apos;s identity provider? Cancel, sign
-          in again from the login screen, and retry the action.
+          Signing in through your company&apos;s identity provider? Cancel, sign in again from the
+          login screen, and retry the action.
         </p>
       </div>
     </div>

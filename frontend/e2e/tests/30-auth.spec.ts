@@ -7,6 +7,7 @@ import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, apiLogin, loginAs } from "../support/api";
 import { PASSWORD, USERS, runId, ws } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
+import { totpCode } from "../support/totp";
 
 const NEW_PASSWORD = "E2e-Reset-Pass-2026!";
 
@@ -56,6 +57,81 @@ test.describe("sign-up, verification and first organization", () => {
     await signUp(page, USERS["C.owner"].email);
     await expect(page.locator("body")).toContainText(/check your (email|inbox)|verification|sent/i);
     await expect(page.locator("body")).not.toContainText(/already (exists|registered|taken)/i);
+  });
+});
+
+test.describe("two-factor sign-in (N-017)", () => {
+  test.setTimeout(180_000);
+
+  test("turn it on, sign in with an app code, then with a recovery code, then turn it off", async ({ page, problems }) => {
+    problems.allowHttp(/\/auth\/login\/mfa$/, [401], "a wrong code is refused");
+    problems.allowHttp(/\/auth\/refresh$/, [401], "no session after sign-out");
+    const email = `mfa-${runId()}@e2e.example.com`;
+    const since = Date.now() - 1_000;
+    await signUp(page, email);
+    const mail = await waitForMail(email, /verify-email/, since);
+    await page.goto(linkFrom(mail, /\/verify-email/));
+    await expect(page.locator("body")).toContainText(/verified|confirmed|thank/i, { timeout: 15_000 });
+    await loginThroughForm(page, email, PASSWORD);
+    await expect(page).toHaveURL(/\/onboarding|\/organizations\/new|\/workspaces/, { timeout: 20_000 });
+    await page.getByRole("textbox").first().fill(`E2E MFA Org ${runId()}`);
+    await page.getByRole("button", { name: /create|continue|get started/i }).first().click();
+    await expect(page).not.toHaveURL(/\/onboarding|\/organizations\/new|\/workspaces/, { timeout: 20_000 });
+    const workspaceBase = new URL(page.url()).pathname.split("/").slice(0, 3).join("/");
+
+    // Turn it on: password, scan (here: the typed-in key), a code from the app.
+    await page.goto(`${workspaceBase}/settings`);
+    const panel = page.getByRole("region", { name: "Two-factor sign-in" });
+    await expect(panel.getByTestId("mfa-state")).toContainText("Off.", { timeout: 15_000 });
+    await panel.getByRole("button", { name: "Turn on two-factor sign-in" }).click();
+    await panel.getByLabel("Current password").fill(PASSWORD);
+    await panel.getByRole("button", { name: "Continue" }).click();
+    await expect(panel.getByRole("img", { name: "QR code to scan with your authenticator app" })).toBeVisible();
+    const secret = (await panel.getByTestId("mfa-secret").innerText()).replace(/\s/g, "");
+    await panel.getByLabel("6-digit code from the app").fill(totpCode(secret));
+    await panel.getByRole("button", { name: "Turn on", exact: true }).click();
+    const codes = panel.getByRole("list", { name: "Recovery codes" }).getByRole("listitem");
+    await expect(codes).toHaveCount(10);
+    const recovery = (await codes.nth(0).innerText()).trim();
+    const secondRecovery = (await codes.nth(1).innerText()).trim();
+    await panel.getByRole("button", { name: "I have saved them" }).click();
+    await expect(panel.getByTestId("mfa-state")).toContainText("On. 10 recovery codes left.");
+    await expectHealthyPage(page);
+
+    // The password alone no longer signs in: a code is asked for, a wrong one is refused.
+    await page.getByRole("button", { name: "Sign Out" }).click();
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+    await loginThroughForm(page, email, PASSWORD);
+    const codeField = page.getByRole("textbox", { name: "Authentication code" });
+    await expect(codeField).toBeVisible({ timeout: 15_000 });
+    await codeField.fill("000000");
+    await page.getByRole("button", { name: "Verify" }).click();
+    await expect(page.getByRole("alert")).toContainText(/code is not right/i);
+    await expect(page).toHaveURL(/\/login/);
+    // The step the app showed at turn-on is spent; the next one is the app's next code.
+    await codeField.fill(totpCode(secret, Date.now() + 30_000));
+    await page.getByRole("button", { name: "Verify" }).click();
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+
+    // A recovery code works once.
+    await page.getByRole("button", { name: "Sign Out" }).click();
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+    await loginThroughForm(page, email, PASSWORD);
+    await page.getByRole("button", { name: "Use a recovery code" }).click();
+    await page.getByRole("textbox", { name: "Recovery code" }).fill(recovery);
+    await page.getByRole("button", { name: "Verify" }).click();
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+
+    // Turning it off needs the password and a code.
+    await page.goto(`${workspaceBase}/settings`);
+    await expect(panel.getByTestId("mfa-state")).toContainText("On. 9 recovery codes left.", { timeout: 15_000 });
+    await panel.getByRole("button", { name: "Turn off", exact: true }).click();
+    await panel.getByLabel("Current password").fill(PASSWORD);
+    // An app code here could fall in a 30-second step already used to sign in; a recovery code cannot.
+    await panel.getByLabel("Code from the app, or a recovery code").fill(secondRecovery);
+    await panel.getByRole("button", { name: "Turn off two-factor sign-in" }).click();
+    await expect(panel.getByTestId("mfa-state")).toContainText("Off.", { timeout: 15_000 });
+    await expectHealthyPage(page);
   });
 });
 

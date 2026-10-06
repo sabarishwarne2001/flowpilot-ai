@@ -7,7 +7,7 @@ and maps standardized, secure response payloads.
 
 import uuid
 from datetime import datetime
-from typing import Union
+from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
 class UserBase(BaseModel):
@@ -69,6 +69,24 @@ class TokenResponse(BaseModel):
     """
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(BaseModel):
+    """
+    What /auth/login answers. Normally a session (`access_token`). For a user with
+    two-factor sign-in on (N-017) the password alone opens nothing: `mfa_required`
+    is true, `access_token` is absent and `mfa_token` is a five-minute challenge
+    to send to /auth/login/mfa with a code from the authenticator app.
+    """
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
+
+
+class MfaLoginRequest(BaseModel):
+    mfa_token: str = Field(min_length=1, max_length=2048)
+    code: str = Field(min_length=6, max_length=32)
 
 class TokenData(BaseModel):
     """

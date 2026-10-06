@@ -13,6 +13,7 @@ import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import EmailChangePanel from "@/pages/Settings/EmailChangePanel";
 import PasswordChangePanel from "@/pages/Settings/PasswordChangePanel";
+import TwoFactorPanel from "@/pages/Settings/TwoFactorPanel";
 import MyWorkspaceGrantsPanel from "@/pages/Settings/MyWorkspaceGrantsPanel";
 import {
   AVATAR_MAX_BYTES,
@@ -384,6 +385,8 @@ export const ProfileSettings: React.FC = () => {
       <EmailChangePanel currentEmail={profile.email} />
 
       <PasswordChangePanel />
+
+      <TwoFactorPanel />
 
       <MyWorkspaceGrantsPanel />
     </div>

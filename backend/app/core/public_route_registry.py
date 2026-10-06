@@ -70,6 +70,13 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         rate_limit_policy="POLICY_LOGIN_IP",
     ),
     PublicRoute(
+        path="/api/v1/auth/login/mfa",
+        methods=("POST",),
+        phase="N-017",
+        credential="five-minute sign-in challenge from /auth/login plus an authenticator or recovery code",
+        rate_limit_policy="POLICY_LOGIN_IP",
+    ),
+    PublicRoute(
         path="/api/v1/auth/register",
         methods=("POST",),
         phase="ARCH-03",

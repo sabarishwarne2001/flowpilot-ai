@@ -40,6 +40,8 @@ from app.models.user_session import SessionRevokedReason, UserSession
 from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
+    LoginResponse,
+    MfaLoginRequest,
     PasswordActionResponse,
     RegistrationAcknowledgement,
     ResendVerificationResponse,
@@ -53,6 +55,7 @@ from app.schemas.auth import (
 )
 from app.services import (
     auth_token_service,
+    mfa_service,
     password_service,
     session_service,
     verification_service,
@@ -62,7 +65,10 @@ from app.services.login_backoff_service import (
     apply_delay,
     check_login_backoff,
     clear_login_backoff,
+    clear_second_factor_failures,
     record_login_failure,
+    record_second_factor_failure,
+    second_factor_locked,
 )
 
 logger = logging.getLogger("app.api.v1.auth")
@@ -205,7 +211,8 @@ def _send_verification_safely(
 # same counter, so every attempt cost two and the allowance was halved.
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=LoginResponse,
+    response_model_exclude_none=True,
 )
 async def login(
     request: Request,
@@ -239,8 +246,21 @@ async def login(
         )
         raise _login_refused()
 
-    clear_login_backoff(ip, email)
+    if mfa_service.is_enabled(db, user.id):
+        # N-017: the password was right, but it is only half. No session yet;
+        # the backoff is cleared once the second step succeeds.
+        logger.info("AUTH_LOGIN_MFA_CHALLENGE | user=%s | ip=%s", user.id, ip)
+        return {
+            "mfa_required": True,
+            "mfa_token": mfa_service.issue_challenge(user),
+            "token_type": "mfa",
+        }
 
+    clear_login_backoff(ip, email)
+    return _open_session(db, request, response, user=user, ip=ip)
+
+
+def _open_session(db: Session, request: Request, response: Response, *, user: User, ip: str) -> dict[str, Any]:
     issued = session_service.create_session(
         db,
         user=user,
@@ -256,6 +276,58 @@ async def login(
         issued.family_id,
     )
     return _issue(response, user_id=user.id, issued=issued)
+
+
+def _second_step_refused() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "code": "MFA_CODE_INVALID",
+            "message": "That code is not right, or the sign-in took too long. Check the code and try again.",
+        },
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+# N-017: the second sign-in step. Public (the caller has no session yet); limited by
+# the same POLICY_LOGIN_IP as /auth/login, by the (ip, email) backoff ladder, and by
+# a per-account cap on wrong codes (login_backoff_service.SECOND_FACTOR_MAX_FAILURES).
+@router.post("/login/mfa", response_model=TokenResponse)
+async def login_second_factor(
+    payload: MfaLoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    ip = _client_ip(request) or "unknown"
+    user_id = mfa_service.read_challenge(payload.mfa_token)
+    user = db.get(User, user_id) if user_id else None
+    if user is None or not user.is_active or not mfa_service.is_enabled(db, user.id):
+        raise _second_step_refused()
+
+    email = user.email.strip().lower()
+    backoff = check_login_backoff(ip, email)
+    apply_delay(backoff.delay_ms)
+    if backoff.is_backed_off or second_factor_locked(email):
+        logger.info("AUTH_LOGIN_MFA_REFUSED | reason=locked | user=%s | ip=%s", user.id, ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "MFA_LOCKED",
+                "message": "Too many wrong codes. Wait 15 minutes, then sign in again.",
+            },
+        )
+
+    if not mfa_service.verify_second_factor(db, user=user, code=payload.code):
+        db.commit()
+        record_login_failure(ip, email)
+        record_second_factor_failure(email)
+        logger.info("AUTH_LOGIN_MFA_REFUSED | reason=bad_code | user=%s | ip=%s", user.id, ip)
+        raise _second_step_refused()
+
+    clear_login_backoff(ip, email)
+    clear_second_factor_failures(email)
+    return _open_session(db, request, response, user=user, ip=ip)
 
 
 @router.post("/refresh", response_model=TokenResponse)

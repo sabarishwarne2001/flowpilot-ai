@@ -290,3 +290,46 @@ __all__ = [
     "reset_store",
     "set_store",
 ]
+
+
+# ===========================================================================
+# N-017: the second sign-in step
+# ===========================================================================
+
+#: A second factor is six digits, so it is only as good as the number of guesses
+#: allowed. Ten wrong codes for one account inside the window close that
+#: account's second step until the window passes. This applies whatever
+#: LOGIN_BACKOFF_ENABLED says: whoever reaches this step already has the password.
+SECOND_FACTOR_MAX_FAILURES = 10
+SECOND_FACTOR_WINDOW_SECONDS = 900
+
+
+def _second_factor_key(email: str) -> str:
+    return f"bo:v2:mfa:{_account_hmac(email)}:n"
+
+
+def second_factor_locked(email: str) -> bool:
+    try:
+        raw = _store().get(_second_factor_key(email))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("login_backoff.mfa_read_failed", extra={"error": str(exc)})
+        return False
+    try:
+        return int(raw or 0) >= SECOND_FACTOR_MAX_FAILURES
+    except (TypeError, ValueError):
+        return False
+
+
+def record_second_factor_failure(email: str) -> int:
+    try:
+        return _store().incr(_second_factor_key(email), SECOND_FACTOR_WINDOW_SECONDS)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("login_backoff.mfa_write_failed", extra={"error": str(exc)})
+        return 0
+
+
+def clear_second_factor_failures(email: str) -> None:
+    try:
+        _store().delete(_second_factor_key(email))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("login_backoff.mfa_clear_failed", extra={"error": str(exc)})

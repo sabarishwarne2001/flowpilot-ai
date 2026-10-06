@@ -41,6 +41,7 @@ from app.api.v1 import (
     internal_tls,
     marketplace,
     me,
+    mfa,
     partner,
     procurement,
     redactions,
@@ -80,6 +81,7 @@ api_router.include_router(organization_notifications.router)
 api_router.include_router(audit_logs.router)
 api_router.include_router(api_keys.router)
 api_router.include_router(me.router)
+api_router.include_router(mfa.router)
 api_router.include_router(avatar.router)
 api_router.include_router(email_change.router)
 api_router.include_router(workspaces.router)
