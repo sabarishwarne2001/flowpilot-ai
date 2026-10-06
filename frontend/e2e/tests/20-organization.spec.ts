@@ -405,9 +405,20 @@ test.describe("Webhooks", () => {
     await expectHealthyPage(page);
   });
 
-  test("an endpoint can be sent a test ping (requested capability)", async ({ page }) => {
+  test("an endpoint can be sent a signed test event (F-080)", async ({ page, problems }) => {
+    problems.allowHttp(/\/webhooks\//, [400, 422, 502], "the receiver is unreachable from the sandbox");
     await page.goto(org("C", "webhooks"));
-    await expect(page.getByRole("button", { name: /send test|test ping|ping/i }).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: "New endpoint" }).click();
+    const url = `https://hooks.caretakers.example.com/ping-${runId()}`;
+    await page.getByRole("textbox", { name: "Endpoint URL" }).fill(url);
+    await page.getByRole("checkbox", { name: "work_item.created" }).check();
+    await page.getByRole("button", { name: /create|save|add endpoint/i }).last().click();
+    await page.getByRole("button", { name: "I've saved it" }).click();
+    const endpoint = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${url}` }) });
+    await endpoint.getByRole("button", { name: "Deliveries" }).click();
+    await endpoint.getByRole("button", { name: "Send test event" }).click();
+    await expect(page.getByText(/Test event queued/)).toBeVisible({ timeout: 15_000 });
+    await expectHealthyPage(page);
   });
 });
 
