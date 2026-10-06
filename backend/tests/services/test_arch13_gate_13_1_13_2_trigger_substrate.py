@@ -193,6 +193,11 @@ async def test_rules_evaluate_without_email_settings(
         )
         is None
     ), "this test requires a workspace with no email settings"
+    # ...and no platform relay to fall back to: with one reachable (the browser
+    # suite's mail sink, a developer's .env) the email is sent and nothing fails.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "PLATFORM_SMTP_HOST", "")
 
     work_item = work_item_factory(classification="Invoice")
     rule_factory(
