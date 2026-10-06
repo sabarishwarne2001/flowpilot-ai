@@ -24,7 +24,12 @@ const ORG_NAV_BY_ROLE: Record<string, { visible: string[]; hidden: string[] }> =
     hidden: [],
   },
   // N-006: OWNER and ADMIN may both mint API keys, so the sidebar shows API keys to ADMIN (F-015, fixed).
-  "A.admin": { visible: ["General", "Members", "Developer platform", "API keys"], hidden: ["Billing"] },
+  // Decided in the final release: ADMIN also sees Webhooks, the audit log and Enterprise identity
+  // (the API serves them to ADMIN; identity writes stay OWNER-only on the server).
+  "A.admin": {
+    visible: ["General", "Members", "Developer platform", "API keys", "Webhooks", "Audit log"],
+    hidden: ["Billing"],
+  },
   "A.billing": { visible: ["General", "Billing"], hidden: ["Members", "API keys", "Audit log"] },
   "A.member": {
     visible: ["General", "Notifications"],
@@ -60,6 +65,16 @@ test.describe("workspace sidebar — viewer", () => {
     await settle(page);
     await expect(page.getByRole("link", { name: "Documents", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+  });
+
+  test("Workflows, Run history and Review queue are hidden from a VIEWER (N-019)", async ({ page }) => {
+    await page.goto(ws("A"));
+    await settle(page);
+    const nav = page.getByRole("navigation", { name: "Primary Navigation" });
+    await expect(nav.getByRole("link", { name: "Documents", exact: true })).toBeVisible();
+    for (const name of ["Workflows", "Run history", "Review queue"]) {
+      await expect(nav.getByRole("link", { name, exact: true }), `${name} hidden`).toHaveCount(0);
+    }
   });
 });
 

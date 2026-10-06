@@ -58,6 +58,8 @@ const ORG_NAV_LABEL: Record<string, string> = {
   // N-021: bring your own AI key is Business and Enterprise.
   "org:byok": "Enterprise BYOK & models",
   "org:analytics": "Analytics & BI egress",
+  // N-002: own service-level targets are the Enterprise priority SLO.
+  "org:service-levels": "Service levels",
 };
 
 const TENANT_OWNER: Record<"A" | "B" | "C", UserKey> = { A: "A.owner", B: "B.owner", C: "C.owner" };
