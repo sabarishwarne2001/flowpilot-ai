@@ -117,6 +117,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setIsDrawerOpen(false);
   }, []);
 
+  // F-056. Why the last question was not answered, shown in the panel until
+  // the next send. Before, a 4-second toast was the only trace and the
+  // question itself was gone from the box and the conversation.
+  const [sendFailure, setSendFailure] = useState<string | null>(null);
+
   const handleQuerySubmit = async (data: MessageFormInput): Promise<void> => {
     if (!conversationId || !workspaceId) {
       toast.error("Please select or create a conversation first.");
@@ -129,6 +134,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
 
     reset();
+    setSendFailure(null);
     const timestamp = new Date().toISOString();
 
     const optimisticUserMessage: ConversationMessage = {
@@ -179,24 +185,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       setLocalMessages((previous) =>
         previous.filter((message) => !message.id.startsWith("optimistic-"))
       );
+      // F-056: the question goes back into the box, so nothing typed is lost.
+      setValue("message", queryContent, { shouldDirty: true });
 
+      let reason: string;
       if (err instanceof ApiError) {
         switch (err.status) {
           case 429:
-            toast.error(err.detail ?? "The AI service is temporarily busy.");
+            reason = err.detail ?? "The AI service is busy right now.";
             break;
           case 503:
-            toast.error("The AI service is temporarily unavailable. Please try again later.");
+            reason = "The AI service is temporarily unavailable.";
             break;
           case 500:
-            toast.error("An unexpected server error occurred.");
+            reason = "An unexpected server error occurred.";
             break;
           default:
-            toast.error(err.message ?? "Failed to send message.");
+            reason = err.message ?? "The message could not be sent.";
         }
       } else {
-        toast.error("Unable to reach the server.");
+        reason = "The server could not be reached.";
       }
+      setSendFailure(reason);
+      toast.error(`Not sent: ${reason}`);
     }
   };
 
@@ -298,6 +309,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       </div>
 
       <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-2.5 sm:p-3.5">
+        {sendFailure ? (
+          <div
+            role="alert"
+            data-testid="assistant-send-failure"
+            className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs sm:text-sm text-foreground"
+          >
+            <ShieldAlert className="h-4 w-4 flex-shrink-0 text-destructive" aria-hidden />
+            <span className="min-w-0 flex-1">
+              Your question was not sent. {sendFailure} It is still in the box below; send it again
+              when you are ready.
+            </span>
+            <button
+              type="submit"
+              className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold hover:bg-muted/60"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
         <div className="flex items-end gap-2 sm:gap-3">
           <div className="flex-1">
             <input
