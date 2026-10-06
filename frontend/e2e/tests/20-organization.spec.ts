@@ -92,8 +92,8 @@ test.describe("Members: invite, accept, change role, remove", () => {
     await role.selectOption("ADMIN");
     await expect(page.locator("body")).toContainText(/updated|changed|saved|ADMIN/i);
     await page.getByRole("button", { name: `Remove ${invitee}` }).click();
-    const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog"));
-    await confirm.getByRole("button", { name: /remove/i }).click();
+    // Removal is confirmed inline in the member's row (Confirm removal / Cancel).
+    await page.getByRole("button", { name: "Confirm removal" }).click();
     await expect(page.getByRole("button", { name: `Remove ${invitee}` })).toHaveCount(0, { timeout: 15_000 });
   });
 });
