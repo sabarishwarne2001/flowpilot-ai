@@ -177,6 +177,15 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
                 f"'VOID'::{INVOICE_STATUS_ENUM_NAME}"
             ),
         ),
+        # F-017: created by the Dodo gateway migration; the model now says so.
+        CheckConstraint("gateway IN ('STRIPE', 'DODO')", name="ck_invoices_gateway_known"),
+        Index(
+            "uq_invoices_gateway_invoice",
+            "gateway",
+            "gateway_invoice_id",
+            unique=True,
+            postgresql_where=text("gateway_invoice_id IS NOT NULL"),
+        ),
     )
 
     billing_account_id: Mapped[uuid.UUID] = mapped_column(
@@ -202,6 +211,15 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
             "invoice at all."
         ),
     )
+
+    # F-017. Which payment gateway issued the invoice and its id there. The
+    # columns came with the Dodo gateway migration and were never mapped, so
+    # the ORM could not read them; the database default keeps Stripe rows as
+    # they were.
+    gateway: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'STRIPE'")
+    )
+    gateway_invoice_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     number: Mapped[str] = mapped_column(
         Text,
@@ -331,6 +349,11 @@ class InvoiceLineItem(Base, UUIDMixin):
         ),
         Index("ix_invoice_line_items_invoice_id", "invoice_id"),
         Index("ix_invoice_line_items_price_book_entry_id", "price_book_entry_id"),
+    )
+
+    # F-017: the column exists in the database (server default now()).
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
     invoice_id: Mapped[uuid.UUID] = mapped_column(

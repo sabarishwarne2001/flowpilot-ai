@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum, INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -103,7 +103,7 @@ class UserSession(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     idp_session_index: Mapped[Optional[str]] = mapped_column(
-        String(512),
+        Text,  # F-017: TEXT in the database
         nullable=True,
     )
     pinned_ip: Mapped[Optional[str]] = mapped_column(

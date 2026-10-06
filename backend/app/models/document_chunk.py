@@ -209,7 +209,7 @@ class DocumentChunk(Base):
     content_tsv: Mapped[str] = mapped_column(
         TSVECTOR,
         Computed(f"to_tsvector('{TSVECTOR_CONFIG}', content)", persisted=True),
-        nullable=False,
+        nullable=True,  # F-017: a generated column, nullable in the database
     )
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
 

@@ -52,11 +52,12 @@ class DocumentSettings(Base, UUIDMixin, TimestampMixin):
         server_default="10",
     )
 
-    intent_config: Mapped[dict[str, Any]] = mapped_column(
-        JSONB,
-        nullable=False,
+    # F-017: nullable in the database, where NULL means "platform defaults".
+    intent_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB(none_as_null=True),
+        nullable=True,
         default=dict,
-        server_default="{}",
+        comment="ARCH-11.5. {intent_name: [keyword, ...]}. NULL follows platform defaults.",
     )
 
     chunk_size: Mapped[int] = mapped_column(

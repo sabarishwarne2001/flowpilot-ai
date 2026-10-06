@@ -58,6 +58,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import (
+    CHAR,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -193,7 +194,7 @@ class RedactionJob(Base, UUIDMixin, TimestampMixin):
         ForeignKey("uploaded_files.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False)  # F-017: CHAR(64) in the database
 
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text(f"'{JOB_STATUS_DETECTING}'")
@@ -211,7 +212,7 @@ class RedactionJob(Base, UUIDMixin, TimestampMixin):
         ForeignKey("uploaded_files.id", ondelete="RESTRICT"),
         nullable=True,
     )
-    output_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    output_sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
     manifest_file_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("uploaded_files.id", ondelete="RESTRICT"),
@@ -232,7 +233,7 @@ class RedactionJob(Base, UUIDMixin, TimestampMixin):
 
     #: `manifest.input_digest`. Present from the moment apply starts, so a
     #: re-apply of an unchanged job is decidable without re-rendering.
-    input_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    input_digest: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
     page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -346,7 +347,7 @@ class RedactionRegion(Base, UUIDMixin):
     #: NULL for manual regions: there is no matched text, only a rectangle a
     #: person drew, and a digest of "" would be a constant that looks like
     #: evidence.
-    token_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    token_digest: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
 
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
