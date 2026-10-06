@@ -27,6 +27,27 @@ GROQ_KEY = "gsk_" + "a" * 48
 GROQ_KEY_2 = "gsk_" + "b" * 48
 GEMINI_KEY = "AIza" + "c" * 35
 
+#: F-099. ARCH-23 made all six providers routable. The disclosure contract
+#: (catalogue badge, UNROUTABLE status, 422 on a tenant-key rule) still holds
+#: for any provider that is not, so these tests mark one provider unroutable
+#: for their duration, the way a newly added provider starts out.
+SIMULATED_UNROUTABLE_REASON = "simulated for the test: no adapter can execute this provider yet"
+
+
+@pytest.fixture()
+def unroutable_gemini(monkeypatch):
+    import dataclasses
+
+    from app.core.byok_providers import PROVIDER_REGISTRY
+
+    spec = PROVIDER_REGISTRY[PROVIDER_GEMINI]
+    monkeypatch.setitem(
+        PROVIDER_REGISTRY,
+        PROVIDER_GEMINI,
+        dataclasses.replace(spec, is_routable=False, unroutable_reason=SIMULATED_UNROUTABLE_REASON),
+    )
+    return PROVIDER_GEMINI
+
 
 def base(organization_id) -> str:
     return f"/api/v1/organizations/{organization_id}/byok"
@@ -266,8 +287,24 @@ class TestValidationEndpoint:
 
 
 class TestRoutabilityIsDisclosed:
-    def test_the_catalogue_marks_five_providers_unroutable(
+    def test_the_catalogue_marks_every_provider_routable(
         self, client: TestClient, tenant: Fixture
+    ) -> None:
+        """ARCH-23: all six providers are routable and say so."""
+        response = client.get(
+            f"{base(tenant.organization.id)}/providers",
+            headers=tenant.org_admin.headers,
+        )
+        assert response.status_code == 200
+        entries = {entry["provider"]: entry for entry in response.json()}
+
+        assert len(entries) == 6
+        for provider, entry in entries.items():
+            assert entry["is_routable"] is True, provider
+            assert entry["unroutable_reason"] is None, provider
+
+    def test_the_catalogue_discloses_an_unroutable_provider_with_its_reason(
+        self, client: TestClient, tenant: Fixture, unroutable_gemini: str
     ) -> None:
         response = client.get(
             f"{base(tenant.organization.id)}/providers",
@@ -278,13 +315,13 @@ class TestRoutabilityIsDisclosed:
 
         assert entries[PROVIDER_GROQ]["is_routable"] is True
         assert entries[PROVIDER_GEMINI]["is_routable"] is False
-        assert entries[PROVIDER_GEMINI]["unroutable_reason"]
+        assert entries[PROVIDER_GEMINI]["unroutable_reason"] == SIMULATED_UNROUTABLE_REASON
         assert sum(
             1 for entry in entries.values() if not entry["is_routable"]
-        ) == 5
+        ) == 1
 
     def test_a_stored_gemini_key_reports_unroutable_not_active(
-        self, client: TestClient, tenant: Fixture, monkeypatch
+        self, client: TestClient, tenant: Fixture, monkeypatch, unroutable_gemini: str
     ) -> None:
         client.put(
             f"{base(tenant.organization.id)}/credentials",
@@ -312,15 +349,15 @@ class TestRoutabilityIsDisclosed:
 
 class TestRoutingRules:
     def test_a_tenant_key_rule_on_an_unroutable_provider_is_422(
-        self, client: TestClient, tenant: Fixture
+        self, client: TestClient, tenant: Fixture, unroutable_gemini: str
     ) -> None:
         response = client.put(
             f"{base(tenant.organization.id)}/routes",
             headers=tenant.owner.headers,
             json={
                 "task_type": "ASSISTANT",
-                "provider": PROVIDER_ANTHROPIC,
-                "model_name": "claude-sonnet-4-6",
+                "provider": PROVIDER_GEMINI,
+                "model_name": "gemini-2.0-flash",
                 "use_tenant_key": True,
             },
         )

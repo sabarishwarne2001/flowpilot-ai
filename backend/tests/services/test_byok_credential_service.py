@@ -55,6 +55,44 @@ GROQ_KEY = "gsk_" + "a" * 48
 GROQ_KEY_2 = "gsk_" + "b" * 48
 GEMINI_KEY = "AIza" + "c" * 35
 
+#: F-099. ARCH-23 made all six providers routable, so the registry no longer
+#: holds an unroutable one. The disclosure rules still matter ("the next
+#: provider added will be unroutable for a while", byok_providers.py), so the
+#: tests that prove them mark one provider unroutable for their duration.
+SIMULATED_UNROUTABLE_REASON = (
+    "simulated for the test: no adapter can execute this provider yet"
+)
+
+
+@pytest.fixture()
+def unroutable_provider(monkeypatch):
+    """Mark OpenAI unroutable, the way a newly added provider starts out."""
+    import dataclasses
+
+    from app.core.byok_providers import PROVIDER_REGISTRY
+
+    spec = PROVIDER_REGISTRY[PROVIDER_OPENAI]
+    monkeypatch.setitem(
+        PROVIDER_REGISTRY,
+        PROVIDER_OPENAI,
+        dataclasses.replace(spec, is_routable=False, unroutable_reason=SIMULATED_UNROUTABLE_REASON),
+    )
+    return PROVIDER_OPENAI
+
+
+@pytest.fixture()
+def platform_inference(db_session: Session, tenant: Fixture):
+    """The tenant on a real tier, which grants inference on the platform account.
+
+    ARCH-29 D-2 made routing fail closed: a decision that ends on the platform
+    account needs `llm.platform_key` from the tenant's tier, and every seeded
+    tier grants it. These tests prove the downgrade paths, so the tenant needs
+    a tier, as every real organization has.
+    """
+    from tests.security.plans import put_on_plan
+
+    return put_on_plan(db_session, tenant.organization, "free")
+
 
 # ---------------------------------------------------------------------------
 # Encryption at rest
@@ -343,18 +381,16 @@ class TestRotation:
 
 
 class TestProviderRegistry:
-    def test_six_providers_stored_one_routable(self) -> None:
+    def test_six_providers_stored_six_routable(self) -> None:
+        """ARCH-23: every stored provider has an adapter and is routable."""
         assert len(BYOK_PROVIDER_VALUES) == 6
-        assert ROUTABLE_PROVIDERS == {PROVIDER_GROQ}
+        assert ROUTABLE_PROVIDERS == set(BYOK_PROVIDER_VALUES)
 
-    def test_gemini_is_stored_but_not_routable(self) -> None:
-        spec = spec_for(PROVIDER_GEMINI)
-        assert spec.is_routable is False
-        assert spec.unroutable_reason
-        assert "genai.configure" in spec.unroutable_reason, (
-            "the reason must name the process-global hazard, or the next "
-            "reader will assume it is an arbitrary restriction and lift it"
-        )
+    def test_a_routable_provider_carries_no_unroutable_reason(self) -> None:
+        for provider in BYOK_PROVIDER_VALUES:
+            spec = spec_for(provider)
+            assert spec.is_routable is True, provider
+            assert spec.unroutable_reason is None, provider
 
     def test_unroutable_providers_have_no_adapter(self) -> None:
         from app.services.byok.provider_clients import has_adapter
@@ -368,9 +404,10 @@ class TestProviderRegistry:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("platform_inference")
 class TestModelRouting:
     def test_a_tenant_key_rule_on_an_unroutable_provider_is_refused(
-        self, db_session: Session, tenant: Fixture
+        self, db_session: Session, tenant: Fixture, unroutable_provider: str
     ) -> None:
         with pytest.raises(model_routing_service.UnroutableProviderError):
             model_routing_service.upsert_route(
@@ -536,6 +573,19 @@ class TestModelRouting:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture()
+def platform_groq_key(monkeypatch):
+    """The deployment holds its own Groq key, so a platform client can be built.
+
+    The fall-through tests depended on GROQ_API_KEY being set in the machine's
+    environment; with it blank they failed for that reason, not for routing.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "gsk_" + "p" * 48)
+
+
+@pytest.mark.usefixtures("platform_inference", "platform_groq_key")
 class TestProviderClientFactory:
     def test_each_call_gets_its_own_client(
         self, db_session: Session, tenant: Fixture
@@ -775,14 +825,14 @@ class TestZeroCogsAttribution:
 
 class TestCredentialStatus:
     def test_unroutable_outranks_active(
-        self, db_session: Session, tenant: Fixture
+        self, db_session: Session, tenant: Fixture, unroutable_provider: str
     ) -> None:
-        """A valid Gemini key is still not serving the tenant's traffic."""
+        """A valid key for an unroutable provider is still not serving traffic."""
         credential = credential_service.upsert_credential(
             db_session,
             organization_id=tenant.organization.id,
-            provider=PROVIDER_GEMINI,
-            plaintext_key=GEMINI_KEY,
+            provider=unroutable_provider,
+            plaintext_key="sk-" + "c" * 48,
         )
         credential_service.record_validation(
             db_session,
