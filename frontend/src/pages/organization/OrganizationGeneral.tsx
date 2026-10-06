@@ -124,12 +124,18 @@ export const OrganizationGeneral: React.FC = () => {
   const isArchived = status !== "ACTIVE";
 
   const [name, setName] = useState(organization.organization_name);
+  // The name the server last confirmed. The bootstrap context the page reads
+  // `organization` from is refetched after a save, and until that lands it
+  // still holds the old name: comparing against it disabled Save for an
+  // immediate rename back (the browser suite caught it under load).
+  const [savedName, setSavedName] = useState<string | null>(null);
+  const currentName = savedName ?? organization.organization_name;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [typedSlug, setTypedSlug] = useState("");
 
   const nameChanged = useMemo(
-    () => name.trim() !== organization.organization_name && name.trim() !== "",
-    [name, organization.organization_name],
+    () => name.trim() !== currentName && name.trim() !== "",
+    [name, currentName],
   );
 
   /* --- Profile ---------------------------------------------------------- */
@@ -144,6 +150,7 @@ export const OrganizationGeneral: React.FC = () => {
       // a rename; scoping to the org key would leave a stale name in the
       // switcher until the next natural refetch.
       void queryClient.invalidateQueries();
+      setSavedName(updated.name);
       setName(updated.name);
     },
     onError: (error: unknown) => {
