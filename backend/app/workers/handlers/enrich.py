@@ -381,14 +381,14 @@ def _run_side_effects(target: _Target) -> None:
 
 
 def _ensure_workspace_defaults(db: Session, *, workspace_id: uuid.UUID):
-    from app.models.ai_settings import AISettings
+    from app.models.ai_settings import AIProvider, AISettings
     from app.models.document_settings import DocumentSettings
 
     ai_settings, created = insert_or_get(
         db,
         instance=AISettings(
             workspace_id=workspace_id,
-            provider="GROQ",
+            provider=AIProvider.GROQ,
             model="openai/gpt-oss-20b",
             temperature=0.7,
             max_output_tokens=2048,
