@@ -10,7 +10,7 @@ Every setting can be set as an environment variable of the same name (or in `bac
 that `.env.production.template` asks for (F-047); a setting outside the template keeps its default
 in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.
 
-304 settings. Columns: name, type, default, where it appears (`example` =
+306 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -37,6 +37,8 @@ guard), and the comment written above it in the code.
 | `REDIS_IDENTITY_PEPPER` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `10` | example, production |  |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `14` | example, production |  |
+| `SESSION_ABSOLUTE_LIFETIME_HOURS` | `int` | `12` | production | ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the session is, and after 30 minutes with no activity. Checked when the access token is refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_… |
+| `SESSION_IDLE_TIMEOUT_MINUTES` | `int` | `30` | production |  |
 | `SESSION_REUSE_GRACE_SECONDS` | `int` | `10` | example |  |
 | `SESSION_CHAIN_WALK_LIMIT` | `int` | `16` | example |  |
 | `EMAIL_VERIFICATION_TTL_HOURS` | `int` | `24` | example |  |

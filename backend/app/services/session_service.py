@@ -316,6 +316,23 @@ def _enforce_ip_pin(session: UserSession, *, trusted_ip: str | None) -> None:
         ) from exc
 
 
+def _lapsed_reason(session: UserSession, *, now: datetime) -> str | None:
+    """ASVS V3.3.2. `authenticated_at` is the sign-in itself, carried unchanged through every
+    rotation; `created_at` is this token's issue, i.e. the last refresh. Idle is measured from
+    it plus one access-token lifetime, because a user working without a refresh is still
+    active until that token runs out: at least SESSION_IDLE_TIMEOUT_MINUTES of real idleness."""
+    absolute = settings.SESSION_ABSOLUTE_LIFETIME_HOURS
+    if absolute and session.authenticated_at is not None:
+        if now - session.authenticated_at > timedelta(hours=absolute):
+            return "absolute_lifetime"
+    idle = settings.SESSION_IDLE_TIMEOUT_MINUTES
+    if idle and session.created_at is not None:
+        allowance = timedelta(minutes=idle + settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        if now - session.created_at > allowance:
+            return "idle_timeout"
+    return None
+
+
 def rotate_session(
     db: Session,
     *,
@@ -334,6 +351,12 @@ def rotate_session(
     if session.expires_at <= now:
         revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)
         raise ExpiredRefreshTokenError("This session has expired.")
+
+    lapsed = _lapsed_reason(session, now=now)
+    if lapsed is not None:
+        logger.info("SESSION_REFRESH_REJECTED | session=%s | reason=%s", session.id, lapsed)
+        revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)
+        raise ExpiredRefreshTokenError("Your session has ended. Sign in again.")
 
     if session.rotated_at is not None:
         return _handle_rotated_token_replay(

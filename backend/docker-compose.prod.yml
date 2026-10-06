@@ -115,6 +115,8 @@ x-app-env: &app-env
   # Written out in the template "so they are visible"; they only take effect if passed on.
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10}
   REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-14}
+  SESSION_ABSOLUTE_LIFETIME_HOURS: ${SESSION_ABSOLUTE_LIFETIME_HOURS:-12}
+  SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
   MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-104857600}
 
   # Required: without mail, invitations, verification links and password resets are

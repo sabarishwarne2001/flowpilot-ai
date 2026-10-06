@@ -117,6 +117,11 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    # ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the
+    # session is, and after 30 minutes with no activity. Checked when the access token is
+    # refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_DAYS stays the outer bound.
+    SESSION_ABSOLUTE_LIFETIME_HOURS: int = 12
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 30
     SESSION_REUSE_GRACE_SECONDS: int = 10
     SESSION_CHAIN_WALK_LIMIT: int = 16
 
