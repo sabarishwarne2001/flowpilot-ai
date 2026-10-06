@@ -317,6 +317,10 @@ def _destroy_documents(
         from app.models.extraction_memory import ExtractionExemplar as _Exemplar
 
         db.execute(_delete(_Exemplar).where(_Exemplar.work_item_id == item.id))
+        # N-020 item 7: a correction's before/after values are the document's content too.
+        from app.models.work_item_field_correction import WorkItemFieldCorrection as _Correction
+
+        db.execute(_delete(_Correction).where(_Correction.work_item_id == item.id))
         item.extraction_metadata = None
         item.original_filename = PLACEHOLDER_FILENAME
         db.add(item)

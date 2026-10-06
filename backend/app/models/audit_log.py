@@ -96,6 +96,9 @@ class AuditResourceType(str, PyEnum):
     REVIEW_ASSIGNMENT = "REVIEW_ASSIGNMENT"
     AI_SETTINGS = "AI_SETTINGS"
     WORKSPACE_EMAIL_OVERRIDE = "WORKSPACE_EMAIL_OVERRIDE"
+    # N-020 item 7. A field corrected in the document viewer. Added to the
+    # PostgreSQL type by p6a1_work_item_field_corrections.
+    WORK_ITEM = "WORK_ITEM"
 
 
 class AuditAction(str, PyEnum):

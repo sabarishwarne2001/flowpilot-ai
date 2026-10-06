@@ -28,6 +28,7 @@ from app.api.v1 import (
     global_search,
     payment_risk,
     document_evidence,
+    document_fields,
     compliance,
     custom_domains,
     dashboard,
@@ -208,6 +209,7 @@ _SCOPED = (
     (ingestion.work_item_router, "/work-items",        "Work Items"),
     (work_items.router,        "/work-items",         "Work Items"),
     (document_evidence.router, "/work-items",         "Work Items"),  # PHASE 4 review evidence
+    (document_fields.router,   "/work-items",         "Work Items"),  # N-020 items 6/7: viewer text + corrections
     (ingestion.session_router,  "/upload-sessions",    "Batch Ingestion"),
     (ingestion.batch_router,    "/ingestion-batches",  "Batch Ingestion"),
     (ingestion.preset_router,   "/document-presets",   "Document Presets"),
