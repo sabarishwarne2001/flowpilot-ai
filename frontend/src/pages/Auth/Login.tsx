@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
 
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ROUTES } from "@/constants/routes";
@@ -100,6 +100,7 @@ export const Login: React.FC = () => {
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const setToken = useAuthStore((state) => state.setToken);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -480,14 +481,23 @@ export const Login: React.FC = () => {
             <input
               id="password"
               placeholder="••••••••"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               disabled={isLoading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={INPUT_CLASS}
+              className={`${INPUT_CLASS} pr-10`}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              disabled={isLoading}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
         </div>
 

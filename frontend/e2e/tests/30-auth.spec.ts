@@ -58,6 +58,8 @@ test.describe("sign-up, verification and first organization", () => {
     await page.goto("/register");
     await page.locator("#email").fill(`weak-${runId()}@e2e.example.com`);
     await page.locator("#password").fill("Password123!");
+    // ASVS V2.1.8: the meter says so before the server does.
+    await expect(page.getByTestId("password-strength")).toContainText("Too easy to guess");
     await page.locator("#confirmPassword").fill("Password123!");
     await page.locator("form").getByRole("button", { name: /create|sign up|register/i }).click();
     await expect(page.locator("body")).toContainText(/too easy to guess/i, { timeout: 15_000 });
@@ -152,6 +154,18 @@ test.describe("login and logout", () => {
     await expect(page).toHaveURL(/\/caretakers-global\/(operations|finance)|\/workspaces/, { timeout: 20_000 });
     await expect(page.locator("body")).toContainText(/Recent Activity|Choose a workspace/, { timeout: 20_000 });
     await expectHealthyPage(page);
+  });
+
+  test("the typed password can be shown before signing in (ASVS V2.1.12)", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByRole("textbox", { name: "Email" }).fill(USERS["C.admin"].email);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#password").fill("visible-for-a-moment");
+    await expect(page.locator("#password")).toHaveAttribute("type", "password");
+    await page.getByRole("button", { name: "Show password" }).click();
+    await expect(page.locator("#password")).toHaveAttribute("type", "text");
+    await page.getByRole("button", { name: "Hide password" }).click();
+    await expect(page.locator("#password")).toHaveAttribute("type", "password");
   });
 
   test("a wrong password shows a generic error and stays on the login page", async ({ page, problems }) => {

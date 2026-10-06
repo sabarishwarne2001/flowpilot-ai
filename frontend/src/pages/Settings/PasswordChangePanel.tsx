@@ -6,6 +6,7 @@ import { changePasswordRequest } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { errorMessage } from "@/services/api/errors";
 import { MIN_PASSWORD_LENGTH } from "@/utils/validation";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 
 /**
  * ARCH-29 Slice 2 — password change.
@@ -88,14 +89,11 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
     },
   });
 
-  const mismatch =
-    confirmPassword.length > 0 && newPassword !== confirmPassword;
+  const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
-  const tooShort =
-    newPassword.length > 0 && newPassword.length < minimumLength;
+  const tooShort = newPassword.length > 0 && newPassword.length < minimumLength;
 
-  const unchanged =
-    newPassword.length > 0 && newPassword === currentPassword;
+  const unchanged = newPassword.length > 0 && newPassword === currentPassword;
 
   const ready =
     currentPassword.length > 0 &&
@@ -107,17 +105,11 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <KeyRound
-            className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
-              Password
-            </h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">Password</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Changing your password signs you out everywhere else. You stay
-              signed in here.
+              Changing your password signs you out everywhere else. You stay signed in here.
             </p>
           </div>
         </div>
@@ -141,14 +133,10 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
           role="status"
           className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground"
         >
-          <ShieldCheck
-            className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <span>
-            Password changed. Every other session was signed out — if you are
-            signed in on a phone or another browser, you will need to sign in
-            again there with the new password.
+            Password changed. Every other session was signed out — if you are signed in on a phone
+            or another browser, you will need to sign in again there with the new password.
           </span>
         </p>
       )}
@@ -162,10 +150,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
       {open && (
         <div className="mt-4 space-y-3 border-t border-border pt-4">
           <div>
-            <label
-              htmlFor="password-current"
-              className="text-sm font-semibold text-foreground"
-            >
+            <label htmlFor="password-current" className="text-sm font-semibold text-foreground">
               Current password
             </label>
             <input
@@ -179,10 +164,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
           </div>
 
           <div>
-            <label
-              htmlFor="password-new"
-              className="text-sm font-semibold text-foreground"
-            >
+            <label htmlFor="password-new" className="text-sm font-semibold text-foreground">
               New password
             </label>
             <input
@@ -196,6 +178,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
             <p className="mt-1 text-xs text-muted-foreground">
               At least {minimumLength} characters.
             </p>
+            <PasswordStrengthMeter password={newPassword} />
             {tooShort && (
               <p className="mt-1 text-xs text-destructive">
                 Too short — {minimumLength} characters minimum.
@@ -209,10 +192,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
           </div>
 
           <div>
-            <label
-              htmlFor="password-confirm"
-              className="text-sm font-semibold text-foreground"
-            >
+            <label htmlFor="password-confirm" className="text-sm font-semibold text-foreground">
               Confirm new password
             </label>
             <input
@@ -224,9 +204,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
             />
             {mismatch && (
-              <p className="mt-1 text-xs text-destructive">
-                The two passwords do not match.
-              </p>
+              <p className="mt-1 text-xs text-destructive">The two passwords do not match.</p>
             )}
           </div>
 
@@ -237,9 +215,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
               disabled={!ready || change.isPending}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              {change.isPending && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              )}
+              {change.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
               Change password
             </button>
             <button

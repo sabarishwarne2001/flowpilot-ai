@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
 
 import { registerSchema, type RegisterInput } from "@/utils/validation";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 
 import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
@@ -33,6 +34,7 @@ export const Register: React.FC = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -186,6 +188,7 @@ export const Register: React.FC = () => {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          <PasswordStrengthMeter password={watch("password")} userInputs={[watch("email")]} />
           {errors.password && (
             <p
               id="password-error"
