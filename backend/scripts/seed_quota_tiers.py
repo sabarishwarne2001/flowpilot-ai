@@ -86,7 +86,8 @@ ADDON_WAREHOUSE_SYNC = {
 #                 case intelligence & the packet dicer (ARCH43-S1:tier-business),
 #                 table intelligence (ARCH44-S1:tier-business),
 #                 obligations & calendar feeds (ARCH46-S1:tier-business),
-#                 ERP posting (ARCH47-S1:tier-business)
+#                 ERP posting (ARCH47-S1:tier-business),
+#                 bring-your-own AI key (N-021:tier-business)
 #                 and analytics warehouse egress (the warehouse add-on, bundled)
 #   Enterprise  + calibrated autonomy, zero-leakage redaction, clause
 #                 assertions, SAML/SCIM enterprise identity, priority 99.9% SLO,
@@ -114,6 +115,7 @@ BUSINESS_CAPABILITIES = [
     _capability("capability.table_intelligence"),  # ARCH44-S1:tier-business
     _capability("capability.obligations"),  # ARCH46-S1:tier-business
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-business
+    _capability("capability.byok"),  # N-021:tier-business
 ]
 BUSINESS_FEATURES = [*DEVELOPER_FEATURES, *BUSINESS_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 ENTERPRISE_CAPABILITIES = [
@@ -135,6 +137,7 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.collaborative_review"),  # ARCH48-S1:tier-enterprise (Enterprise only)
     _capability("capability.process_intelligence"),  # ARCH49-S1:tier-enterprise (Enterprise only)
     _capability("capability.egress_lockdown"),  # ARCH50-S1:tier-enterprise (Enterprise only)
+    _capability("capability.byok"),  # N-021:tier-enterprise
 ]
 ENTERPRISE_FEATURES = [*DEVELOPER_FEATURES, *ENTERPRISE_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 

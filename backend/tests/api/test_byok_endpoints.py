@@ -32,6 +32,19 @@ def base(organization_id) -> str:
     return f"/api/v1/organizations/{organization_id}/byok"
 
 
+@pytest.fixture(autouse=True)
+def business_plan(db_session, tenant):
+    """N-021: BYOK writes need `capability.byok` (Business and Enterprise).
+
+    These tests exercise the console once the plan includes it, so their
+    arrangement holds it; nothing they assert changed. The refusal on Free and
+    Developer is proven in tests/api/test_byok_plan_gate.py.
+    """
+    from tests.security.plans import put_on_plan
+
+    return put_on_plan(db_session, tenant.organization, "business")
+
+
 @pytest.fixture()
 def stored_groq(db_session: Session, tenant: Fixture):
     credential = credential_service.upsert_credential(

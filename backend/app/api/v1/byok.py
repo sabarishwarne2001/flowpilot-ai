@@ -25,12 +25,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.api import capability_gate
 from app.api.deps import (
     OrganizationContext,
     RequireOrgAdmin,
     RequireOrgOwner,
     get_db,
 )
+from app.core import entitlements
 from app.core.client_ip import client_ip
 from app.core.byok_providers import (
     BYOK_PROVIDER_VALUES,
@@ -96,6 +98,21 @@ def _assert_scope(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found.",
         )
+
+
+def _require_byok(db: Session, context: OrganizationContext, operation: str) -> None:
+    """N-021: storing, validating and routing provider keys is Business and up.
+
+    Reads and deletes are not gated, so a tenant that downgrades can still see
+    which keys are stored and retire them (the N-003 pattern). Called after the
+    scope check, so a foreign organization still gets its 404 first.
+    """
+    capability_gate.require_capability(
+        db,
+        context=context,
+        capability_key=entitlements.BYOK_CAPABILITY,
+        operation=operation,
+    )
 
 
 def _client_context(request: Request) -> dict[str, Optional[str]]:
@@ -356,6 +373,7 @@ def upsert_credential(
 ) -> ProviderCredentialResponse:
     _assert_scope(context, organization_id)
     provider = _resolved_provider(payload.provider)
+    _require_byok(db, context, "byok.credential.upsert")
 
     existing = credential_service.resolve_active(
         db, organization_id=organization_id, provider=provider
@@ -452,6 +470,7 @@ def validate_credential(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> CredentialValidationResponse:
     _assert_scope(context, organization_id)
+    _require_byok(db, context, "byok.credential.validate")
     key = _resolved_provider(provider)
 
     try:
@@ -513,6 +532,7 @@ def update_fallback_policy(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> ProviderCredentialResponse:
     _assert_scope(context, organization_id)
+    _require_byok(db, context, "byok.credential.fallback")
     key = _resolved_provider(provider)
 
     try:
@@ -582,6 +602,7 @@ def upsert_route(
     context: OrganizationContext = Depends(RequireOrgOwner),
 ) -> ModelRouteResponse:
     _assert_scope(context, organization_id)
+    _require_byok(db, context, "byok.route.upsert")
 
     try:
         route = model_routing_service.upsert_route(

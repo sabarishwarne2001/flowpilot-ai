@@ -27,6 +27,19 @@ def base(organization_id) -> str:
     return f"/api/v1/organizations/{organization_id}/byok"
 
 
+@pytest.fixture(autouse=True)
+def business_plan(db_session, tenant):
+    """N-021: BYOK writes need `capability.byok` (Business and Enterprise).
+
+    These tests exercise the console once the plan includes it, so their
+    arrangement holds it; nothing they assert changed. The refusal on Free and
+    Developer is proven in tests/api/test_byok_plan_gate.py.
+    """
+    from tests.security.plans import put_on_plan
+
+    return put_on_plan(db_session, tenant.organization, "business")
+
+
 def test_azure_credential_upsert_and_response(client: TestClient, tenant: Fixture) -> None:
     response = client.put(
         f"{base(tenant.organization.id)}/credentials",
