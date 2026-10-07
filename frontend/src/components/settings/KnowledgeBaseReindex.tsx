@@ -100,8 +100,8 @@ export const KnowledgeBaseReindex: React.FC<Props> = ({ workspaceId, canManage }
 
   return (
     <div className="fp-card p-6">
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
-        <div className="min-w-0">
+      <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3 sm:flex-nowrap">
+        <div className="min-w-0 flex-1">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <Database className="h-5 w-5 text-primary" aria-hidden />
             Knowledge Base Reindexing
@@ -116,7 +116,7 @@ export const KnowledgeBaseReindex: React.FC<Props> = ({ workspaceId, canManage }
             onClick={() => setConfirming(true)}
             disabled={busy || status.isLoading}
             aria-busy={busy}
-            className="fp-btn fp-btn-secondary"
+            className="fp-btn fp-btn-secondary shrink-0"
           >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

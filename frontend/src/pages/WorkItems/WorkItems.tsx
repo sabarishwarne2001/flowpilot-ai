@@ -23,7 +23,7 @@ import { workItemKeys, invalidateWorkspace, keepPreviousWithinWorkspace } from "
 import { useOptionalTenant } from "@/routes/TenantContext";
 import { canCreateContent } from "@/permissions/workspacePermissions";
 import { BulkActionBar } from "@/components/workItems/BulkActionBar";
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -346,7 +346,7 @@ export const WorkItems: React.FC = () => {
                     </th>
                   )}
                   <th
-                    className="w-4/12 px-4 py-2.5"
+                    className="w-[34%] px-4 py-2.5"
                     aria-sort={
                       sortBy === "original_filename"
                         ? sortOrder === "asc"
@@ -366,7 +366,7 @@ export const WorkItems: React.FC = () => {
                     </button>
                   </th>
                   <th
-                    className="w-2/12 px-4 py-2.5"
+                    className="w-[14%] px-4 py-2.5"
                     aria-sort={
                       sortBy === "created_at"
                         ? sortOrder === "asc"
@@ -381,13 +381,13 @@ export const WorkItems: React.FC = () => {
                       onClick={() => handleSortToggle("created_at")}
                       className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <span>Uploaded</span>
+                      <span className="whitespace-nowrap">Uploaded</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-1/12 px-4 py-2.5">Format</th>
+                  <th className="w-[9%] px-4 py-2.5">Format</th>
                   <th
-                    className="w-1/12 px-4 py-2.5"
+                    className="w-[12%] px-4 py-2.5"
                     aria-sort={
                       sortBy === "file_size"
                         ? sortOrder === "asc"
@@ -402,12 +402,12 @@ export const WorkItems: React.FC = () => {
                       onClick={() => handleSortToggle("file_size")}
                       className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <span>File Size</span>
+                      <span className="whitespace-nowrap">File Size</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-2/12 px-4 py-2.5">Status</th>
-                  <th className="w-2/12 px-4 py-2.5 text-right">Actions</th>
+                  <th className="w-[14%] px-4 py-2.5">Status</th>
+                  <th className="w-[12%] px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
 
@@ -447,7 +447,7 @@ export const WorkItems: React.FC = () => {
                       </div>
                     </td>
                     <td className="truncate px-4 py-3 text-xs text-muted-foreground" title={formatTimestamp(item.created_at)}>
-                      {formatTimestamp(item.created_at)}
+                      <time dateTime={item.created_at}>{formatTimestampDate(item.created_at)}</time>
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">

@@ -507,8 +507,8 @@ export const Automation: React.FC = () => {
             Automation Dashboard
           </h2>
           <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
-            Construct trigger-action automation rules and inspect audit
-            execution files in real-time.
+            Build rules that act on documents as they arrive, and see every run
+            and its outcome as it happens.
           </p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -620,10 +620,10 @@ export const Automation: React.FC = () => {
           </div>
           <div>
             <h4 className="text-2xl font-semibold tracking-tight text-foreground">
-              {stats.successRate}%
+              {stats.totalExecutions > 0 ? `${stats.successRate}%` : "—"}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Runs successfully completed
+              {stats.totalExecutions > 0 ? "Runs successfully completed" : "No runs yet"}
             </p>
           </div>
         </div>
@@ -638,10 +638,10 @@ export const Automation: React.FC = () => {
           </div>
           <div>
             <h4 className="text-2xl font-semibold tracking-tight text-foreground">
-              {stats.failureRate}%
+              {stats.totalExecutions > 0 ? `${stats.failureRate}%` : "—"}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Execution failures caught
+              {stats.totalExecutions > 0 ? "Execution failures caught" : "No runs yet"}
             </p>
           </div>
         </div>
@@ -737,7 +737,33 @@ export const Automation: React.FC = () => {
             Configured Rules ({sortedRules.length})
           </h3>
 
-          {sortedRules.length === 0 ? (
+          {sortedRules.length === 0 && rules.length === 0 ? (
+            // A workspace with no rules yet gets a first step, not advice about filters.
+            <div className="text-center py-14 px-6 bg-card border border-dashed border-border/60 rounded-2xl select-none flex flex-col items-center justify-center space-y-3">
+              <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1">
+                <Sliders className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <h4 className="text-sm font-semibold tracking-tight">
+                  No automation rules yet
+                </h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
+                  A rule watches for an event (a document uploaded, processed or
+                  failed), checks your conditions, and takes actions: notify a
+                  team, send to review, update a field.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateForm}
+                disabled={isDeletingRule || isUpdatingRule}
+                className="fp-btn fp-btn-primary text-xs"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Create your first rule
+              </button>
+            </div>
+          ) : sortedRules.length === 0 ? (
             <div className="text-center py-14 px-6 bg-card border border-dashed border-border/60 rounded-2xl select-none flex flex-col items-center justify-center space-y-3">
               <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1">
                 <Sliders className="h-6 w-6" />
