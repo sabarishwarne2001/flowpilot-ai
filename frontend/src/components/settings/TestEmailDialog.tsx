@@ -26,7 +26,7 @@ export const TestEmailDialog: React.FC<TestEmailDialogProps> = ({
       <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-2xl">
 
         <div className="border-b border-border px-6 py-4">
-          <h2 className="text-lg font-bold">
+          <h2 className="text-lg font-semibold">
             Send Test Email
           </h2>
 
@@ -39,7 +39,7 @@ export const TestEmailDialog: React.FC<TestEmailDialogProps> = ({
 
           <div className="space-y-2">
 
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Recipient Email
             </label>
 
@@ -70,7 +70,7 @@ export const TestEmailDialog: React.FC<TestEmailDialogProps> = ({
             type="button"
             onClick={onSend}
             disabled={isSending || recipient.trim() === ""}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
             {isSending ? "Sending..." : "Send Test Email"}
           </button>

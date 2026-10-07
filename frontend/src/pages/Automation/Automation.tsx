@@ -479,7 +479,7 @@ export const Automation: React.FC = () => {
         <div className="h-12 w-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mb-4 animate-bounce">
           <AlertCircle className="h-6 w-6" />
         </div>
-        <h2 className="text-lg font-bold tracking-tight mb-2">
+        <h2 className="text-lg font-semibold tracking-tight mb-2">
           Failed to load rules metrics
         </h2>
         <p className="text-sm text-muted-foreground font-medium leading-relaxed mb-6">
@@ -488,7 +488,7 @@ export const Automation: React.FC = () => {
         </p>
         <button
           onClick={handleManualSync}
-          className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm"
+          className="fp-btn-primary flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:bg-primary/95 transition-all"
         >
           <RefreshCw className="h-3.5 w-3.5 mr-2" />
           Retry Sync
@@ -503,7 +503,7 @@ export const Automation: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0 select-none">
         <div className="space-y-1">
-          <h2 className="text-2xl font-extrabold tracking-tight">
+          <h2 className="text-2xl font-semibold tracking-tight">
             Automation Dashboard
           </h2>
           <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
@@ -529,7 +529,7 @@ export const Automation: React.FC = () => {
             type="button"
             onClick={handleOpenCreateForm}
             disabled={isDeletingRule || isUpdatingRule}
-            className="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50"
+            className="fp-btn-primary flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:bg-primary/95 transition-all active:scale-[0.98] disabled:opacity-50"
           >
             <Plus className="h-4 w-4 mr-1.5 flex-shrink-0" />
             Create New Rule
@@ -541,13 +541,13 @@ export const Automation: React.FC = () => {
         {/* Total Rules */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Total Rules
             </span>
             <Sliders className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.total}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -559,13 +559,13 @@ export const Automation: React.FC = () => {
         {/* Active Rules */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Active Rules
             </span>
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.active}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -577,13 +577,13 @@ export const Automation: React.FC = () => {
         {/* Disabled Rules */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Disabled Rules
             </span>
             <XCircle className="h-4 w-4 text-muted-foreground/60" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.disabled}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -595,13 +595,13 @@ export const Automation: React.FC = () => {
         {/* Executions Today */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Executions Today
             </span>
             <Clock className="h-4 w-4 text-blue-500" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.totalExecutions}
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -613,13 +613,13 @@ export const Automation: React.FC = () => {
         {/* Success Rate */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Success Rate
             </span>
             <Activity className="h-4 w-4 text-emerald-500" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.successRate}%
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -631,13 +631,13 @@ export const Automation: React.FC = () => {
         {/* Failure Rate */}
         <div className="p-4 bg-card border border-border/60 rounded-xl shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Failure Rate
             </span>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </div>
           <div>
-            <h4 className="text-2xl font-black tracking-tight text-foreground">
+            <h4 className="text-2xl font-semibold tracking-tight text-foreground">
               {stats.failureRate}%
             </h4>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -661,7 +661,7 @@ export const Automation: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold">
+            <span className="text-[10px] text-muted-foreground uppercase font-semibold">
               Status:
             </span>
 
@@ -684,7 +684,7 @@ export const Automation: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold">
+            <span className="text-[10px] text-muted-foreground uppercase font-semibold">
               Trigger:
             </span>
 
@@ -705,7 +705,7 @@ export const Automation: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold">
+            <span className="text-[10px] text-muted-foreground uppercase font-semibold">
               Sort:
             </span>
 
@@ -733,7 +733,7 @@ export const Automation: React.FC = () => {
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-5 space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground pl-1 select-none">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-1 select-none">
             Configured Rules ({sortedRules.length})
           </h3>
 
@@ -743,7 +743,7 @@ export const Automation: React.FC = () => {
                 <Sliders className="h-6 w-6" />
               </div>
               <div className="space-y-1 max-w-sm">
-                <h4 className="text-sm font-extrabold tracking-tight">
+                <h4 className="text-sm font-semibold tracking-tight">
                   No matching rules found
                 </h4>
                 <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
@@ -759,7 +759,7 @@ export const Automation: React.FC = () => {
                   setEventFilter("ALL");
                   setSortBy("PRIORITY_ASC");
                 }}
-                className="px-3.5 py-1.5 border border-border rounded-lg text-xs font-bold bg-background hover:bg-muted hover:text-foreground text-muted-foreground transition-all focus:outline-none select-none"
+                className="px-3.5 py-1.5 border border-border rounded-lg text-xs font-semibold bg-background hover:bg-muted hover:text-foreground text-muted-foreground transition-all focus:outline-none select-none"
               >
                 Clear Filters
               </button>
@@ -778,11 +778,11 @@ export const Automation: React.FC = () => {
                 >
                   <div className="flex justify-between items-start space-x-4">
                     <div className="min-w-0 space-y-2">
-                      <h4 className="font-extrabold text-base leading-snug truncate text-foreground">
+                      <h4 className="font-semibold text-base leading-snug truncate text-foreground">
                         {rule.name}
                       </h4>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold select-none whitespace-nowrap">
+                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
                           Priority #{rule.priority}
                         </span>
                         <span className="text-[10px] bg-secondary text-secondary-foreground border border-border/40 px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
@@ -797,11 +797,11 @@ export const Automation: React.FC = () => {
                           </span>
                         )}
                         {rule.is_active ? (
-                          <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2.5 py-0.5 rounded-full font-bold select-none whitespace-nowrap">
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2.5 py-0.5 rounded-full font-semibold select-none whitespace-nowrap">
                             Active
                           </span>
                         ) : (
-                          <span className="text-[10px] bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full font-bold select-none whitespace-nowrap">
+                          <span className="text-[10px] bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full font-semibold select-none whitespace-nowrap">
                             Disabled
                           </span>
                         )}
@@ -854,7 +854,7 @@ export const Automation: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-muted/30 dark:bg-muted/10 border border-border/40 rounded-xl p-3.5 select-none">
                     <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5 border-b sm:border-b-0 pb-2.5 sm:pb-0">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-primary">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                         IF Conditions ({rule.logic_operator})
                       </span>
                       <div className="flex flex-col gap-2">
@@ -862,21 +862,21 @@ export const Automation: React.FC = () => {
                           <React.Fragment key={idx}>
                             {idx > 0 && (
                               <div className="flex items-center space-x-2 select-none">
-                                <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black uppercase">
+                                <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase">
                                   {rule.logic_operator}
                                 </span>
                                 <div className="h-px bg-border/40 flex-1" />
                               </div>
                             )}
                             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                              <span className="px-2 py-1 rounded-md bg-background border border-border/60 font-mono font-bold text-foreground truncate max-w-[150px]">
+                              <span className="px-2 py-1 rounded-md bg-background border border-border/60 font-mono font-semibold text-foreground truncate max-w-[150px]">
                                 {fieldLabel(catalog, cond.field)}
                               </span>
-                              <span className="text-[10px] uppercase font-bold text-muted-foreground px-1">
+                              <span className="text-[10px] uppercase font-semibold text-muted-foreground px-1">
                                 {OPERATOR_DISPLAY_MAP[cond.operator] ??
                                   cond.operator.replace("_", " ")}
                               </span>
-                              <span className="px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold truncate max-w-[150px]">
+                              <span className="px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-semibold truncate max-w-[150px]">
                                 {cond.value}
                               </span>
                             </div>
@@ -886,14 +886,14 @@ export const Automation: React.FC = () => {
                     </div>
 
                     <div className="sm:col-span-5 flex flex-col justify-center sm:border-l border-border/40 pt-1.5 sm:pt-0 sm:pl-3.5 space-y-2.5">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         THEN Actions ({rule.actions.length})
                       </span>
                       <div className="flex flex-col gap-2 select-none">
                         {rule.actions.map((act: any, idx: number) => (
                           <div
                             key={idx}
-                            className="flex items-center space-x-2 text-xs font-bold text-foreground"
+                            className="flex items-center space-x-2 text-xs font-semibold text-foreground"
                           >
                             <span className="text-[9px] text-muted-foreground bg-muted border border-border/40 px-1.5 py-0.5 rounded font-mono">
                               #{idx + 1}
@@ -978,7 +978,7 @@ export const Automation: React.FC = () => {
           <div className="bg-card border border-border/60 rounded-xl p-5 shadow-sm select-none space-y-4">
             <header className="flex items-center space-x-2 border-b border-border/30 pb-2">
               <PieChart className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-extrabold tracking-tight">
+              <h3 className="text-sm font-semibold tracking-tight">
                 Quick Insights
               </h3>
             </header>
@@ -989,26 +989,26 @@ export const Automation: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
                 <div className="p-3 bg-muted/40 rounded-lg space-y-1 border border-border/40">
-                  <span className="text-muted-foreground text-[10px] uppercase font-bold">
+                  <span className="text-muted-foreground text-[10px] uppercase font-semibold">
                     Active Rules ratio
                   </span>
-                  <p className="text-foreground font-black text-sm">
+                  <p className="text-foreground font-semibold text-sm">
                     {stats.activePct}% Active / {stats.disabledPct}% Off
                   </p>
                 </div>
                 <div className="p-3 bg-muted/40 rounded-lg space-y-1 border border-border/40">
-                  <span className="text-muted-foreground text-[10px] uppercase font-bold">
+                  <span className="text-muted-foreground text-[10px] uppercase font-semibold">
                     Average Priority
                   </span>
-                  <p className="text-foreground font-black text-sm">
+                  <p className="text-foreground font-semibold text-sm">
                     {stats.avgPriority} (Scale 1-9999)
                   </p>
                 </div>
                 <div className="p-3 bg-muted/40 rounded-lg col-span-2 space-y-1 border border-border/40">
-                  <span className="text-muted-foreground text-[10px] uppercase font-bold">
+                  <span className="text-muted-foreground text-[10px] uppercase font-semibold">
                     Highest Priority Rule
                   </span>
-                  <p className="text-foreground font-extrabold truncate">
+                  <p className="text-foreground font-semibold truncate">
                     {stats.highestPriority
                       ? `${stats.highestPriority.name} (#${stats.highestPriority.priority})`
                       : "None configured"}
@@ -1022,11 +1022,11 @@ export const Automation: React.FC = () => {
             <header className="flex items-center justify-between border-b border-border/30 pb-2">
               <div className="flex items-center space-x-2">
                 <Activity className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-extrabold tracking-tight">
+                <h3 className="text-sm font-semibold tracking-tight">
                   Audit Log Monitoring
                 </h3>
               </div>
-              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-black">
+              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-semibold">
                 {filteredLogs.length} Executions Matched
               </span>
             </header>
@@ -1043,7 +1043,7 @@ export const Automation: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-xs font-bold">
+              <div className="grid grid-cols-3 gap-2 text-xs font-semibold">
                 <Select
                   value={logStatusFilter}
                   onValueChange={(value) =>
@@ -1099,33 +1099,33 @@ export const Automation: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-black uppercase text-muted-foreground border border-border/40 p-2.5 rounded-lg bg-muted/10">
+            <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-semibold uppercase text-muted-foreground border border-border/40 p-2.5 rounded-lg bg-muted/10">
               <div>
-                <span className="block text-foreground text-sm font-black">
+                <span className="block text-foreground text-sm font-semibold">
                   {auditStats.total}
                 </span>
                 <span>Total</span>
               </div>
               <div>
-                <span className="block text-emerald-500 text-sm font-black">
+                <span className="block text-emerald-500 text-sm font-semibold">
                   {auditStats.successful}
                 </span>
                 <span>Succeeded</span>
               </div>
               <div>
-                <span className="block text-destructive text-sm font-black">
+                <span className="block text-destructive text-sm font-semibold">
                   {auditStats.failed}
                 </span>
                 <span>Failed</span>
               </div>
               <div>
-                <span className="block text-emerald-500 text-sm font-black">
+                <span className="block text-emerald-500 text-sm font-semibold">
                   {auditStats.successPct}%
                 </span>
                 <span>Success Rate</span>
               </div>
               <div>
-                <span className="block text-destructive text-sm font-black">
+                <span className="block text-destructive text-sm font-semibold">
                   {auditStats.failurePct}%
                 </span>
                 <span>Failure Rate</span>
@@ -1135,17 +1135,17 @@ export const Automation: React.FC = () => {
 
           <div className="bg-card border border-border/60 rounded-xl overflow-hidden shadow-sm flex flex-col h-[400px]">
             <header className="p-5 border-b border-border/40 bg-muted/5 select-none">
-              <h3 className="text-sm font-extrabold tracking-tight">
+              <h3 className="text-sm font-semibold tracking-tight">
                 Monitoring Timelines
               </h3>
-              <p className="text-xs text-muted-foreground font-bold mt-1">
+              <p className="text-xs text-muted-foreground font-semibold mt-1">
                 Timeline trace logs mapping active condition comparisons and
                 execution states.
               </p>
               {/* ARCH36-S1:timeline-link — the execution history had a route and no way in. */}
               <Link
                 to="./timeline"
-                className="mt-2 inline-flex text-xs font-bold text-primary hover:underline"
+                className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
               >
                 Open full run history
               </Link>
@@ -1170,7 +1170,7 @@ export const Automation: React.FC = () => {
                         setLogRuleFilter("ALL");
                         setLogDateRangeFilter("ALL");
                       }}
-                      className="text-[10px] border border-border px-2 py-1 bg-background hover:bg-muted rounded font-bold transition-all text-foreground"
+                      className="text-[10px] border border-border px-2 py-1 bg-background hover:bg-muted rounded font-semibold transition-all text-foreground"
                     >
                       Reset Monitor Filters
                     </button>
@@ -1188,7 +1188,7 @@ export const Automation: React.FC = () => {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <h4 className="truncate text-sm font-bold text-foreground">
+                          <h4 className="truncate text-sm font-semibold text-foreground">
                             {log.rule_name}
                           </h4>
 
@@ -1204,12 +1204,12 @@ export const Automation: React.FC = () => {
 
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/10 pt-2 text-[10px]">
                         <div className="flex items-center space-x-2">
-                          <span className="rounded-md bg-primary/10 px-2 py-0.5 font-bold text-primary">
+                          <span className="rounded-md bg-primary/10 px-2 py-0.5 font-semibold text-primary">
                             {log.action_type}
                           </span>
 
                           <span
-                            className={`rounded-md px-2 py-0.5 font-bold ${
+                            className={`rounded-md px-2 py-0.5 font-semibold ${
                               isFailed
                                 ? "bg-destructive/10 text-destructive"
                                 : "bg-emerald-500/10 text-emerald-500"
@@ -1236,7 +1236,7 @@ export const Automation: React.FC = () => {
                         <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-muted-foreground/80">
                           {log.actions_executed !== null &&
                             log.actions_executed !== undefined && (
-                              <span className="rounded-md bg-muted px-2 py-0.5 font-bold">
+                              <span className="rounded-md bg-muted px-2 py-0.5 font-semibold">
                                 {log.actions_executed}{" "}
                                 {log.actions_executed === 1 ? "action" : "actions"}
                               </span>
@@ -1245,7 +1245,7 @@ export const Automation: React.FC = () => {
                           {log.execution_time_ms !== null &&
                             log.execution_time_ms !== undefined && (
                               <span
-                                className="rounded-md bg-muted px-2 py-0.5 font-bold"
+                                className="rounded-md bg-muted px-2 py-0.5 font-semibold"
                                 title="Wall clock from execution start to completion"
                               >
                                 {formatDurationMs(log.execution_time_ms)}
@@ -1255,7 +1255,7 @@ export const Automation: React.FC = () => {
                           {log.spent_cost_micros !== null &&
                             log.spent_cost_micros !== undefined && (
                               <span
-                                className="rounded-md bg-muted px-2 py-0.5 font-bold"
+                                className="rounded-md bg-muted px-2 py-0.5 font-semibold"
                                 title="Spend against this execution's budget"
                               >
                                 {formatCostMicros(log.spent_cost_micros)}
@@ -1271,7 +1271,7 @@ export const Automation: React.FC = () => {
                                 BUDGET_EXHAUSTED, TIMED_OUT and the suppressed
                                 states, which all collapse to "FAILED" there.
                               */
-                              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 font-bold text-amber-600">
+                              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-600">
                                 {log.execution_status}
                               </span>
                             )}
@@ -1285,7 +1285,7 @@ export const Automation: React.FC = () => {
                             onClick={() =>
                               setExpandedLogId(isExpanded ? null : log.id)
                             }
-                            className="text-[10px] text-primary font-bold hover:underline focus:outline-none flex items-center space-x-1"
+                            className="text-[10px] text-primary font-semibold hover:underline focus:outline-none flex items-center space-x-1"
                           >
                             <span>
                               {isExpanded
@@ -1331,7 +1331,7 @@ export const Automation: React.FC = () => {
                                 navigator.clipboard.writeText(log.log_message);
                                 toast.success("Error copied.");
                               }}
-                              className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted font-bold text-foreground"
+                              className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted font-semibold text-foreground"
                             >
                               Copy Error
                             </button>

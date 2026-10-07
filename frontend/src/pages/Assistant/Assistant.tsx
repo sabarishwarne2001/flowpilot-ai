@@ -66,7 +66,7 @@ export const Assistant: React.FC = () => {
   return (
     <div className="flex h-full flex-col space-y-3">
       <header className="shrink-0 space-y-0.5">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">AI Assistant</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">AI Assistant</h1>
         <p className="text-xs text-muted-foreground sm:text-sm">
           Ask across the whole workspace, a chosen set of documents, or one document — every
           answer cites the passages it used.

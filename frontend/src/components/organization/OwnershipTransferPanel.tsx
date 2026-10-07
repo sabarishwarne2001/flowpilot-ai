@@ -221,7 +221,7 @@ export const OwnershipTransferPanel: React.FC<Props> = ({
                 disabled={
                   propose.isPending || !targetId || password.length === 0
                 }
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
               >
                 {propose.isPending && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

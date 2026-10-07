@@ -81,7 +81,7 @@ export const IdpConnectionBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90"
+            className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90"
           >
             <Plus className="h-3.5 w-3.5" />
             Add connection
@@ -187,7 +187,7 @@ export const IdpConnectionBuilder: React.FC = () => {
                         type="button"
                         onClick={() => activate.mutate(config.id)}
                         disabled={activate.isPending}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                        className="fp-btn-primary mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
                       >
                         {activate.isPending && (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -464,7 +464,7 @@ const ConnectionForm: React.FC<ConnectionFormProps> = ({
           type="button"
           onClick={() => create.mutate()}
           disabled={!valid || create.isPending}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
         >
           {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           Create
@@ -540,7 +540,7 @@ const CertificatePanel: React.FC<{
               type="button"
               onClick={() => add.mutate()}
               disabled={!pem.trim().startsWith("-----BEGIN") || add.isPending}
-              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+              className="fp-btn-primary rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
             >
               {add.isPending ? "Adding…" : "Add certificate"}
             </button>
@@ -703,7 +703,7 @@ const RoleMappingPanel: React.FC<{
             type="button"
             onClick={() => save.mutate()}
             disabled={matchValue.trim().length === 0 || save.isPending}
-            className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+            className="fp-btn-primary rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
           >
             {save.isPending ? "Saving…" : "Save mapping"}
           </button>

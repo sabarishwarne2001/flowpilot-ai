@@ -25,10 +25,10 @@ import { ApiError } from "@/services/api/client";
 import { formatDateTime } from "@/utils/formatters";
 
 const EVENT_BADGES = {
-  PROCESS_COMPLETED: "bg-emerald-500/10 text-emerald-500",
-  UPLOAD_COMPLETED: "bg-primary/10 text-primary",
-  AUTOMATION_TRIGGERED: "bg-indigo-500/10 text-indigo-500",
-  PROCESS_STARTED: "bg-amber-500/10 text-amber-500",
+  PROCESS_COMPLETED: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  UPLOAD_COMPLETED: "bg-primary/10 text-primary dark:text-[hsl(213_94%_72%)]",
+  AUTOMATION_TRIGGERED: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+  PROCESS_STARTED: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   PROCESS_FAILED: "bg-destructive/10 text-destructive",
 } as const;
 
@@ -137,25 +137,24 @@ export const Dashboard: React.FC = () => {
 
       <section
         aria-label="Dashboard Metrics"
-        className="grid gap-6 md:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
       >
         {metricCards.map((card) => (
           <div
             key={card.title}
-            className="rounded-xl border border-border/60 bg-card p-6 shadow-sm transition-colors dark:border-border/40"
+            className="fp-card group relative overflow-hidden p-5"
           >
-            <div className="flex items-center justify-between">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-primary/[0.07] blur-2xl transition-opacity duration-300 group-hover:opacity-100 dark:bg-primary/[0.12]" />
+            <div className="relative flex items-start justify-between">
               <div>
-                <p className="text-sm font-semibold text-muted-foreground">
-                  {card.title}
-                </p>
-                <p className="mt-2 text-3xl font-extrabold tracking-tight">
+                <p className="fp-eyebrow">{card.title}</p>
+                <p className="fp-num mt-3 text-[28px] font-semibold leading-none tracking-tight text-foreground">
                   {card.value}
                 </p>
               </div>
-              <div className="rounded-xl bg-primary/10 p-3 text-primary">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-muted-foreground shadow-inner-highlight">
                 <card.icon
-                  className={`h-6 w-6 ${
+                  className={`h-4 w-4 ${
                     card.title === "Processing" ? "animate-spin" : ""
                   }`}
                 />
@@ -165,17 +164,17 @@ export const Dashboard: React.FC = () => {
         ))}
       </section>
 
-      <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm dark:border-border/40">
-        <div className="mb-6 flex items-center justify-between">
+      <section className="fp-card p-6">
+        <div className="mb-5 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold">Recent Activity</h2>
+            <h2 className="text-[15px] font-semibold tracking-tight">Recent Activity</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Latest document processing events.
             </p>
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="relative">
           {metrics.recent_activity.length === 0 ? (
             <EmptyState
               icon={Clock}
@@ -186,22 +185,26 @@ export const Dashboard: React.FC = () => {
             metrics.recent_activity.map((activity) => (
               <div
                 key={activity.id}
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/10 p-4 transition-colors hover:bg-muted/20"
+                className="group relative flex items-center justify-between gap-4 rounded-lg py-2.5 pl-7 pr-2 transition-colors before:absolute before:bottom-0 before:left-[9px] before:top-0 before:w-px before:bg-border first:before:top-1/2 last:before:bottom-1/2 hover:bg-muted/40"
               >
+                <span
+                  aria-hidden="true"
+                  className="absolute left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rounded-full border-2 border-card bg-muted-foreground/50 ring-1 ring-border group-hover:bg-primary"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                      className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${
                         EVENT_BADGES[activity.event_type]
                       }`}
                     >
                       {activity.event_type.replaceAll("_", " ")}
                     </span>
-                    <span className="text-sm font-semibold">
+                    <span className="truncate text-sm font-medium text-foreground">
                       {activity.description}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="fp-num mt-1 text-xs text-muted-foreground">
                     {formatDateTime(activity.timestamp)}
                   </p>
                 </div>
@@ -216,9 +219,9 @@ export const Dashboard: React.FC = () => {
                           triggerReprocess(activity.work_item_id);
                         }
                       }}
-                      className="ml-4 flex items-center rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
+                      className="fp-btn fp-btn-secondary shrink-0 text-xs"
                     >
-                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                       Retry
                     </button>
                   )}
@@ -228,9 +231,9 @@ export const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm dark:border-border/40">
+      <section className="fp-card p-6">
         <div className="mb-6">
-          <h2 className="text-lg font-bold">Document Distribution</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight">Document Distribution</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Breakdown of processed document types.
           </p>
@@ -242,20 +245,20 @@ export const Dashboard: React.FC = () => {
             description="Upload and process documents to view document distribution analytics."
           />
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {metrics.document_type_distribution.map((item) => (
               <div key={item.document_type}>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-foreground">
                     {item.document_type}
                   </span>
-                  <span className="text-sm font-bold">
+                  <span className="fp-num text-[13px] text-muted-foreground">
                     {item.count} ({item.percentage}%)
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-violet-500 transition-all duration-500"
                     style={{
                       width: `${item.percentage}%`,
                     }}

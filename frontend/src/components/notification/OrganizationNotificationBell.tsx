@@ -62,16 +62,14 @@ export const OrganizationNotificationBell: React.FC<{
         aria-expanded={open}
         aria-haspopup="dialog"
         title="Organization notifications"
-        className={`relative rounded-lg border p-2 text-muted-foreground transition-all hover:text-foreground sm:p-2.5 ${
-          open
-            ? "border-primary/40 bg-muted/50 text-primary"
-            : "border-border bg-background hover:bg-muted/50"
+        className={`relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground ${
+          open ? "bg-accent text-foreground" : ""
         }`}
       >
-        <Bell className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+        <Bell className="h-4 w-4" />
         {unread > 0 && (
           <span
-            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-black text-destructive-foreground shadow-sm"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground ring-2 ring-background"
             aria-label={`${unread} unread organization alerts`}
           >
             {badge}
@@ -89,7 +87,7 @@ export const OrganizationNotificationBell: React.FC<{
           <div
             role="dialog"
             aria-label="Organization notifications"
-            className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border/60 bg-popover text-popover-foreground shadow-2xl sm:w-96"
+            className="fp-popover absolute right-0 z-50 mt-2.5 w-80 overflow-hidden sm:w-96"
           >
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
               <p className="text-sm font-semibold">Organization alerts</p>

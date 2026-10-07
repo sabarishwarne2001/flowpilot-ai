@@ -1,13 +1,12 @@
 import React, { useMemo } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { ArrowLeft, Lock, LogOut } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Lock } from "lucide-react";
 
 import { buildOrganizationNavigationItems } from "./navigation";
 import type { NavigationItem } from "./navigation";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { workspaceDashboardPath } from "@/routes/tenantPaths";
-import { useAuthStore } from "@/store/useAuthStore";
-import { Avatar } from "@/components/common/Avatar";
+import UserMenu from "./UserMenu";
 import { useTenantStore } from "@/store/useTenantStore";
 import { ROUTES } from "@/constants/routes";
 import { useUpgradePrompt } from "@/hooks/useUpgradePrompt";
@@ -82,7 +81,6 @@ const OrganizationSidebarNavigation: React.FC<
     useResolvedOrganization();
 
   const orgSlug = organization.organization_slug;
-  const user = useAuthStore((state) => state.user);
 
   const lastWorkspaceByOrganization = useTenantStore(
     (state) => state.lastWorkspaceByOrganization,
@@ -122,15 +120,30 @@ const OrganizationSidebarNavigation: React.FC<
   }, [organization.workspaces, lastWorkspaceByOrganization, organizationId, orgSlug]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col" aria-label="Organization Navigation">
-      <div className="shrink-0 px-3 pb-3 pt-5">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground" aria-label="Organization Navigation">
+      <div className="shrink-0 space-y-2 border-b border-border/70 px-2.5 pb-3 pt-3">
+        <div className="flex items-center gap-2.5 px-2 py-1">
+          <span
+            aria-hidden="true"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary to-violet-500 text-xs font-semibold text-white shadow-inner-highlight"
+          >
+            {organization.organization_name.charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold leading-5 text-foreground">
+              {organization.organization_name}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground">Organization console</span>
+          </span>
+        </div>
+
         {returnTarget ? (
           <Link
             to={returnTarget.path}
             onClick={onNavigate}
-            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted/60"
+            className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 text-[13px] font-medium text-foreground shadow-elevation-1 hover:border-border-strong hover:bg-accent/60"
           >
-            <ArrowLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 truncate">
               Return to {returnTarget.name}
             </span>
@@ -140,20 +153,17 @@ const OrganizationSidebarNavigation: React.FC<
         <Link
           to={ROUTES.WORKSPACES}
           onClick={onNavigate}
-          className="mt-2 block px-1 text-xs text-muted-foreground transition hover:text-foreground hover:underline"
+          className="flex items-center gap-2 rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent/60 hover:text-foreground"
         >
+          <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
           All organizations &amp; workspaces
         </Link>
-
-        <p className="mt-4 truncate px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {organization.organization_name}
-        </p>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 pb-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 py-3">
         {sections.map((section) => (
           <div key={section.name} className="mb-4 last:mb-0">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <p className="fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground/75">
               {section.name}
             </p>
             <div className="space-y-0.5">
@@ -162,14 +172,14 @@ const OrganizationSidebarNavigation: React.FC<
                 const locked = upgrade.isLocked(lockKey);
                 const content = (
                   <>
-                    <item.icon className="h-4 w-4 flex-shrink-0" />
-                    <span className="ml-3 min-w-0 flex-1 truncate text-left font-medium">
+                    <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.85} />
+                    <span className="ml-2.5 min-w-0 flex-1 truncate text-left">
                       {item.name}
                     </span>
                     {lockKey !== undefined ? (
                       <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
                         {locked ? (
-                          <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden data-testid="nav-lock" />
+                          <Lock className="h-3 w-3 text-muted-foreground/70" aria-hidden data-testid="nav-lock" />
                         ) : null}
                       </span>
                     ) : null}
@@ -184,7 +194,7 @@ const OrganizationSidebarNavigation: React.FC<
                     aria-haspopup="dialog"
                     title="Not included in your plan"
                     data-testid="nav-locked-row"
-                    className="group relative flex h-9 w-full items-center rounded-lg px-3 text-sm text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
+                    className="group relative flex h-8 w-full items-center rounded-md px-2.5 text-[13px] font-medium text-muted-foreground opacity-80 hover:bg-accent/70 hover:text-foreground"
                   >
                     {content}
                   </button>
@@ -194,10 +204,10 @@ const OrganizationSidebarNavigation: React.FC<
                     to={item.path}
                     onClick={onNavigate}
                     className={({ isActive }) =>
-                      `group relative flex h-9 items-center rounded-lg px-3 text-sm transition-all ${
+                      `group relative flex h-8 items-center rounded-md px-2.5 text-[13px] font-medium ${
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          ? "bg-primary/10 text-primary hover:bg-primary/[0.14] dark:bg-primary/[0.12] dark:text-[hsl(213_94%_72%)] before:absolute before:-left-2.5 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-primary"
+                          : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                       }`
                     }
                   >
@@ -219,28 +229,13 @@ const OrganizationSidebarNavigation: React.FC<
       </nav>
 
       {onLogout ? (
-        <div className="shrink-0 border-t border-border/60 px-3 py-3">
-          <div className="flex items-center gap-2.5">
-            <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} size="md" />
-
-            <div className="min-w-0 flex-1">
-              <span className="block text-xs font-semibold text-muted-foreground">
-                Signed in as
-              </span>
-              <span className="mt-0.5 block truncate text-sm font-bold leading-none text-foreground">
-                {user?.email ?? "User Profile"}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Sign Out"
-              aria-label="Sign Out"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+        <div className="shrink-0 border-t border-border/70 px-2.5 py-2.5">
+          <UserMenu
+            onLogout={onLogout}
+            role={organizationRole}
+            profileHref={returnTarget ? `${returnTarget.path}/settings?section=profile` : undefined}
+            sessionsHref={returnTarget ? `${returnTarget.path}/settings?section=sessions` : undefined}
+          />
         </div>
       ) : null}
     </div>

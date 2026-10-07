@@ -196,7 +196,7 @@ export const DomainManager: React.FC = () => {
             type="button"
             onClick={() => claim.mutate()}
             disabled={claim.isPending || newDomain.trim().length < 4}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {claim.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Claim domain

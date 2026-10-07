@@ -14,10 +14,20 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { MailCheck } from "lucide-react";
+import { ArrowLeft, KeyRound, Loader2, Mail, MailCheck } from "lucide-react";
 
 import { authApi } from "@/services/api/auth";
 import { ROUTES } from "@/constants/routes";
+import { AuthShell } from "@/components/auth/AuthShell";
+import {
+  AUTH_INPUT,
+  AUTH_INPUT_ICON,
+  AUTH_LABEL,
+  AUTH_MUTED_LINK,
+  AUTH_PRIMARY,
+  AUTH_SUBTITLE,
+  AUTH_TITLE,
+} from "@/components/auth/authStyles";
 
 export function ForgotPassword() {
   const [email, setEmail] = React.useState("");
@@ -41,66 +51,78 @@ export function ForgotPassword() {
     }
   };
 
+  const back = (
+    <Link to={ROUTES.LOGIN} className={`inline-flex items-center gap-1.5 ${AUTH_MUTED_LINK}`}>
+      <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+      Back to sign in
+    </Link>
+  );
+
   if (sent) {
     return (
-      <Shell>
-        <MailCheck className="h-8 w-8 text-emerald-500" />
-        <h1 className="text-lg font-semibold">Check your inbox</h1>
-        <p className="max-w-sm text-center text-sm text-muted-foreground">
-          If an account exists for <strong>{email.trim()}</strong>, a reset link
-          is on its way. It expires in an hour and can be used once.
-        </p>
-        <Link
-          to={ROUTES.LOGIN}
-          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Back to sign in
-        </Link>
-      </Shell>
+      <AuthShell>
+        <div className="flex flex-col items-center gap-4 py-2 text-center animate-fade-in">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10">
+            <MailCheck className="h-6 w-6 text-emerald-500" aria-hidden="true" />
+          </div>
+          <h1 className={AUTH_TITLE}>Check your inbox</h1>
+          <p className={`max-w-sm ${AUTH_SUBTITLE}`}>
+            If an account exists for <strong className="font-medium text-foreground">{email.trim()}</strong>, a
+            reset link is on its way. It expires in an hour and can be used once.
+          </p>
+          <div className="pt-2">{back}</div>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <Shell>
-      <h1 className="text-lg font-semibold">Reset your password</h1>
-      <p className="max-w-sm text-center text-sm text-muted-foreground">
-        Enter your email address and we will send you a link to choose a new
-        password.
-      </p>
+    <AuthShell>
+      <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/60 text-primary shadow-inner-highlight">
+        <KeyRound className="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div className="mb-6 space-y-1.5">
+        <h1 className={AUTH_TITLE}>Reset your password</h1>
+        <p className={AUTH_SUBTITLE}>
+          Enter your email address and we will send you a link to choose a new password.
+        </p>
+      </div>
 
-      <form onSubmit={submit} className="w-full max-w-sm space-y-3">
-        <input
-          type="email"
-          required
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          disabled={sending}
-          className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {sending ? "Sending…" : "Send reset link"}
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="forgot-email" className={AUTH_LABEL}>
+            Email
+          </label>
+          <div className="relative">
+            <Mail className={AUTH_INPUT_ICON} aria-hidden="true" />
+            <input
+              id="forgot-email"
+              type="email"
+              required
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              className={`${AUTH_INPUT} pl-9`}
+            />
+          </div>
+        </div>
+        <button type="submit" disabled={sending} className={AUTH_PRIMARY}>
+          {sending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Sending…
+            </>
+          ) : (
+            "Send reset link"
+          )}
         </button>
       </form>
 
-      <Link
-        to={ROUTES.LOGIN}
-        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-      >
-        Back to sign in
-      </Link>
-    </Shell>
+      <div className="mt-6 flex justify-center border-t border-border/70 pt-5">{back}</div>
+    </AuthShell>
   );
 }
-
-const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-background px-4">
-    {children}
-  </div>
-);
 
 export default ForgotPassword;

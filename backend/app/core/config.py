@@ -371,6 +371,62 @@ class Settings(BaseSettings):
     SAML_RAW_ASSERTION_RETENTION_DAYS: int = 30
     SAML_CRYPTO_BACKEND: Literal["signxml"] = "signxml"
 
+    # ======================================================================
+    # F-123 — the public address identity providers talk to, and the
+    # identity settings the env templates document. Same defect as the
+    # blocks around this one: read through getattr() and never declared, so
+    # on every deployment the SAML entity ID / ACS / SLO URLs were
+    # http://localhost:8000/..., the OIDC redirect_uri was empty, and no
+    # environment variable could change either.
+    #
+    # PUBLIC_API_URL: the origin at which the internet reaches the API.
+    # Empty means "the web app's own origin" in staging and production,
+    # because Caddy serves the API on APP_DOMAIN next to the SPA; in
+    # development it means uvicorn's http://localhost:8000 (Vite runs on
+    # another port). Set it only when the API has a host of its own.
+    # ======================================================================
+    PUBLIC_API_URL: str = ""
+    SAML_SP_ENTITY_ID: Optional[str] = None
+    #: PEM used in the SP metadata when no SP certificate row is live.
+    SAML_SP_SIGNING_CERT_PEM: str = ""
+    #: Empty: {public API address}{API_V1_STR}/oidc/callback.
+    OIDC_REDIRECT_URI: str = ""
+    OIDC_DEFAULT_SCOPES: str = "openid,email,profile"
+    OIDC_DISCOVERY_TIMEOUT_S: float = 10.0
+
+    SCIM_TOKEN_TTL_DAYS: int = 365
+    SCIM_TOKEN_ROTATION_OVERLAP_DAYS: int = 7
+    SCIM_MAX_PAGE_SIZE: int = 200
+    DOMAIN_VERIFICATION_GRACE_DAYS: int = 14
+    DOMAIN_VERIFICATION_RECHECK_INTERVAL_HOURS: int = 24
+    #: JIT seat cap when the organization's tier has no seat dimension.
+    JIT_SEAT_CAP_DEFAULT: Optional[int] = None
+
+    @field_validator("PUBLIC_API_URL")
+    @classmethod
+    def validate_public_api_url(cls, v: str) -> str:
+        cleaned = (v or "").strip().rstrip("/")
+        if cleaned and not cleaned.startswith(("http://", "https://")):
+            raise ValueError(
+                "PUBLIC_API_URL must include a scheme, e.g. https://api.example.com "
+                "(or be left empty to use FRONTEND_URL)."
+            )
+        return cleaned
+
+    @property
+    def public_api_base(self) -> str:
+        """Where identity providers reach the API, without a trailing slash."""
+        if self.PUBLIC_API_URL:
+            return self.PUBLIC_API_URL
+        if self.ENVIRONMENT in HARDENED_ENVIRONMENTS:
+            return self.FRONTEND_URL
+        return "http://localhost:8000"
+
+    @property
+    def oidc_redirect_uri(self) -> str:
+        explicit = (self.OIDC_REDIRECT_URI or "").strip()
+        return explicit or f"{self.public_api_base}{self.API_V1_STR}/oidc/callback"
+
     # The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if
     # settings cannot be read at all, hardening_policy_from_settings()
     # returns the hardened policy. A GA platform needs a switch for the
@@ -577,6 +633,11 @@ class Settings(BaseSettings):
     STREAM_MAX_CONCURRENT_PER_ORG: int = 20
     STREAM_MAX_MESSAGES_PER_MINUTE_PER_CONVERSATION: int = 10
     PDF_TEXT_LAYER_BBOXES_ENABLED: bool = True
+    # F-123: read through getattr() and never declared, so the variables had
+    # no effect. Declared at the defaults the code already used.
+    KNOWLEDGE_DUAL_READ: bool = True
+    #: How often the worker scheduler loop wakes, in seconds.
+    SCHEDULER_TICK_SECONDS: float = 30.0
 
     # ---- ARCH-14: pricing -------------------------------------------------
     PRICE_BOOK_CACHE_TTL_SECONDS: float = 300.0

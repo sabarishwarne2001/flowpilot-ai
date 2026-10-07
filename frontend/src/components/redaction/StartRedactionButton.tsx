@@ -152,7 +152,7 @@ const StartRedactionButton: React.FC<StartRedactionButtonProps> = ({
         <div
           role="menu"
           aria-label="Redaction profile"
-          className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-border bg-card p-1 shadow-lg"
+          className="absolute right-0 z-30 mt-2 w-72 fp-card p-1 shadow-lg"
         >
           <p className="px-3 py-2 text-xs text-muted-foreground">
             Choose what to detect. You review every region before anything is

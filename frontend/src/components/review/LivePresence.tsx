@@ -24,7 +24,7 @@ export const Avatar: React.FC<{ readonly person: { user_id: string; name?: strin
   const dimension = size === "sm" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
   return (
     <span
-      className={`inline-flex ${dimension} items-center justify-center rounded-full font-bold text-white ring-2 ring-card`}
+      className={`inline-flex ${dimension} items-center justify-center rounded-full font-semibold text-white ring-2 ring-card`}
       style={{ backgroundColor: `hsl(${hue} 55% 45%)` }}
       title={person.name || person.email || "Reviewer"}
       aria-hidden="true"
@@ -66,7 +66,7 @@ export const LockBadge: React.FC<{ readonly lock: LiveLock | undefined; readonly
   const until = formatTimestampTime(lock.expires_at);
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
         mine ? "bg-primary/15 text-primary" : "bg-amber-500/15 text-amber-800 dark:text-amber-300"
       }`}
       title={mine ? `You are deciding this item (your lock renews while this tab is open; now until ${until}).` : `${who} is deciding this item. Their lock lapses if they step away (now until ${until}).`}

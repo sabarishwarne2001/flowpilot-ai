@@ -158,7 +158,7 @@ export const PortalMenu: React.FC<PortalMenuProps> = ({
       ref={menuRef}
       role="menu"
       style={{ top: position.top, left: position.left, width }}
-      className="fixed z-[100] rounded-lg border border-border bg-card p-1 shadow-lg"
+      className="fp-popover fixed z-[100] p-1"
       onClick={(event) => event.stopPropagation()}
     >
       {children}

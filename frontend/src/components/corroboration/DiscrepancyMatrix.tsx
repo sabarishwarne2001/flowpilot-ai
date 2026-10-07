@@ -66,7 +66,7 @@ export const DiscrepancyMatrix: React.FC<MatrixProps> = ({ rows, documents, sele
             <th className="w-64 p-2">Difference</th>
             {docs.map((doc) => (
               <th key={doc.work_item_id} className="p-2" title={doc.label}>
-                <span className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
+                <span className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
                   {doc.position + 1}
                 </span>
                 {clip(doc.label, 28)}
@@ -89,7 +89,7 @@ export const DiscrepancyMatrix: React.FC<MatrixProps> = ({ rows, documents, sele
                 className={`cursor-pointer border-b border-border/40 align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${selected ? "bg-primary/10" : "hover:bg-muted/30"} ${row.status !== "OPEN" ? "opacity-60" : ""}`}
               >
                 <td className="p-2">
-                  <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${SEVERITY_TONE[row.severity]}`}>
+                  <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[row.severity]}`}>
                     {row.severity}
                   </span>
                   <div className="mt-1 h-1.5 w-16 rounded bg-muted" aria-label={`materiality ${row.materiality.toFixed(2)}`}>

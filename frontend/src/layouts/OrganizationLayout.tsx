@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { ChevronRight, Menu, X } from "lucide-react";
 
 import OrganizationSidebarNavigation from "@/components/layout/OrganizationSidebarNavigation";
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -52,20 +52,20 @@ export const OrganizationLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground transition-colors duration-200">
-      <aside className="hidden h-screen w-64 min-h-0 flex-shrink-0 flex-col border-r border-border lg:flex">
+      <aside className="hidden h-screen w-[260px] min-h-0 flex-shrink-0 flex-col border-r border-border/80 bg-sidebar lg:flex">
         <OrganizationSidebarNavigation onLogout={handleLogout} />
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="flex h-full w-64 min-h-0 flex-col border-r border-border bg-background">
+        <div className="fixed inset-0 z-40 flex animate-fade-in lg:hidden">
+          <div className="flex h-full w-[280px] max-w-[85vw] min-h-0 flex-col border-r border-border bg-sidebar shadow-elevation-3">
             <OrganizationSidebarNavigation
               onNavigate={() => setMobileOpen(false)}
               onLogout={handleLogout}
             />
           </div>
           <div
-            className="flex-1 bg-black/40"
+            className="flex-1 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
@@ -73,11 +73,12 @@ export const OrganizationLayout: React.FC = () => {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-card px-4 lg:px-6">
+        <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-5">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-background/75 backdrop-blur-md" />
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="rounded-lg p-2 hover:bg-muted/50 lg:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
               onClick={() => setMobileOpen((open) => !open)}
               aria-label="Toggle organization navigation"
             >
@@ -88,18 +89,16 @@ export const OrganizationLayout: React.FC = () => {
               )}
             </button>
 
-            <h1 className="min-w-0 truncate text-sm">
-              <span className="font-semibold text-foreground">
+            <h1 className="flex min-w-0 items-center gap-1 truncate text-[13px] font-normal">
+              <span className="truncate text-muted-foreground">
                 {organization.organization_name}
               </span>
-              <span className="mx-2 text-muted-foreground/60" aria-hidden="true">
-                ·
-              </span>
-              <span className="text-muted-foreground">Settings</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+              <span className="font-medium text-foreground">Settings</span>
             </h1>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <ThemeToggle />
             <OrganizationNotificationBell
               organizationId={organizationId}
@@ -118,7 +117,7 @@ export const OrganizationLayout: React.FC = () => {
           <MemberAccessNotice organizationId={organizationId} />
         )}
 
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background p-4 sm:p-5 lg:px-8 lg:py-7">
           <DisplayPreferencesBoundary>
             <Outlet />
           </DisplayPreferencesBoundary>

@@ -74,7 +74,7 @@ function renderMessageContent(
                   rounded
                   px-0.5
                   text-[10px]
-                  font-black
+                  font-semibold
                   text-primary
                   transition-colors
                   hover:underline
@@ -186,7 +186,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
                 <Bot className="h-4 w-4 text-primary" />
               )}
 
-              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {isUser ? "You" : (tenant?.workspace.workspace_name ?? "Assistant")}
               </span>
             </div>
@@ -252,7 +252,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
                           px-2.5
                           py-1.5
                           text-[10px]
-                          font-bold
+                          font-semibold
                           text-muted-foreground
                           transition-colors
                           hover:bg-muted

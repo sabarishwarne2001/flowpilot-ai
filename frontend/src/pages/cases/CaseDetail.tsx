@@ -93,7 +93,7 @@ const CaseDetailPage: React.FC = () => {
               <tr key={r.rule_id} className={TABLE_ROW}>
                 <td className="p-2">{r.label}</td>
                 <td className="p-2 text-center font-mono text-xs">{r.op}</td>
-                <td className="p-2 text-center"><span className={`rounded px-2 py-0.5 text-xs font-bold ${OUTCOME_STYLE[r.outcome]}`}>{r.outcome}</span></td>
+                <td className="p-2 text-center"><span className={`rounded px-2 py-0.5 text-xs font-semibold ${OUTCOME_STYLE[r.outcome]}`}>{r.outcome}</span></td>
                 <td className="p-2">{r.left_value ?? "—"}</td>
                 <td className="p-2">{r.right_value ?? "—"}</td>
               </tr>

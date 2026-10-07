@@ -50,7 +50,7 @@ export const TriggerCard: React.FC<TriggerCardProps> = ({ catalog, selected, onC
       <div className="space-y-4">
         {byCategory.map(([category, triggers]) => (
           <fieldset key={category} className="space-y-2">
-            <legend className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{category}</legend>
+            <legend className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{category}</legend>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {triggers.map((trigger) => {
                 const checked = selected.includes(trigger.key);
@@ -77,12 +77,12 @@ export const TriggerCard: React.FC<TriggerCardProps> = ({ catalog, selected, onC
                       <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
                         {trigger.label}
                         {locked && (
-                          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                             <Lock className="h-3 w-3" aria-hidden="true" /> Not in your plan
                           </span>
                         )}
                         {trigger.runs_during_review && (
-                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                             Runs during review
                           </span>
                         )}

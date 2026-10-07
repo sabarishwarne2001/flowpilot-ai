@@ -343,17 +343,17 @@ const CommandPalette: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-label="Search pages and records"
-        className={`${SURFACE_DIALOG} w-full max-w-xl overflow-hidden`}
+        className={`${SURFACE_DIALOG} w-full max-w-[640px] overflow-hidden !bg-popover/95 backdrop-blur-xl`}
       >
-        <div className="flex items-center gap-2 border-b border-border px-4">
-          <Search className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <div className="flex items-center gap-2.5 border-b border-border px-4">
+          <Search className="h-[18px] w-[18px] text-muted-foreground" aria-hidden />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onInputKeyDown}
             placeholder="Jump to a page, or find a document, entity or case…"
-            className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="h-14 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none placeholder:text-muted-foreground/70 focus-visible:shadow-none"
             role="combobox"
             aria-expanded="true"
             aria-controls="command-palette-results"
@@ -363,16 +363,14 @@ const CommandPalette: React.FC = () => {
           {searching && (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Searching" />
           )}
-          <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-            Esc
-          </kbd>
+          <kbd className="fp-kbd">Esc</kbd>
         </div>
 
         <ul
           id="command-palette-results"
           role="listbox"
           aria-label="Results"
-          className="max-h-[50vh] overflow-y-auto p-2"
+          className="max-h-[52vh] overflow-y-auto p-1.5"
         >
           {results.length === 0 ? (
             <li className="px-3 py-6 text-center text-sm text-muted-foreground">
@@ -395,13 +393,19 @@ const CommandPalette: React.FC = () => {
                     event.preventDefault();
                     go(entry);
                   }}
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 ${
-                    selected ? "bg-primary/10 text-foreground" : "text-muted-foreground"
+                  className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 ${
+                    selected ? "bg-accent text-foreground" : "text-muted-foreground"
                   }`}
                 >
-                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  <span
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
+                      selected ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/50"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                       <span className="truncate">{entry.name}</span>
                       {entry.locked && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 text-[10px] font-medium text-muted-foreground">
@@ -412,7 +416,7 @@ const CommandPalette: React.FC = () => {
                     </span>
                     <span className="block truncate text-xs">{entry.description}</span>
                   </span>
-                  <span className="hidden text-[10px] uppercase tracking-wide sm:block">
+                  <span className="fp-eyebrow hidden text-[10px] sm:block">
                     {entry.section}
                   </span>
                   {selected && <CornerDownLeft className="h-3.5 w-3.5" aria-hidden />}
@@ -421,6 +425,21 @@ const CommandPalette: React.FC = () => {
             })
           )}
         </ul>
+        <div className="flex items-center gap-4 border-t border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground" aria-hidden="true">
+          <span className="flex items-center gap-1.5">
+            <kbd className="fp-kbd">↑</kbd>
+            <kbd className="fp-kbd">↓</kbd>
+            to move
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="fp-kbd">↵</kbd>
+            to open
+          </span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <kbd className="fp-kbd">Esc</kbd>
+            to close
+          </span>
+        </div>
       </div>
     </div>
   );

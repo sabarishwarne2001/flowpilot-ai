@@ -69,11 +69,11 @@ export default function Tooltip({ content, children }: TooltipProps) {
             w-72
             rounded-xl
             border
-            border-border/80
+            border-border-strong/60
             bg-popover/95
-            backdrop-blur-md
+            backdrop-blur-xl
             p-4
-            shadow-2xl
+            shadow-elevation-3
             text-sm
             leading-relaxed
             text-popover-foreground
@@ -84,7 +84,7 @@ export default function Tooltip({ content, children }: TooltipProps) {
           <FloatingArrow
             ref={arrowRef}
             context={context}
-            className="fill-slate-900 stroke-slate-700"
+            className="fill-popover stroke-border"
           />
         </div>
       )}

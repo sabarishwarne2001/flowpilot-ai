@@ -10,7 +10,7 @@ Every setting can be set as an environment variable of the same name (or in `bac
 that `.env.production.template` asks for (F-047); a setting outside the template keeps its default
 in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.
 
-306 settings. Columns: name, type, default, where it appears (`example` =
+320 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -24,7 +24,7 @@ guard), and the comment written above it in the code.
 | `HOST` | `str` | `'0.0.0.0'` | example |  |
 | `PORT` | `int` | `8000` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
-| `LOG_FORMAT` | `str` | `'text'` | production | text: one line per event with its context as key=value; json: one JSON object per line. |
+| `LOG_FORMAT` | `str` | `'text'` | example, production | text: one line per event with its context as key=value; json: one JSON object per line. |
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `POSTGRES_USER` | `str` | `'postgres'` | example, production |  |
 | `POSTGRES_PASSWORD` | `str` | `'postgres'` | example, production, guard |  |
@@ -37,8 +37,8 @@ guard), and the comment written above it in the code.
 | `REDIS_IDENTITY_PEPPER` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `10` | example, production |  |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `14` | example, production |  |
-| `SESSION_ABSOLUTE_LIFETIME_HOURS` | `int` | `12` | production | ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the session is, and after 30 minutes with no activity. Checked when the access token is refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_… |
-| `SESSION_IDLE_TIMEOUT_MINUTES` | `int` | `30` | production |  |
+| `SESSION_ABSOLUTE_LIFETIME_HOURS` | `int` | `12` | example, production | ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the session is, and after 30 minutes with no activity. Checked when the access token is refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_… |
+| `SESSION_IDLE_TIMEOUT_MINUTES` | `int` | `30` | example, production |  |
 | `SESSION_REUSE_GRACE_SECONDS` | `int` | `10` | example |  |
 | `SESSION_CHAIN_WALK_LIMIT` | `int` | `16` | example |  |
 | `EMAIL_VERIFICATION_TTL_HOURS` | `int` | `24` | example |  |
@@ -60,12 +60,12 @@ guard), and the comment written above it in the code.
 | `GROQ_API_KEY` | `SecretStr \| None` | `None` | example, production |  |
 | `GEMINI_API_KEY` | `SecretStr \| None` | `None` | example, production |  |
 | `LLM_PROVIDER` | `str` | `'groq'` | example, production |  |
-| `GROQ_MODEL_NAME` | `str` | `'llama-3.3-70b-versatile'` | example |  |
-| `GEMINI_MODEL_NAME` | `str` | `'gemini-3.5-flash'` | example |  |
+| `GROQ_MODEL_NAME` | `str` | `'llama-3.3-70b-versatile'` | example, production |  |
+| `GEMINI_MODEL_NAME` | `str` | `'gemini-3.5-flash'` | example, production |  |
 | `EMBEDDING_MODEL_NAME` | `str` | `'all-MiniLM-L6-v2'` | example |  |
 | `EMBEDDING_BATCH_SIZE` | `int` | `32` | example |  |
 | `OCR_LANGUAGE` | `str` | `'en'` | example |  |
-| `ML_STUBS` | `bool` | `False` | — | TEST STUBS, not models: hashed bag-of-words embeddings and labelled placeholder OCR text (app/services/ml_stubs.py). For environments that cannot download the PaddleOCR / SentenceTransformers weights. Refused when ENVIR… |
+| `ML_STUBS` | `bool` | `False` | example | TEST STUBS, not models: hashed bag-of-words embeddings and labelled placeholder OCR text (app/services/ml_stubs.py). For environments that cannot download the PaddleOCR / SentenceTransformers weights. Refused when ENVIR… |
 | `PLATFORM_SMTP_HOST` | `str` | `''` | example, production, guard |  |
 | `PLATFORM_SMTP_PORT` | `int` | `587` | example, production |  |
 | `PLATFORM_SMTP_USERNAME` | `str` | `''` | example, production |  |
@@ -86,7 +86,7 @@ guard), and the comment written above it in the code.
 | `TRUSTED_PROXY_HOPS_CONFIRMED` | `bool` | `False` | example, production | ARCH-08 A.3.4 — read by session_policy_service.update_policy to gate enabling IP pinning. It was read through getattr() with a False default and never declared, so the gate could not be opened at all. Set to true only o… |
 | `RATE_LIMIT_GLOBAL_IP_PER_MINUTE` | `int` | `600` | — |  |
 | `RATE_LIMIT_USER_PER_MINUTE` | `int` | `300` | — |  |
-| `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `20` | production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). N-018 (deci… |
+| `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `20` | example, production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). N-018 (deci… |
 | `RATE_LIMIT_CREDENTIAL_PER_HOUR` | `int` | `10` | — |  |
 | `RATE_LIMIT_EXPORT_PER_HOUR` | `int` | `5` | — |  |
 | `RAG_TOP_K` | `int` | `5` | example |  |
@@ -146,14 +146,26 @@ guard), and the comment written above it in the code.
 | `S3_MULTIPART_THRESHOLD` | `int` | `16 * 1024 * 1024` | — |  |
 | `S3_MULTIPART_CHUNKSIZE` | `int` | `16 * 1024 * 1024` | — |  |
 | `S3_MAX_CONCURRENCY` | `int` | `4` | — |  |
-| `S3_ACCESS_KEY_ID` | `Optional[str]` | `Field(default=None, validation_alias=AliasChoices('S3_ACCES…` | production, guard | ====================================================================== RH-1 — object storage credentials. These were never declared. backend/.env.example has shipped AWS_ACCESS_KEY_ID=minioadmin since ARCH-10, but `mode… |
-| `S3_SECRET_ACCESS_KEY` | `Optional[SecretStr]` | `Field(default=None, validation_alias=AliasChoices('S3_SECRE…` | production, guard |  |
+| `S3_ACCESS_KEY_ID` | `Optional[str]` | `Field(default=None, validation_alias=AliasChoices('S3_ACCES…` | example, production, guard | ====================================================================== RH-1 — object storage credentials. These were never declared. backend/.env.example has shipped AWS_ACCESS_KEY_ID=minioadmin since ARCH-10, but `mode… |
+| `S3_SECRET_ACCESS_KEY` | `Optional[SecretStr]` | `Field(default=None, validation_alias=AliasChoices('S3_SECRE…` | example, production, guard |  |
 | `S3_SESSION_TOKEN` | `Optional[SecretStr]` | `Field(default=None, validation_alias=AliasChoices('S3_SESSI…` | — |  |
-| `S3_DEV_FALLBACK_CREDENTIALS` | `bool` | `True` | — | : When true and ENVIRONMENT is development or test, an object-storage : backend with no credentials resolves to the docker-compose MinIO : defaults instead of falling through to botocore's ambient chain. : Ignored outsi… |
+| `S3_DEV_FALLBACK_CREDENTIALS` | `bool` | `True` | example | : When true and ENVIRONMENT is development or test, an object-storage : backend with no credentials resolves to the docker-compose MinIO : defaults instead of falling through to botocore's ambient chain. : Ignored outsi… |
 | `S3_REGIONAL_BUCKETS` | `dict[str, str]` | `{}` | production | ARCH-20 — data residency. Region -> bucket. Empty by default, which leaves every tenant on GLOBAL and the single S3_BUCKET, exactly as before this phase. A tenant pinned to a region with no entry here is REFUSED at writ… |
 | `SAML_CLOCK_SKEW_S` | `int` | `120` | example | ====================================================================== ARCH-28 — SAML settings that ARCH-16 read but never declared. The same defect the ARCH-25 block below documents, four more instances of it. `saml_ga… |
 | `SAML_RAW_ASSERTION_RETENTION_DAYS` | `int` | `30` | — |  |
 | `SAML_CRYPTO_BACKEND` | `Literal['signxml']` | `'signxml'` | — |  |
+| `PUBLIC_API_URL` | `str` | `''` | example, production | ====================================================================== F-123 — the public address identity providers talk to, and the identity settings the env templates document. Same defect as the blocks around this o… |
+| `SAML_SP_ENTITY_ID` | `Optional[str]` | `None` | — |  |
+| `SAML_SP_SIGNING_CERT_PEM` | `str` | `''` | — | : PEM used in the SP metadata when no SP certificate row is live. |
+| `OIDC_REDIRECT_URI` | `str` | `''` | — | : Empty: {public API address}{API_V1_STR}/oidc/callback. |
+| `OIDC_DEFAULT_SCOPES` | `str` | `'openid,email,profile'` | — |  |
+| `OIDC_DISCOVERY_TIMEOUT_S` | `float` | `10.0` | — |  |
+| `SCIM_TOKEN_TTL_DAYS` | `int` | `365` | example |  |
+| `SCIM_TOKEN_ROTATION_OVERLAP_DAYS` | `int` | `7` | example |  |
+| `SCIM_MAX_PAGE_SIZE` | `int` | `200` | — |  |
+| `DOMAIN_VERIFICATION_GRACE_DAYS` | `int` | `14` | example |  |
+| `DOMAIN_VERIFICATION_RECHECK_INTERVAL_HOURS` | `int` | `24` | — |  |
+| `JIT_SEAT_CAP_DEFAULT` | `Optional[int]` | `None` | — | : JIT seat cap when the organization's tier has no seat dimension. |
 | `SAML_XSW_DEFENCE_ENABLED` | `bool` | `True` | guard | The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if settings cannot be read at all, hardening_policy_from_settings() returns the hardened policy. A GA platform needs a switch for the night a real IdP turns o… |
 | `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | ---- DNS resolution (shared with ARCH-16 identity domain checks) ---- |
 | `DNS_TIMEOUT_S` | `float` | `5.0` | — |  |
@@ -204,9 +216,9 @@ guard), and the comment written above it in the code.
 | `HYBRID_WEIGHT_DENSE` | `float` | `1.0` | — |  |
 | `HYBRID_WEIGHT_FULL_TEXT` | `float` | `1.0` | — |  |
 | `HYBRID_WEIGHT_FUZZY` | `float` | `0.5` | — |  |
-| `RERANKER_ENABLED` | `bool` | `True` | production, guard |  |
-| `RERANKER_URL` | `str` | `'http://reranker:8081'` | — |  |
-| `RERANKER_INTERNAL_TOKEN` | `Optional[SecretStr]` | `None` | production, guard |  |
+| `RERANKER_ENABLED` | `bool` | `True` | example, production, guard |  |
+| `RERANKER_URL` | `str` | `'http://reranker:8081'` | example |  |
+| `RERANKER_INTERNAL_TOKEN` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `RERANKER_TIMEOUT` | `float` | `2.0` | — |  |
 | `RERANKER_CONNECT_TIMEOUT` | `float` | `0.5` | — |  |
 | `RERANKER_BREAKER_THRESHOLD` | `int` | `5` | — |  |
@@ -248,6 +260,8 @@ guard), and the comment written above it in the code.
 | `STREAM_MAX_CONCURRENT_PER_ORG` | `int` | `20` | — |  |
 | `STREAM_MAX_MESSAGES_PER_MINUTE_PER_CONVERSATION` | `int` | `10` | — |  |
 | `PDF_TEXT_LAYER_BBOXES_ENABLED` | `bool` | `True` | — |  |
+| `KNOWLEDGE_DUAL_READ` | `bool` | `True` | — | F-123: read through getattr() and never declared, so the variables had no effect. Declared at the defaults the code already used. |
+| `SCHEDULER_TICK_SECONDS` | `float` | `30.0` | — | : How often the worker scheduler loop wakes, in seconds. |
 | `PRICE_BOOK_CACHE_TTL_SECONDS` | `float` | `300.0` | — | ---- ARCH-14: pricing ------------------------------------------------- |
 | `ROLLUP_SEAL_GRACE_HOURS` | `int` | `26` | — |  |
 | `ROLLUP_BATCH_SIZE` | `int` | `2000` | — |  |
@@ -305,7 +319,7 @@ guard), and the comment written above it in the code.
 | `BILLING_ADDON_GRACE_DAYS` | `int` | `14` | — | D-6. Days existing add-on resources keep working after the grant ends. |
 | `BILLING_ON_HOLD_GRACE_DAYS` | `int` | `13` | — | D-11. Days of full access after a renewal failure. Matches Dodo's default Payment Retries recovery window, so access ends when retries do. |
 | `BILLING_LAPSED_TIER_KEY` | `str` | `'free'` | — | The tier an organization falls back to when its subscription ends. |
-| `BILLING_DODO_SEAT_PRORATION_MODE` | `str` | `'prorated_immediately'` | — | ARCH-30 Tranche 3. How Dodo bills a mid-cycle seat change. Dodo documents that the three "_immediately" modes charge now and move the renewal date; do_not_bill keeps the date and bills the new quantity at renewal. |
+| `BILLING_DODO_SEAT_PRORATION_MODE` | `str` | `'prorated_immediately'` | example | ARCH-30 Tranche 3. How Dodo bills a mid-cycle seat change. Dodo documents that the three "_immediately" modes charge now and move the renewal date; do_not_bill keeps the date and bills the new quantity at renewal. |
 | `BILLING_DEFAULT_CURRENCY` | `str` | `'USD'` | example, production |  |
 | `BILLING_DEFAULT_QUOTA_TIER_KEY` | `str \| None` | `None` | — |  |
 | `BILLING_SEAT_PRICE_LOOKUP_KEY` | `str \| None` | `None` | — |  |

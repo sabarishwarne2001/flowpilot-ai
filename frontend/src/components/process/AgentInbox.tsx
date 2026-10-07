@@ -85,7 +85,7 @@ export const AgentInbox: React.FC<{
                         className="font-semibold text-primary hover:underline">
                         {p.label}
                       </Link>
-                      {p.verdict ? <span className="ml-1 text-[11px] font-bold text-muted-foreground">{p.verdict}</span> : null}
+                      {p.verdict ? <span className="ml-1 text-[11px] font-semibold text-muted-foreground">{p.verdict}</span> : null}
                       {p.injection_suspected ? <span className="ml-1 text-[11px] font-semibold text-destructive">injection?</span> : null}
                     </td>
                     <td className="px-2 py-2 text-xs">

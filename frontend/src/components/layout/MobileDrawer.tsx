@@ -40,7 +40,7 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
         onClick={onClose}
         aria-hidden="true"
         className={`
-          fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 lg:hidden
+          fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 lg:hidden
           ${
             open
               ? "opacity-100 pointer-events-auto"
@@ -56,14 +56,14 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
         aria-label="Navigation Menu"
         className={`
           fixed inset-y-0 left-0 z-50
-          w-72 max-w-[85vw]
-          bg-card
+          w-[280px] max-w-[85vw]
+          bg-sidebar
           border-r
           border-border
-          shadow-2xl
+          shadow-elevation-3
           transition-transform
-          duration-300
-          ease-in-out
+          duration-200
+          ease-out-expo
           lg:hidden
           ${
             open

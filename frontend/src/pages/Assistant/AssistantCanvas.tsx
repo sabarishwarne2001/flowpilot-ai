@@ -302,7 +302,7 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
                   onClick={() => void send()}
                   disabled={prompt.trim().length === 0}
                   aria-label="Send"
-                  className="rounded-md bg-primary p-2 sm:p-2.5 text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                  className="fp-btn-primary rounded-md bg-primary p-2 sm:p-2.5 text-primary-foreground hover:opacity-90 disabled:opacity-40"
                 >
                   <Send className="h-4 w-4" />
                 </button>

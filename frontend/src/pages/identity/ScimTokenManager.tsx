@@ -130,7 +130,7 @@ export const ScimTokenManager: React.FC = () => {
               type="button"
               onClick={() => creatingFor && create.mutate(creatingFor)}
               disabled={!creatingFor || create.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Issue token
@@ -234,7 +234,7 @@ export const ScimTokenManager: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="revoke-title"
-            className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl"
+            className="w-full max-w-md fp-card p-5 shadow-2xl"
           >
             <h3 id="revoke-title" className="text-base font-semibold">
               Revoke this token?
@@ -397,7 +397,7 @@ const SecretDialog: React.FC<{
         role="dialog"
         aria-modal="true"
         aria-labelledby="secret-title"
-        className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-2xl"
+        className="w-full max-w-lg fp-card p-5 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
           <h3 id="secret-title" className="text-base font-semibold">
@@ -454,7 +454,7 @@ const SecretDialog: React.FC<{
             type="button"
             onClick={onClose}
             disabled={!acknowledged}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="fp-btn-primary rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             Done
           </button>

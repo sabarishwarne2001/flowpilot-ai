@@ -68,7 +68,7 @@ interface TenantErrorProps {
 const TenantError: React.FC<TenantErrorProps> = ({ onRetry }) => (
   <div className="flex h-screen w-full items-center justify-center bg-background px-6">
     <div className="w-full max-w-sm space-y-4 text-center">
-      <h1 className="text-lg font-bold tracking-tight text-foreground">
+      <h1 className="text-lg font-semibold tracking-tight text-foreground">
         Unable to load your workspace
       </h1>
       <p className="text-sm text-muted-foreground">
@@ -78,7 +78,7 @@ const TenantError: React.FC<TenantErrorProps> = ({ onRetry }) => (
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+        className="fp-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
       >
         <RefreshCw className="h-4 w-4" />
         Try again

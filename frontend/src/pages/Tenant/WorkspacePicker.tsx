@@ -57,7 +57,7 @@ const OrganizationCard: React.FC<{
     <section className="space-y-3 rounded-xl border border-border/60 bg-card p-5">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
-          <h2 className="truncate text-sm font-bold text-foreground">
+          <h2 className="truncate text-sm font-semibold text-foreground">
             {organization.organization_name}
           </h2>
           <p className="text-xs text-muted-foreground">
@@ -199,7 +199,7 @@ export const WorkspacePicker: React.FC = () => {
     <div className="flex min-h-screen w-full justify-center bg-background px-6 py-12">
       <div className="w-full max-w-lg space-y-6">
         <header className="space-y-2">
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Choose a workspace
           </h1>
           <p className="text-sm font-medium text-muted-foreground">

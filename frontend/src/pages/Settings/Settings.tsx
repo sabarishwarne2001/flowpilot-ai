@@ -15,8 +15,8 @@
  * against a raw membership role.
  */
 
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Building2,
   Cpu,
@@ -53,7 +53,7 @@ export const PermissionDenied: React.FC = () => {
       <div className="p-4 bg-destructive/10 text-destructive rounded-full mb-4">
         <ShieldAlert className="h-10 w-10" />
       </div>
-      <h2 className="text-lg font-extrabold tracking-tight">Permission Denied</h2>
+      <h2 className="text-lg font-semibold tracking-tight">Permission Denied</h2>
       <p className="text-xs text-muted-foreground font-semibold leading-relaxed mt-2 max-w-sm">
         You do not possess sufficient privilege levels to inspect or modify workspace settings in this role.
       </p>
@@ -101,8 +101,19 @@ const SCOPE_TITLES: Readonly<Record<SettingsScope, string>> = {
   workspace: "This workspace",
 };
 
+const isSection = (value: string | null): value is SettingsSection =>
+  SECTIONS.some((section) => section.id === value);
+
 const Settings: React.FC = () => {
-  const [active, setActive] = useState<SettingsSection>("profile");
+  // `?section=sessions` opens a section directly (the account menu links here).
+  const [searchParams] = useSearchParams();
+  const requested = searchParams.get("section");
+  const [active, setActive] = useState<SettingsSection>(isSection(requested) ? requested : "profile");
+  useEffect(() => {
+    if (isSection(requested)) {
+      setActive(requested);
+    }
+  }, [requested]);
   const { workspace, workspaceRole, organization, organizationRole } = useResolvedTenant();
 
   const canSeeWorkspace = isAtLeast(workspaceRole, "CONTRIBUTOR");
@@ -136,7 +147,7 @@ const Settings: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Your account, and <span className="font-semibold text-foreground">{workspace.workspace_name}</span>.
         </p>
@@ -150,8 +161,8 @@ const Settings: React.FC = () => {
               return null;
             }
             return (
-              <nav key={scope} aria-labelledby={`settings-scope-${scope}`} className="rounded-xl border border-border bg-card p-2">
-                <h2 id={`settings-scope-${scope}`} className="px-2 pb-1.5 pt-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              <nav key={scope} aria-labelledby={`settings-scope-${scope}`} className="fp-card p-2">
+                <h2 id={`settings-scope-${scope}`} className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {SCOPE_TITLES[scope]}
                 </h2>
                 <ul className="flex flex-row gap-1 overflow-x-auto no-scrollbar lg:flex-col">
@@ -165,13 +176,13 @@ const Settings: React.FC = () => {
                           onClick={() => setActive(section.id)}
                           aria-current={selected ? "page" : undefined}
                           className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                            selected ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(213_94%_72%)]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                           }`}
                         >
                           <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="min-w-0">
                             <span className="block whitespace-nowrap text-sm font-semibold">{section.label}</span>
-                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary-foreground/80" : "text-muted-foreground/80"}`}>
+                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(213_94%_72%)]/70" : "text-muted-foreground/80"}`}>
                               {section.hint}
                             </span>
                           </span>
@@ -186,7 +197,7 @@ const Settings: React.FC = () => {
 
           {orgLinks.length > 0 && (
             <nav aria-labelledby="settings-scope-organization" className="rounded-xl border border-dashed border-border bg-card/50 p-2">
-              <h2 id="settings-scope-organization" className="px-2 pb-1.5 pt-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              <h2 id="settings-scope-organization" className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Organization
               </h2>
               <ul className="space-y-0.5">

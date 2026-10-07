@@ -36,7 +36,7 @@ const ROW_STYLE: Readonly<Record<RowKind, string>> = {
   BODY: "",
   SECTION: "font-semibold bg-muted/30",
   SUBTOTAL: "font-semibold border-t border-border",
-  TOTAL: "font-bold border-t-2 border-border",
+  TOTAL: "font-semibold border-t-2 border-border",
   CARRY: "italic text-muted-foreground",
 };
 

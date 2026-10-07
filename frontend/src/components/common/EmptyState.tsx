@@ -40,20 +40,20 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <div
-      className={`flex flex-col items-center justify-center text-center p-8 bg-card border border-border/60 dark:border-border/40 rounded-xl max-w-sm mx-auto shadow-sm select-none animate-fade-in ${className}`}
+      className={`relative mx-auto flex max-w-sm flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-border-strong/70 bg-card/60 px-8 py-10 text-center select-none animate-fade-in ${className}`}
       role="region"
       aria-label={`${title} Empty State`}
     >
       {/* Visual Vector Icon Container */}
-      <div className="p-4 bg-primary/10 text-primary rounded-full mb-4">
-        <Icon className="h-7 w-7 flex-shrink-0" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-muted to-muted/30 text-muted-foreground shadow-elevation-1">
+        <Icon className="h-5 w-5 flex-shrink-0" />
       </div>
 
       {/* Main Descriptions Labels */}
-      <h3 className="text-sm font-extrabold tracking-tight text-foreground/90 font-sans mb-1.5">
+      <h3 className="mb-1 text-sm font-semibold tracking-tight text-foreground">
         {title}
       </h3>
-      <p className="text-xs text-muted-foreground font-semibold leading-relaxed mb-5 max-w-[280px]">
+      <p className="mb-5 max-w-[280px] text-[13px] leading-relaxed text-muted-foreground">
         {description}
       </p>
 
@@ -62,7 +62,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <button
           type="button"
           onClick={onAction}
-          className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="fp-btn fp-btn-primary text-[13px]"
         >
           {actionText}
         </button>

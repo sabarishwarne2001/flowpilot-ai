@@ -20,6 +20,7 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 import { useAuthStore } from "@/store/useAuthStore";
+import { AuthShell } from "@/components/auth/AuthShell";
 
 type Phase = "working" | "verified" | "failed" | "missing";
 
@@ -101,14 +102,14 @@ export function VerifyEmail() {
     return (
       <Shell>
         <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-        <h1 className="text-lg font-semibold">Email verified</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight">Email verified</h1>
         <p className="text-sm text-muted-foreground">
           Your address is confirmed. You now have full access.
         </p>
         <button
           type="button"
           onClick={() => navigate(ROUTES.LOGIN, { replace: true })}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          className="fp-btn fp-btn-primary h-10 px-5"
         >
           Continue
         </button>
@@ -119,7 +120,7 @@ export function VerifyEmail() {
   return (
     <Shell>
       <XCircle className="h-8 w-8 text-destructive" />
-      <h1 className="text-lg font-semibold">
+      <h1 className="text-[22px] font-semibold tracking-tight">
         {phase === "missing" ? "Nothing to verify" : "Verification failed"}
       </h1>
       <p className="max-w-sm text-center text-sm text-muted-foreground">
@@ -132,7 +133,7 @@ export function VerifyEmail() {
       </p>
       <Link
         to={ROUTES.LOGIN}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        className="fp-btn fp-btn-primary h-10 px-5"
       >
         Go to sign in
       </Link>
@@ -141,9 +142,9 @@ export function VerifyEmail() {
 }
 
 const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex min-h-screen w-full flex-col items-center justify-center gap-4 bg-background px-4">
-    {children}
-  </div>
+  <AuthShell>
+    <div className="flex flex-col items-center gap-4 py-2 text-center animate-fade-in">{children}</div>
+  </AuthShell>
 );
 
 export default VerifyEmail;

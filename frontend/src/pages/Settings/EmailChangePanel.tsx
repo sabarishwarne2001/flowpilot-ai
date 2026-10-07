@@ -72,9 +72,9 @@ export const EmailChangePanel: React.FC<Props> = ({ currentEmail }) => {
   });
 
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="fp-card">
       <header className="border-b border-border px-4 py-3">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Mail className="h-4 w-4 text-primary" />
           Email address
         </h2>
@@ -170,7 +170,7 @@ export const EmailChangePanel: React.FC<Props> = ({ currentEmail }) => {
                   newEmail.trim().length === 0 ||
                   password.length === 0
                 }
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
                 {request.isPending && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

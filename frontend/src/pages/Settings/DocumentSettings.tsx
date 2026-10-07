@@ -117,7 +117,7 @@ export const DocumentSettings: React.FC = () => {
 
   if (isLoadingDocumentSettings) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="fp-card p-6 shadow-sm">
         <div className="space-y-6 animate-pulse">
           <div className="h-8 w-56 rounded bg-muted" />
           <div className="h-4 w-80 rounded bg-muted" />
@@ -138,8 +138,8 @@ export const DocumentSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">Document Settings</h1>
+      <div className="fp-card p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold">Document Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Configure document ingestion, chunking, OCR, and automated extraction behaviors used throughout FlowPilot AI.
         </p>
@@ -154,7 +154,7 @@ export const DocumentSettings: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
-              <label htmlFor="chunk_size" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <label htmlFor="chunk_size" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("chunk_size", "Chunk Size")}
               </label>
               <input
@@ -168,7 +168,7 @@ export const DocumentSettings: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="chunk_overlap" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <label htmlFor="chunk_overlap" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("chunk_overlap", "Chunk Overlap")}
               </label>
               <input
@@ -185,7 +185,7 @@ export const DocumentSettings: React.FC = () => {
                 database constraint); OCR runs with one process-wide language. Both were
                 free-text inputs nothing read. They are shown as the facts they are. */}
             <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("embedding_model", "Embedding Model")}
               </span>
               <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
@@ -200,7 +200,7 @@ export const DocumentSettings: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("ocr_language", "OCR Language")}
               </span>
               <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
@@ -212,7 +212,7 @@ export const DocumentSettings: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="max_upload_size" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <label htmlFor="max_upload_size" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("max_upload_size", "Max Upload Size (MB)")}
               </label>
               <input
@@ -228,7 +228,7 @@ export const DocumentSettings: React.FC = () => {
             {/* HARDENING-T2:D13. Chips over the platform's accepted types; the upload paths
                 now enforce this list, and it can only narrow what the platform accepts. */}
             <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {renderLabel("allowed_file_types", "Allowed File Types")}
               </span>
               <div role="group" aria-label="Allowed file types" className="flex flex-wrap gap-1.5">
@@ -368,7 +368,7 @@ export const DocumentSettings: React.FC = () => {
             <button
               type="submit"
               disabled={!isDirty || isSaving || !canManageSettings}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="fp-btn-primary rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save Document Settings"}
             </button>
@@ -381,7 +381,7 @@ export const DocumentSettings: React.FC = () => {
       {/* ARCH38-S2:preset-gallery. The vertical packs live with the other
           document settings: a pack decides what is extracted from a document
           type, which is the same question the rest of this page answers. */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="fp-card p-6">
         <PresetGallery
           workspaceId={workspace.id}
           canManage={canManageSettings}

@@ -14,7 +14,7 @@ interface WorkspaceLogoProps {
 export function WorkspaceLogo({
   workspace,
   className = "h-8 w-8 rounded object-cover",
-  fallbackClassName = "flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary",
+  fallbackClassName = "flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-xs font-semibold text-primary",
 }: WorkspaceLogoProps) {
   const src = useAuthenticatedImage(workspace.company_logo_url ?? null);
   const [loadError, setLoadError] = useState(false);

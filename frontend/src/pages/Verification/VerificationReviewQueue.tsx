@@ -325,7 +325,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
                   type="button"
                   onClick={acceptConsensus}
                   disabled={resolve.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   {resolve.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -399,7 +399,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
                   type="button"
                   onClick={submitEdits}
                   disabled={resolve.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   {resolve.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin" />

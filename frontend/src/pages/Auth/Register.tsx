@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, MailCheck } from "lucide-react";
 
 import { registerSchema, type RegisterInput } from "@/utils/validation";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
@@ -12,6 +12,17 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 import { isSafeRedirectPath } from "@/routes/tenantPaths";
+import {
+  AUTH_FIELD_ERROR,
+  AUTH_INPUT,
+  AUTH_INPUT_ICON,
+  AUTH_LABEL,
+  AUTH_LINK,
+  AUTH_PRIMARY,
+  AUTH_SUBTITLE,
+  AUTH_TITLE,
+  AUTH_TRAILING_BUTTON,
+} from "@/components/auth/authStyles";
 
 export const Register: React.FC = () => {
   const location = useLocation();
@@ -90,21 +101,20 @@ export const Register: React.FC = () => {
 
   if (submitted) {
     return (
-      <div className="flex w-full flex-col items-center justify-center gap-4 px-4 py-10 text-center select-none">
-        <MailCheck className="h-8 w-8 text-emerald-500" />
-        <h1 className="text-lg font-semibold tracking-tight">Check your email</h1>
-        <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-          We have sent a message to <strong>{submittedEmail}</strong>. Open the link inside to
-          finish setting up your account.
+      <div className="flex w-full flex-col items-center gap-4 py-4 text-center select-none animate-fade-in">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10">
+          <MailCheck className="h-6 w-6 text-emerald-500" aria-hidden="true" />
+        </div>
+        <h1 className={AUTH_TITLE}>Check your email</h1>
+        <p className={`max-w-sm ${AUTH_SUBTITLE}`}>
+          We have sent a message to <strong className="font-medium text-foreground">{submittedEmail}</strong>. Open the
+          link inside to finish setting up your account.
         </p>
         <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
           Nothing arrived after a few minutes? Check your spam folder, and confirm the address above
           is spelled correctly.
         </p>
-        <Link
-          to={ROUTES.LOGIN}
-          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
+        <Link to={ROUTES.LOGIN} className={`text-sm ${AUTH_LINK}`}>
           Back to sign in
         </Link>
       </div>
@@ -112,56 +122,44 @@ export const Register: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="select-none space-y-2">
-        <h1 className="text-2xl font-extrabold tracking-tight">Create an Account</h1>
-        <p className="text-sm font-semibold leading-relaxed text-muted-foreground">
-          Sign up to begin automating your business documents.
-        </p>
+    <div className="flex w-full flex-col">
+      <div className="mb-6 space-y-1.5 select-none">
+        <h1 className={AUTH_TITLE}>Create an Account</h1>
+        <p className={AUTH_SUBTITLE}>Sign up to begin automating your business documents.</p>
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
-          <label
-            htmlFor="email"
-            className="select-none text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          >
+          <label htmlFor="email" className={`${AUTH_LABEL} select-none`}>
             Email Address
           </label>
-          <input
-            {...register("email")}
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@company.com"
-            disabled={isSubmitting}
-            aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "email-error" : undefined}
-            className={`w-full rounded-lg border bg-background px-3.5 py-2.5 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-              errors.email
-                ? "border-destructive focus:border-destructive"
-                : "border-border hover:border-muted-foreground/30 focus:border-primary"
-            }`}
-          />
+          <div className="relative">
+            <Mail className={AUTH_INPUT_ICON} aria-hidden="true" />
+            <input
+              {...register("email")}
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="name@company.com"
+              disabled={isSubmitting}
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "email-error" : undefined}
+              className={`${AUTH_INPUT} pl-9`}
+            />
+          </div>
           {errors.email && (
-            <p
-              id="email-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="email-error" role="alert" className={AUTH_FIELD_ERROR}>
               {errors.email.message}
             </p>
           )}
         </div>
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="password"
-            className="select-none text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          >
+          <label htmlFor="password" className={`${AUTH_LABEL} select-none`}>
             Password
           </label>
           <div className="relative">
+            <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
             <input
               {...register("password")}
               id="password"
@@ -171,11 +169,7 @@ export const Register: React.FC = () => {
               disabled={isSubmitting}
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
-              className={`w-full rounded-lg border bg-background py-2.5 pl-3.5 pr-11 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-                errors.password
-                  ? "border-destructive focus:border-destructive"
-                  : "border-border hover:border-muted-foreground/30 focus:border-primary"
-              }`}
+              className={`${AUTH_INPUT} pl-9 pr-10`}
             />
             <button
               type="button"
@@ -183,31 +177,25 @@ export const Register: React.FC = () => {
               disabled={isSubmitting}
               tabIndex={-1}
               aria-label={showPassword ? "Hide Password" : "Show Password"}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
+              className={AUTH_TRAILING_BUTTON}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           <PasswordStrengthMeter password={watch("password")} userInputs={[watch("email")]} />
           {errors.password && (
-            <p
-              id="password-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="password-error" role="alert" className={AUTH_FIELD_ERROR}>
               {errors.password.message}
             </p>
           )}
         </div>
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="confirmPassword"
-            className="select-none text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          >
+          <label htmlFor="confirmPassword" className={`${AUTH_LABEL} select-none`}>
             Confirm Password
           </label>
           <div className="relative">
+            <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
             <input
               {...register("confirmPassword")}
               id="confirmPassword"
@@ -217,11 +205,7 @@ export const Register: React.FC = () => {
               disabled={isSubmitting}
               aria-invalid={!!errors.confirmPassword}
               aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-              className={`w-full rounded-lg border bg-background py-2.5 pl-3.5 pr-11 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-                errors.confirmPassword
-                  ? "border-destructive focus:border-destructive"
-                  : "border-border hover:border-muted-foreground/30 focus:border-primary"
-              }`}
+              className={`${AUTH_INPUT} pl-9 pr-10`}
             />
             <button
               type="button"
@@ -229,54 +213,46 @@ export const Register: React.FC = () => {
               disabled={isSubmitting}
               tabIndex={-1}
               aria-label={showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
+              className={AUTH_TRAILING_BUTTON}
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {errors.confirmPassword && (
-            <p
-              id="confirmPassword-error"
-              role="alert"
-              className="pt-0.5 text-xs font-semibold text-destructive"
-            >
+            <p id="confirmPassword-error" role="alert" className={AUTH_FIELD_ERROR}>
               {errors.confirmPassword.message}
             </p>
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="mt-2 flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-        >
+        <button type="submit" disabled={isSubmitting} className={`${AUTH_PRIMARY} mt-2`}>
           {isSubmitting ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Creating account...
             </>
           ) : (
-            "Create Account"
+            <>
+              Create Account
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </>
           )}
         </button>
       </form>
 
-      {/* Footer */}
-      <footer className="pt-2 text-center select-none">
-        <p className="text-sm font-medium leading-none text-muted-foreground">
-          Already have an account?{" "}
-          <Link
-            to={
-              validatedRedirectParam
-                ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}`
-                : ROUTES.LOGIN
-            }
-            className="font-bold text-primary hover:underline"
-          >
-            Sign in instead
-          </Link>
-        </p>
-      </footer>
+      <p className="mt-6 border-t border-border/70 pt-5 text-center text-[13px] text-muted-foreground select-none">
+        Already have an account?{" "}
+        <Link
+          to={
+            validatedRedirectParam
+              ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}`
+              : ROUTES.LOGIN
+          }
+          className={AUTH_LINK}
+        >
+          Sign in instead
+        </Link>
+      </p>
     </div>
   );
 };

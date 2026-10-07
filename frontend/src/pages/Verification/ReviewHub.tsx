@@ -536,7 +536,7 @@ export const ReviewHub: React.FC = () => {
     <div className="mx-auto max-w-7xl space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Review</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Review</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Everything waiting on a person, oldest high-severity first.
           </p>
@@ -551,8 +551,8 @@ export const ReviewHub: React.FC = () => {
         <dl className="flex gap-2" aria-label="Open items by source">
           {allowed.map((kind) => (
             <div key={kind} className="rounded-lg border border-border bg-card px-3 py-1.5 text-center">
-              <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{KIND_LABELS[kind]}</dt>
-              <dd className="text-lg font-black tabular-nums">{counts[kind] ?? 0}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{KIND_LABELS[kind]}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{counts[kind] ?? 0}</dd>
             </div>
           ))}
         </dl>
@@ -590,7 +590,7 @@ export const ReviewHub: React.FC = () => {
                 setSeverities((list) => (on ? list.filter((s) => s !== severity) : [...list, severity]));
                 setPage(1);
               }}
-              className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
               }`}
             >
@@ -646,7 +646,7 @@ export const ReviewHub: React.FC = () => {
 
       {selectedItems.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3" role="region" aria-label="Bulk actions">
-          <span className="text-sm font-bold">{selectedItems.length} selected</span>
+          <span className="text-sm font-semibold">{selectedItems.length} selected</span>
           <select
             aria-label="Assign selected to"
             value=""
@@ -674,9 +674,9 @@ export const ReviewHub: React.FC = () => {
           {onlyKind === "ASSERTION" && (
             <>
               <button type="button" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: "resolve", body: { reviewer_verdict: "PASS" } })}
-                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white">All pass</button>
+                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">All pass</button>
               <button type="button" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: "resolve", body: { reviewer_verdict: "FAIL" } })}
-                className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">All fail</button>
+                className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-semibold text-destructive-foreground">All fail</button>
             </>
           )}
           {onlyKind === "ANOMALY" && (
@@ -690,10 +690,10 @@ export const ReviewHub: React.FC = () => {
               />
               <button type="button" disabled={bulk.isPending || bulkReason.trim().length < 10}
                 onClick={() => bulk.mutate({ action: "resolve", body: { anomaly_verdict: "DISMISS", note: bulkReason.trim() } })}
-                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted disabled:opacity-50">Dismiss all</button>
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-50">Dismiss all</button>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { anomaly_verdict: "CONFIRM" } })}
-                className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">Confirm all</button>
+                className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-semibold text-destructive-foreground">Confirm all</button>
             </>
           )}
           {/* ARCH45-S2:hub-corroboration-bulk */}
@@ -701,10 +701,10 @@ export const ReviewHub: React.FC = () => {
             <>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { corroboration_verdict: "CONFIRM" } })}
-                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">Confirm all</button>
+                className="fp-btn-primary rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">Confirm all</button>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { corroboration_verdict: "DISMISS" } })}
-                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Dismiss all</button>
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-muted">Dismiss all</button>
             </>
           )}
           {/* ARCH46-S2:hub-obligation-bulk */}
@@ -712,10 +712,10 @@ export const ReviewHub: React.FC = () => {
             <>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { obligation_verdict: "CONFIRM" } })}
-                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">Confirm all</button>
+                className="fp-btn-primary rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">Confirm all</button>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { obligation_verdict: "REJECT" } })}
-                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Reject all</button>
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-muted">Reject all</button>
             </>
           )}
           {/* ARCH47-S2:hub-posting-bulk — accepting needs the ERP's reference, so it is one at a time. */}
@@ -723,10 +723,10 @@ export const ReviewHub: React.FC = () => {
             <>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { posting_verdict: "RETRY" } })}
-                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">Retry all</button>
+                className="fp-btn-primary rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">Retry all</button>
               <button type="button" disabled={bulk.isPending}
                 onClick={() => bulk.mutate({ action: "resolve", body: { posting_verdict: "CANCEL" } })}
-                className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold hover:bg-muted">Cancel all</button>
+                className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-muted">Cancel all</button>
             </>
           )}
           {selectedKinds.has("EXTRACTION") && (
@@ -758,7 +758,7 @@ export const ReviewHub: React.FC = () => {
           {tab === "HISTORY" ? "Nothing resolved matches these filters." : "Nothing is waiting for review here."}
         </p>
       ) : (
-        <ul ref={listRef} className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" aria-label="Review items">
+        <ul ref={listRef} className="divide-y divide-border overflow-hidden fp-card" aria-label="Review items">
           {items.map((item, index) => {
             const key = itemKey(item);
             const isCurrent = index === cursor;
@@ -788,13 +788,13 @@ export const ReviewHub: React.FC = () => {
                     {isOpen ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0" />}
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-black ${SEVERITY_STYLES[item.severity]}`}>{item.severity}</span>
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{KIND_LABELS[item.kind]}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_STYLES[item.severity]}`}>{item.severity}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{KIND_LABELS[item.kind]}</span>
                         {item.review_reason && (
                           <span className="text-[10px] font-semibold uppercase text-muted-foreground">{REASON_LABELS[item.review_reason]}</span>
                         )}
                         {item.under_retention_hold && (
-                          <span className="inline-flex items-center gap-1 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:text-sky-400" title="This document is under a retention hold: it cannot be deleted or exported while the hold stands.">
+                          <span className="inline-flex items-center gap-1 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-400" title="This document is under a retention hold: it cannot be deleted or exported while the hold stands.">
                             <Lock className="h-3 w-3" aria-hidden="true" /> Retention hold
                           </span>
                         )}
@@ -849,7 +849,7 @@ export const ReviewHub: React.FC = () => {
                           setCursor(index);
                           openResolve(item);
                         }}
-                        className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+                        className="fp-btn-primary rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                       >
                         Resolve
                       </button>

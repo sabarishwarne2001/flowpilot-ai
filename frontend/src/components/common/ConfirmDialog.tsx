@@ -111,12 +111,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const busyLabel = loadingText ?? (confirmText === "Delete" ? "Deleting…" : "Working…");
   const confirmClass =
     tone === "danger"
-      ? "bg-destructive text-white hover:opacity-90"
-      : "bg-primary text-primary-foreground hover:bg-primary/90";
+      ? "fp-btn-danger"
+      : "fp-btn-primary";
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-[1px]"
+      className="fixed inset-0 z-[100] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !loading) {
           onCancel();
@@ -129,24 +129,24 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={messageId}
-        className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-card-foreground shadow-2xl"
+        className="w-full max-w-md animate-scale-in rounded-2xl border border-border-strong/60 bg-popover p-6 text-popover-foreground shadow-elevation-3"
       >
-        <h2 id={titleId} className="text-lg font-semibold text-foreground">
+        <h2 id={titleId} className="text-base font-semibold tracking-tight text-foreground">
           {title}
         </h2>
 
-        <p id={messageId} className="mt-3 text-sm text-muted-foreground">
+        <p id={messageId} className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {message}
         </p>
 
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           {hideCancel ? null : (
             <button
               ref={cancelRef}
               type="button"
               onClick={onCancel}
               disabled={loading}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+              className="fp-btn fp-btn-secondary h-9 px-4"
             >
               {cancelText}
             </button>
@@ -157,7 +157,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50 ${confirmClass}`}
+            className={`fp-btn h-9 px-4 font-semibold ${confirmClass}`}
           >
             {loading ? busyLabel : confirmText}
           </button>

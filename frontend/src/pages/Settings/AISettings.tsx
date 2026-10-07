@@ -86,7 +86,7 @@ const FieldLabel: React.FC<{ readonly htmlFor: string; readonly field: keyof typ
     // HARDENING-T2:Phase3. The same (i) affordance as the other settings forms,
     // instead of a paragraph under every label.
     <span className="flex items-center gap-1.5">
-      <label htmlFor={htmlFor} className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+      <label htmlFor={htmlFor} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {help.title}
       </label>
       <InfoTooltip label={help.title}>{help.description}</InfoTooltip>
@@ -103,7 +103,7 @@ const ResolvedPanel: React.FC<{
 }> = ({ resolved, loading, orgSlug, showOrgLinks, showBilling }) => {
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground" role="status">
+      <div className="flex items-center gap-2 fp-card p-5 text-sm text-muted-foreground" role="status">
         <Loader2 className="h-4 w-4 animate-spin" /> Resolving what serves this workspace…
       </div>
     );
@@ -113,16 +113,16 @@ const ResolvedPanel: React.FC<{
   }
   const fromRule = resolved.resolution_origin === "route_rule";
   return (
-    <section aria-labelledby="ai-resolved-title" className="rounded-xl border border-border bg-card">
+    <section aria-labelledby="ai-resolved-title" className="fp-card">
       <header className="border-b border-border/60 px-5 py-4">
-        <h2 id="ai-resolved-title" className="text-sm font-extrabold uppercase tracking-wider">What runs</h2>
+        <h2 id="ai-resolved-title" className="text-sm font-semibold uppercase tracking-wider">What runs</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           The model that actually serves this workspace&apos;s extraction. Read-only: it reflects organization routing, keys and limits.
         </p>
       </header>
       <dl className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
         <div className="rounded-lg border border-border/60 p-3">
-          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <Cpu className="h-3.5 w-3.5" aria-hidden="true" /> Model
           </dt>
           <dd className="mt-1 font-mono text-sm">{resolved.resolved_provider} / {resolved.resolved_model}</dd>
@@ -132,7 +132,7 @@ const ResolvedPanel: React.FC<{
           </dd>
         </div>
         <div className="rounded-lg border border-border/60 p-3">
-          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <Wallet className="h-3.5 w-3.5" aria-hidden="true" /> Price per 1M input tokens
           </dt>
           <dd className="mt-1 font-mono text-sm">
@@ -144,7 +144,7 @@ const ResolvedPanel: React.FC<{
           </dd>
         </div>
         <div className="rounded-lg border border-border/60 p-3">
-          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <KeyRound className="h-3.5 w-3.5" aria-hidden="true" /> Provider key
           </dt>
           <dd className="mt-1 text-sm">
@@ -163,7 +163,7 @@ const ResolvedPanel: React.FC<{
           )}
         </div>
         <div className="rounded-lg border border-border/60 p-3">
-          <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <Wallet className="h-3.5 w-3.5" aria-hidden="true" /> Spend limit
           </dt>
           <dd className="mt-1 text-sm">
@@ -347,11 +347,11 @@ export const AISettings: React.FC = () => {
 
       <form
         onSubmit={handleSubmit((values) => save.mutate(values))}
-        className="rounded-xl border border-border bg-card"
+        className="fp-card"
         aria-labelledby="ai-defaults-title"
       >
         <header className="border-b border-border/60 px-5 py-4">
-          <h2 id="ai-defaults-title" className="text-sm font-extrabold uppercase tracking-wider">Workspace defaults</h2>
+          <h2 id="ai-defaults-title" className="text-sm font-semibold uppercase tracking-wider">Workspace defaults</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Used when no organization routing rule applies.
             {!canManage && " You can view these; a workspace admin can change them."}
@@ -446,7 +446,7 @@ export const AISettings: React.FC = () => {
             <button
               type="submit"
               disabled={disabled || !isDirty}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save defaults
             </button>

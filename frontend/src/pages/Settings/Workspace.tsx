@@ -431,7 +431,7 @@ export const Workspace: React.FC = () => {
 
   if (isPageLoading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="fp-card p-6 shadow-sm">
         <div className="space-y-6 animate-pulse">
           <div className="h-8 w-56 rounded bg-muted" />
           <div className="h-4 w-80 rounded bg-muted" />
@@ -454,15 +454,15 @@ export const Workspace: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">Workspace Settings</h1>
+      <div className="fp-card p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold">Workspace Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Configure your organization's workspace profile and regional preferences.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
           <div className="space-y-2">
-            <label htmlFor="workspace_name" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label htmlFor="workspace_name" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Workspace Name
             </label>
             <input
@@ -480,7 +480,7 @@ export const Workspace: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Company Logo
             </label>
             <div className="flex items-center gap-4">
@@ -531,7 +531,7 @@ export const Workspace: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <span className="flex items-center gap-1.5">
-                <label htmlFor="timezone" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Scheduling timezone</label>
+                <label htmlFor="timezone" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scheduling timezone</label>
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
                 <InfoTooltip label="Scheduling timezone">Sets the clock for analytics warehouse sync windows. The timestamps you see follow your own profile timezone, not this one.</InfoTooltip>
               </span>
@@ -577,7 +577,7 @@ export const Workspace: React.FC = () => {
 
             <div className="space-y-2">
               <span className="flex items-center gap-1.5">
-                <label htmlFor="currency" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Currency</label>
+                <label htmlFor="currency" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Currency</label>
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
                 <InfoTooltip label="Currency">Used by three-way matching when an invoice, purchase order or receipt does not state its currency. It does not change how amounts are displayed.</InfoTooltip>
               </span>
@@ -602,7 +602,7 @@ export const Workspace: React.FC = () => {
 
             <div className="space-y-2">
               <span className="flex items-center gap-1.5">
-                <label htmlFor="date_format" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Date Format</label>
+                <label htmlFor="date_format" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date Format</label>
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
                 <InfoTooltip label="Date Format">Tells three-way matching how to read ambiguous dates on your documents (is 03/04/2026 March or April?). It does not change how dates are displayed.</InfoTooltip>
               </span>
@@ -657,7 +657,7 @@ export const Workspace: React.FC = () => {
             <button
               type="submit"
               disabled={!isDirty || isSaving || !canEditWorkspace}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+              className="fp-btn-primary rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save Workspace"}
             </button>
@@ -665,10 +665,10 @@ export const Workspace: React.FC = () => {
         </form>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+      <div className="fp-card p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold">Team Members</h2>
+            <h2 className="text-xl font-semibold">Team Members</h2>
             <p className="text-sm text-muted-foreground">
               View active accounts and access privilege levels within this workspace.
             </p>
@@ -688,10 +688,10 @@ export const Workspace: React.FC = () => {
           <table className="w-full text-left text-sm border-collapse border-b border-border">
             <thead>
               <tr className="border-b border-border bg-muted/20 text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="py-2.5 px-4 font-bold">Email Address</th>
-                <th className="py-2.5 px-4 font-bold">Access Role</th>
-                <th className="py-2.5 px-4 font-bold">Status</th>
-                <th className="py-2.5 px-4 font-bold text-right">Actions</th>
+                <th className="py-2.5 px-4 font-semibold">Email Address</th>
+                <th className="py-2.5 px-4 font-semibold">Access Role</th>
+                <th className="py-2.5 px-4 font-semibold">Status</th>
+                <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -760,7 +760,7 @@ export const Workspace: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4">
                       <span
-                        className={`inline-block px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                        className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${
                           isActive
                             ? "bg-emerald-100 text-green-800 dark:bg-emerald-900/30 dark:text-green-300"
                             : "bg-destructive/10 text-destructive"
@@ -788,8 +788,8 @@ export const Workspace: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-6">
-        <h2 className="text-xl font-bold">Invitations Directory</h2>
+      <div className="fp-card p-6 shadow-sm space-y-6">
+        <h2 className="text-xl font-semibold">Invitations Directory</h2>
         <p className="text-sm text-muted-foreground">
           Invite new collaborators to this workspace or manage active pending invitations.
         </p>
@@ -797,7 +797,7 @@ export const Workspace: React.FC = () => {
         {canManageTeam && (
           <form onSubmit={handleSendInvite} className="p-4 rounded-lg bg-muted/20 border border-border grid grid-cols-12 gap-4 items-end">
             <div className="col-span-12 md:col-span-6 space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Recipient Email
               </label>
               <input
@@ -810,7 +810,7 @@ export const Workspace: React.FC = () => {
               />
             </div>
             <div className="col-span-12 md:col-span-3 space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Membership Role
               </label>
               <select
@@ -829,7 +829,7 @@ export const Workspace: React.FC = () => {
               <button
                 type="submit"
                 disabled={isInviting || !inviteEmail.trim()}
-                className="w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               >
                 {isInviting ? "Sending..." : "Send Invite"}
               </button>
@@ -838,7 +838,7 @@ export const Workspace: React.FC = () => {
         )}
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
 
           {invitations.length === 0 ? (
             <p className="text-sm text-muted-foreground bg-muted/10 p-4 rounded-lg border border-border/50 text-center">
@@ -849,10 +849,10 @@ export const Workspace: React.FC = () => {
               <table className="w-full text-left text-sm border-collapse border-b border-border">
                 <thead>
                   <tr className="border-b border-border bg-muted/20 text-muted-foreground text-xs uppercase tracking-wider">
-                    <th className="py-2.5 px-4 font-bold">Email</th>
-                    <th className="py-2.5 px-4 font-bold">Target Role</th>
-                    <th className="py-2.5 px-4 font-bold">Expiration Date</th>
-                    {canManageTeam && <th className="py-2.5 px-4 font-bold text-right">Actions</th>}
+                    <th className="py-2.5 px-4 font-semibold">Email</th>
+                    <th className="py-2.5 px-4 font-semibold">Target Role</th>
+                    <th className="py-2.5 px-4 font-semibold">Expiration Date</th>
+                    {canManageTeam && <th className="py-2.5 px-4 font-semibold text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>

@@ -207,7 +207,7 @@ export const CreateOrganizationPage: React.FC = () => {
             <Building2 className="h-5 w-5 text-primary" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Create your organization
             </h1>
             <p className="text-sm font-medium leading-relaxed text-muted-foreground">
@@ -316,7 +316,7 @@ export const CreateOrganizationPage: React.FC = () => {
           <button
             type="submit"
             disabled={busy || slugStatus === "taken"}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="fp-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {busy ? "Creating..." : "Create organization"}

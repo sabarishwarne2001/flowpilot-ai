@@ -343,15 +343,15 @@ const CorroborationRun: React.FC = () => {
             <div className={`${SURFACE} space-y-3 p-4`}>
               <div className="flex flex-wrap gap-4">
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{run.material_count}</p>
+                  <p className="text-2xl font-semibold tabular-nums">{run.material_count}</p>
                   <p className={HINT}>material of {run.discrepancy_count} differences</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{run.open_material_count}</p>
+                  <p className="text-2xl font-semibold tabular-nums">{run.open_material_count}</p>
                   <p className={HINT}>material still open</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{run.max_materiality.toFixed(2)}</p>
+                  <p className="text-2xl font-semibold tabular-nums">{run.max_materiality.toFixed(2)}</p>
                   <p className={HINT}>highest materiality</p>
                 </div>
               </div>

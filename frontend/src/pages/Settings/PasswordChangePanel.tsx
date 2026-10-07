@@ -102,12 +102,12 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
     !unchanged;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="fp-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">Password</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Password</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Changing your password signs you out everywhere else. You stay signed in here.
             </p>
@@ -213,7 +213,7 @@ export const PasswordChangePanel: React.FC<PasswordChangePanelProps> = ({
               type="button"
               onClick={() => change.mutate()}
               disabled={!ready || change.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               {change.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
               Change password

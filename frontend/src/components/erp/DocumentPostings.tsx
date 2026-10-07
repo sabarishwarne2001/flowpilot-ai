@@ -35,7 +35,7 @@ export const DocumentPostings: React.FC<{ readonly workItemId: string }> = ({ wo
     <section className="space-y-3" aria-labelledby="document-postings-title">
       <div className="flex flex-wrap items-center gap-2">
         <BookUp className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <h2 id="document-postings-title" className="text-lg font-bold">ERP postings</h2>
+        <h2 id="document-postings-title" className="text-lg font-semibold">ERP postings</h2>
         <Link to={erpPath(orgSlug, workspaceSlug)} className="text-xs font-semibold text-primary hover:underline">All postings</Link>
       </div>
       <p className={HINT}>

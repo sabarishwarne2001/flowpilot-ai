@@ -201,7 +201,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
     >
       <div className="flex w-full max-w-6xl flex-col overflow-hidden border border-border bg-background shadow-2xl sm:rounded-xl">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-card px-5">
-          <h2 id="flow-builder-title" className="text-sm font-extrabold uppercase tracking-wider">
+          <h2 id="flow-builder-title" className="text-sm font-semibold uppercase tracking-wider">
             {isEdit ? "Edit automation" : ruleToDuplicate ? "Duplicate automation" : "New automation"}
           </h2>
           <button
@@ -239,7 +239,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
               >
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
                   <div className="md:col-span-6">
-                    <label htmlFor="flow-name" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Name</label>
+                    <label htmlFor="flow-name" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</label>
                     <input
                       id="flow-name"
                       autoFocus
@@ -253,7 +253,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
                     <IssueText issues={general.filter((i) => i.field === "name")} />
                   </div>
                   <div className="md:col-span-2">
-                    <label htmlFor="flow-priority" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Priority</label>
+                    <label htmlFor="flow-priority" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Priority</label>
                     <input
                       id="flow-priority"
                       type="number"
@@ -267,7 +267,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
                     <IssueText issues={general.filter((i) => i.field === "priority")} />
                   </div>
                   <div className="md:col-span-2">
-                    <label htmlFor="flow-on-error" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">On failure</label>
+                    <label htmlFor="flow-on-error" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On failure</label>
                     <select
                       id="flow-on-error"
                       disabled={busy}

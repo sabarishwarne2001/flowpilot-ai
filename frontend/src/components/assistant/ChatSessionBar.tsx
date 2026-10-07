@@ -38,7 +38,7 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof ApiError ? error.message : fallback;
 
 const PANEL_CLASS =
-  "absolute left-0 right-0 top-full z-30 mt-1 rounded-xl border border-border bg-card p-3 shadow-lg";
+  "absolute left-0 right-0 top-full z-30 mt-1 fp-card p-3 shadow-lg";
 
 /**
  * ARCH39-S1:chat-session-bar — what this conversation searches, which model
@@ -262,7 +262,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
       {panel === "scope" && !isDocument && (
         <div className={PANEL_CLASS} role="dialog" aria-label="Choose documents to search">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-bold">Search which documents?</p>
+            <p className="text-xs font-semibold">Search which documents?</p>
             <button type="button" onClick={() => setPanel(null)} aria-label="Close" className="rounded p-1 hover:bg-muted">
               <X className="h-3.5 w-3.5" />
             </button>
@@ -317,7 +317,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
               type="button"
               disabled={saveScope.isPending || picked.length === 0}
               onClick={() => saveScope.mutate({ mode: "SELECTED", ids: picked })}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              className="fp-btn-primary inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
             >
               {saveScope.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
               Search selected ({picked.length})
@@ -329,7 +329,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
       {panel === "templates" && (
         <div className={PANEL_CLASS} role="dialog" aria-label="Prompt templates">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-bold">Prompt templates</p>
+            <p className="text-xs font-semibold">Prompt templates</p>
             <button type="button" onClick={() => setPanel(null)} aria-label="Close" className="rounded p-1 hover:bg-muted">
               <X className="h-3.5 w-3.5" />
             </button>
@@ -398,7 +398,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
                 <button
                   type="submit"
                   disabled={createTemplate.isPending || !newName.trim() || !newBody.trim()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                  className="fp-btn-primary inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
                 >
                   {createTemplate.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

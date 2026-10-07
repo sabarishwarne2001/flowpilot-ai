@@ -48,7 +48,7 @@ export const DocumentObligations: React.FC<{ readonly workItemId: string }> = ({
     <section className="space-y-3" aria-labelledby="document-obligations-title">
       <div className="flex flex-wrap items-center gap-2">
         <CalendarClock className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <h2 id="document-obligations-title" className="text-lg font-bold">Obligations</h2>
+        <h2 id="document-obligations-title" className="text-lg font-semibold">Obligations</h2>
         <Link to={obligationsPath(orgSlug, workspaceSlug)} className="text-xs font-semibold text-primary hover:underline">All obligations</Link>
         {canEdit ? (
           <button type="button" className={`${BUTTON_GHOST} ml-auto`} disabled={again.isPending} onClick={() => again.mutate()}>

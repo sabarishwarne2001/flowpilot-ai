@@ -52,7 +52,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
         <p className="text-sm">
           Does the document satisfy <span className="font-semibold">“{item.headline}”</span>?
         </p>
-        <label htmlFor="resolve-quote" className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <label htmlFor="resolve-quote" className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Corrected quote (optional)
         </label>
         <textarea
@@ -70,7 +70,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
               type="button"
               disabled={pending}
               onClick={() => verdict(value)}
-              className={`rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-50 ${
+              className={`rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
                 value === "PASS"
                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
                   : value === "FAIL"
@@ -113,7 +113,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ merge_verdict: "MERGE" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Same record — merge
           </button>
@@ -121,7 +121,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ merge_verdict: "SEPARATE" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Different — keep separate
           </button>
@@ -150,7 +150,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ table_verdict: "ACCEPT" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Accept figures
           </button>
@@ -158,7 +158,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ table_verdict: "REJECT" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Reject table
           </button>
@@ -190,7 +190,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ obligation_verdict: "CONFIRM" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Confirm obligation
           </button>
@@ -198,7 +198,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ obligation_verdict: "REJECT" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Not an obligation
           </button>
@@ -242,7 +242,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
           does. The attempts and the target&apos;s answers are on the{" "}
           <Link className="underline" to={erpPostingPath(orgSlug, workspaceSlug, item.item_id)}>posting page</Link>.
         </p>
-        <label htmlFor="resolve-posting-reference" className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <label htmlFor="resolve-posting-reference" className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           ERP reference (when accepting)
         </label>
         <input
@@ -258,7 +258,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ posting_verdict: "RETRY" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Retry posting
           </button>
@@ -266,7 +266,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve(reference ? { posting_verdict: "ACCEPT", posting_reference: reference } : { posting_verdict: "ACCEPT" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             The ERP has it
           </button>
@@ -274,7 +274,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ posting_verdict: "CANCEL" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold text-destructive hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-destructive hover:bg-muted disabled:opacity-50"
           >
             Do not post
           </button>
@@ -301,7 +301,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ corroboration_verdict: "CONFIRM" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Confirm differences
           </button>
@@ -309,7 +309,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ corroboration_verdict: "DISMISS" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Dismiss differences
           </button>
@@ -339,7 +339,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ split_verdict: "APPROVE" })}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="fp-btn-primary rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Approve split
           </button>
@@ -347,7 +347,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => onResolve({ split_verdict: "REJECT" })}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Keep as one document
           </button>
@@ -374,7 +374,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
     return (
       <div className="space-y-3">
         <p className="text-sm font-semibold">{item.headline}</p>
-        <label htmlFor="resolve-reason" className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <label htmlFor="resolve-reason" className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Note (required to dismiss, at least {MIN_DISMISS_REASON} characters)
         </label>
         <textarea
@@ -389,7 +389,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending}
             onClick={() => send("CONFIRM")}
-            className="rounded-lg bg-destructive px-3 py-2 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+            className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
           >
             Confirm finding
           </button>
@@ -397,7 +397,7 @@ export const ResolvePanel: React.FC<ResolvePanelProps> = ({ item, pending, onRes
             type="button"
             disabled={pending || !dismissReady}
             onClick={() => send("DISMISS")}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-50"
           >
             Dismiss
           </button>

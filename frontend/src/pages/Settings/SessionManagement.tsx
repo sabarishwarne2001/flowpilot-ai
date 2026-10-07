@@ -158,7 +158,7 @@ export const SessionManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold tracking-tight text-foreground">Active sessions</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">Active sessions</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Every device currently signed in to your account. If you don&apos;t
           recognise one, end it and change your password.
@@ -180,7 +180,7 @@ export const SessionManagement: React.FC = () => {
           No active sessions found.
         </p>
       ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+        <ul className="divide-y divide-border fp-card">
           {ordered.map((session) => {
             const isCurrent = session.id === activeSessionId;
             const device = describeDevice(session.user_agent);
@@ -233,7 +233,7 @@ export const SessionManagement: React.FC = () => {
         </ul>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className="fp-card p-4">
         <p className="text-sm font-semibold text-foreground">Sign out everywhere</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Ends every session, including this one. You&apos;ll need to sign in

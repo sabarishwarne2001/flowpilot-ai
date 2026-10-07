@@ -20,19 +20,19 @@ export const SkeletonChat: React.FC<SkeletonChatProps> = ({
       role="presentation"
       aria-hidden="true"
       aria-label="Loading conversation"
-      className={`pointer-events-none flex min-h-[550px] w-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card select-none dark:border-border/40 ${className}`}
+      className={`pointer-events-none flex min-h-[550px] w-full flex-col overflow-hidden fp-card select-none ${className}`}
     >
       {/* ===========================
           Header
       =========================== */}
 
       <div className="flex items-center space-x-3 border-b border-border/40 bg-muted/5 p-4">
-        <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-full bg-muted/40 dark:bg-muted/10" />
+        <div className="h-9 w-9 flex-shrink-0 fp-skeleton rounded-full" />
 
         <div className="flex-1 space-y-1.5">
-          <div className="h-3.5 w-32 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+          <div className="h-3.5 w-32 fp-skeleton rounded" />
 
-          <div className="h-2.5 w-20 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+          <div className="h-2.5 w-20 fp-skeleton rounded" />
         </div>
       </div>
 
@@ -52,7 +52,7 @@ export const SkeletonChat: React.FC<SkeletonChatProps> = ({
               }`}
             >
               {!isUser && (
-                <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded-full bg-muted/40 dark:bg-muted/10" />
+                <div className="h-8 w-8 flex-shrink-0 fp-skeleton rounded-full" />
               )}
 
               <div
@@ -64,24 +64,24 @@ export const SkeletonChat: React.FC<SkeletonChatProps> = ({
               >
                 <div className="space-y-1.5">
                   <div
-                    className={`h-3 animate-pulse rounded bg-muted/60 dark:bg-muted/15 ${
+                    className={`h-3 fp-skeleton rounded ${
                       isUser ? "ml-auto w-48" : "w-64"
                     }`}
                   />
 
                   {!isUser && (
                     <>
-                      <div className="h-3 w-56 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                      <div className="h-3 w-56 fp-skeleton rounded" />
 
-                      <div className="h-3 w-40 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                      <div className="h-3 w-40 fp-skeleton rounded" />
                     </>
                   )}
                 </div>
                 {!isUser && (
                   <div className="mt-2 flex items-center space-x-2 border-t border-border/20 pt-2">
-                    <div className="h-2.5 w-12 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                    <div className="h-2.5 w-12 fp-skeleton rounded" />
 
-                    <div className="h-5 w-16 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                    <div className="h-5 w-16 fp-skeleton rounded" />
                   </div>
                 )}
               </div>
@@ -95,11 +95,11 @@ export const SkeletonChat: React.FC<SkeletonChatProps> = ({
       =========================== */}
 
       <div className="flex items-center space-x-3 border-t border-border/40 bg-card p-4">
-        <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+        <div className="h-9 w-9 flex-shrink-0 fp-skeleton rounded-lg" />
 
-        <div className="h-9 flex-1 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+        <div className="h-9 flex-1 fp-skeleton rounded-lg" />
 
-        <div className="h-9 w-16 flex-shrink-0 animate-pulse rounded-lg bg-muted/60 dark:bg-muted/15" />
+        <div className="h-9 w-16 flex-shrink-0 fp-skeleton rounded-lg" />
       </div>
     </div>
   );

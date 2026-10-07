@@ -189,11 +189,12 @@ export const Avatar: React.FC<AvatarProps> = ({
         justify-center
         overflow-hidden
         rounded-full
-        border
-        border-border
-        bg-muted
+        bg-gradient-to-br
+        from-sky-500/90
+        to-violet-600/90
         font-semibold
-        text-muted-foreground
+        text-white
+        shadow-inner-highlight
         select-none
         ${sizeClass}
         ${className}

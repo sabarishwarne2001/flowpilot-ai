@@ -79,9 +79,9 @@ const ResolutionPanel: React.FC<{ readonly resolution: EmailResolution | undefin
   loading,
   failed,
 }) => (
-  <section aria-labelledby="email-resolution-title" className="rounded-xl border border-border bg-card">
+  <section aria-labelledby="email-resolution-title" className="fp-card">
     <header className="border-b border-border/60 px-5 py-4">
-      <h2 id="email-resolution-title" className="text-sm font-extrabold uppercase tracking-wider">What this workspace sends as</h2>
+      <h2 id="email-resolution-title" className="text-sm font-semibold uppercase tracking-wider">What this workspace sends as</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         Resolved now, most specific layer first. Password resets and verification always use the platform relay.
       </p>
@@ -98,17 +98,17 @@ const ResolutionPanel: React.FC<{ readonly resolution: EmailResolution | undefin
       <div className="space-y-4 p-5">
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
-            <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">From</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">From</dt>
             <dd className="mt-0.5 break-all font-mono text-sm">
               {resolution.sender_name} &lt;{resolution.from_address}&gt;
             </dd>
           </div>
           <div>
-            <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reply-to</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reply-to</dt>
             <dd className="mt-0.5 break-all font-mono text-sm">{resolution.reply_to ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Relay</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Relay</dt>
             <dd className="mt-0.5 break-all font-mono text-sm">{resolution.smtp_host}</dd>
             <dd className="text-[11px] text-muted-foreground">{LAYER_LABELS[resolution.transport_layer] ?? resolution.transport_layer}</dd>
           </div>
@@ -231,7 +231,7 @@ export const EmailSettings: React.FC = () => {
 
   const disabled = !canManage || save.isPending;
   const input = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-60";
-  const label = "mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
+  const label = "mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 
   return (
     <div className="space-y-6">
@@ -241,10 +241,10 @@ export const EmailSettings: React.FC = () => {
         failed={resolutionQuery.isError}
       />
 
-      <form onSubmit={handleSubmit((values) => save.mutate(values))} className="rounded-xl border border-border bg-card" aria-labelledby="email-override-title">
+      <form onSubmit={handleSubmit((values) => save.mutate(values))} className="fp-card" aria-labelledby="email-override-title">
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
           <div>
-            <h2 id="email-override-title" className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider">
+            <h2 id="email-override-title" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
               <Mail className="h-4 w-4 text-primary" aria-hidden="true" /> Workspace override
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -329,7 +329,7 @@ export const EmailSettings: React.FC = () => {
             <button
               type="submit"
               disabled={disabled || !isDirty}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save override
             </button>

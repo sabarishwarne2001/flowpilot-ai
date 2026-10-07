@@ -61,7 +61,7 @@ export const ClauseChecksPanel: React.FC<ClauseChecksPanelProps> = ({ workspaceI
   });
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5" aria-labelledby="clause-checks-heading">
+    <section className="fp-card p-5" aria-labelledby="clause-checks-heading">
       <header className="mb-3">
         <h2 id="clause-checks-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
           <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Clause checks
@@ -92,7 +92,7 @@ export const ClauseChecksPanel: React.FC<ClauseChecksPanelProps> = ({ workspaceI
         <button
           type="submit"
           disabled={!name.trim() || create.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
         >
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
           New check

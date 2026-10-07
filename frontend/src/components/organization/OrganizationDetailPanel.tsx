@@ -72,7 +72,7 @@ export const OrganizationDetailPanel: React.FC<{
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-border bg-card p-4">
+      <section className="fp-card p-4">
         <div className="flex items-start gap-3">
           <Building2
             className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
@@ -122,7 +122,7 @@ export const OrganizationDetailPanel: React.FC<{
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4">
+      <section className="fp-card p-4">
         <div className="flex items-start gap-3">
           <Layers
             className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"

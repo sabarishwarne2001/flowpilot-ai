@@ -260,7 +260,7 @@ export const WarehouseDestinationEditor: React.FC<
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="fp-btn-primary inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
             disabled={!dirty || save.isPending}
             onClick={() => save.mutate()}
           >

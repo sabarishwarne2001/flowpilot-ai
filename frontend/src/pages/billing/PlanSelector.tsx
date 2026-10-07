@@ -378,7 +378,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                         setConfirming(true);
                         checkout.reset();
                       }}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                      className="fp-btn-primary mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                     >
                       {(TIER_RANK[plan.key] ?? 0) > (TIER_RANK[currentKey ?? "free"] ?? 0)
                         ? `Upgrade to ${plan.display_name}`
@@ -446,7 +446,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                 type="button"
                 onClick={() => checkout.mutate(selected)}
                 disabled={checkout.isPending}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
               >
                 {checkout.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {selectedIsFree ? "Switch to Free" : "Continue to payment"}
@@ -464,7 +464,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="fp-btn-primary rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               {selectedIsFree
                 ? "Use this plan"

@@ -109,7 +109,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({ workspaceId, initi
           <ol className="space-y-1">
             {chosen.map((c, index) => (
               <li key={c.id} className="flex items-center gap-2 rounded border border-border/60 px-2 py-1 text-xs">
-                <span className="w-4 font-bold">{index + 1}</span>
+                <span className="w-4 font-semibold">{index + 1}</span>
                 <span className="min-w-0 flex-1 truncate">{c.label}</span>
                 <button type="button" aria-label={`Move ${c.label} up`} onClick={() => shift(index, -1)} className="rounded p-0.5 hover:bg-muted"><ArrowUp className="h-3.5 w-3.5" /></button>
                 <button type="button" aria-label={`Move ${c.label} down`} onClick={() => shift(index, 1)} className="rounded p-0.5 hover:bg-muted"><ArrowDown className="h-3.5 w-3.5" /></button>

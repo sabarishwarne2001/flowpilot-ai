@@ -121,7 +121,7 @@ export const Notifications: React.FC = () => {
     return (
       <div className="space-y-6">
         <header className="space-y-1">
-          <h1 className="text-2xl font-extrabold tracking-tight">Notifications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <div className="h-4 bg-muted/40 rounded w-64 animate-pulse" />
         </header>
         <SkeletonTable rows={5} />
@@ -154,7 +154,7 @@ export const Notifications: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3 select-none">
         <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold tracking-tight">Notifications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-muted-foreground font-semibold leading-relaxed">
             View and manage your workspace notifications.
           </p>
@@ -253,13 +253,13 @@ export const Notifications: React.FC = () => {
                       <div className="flex items-center w-full flex-wrap gap-1.5">
                         <h2
                           className={`text-sm leading-none ${
-                            alert.is_read ? "font-semibold text-foreground/80" : "font-black text-foreground"
+                            alert.is_read ? "font-semibold text-foreground/80" : "font-semibold text-foreground"
                           }`}
                         >
                           {alert.title}
                         </h2>
                         {!alert.is_read && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black tracking-wide bg-primary text-primary-foreground leading-none uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide bg-primary text-primary-foreground leading-none uppercase">
                             New
                           </span>
                         )}
@@ -288,7 +288,7 @@ export const Notifications: React.FC = () => {
                           tenantState.workspace.slug,
                           alert.work_item_id,
                         )}
-                        className="inline-flex items-center px-3 py-1.5 border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-[11px] font-bold tracking-wide uppercase rounded-lg transition-all"
+                        className="inline-flex items-center px-3 py-1.5 border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-[11px] font-semibold tracking-wide uppercase rounded-lg transition-all"
                         title="Open the document this notification is about"
                       >
                         <FileText className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />

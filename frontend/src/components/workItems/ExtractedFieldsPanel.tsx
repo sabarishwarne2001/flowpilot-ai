@@ -160,8 +160,8 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
 
   if (entries.length === 0) {
     return (
-      <section aria-label="Extracted fields" className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-bold">Extracted fields</h2>
+      <section aria-label="Extracted fields" className="rounded-xl border border-border bg-card p-4 shadow-elevation-1">
+        <h2 className="text-sm font-semibold">Extracted fields</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           No fields were extracted from this document. Check the AI provider in Settings → AI, then reprocess it.
         </p>
@@ -170,9 +170,9 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
   }
 
   return (
-    <section aria-label="Extracted fields" className="rounded-lg border border-border bg-card">
-      <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h2 className="text-sm font-bold">Extracted fields</h2>
+    <section aria-label="Extracted fields" className="overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1 xl:sticky xl:top-0">
+      <header className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Extracted fields</h2>
         {history.data && history.data.length > 0 && (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <History className="h-3.5 w-3.5" aria-hidden />
@@ -181,7 +181,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
         )}
       </header>
       {!canEdit && readOnlyReason && (
-        <p role="note" className="border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+        <p role="note" className="border-b border-border bg-primary/[0.04] px-4 py-2.5 text-xs leading-relaxed text-muted-foreground">
           {readOnlyReason}
           {readOnlyLink && (
             <>
@@ -193,7 +193,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           )}
         </p>
       )}
-      <ul className="divide-y divide-border">
+      <ul className="max-h-[70vh] divide-y divide-border/70 overflow-y-auto">
         {plain.map(([key, value]) => {
           const page = firstPage.get(key) ?? null;
           const correction = latestCorrection.get(key);
@@ -202,7 +202,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           return (
             <li
               key={key}
-              className={`px-4 py-3 ${active ? "bg-primary/5" : ""}`}
+              className={`relative px-4 py-3 transition-colors ${active ? "bg-primary/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary" : "hover:bg-muted/40"}`}
               data-field={key}
             >
               <div className="flex items-start gap-3">
@@ -212,18 +212,18 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                   className="min-w-0 flex-1 text-left"
                   aria-label={`Show ${fieldLabel(key)} on the page`}
                 >
-                  <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <span className="fp-eyebrow block text-[10.5px]">
                     {fieldLabel(key)}
                   </span>
                   {!isEditing && (
-                    <span className="mt-0.5 block break-words text-sm font-semibold text-foreground">{show(value)}</span>
+                    <span className="mt-1 block break-words text-sm font-medium text-foreground">{show(value)}</span>
                   )}
                 </button>
                 {!isEditing && (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
                     {correction && (
                       <span
-                        className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400"
+                        className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
                         title={`Was ${show(correction.previous_value)} — corrected ${formatDateTime(correction.created_at)}${
                           correction.reason ? ` (${correction.reason})` : ""
                         }`}
@@ -235,7 +235,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectField(key, page)}
-                        className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                        className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:border-primary/40 hover:text-primary"
                         title="Show where this value is printed"
                       >
                         <MapPin className="h-3 w-3" aria-hidden />
@@ -258,7 +258,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                           onSelectField(key, page);
                         }}
                         aria-label={`Edit field ${fieldLabel(key)}`}
-                        className="rounded border border-border p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -280,7 +280,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                     onChange={(event) => setDraft(event.target.value)}
                     aria-label={`New value for ${fieldLabel(key)}`}
                     maxLength={2000}
-                    className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="fp-input h-9 px-2.5 py-1.5"
                   />
                   <input
                     value={reason}
@@ -288,13 +288,13 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                     aria-label="Reason for the correction (optional)"
                     placeholder="Reason (optional), e.g. the model read the PO number"
                     maxLength={500}
-                    className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs"
+                    className="fp-input px-2.5 py-1.5 text-xs"
                   />
                   <div className="flex items-center gap-2">
                     <button
                       type="submit"
                       disabled={save.isPending}
-                      className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                      className="fp-btn fp-btn-primary h-8 text-xs font-semibold"
                     >
                       {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                       Save correction
@@ -303,7 +303,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                       type="button"
                       onClick={() => setEditing(null)}
                       disabled={save.isPending}
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                      className="fp-btn fp-btn-secondary h-8 text-xs"
                     >
                       <X className="h-3.5 w-3.5" /> Cancel
                     </button>
@@ -325,7 +325,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           <ul className="mt-2 space-y-2">
             {grouped.map(([key, value]) => (
               <li key={key}>
-                <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                <span className="fp-eyebrow block text-[10.5px]">
                   {fieldLabel(key)}
                 </span>
                 <pre className="mt-1 max-h-48 overflow-auto rounded bg-muted/30 p-2 text-[11px] leading-5">

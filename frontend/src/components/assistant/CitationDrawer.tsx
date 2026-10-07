@@ -156,7 +156,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             <div>
               <h2
                 id={DRAWER_TITLE_ID}
-                className="text-sm font-extrabold uppercase tracking-wider"
+                className="text-sm font-semibold uppercase tracking-wider"
               >
                 Cited Source
               </h2>
@@ -188,7 +188,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
         <main className="flex flex-1 flex-col overflow-y-auto p-6">
           {/* Source Document */}
           <section className="space-y-2">
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Source Document
             </h3>
 
@@ -199,13 +199,13 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
 
               <div className="min-w-0">
                 <p
-                  className="truncate pr-4 text-sm font-extrabold text-foreground/90"
+                  className="truncate pr-4 text-sm font-semibold text-foreground/90"
                   title={documentName}
                 >
                   {documentName}
                 </p>
 
-                <p className="mt-1 text-[10px] font-bold text-muted-foreground">
+                <p className="mt-1 text-[10px] font-semibold text-muted-foreground">
                   {citation.page_number !== null
                     ? `Page ${citation.page_number} • Chunk ${citation.chunk_index}`
                     : `Chunk ${citation.chunk_index}`}
@@ -219,12 +219,12 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-4">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Percent className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[10px] font-semibold uppercase tracking-wider">
                   Relevance
                 </span>
               </div>
 
-              <p className="text-xl font-black tracking-tight">
+              <p className="text-xl font-semibold tracking-tight">
                 {similarityScore}
               </p>
             </div>
@@ -232,12 +232,12 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
             <div className="space-y-1.5 rounded-xl border border-border/40 bg-muted/10 p-4">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Bookmark className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[10px] font-semibold uppercase tracking-wider">
                   Location
                 </span>
               </div>
 
-              <p className="text-xl font-black tracking-tight">
+              <p className="text-xl font-semibold tracking-tight">
                 {citation.page_number !== null
                   ? `Page ${citation.page_number}`
                   : 'Text Segment'}
@@ -247,7 +247,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
 
           {/* Citation Snippet */}
           <section className="mt-6 flex min-h-0 flex-1 flex-col space-y-2">
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Referenced Text
             </h3>
 
@@ -262,14 +262,14 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
 
           {/* Metadata */}
           <section className="mt-6 space-y-2">
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Metadata
             </h3>
 
             <div className="rounded-xl border border-border/40 bg-muted/10 p-4">
               <dl className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Citation ID
                   </dt>
                   <dd className="break-all text-right font-mono text-xs">
@@ -278,7 +278,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                 </div>
 
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Work Item
                   </dt>
                   <dd className="break-all text-right font-mono text-xs">
@@ -287,7 +287,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({
                 </div>
 
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Chunk Index
                   </dt>
                   <dd className="text-sm font-semibold">

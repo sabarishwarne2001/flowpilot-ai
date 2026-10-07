@@ -226,7 +226,7 @@ export const InviteMembersPanel: React.FC<{ readonly organizationId: string }> =
         <button
           type="submit"
           disabled={!validEmail || send.isPending}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+          className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {send.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailPlus className="h-3.5 w-3.5" />}
           Send invitation

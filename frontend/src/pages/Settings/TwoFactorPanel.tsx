@@ -222,12 +222,12 @@ export const TwoFactorPanel: React.FC = () => {
   );
 
   return (
-    <section aria-labelledby="mfa-title" className="rounded-xl border border-border bg-card p-4">
+    <section aria-labelledby="mfa-title" className="fp-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <div>
-            <h2 id="mfa-title" className="text-lg font-bold tracking-tight text-foreground">
+            <h2 id="mfa-title" className="text-lg font-semibold tracking-tight text-foreground">
               Two-factor sign-in
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground" data-testid="mfa-state">

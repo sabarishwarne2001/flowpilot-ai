@@ -82,7 +82,7 @@ const Cases: React.FC = () => {
       <div className="grid gap-3 md:grid-cols-4" role="list" aria-label="Case board">
         {CASE_STATUSES.map((status) => (
           <section key={status} className={`${SURFACE_INSET} min-h-40 space-y-2 p-2`} role="listitem" aria-label={CASE_STATUS_LABELS[status]}>
-            <h2 className="text-xs font-bold uppercase tracking-wide">
+            <h2 className="text-xs font-semibold uppercase tracking-wide">
               {CASE_STATUS_LABELS[status]} · {cases.data?.counts_by_status[status] ?? 0}
             </h2>
             {(cases.data?.items ?? []).filter((c) => c.status === status).map((c) => (

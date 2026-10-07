@@ -135,6 +135,10 @@ How to read this file:
 | F-120 | P2 | **fixed** (final release, `01a4bfa`) | Sessions (ASVS V3.3.2) | A session refreshed daily never required signing in again |
 | F-121 | P2 | **fixed** (final release, `2a8bb7c`) | Frontend | Every page was thrown away and rebuilt when the user's profile arrived, losing what had just been typed or selected |
 | F-122 | P3 | **fixed** (final release, `c634ee1`) | API (ASVS V8.2.1) | API responses carried no `Cache-Control`, leaving tenant data to browser caching heuristics |
+| F-123 | P2 | **fixed** (production config & UI, `c1068be`) | SSO / config | SAML and OIDC advertised `http://localhost:8000` and an empty redirect URI on every deployment; the settings meant to fix it were ignored |
+| F-124 | P3 | **unverified** (code reading) | SCIM | The SCIM token HMAC falls back to `str(JWT_SECRET_KEY)`, which for a `SecretStr` is the constant `**********`, not the secret |
+| F-125 | P2 | **open, owner action** (production config & UI) | Billing config | The production webhook secret was the `stripe listen` CLI secret, so every Stripe event to the server would be refused |
+| F-126 | P3 | **confirmed, open** (pre-existing; found by the final browser run) | Sessions | Two refreshes of one token within the reuse grace revoke the session the first one just handed out, so that page's next request is refused once |
 
 ---
 
@@ -2036,6 +2040,72 @@ organization name was reset before the change and is kept after it.
 **Fix** (`c634ee1`): every `/api` and `/scim` response without its own `Cache-Control` gets
 `no-store`; images, logos, avatars and streams keep theirs. **Proof**
 `tests/api/test_api_cache_control.py` (2 of 3 red before).
+
+## F-123 — SSO advertised localhost on every deployment (P2, fixed)
+`app/api/v1/saml.py` built the SAML entity ID, ACS and SLO URLs from
+`getattr(settings, "PUBLIC_API_URL", "http://localhost:8000")` and sent
+`getattr(settings, "OIDC_REDIRECT_URI", "")` to the identity provider. Neither name was a declared
+setting and `Settings` ignores undeclared variables (`extra="ignore"`), so on a real server SAML
+metadata pointed identity providers at `http://localhost:8000/api/v1/saml/acs`, OIDC sent an empty
+`redirect_uri`, and no environment variable could change it. Enterprise SSO could not complete
+anywhere but a developer laptop. Found by the configuration audit (every key read by the app).
+The same was true of five identity settings the env templates document (SCIM token lifetime,
+rotation overlap and page size; domain re-verification grace and interval) and four tuning values.
+**Fix** (`c1068be`): all declared at the defaults the code already used; `public_api_base` is
+`PUBLIC_API_URL`, else `FRONTEND_URL` in staging/production (Caddy serves the API on the web app's
+host), else `http://localhost:8000` (development unchanged); `oidc_redirect_uri` defaults to
+`<base>/api/v1/oidc/callback`. A ratchet test fails on any new `getattr(settings, "NAME")` of an
+undeclared name. **Proof** `tests/core/test_sso_public_addresses.py`: 11 red before (production ACS
+was `http://localhost:8000/api/v1/saml/acs`), 11 green after; the related suites (config, guard,
+template, SAML, SCIM, identity: 341 tests) pass.
+
+## F-124 — SCIM token pepper is a constant (P3, unverified)
+`scim_service._pepper()` uses `getattr(settings, "SCIM_TOKEN_PEPPER", None) or
+getattr(settings, "JWT_SECRET_KEY", "")` and then `str(...)`. `SCIM_TOKEN_PEPPER` is not declared
+(so always `None`) and `JWT_SECRET_KEY` is a pydantic `SecretStr`, whose `str()` is the mask
+`**********`, so the HMAC key for every SCIM token is that constant. Impact is small: each SCIM token
+carries 320 random bits, so a leaked hash still cannot be guessed. **Not fixed here** because
+changing the key invalidates every SCIM token already issued; the right moment is before the first
+customer configures SCIM (use `API_KEY_PEPPER` or a declared `SCIM_TOKEN_PEPPER`). Exempted by name in
+the F-123 ratchet test until then.
+
+## F-125 — Production Stripe webhook secret was the local CLI secret (P2, owner action)
+The supplied `.env.production` carried the same `whsec_` value as `.env`: 64 hex characters, the
+format `stripe listen` prints for forwarding to a developer machine. Stripe signs deliveries to a
+Dashboard endpoint with that endpoint's own secret, so on the server every event would fail
+signature verification and no checkout, renewal or failed payment would ever be recorded. The
+finalized file leaves `STRIPE_WEBHOOK_SECRETS` blank on purpose: the start-up guard then refuses to
+boot until the endpoint's secret is filled in (verified by rendering the file with
+`docker compose config` and building `Settings` from the result).
+
+## F-126 — A concurrent refresh revokes the session the other caller just received (P3, confirmed, open)
+**Seen** once in a full browser run of this branch (13-automation-review "an upload fires the
+'Document uploaded' rule…": a 401 on `/me/context`); it passed in every other full run (the final
+one included) and in three repeats of its file.
+The test opens a page and reloads it at once, so the first page's `/auth/refresh` is
+cut off by the browser while the server is still processing it. **Evidence** (trace + API log,
+2026-10-07 07:20:15): the new page's refresh rotated `e5ba…` → `0097…` and the page received
+`0097`'s access token; the cut-off refresh then presented `e5ba…` inside the 10 s grace, and
+`_handle_rotated_token_replay` rotated the chain tip `0097…` → `bdd4…`, which revokes `0097`
+(`SESSION_CONCURRENT_REFRESH`); the page's next request carried `0097`'s token and was refused
+(`AUTH_REJECTED … reason=session_revoked`); the app refreshed again and recovered. Real users meet
+the same race with two tabs refreshing together, or a reload during a refresh: one refused request
+and a console error, then recovery. **Not introduced here**: `session_service.py`, `deps.py`,
+`auth.py` and the client's refresh code are unchanged on this branch. **Not fixed here**: the
+remedy is a session-design choice (let an access token of a session revoked only by ROTATION live to
+its expiry, or have the grace path branch a sibling session instead of rotating the tip), each with
+a security trade-off for revoked devices, so it needs its own failing test and review.
+
+## F-127 — The review-queue browser test depends on how many runs the database has seen (P4, test only, open)
+**Seen** when 13-automation-review was repeated three times against the same database
+("Review queue › type tabs…", 3rd repeat: no button named /Packet split/). **Evidence** (snapshot of
+the failure): the queue held 52 items, "page 1 of 3", 25 on the first page; 15 of them were HIGH
+duplicate-number findings for `disputed-*.pdf`, one per earlier run of the "disputed extraction"
+test, which uploads a fresh copy each time (the radar rightly flags it). The only packet-split item
+(the tile still read "Packet split 1") had been pushed to page 2. Passes on a fresh database, as in
+CI and in both full runs of this branch; the queue's page size and ordering are unchanged on this
+branch. **Not changed here**: the remedy is test isolation (open the "Packet splits" tab before
+looking for the item, or clear the run's disputed copies), which belongs in a test-only change.
 
 ## Built in this release (owner decisions, not defects)
 - **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery
