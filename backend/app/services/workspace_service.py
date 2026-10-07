@@ -85,18 +85,29 @@ def list_accessible_workspaces(
     organization: Organization,
     user_id: uuid.UUID,
     organization_role: OrganizationRole,
+    include_archived: bool = False,
 ) -> list[Workspace]:
+    """Active workspaces the actor may enter; owners and admins may ask for archived ones too.
+
+    F-131. The grant path did not filter on the workspace's status, so an archived workspace
+    stayed in a member's switcher (and could be their default) and answered "no access".
+    """
     if organization_role in IMPLICIT_WORKSPACE_ADMIN_ROLES:
         return workspace_crud.list_workspaces_for_organization(
             db,
             organization_id=organization.id,
-            statuses=(WorkspaceStatus.ACTIVE,),
+            statuses=(
+                (WorkspaceStatus.ACTIVE, WorkspaceStatus.ARCHIVED)
+                if include_archived
+                else (WorkspaceStatus.ACTIVE,)
+            ),
         )
 
     return workspace_crud.list_granted_workspaces_for_user(
         db,
         user_id=user_id,
         organization_id=organization.id,
+        workspace_statuses=(WorkspaceStatus.ACTIVE,),
         statuses=ACTIVE_ONLY,
     )
 
@@ -427,6 +438,22 @@ def restore_workspace(
     if not can_delete_workspace(actor_organization_role):
         raise OrganizationPermissionDeniedError(
             "Only an organization owner or admin can restore a workspace."
+        )
+    if workspace.status is WorkspaceStatus.ACTIVE:
+        return workspace
+    if workspace.status is not WorkspaceStatus.ARCHIVED:
+        raise WorkspacePermissionDeniedError(
+            f"This workspace is {workspace.status.value.lower()}; only an archived workspace can be restored."
+        )
+    active_count = workspace_crud.count_workspaces_for_organization(
+        db,
+        organization_id=workspace.organization_id,
+        statuses=(WorkspaceStatus.ACTIVE,),
+    )
+    if active_count >= MAX_WORKSPACES_PER_ORGANIZATION:
+        raise OrganizationPermissionDeniedError(
+            f"This organization already has {MAX_WORKSPACES_PER_ORGANIZATION} active workspaces. "
+            "Archive one before restoring another."
         )
 
     try:

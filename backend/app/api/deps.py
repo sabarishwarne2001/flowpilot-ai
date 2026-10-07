@@ -510,6 +510,71 @@ async def get_workspace_context(
     )
 
 
+async def get_archived_workspace_context(
+    workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+) -> TenantContext:
+    """The workspace context WITHOUT the "is it active" check, for restoring it and nothing else.
+
+    F-131. `POST /workspaces/{id}/restore` used get_workspace_context, which refuses an archived
+    workspace, so a restore could never succeed. Access is resolved exactly as for any workspace
+    route, the organization must still be operational, and the restore itself checks the
+    organization role (owner or admin).
+    """
+    workspace = workspace_service.get_workspace_or_raise(db, workspace_id=workspace_id)
+    access = workspace_member_service.resolve_workspace_access(
+        db, workspace=workspace, user_id=current_user.id
+    )
+    if not access.has_access:
+        raise WorkspaceAccessDeniedError("Workspace not found.")
+
+    organization_service.assert_organization_operational(workspace.organization)
+
+    assert access.organization_membership is not None
+    assert access.effective_role is not None
+    return TenantContext(
+        user=current_user,
+        organization=workspace.organization,
+        organization_membership=access.organization_membership,
+        workspace=workspace,
+        workspace_membership=access.workspace_membership,
+        effective_workspace_role=access.effective_role,
+    )
+
+
+async def get_archived_organization_owner_context(
+    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+) -> OrganizationContext:
+    """The organization context WITHOUT the "is it active" check, for its owner to restore it.
+
+    F-132. Archiving was described as reversible, but every organization route refuses an
+    archived organization, so nothing could reverse it. Only an active OWNER membership passes.
+    """
+    organization = organization_service.get_organization_or_raise(
+        db, organization_id=organization_id
+    )
+    membership = crud.get_organization_member(
+        db,
+        organization_id=organization.id,
+        user_id=current_user.id,
+        statuses=ACTIVE_ONLY,
+    )
+    if membership is None:
+        raise OrganizationAccessDeniedError("Organization not found.")
+    if membership.role is not OrganizationRole.OWNER:
+        raise OrganizationPermissionDeniedError(
+            "Only an organization owner can restore the organization."
+        )
+    return OrganizationContext(
+        user=current_user,
+        organization=organization,
+        membership=membership,
+    )
+
+
 OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
 SSOCompliantOrgContext = Annotated[OrganizationContext, Depends(get_sso_compliant_organization_context)]
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
