@@ -15,6 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.core.slugs import MAX_SLUG_LENGTH, MIN_SLUG_LENGTH
+from app.models.organization import OrganizationStatus
 from app.models.workspace import WorkspaceRole, WorkspaceStatus
 
 
@@ -115,6 +116,28 @@ class WorkspaceSummary(BaseModel):
         if self.logo_file_id is None:
             return None
         return f"/api/v1/workspaces/{self.id}/logo"
+
+
+class WorkspaceGrantSummary(WorkspaceSummary):
+    """One explicit workspace grant, with the organization it lives in (F-142).
+
+    The grants list spans organizations, so it names each one, and it says
+    whether the workspace is usable: a workspace is archived when it was
+    archived itself or when its organization was (archiving an organization
+    leaves its workspaces' own status untouched, so that a restore brings them
+    back as they were).
+    """
+    organization_name: str
+    organization_slug: str
+    organization_status: OrganizationStatus
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def archived(self) -> bool:
+        return (
+            self.status is WorkspaceStatus.ARCHIVED
+            or self.organization_status is OrganizationStatus.ARCHIVED
+        )
 
 
 class WorkspaceSlugAvailabilityResponse(BaseModel):

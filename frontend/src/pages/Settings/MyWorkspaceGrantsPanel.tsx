@@ -4,6 +4,7 @@ import { FolderOpen, Loader2 } from "lucide-react";
 
 import { getMyWorkspaces } from "@/services/api/me";
 import { useTenant } from "@/hooks/useTenant";
+import type { WorkspaceGrantSummary } from "@/types/tenancy";
 
 /**
  * ARCH-29 Slice 3 — the actor's explicit workspace grants.
@@ -37,6 +38,12 @@ const ROLE_LABELS: Readonly<Record<string, string>> = {
   ADMIN: "Admin",
 };
 
+function archivedReason(workspace: WorkspaceGrantSummary): string {
+  return workspace.organization_status === "ARCHIVED"
+    ? `The ${workspace.organization_name} organization is archived. An organization owner can restore it from the organization picker.`
+    : "This workspace is archived. An organization owner or admin can restore it.";
+}
+
 export const MyWorkspaceGrantsPanel: React.FC = () => {
   const { state } = useTenant();
 
@@ -46,16 +53,17 @@ export const MyWorkspaceGrantsPanel: React.FC = () => {
     staleTime: 60_000,
   });
 
-  // The reachable set, from the same bootstrap context the switcher uses.
+  // The reachable set, from the same bootstrap context the switcher uses. An
+  // archived organization's workspaces cannot be opened, so they are not counted.
   const reachable =
     state.status === "ready" || state.status === "no_workspace"
-      ? state.organizations.reduce(
-          (total, organization) => total + organization.workspaces.length,
-          0,
-        )
+      ? state.organizations
+          .filter((organization) => organization.organization_status !== "ARCHIVED")
+          .reduce((total, organization) => total + organization.workspaces.length, 0)
       : null;
 
   const items = grants.data ?? [];
+  const usable = items.filter((workspace) => !workspace.archived).length;
 
   return (
     <div className="fp-card p-4">
@@ -105,20 +113,34 @@ export const MyWorkspaceGrantsPanel: React.FC = () => {
             {items.map((workspace) => (
               <li
                 key={workspace.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                data-testid="workspace-grant"
+                data-archived={workspace.archived ? "true" : "false"}
+                className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 ${
+                  workspace.archived ? "bg-muted/30" : ""
+                }`}
               >
-                <div>
-                  <p className="text-sm font-medium text-foreground">
+                <div className={`min-w-0 ${workspace.archived ? "opacity-70" : ""}`}>
+                  <p className="truncate text-sm font-medium text-foreground">
                     {workspace.workspace_name}
                   </p>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {workspace.slug}
+                  <p className="truncate text-xs text-muted-foreground">
+                    {workspace.organization_name}
+                    <span aria-hidden> · </span>
+                    <span className="font-mono">{workspace.slug}</span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {workspace.status !== "ACTIVE" ? (
-                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-                      {workspace.status}
+                  {workspace.archived ? (
+                    <span
+                      className="rounded border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      title={archivedReason(workspace)}
+                    >
+                      Archived
+                    </span>
+                  ) : workspace.status !== "ACTIVE" ||
+                    workspace.organization_status !== "ACTIVE" ? (
+                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                      Suspended
                     </span>
                   ) : null}
                   <span className="rounded border border-border px-2 py-0.5 text-xs text-muted-foreground">
@@ -129,7 +151,7 @@ export const MyWorkspaceGrantsPanel: React.FC = () => {
               </li>
             ))}
           </ul>
-          {reachable !== null && reachable > items.length ? (
+          {reachable !== null && reachable > usable ? (
             <p className="mt-2 text-xs text-muted-foreground">
               You can open {reachable} in total; the rest come from your
               organization role rather than a direct grant.

@@ -93,6 +93,17 @@ export interface WorkspaceSummary {
   effective_role: WorkspaceRole;
 }
 
+/**
+ * One explicit workspace grant (`/me/workspaces`), with its organization (F-142).
+ * `archived` is true when the workspace or its organization is archived.
+ */
+export interface WorkspaceGrantSummary extends WorkspaceSummary {
+  organization_name: string;
+  organization_slug: string;
+  organization_status: OrganizationStatus;
+  archived: boolean;
+}
+
 export interface WorkspaceCreateRequest {
   workspace_name: string;
   slug?: string;
