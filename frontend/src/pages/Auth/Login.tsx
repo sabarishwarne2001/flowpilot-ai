@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
 
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ROUTES } from "@/constants/routes";
@@ -10,6 +10,19 @@ import { ApiError } from "@/services/api/client";
 import { discoverSso, emailDomain, ssoStartHref } from "@/services/api/sso";
 import { useAuthStore } from "@/store/useAuthStore";
 import { isMfaChallenge } from "@/types/auth";
+import {
+  AUTH_ERROR,
+  AUTH_INPUT,
+  AUTH_INPUT_ICON,
+  AUTH_LABEL,
+  AUTH_LINK,
+  AUTH_MUTED_LINK,
+  AUTH_PRIMARY,
+  AUTH_SECONDARY,
+  AUTH_SUBTITLE,
+  AUTH_TITLE,
+  AUTH_TRAILING_BUTTON,
+} from "@/components/auth/authStyles";
 
 /**
  * Sign-in page: password, or enterprise single sign-on.
@@ -45,17 +58,43 @@ import { isMfaChallenge } from "@/types/auth";
 // N-017: "code" is the second step for a user with two-factor sign-in on.
 type SignInMode = "identify" | "password" | "sso" | "code";
 
-const INPUT_CLASS =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-10 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+/** Where the user is in email -> password -> (two-factor code). */
+const Steps: React.FC<{ readonly mode: SignInMode }> = ({ mode }) => {
+  const steps = mode === "code" ? ["Email", "Password", "Code"] : ["Email", "Password"];
+  const current = mode === "identify" ? 0 : mode === "password" ? 1 : 2;
+  return (
+    <ol className="mb-6 flex items-center gap-2" aria-label="Sign-in progress">
+      {steps.map((label, index) => {
+        const done = index < current;
+        const active = index === current;
+        return (
+          <li key={label} className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold transition-colors ${
+                done
+                  ? "bg-primary text-primary-foreground"
+                  : active
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/40 dark:text-[hsl(213_94%_72%)]"
+                    : "bg-muted text-muted-foreground ring-1 ring-border"
+              }`}
+            >
+              {done ? <Check className="h-3 w-3" aria-hidden="true" /> : index + 1}
+            </span>
+            <span className={`text-xs ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}>{label}</span>
+            {index < steps.length - 1 && <span className="h-px w-6 bg-border" aria-hidden="true" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
 
-const LABEL_CLASS =
-  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70";
-
-const PRIMARY_BUTTON_CLASS =
-  "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full";
-
-const SECONDARY_BUTTON_CLASS =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background text-sm font-medium ring-offset-background transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 w-full";
+const Heading: React.FC<{ readonly title: string; readonly children: React.ReactNode }> = ({ title, children }) => (
+  <div className="mb-6 space-y-1.5 select-none">
+    <h1 className={AUTH_TITLE}>{title}</h1>
+    <p className={AUTH_SUBTITLE}>{children}</p>
+  </div>
+);
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -277,20 +316,21 @@ export const Login: React.FC = () => {
   const feedback = (
     <>
       {error && (
-        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">
-          {error}
+        <div className={AUTH_ERROR} role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
         </div>
       )}
       {notice && (
         <div
-          className="rounded-md border border-border bg-muted/50 p-3 text-sm text-foreground"
+          className="rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-[13px] text-foreground animate-fade-in"
           role="status"
         >
           <p>{notice}</p>
           <button
             type="button"
             onClick={() => switchMode("password")}
-            className="mt-2 text-sm font-medium underline underline-offset-4 hover:text-primary"
+            className={`mt-1.5 text-[13px] ${AUTH_LINK}`}
           >
             Use password
           </button>
@@ -300,12 +340,12 @@ export const Login: React.FC = () => {
   );
 
   const emailField = (
-    <div className="space-y-2">
-      <label className={LABEL_CLASS} htmlFor="email">
+    <div className="space-y-1.5">
+      <label className={AUTH_LABEL} htmlFor="email">
         {mode === "sso" ? "Work email" : "Email"}
       </label>
       <div className="relative">
-        <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Mail className={AUTH_INPUT_ICON} aria-hidden="true" />
         <input
           id="email"
           placeholder={mode === "sso" ? "alex@company.com" : "name@example.com"}
@@ -316,56 +356,68 @@ export const Login: React.FC = () => {
           disabled={isLoading}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className={INPUT_CLASS}
+          className={`${AUTH_INPUT} pl-9`}
           required
         />
       </div>
     </div>
   );
 
+  const signUpFooter = (
+    <p className="mt-6 border-t border-border/70 pt-5 text-center text-[13px] text-muted-foreground select-none">
+      Don't have an account?{" "}
+      <Link to={ROUTES.REGISTER} className={AUTH_LINK}>
+        Sign up
+      </Link>
+    </p>
+  );
+
   if (mode === "identify") {
     return (
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center select-none">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your email. We&apos;ll send you to single sign-on if your company uses it.
-          </p>
-        </div>
+      <div className="flex w-full flex-col">
+        <Steps mode={mode} />
+        <Heading title="Welcome back">
+          Enter your email. We&apos;ll send you to single sign-on if your company uses it.
+        </Heading>
         <form onSubmit={handleIdentifySubmit} className="space-y-4">
           {feedback}
           {emailField}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-          >
-            {isLoading ? "Checking…" : "Continue"}
+          <button type="submit" disabled={isLoading} className={AUTH_PRIMARY}>
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Checking…
+              </>
+            ) : (
+              <>
+                Continue
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </>
+            )}
           </button>
         </form>
+        {signUpFooter}
       </div>
     );
   }
 
   if (mode === "code") {
     return (
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center select-none">
-          <h1 className="text-2xl font-semibold tracking-tight">Two-factor sign-in</h1>
-          <p className="text-sm text-muted-foreground">
-            {useRecoveryCode
-              ? "Enter one of the recovery codes you saved. Each one works once."
-              : "Enter the 6-digit code from your authenticator app."}
-          </p>
-        </div>
+      <div className="flex w-full flex-col">
+        <Steps mode={mode} />
+        <Heading title="Two-factor sign-in">
+          {useRecoveryCode
+            ? "Enter one of the recovery codes you saved. Each one works once."
+            : "Enter the 6-digit code from your authenticator app."}
+        </Heading>
         <form onSubmit={handleCodeSubmit} className="space-y-4">
           {feedback}
-          <div className="space-y-2">
-            <label className={LABEL_CLASS} htmlFor="mfa-code">
+          <div className="space-y-1.5">
+            <label className={AUTH_LABEL} htmlFor="mfa-code">
               {useRecoveryCode ? "Recovery code" : "Authentication code"}
             </label>
             <div className="relative">
-              <Smartphone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Smartphone className={AUTH_INPUT_ICON} aria-hidden="true" />
               <input
                 id="mfa-code"
                 autoFocus
@@ -375,7 +427,8 @@ export const Login: React.FC = () => {
                 disabled={isLoading}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className={INPUT_CLASS}
+                className={`${AUTH_INPUT} pl-9 font-mono tracking-[0.3em] placeholder:tracking-normal`}
+                placeholder={useRecoveryCode ? undefined : "000000"}
                 required
               />
             </div>
@@ -383,11 +436,11 @@ export const Login: React.FC = () => {
           <button
             type="submit"
             disabled={isLoading || !code.trim()}
-            className={PRIMARY_BUTTON_CLASS}
+            className={AUTH_PRIMARY}
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Verifying...
               </>
             ) : (
@@ -403,7 +456,7 @@ export const Login: React.FC = () => {
                 setError(null);
               }}
               disabled={isLoading}
-              className="text-sm text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+              className={AUTH_MUTED_LINK}
             >
               {useRecoveryCode ? "Use the authenticator app" : "Use a recovery code"}
             </button>
@@ -411,7 +464,7 @@ export const Login: React.FC = () => {
               type="button"
               onClick={() => switchMode("password")}
               disabled={isLoading}
-              className="text-sm text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+              className={AUTH_MUTED_LINK}
             >
               Start over
             </button>
@@ -423,22 +476,22 @@ export const Login: React.FC = () => {
 
   if (mode === "sso") {
     return (
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center select-none">
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in with single sign-on</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your work email and we&apos;ll send you to your company&apos;s sign-in page
-          </p>
+      <div className="flex w-full flex-col">
+        <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/60 text-primary shadow-inner-highlight">
+          <KeyRound className="h-5 w-5" aria-hidden="true" />
         </div>
+        <Heading title="Sign in with single sign-on">
+          Enter your work email and we&apos;ll send you to your company&apos;s sign-in page
+        </Heading>
 
         <form onSubmit={handleSsoSubmit} className="space-y-4">
           {feedback}
           {emailField}
 
-          <button type="submit" disabled={isLoading} className={PRIMARY_BUTTON_CLASS}>
+          <button type="submit" disabled={isLoading} className={AUTH_PRIMARY}>
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Redirecting...
               </>
             ) : (
@@ -451,7 +504,7 @@ export const Login: React.FC = () => {
               type="button"
               onClick={() => switchMode("password")}
               disabled={isLoading}
-              className="text-sm text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+              className={AUTH_MUTED_LINK}
             >
               Sign in with a password instead
             </button>
@@ -462,31 +515,35 @@ export const Login: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-      <div className="flex flex-col space-y-2 text-center select-none">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-sm text-muted-foreground">Enter your email to sign in to your account</p>
-      </div>
+    <div className="flex w-full flex-col">
+      <Steps mode={mode} />
+      <Heading title="Welcome back">Enter your email to sign in to your account</Heading>
 
       <form onSubmit={handlePasswordSubmit} className="space-y-4">
         {feedback}
         {emailField}
 
-        <div className="space-y-2">
-          <label className={LABEL_CLASS} htmlFor="password">
-            Password
-          </label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className={AUTH_LABEL} htmlFor="password">
+              Password
+            </label>
+            <Link to={ROUTES.FORGOT_PASSWORD} className={AUTH_MUTED_LINK}>
+              Forgot your password?
+            </Link>
+          </div>
           <div className="relative">
-            <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
             <input
               id="password"
               placeholder="••••••••"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
+              autoFocus
               disabled={isLoading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={`${INPUT_CLASS} pr-10`}
+              className={`${AUTH_INPUT} pl-9 pr-10`}
               required
             />
             <button
@@ -494,39 +551,31 @@ export const Login: React.FC = () => {
               onClick={() => setShowPassword((value) => !value)}
               disabled={isLoading}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+              className={AUTH_TRAILING_BUTTON}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        <button type="submit" disabled={isLoading} className={PRIMARY_BUTTON_CLASS}>
+        <button type="submit" disabled={isLoading} className={AUTH_PRIMARY}>
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Signing in...
             </>
           ) : (
             "Continue"
           )}
         </button>
-        <div className="flex justify-end">
-          <Link
-            to={ROUTES.FORGOT_PASSWORD}
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-          >
-            Forgot your password?
-          </Link>
-        </div>
       </form>
 
-      <div className="relative select-none" aria-hidden="true">
+      <div className="relative my-5 select-none" aria-hidden="true">
         <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-border" />
+          <span className="w-full border-t border-border/80" />
         </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or</span>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground dark:bg-zinc-900">or</span>
         </div>
       </div>
 
@@ -534,23 +583,13 @@ export const Login: React.FC = () => {
         type="button"
         onClick={() => switchMode("sso")}
         disabled={isLoading}
-        className={SECONDARY_BUTTON_CLASS}
+        className={AUTH_SECONDARY}
       >
-        <KeyRound className="h-4 w-4" />
+        <KeyRound className="h-4 w-4" aria-hidden="true" />
         Continue with single sign-on
       </button>
 
-      <footer className="pt-2 text-center select-none">
-        <p className="text-sm text-muted-foreground">
-          Don't have an account?{" "}
-          <Link
-            to={ROUTES.REGISTER}
-            className="underline underline-offset-4 hover:text-primary transition-colors"
-          >
-            Sign up
-          </Link>
-        </p>
-      </footer>
+      {signUpFooter}
     </div>
   );
 };

@@ -13,6 +13,7 @@ import {
   rejectInvitation,
 } from "@/services/api/invitations";
 import { useAuthStore } from "@/store/useAuthStore";
+import { AuthShell } from "@/components/auth/AuthShell";
 
 type Phase =
   | "preview"
@@ -222,15 +223,15 @@ export const InvitationAcceptPage: React.FC = () => {
 
   if (isLoadingPreview && !phase) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-foreground">
-        <div className="flex flex-col items-center space-y-4">
+      <AuthShell>
+        <div className="flex flex-col items-center space-y-4 py-6">
           <svg className="animate-spin h-10 w-10 text-primary" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <span className="text-sm text-muted-foreground font-semibold">Resolving invitation credentials...</span>
+          <span className="text-sm text-muted-foreground">Resolving invitation credentials...</span>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -238,12 +239,12 @@ export const InvitationAcceptPage: React.FC = () => {
   const roleDisplay = (preview?.role || (preview as any)?.organization_role || "member").toString().toLowerCase();
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center text-foreground p-4">
-      <div className="bg-card border border-border p-8 rounded-xl shadow-lg max-w-md w-full text-center space-y-6">
+    <AuthShell>
+      <div className="w-full text-center space-y-6">
         {resolvedPhase === "preview" && preview && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight">You've been invited!</h2>
+              <h2 className="text-[22px] font-semibold tracking-tight">You've been invited!</h2>
               <p className="text-sm text-muted-foreground">
                 <strong>{preview.inviter_email}</strong> has invited you to join the{" "}
                 <strong>{preview.organization_name}</strong> organization as a{" "}
@@ -254,7 +255,7 @@ export const InvitationAcceptPage: React.FC = () => {
               <button
                 onClick={() => void acceptMutation()}
                 disabled={isAccepting}
-                className="w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                className="fp-btn fp-btn-primary h-10 w-full font-semibold"
               >
                 {isAccepting ? "Joining..." : "Accept & Join Organization"}
               </button>
@@ -271,7 +272,7 @@ export const InvitationAcceptPage: React.FC = () => {
 
         {resolvedPhase === "accepted" && (
           <div className="space-y-2">
-            <h2 className="text-xl font-bold tracking-tight">Joined Organization!</h2>
+            <h2 className="text-[22px] font-semibold tracking-tight">Joined Organization!</h2>
             <p className="text-sm text-muted-foreground">Taking you to your workspace...</p>
           </div>
         )}
@@ -279,7 +280,7 @@ export const InvitationAcceptPage: React.FC = () => {
         {resolvedPhase === "rejected" && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight">Invitation Declined</h2>
+              <h2 className="text-[22px] font-semibold tracking-tight">Invitation Declined</h2>
               <p className="text-sm text-muted-foreground">You have declined this invitation. You may safely close this page.</p>
             </div>
             <button
@@ -294,7 +295,7 @@ export const InvitationAcceptPage: React.FC = () => {
         {resolvedPhase === "auth_required" && (
           <div className="space-y-3 pt-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight">Sign in to continue</h2>
+              <h2 className="text-[22px] font-semibold tracking-tight">Sign in to continue</h2>
               <p className="text-sm text-muted-foreground text-left">
                 Accepting an invitation requires a signed-in account matching{" "}
                 <strong>{preview?.invited_email}</strong>.
@@ -318,7 +319,7 @@ export const InvitationAcceptPage: React.FC = () => {
         {resolvedPhase === "email_mismatch" && (
           <div className="space-y-3 pt-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight">Wrong account</h2>
+              <h2 className="text-[22px] font-semibold tracking-tight">Wrong account</h2>
               <p className="text-sm text-muted-foreground text-left">
                 {errorMsg ||
                   `This invitation was sent to ${preview?.invited_email ?? "another address"}, but you are signed in as ${currentEmail ?? "a different account"}.`}
@@ -336,7 +337,7 @@ export const InvitationAcceptPage: React.FC = () => {
         {(resolvedPhase === "expired" || resolvedPhase === "invalid") && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight">
+              <h2 className="text-[22px] font-semibold tracking-tight">
                 {resolvedPhase === "expired" ? "Invitation Expired" : "Invalid Link"}
               </h2>
               <p className="text-sm text-muted-foreground">{errorMsg || previewMessage}</p>
@@ -350,7 +351,7 @@ export const InvitationAcceptPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 };
 

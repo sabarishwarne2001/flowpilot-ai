@@ -96,17 +96,22 @@ export const PasswordStrengthMeter: React.FC<Props> = ({ password, userInputs = 
       : "Checking…";
 
   return (
-    <div className="space-y-1 pt-1" data-testid="password-strength">
-      <div className="grid grid-cols-4 gap-1" aria-hidden="true">
+    <div className="space-y-1.5 pt-1.5" data-testid="password-strength">
+      <div className="grid grid-cols-4 gap-1.5" aria-hidden="true">
         {[1, 2, 3, 4].map((segment) => (
           <span
             key={segment}
-            className={`h-1 rounded-full ${result && score >= segment ? COLOURS[score] : "bg-muted"}`}
+            className={`h-1 rounded-full transition-colors duration-300 ${
+              result && score >= segment ? COLOURS[score] : "bg-muted ring-1 ring-inset ring-border/60"
+            }`}
           />
         ))}
       </div>
       <p className="text-xs text-muted-foreground" aria-live="polite">
-        Password strength: {label}
+        Password strength:{" "}
+        <span className={`font-medium ${!result || tooShort ? "" : score <= 1 ? "text-destructive" : score === 2 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+          {label}
+        </span>
         {!tooShort && result?.warning && score < 3 ? `. ${result.warning}` : ""}
       </p>
     </div>
