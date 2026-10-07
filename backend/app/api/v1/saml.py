@@ -169,10 +169,12 @@ def _sso_landing_redirect(*, target: str | None,
 
 
 def _sp_urls():
+    # F-123: the deployment's public address (FRONTEND_URL behind Caddy unless
+    # PUBLIC_API_URL says otherwise), never a hard-coded localhost.
     settings = get_settings()
-    base = str(getattr(settings, "PUBLIC_API_URL", "http://localhost:8000")).rstrip("/")
-    prefix = str(getattr(settings, "API_V1_STR", "/api/v1"))
-    entity_id = str(getattr(settings, "SAML_SP_ENTITY_ID", None) or f"{base}{prefix}/saml/metadata")
+    base = settings.public_api_base
+    prefix = settings.API_V1_STR
+    entity_id = settings.SAML_SP_ENTITY_ID or f"{base}{prefix}/saml/metadata"
     return entity_id, f"{base}{prefix}/saml/acs", f"{base}{prefix}/saml/slo"
 
 
@@ -320,7 +322,7 @@ def start_sso(request: Request, domain: str = Query(...),
     url = oidc_gateway.build_authorization_url(
         authorization_endpoint=row.oidc_authorization_endpoint,
         client_id=row.oidc_client_id,
-        redirect_uri=str(getattr(settings, "OIDC_REDIRECT_URI", "")),
+        redirect_uri=settings.oidc_redirect_uri,
         state=state, nonce=nonce, code_challenge=challenge,
         scopes=str(getattr(settings, "OIDC_DEFAULT_SCOPES", "openid,email,profile")),
         force_authn=force_authn,
@@ -562,7 +564,7 @@ def oidc_callback(request: Request, code: str = Query(...),
             client_id=config.oidc_client_id,
             client_secret=client_secret,
             code=code,
-            redirect_uri=str(getattr(settings, "OIDC_REDIRECT_URI", "")),
+            redirect_uri=settings.oidc_redirect_uri,
             code_verifier=verifier,
         )
         id_token = tokens.get("id_token")
