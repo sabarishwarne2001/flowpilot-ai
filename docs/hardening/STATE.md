@@ -5,7 +5,7 @@ _Last updated: 2026-10-07 (final systemic polish and live engine hardening)_
 ## Current phase
 **Final systemic polish & live engine hardening — COMPLETE, in review.** Branch
 `hardening/final-systemic-polish-and-live-engine-hardening` (session branch
-`claude/wonderful-gates-5fid79`); PR: see "Next action". Builds on PR #8 (merged into `main`).
+`claude/wonderful-gates-5fid79`); PR #9 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/9). Builds on PR #8 (merged into `main`).
 
 - **Live engine defects.** F-128 (knowledge reindex crashed every job on the spend guard),
   F-129 (a later reindex queued nothing), F-126 (two tabs refreshing signed each other out),
