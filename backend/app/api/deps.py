@@ -41,7 +41,7 @@ from app.models.organization import (
     OrganizationRole,
 )
 from app.models.user import User
-from app.models.user_session import UserSession
+from app.models.user_session import SessionRevokedReason, UserSession
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.services import api_key_service
 from app.services import organization_service
@@ -211,9 +211,9 @@ def _session_is_revoked(
         return False
 
     row = db.execute(
-        select(UserSession.revoked_at).where(
-            UserSession.id == claims.session_id
-        )
+        select(
+            UserSession.revoked_at, UserSession.revoked_reason, UserSession.family_id
+        ).where(UserSession.id == claims.session_id)
     ).first()
 
     # No row at all means the session was hard-deleted (erasure sweep, or a
@@ -223,7 +223,20 @@ def _session_is_revoked(
     if row is None:
         return True
 
-    return row[0] is not None
+    revoked_at, revoked_reason, family_id = row
+    if revoked_at is None:
+        return False
+
+    # F-126. A session retired only by ROTATION was not revoked by anyone: another tab of
+    # the same sign-in refreshed. Its access token keeps working until it expires, as long
+    # as the sign-in itself is alive. Refusing it made every refresh in one tab cost the
+    # other tab a 401. Sign-out, device revocation and reuse detection end the whole
+    # sign-in (no live session left), so they still refuse it at once.
+    if revoked_reason is SessionRevokedReason.ROTATED:
+        from app.services import session_service
+
+        return not session_service.family_is_live(db, family_id=family_id)
+    return True
 
 
 async def get_current_active_user(

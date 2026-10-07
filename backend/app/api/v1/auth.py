@@ -381,7 +381,8 @@ async def logout(
             db, refresh_token=refresh_cookie
         )
         if session is not None:
-            session_service.revoke_session(
+            # The whole sign-in, not the one row: the cookie may be a rotated one (F-126).
+            session_service.end_sign_in(
                 db, session=session, reason=SessionRevokedReason.LOGOUT
             )
             db.commit()
@@ -436,7 +437,8 @@ async def revoke_one_session(
             status_code=status.HTTP_404_NOT_FOUND, detail="Session not found."
         )
 
-    session_service.revoke_session(
+    # The device's whole sign-in, so its older access tokens stop too (F-126).
+    session_service.end_sign_in(
         db, session=session, reason=SessionRevokedReason.LOGOUT
     )
     db.commit()

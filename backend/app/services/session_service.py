@@ -145,12 +145,59 @@ def get_session_by_token(
     db: Session,
     *,
     refresh_token: str,
+    lock: bool = False,
 ) -> UserSession | None:
+    stmt = select(UserSession).where(UserSession.token_hash == hash_token(refresh_token))
+    if lock:
+        # Two tabs refreshing with one cookie at the same moment: the second waits for the
+        # first's rotation instead of rotating the same row again and forking the chain.
+        stmt = stmt.with_for_update()
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def family_is_live(db: Session, *, family_id: uuid.UUID) -> bool:
+    """True while the sign-in a session belongs to still has a live, unexpired session."""
     return db.execute(
-        select(UserSession).where(
-            UserSession.token_hash == hash_token(refresh_token)
+        select(UserSession.id)
+        .where(
+            UserSession.family_id == family_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > datetime.now(UTC),
         )
-    ).scalar_one_or_none()
+        .limit(1)
+    ).first() is not None
+
+
+def end_sign_in(
+    db: Session,
+    *,
+    session: UserSession,
+    reason: SessionRevokedReason,
+) -> int:
+    """Sign-out and "revoke this device": end the whole sign-in the session belongs to.
+
+    F-126. An access token of a session retired only by rotation stays valid while its sign-in
+    is alive, so ending one row is not enough: a stale cookie (already rotated) would revoke
+    nothing, and the live tip would keep every older access token working.
+    """
+    result = db.execute(
+        update(UserSession)
+        .where(
+            UserSession.family_id == session.family_id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
+        .execution_options(synchronize_session="fetch")
+    )
+    db.flush()
+    logger.info(
+        "SESSION_SIGN_IN_ENDED | user=%s | family=%s | reason=%s | sessions=%d",
+        session.user_id,
+        session.family_id,
+        reason.value,
+        result.rowcount,
+    )
+    return result.rowcount
 
 
 def list_active_sessions(
@@ -342,7 +389,7 @@ def rotate_session(
     trusted_ip: str | None = None,
 ) -> IssuedSession:
     now = datetime.now(UTC)
-    session = get_session_by_token(db, refresh_token=refresh_token)
+    session = get_session_by_token(db, refresh_token=refresh_token, lock=True)
 
     if session is None:
         logger.info("SESSION_REFRESH_REJECTED | reason=no_matching_session")
@@ -357,6 +404,16 @@ def rotate_session(
         logger.info("SESSION_REFRESH_REJECTED | session=%s | reason=%s", session.id, lapsed)
         revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)
         raise ExpiredRefreshTokenError("Your session has ended. Sign in again.")
+
+    if session.rotated_at is not None and _superseded_before_presented(session):
+        return _serve_superseded_token(
+            db,
+            session=session,
+            now=now,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            trusted_ip=trusted_ip,
+        )
 
     if session.rotated_at is not None:
         return _handle_rotated_token_replay(
@@ -394,7 +451,14 @@ def _rotate_live_session(
     now: datetime,
     ip_address: str | None,
     user_agent: str | None,
+    presented: bool = True,
 ) -> IssuedSession:
+    """Retire `session` in favour of a new one in the same family.
+
+    `presented` says whether `session`'s own token is the one being presented. When a racing
+    tab rotates the tip on its behalf (the grace path), it is not: its holder has never used it,
+    and `last_used_at` stays empty so that holder is still served once (F-126).
+    """
     user = db.get(User, session.user_id)
     if user is None or not user.is_active:
         revoke_session(
@@ -418,7 +482,8 @@ def _rotate_live_session(
 
     session.rotated_at = now
     session.replaced_by_id = issued.session.id
-    session.last_used_at = now
+    if presented:
+        session.last_used_at = now
     session.revoked_at = now
     session.revoked_reason = SessionRevokedReason.ROTATED
     db.add(session)
@@ -506,6 +571,71 @@ def _handle_rotated_token_replay(
         now=now,
         ip_address=ip_address,
         user_agent=user_agent,
+        presented=False,
+    )
+
+
+def _superseded_before_presented(session: UserSession) -> bool:
+    """Retired by a racing tab (the grace path) before its own holder ever presented it.
+
+    `last_used_at` is written only when a session's own token is presented for rotation.
+    """
+    return (
+        session.revoked_reason is SessionRevokedReason.ROTATED
+        and session.last_used_at is None
+    )
+
+
+def _serve_superseded_token(
+    db: Session,
+    *,
+    session: UserSession,
+    now: datetime,
+    ip_address: str | None,
+    user_agent: str | None,
+    trusted_ip: str | None = None,
+) -> IssuedSession:
+    """F-126. The first presentation of a token a racing tab retired on its holder's behalf.
+
+    A reload during a refresh: the new page's refresh rotated A -> B and the page kept B; the
+    cut-off request then presented A inside the grace window and the grace path rotated B -> C,
+    whose cookie never reached the browser. The page still holds B. Reuse detection exists for a
+    token presented TWICE; this is B's first presentation, so it is served at any age (the
+    session's own expiry, idle and absolute limits were already checked). From here on B is an
+    ordinary rotated token: a second presentation after the grace window is reuse.
+    """
+    tip = _chain_tip(db, session)
+    if tip.revoked_at is not None and tip.revoked_reason is not SessionRevokedReason.ROTATED:
+        raise RevokedRefreshTokenError("This session is no longer valid.")
+    if tip.rotated_at is not None:
+        revoke_family(
+            db,
+            family_id=session.family_id,
+            reason=SessionRevokedReason.REUSE_DETECTED,
+        )
+        raise SessionReuseDetectedError(
+            "This session was signed out because its refresh token was reused."
+        )
+    _enforce_ip_pin(tip, trusted_ip=trusted_ip)
+
+    session.last_used_at = now
+    session.rotated_at = now  # the grace window for this token starts at its first presentation
+    db.add(session)
+
+    logger.info(
+        "SESSION_SUPERSEDED_REFRESH | user=%s | family=%s | presented=%s | rotating tip=%s",
+        session.user_id,
+        session.family_id,
+        session.id,
+        tip.id,
+    )
+    return _rotate_live_session(
+        db,
+        session=tip,
+        now=now,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        presented=False,
     )
 
 
