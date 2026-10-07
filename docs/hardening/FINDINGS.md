@@ -2095,6 +2095,17 @@ remedy is a session-design choice (let an access token of a session revoked only
 its expiry, or have the grace path branch a sibling session instead of rotating the tip), each with
 a security trade-off for revoked devices, so it needs its own failing test and review.
 
+## F-127 — The review-queue browser test depends on how many runs the database has seen (P4, test only, open)
+**Seen** when 13-automation-review was repeated three times against the same database
+("Review queue › type tabs…", 3rd repeat: no button named /Packet split/). **Evidence** (snapshot of
+the failure): the queue held 52 items, "page 1 of 3", 25 on the first page; 15 of them were HIGH
+duplicate-number findings for `disputed-*.pdf`, one per earlier run of the "disputed extraction"
+test, which uploads a fresh copy each time (the radar rightly flags it). The only packet-split item
+(the tile still read "Packet split 1") had been pushed to page 2. Passes on a fresh database, as in
+CI and in both full runs of this branch; the queue's page size and ordering are unchanged on this
+branch. **Not changed here**: the remedy is test isolation (open the "Packet splits" tab before
+looking for the item, or clear the run's disputed copies), which belongs in a test-only change.
+
 ## Built in this release (owner decisions, not defects)
 - **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery
   codes, required at sign-in and in the step-up dialog; wrong codes throttled per address and
