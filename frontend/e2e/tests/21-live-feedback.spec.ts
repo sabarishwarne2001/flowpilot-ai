@@ -150,18 +150,28 @@ test.describe("Your workspace access (F-142)", () => {
     expect(workspace.status, workspace.text).toBeLessThan(300);
     expect((await api(session, "POST", `/workspaces/${workspace.body.id}/archive`)).status).toBe(200);
 
-    // A whole organization archived, its first workspace untouched.
-    const slug = `grant-org-${runId()}`.toLowerCase().slice(0, 40);
-    const orgName = `Grant Org ${runId()}`;
-    const created = await api<{ id: string; slug: string }>(session, "POST", "/organizations", {
-      organization_name: orgName,
-      organization_slug: slug,
-    });
-    expect(created.status, created.text).toBeLessThan(300);
-    const archived = await api(session, "POST", `/organizations/${created.body.id}/archive`, {
-      confirm_slug: created.body.slug,
-    });
-    expect(archived.status, archived.text).toBe(200);
+    // A whole organization archived, its first workspace untouched. An archived organization this
+    // owner already has is reused: archived organizations count towards the account's limit of 3,
+    // so creating one per run would stop working on a database that has seen a few runs.
+    const context = await api<{
+      organizations: Array<{ organization_id: string; organization_name: string; organization_status: string; role: string; workspaces: unknown[] }>;
+    }>(session, "GET", "/me/context");
+    let orgName = context.body.organizations.find(
+      (organization) => organization.organization_status === "ARCHIVED" && organization.role === "OWNER",
+    )?.organization_name;
+    if (!orgName) {
+      const slug = `grant-org-${runId()}`.toLowerCase().slice(0, 40);
+      orgName = `Grant Org ${runId()}`;
+      const created = await api<{ id: string; slug: string }>(session, "POST", "/organizations", {
+        organization_name: orgName,
+        organization_slug: slug,
+      });
+      expect(created.status, created.text).toBeLessThan(300);
+      const archived = await api(session, "POST", `/organizations/${created.body.id}/archive`, {
+        confirm_slug: created.body.slug,
+      });
+      expect(archived.status, archived.text).toBe(200);
+    }
 
     await page.goto(ws("C", "settings"));
     const panel = page.locator(".fp-card").filter({ has: page.getByRole("heading", { name: "Your workspace access" }) });
@@ -171,7 +181,7 @@ test.describe("Your workspace access (F-142)", () => {
     await expect(archivedWorkspace).toHaveAttribute("data-archived", "true");
     await expect(archivedWorkspace.getByText("Archived", { exact: true })).toBeVisible();
 
-    const inArchivedOrg = panel.getByTestId("workspace-grant").filter({ hasText: orgName });
+    const inArchivedOrg = panel.getByTestId("workspace-grant").filter({ hasText: orgName as string });
     await expect(inArchivedOrg.first()).toHaveAttribute("data-archived", "true");
     await expect(inArchivedOrg.first().getByText("Archived", { exact: true })).toBeVisible();
 
