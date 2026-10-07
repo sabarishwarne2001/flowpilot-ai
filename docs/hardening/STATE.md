@@ -4,8 +4,8 @@ _Last updated: 2026-10-07 (live feedback and Tier-1 elevation)_
 
 ## Current phase
 **Live feedback & Tier-1 elevation — COMPLETE, in review.** Branch
-`hardening/live-feedback-and-tier1-elevation`; PR: see "Next action". Builds on PR #9 (merged
-into `main`).
+`hardening/live-feedback-and-tier1-elevation`; PR opened from it (link in the session summary).
+Builds on PR #9 (merged into `main`).
 
 - **Live UI feedback (owner's report).** F-141 reindex status route and a polling progress card
   (button disabled while a run is active, start and finish toasts); F-142 ARCHIVED badge in "Your
@@ -27,7 +27,8 @@ into `main`).
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
   polish:** PRs #1 to #9 (merged).
 - **Live feedback & Tier-1 elevation** (this branch): F-141 to F-154 fixed; N-026 to N-031 decided.
-  - Backend suite (full): in progress at this commit; result recorded when it completes.
+  - Backend suite (full, after the last backend change): **3,366 passed, 0 failed, 9 skipped**
+    (was 3,343: 23 new tests).
   - Browser suite on a fresh database, production CSP, model stand-in: **316 passed, 0 failed,
     1 skipped** (by design; was 302 passed). The 12 tests in the new `21-live-feedback.spec.ts`
     each failed on the previous code before its fix.
