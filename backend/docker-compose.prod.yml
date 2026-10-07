@@ -111,6 +111,12 @@ x-app-env: &app-env
   LLM_PROVIDER: ${LLM_PROVIDER:-groq}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GROQ_MODEL_NAME: ${GROQ_MODEL_NAME:-llama-3.3-70b-versatile}
+  GEMINI_MODEL_NAME: ${GEMINI_MODEL_NAME:-gemini-3.5-flash}
+
+  # F-123. The address identity providers return users to (SAML ACS, OIDC
+  # redirect_uri). Blank: FRONTEND_URL, because Caddy serves the API there.
+  PUBLIC_API_URL: ${PUBLIC_API_URL:-}
 
   # Written out in the template "so they are visible"; they only take effect if passed on.
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10}
