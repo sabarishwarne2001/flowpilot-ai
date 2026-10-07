@@ -12,7 +12,8 @@ Two mechanisms, because each covers what the other cannot:
 
 * `on_job_dead` runs in the worker the moment a document job dies. It is
   precise and immediate.
-* `sweep_stuck_documents` (job `pipeline.sweep_stuck`, every ten minutes)
+* `sweep_stuck_documents` (job `pipeline.sweep_stuck`, every ten minutes; the
+  same job also times out automation runs stranded in RUNNING, F-146)
   catches what the hook cannot see: a worker process killed outright, a job
   row deleted, a stage left behind by a crash between two commits. It only
   fails a document that has been in a working stage longer than
@@ -202,9 +203,15 @@ def sweep_stuck_documents(
 
 def handle_pipeline_sweep_stuck(payload: dict[str, Any]) -> dict[str, Any]:
     from app.db.session import SessionLocal
+    from app.services.automation.executor import reap_stranded
 
     with SessionLocal() as db:
-        return sweep_stuck_documents(db)
+        result = sweep_stuck_documents(db)
+    # F-146. An automation run whose worker died mid-walk stays RUNNING past its deadline;
+    # `reap_stranded` marks it TIMED_OUT. It existed, tested, and nothing ever called it.
+    with SessionLocal() as db:
+        result["automation_runs_reaped"] = reap_stranded(db)
+    return result
 
 
 __all__ = [
