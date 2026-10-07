@@ -887,9 +887,14 @@ def due_schedules(db: Session, *, now: Optional[datetime] = None) -> list[Export
     organization predicate. Every row it returns carries its own
     `organization_id`, which is what every downstream call is scoped by.
     """
+    from app.models.organization import Organization, OrganizationStatus
+
     moment = now or _now()
     stmt = (
         select(ExportSchedule)
+        # F-134: an archived (or suspended) organization's data is not pushed anywhere.
+        .join(Organization, Organization.id == ExportSchedule.organization_id)
+        .where(Organization.status == OrganizationStatus.ACTIVE)
         .where(ExportSchedule.enabled.is_(True))
         .where(ExportSchedule.circuit_opened_at.is_(None))
         .where(ExportSchedule.next_run_at.is_not(None))
