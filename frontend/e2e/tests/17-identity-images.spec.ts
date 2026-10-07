@@ -41,7 +41,7 @@ function png(width: number, height: number, rgb: [number, number, number]): Buff
 
 async function uploadAvatar(session: Awaited<ReturnType<typeof loginAs>>, image: Buffer): Promise<void> {
   const form = new FormData();
-  form.append("file", new Blob([image], { type: "image/png" }), "avatar.png");
+  form.append("file", new Blob([new Uint8Array(image)], { type: "image/png" }), "avatar.png");
   const response = await api(session, "POST", "/me/avatar", form);
   expect(response.status, response.text).toBeLessThan(300);
 }
