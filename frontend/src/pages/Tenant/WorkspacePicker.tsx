@@ -161,7 +161,8 @@ const ActiveOrganizationCard: React.FC<{
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-foreground">{organization.organization_name}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            /{organization.organization_slug} · {organization.role.toLowerCase()}
+            {/* Monospace: Inter's contextual alternates draw the x in "6x9" as a multiplication sign. */}
+            <span className="font-mono">/{organization.organization_slug}</span> · {organization.role.toLowerCase()}
           </p>
         </div>
       </header>
@@ -243,7 +244,8 @@ const ArchivedOrganizationCard: React.FC<{
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-muted-foreground">{organization.organization_name}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            /{organization.organization_slug} · {organization.role.toLowerCase()}
+            {/* Monospace: Inter's contextual alternates draw the x in "6x9" as a multiplication sign. */}
+            <span className="font-mono">/{organization.organization_slug}</span> · {organization.role.toLowerCase()}
           </p>
         </div>
         <StatusBadge label={organization.organization_status.toLowerCase()} />
