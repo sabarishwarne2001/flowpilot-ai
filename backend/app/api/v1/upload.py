@@ -39,7 +39,6 @@ MAX_DIMENSION = 2048
 LOGO_PURPOSE = "WORKSPACE_LOGO"
 OUTPUT_FORMAT = "PNG"
 OUTPUT_MIME = "image/png"
-LOGO_CACHE_SECONDS = 300
 
 
 class LogoUploadResponse(BaseModel):
@@ -195,7 +194,9 @@ def get_workspace_logo(
     security_headers = {
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": "inline",
-        "Cache-Control": f"private, max-age={LOGO_CACHE_SECONDS}",
+        # Revalidated on every use (304 while the checksum matches): with max-age the browser
+        # kept a replaced logo for five minutes after a reload or in another tab.
+        "Cache-Control": "private, no-cache",
     }
     if etag:
         security_headers["ETag"] = etag

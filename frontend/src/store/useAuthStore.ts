@@ -139,6 +139,12 @@ interface AuthState {
   readonly setHasAvatar: (hasAvatar: boolean) => void;
 
   /**
+   * Replaces the cached user with a fresh /auth/me, keeping the token. Used when a session is
+   * restored: the cached copy may be days old (a picture or name changed on another device).
+   */
+  readonly setUser: (user: User) => void;
+
+  /**
    * Simple role helper.
    */
   readonly hasRole: (
@@ -236,6 +242,12 @@ export const useAuthStore = create<AuthState>()(
           set((state) => ({
             ...state,
             user: state.user ? { ...state.user, has_avatar: hasAvatar } : state.user,
+          })),
+
+        setUser: (user) =>
+          set((state) => ({
+            ...state,
+            user,
           })),
 
         /**

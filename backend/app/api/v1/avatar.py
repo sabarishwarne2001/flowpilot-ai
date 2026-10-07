@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from fastapi import Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -122,6 +122,7 @@ async def stream_avatar(
     user_id: uuid.UUID,
     db: deps.DbSession,
     current_user: deps.CurrentUser,
+    if_none_match: Optional[str] = Header(default=None),
 ) -> Any:
     target = db.get(User, user_id)
 
@@ -134,6 +135,25 @@ async def stream_avatar(
 
     try:
         uploaded = avatar_service.resolve_current(db, owner=target)
+    except avatar_service.AvatarNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found."
+        )
+
+    # Revalidated on every use, answered 304 while unchanged. It was max-age=300 at a fixed
+    # address, so after a new picture (another tab or device, or a reload) the browser kept
+    # showing the old one for five minutes. Every upload is a new row, so its id is the version.
+    etag = f'"{uploaded.id}"'
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": "inline",
+        "Cache-Control": "private, no-cache",
+        "ETag": etag,
+    }
+    if if_none_match and etag in [tag.strip() for tag in if_none_match.split(",")]:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
+    try:
         stream = avatar_service.open_avatar_stream(uploaded)
     except avatar_service.AvatarNotFoundError:
         raise HTTPException(
@@ -143,9 +163,5 @@ async def stream_avatar(
     return StreamingResponse(
         content=stream,
         media_type=uploaded.mime_type,
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": "inline",
-            "Cache-Control": "private, max-age=300",
-        },
+        headers=headers,
     )
