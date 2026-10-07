@@ -13,6 +13,10 @@ export interface UserSummary {
   id: string;
   email: string;
   is_active: boolean;
+  /** Set in Settings -> Profile; null until the person chooses one (show the email then). */
+  display_name?: string | null;
+  /** F-153: whether a profile picture is set, so lists request only real avatars. */
+  has_avatar?: boolean;
 }
 
 export interface Organization {

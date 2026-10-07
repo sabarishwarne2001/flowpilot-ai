@@ -64,6 +64,9 @@ class UserSummary(BaseModel):
     is_active: bool
     display_name: str | None = None
     timezone: str | None = None
+    # F-153. Read from `User.has_avatar`, so a member list shows a picture only where there is
+    # one instead of requesting (and 404-ing) an avatar for every member.
+    has_avatar: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
