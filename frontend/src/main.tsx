@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 
+// Bundled fonts (served from this origin, so the CSP's font-src 'self' allows them).
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "@/styles/index.css";
 
 import { ApiError } from "@/services/api/client";
