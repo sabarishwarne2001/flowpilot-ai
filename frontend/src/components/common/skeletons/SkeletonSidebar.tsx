@@ -28,9 +28,9 @@ export const SkeletonSidebar: React.FC<SkeletonSidebarProps> = ({
 
       <div>
         <div className="mb-4 flex h-12 items-center space-x-3 border-b border-border/20 px-2 pb-4">
-          <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded-lg bg-muted/60 dark:bg-muted/15" />
+          <div className="h-8 w-8 flex-shrink-0 fp-skeleton rounded-lg" />
 
-          <div className="h-4 w-24 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+          <div className="h-4 w-24 fp-skeleton rounded" />
         </div>
 
         {/* ===========================
@@ -46,9 +46,9 @@ export const SkeletonSidebar: React.FC<SkeletonSidebarProps> = ({
               key={`skeleton-sidebar-${index}`}
               className="flex items-center space-x-3.5 py-1"
             >
-              <div className="h-5 w-5 flex-shrink-0 animate-pulse rounded-md bg-muted/40 dark:bg-muted/10" />
+              <div className="h-5 w-5 flex-shrink-0 fp-skeleton rounded-md" />
 
-              <div className="h-3 w-2/3 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+              <div className="h-3 w-2/3 fp-skeleton rounded" />
             </div>
           ))}
         </nav>
@@ -59,10 +59,10 @@ export const SkeletonSidebar: React.FC<SkeletonSidebarProps> = ({
       =========================== */}
 
       <div className="flex items-center space-x-3 rounded-xl border-t border-border/20 bg-muted/10 p-3 dark:bg-muted/5">
-        <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-full bg-muted/40 dark:bg-muted/10" />
+        <div className="h-9 w-9 flex-shrink-0 fp-skeleton rounded-full" />
 
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-3 w-16 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+          <div className="h-3 w-16 fp-skeleton rounded" />
 
           <div className="h-2.5 w-28 animate-pulse truncate rounded bg-muted/40 dark:bg-muted/10" />
         </div>

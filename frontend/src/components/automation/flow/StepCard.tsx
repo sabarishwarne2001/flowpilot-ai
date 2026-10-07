@@ -25,15 +25,15 @@ export const StepCard: React.FC<StepCardProps> = ({ step, title, subtitle, icon,
     <section
       id={id}
       aria-labelledby={`${id}-title`}
-      className={`rounded-xl border bg-card shadow-sm ${issues.length ? "border-destructive/60" : "border-border"}`}
+      className={`fp-step rounded-xl border bg-card shadow-elevation-1 ${issues.length ? "border-destructive/60" : "border-border"}`}
     >
-      <header className="flex items-start justify-between gap-3 border-b border-border/50 px-5 py-4">
+      <header className="flex items-start justify-between gap-3 border-b border-border/70 px-5 py-4">
         <div className="flex items-start gap-3 min-w-0">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-semibold text-white shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]">
             {step}
           </span>
           <div className="min-w-0">
-            <h3 id={`${id}-title`} className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
+            <h3 id={`${id}-title`} className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em]">
               <span aria-hidden="true" className="text-primary">{icon}</span>
               {title}
             </h3>

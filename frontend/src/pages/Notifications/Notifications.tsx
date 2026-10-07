@@ -259,7 +259,7 @@ export const Notifications: React.FC = () => {
                           {alert.title}
                         </h2>
                         {!alert.is_read && (
-                          <span className="fp-btn-primary inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide bg-primary text-primary-foreground leading-none uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide bg-primary text-primary-foreground leading-none uppercase">
                             New
                           </span>
                         )}

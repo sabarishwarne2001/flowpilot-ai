@@ -518,6 +518,22 @@
     background-size: 16px 16px;
   }
 
+  /* Automation builder: a connector from one step card to the next. */
+  .fp-step {
+    position: relative;
+  }
+
+  .fp-step + .fp-step::before {
+    content: "";
+    position: absolute;
+    left: 33px;
+    top: -1.25rem;
+    height: 1.25rem;
+    width: 2px;
+    border-radius: 9999px;
+    background-image: linear-gradient(hsl(var(--primary) / 0.55), hsl(var(--border-strong)));
+  }
+
   /* A soft radial wash behind a hero area. */
   .fp-ambient {
     background-image:

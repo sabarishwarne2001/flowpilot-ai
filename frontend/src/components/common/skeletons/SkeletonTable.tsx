@@ -20,19 +20,19 @@ export const SkeletonTable: React.FC<SkeletonTableProps> = ({
       role="presentation"
       aria-hidden="true"
       aria-label="Loading table"
-      className={`pointer-events-none overflow-hidden overflow-y-hidden rounded-xl border border-border/60 bg-card select-none dark:border-border/40 ${className}`}
+      className={`pointer-events-none overflow-hidden overflow-y-hidden fp-card select-none ${className}`}
     >
       {/* ===========================
           Toolbar
       =========================== */}
 
       <div className="flex flex-col items-center justify-between space-y-3 border-b border-border/40 bg-muted/5 p-4 sm:flex-row sm:space-x-4 sm:space-y-0">
-        <div className="h-9 w-full animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10 sm:w-72" />
+        <div className="h-9 w-full fp-skeleton rounded-lg sm:w-72" />
 
         <div className="flex w-full justify-end space-x-2 sm:w-auto">
-          <div className="h-9 w-20 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+          <div className="h-9 w-20 fp-skeleton rounded-lg" />
 
-          <div className="h-9 w-24 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+          <div className="h-9 w-24 fp-skeleton rounded-lg" />
         </div>
       </div>
 
@@ -45,19 +45,19 @@ export const SkeletonTable: React.FC<SkeletonTableProps> = ({
           <thead>
             <tr className="border-b border-border/40 bg-muted/20 dark:bg-muted/5">
               <th className="w-2/5 p-4">
-                <div className="h-3.5 w-1/4 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                <div className="h-3.5 w-1/4 fp-skeleton rounded" />
               </th>
 
               <th className="w-1/5 p-4">
-                <div className="h-3.5 w-1/3 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                <div className="h-3.5 w-1/3 fp-skeleton rounded" />
               </th>
 
               <th className="w-1/5 p-4">
-                <div className="h-3.5 w-1/2 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                <div className="h-3.5 w-1/2 fp-skeleton rounded" />
               </th>
 
               <th className="w-1/5 p-4 text-right">
-                <div className="ml-auto h-3.5 w-1/3 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                <div className="ml-auto h-3.5 w-1/3 fp-skeleton rounded" />
               </th>
             </tr>
           </thead>
@@ -69,20 +69,20 @@ export const SkeletonTable: React.FC<SkeletonTableProps> = ({
                 className="border-b border-border/40 last:border-b-0"
               >
                 <td className="flex items-center space-x-3 p-4">
-                  <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                  <div className="h-8 w-8 flex-shrink-0 fp-skeleton rounded" />
 
-                  <div className="h-3.5 w-3/5 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                  <div className="h-3.5 w-3/5 fp-skeleton rounded" />
                 </td>
 
                 <td className="p-4">
-                  <div className="h-3 w-1/2 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                  <div className="h-3 w-1/2 fp-skeleton rounded" />
                 </td>
                 <td className="p-4">
-                  <div className="h-3 w-2/3 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+                  <div className="h-3 w-2/3 fp-skeleton rounded" />
                 </td>
 
                 <td className="p-4 text-right">
-                  <div className="ml-auto h-3 w-1/4 animate-pulse rounded bg-muted/60 dark:bg-muted/15" />
+                  <div className="ml-auto h-3 w-1/4 fp-skeleton rounded" />
                 </td>
               </tr>
             ))}
@@ -95,12 +95,12 @@ export const SkeletonTable: React.FC<SkeletonTableProps> = ({
       =========================== */}
 
       <div className="flex items-center justify-between border-t border-border/40 bg-muted/5 p-4">
-        <div className="h-3 w-36 animate-pulse rounded bg-muted/40 dark:bg-muted/10" />
+        <div className="h-3 w-36 fp-skeleton rounded" />
 
         <div className="flex space-x-2">
-          <div className="h-8 w-16 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+          <div className="h-8 w-16 fp-skeleton rounded-lg" />
 
-          <div className="h-8 w-16 animate-pulse rounded-lg bg-muted/40 dark:bg-muted/10" />
+          <div className="h-8 w-16 fp-skeleton rounded-lg" />
         </div>
       </div>
     </div>
