@@ -398,6 +398,30 @@ helper, billing-account creation, Dodo reconciliation, RevOps contracts) and mus
 cannot be read fails. It is a pytest test (`tests/isolation/`), not a `verify_*.py` gate, so N-010
 is not touched. F-099 item closed.
 
+## N-026 — Which payment gateway goes live, and its three plan prices (production config, F-125)
+Your development `.env` selected Dodo (`BILLING_GATEWAY=DODO`) with placeholder product ids and no Dodo
+API key; production selected nothing (so Stripe) and has Stripe test keys. Only one gateway is live
+per deployment. **Decide:** Stripe or Dodo. **Then, in that gateway's test mode:** create one
+recurring per-seat monthly price for each paid plan (Developer $49, Business $299, Enterprise $799)
+and put the ids in `GATEWAY_PRICE_ID_DEVELOPER/BUSINESS/ENTERPRISE`; the plan seed refuses a paid plan
+without one. For Stripe also add a Dashboard webhook endpoint for
+`https://app.flowpilot.ai/api/v1/billing/webhooks/stripe` and use its signing secret (F-125).
+`BILLING_SEAT_PRICE_ID` is obsolete (prices are per plan since ARCH-29). **Default in the finalized
+files:** Stripe, because it is the only gateway with keys.
+
+## N-027 — Transactional email provider before real volume (production config)
+Production sends from a personal Gmail account. It works for launch testing, but Gmail caps a
+personal account at about 500 messages a day, the FROM address must stay that Gmail address, and
+mail cannot carry SPF/DKIM for flowpilot.ai. **Decide:** a provider (Postmark, Amazon SES, Resend,
+Mailgun) and a sending address on your domain. **Default:** Gmail until you choose.
+
+## N-028 — Confirm the domain and the mailbox names (production config)
+The production file uses `app.flowpilot.ai` and `admin@flowpilot.ai`. **Confirm** you control
+`flowpilot.ai` DNS (Caddy needs an A record for `app.flowpilot.ai` before the first start to get a
+certificate) and that `admin@flowpilot.ai` is a mailbox you can read (password resets for the
+seeded administrator go there). If not, change `APP_DOMAIN`, `FRONTEND_URL`, `CORS_ORIGINS`,
+`PLATFORM_RESERVED_HOSTS` and `SEED_ADMIN_EMAIL` together.
+
 ---
 
 # Final release (2026-10-06): every open decision taken

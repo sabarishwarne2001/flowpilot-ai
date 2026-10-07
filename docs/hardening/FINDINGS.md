@@ -135,6 +135,9 @@ How to read this file:
 | F-120 | P2 | **fixed** (final release, `01a4bfa`) | Sessions (ASVS V3.3.2) | A session refreshed daily never required signing in again |
 | F-121 | P2 | **fixed** (final release, `2a8bb7c`) | Frontend | Every page was thrown away and rebuilt when the user's profile arrived, losing what had just been typed or selected |
 | F-122 | P3 | **fixed** (final release, `c634ee1`) | API (ASVS V8.2.1) | API responses carried no `Cache-Control`, leaving tenant data to browser caching heuristics |
+| F-123 | P2 | **fixed** (production config & UI, `c1068be`) | SSO / config | SAML and OIDC advertised `http://localhost:8000` and an empty redirect URI on every deployment; the settings meant to fix it were ignored |
+| F-124 | P3 | **unverified** (code reading) | SCIM | The SCIM token HMAC falls back to `str(JWT_SECRET_KEY)`, which for a `SecretStr` is the constant `**********`, not the secret |
+| F-125 | P2 | **open, owner action** (production config & UI) | Billing config | The production webhook secret was the `stripe listen` CLI secret, so every Stripe event to the server would be refused |
 
 ---
 
@@ -2036,6 +2039,43 @@ organization name was reset before the change and is kept after it.
 **Fix** (`c634ee1`): every `/api` and `/scim` response without its own `Cache-Control` gets
 `no-store`; images, logos, avatars and streams keep theirs. **Proof**
 `tests/api/test_api_cache_control.py` (2 of 3 red before).
+
+## F-123 — SSO advertised localhost on every deployment (P2, fixed)
+`app/api/v1/saml.py` built the SAML entity ID, ACS and SLO URLs from
+`getattr(settings, "PUBLIC_API_URL", "http://localhost:8000")` and sent
+`getattr(settings, "OIDC_REDIRECT_URI", "")` to the identity provider. Neither name was a declared
+setting and `Settings` ignores undeclared variables (`extra="ignore"`), so on a real server SAML
+metadata pointed identity providers at `http://localhost:8000/api/v1/saml/acs`, OIDC sent an empty
+`redirect_uri`, and no environment variable could change it. Enterprise SSO could not complete
+anywhere but a developer laptop. Found by the configuration audit (every key read by the app).
+The same was true of five identity settings the env templates document (SCIM token lifetime,
+rotation overlap and page size; domain re-verification grace and interval) and four tuning values.
+**Fix** (`c1068be`): all declared at the defaults the code already used; `public_api_base` is
+`PUBLIC_API_URL`, else `FRONTEND_URL` in staging/production (Caddy serves the API on the web app's
+host), else `http://localhost:8000` (development unchanged); `oidc_redirect_uri` defaults to
+`<base>/api/v1/oidc/callback`. A ratchet test fails on any new `getattr(settings, "NAME")` of an
+undeclared name. **Proof** `tests/core/test_sso_public_addresses.py`: 11 red before (production ACS
+was `http://localhost:8000/api/v1/saml/acs`), 11 green after; the related suites (config, guard,
+template, SAML, SCIM, identity: 341 tests) pass.
+
+## F-124 — SCIM token pepper is a constant (P3, unverified)
+`scim_service._pepper()` uses `getattr(settings, "SCIM_TOKEN_PEPPER", None) or
+getattr(settings, "JWT_SECRET_KEY", "")` and then `str(...)`. `SCIM_TOKEN_PEPPER` is not declared
+(so always `None`) and `JWT_SECRET_KEY` is a pydantic `SecretStr`, whose `str()` is the mask
+`**********`, so the HMAC key for every SCIM token is that constant. Impact is small: each SCIM token
+carries 320 random bits, so a leaked hash still cannot be guessed. **Not fixed here** because
+changing the key invalidates every SCIM token already issued; the right moment is before the first
+customer configures SCIM (use `API_KEY_PEPPER` or a declared `SCIM_TOKEN_PEPPER`). Exempted by name in
+the F-123 ratchet test until then.
+
+## F-125 — Production Stripe webhook secret was the local CLI secret (P2, owner action)
+The supplied `.env.production` carried the same `whsec_` value as `.env`: 64 hex characters, the
+format `stripe listen` prints for forwarding to a developer machine. Stripe signs deliveries to a
+Dashboard endpoint with that endpoint's own secret, so on the server every event would fail
+signature verification and no checkout, renewal or failed payment would ever be recorded. The
+finalized file leaves `STRIPE_WEBHOOK_SECRETS` blank on purpose: the start-up guard then refuses to
+boot until the endpoint's secret is filled in (verified by rendering the file with
+`docker compose config` and building `Settings` from the result).
 
 ## Built in this release (owner decisions, not defects)
 - **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery
