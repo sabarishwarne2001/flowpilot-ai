@@ -31,6 +31,7 @@ def active_rules_for_event(
             AutomationRuleTrigger.event_type == event_type,
             AutomationRule.workspace_id == workspace_id,
             AutomationRule.is_active.is_(True),
+            AutomationRule.deleted_at.is_(None),
         )
         .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.asc())
     )

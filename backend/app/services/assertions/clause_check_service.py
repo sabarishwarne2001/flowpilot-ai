@@ -124,6 +124,7 @@ def list_for_workspace(db: Session, *, workspace_id: uuid.UUID) -> list[ClauseCh
         .join(AutomationNode, AutomationNode.rule_id == AutomationRule.id)
         .where(
             AutomationRule.workspace_id == workspace_id,
+            AutomationRule.deleted_at.is_(None),
             AutomationNode.node_key == CLAUSE_NODE_KEY,
             AutomationNode.node_type == "assertion",
         )

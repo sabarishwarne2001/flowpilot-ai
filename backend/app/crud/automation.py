@@ -38,6 +38,7 @@ def get_rule_by_id(
     statement = select(AutomationRule).where(
         AutomationRule.id == rule_id,
         AutomationRule.workspace_id == workspace_id,
+        AutomationRule.deleted_at.is_(None),
     )
     return db.execute(statement).scalar_one_or_none()
 
@@ -50,7 +51,7 @@ def list_automation_rules(
 ) -> list[AutomationRule]:
     statement = (
         select(AutomationRule)
-        .where(AutomationRule.workspace_id == workspace_id)
+        .where(AutomationRule.workspace_id == workspace_id, AutomationRule.deleted_at.is_(None))
         .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc(), AutomationRule.id.desc())
         .offset(skip)
         .limit(limit)
@@ -69,6 +70,7 @@ def list_active_rules_for_event(
             AutomationRule.workspace_id == workspace_id,
             AutomationRule.event == event,
             AutomationRule.is_active.is_(True),
+            AutomationRule.deleted_at.is_(None),
         )
         .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
     )
@@ -103,7 +105,12 @@ def delete_automation_rule(
     *,
     db_obj: AutomationRule,
 ) -> bool:
-    db.delete(db_obj)
+    """F-150. A soft delete: the rule's executions keep referencing it (Run history, spend)."""
+    from datetime import datetime, timezone
+
+    db_obj.deleted_at = datetime.now(timezone.utc)
+    db_obj.is_active = False
+    db.add(db_obj)
     db.commit()
     return True
 

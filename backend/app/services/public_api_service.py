@@ -516,7 +516,7 @@ def list_workflows(
     resolve_workspace(
         db, organization_id=organization_id, workspace_id=workspace_id
     )
-    predicates = [AutomationRule.workspace_id == workspace_id]
+    predicates = [AutomationRule.workspace_id == workspace_id, AutomationRule.deleted_at.is_(None)]
     if active_only:
         predicates.append(AutomationRule.is_active.is_(True))
 
@@ -576,6 +576,7 @@ def trigger_workflow(
         select(AutomationRule).where(
             AutomationRule.id == rule_id,
             AutomationRule.workspace_id == workspace_id,
+            AutomationRule.deleted_at.is_(None),
         )
     ).scalar_one_or_none()
     if rule is None:

@@ -183,6 +183,7 @@ def list_rule_assertions(
         select(AutomationRule).where(
             AutomationRule.id == rule_id,
             AutomationRule.workspace_id == workspace_id,
+            AutomationRule.deleted_at.is_(None),
         )
     ).scalar_one_or_none()
     if rule is None:
@@ -217,6 +218,7 @@ def save_assertion(
         select(AutomationRule).where(
             AutomationRule.id == rule_id,
             AutomationRule.workspace_id == workspace_id,
+            AutomationRule.deleted_at.is_(None),
         )
     ).scalar_one_or_none()
     if rule is None:
