@@ -9,12 +9,13 @@
  * F-143: a profile picture or logo the browser could not decode showed a broken-image icon, and the
  *        profile page refetched the picture in a loop for as long as it was open.
  */
+import fs from "node:fs";
 import zlib from "node:zlib";
 
 import type { Page, Route } from "@playwright/test";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { TENANTS, org, runId, ws } from "../support/env";
+import { STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
 import { api, loginAs, resolveWorkspaceId } from "../support/api";
 
 /** A solid-colour PNG (RGB, no filtering), built by hand. */
@@ -391,5 +392,35 @@ test.describe("Organization invitations (F-148)", () => {
     const fresh = list.getByRole("listitem").filter({ hasText: "fresh@e2e.example.com" });
     await expect(fresh.getByText("Expired", { exact: true })).toHaveCount(0);
     await expect(fresh).toContainText("expires");
+  });
+});
+
+test.describe("Document page images that cannot be shown (F-143)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the document viewer says the page could not be rendered instead of a broken image", async ({ page }) => {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const invoice = (state.documents.C.items as Array<{ id: string; name: string }>).find((item) =>
+      item.name.includes("INV-E2E-1001"),
+    );
+    await page.route(/\/work-items\/[^/]+\/pages\/\d+\.png/, corrupt);
+    await page.goto(ws("C", `work-items/${invoice?.id}`));
+    const pages = page.getByRole("region", { name: "Document pages" });
+    await expect(pages).toContainText("This page couldn't be rendered.", { timeout: 20_000 });
+    await expect(pages.getByRole("img", { name: "Page 1 of the document" })).toHaveCount(0);
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("Browser tab titles (F-154)", () => {
+  test.use({ user: "C.owner" });
+
+  test("each tab names its page, workspace or organization", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await expect(page).toHaveTitle("Documents · Operations · FlowPilot AI");
+    await page.goto(ws("C"));
+    await expect(page).toHaveTitle("Operations · FlowPilot AI");
+    await page.goto(org("C", "members"));
+    await expect(page).toHaveTitle("Members · Caretakers Global Inc · FlowPilot AI");
   });
 });
