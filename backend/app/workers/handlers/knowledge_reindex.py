@@ -158,7 +158,11 @@ def _reindex(db: Session, target: _Target) -> dict[str, Any]:
         texts=[candidate.content for candidate in candidates],
         job_id=target.job_id,
         event_type=USAGE_EVENT_TYPE,
-        idempotency_prefix=IDEMPOTENCY_PREFIX,
+        # Per job: a retry of this job is billed once, and a later reindex request (a new job)
+        # is counted again, so the platform backfill ceiling sees the work actually done.
+        idempotency_prefix=(
+            f"{IDEMPOTENCY_PREFIX}:{target.job_id}" if target.job_id else IDEMPOTENCY_PREFIX
+        ),
     )
 
     written = replace_document_chunks(
