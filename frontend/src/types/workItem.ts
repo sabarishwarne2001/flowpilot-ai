@@ -94,3 +94,21 @@ export interface ReindexResult {
   readonly total_documents: number;
   readonly detail: string;
 }
+
+/** One click of "Reindex knowledge base": the jobs it queued and how far they got (F-141). */
+export interface ReindexRunStatus {
+  readonly requested_at: string;
+  /** Null while any of its jobs is still waiting or running. */
+  readonly finished_at: string | null;
+  readonly total: number;
+  readonly waiting: number;
+  readonly completed: number;
+  readonly failed: number;
+}
+
+export interface ReindexStatus {
+  readonly state: "idle" | "running";
+  readonly active_jobs: number;
+  readonly latest: ReindexRunStatus | null;
+  readonly last_completed_at: string | null;
+}

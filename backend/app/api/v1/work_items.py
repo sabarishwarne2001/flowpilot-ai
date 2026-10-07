@@ -4,7 +4,8 @@ Work Items API router endpoints for FlowPilot AI.
 
 import logging
 import uuid
-from typing import Any, Iterator, Optional
+from datetime import datetime
+from typing import Any, Iterator, Literal, Optional
 from urllib.parse import quote
 
 from fastapi import (
@@ -20,7 +21,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -67,6 +68,30 @@ class ReindexResponse(BaseModel):
     detail: str
 
     model_config = ConfigDict(protected_namespaces=())
+
+
+class ReindexRunStatus(BaseModel):
+    """One click of "Reindex knowledge base": the jobs it queued and how far they got."""
+
+    requested_at: datetime
+    #: When the last of its jobs settled; null while any is still waiting or running.
+    finished_at: Optional[datetime]
+    total: int
+    #: Waiting, running, or waiting to be retried after an error.
+    waiting: int
+    completed: int
+    #: Gave up (dead after its retries) or finished without re-embedding (budget, unreadable text).
+    failed: int
+
+
+class ReindexStatusResponse(BaseModel):
+    state: Literal["idle", "running"]
+    #: Every reindex job of this workspace still waiting or running, whichever click queued it.
+    active_jobs: int
+    #: The most recent click, or null when this workspace was never reindexed.
+    latest: Optional[ReindexRunStatus]
+    #: When the most recent run that has fully settled finished.
+    last_completed_at: Optional[datetime]
 
 
 @router.post("", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
@@ -491,6 +516,8 @@ def reindex_knowledge_base(
             payload={
                 "work_item_id": str(work_item_id),
                 "workspace_id": str(context.workspace_id),
+                # Groups the jobs of one click, so the status route can report that run.
+                "batch_id": request_id,
             },
             idempotency_key=f"knowledge.reindex:{work_item_id}:{request_id}",
         )
@@ -517,6 +544,89 @@ def reindex_knowledge_base(
         queued=queued,
         total_documents=len(work_item_ids),
         detail=detail,
+    )
+
+
+#: Runs read per status request. A run older than this many clicks that is still
+#: waiting is counted in `active_jobs` (which has no limit) but not in a run's figures.
+_REINDEX_RUNS_READ = 50
+
+
+@router.get(
+    "/knowledge-base/reindex/status",
+    response_model=ReindexStatusResponse,
+    summary="Progress of this workspace's knowledge base reindex",
+)
+def reindex_knowledge_base_status(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
+) -> ReindexStatusResponse:
+    """F-141. What the Settings card polls while a reindex runs.
+
+    A run is the set of jobs one click queued (`payload.batch_id`; jobs queued
+    before the id existed are grouped by the request id in their idempotency key).
+    A job counts as completed when the handler re-embedded the document or found
+    it gone, and as failed when it died after its retries or finished without
+    re-embedding (the platform backfill budget, text that could not be read).
+    """
+    from app.models.job import Job, JobStatus
+
+    active_statuses = (JobStatus.PENDING, JobStatus.CLAIMED, JobStatus.FAILED)
+    outcome = Job.result["outcome"].astext
+    run_id = func.coalesce(
+        Job.payload["batch_id"].astext, func.split_part(Job.idempotency_key, ":", 3)
+    )
+    of_this_workspace = (
+        Job.job_type == "knowledge.reindex",
+        Job.organization_id == context.organization_id,
+        Job.payload["workspace_id"].astext == str(context.workspace_id),
+    )
+
+    active_jobs = int(
+        db.execute(
+            select(func.count())
+            .select_from(Job)
+            .where(*of_this_workspace, Job.status.in_(active_statuses))
+        ).scalar_one()
+    )
+
+    waiting = func.count().filter(Job.status.in_(active_statuses))
+    completed = func.count().filter(
+        Job.status == JobStatus.SUCCEEDED,
+        func.coalesce(outcome, "COMPLETED").in_(("COMPLETED", "SKIPPED")),
+    )
+    rows = db.execute(
+        select(
+            run_id.label("run_id"),
+            func.min(Job.created_at).label("requested_at"),
+            func.max(func.coalesce(Job.succeeded_at, Job.updated_at)).label("settled_at"),
+            func.count().label("total"),
+            waiting.label("waiting"),
+            completed.label("completed"),
+        )
+        .where(*of_this_workspace)
+        .group_by(run_id)
+        .order_by(func.min(Job.created_at).desc())
+        .limit(_REINDEX_RUNS_READ)
+    ).all()
+
+    runs = [
+        ReindexRunStatus(
+            requested_at=row.requested_at,
+            finished_at=None if row.waiting else row.settled_at,
+            total=row.total,
+            waiting=row.waiting,
+            completed=row.completed,
+            failed=row.total - row.waiting - row.completed,
+        )
+        for row in rows
+    ]
+    last_finished = next((run for run in runs if run.finished_at is not None), None)
+    return ReindexStatusResponse(
+        state="running" if active_jobs else "idle",
+        active_jobs=active_jobs,
+        latest=runs[0] if runs else None,
+        last_completed_at=last_finished.finished_at if last_finished else None,
     )
 
 
