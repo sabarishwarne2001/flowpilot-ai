@@ -1,5 +1,6 @@
 import { formatTimestampDate } from "@/utils/displayTime";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RefreshCw, Users } from "lucide-react";
 
@@ -35,6 +36,12 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
       );
       setConfirming(false);
     },
+  });
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(confirmRef, () => setConfirming(false), {
+    open: confirming,
+    busy: sync.isPending,
+    trap: false,
   });
 
   if (isLoading) {
@@ -148,6 +155,7 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
 
       {confirming && (
         <div
+          ref={confirmRef}
           role="dialog"
           aria-label="Confirm seat change"
           className="mt-4 rounded-md border border-border bg-background p-3"

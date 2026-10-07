@@ -493,8 +493,7 @@ export const OrganizationWebhooks: React.FC = () => {
 
         {revealed && (
           <div
-            role="dialog"
-            aria-modal="true"
+            role="region"
             aria-label="Webhook signing secret"
             className="rounded-lg border-2 border-primary bg-card p-4"
           >

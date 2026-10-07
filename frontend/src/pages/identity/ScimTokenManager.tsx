@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -92,6 +93,12 @@ export const ScimTokenManager: React.FC = () => {
       setConfirmRevoke(null);
       await invalidate();
     },
+  });
+
+  const revokeRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(revokeRef, () => setConfirmRevoke(null), {
+    open: confirmRevoke !== null,
+    busy: revoke.isPending,
   });
 
   const keys = keysQuery.data ?? [];
@@ -231,6 +238,7 @@ export const ScimTokenManager: React.FC = () => {
       {confirmRevoke && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div
+            ref={revokeRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="revoke-title"
@@ -390,10 +398,13 @@ const SecretDialog: React.FC<{
       // Ignored
     }
   }, [issued.token]);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: !acknowledged });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="secret-title"

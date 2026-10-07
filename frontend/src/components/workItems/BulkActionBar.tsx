@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { Download, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -36,6 +37,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   const [tagDraft, setTagDraft] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const [refusals, setRefusals] = useState<BulkActionResult["results"]>([]);
+  const confirmRef = React.useRef<HTMLDivElement | null>(null);
+  useDialogFocus(confirmRef, () => setConfirmingDelete(false), {
+    open: confirmingDelete,
+    trap: false,
+  });
 
   const mutation = useMutation({
     mutationFn: (input: {
@@ -176,6 +182,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
 
       {confirmingDelete && (
         <div
+          ref={confirmRef}
           role="alertdialog"
           aria-label="Confirm deletion"
           className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
@@ -195,6 +202,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
             </button>
             <button
               type="button"
+              data-autofocus
               onClick={() => setConfirmingDelete(false)}
               className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium"
             >

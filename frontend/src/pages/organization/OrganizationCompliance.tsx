@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useCallback,  useMemo, useState  } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -523,10 +524,13 @@ const ErasureModal: React.FC<{
     confirmEmail.trim().length > 0 &&
     typedPhrase === PHRASE &&
     previewIsCurrent;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: mutation.isPending });
 
   return (
     <div
       className={OVERLAY}
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="erasure-title"
