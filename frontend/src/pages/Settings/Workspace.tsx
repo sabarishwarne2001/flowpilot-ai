@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import RoleGuide from "@/components/tenancy/RoleGuide";
 import { ApiError } from "@/services/api/client";
 import { uploadLogo } from "@/services/api/upload";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
@@ -670,7 +671,7 @@ export const Workspace: React.FC = () => {
           <div>
             <h2 className="text-xl font-semibold">Team Members</h2>
             <p className="text-sm text-muted-foreground">
-              View active accounts and access privilege levels within this workspace.
+              Who can open this workspace, and what they can do with its documents.
             </p>
           </div>
           {canManageTeam && (
@@ -683,6 +684,8 @@ export const Workspace: React.FC = () => {
             </button>
           )}
         </div>
+
+        <RoleGuide scope="workspace" />
 
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-left text-sm border-collapse border-b border-border">

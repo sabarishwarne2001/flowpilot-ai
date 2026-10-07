@@ -20,6 +20,7 @@ import {
 import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
 import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
 import InviteMembersPanel from "@/components/organization/InviteMembersPanel";
+import RoleGuide from "@/components/tenancy/RoleGuide";
 
 const ALL_ROLES: readonly OrganizationRole[] = [
   "OWNER",
@@ -191,6 +192,8 @@ export const OrganizationMembers: React.FC = () => {
           Seats include pending invitations — an unaccepted invitation holds a
           seat so an organization cannot invite past its plan limit.
         </p>
+
+        <RoleGuide scope="organization" />
 
         {actionError && (
           <p
