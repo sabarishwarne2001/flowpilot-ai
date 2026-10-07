@@ -21,6 +21,7 @@ import { errorMessage } from "@/services/api/errors";
 import { approvePacketSplit, correctPacketSplit, getPacketSplit, rejectPacketSplit } from "@/services/api/packets";
 import type { PageScore } from "@/types/packets";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 const PageThumb: React.FC<{ readonly workspaceId: string; readonly splitId: string; readonly score: PageScore }> = ({
   workspaceId, splitId, score,
@@ -28,11 +29,15 @@ const PageThumb: React.FC<{ readonly workspaceId: string; readonly splitId: stri
   const blob = useAuthorizedBlobUrl(
     `/workspaces/${encodeURIComponent(workspaceId)}/packet-splits/${encodeURIComponent(splitId)}/pages/${score.page}/thumbnail`,
   );
+  const thumb = useImageFallback(blob.url);
   return (
     <figure className="w-32 shrink-0 space-y-1">
       <div className="flex h-40 items-center justify-center overflow-hidden rounded border border-border bg-white">
-        {blob.url ? (
-          <img src={blob.url} alt={`Page ${score.page}`} className="max-h-full max-w-full" />
+        {blob.url && !thumb.failed ? (
+          <img src={blob.url} alt={`Page ${score.page}`} className="max-h-full max-w-full" onError={thumb.onError} />
+        ) : blob.status === "error" || thumb.failed ? (
+          // A thumbnail that cannot be shown says so instead of spinning forever.
+          <span className="px-2 text-center text-[11px] text-muted-foreground">Preview unavailable</span>
         ) : (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading page" />
         )}

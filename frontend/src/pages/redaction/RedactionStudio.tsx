@@ -41,6 +41,7 @@ import { formatTimestamp } from "@/utils/displayTime";
 import { workItemDetailsPath, workItemsPath } from "@/routes/tenantPaths";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 const CAPABILITY_KEY = "capability.redaction";
 const PREVIEW_DPI = 110;
@@ -260,6 +261,7 @@ const RedactionStudio: React.FC = () => {
     previewAttempt,
   ]);
   const preview = useAuthorizedBlobUrl(previewPath);
+  const previewImage = useImageFallback(preview.url);
 
   const toPoints = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -606,7 +608,7 @@ const RedactionStudio: React.FC = () => {
               }
             }}
           >
-            {preview.url ? (
+            {preview.url && !previewImage.failed ? (
               <img
                 // `burn` routes through the apply job's own rasterizer, so
                 // what is on screen is what will be in the file. The bytes
@@ -624,13 +626,18 @@ const RedactionStudio: React.FC = () => {
                     heightPt: (img.naturalHeight / PREVIEW_DPI) * POINTS_PER_INCH,
                   });
                 }}
+                onError={previewImage.onError}
               />
             ) : (
               <div
                 className="flex aspect-[1/1.294] w-full items-center justify-center rounded border border-border"
                 aria-busy={preview.status === "loading"}
               >
-                {preview.status === "error" ? null : (
+                {preview.status === "error" || previewImage.failed ? (
+                  <span className="px-4 text-center text-xs text-muted-foreground">
+                    This page could not be displayed. Try another page, or reload.
+                  </span>
+                ) : (
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                 )}
               </div>

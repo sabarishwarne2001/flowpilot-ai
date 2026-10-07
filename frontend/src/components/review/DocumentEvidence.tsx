@@ -18,6 +18,7 @@ import {
   type EvidenceLocation,
 } from "@/services/api/documentEvidence";
 import { formatFieldValue, type VerificationFieldResponse } from "@/types/verification";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 /** One colour per agent, in order; enough for the 2–5 agents a verification can use. */
 const AGENT_COLOURS = ["#2563eb", "#d97706", "#059669", "#db2777", "#7c3aed"] as const;
@@ -89,6 +90,8 @@ export const DocumentEvidence: React.FC<DocumentEvidenceProps> = ({
     staleTime: 300_000,
   });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  // F-143: a page image the browser cannot decode says so instead of a broken-image icon.
+  const pageImage = useImageFallback(imageUrl);
   useEffect(() => {
     if (!image.data) {
       setImageUrl(null);
@@ -146,14 +149,14 @@ export const DocumentEvidence: React.FC<DocumentEvidenceProps> = ({
       </ul>
 
       <div className="relative w-full overflow-hidden rounded border border-border bg-white">
-        {imageUrl ? (
-          <img src={imageUrl} alt={`Page ${page} of the document`} className="block w-full" />
+        {imageUrl && !pageImage.failed ? (
+          <img src={imageUrl} alt={`Page ${page} of the document`} className="block w-full" onError={pageImage.onError} />
         ) : (
           <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
-            {image.isError ? "The page image could not be loaded." : <Loader2 className="h-4 w-4 animate-spin" />}
+            {image.isError || pageImage.failed ? "The page image could not be loaded." : <Loader2 className="h-4 w-4 animate-spin" />}
           </div>
         )}
-        {imageUrl &&
+        {imageUrl && !pageImage.failed &&
           boxes
             .filter((box) => box.location.page === page)
             .map((box, index) => (

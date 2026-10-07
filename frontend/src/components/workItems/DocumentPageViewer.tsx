@@ -22,6 +22,7 @@ import {
   type DocumentEvidence,
   type EvidenceLocation,
 } from "@/services/api/documentEvidence";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 export const evidenceKey = (workspaceId: string, workItemId: string) =>
   ["document-evidence", workspaceId, workItemId, "extracted"] as const;
@@ -97,6 +98,8 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
   });
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  // F-143: a page image the browser cannot decode says so instead of a broken-image icon.
+  const pageImage = useImageFallback(imageUrl);
   useEffect(() => {
     if (!image.data) {
       setImageUrl(null);
@@ -208,14 +211,20 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
       </header>
       <div className="fp-viewer-canvas max-h-[75vh] overflow-auto p-4 sm:p-6">
         <div className="relative mx-auto rounded-sm bg-white shadow-elevation-3 ring-1 ring-black/5" style={{ width: `${zoom}%` }}>
-          {imageUrl ? (
-            <img src={imageUrl} alt={`Page ${page} of the document`} className="block w-full select-none" draggable={false} />
+          {imageUrl && !pageImage.failed ? (
+            <img
+              src={imageUrl}
+              alt={`Page ${page} of the document`}
+              className="block w-full select-none"
+              draggable={false}
+              onError={pageImage.onError}
+            />
           ) : (
             <div className="flex h-96 items-center justify-center text-xs text-muted-foreground">
-              {image.isError ? "This page couldn't be rendered." : <Loader2 className="h-4 w-4 animate-spin" />}
+              {image.isError || pageImage.failed ? "This page couldn't be rendered." : <Loader2 className="h-4 w-4 animate-spin" />}
             </div>
           )}
-          {imageUrl &&
+          {imageUrl && !pageImage.failed &&
             boxes.map((box, index) => {
               const active = activeField !== null && box.field === activeField;
               return (
