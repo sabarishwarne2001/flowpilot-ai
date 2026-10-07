@@ -216,7 +216,22 @@ class AutomationExecutionPage(BaseModel):
     next_offset: Optional[int] = None
 
 
-def _execution_view(row: AutomationExecution) -> AutomationExecutionResponse:
+def _rule_names(db: Session, rule_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """F-140. One query for a page's rule names: the execution model has no `rule` relationship,
+    so reading one always gave None and Run history could only say "Rule 1f3a9c0e"."""
+    if not rule_ids:
+        return {}
+    return {
+        rule_id: name
+        for rule_id, name in db.execute(
+            select(AutomationRule.id, AutomationRule.name).where(AutomationRule.id.in_(rule_ids))
+        ).all()
+    }
+
+
+def _execution_view(
+    row: AutomationExecution, rule_name: Optional[str] = None
+) -> AutomationExecutionResponse:
     duration_ms: Optional[int] = None
     if row.started_at is not None and row.completed_at is not None:
         delta = row.completed_at - row.started_at
@@ -225,11 +240,6 @@ def _execution_view(row: AutomationExecution) -> AutomationExecutionResponse:
     status_value = (
         row.status.value if hasattr(row.status, "value") else getattr(row.status, "value", row.status)
     )
-
-    rule_name: Optional[str] = None
-    rule = getattr(row, "rule", None)
-    if rule is not None:
-        rule_name = getattr(rule, "name", None)
 
     return AutomationExecutionResponse(
         id=row.id,
@@ -330,8 +340,9 @@ async def list_executions(
     has_more = len(rows) > limit
     page = rows[:limit]
 
+    names = _rule_names(db, {row.rule_id for row in page})
     return AutomationExecutionPage(
-        items=[_execution_view(row) for row in page],
+        items=[_execution_view(row, names.get(row.rule_id)) for row in page],
         limit=limit,
         has_more=has_more,
         next_offset=(offset + limit) if has_more else None,
@@ -362,7 +373,7 @@ async def get_execution(
             detail="Execution not found or you do not have permission to access it.",
         )
 
-    return _execution_view(row)
+    return _execution_view(row, _rule_names(db, {row.rule_id}).get(row.rule_id))
 
 
 @router.post(
