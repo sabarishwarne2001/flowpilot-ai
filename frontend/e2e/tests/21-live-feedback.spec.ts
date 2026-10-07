@@ -270,3 +270,33 @@ test.describe("Logos that cannot be shown (F-143)", () => {
     }
   });
 });
+
+test.describe("A page that cannot load (F-144)", () => {
+  test.use({ user: "C.owner" });
+
+  test("a deploy while the tab is open shows a reload card inside the shell, and other pages still work", async ({
+    page,
+    problems,
+  }) => {
+    const chunk = /\/assets\/Cases-[\w-]+\.js$/;
+    problems.allowHttp(chunk, [404], "simulates a deploy: the page's old code file is gone");
+    problems.allowConsole(/dynamically imported module|The above error occurred/i, "the missing page code");
+
+    await page.goto(ws("C"));
+    await expect(page.locator("main")).toContainText("Recent Activity");
+    await page.route(chunk, (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "gone" }));
+    await page.getByRole("link", { name: /^Cases/ }).first().click();
+
+    // One automatic reload is tried; the code is still missing, so the card explains it.
+    await expect(page.getByRole("heading", { name: "A new version of FlowPilot is available" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible();
+    // The sidebar and header are still there, and another page opens normally.
+    await expect(page.getByRole("button", { name: /^Account menu for / })).toBeVisible();
+    await page.unroute(chunk);
+    await page.getByRole("link", { name: "Documents", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "A new version of FlowPilot is available" })).toHaveCount(0);
+    await expectHealthyPage(page);
+  });
+});

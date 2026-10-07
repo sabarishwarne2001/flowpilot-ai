@@ -10,6 +10,7 @@ import DunningBanner from "@/components/billing/DunningBanner";
 // ARCH30-T4F:ts-member-notice-import — A5.
 import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
+import { RouteErrorBoundary } from "@/components/common/RouteErrorBoundary";
 import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ROUTES } from "@/constants/routes";
@@ -119,7 +120,9 @@ export const OrganizationLayout: React.FC = () => {
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background p-4 sm:p-5 lg:px-8 lg:py-7">
           <DisplayPreferencesBoundary>
-            <Outlet />
+            <RouteErrorBoundary>
+              <Outlet />
+            </RouteErrorBoundary>
           </DisplayPreferencesBoundary>
         </main>
       </div>
