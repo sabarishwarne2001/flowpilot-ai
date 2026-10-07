@@ -14,7 +14,7 @@ import zlib from "node:zlib";
 import type { Page, Route } from "@playwright/test";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { TENANTS, runId, ws } from "../support/env";
+import { TENANTS, org, runId, ws } from "../support/env";
 import { api, loginAs, resolveWorkspaceId } from "../support/api";
 
 /** A solid-colour PNG (RGB, no filtering), built by hand. */
@@ -298,5 +298,88 @@ test.describe("A page that cannot load (F-144)", () => {
     await page.getByRole("link", { name: "Documents", exact: true }).click();
     await expect(page.getByRole("heading", { name: "A new version of FlowPilot is available" })).toHaveCount(0);
     await expectHealthyPage(page);
+  });
+});
+
+test.describe("Documents: selection and bulk actions (F-149, F-145)", () => {
+  test.use({ user: "C.owner" });
+
+  test("selecting documents opens the bulk bar, and an action reports its result", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await expect(page.getByRole("heading", { name: "Documents Database" })).toBeVisible();
+    const boxes = page.getByRole("checkbox", { name: /^Select (?!every)/ });
+    await expect(boxes.first()).toBeVisible();
+    await boxes.nth(0).check();
+    await boxes.nth(1).check();
+    await expect(page.getByText("2 documents selected")).toBeVisible();
+
+    await page.getByRole("button", { name: "Tag", exact: true }).click();
+    await page.getByRole("textbox", { name: "Tag to apply" }).fill(`e2e-${runId()}`);
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(page.getByText("2 documents tagged.")).toBeVisible();
+    await expect(page.getByText(/documents? selected/)).toHaveCount(0);
+
+    await page.getByRole("checkbox", { name: "Select every document on this page" }).check();
+    await expect(page.getByText(/^\d+ documents selected$/)).toBeVisible();
+    await page.getByRole("button", { name: "Clear selection" }).click();
+    await expect(page.getByText(/documents? selected/)).toHaveCount(0);
+    await expectHealthyPage(page);
+  });
+
+  test("a bulk action the server refuses says why instead of doing nothing", async ({ page, problems }) => {
+    problems.allowHttp(/\/work-items\/bulk$/, [503], "the test makes the bulk route fail");
+    await page.route("**/work-items/bulk", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "SERVICE_UNAVAILABLE", message: "Bulk actions are paused for maintenance.", detail: "Bulk actions are paused for maintenance." }),
+      }),
+    );
+    await page.goto(ws("C", "work-items"));
+    await page.getByRole("checkbox", { name: /^Select (?!every)/ }).first().check();
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    await expect(page.getByText("Bulk actions are paused for maintenance.")).toBeVisible();
+    await expect(page.getByText("1 document selected")).toBeVisible();
+  });
+});
+
+test.describe("Documents for a viewer (F-149)", () => {
+  test.use({ user: "C.viewer" });
+
+  test("a viewer is not offered selection, delete or retry", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await expect(page.getByRole("heading", { name: "Documents Database" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "View Details" }).first()).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Delete Document" })).toHaveCount(0);
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("Organization invitations (F-148)", () => {
+  test.use({ user: "C.owner" });
+
+  test("an invitation past its expiry is marked expired, not pending", async ({ page }) => {
+    const past = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+    const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+    await page.route(/\/organizations\/[^/]+\/invitations$/, (route) => {
+      if (route.request().method() !== "GET") {return route.continue();}
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          { id: "00000000-0000-4000-8000-000000000001", email: "late@e2e.example.com", organization_role: "MEMBER", status: "PENDING", expires_at: past, grants: [] },
+          { id: "00000000-0000-4000-8000-000000000002", email: "fresh@e2e.example.com", organization_role: "MEMBER", status: "PENDING", expires_at: future, grants: [] },
+        ]),
+      });
+    });
+    await page.goto(org("C", "members"));
+    const list = page.getByRole("list", { name: "Pending invitations" });
+    const late = list.getByRole("listitem").filter({ hasText: "late@e2e.example.com" });
+    await expect(late.getByText("Expired", { exact: true })).toBeVisible();
+    await expect(late).toContainText("resend to renew it");
+    const fresh = list.getByRole("listitem").filter({ hasText: "fresh@e2e.example.com" });
+    await expect(fresh.getByText("Expired", { exact: true })).toHaveCount(0);
+    await expect(fresh).toContainText("expires");
   });
 });
