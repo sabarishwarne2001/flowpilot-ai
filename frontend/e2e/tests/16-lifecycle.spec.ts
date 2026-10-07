@@ -58,6 +58,10 @@ test("an archived organization is shown apart, and its owner can restore it", as
   expect(archive.status, archive.text).toBe(200);
 
   try {
+    // "New workspace" in an archived organization goes back to the picker, where it can be restored.
+    await page.goto(`/organizations/${created.body.slug}/workspaces/new`);
+    await expect(page).toHaveURL(/\/workspaces$/);
+
     await page.goto("/workspaces");
     const section = page.getByRole("region", { name: "Archived organizations" });
     const card = section.getByRole("article").filter({ hasText: created.body.name });
