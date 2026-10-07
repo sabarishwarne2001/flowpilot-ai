@@ -82,8 +82,13 @@ export const resolveOrganization = (
     return null;
   }
 
+  // F-133. Only a URL that names an organization may land in an archived one (its notice is
+  // shown there). A remembered selection, the server default and "the first one" skip archived
+  // organizations: their workspaces refuse every request.
+  const usable = organizations.filter((o) => o.organization_status === "ACTIVE");
+
   const byId = (id: string | null): OrganizationMembershipSummary | undefined =>
-    id ? organizations.find((o) => o.organization_id === id) : undefined;
+    id ? usable.find((o) => o.organization_id === id) : undefined;
 
   const bySlug = (
     slug: string | undefined,
@@ -94,6 +99,7 @@ export const resolveOrganization = (
     bySlug(route.orgSlug) ??
     byId(selection.activeOrganizationId) ??
     byId(context.default_organization_id) ??
+    usable[0] ??
     organizations[0] ??
     null
   );
@@ -405,6 +411,36 @@ export const runTenantResolutionSelfCheck = (): string[] => {
         lastWorkspaceByOrganization: {},
       }),
     ).status === "ready",
+  );
+
+  // F-133. An archived organization is never where sign-in lands: its workspaces refuse every
+  // request, so landing there showed "no access" while the person had a working organization.
+  const archivedOrg: OrganizationMembershipSummary = {
+    ...stubOrganization("old-co", [stubWorkspace("old-main", "old-co")]),
+    organization_status: "ARCHIVED",
+  };
+  const archivedFirst = stubContext([archivedOrg, orgA]);
+  const landing = resolveTenant(baseInput(archivedFirst));
+  expect(
+    "an archived default organization is skipped at sign-in",
+    landing.status === "ready" && landing.organization.organization_id === "acme",
+  );
+  const rememberedArchived = resolveTenant(
+    baseInput(archivedFirst, {
+      activeOrganizationId: "old-co",
+      activeWorkspaceId: "old-main",
+      lastWorkspaceByOrganization: { "old-co": "old-main" },
+    }),
+  );
+  expect(
+    "a remembered organization that has since been archived is skipped",
+    rememberedArchived.status === "ready" &&
+      rememberedArchived.organization.organization_id === "acme",
+  );
+  const namedArchived = resolveTenant({ ...baseInput(archivedFirst), route: { orgSlug: "old-co" } });
+  expect(
+    "a URL that names the archived organization still resolves to it (its notice is shown)",
+    namedArchived.status === "ready" && namedArchived.organization.organization_id === "old-co",
   );
 
   const empty = resolveTenant(
