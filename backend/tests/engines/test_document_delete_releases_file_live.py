@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.core.storage import get_storage_driver
 from app.models.uploaded_file import UploadedFile
-from tests.engines.conftest import Engines
+from tests.engines.conftest import Engines, drain, make_pdf
 
 PAGE = ["DELIVERY NOTE", "Twelve pallets of copier paper delivered to dock 4."]
 
@@ -83,3 +83,27 @@ def test_a_file_a_supplier_invoice_keeps_is_not_destroyed(engines: Engines) -> N
 
     assert engines.delete(f"/work-items/{work_item_id}").status_code == 204
     assert get_storage_driver().exists(key), "a financial record's source document was destroyed"
+
+
+def test_erasing_a_subject_deletes_the_files_they_uploaded(engines: Engines) -> None:
+    """F-152. The subject erasure (GDPR Art. 17) marked the subject's uploaded files deleted and
+    listed their storage keys as "orphaned" in the tombstone, and nothing ever deleted them: the
+    erased person's documents stayed in storage. They are now deleted once the erasure commits."""
+    t = engines.tenant
+    work_item_id = engines.upload("contributor-upload.pdf", make_pdf([PAGE]), as_user=t.contributor)
+    drain()
+    key = _file(engines, work_item_id).file_path
+    driver = get_storage_driver()
+    assert driver.exists(key)
+
+    response = engines.post(
+        "/compliance/erasures",
+        {
+            "subject_user_id": str(t.contributor.user.id),
+            "erasure_ticket": "DSR-F152",
+            "confirm_subject_email": t.contributor.user.email,
+        },
+        org=True,
+    )
+    assert response.status_code in (200, 201), response.text
+    assert not driver.exists(key), "the erased subject's file is still in storage"

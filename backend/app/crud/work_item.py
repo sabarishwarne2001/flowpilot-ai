@@ -269,45 +269,23 @@ def delete_work_item(db: Session, *, db_obj: WorkItem) -> None:
     """Delete a document, and with it the file it was made from (F-151).
 
     The original upload's record is marked deleted and its stored object removed once the
-    deletion is committed. A file a supplier invoice keeps as its source document is a
-    financial record: its record is marked deleted but its bytes stay (as in the subject
-    erasure's PRESERVED_FINANCIAL_TABLES). Storage failures are logged, never raised: the
-    document is already gone, and the next erasure or retention pass can retry the object.
+    deletion is committed (app/services/storage_cleanup.py), except for a file a supplier
+    invoice keeps as its source document, a financial record.
     """
-    from app.models.supplier_cogs import SupplierInvoice
     from app.models.uploaded_file import UploadedFile
+    from app.services import storage_cleanup
 
-    keys: set[str] = set()
+    keys: list[str] = []
     uploaded = (
         db.get(UploadedFile, db_obj.uploaded_file_id) if db_obj.uploaded_file_id else None
     )
     if uploaded is not None and uploaded.deleted_at is None:
         uploaded.deleted_at = datetime.now(timezone.utc)
         db.add(uploaded)
-        kept_as_financial_record = db.execute(
-            select(SupplierInvoice.id)
-            .where(SupplierInvoice.raw_document_file_id == uploaded.id)
-            .limit(1)
-        ).first() is not None
-        if not kept_as_financial_record:
-            keys.update(key for key in (uploaded.file_path, db_obj.stored_filename) if key)
+        keys = storage_cleanup.deletable_keys(db, [uploaded.file_path])
+        if keys and db_obj.stored_filename and db_obj.stored_filename not in keys:
+            keys.append(db_obj.stored_filename)
 
     db.delete(db_obj)
     db.commit()
-    _delete_stored_objects(keys)
-
-
-def _delete_stored_objects(keys: set[str]) -> None:
-    if not keys:
-        return
-    import logging
-
-    from app.core.storage import get_storage_driver
-
-    log = logging.getLogger("app.crud.work_item")
-    driver = get_storage_driver()
-    for key in sorted(keys):
-        try:
-            driver.delete(key)
-        except Exception:  # noqa: BLE001 - the row is gone; a stray object is retried later
-            log.warning("work_item.file_delete_failed", extra={"key": key}, exc_info=True)
+    storage_cleanup.delete_stored_objects(keys)
