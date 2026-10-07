@@ -1328,8 +1328,14 @@ export const Automation: React.FC = () => {
                               type="button"
                               onClick={() => {
                                 if (!log.log_message) {return;}
-                                navigator.clipboard.writeText(log.log_message);
-                                toast.success("Error copied.");
+                                // The clipboard is refused outside a secure context or without
+                                // permission; say so instead of claiming it worked.
+                                Promise.resolve()
+                                  .then(() => navigator.clipboard.writeText(log.log_message ?? ""))
+                                  .then(
+                                    () => toast.success("Error copied."),
+                                    () => toast.error("The error could not be copied. Select it and copy it by hand."),
+                                  );
                               }}
                               className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted font-semibold text-foreground"
                             >

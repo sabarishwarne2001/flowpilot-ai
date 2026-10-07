@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   BarChart3,
@@ -239,6 +240,7 @@ const DestinationRow: React.FC<{
       queryClient.invalidateQueries({
         queryKey: analyticsKeys.destinations(organizationId),
       }),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const remove = useMutation({
@@ -368,18 +370,30 @@ const ScheduleRow: React.FC<{
       updateSchedule(organizationId, schedule.id, {
         enabled: !schedule.enabled,
       }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      toast.success(schedule.enabled ? "Schedule paused." : "Schedule resumed.");
+      return invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const reset = useMutation({
     mutationFn: () =>
       updateSchedule(organizationId, schedule.id, { reset_circuit: true }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      toast.success("Circuit reset. The next run will try the destination again.");
+      return invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const remove = useMutation({
     mutationFn: () => deleteSchedule(organizationId, schedule.id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      toast.success("Schedule deleted.");
+      return invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   return (

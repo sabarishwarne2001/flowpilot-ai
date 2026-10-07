@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Info, ShieldAlert } from "lucide-react";
+import { Check, Info, Loader2, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   applyPreset,
@@ -8,6 +9,7 @@ import {
   setPresetEnabled,
   type DocumentPreset,
 } from "@/services/api/ingestion";
+import { errorMessage } from "@/services/api/errors";
 import { ingestionKeys } from "@/services/api/queryKeys";
 
 /**
@@ -54,14 +56,24 @@ const PresetCard: React.FC<{
     mutationFn: () => applyPreset(workspaceId, preset.id),
     onSuccess: () => {
       setExpanded(true);
+      toast.success(`${preset.label} applied. Review it below, then enable it.`);
       invalidate();
     },
+    onError: (error) => toast.error(errorMessage(error, "The preset could not be applied.")),
   });
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) =>
       setPresetEnabled(workspaceId, preset.id, enabled),
-    onSuccess: invalidate,
+    onSuccess: (_, enabled) => {
+      toast.success(
+        enabled
+          ? `${preset.label} is enabled for new documents.`
+          : `${preset.label} is disabled.`,
+      );
+      invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The preset could not be changed.")),
   });
 
   const fields = useMemo(() => {
@@ -103,8 +115,10 @@ const PresetCard: React.FC<{
             type="button"
             onClick={() => apply.mutate()}
             disabled={apply.isPending}
-            className="shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            aria-busy={apply.isPending}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
+            {apply.isPending && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
             Apply to workspace
           </button>
         )}
@@ -113,8 +127,10 @@ const PresetCard: React.FC<{
             type="button"
             onClick={() => toggle.mutate(!preset.enabled)}
             disabled={toggle.isPending}
-            className="shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            aria-busy={toggle.isPending}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
+            {toggle.isPending && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
             {preset.enabled ? "Disable" : "Enable"}
           </button>
         )}

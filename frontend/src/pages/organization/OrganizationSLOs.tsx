@@ -3,6 +3,7 @@ import { CAPABILITY } from "@/constants/capabilities";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
   getOrganizationSLOs,
   setOrganizationSLO,
 } from "@/services/api/slos";
+import { errorMessage } from "@/services/api/errors";
 import { sloKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
@@ -113,8 +115,10 @@ const SLORow: React.FC<{
     mutationFn: () => clearOrganizationSLO(organizationId, entry.slo_key),
     onSuccess: () => {
       setEditing(false);
+      toast.success("Target reset to the platform default.");
       onChanged();
     },
+    onError: (error) => toast.error(errorMessage(error, "The target could not be reset.")),
   });
 
   const hasSamples = entry.sample_count > 0;

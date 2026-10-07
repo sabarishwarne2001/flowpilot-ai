@@ -2,6 +2,7 @@ import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Globe, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   bindDomainSso,
@@ -9,6 +10,7 @@ import {
   listDomains,
   verifyDomain,
 } from "@/services/api/identity";
+import { errorMessage } from "@/services/api/errors";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { DomainRead } from "@/types/identity";
@@ -158,12 +160,26 @@ export const DomainManager: React.FC = () => {
 
   const verify = useMutation({
     mutationFn: (domainId: string) => verifyDomain(organizationId, domainId),
-    onSuccess: invalidate,
+    onSuccess: async (domain) => {
+      if (domain.status === "VERIFIED") {
+        toast.success(`${domain.domain} is verified.`);
+      } else {
+        toast.info(
+          `The TXT record for ${domain.domain} was not found yet. DNS changes can take a while to appear; try again shortly.`,
+        );
+      }
+      await invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The domain could not be checked. Please try again.")),
   });
 
   const bind = useMutation({
     mutationFn: (domainId: string) => bindDomainSso(organizationId, domainId),
-    onSuccess: invalidate,
+    onSuccess: async (domain) => {
+      toast.success(`${domain.domain} now signs people in with single sign-on.`);
+      await invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The domain could not be bound to single sign-on.")),
   });
 
   const domains = domainsQuery.data ?? [];
