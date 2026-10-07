@@ -37,7 +37,11 @@ _Last updated: 2026-10-07 (final systemic polish and live engine hardening)_
   self-hosted model).
   - Browser suite on a fresh database, production CSP, model stand-in: **302 passed, 0 failed,
     1 skipped** (by design; was 290 passed: 12 new tests).
-  - Backend suite: BACKEND_RESULT.
+  - Backend suite (full, second Postgres cluster): **3,343 passed, 0 failed, 9 skipped** (was 3,309:
+    34 new tests). Run before the last two backend changes (F-140, the narrowed `/me/context`
+    default); after them the touched files (107 tests) and the security suite (388) pass.
+  - After the full browser run: the F-139 tests, the updated lifecycle test and the Run history and
+    automation tests (13) pass on the final bundle and API.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self` (new), `check-no-sourcemaps
     --dist`, encoding check: clean. One Alembic head (`p6a3_user_mfa_factors`), no migration added.
   - `COVERAGE.csv` (1,347 rows): deep 305 → **317**, untested 418 → **397** (21 background jobs

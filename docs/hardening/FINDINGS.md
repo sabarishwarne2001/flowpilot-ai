@@ -151,7 +151,8 @@ How to read this file:
 | F-136 | P3 | **fixed** (final systemic polish, `9e25b07`) | Profile | A new profile picture (or logo) was replaced by the old one after a reload or on another device |
 | F-137 | P3 | **fixed** (final systemic polish, `ca3b053`) | Accessibility | Eleven dialogs ignored Escape and let Tab leave them; two inline panels were marked modal |
 | F-138 | P3 | **fixed** (final systemic polish, `e72a65a`) | Compliance | A DPA/GDPR export bundle could not be downloaded where storage cannot presign URLs (local disk) |
-| F-139 | P3 | **fixed** (final systemic polish) | Roles / UX | The invite form offered "Admin" to organization admins, who may not grant it; they were refused only on submit |
+| F-139 | P3 | **fixed** (final systemic polish, `9567cc3`) | Roles / UX | The invite form offered "Admin" to organization admins, who may not grant it; they were refused only on submit |
+| F-140 | P3 | **fixed** (final systemic polish) | Run history | Every execution came back with `rule_name` null, so Run history could only say "Rule 1f3a9c0e" |
 
 ---
 
@@ -2245,6 +2246,13 @@ inviter may grant (the same rule, `canAssignOrganizationRole`). **Proof**
 the server enforces organization scope (billing, members, SSO, compliance, keys) and workspace
 scope (documents, review, workflows) separately, `tests/security/test_role_matrix.py` and the
 browser role matrix pass, and both members pages now explain the two kinds of role.
+
+### F-140 — Run history never named the rule (P3, fixed)
+Found on the new Run history screenshots: every chain read "Rule abf060bb" although the rules had
+names. The executions API filled `rule_name` from a `rule` relationship the execution model does
+not have, so it was always null. The names are now looked up for each page in one query.
+**Proof** `tests/engines/test_automation_live.py::test_run_history_names_the_rule_that_ran`
+(failed with `{None}`); live, the API returns the rules' names.
 
 ### Seen live, not defects
 - `CRITICAL llm.settle_price_unavailable` for provider `local`: by design (ARCH-50), an unpriced
