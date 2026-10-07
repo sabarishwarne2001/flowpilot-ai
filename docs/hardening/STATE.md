@@ -31,26 +31,17 @@ _Last updated: 2026-10-07 (final systemic polish and live engine hardening)_
 - **Verified:** see "What is done".
 
 ## What is done
-- **Phases 0 to 5:** `00-map.md` … `05-production-readiness.md` (PRs #1 to #6).
-- **Final release** (this branch; the PR lists every commit):
-  - **Stage 1 — decisions and missing features.** N-002 to N-020 decided and applied:
-    notification filters and mark as unread, promo code at checkout, invite from Organization →
-    Members, page image beside the fields with in-place correction, Service levels targets on
-    Enterprise, viewer/admin sidebar rules, sign-in allowance 20/5 min, Redis password, uptime
-    heartbeat, CSP enforced, two-factor sign-in.
-  - **Stage 2 — live end-to-end pass** over all 27 module trees with a deterministic local model
-    stand-in (F-063 closed) and the production CSP enforced. New defects F-108 to F-122 found and
-    fixed (two P1: legal hold bypass F-108, first document skipping AI F-113).
-  - **Stage 3 — repository.** 286 historical files moved unchanged to `archive/`; CI gates job
-    retired; README and RUNBOOK updated.
-  - **Stage 4 — certification.** OWASP ASVS 4.0.3 Level 2 and Twelve-Factor reviews; the ASVS
-    audit found and fixed four authentication gaps (F-117 to F-120: password policy and strength
-    meter, show-password, session lifetime, sign-out on a typo), API caching (F-122), and added a
-    Permissions-Policy.
-  - Backend suite: **3,298 passed, 0 failed, 9 skipped**. Browser suite: **290 passed, 0 failed, 1 skipped** (by design) (start of release:
-    272 passed, 7 failed, 2 skipped). One Alembic head (`p6a3_user_mfa_factors`), 0 new drift.
-  - `COVERAGE.csv` (1,345 rows): deep 270 → **305**, smoke 634 → 622, untested **418** (unchanged;
-    endpoints untested 34).
+- **Phases 0 to 5, final release, production configuration & UI elevation:** PRs #1 to #8 (merged).
+- **Final systemic polish & live engine hardening** (this branch): F-126 to F-140 fixed, each with
+  a test that failed first (FINDINGS.md). Owner items N-030 (seat price), N-031 (pricing a
+  self-hosted model).
+  - Browser suite on a fresh database, production CSP, model stand-in: **302 passed, 0 failed,
+    1 skipped** (by design; was 290 passed: 12 new tests).
+  - Backend suite: BACKEND_RESULT.
+  - `npm run build`, both `tsc` projects, lint, `npm run check:self` (new), `check-no-sourcemaps
+    --dist`, encoding check: clean. One Alembic head (`p6a3_user_mfa_factors`), no migration added.
+  - `COVERAGE.csv` (1,347 rows): deep 305 → **317**, untested 418 → **397** (21 background jobs
+    now have live evidence from the jobs table), 2 new routes.
 
 ## Owner decisions in force (do not re-ask)
 All of Phase 5's (N-004, N-006 to N-014, N-019 ERP part, N-020 items 1/4/6, N-021 to N-025) plus,
@@ -61,19 +52,16 @@ per 5 minutes; **N-019** viewers do not see Workflows / Run history / Review que
 seven capabilities built. Details: NEEDS-OWNER.md, "Final release".
 
 ## Next action (exact)
-1. Owner: review and merge the PR (before/after screenshots were sent with the session summary).
-2. Owner decisions N-026 (gateway and the three plan price ids), N-027 (email provider), N-028 (domain
-   and admin mailbox), N-029 (sign-in page claims).
-3. Stripe Dashboard (test mode): add the webhook endpoint
-   `https://app.flowpilot.ai/api/v1/billing/webhooks/stripe` and put its signing secret in
-   `.env.production` (F-125); the app refuses to start until then.
-4. Test the Gemini `AQ.` key from your own machine (CHANGES note); replace it with an AI Studio key if
-   it is refused.
-5. Before the first deploy, regenerate the server secrets on the server and roll the R2 token, Gmail
-   app password and Groq keys (they were pasted into a chat).
-6. Then the first deploy as before: `docs/RUNBOOK.md` §9 (sweepers.env now carries
-   `HEARTBEAT_UUID_UPTIME`).
-7. Before the first customer configures SCIM: F-124 (SCIM token pepper).
+1. Owner: review and merge the PR for this branch (screenshots of the new picker, Run history,
+   workflow conditions and role guide were sent with the session summary).
+2. Owner decisions N-030 (per-seat price in the price book), N-031 (pricing a self-hosted model),
+   and the earlier N-026 to N-029.
+3. Stripe Dashboard (test mode): the webhook endpoint and its signing secret in `.env.production`
+   (F-125); the app refuses to start until then.
+4. Before the first deploy, regenerate the server secrets and roll the keys pasted into a chat
+   (R2 token, Gmail app password, Groq keys); test the Gemini `AQ.` key from your own machine.
+5. Then the first deploy: `docs/RUNBOOK.md` §9.
+6. Before the first customer configures SCIM: F-124 (SCIM token pepper).
 
 How to bring the test stack up in a fresh sandbox: `frontend/e2e/scripts/start-db.sh` (pgvector
 0.8.0 built from source: `apt-get install postgresql-server-dev-16`, then `make && make install` in a
@@ -87,8 +75,9 @@ None in engineering. Not verifiable from this environment: the production compos
 server (F-006) and the CPU-only torch image (F-045).
 
 ## Budget notes
-One session: environment set-up, the Stage 1 features, three full browser runs and three full
-backend runs (on two RAM-disk Postgres clusters in parallel), the fixes, and the documentation. The
+One session: environment set-up, the fixes with their tests, a live click-through crawl (two
+runs), API sweeps, one full browser run and one full backend run (in parallel on two RAM-disk
+Postgres clusters, which slows the backend run to well over an hour), and the documentation. The
 exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
@@ -103,3 +92,9 @@ exact spend is not visible from inside the session; check your usage page.
   runs without reload). `E2E_LLM=1` starts the model stand-in; `E2E_CSP=1` enforces the Caddyfile CSP.
 - `pkill -f <pattern>` can kill the calling shell; use anchored `pgrep -f '^...'` and kill by PID.
 - Model hosts, Stripe, Groq and Dodo are blocked; PyPI and npm are reachable.
+- **Live sweeps**: the crawler and API sweep scripts used in this pass are described in
+  FINDINGS.md ("Final systemic polish"); the jobs table (`select job_type, status, count(*) from
+  jobs group by 1,2`) is the record of every background job the live stack ran, and survives the
+  log rotation that `start-stack.sh` does on every restart.
+- The browser suite reuses a preview server on port 3000 if one is running (outside CI), so a run
+  started while another is serving tests the older bundle.
