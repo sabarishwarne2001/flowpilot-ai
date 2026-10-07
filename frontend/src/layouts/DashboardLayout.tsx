@@ -73,8 +73,11 @@ export const DashboardLayout: React.FC = () => {
           hidden
           h-screen
           shrink-0
+          transition-[width]
+          duration-200
+          ease-out-expo
           lg:block
-          ${isSidebarCollapsed ? "w-20" : "w-64"}
+          ${isSidebarCollapsed ? "w-[68px]" : "w-[260px]"}
         `}
       >
         <DesktopSidebar onLogout={handleLogout} />
@@ -98,7 +101,7 @@ export const DashboardLayout: React.FC = () => {
           <MemberAccessNotice organizationId={tenantState.organization.organization_id} />
         ) : null}
 
-        <main className="flex-1 overflow-y-auto bg-muted/10 dark:bg-background p-3 sm:p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
           <DisplayPreferencesBoundary>
             <Outlet />
           </DisplayPreferencesBoundary>

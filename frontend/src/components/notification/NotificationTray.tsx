@@ -149,12 +149,12 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
   return (
     <>
       <div
-        className={`absolute right-0 mt-3 w-80 sm:w-96 bg-card border border-border/80 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[480px] z-50 animate-scale-in ${className}`}
+        className={`fp-popover absolute right-0 z-50 mt-2.5 flex max-h-[480px] w-80 flex-col overflow-hidden sm:w-96 ${className}`}
       >
-        <header className="p-4 border-b border-border/40 flex items-center justify-between bg-muted/5 select-none">
+        <header className="flex select-none items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center space-x-2">
             <Bell className="h-4 w-4 text-primary" />
-            <span className="text-xs font-extrabold uppercase tracking-wider">
+            <span className="text-xs font-semibold uppercase tracking-wider">
               Alert Center
             </span>
           </div>
@@ -165,7 +165,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
                 type="button"
                 onClick={() => triggerMarkAllRead()}
                 disabled={isMarkingAll}
-                className="inline-flex items-center text-[10px] font-black uppercase text-primary hover:bg-primary/10 px-2 py-1 rounded transition-all focus:outline-none"
+                className="inline-flex items-center text-[10px] font-semibold uppercase text-primary hover:bg-primary/10 px-2 py-1 rounded transition-all focus:outline-none"
                 title="Mark all notifications as read"
               >
                 {isMarkingAll ? (
@@ -188,7 +188,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-border/20 scrollbar bg-background/50">
+        <div className="flex-1 divide-y divide-border/60 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 space-y-3 animate-pulse">
               <div className="space-y-2">
@@ -203,12 +203,12 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
           ) : error ? (
             <div className="p-8 text-center select-none text-muted-foreground">
               <AlertCircle className="h-7 w-7 mx-auto mb-2 text-destructive opacity-80" />
-              <p className="text-xs font-bold">Failed to load alerts cache.</p>
+              <p className="text-xs font-semibold">Failed to load alerts cache.</p>
             </div>
           ) : notifications.length === 0 ? (
             <div className="p-8 text-center select-none text-muted-foreground">
               <Clock className="h-8 w-8 mx-auto mb-2 opacity-35 animate-pulse" />
-              <p className="text-xs font-bold leading-relaxed">
+              <p className="text-xs font-semibold leading-relaxed">
                 Your alert workspace is clean.
               </p>
             </div>
@@ -238,7 +238,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
                     <h4
                       className={`text-xs truncate ${
                         !alert.is_read
-                          ? "font-extrabold text-foreground"
+                          ? "font-semibold text-foreground"
                           : "font-semibold text-muted-foreground"
                       }`}
                     >
@@ -250,7 +250,7 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
                     {alert.message}
                   </p>
 
-                  <span className="text-[9px] font-black text-muted-foreground/60 select-none block pt-1">
+                  <span className="text-[9px] font-semibold text-muted-foreground/60 select-none block pt-1">
                     {formatDateTime(alert.created_at)}
                   </span>
                 </div>

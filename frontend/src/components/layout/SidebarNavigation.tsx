@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
-import { Lock, Search } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import {
   buildOrganizationNavigationItems,
@@ -9,10 +9,6 @@ import {
   buildWorkspaceNavigationGroups,
   type NavigationItem,
 } from "./navigation";
-import {
-  commandPaletteShortcutLabel,
-  openCommandPalette,
-} from "./commandPaletteEvents";
 import { useGrantedCapabilities } from "@/hooks/useGrantedCapabilities";
 import { useIsPartnerMember } from "@/hooks/useIsPartnerMember";
 import { isAtLeast } from "@/permissions/workspacePermissions";
@@ -139,35 +135,35 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
     [isSuperAdmin],
   );
 
-  const shortcut = commandPaletteShortcutLabel();
-
   const renderItem = (item: RenderableItem) => {
     const label = item.locked ? `${item.name} (not included in your plan)` : item.name;
-    const shape = collapsed ? "h-11 w-11 p-0" : "h-10 w-full px-3";
-    const idle = "text-muted-foreground hover:bg-muted/50 hover:text-foreground";
+    const shape = collapsed ? "h-9 w-9 justify-center p-0" : "h-8 w-full px-2.5";
+    const idle = "text-muted-foreground hover:bg-accent/70 hover:text-foreground";
+    const active =
+      "bg-primary/10 text-primary hover:bg-primary/[0.14] dark:bg-primary/[0.12] dark:text-[hsl(213_94%_72%)] before:absolute before:-left-2.5 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-primary";
 
     // HM-S1:lock-slot. A gated row always reserves the lock's width, and the
     // lock only appears once entitlements have loaded, so nothing reflows and
     // nothing flickers when the answer arrives.
     const content = (
       <>
-        <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden />
+        <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.85} aria-hidden />
         {!collapsed ? (
           <>
-            <span className="ml-3 min-w-0 flex-1 truncate whitespace-nowrap text-left font-semibold">
+            <span className="ml-2.5 min-w-0 flex-1 truncate whitespace-nowrap text-left">
               {item.name}
             </span>
             {item.gated ? (
               <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
                 {item.locked && (
-                  <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden data-testid="nav-lock" />
+                  <Lock className="h-3 w-3 text-muted-foreground/70" aria-hidden data-testid="nav-lock" />
                 )}
               </span>
             ) : null}
           </>
         ) : null}
         {collapsed && item.locked && (
-          <Lock className="absolute bottom-1 right-1 h-3 w-3 opacity-70" aria-hidden data-testid="nav-lock" />
+          <Lock className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-muted-foreground/80" aria-hidden data-testid="nav-lock" />
         )}
       </>
     );
@@ -184,7 +180,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
           aria-label={label}
           aria-haspopup="dialog"
           data-testid="nav-locked-row"
-          className={`group relative flex items-center justify-center rounded-lg ${shape} text-sm font-medium transition-all ${idle}`}
+          className={`group relative flex items-center rounded-md ${shape} text-[13px] font-medium ${idle} ${item.locked ? "opacity-80" : ""}`}
         >
           {content}
         </button>
@@ -197,8 +193,8 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
           title={collapsed ? label : undefined}
           aria-label={label}
           className={({ isActive }) =>
-            `group relative flex items-center justify-center rounded-lg ${shape} text-sm font-medium transition-all ${
-              isActive ? "bg-primary text-primary-foreground shadow-sm" : idle
+            `group relative flex items-center rounded-md ${shape} text-[13px] font-medium ${
+              isActive ? active : idle
             }`
           }
         >
@@ -217,11 +213,18 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
 
   const renderGroupLabel = (label: string, first: boolean) =>
     collapsed ? (
-      first ? null : <div className="my-2 h-px w-8 bg-border" aria-hidden />
+      first ? null : <div className="mx-auto my-2 h-px w-6 bg-border" aria-hidden />
     ) : (
-      <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className={`fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground/75 ${first ? "pt-1" : "pt-4"}`}>
         {label}
       </p>
+    );
+
+  const sectionLabel = (label: string) =>
+    collapsed ? (
+      <div className="mx-auto mb-2 h-px w-6 bg-border" aria-hidden />
+    ) : (
+      <p className="fp-eyebrow truncate px-2.5 pb-1 text-[10.5px] text-muted-foreground/75">{label}</p>
     );
 
   return (
@@ -231,52 +234,23 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
         h-full
         min-h-0
         flex-col
-        px-3
-        py-4
         overflow-y-auto
         overflow-x-hidden
-        ${collapsed ? "items-center" : ""}
+        overscroll-contain
+        ${collapsed ? "items-center px-2 py-3" : "px-2.5 py-3"}
       `}
       aria-label="Primary Navigation"
     >
-      <button
-        type="button"
-        onClick={openCommandPalette}
-        title={collapsed ? `Search (${shortcut})` : undefined}
-        aria-label={`Search pages (${shortcut})`}
-        aria-keyshortcuts="Control+K Meta+K"
-        className={`
-          mb-2 flex items-center rounded-lg border border-border bg-background
-          text-sm text-muted-foreground transition-colors
-          hover:bg-muted/50 hover:text-foreground
-          ${collapsed ? "h-10 w-10 justify-center" : "h-9 w-full px-3"}
-        `}
-      >
-        <Search className="h-4 w-4 flex-shrink-0" aria-hidden />
-        {!collapsed && (
-          <>
-            <span className="ml-2 flex-1 text-left">Search…</span>
-            <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold">
-              {shortcut}
-            </kbd>
-          </>
-        )}
-      </button>
-
       {groups.map((group, index) => (
-        <div key={group.key} className="space-y-1" role="group" aria-label={group.label}>
+        <div key={group.key} className={`space-y-0.5 ${collapsed ? "flex flex-col items-center" : ""}`} role="group" aria-label={group.label}>
           {renderGroupLabel(group.label, index === 0)}
           {group.items.map(renderItem)}
         </div>
       ))}
 
       {organizationItems.length > 0 && (
-        <div className="mt-5 space-y-1 border-t border-border pt-4">
-          {!collapsed && (
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {organization.organization_name}
-            </p>
-          )}
+        <div className={`mt-4 space-y-0.5 pt-1 ${collapsed ? "flex flex-col items-center" : ""}`}>
+          {sectionLabel(organization.organization_name)}
           {organizationItems.map((item) =>
             renderItem({
               ...item,
@@ -288,23 +262,15 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
       )}
 
       {partnerItems.length > 0 && (
-        <div className="mt-5 space-y-1 border-t border-border pt-4">
-          {!collapsed && (
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Partner
-            </p>
-          )}
+        <div className={`mt-4 space-y-0.5 pt-1 ${collapsed ? "flex flex-col items-center" : ""}`}>
+          {sectionLabel("Partner")}
           {partnerItems.map((item) => renderItem(item))}
         </div>
       )}
 
       {platformItems.length > 0 && (
-        <div className="mt-5 space-y-1 border-t border-border pt-4">
-          {!collapsed && (
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Platform
-            </p>
-          )}
+        <div className={`mt-4 space-y-0.5 pt-1 ${collapsed ? "flex flex-col items-center" : ""}`}>
+          {sectionLabel("Platform")}
           {platformItems.map((item) => renderItem(item))}
         </div>
       )}

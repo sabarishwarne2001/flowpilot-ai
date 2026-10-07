@@ -59,31 +59,12 @@ import { ROUTES } from "@/constants/routes";
 export const PlatformLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground transition-colors duration-200">
-      <header className="flex-shrink-0 border-b border-border bg-card">
+      <header className="relative z-20 flex-shrink-0 border-b border-border/70 bg-background/80 backdrop-blur-md">
         <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to={ROUTES.WORKSPACES}
-              className="
-                inline-flex
-                flex-shrink-0
-                items-center
-                gap-1.5
-                rounded-md
-                border
-                border-border
-                bg-background
-                px-3
-                py-1.5
-                text-sm
-                font-medium
-                text-foreground
-                transition-colors
-                hover:bg-muted
-                focus:outline-none
-                focus:ring-2
-                focus:ring-primary/30
-              "
+              className="fp-btn fp-btn-secondary flex-shrink-0"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to workspaces
@@ -127,7 +108,7 @@ export const PlatformLayout: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-muted/10 p-3 dark:bg-background sm:p-4 md:p-6">
+      <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
         <Outlet />
       </main>
     </div>

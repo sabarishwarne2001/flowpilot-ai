@@ -13,14 +13,14 @@ export const ThemeToggle: React.FC<{ readonly className?: string }> = ({
     <button
       type="button"
       onClick={toggleTheme}
-      className={`rounded-lg border border-border bg-background p-2 text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground sm:p-2.5 ${className}`}
+      className={`flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground ${className}`}
       aria-label="Toggle Theme"
       title={`Switch to ${theme === "light" ? "Dark" : "Light"} mode`}
     >
       {theme === "light" ? (
-        <Moon className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+        <Moon className="h-4 w-4" />
       ) : (
-        <Sun className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+        <Sun className="h-4 w-4" />
       )}
     </button>
   );

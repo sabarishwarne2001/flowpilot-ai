@@ -1,161 +1,88 @@
 import React from "react";
-import { ChevronLeft, LogOut } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
-import { useAuthStore } from "@/store/useAuthStore";
 import { useUIStore } from "@/store/useUIStore";
-import { Brand } from "@/components/branding/Brand";
-import { Avatar } from "@/components/common/Avatar";
+import { useResolvedTenant } from "@/routes/TenantContext";
+import { workspaceSettingsPath } from "@/routes/tenantPaths";
 import SidebarNavigation from "./SidebarNavigation";
 import OrgWorkspaceSwitcher from "./OrgWorkspaceSwitcher";
+import UserMenu from "./UserMenu";
+import { SideTooltip } from "./SideTooltip";
 
 interface DesktopSidebarProps {
   readonly onLogout: () => void;
   readonly className?: string;
 }
 
+/**
+ * The workspace sidebar: 260px expanded, a 68px icon rail collapsed.
+ *
+ * Top: the workspace identity, which is also the switcher. Middle: grouped
+ * navigation. Bottom: the signed-in user's card and menu. The collapse toggle
+ * sits beside the identity (expanded) or under it (rail), and the choice is
+ * remembered (useUIStore persists it).
+ */
 const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
   onLogout,
   className = "",
 }) => {
-  const { user } = useAuthStore();
-  const { isSidebarCollapsed, toggleSidebarCollapse } = useUIStore();
-  const isDesktopCollapsed = isSidebarCollapsed;
+  const { isSidebarCollapsed: collapsed, toggleSidebarCollapse } = useUIStore();
+  const { organization, workspace, organizationRole } = useResolvedTenant();
+  const settings = workspaceSettingsPath(organization.organization_slug, workspace.slug);
+
+  const toggle = (
+    <button
+      type="button"
+      onClick={toggleSidebarCollapse}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+      aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+      aria-expanded={!collapsed}
+    >
+      {collapsed ? (
+        <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+      )}
+    </button>
+  );
 
   return (
     <aside
       aria-label="Primary Navigation Sidebar"
       className={`
-        relative
-        flex
-        h-full
-        min-h-0
-        flex-col
-        bg-card
-        border-r
-        border-border
-        transition-[width]
-        duration-300
-        ease-in-out
-        ${isDesktopCollapsed ? "w-20" : "w-64"}
+        relative flex h-full min-h-0 flex-col
+        border-r border-border/80 bg-sidebar text-sidebar-foreground
+        transition-[width] duration-200 ease-out-expo
+        ${collapsed ? "w-[68px]" : "w-[260px]"}
         ${className}
       `}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Brand Header */}
-        {!isDesktopCollapsed ? (
-          <div className="flex h-[72px] items-center justify-between border-b border-border/40 px-4">
-            <Brand variant="sidebar" className="min-w-0 flex-1" />
-
-            <button
-              type="button"
-              onClick={toggleSidebarCollapse}
-              className="ml-2 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              aria-label="Collapse Sidebar"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex h-[88px] flex-col items-center justify-center gap-3 border-b border-border/40 pt-3">
-            <Brand variant="sidebar-compact" />
-
-            <button
-              type="button"
-              onClick={toggleSidebarCollapse}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              aria-label="Expand Sidebar"
-            >
-              <ChevronLeft className="h-4 w-4 rotate-180" />
-            </button>
-          </div>
-        )}
-
-        {/* Tenant Switcher */}
-        <div className="border-b border-border/40">
-          <OrgWorkspaceSwitcher collapsed={isDesktopCollapsed} />
+      {/* Identity + collapse */}
+      <div
+        className={`flex shrink-0 border-b border-border/70 ${
+          collapsed ? "flex-col items-center gap-1.5 px-2 py-2.5" : "h-14 items-center gap-1 px-2.5"
+        }`}
+      >
+        <div className={collapsed ? "" : "min-w-0 flex-1"}>
+          <OrgWorkspaceSwitcher collapsed={collapsed} />
         </div>
-
-        {/* Navigation */}
-        <div className="flex-1 min-h-0">
-          <SidebarNavigation collapsed={isDesktopCollapsed} />
-        </div>
+        {collapsed ? <SideTooltip label="Expand sidebar">{toggle}</SideTooltip> : toggle}
       </div>
 
-      {/* Bottom Profile Section */}
-      <div className="border-t border-border/40 bg-muted/20 px-4 py-5 dark:bg-muted/5">
-        <div
-          className={`
-            flex
-            ${
-              isDesktopCollapsed
-                ? "flex-col items-center gap-3"
-                : "items-center justify-between"
-            }
-          `}
-        >
-          {/*
-            ARCH-29 Tranche 1. The avatar stays rendered when the sidebar is
-            collapsed — it is the identity affordance that survives the text
-            being clipped to zero width, which is the collapsed state's whole
-            point.
-          */}
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar
-              userId={user?.id}
-              hasAvatar={user?.has_avatar}
-              email={user?.email}
-              size={isDesktopCollapsed ? "sm" : "md"}
-            />
+      {/* Navigation */}
+      <div className="min-h-0 flex-1">
+        <SidebarNavigation collapsed={collapsed} />
+      </div>
 
-            <div
-              className={`
-                min-w-0
-                overflow-hidden
-                transition-all
-                duration-300
-                ease-in-out
-                ${
-                  isDesktopCollapsed
-                    ? "max-w-0 opacity-0"
-                    : "max-w-[180px] opacity-100"
-                }
-              `}
-            >
-              <span className="block truncate text-xs font-semibold text-muted-foreground select-none">
-                Signed in as
-              </span>
-
-              <span className="mt-1 block truncate text-sm font-extrabold leading-none">
-                {user?.email ?? "User Profile"}
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onLogout}
-            title="Sign Out"
-            aria-label="Sign Out"
-            className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-lg
-              text-muted-foreground
-              transition-all
-              duration-300
-              hover:bg-destructive/10
-              hover:text-destructive
-              focus:outline-none
-              focus:ring-2
-              focus:ring-destructive/20
-            "
-          >
-            <LogOut className="h-5 w-5 flex-shrink-0" />
-          </button>
-        </div>
+      {/* The signed-in user */}
+      <div className={`shrink-0 border-t border-border/70 ${collapsed ? "px-2 py-2.5" : "px-2.5 py-2.5"}`}>
+        <UserMenu
+          onLogout={onLogout}
+          collapsed={collapsed}
+          role={organizationRole}
+          profileHref={`${settings}?section=profile`}
+          sessionsHref={`${settings}?section=sessions`}
+        />
       </div>
     </aside>
   );
