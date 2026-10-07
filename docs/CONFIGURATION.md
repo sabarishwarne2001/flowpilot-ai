@@ -334,5 +334,5 @@ guard), and the comment written above it in the code.
 | `BILLING_PORTAL_RETURN_URL` | `str \| None` | `None` | — |  |
 | `BILLING_CHECKOUT_SUCCESS_URL` | `str \| None` | `None` | — |  |
 | `BILLING_CHECKOUT_CANCEL_URL` | `str \| None` | `None` | — |  |
-| `BILLING_SEAT_PRICE_ID` | `str \| None` | `None` | — |  |
+| `BILLING_SEAT_PRICE_ID` | `str \| None` | `None` | — | Obsolete since ARCH-29 and ignored: prices are per plan (`GATEWAY_PRICE_ID_*`). Leave unset (N-026). |
 | `BILLING_DUNNING_MAX_STEP` | `str` | `'NOTIFY_3'` | example |  |
