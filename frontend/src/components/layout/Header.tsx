@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Bell, ChevronRight, Menu, Moon, Search, Sun } from "lucide-react";
 
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUIStore } from "@/store/useUIStore";
 import { NotificationTray } from "@/components/notification/NotificationTray";
 import { useResolvedTenant } from "@/routes/TenantContext";
@@ -48,6 +49,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
   const { toggleMobileSidebar, resolvedTheme, toggleTheme, notificationBadgeCount } = useUIStore();
   const { organization, workspace } = useResolvedTenant();
   const pageLabel = usePageLabel();
+  useDocumentTitle(pageLabel === "Overview" ? null : pageLabel, workspace.workspace_name);
   const shortcut = commandPaletteShortcutLabel();
 
   const handleToggleNotifications = useCallback((): void => {
