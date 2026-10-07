@@ -319,7 +319,7 @@ Push-Location $BackendDir
 try {
     # 1. Price Book
     if (Test-Path 'scripts/seed_price_book.py') {
-        & $venvPython scripts/seed_price_book.py
+        & $venvPython scripts/seed_price_book.py --version auto
         if ($LASTEXITCODE -eq 0) { Write-Ok "scripts/seed_price_book.py" }
         else { Write-Warn2 "scripts/seed_price_book.py FAILED (exit $LASTEXITCODE, see output above)" }
     }

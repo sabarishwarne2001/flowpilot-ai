@@ -258,7 +258,7 @@ run_seed() {
         warn "$1 FAILED: $(printf '%s\n' "${output}" | tail -n 1)"
     fi
 }
-run_seed scripts/seed_price_book.py --version 1
+run_seed scripts/seed_price_book.py --version auto
 # Dev has no payment gateway, so publish the tiers without gateway price ids;
 # without the flag the script refuses and no plan tier exists at all.
 run_seed scripts/seed_quota_tiers.py --allow-unpriced

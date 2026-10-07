@@ -286,6 +286,61 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Overage rate for Groq output tokens.",
     },
+    # --- Self-hosted model (sovereign edition), N-031 ---
+    # The operator's own model on the operator's own hardware: the platform buys
+    # nothing per token, so it is priced at zero and the zero is DECLARED
+    # (ZERO_BYOK), never an unknown read as free. Provider-wide, because the
+    # model name is whatever the operator deploys (LOCAL_LLM_MODEL). Quantity
+    # quotas on tokens still apply.
+    {
+        "event_type": "llm.input_token",
+        "provider": "local",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Self-hosted model on the operator's hardware (N-031).",
+    },
+    {
+        "event_type": "llm.output_token",
+        "provider": "local",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Self-hosted model on the operator's hardware (N-031).",
+    },
+    # --- Seats, N-030 ---
+    # One seat per month on each paid plan, the per-seat price the plan cards
+    # advertise (seed_quota_tiers.COMMERCIALS). The invoice's seat line and the
+    # seat-change disclosure read these; Free has no seats to sell.
+    {
+        "event_type": "billing.seat",
+        "provider": "platform",
+        "model": None,
+        "tier_key": "developer",
+        "unit": "seat",
+        "unit_price_micros": "49000000",
+        "notes": "Developer plan, one seat per month (N-030).",
+    },
+    {
+        "event_type": "billing.seat",
+        "provider": "platform",
+        "model": None,
+        "tier_key": "business",
+        "unit": "seat",
+        "unit_price_micros": "299000000",
+        "notes": "Business plan, one seat per month (N-030).",
+    },
+    {
+        "event_type": "billing.seat",
+        "provider": "platform",
+        "model": None,
+        "tier_key": "enterprise",
+        "unit": "seat",
+        "unit_price_micros": "799000000",
+        "notes": "Enterprise plan, one seat per month (N-030).",
+    },
     # --- Non-billable API Gateway Metering ---
     {
         "event_type": "api.request",
@@ -325,6 +380,57 @@ def _load_entries(path: Optional[Path]) -> list[PriceSpec]:
     ]
 
 
+def _entry_key(spec: PriceSpec) -> tuple[str, ...]:
+    return (
+        spec.event_type,
+        (spec.provider or "").strip().lower(),
+        spec.model or "",
+        spec.tier_key or "",
+        format(Decimal(str(spec.unit_price_micros)).normalize(), "f"),
+        format(Decimal(str(spec.cost_basis_micros)).normalize(), "f")
+        if spec.cost_basis_micros is not None
+        else "",
+        spec.cost_basis_source or "",
+    )
+
+
+def next_version_for(db, entries: list[PriceSpec]) -> Optional[int]:
+    """`--version auto`: the version to publish, or None when nothing changed.
+
+    A server seeded by an earlier release keeps its published book (published
+    books are immutable: invoices pin them). When this file's entries differ
+    from the newest published book, the next version is published and takes
+    over from now on; when they are the same, nothing is written, so the
+    start-up scripts can run this on every start.
+    """
+    latest = db.execute(
+        select(PriceBook)
+        .where(PriceBook.published_at.is_not(None))
+        .order_by(PriceBook.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if latest is None:
+        return 1
+    published = {
+        _entry_key(
+            PriceSpec(
+                event_type=row.event_type,
+                provider=row.provider,
+                model=row.model,
+                tier_key=row.tier_key,
+                unit_price_micros=row.unit_price_micros,
+                cost_basis_micros=row.cost_basis_micros,
+                cost_basis_source=row.cost_basis_source,
+            )
+        )
+        for row in latest.entries
+    }
+    if published == {_entry_key(spec) for spec in entries}:
+        return None
+    newest = db.execute(select(PriceBook.version).order_by(PriceBook.version.desc()).limit(1)).scalar_one()
+    return int(newest) + 1
+
+
 def _parse_instant(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -334,7 +440,15 @@ def _parse_instant(value: str) -> datetime:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, default=1, help="Pricebook version (default: 1)")
+    parser.add_argument(
+        "--version",
+        type=str,
+        default="1",
+        help=(
+            "Pricebook version (default: 1). 'auto' publishes the next version only when "
+            "the entries differ from the newest published book."
+        ),
+    )
     parser.add_argument(
         "--effective-from",
         dest="effective_from",
@@ -359,6 +473,18 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     db = SessionLocal()
     try:
+        if str(args.version).strip().lower() == "auto":
+            resolved = next_version_for(db, entries)
+            if resolved is None:
+                if args.as_json:
+                    print(json.dumps({"status": "up-to-date"}, indent=2))
+                else:
+                    print("The newest published price book already matches this seed.")
+                return 0
+            args.version = resolved
+        else:
+            args.version = int(args.version)
+
         existing = db.execute(
             select(PriceBook).where(PriceBook.version == args.version)
         ).scalar_one_or_none()

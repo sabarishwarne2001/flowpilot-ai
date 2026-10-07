@@ -240,7 +240,7 @@ class AssemblyResult:
 
 
 def seat_price_entry(
-    db: Session, *, price_book_id: uuid.UUID
+    db: Session, *, price_book_id: uuid.UUID, tier_key: Optional[str] = None
 ) -> Optional[PriceBookEntry]:
     """The seat line's price entry in one specific, pinned price book.
 
@@ -250,13 +250,29 @@ def seat_price_entry(
     the invoice are two independent lookups that will eventually disagree, and
     the disagreement is discovered by a customer. One implementation, two
     callers.
+
+    N-030. A seat costs a different amount on each plan, so the book carries
+    one entry per plan (`tier_key` = the plan key). The plan's own entry wins;
+    a plan-less entry, if the book has one, prices every plan without its own.
+    Another plan's entry is never used: this lookup used to take whichever seat
+    entry sorted first, which with per-plan entries quoted every customer the
+    Business price.
     """
+    base = select(PriceBookEntry).where(
+        PriceBookEntry.price_book_id == price_book_id,
+        PriceBookEntry.event_type == settings.BILLING_SEAT_EVENT_TYPE,
+    )
+    if tier_key:
+        own = db.execute(
+            base.where(PriceBookEntry.tier_key == tier_key)
+            .order_by(PriceBookEntry.created_at)
+            .limit(1)
+        ).scalar_one_or_none()
+        if own is not None:
+            return own
     return db.execute(
-        select(PriceBookEntry).where(
-            PriceBookEntry.price_book_id == price_book_id,
-            PriceBookEntry.event_type == settings.BILLING_SEAT_EVENT_TYPE,
-        )
-        .order_by(PriceBookEntry.tier_key.nulls_last(), PriceBookEntry.created_at)
+        base.where(PriceBookEntry.tier_key.is_(None))
+        .order_by(PriceBookEntry.created_at)
         .limit(1)
     ).scalar_one_or_none()
 
@@ -410,7 +426,11 @@ def assemble(
 
     # -- 1. the seat line -------------------------------------------------
     seats = int(subscription.seats_purchased)
-    seat_entry = seat_price_entry(db, price_book_id=subscription.price_book_id)
+    seat_entry = seat_price_entry(
+        db,
+        price_book_id=subscription.price_book_id,
+        tier_key=subscription.quota_tier_key,
+    )
 
     if seat_entry is not None:
         seat_price = Decimal(str(seat_entry.unit_price_micros))

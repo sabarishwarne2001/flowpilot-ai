@@ -390,7 +390,9 @@ def seat_price_disclosure(
     after = current + additional_seats
 
     entry = invoice_service.seat_price_entry(
-        db, price_book_id=subscription.price_book_id
+        db,
+        price_book_id=subscription.price_book_id,
+        tier_key=subscription.quota_tier_key,
     )
 
     if entry is None:
