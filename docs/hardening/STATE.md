@@ -4,7 +4,7 @@ _Last updated: 2026-10-07 (production configuration & UI elevation)_
 
 ## Current phase
 **Production configuration & UI elevation — COMPLETE, in review.** Branch
-`hardening/production-config-and-ui-elevation` (session branch `claude/sweet-bell-ahiem4`); PR: to be opened from this branch.
+`hardening/production-config-and-ui-elevation` (session branch `claude/sweet-bell-ahiem4`); PR #8 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/8).
 The final release (PR #7, GO) is merged into `main`; this branch builds on it.
 
 - **Track 1 (configuration).** Every key the app, the compose files and the scripts read was checked
