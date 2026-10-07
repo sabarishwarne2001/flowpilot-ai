@@ -13,7 +13,8 @@ Two mechanisms, because each covers what the other cannot:
 * `on_job_dead` runs in the worker the moment a document job dies. It is
   precise and immediate.
 * `sweep_stuck_documents` (job `pipeline.sweep_stuck`, every ten minutes; the
-  same job also times out automation runs stranded in RUNNING, F-146)
+  same job also times out automation runs stranded in RUNNING, F-146, and
+  re-enqueues notification deliveries whose job died, F-147)
   catches what the hook cannot see: a worker process killed outright, a job
   row deleted, a stage left behind by a crash between two commits. It only
   fails a document that has been in a working stage longer than
@@ -211,6 +212,11 @@ def handle_pipeline_sweep_stuck(payload: dict[str, Any]) -> dict[str, Any]:
     # `reap_stranded` marks it TIMED_OUT. It existed, tested, and nothing ever called it.
     with SessionLocal() as db:
         result["automation_runs_reaped"] = reap_stranded(db)
+    # F-147. A FAILED notification delivery that is due and whose job died is re-enqueued.
+    # `sweep_due_deliveries` was written for this and, like the reaper, never scheduled.
+    from app.workers.handlers.notify import sweep_due_deliveries
+
+    result["notification_deliveries_requeued"] = sweep_due_deliveries()
     return result
 
 

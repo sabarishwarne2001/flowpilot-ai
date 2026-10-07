@@ -54,3 +54,64 @@ def test_the_scheduled_sweep_reaps_a_stranded_run_and_spares_a_live_one(
     db_session.expire_all()
     assert db_session.get(AutomationExecution, stranded.id).status is AutomationExecutionStatus.TIMED_OUT
     assert db_session.get(AutomationExecution, live.id).status is AutomationExecutionStatus.RUNNING
+
+
+def test_the_scheduled_sweep_requeues_a_stranded_notification_delivery(
+    db_session, tenant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-147. `sweep_due_deliveries` re-enqueues a FAILED delivery that is due and has no job
+    (its job died, e.g. on lease expiries that used up its attempts). Its docstring said it ran
+    "on the same schedule as reap_expired_leases"; nothing ran it, so such an email was never
+    retried. The scheduled sweep now runs it."""
+    from sqlalchemy import select
+
+    from app.models.job import Job
+    from app.models.notification import (
+        Notification,
+        NotificationChannel,
+        NotificationPriority,
+        NotificationStatus,
+        NotificationType,
+    )
+    from app.models.notification_delivery import NotificationDelivery, NotificationDeliveryStatus
+    from app.services.notification import outbox_dispatcher
+    from app.workers.handlers import notify, register_all
+
+    register_all()  # as the worker does at start; enqueue refuses an unregistered job type
+    monkeypatch.setattr(session_module, "SessionLocal", TestSessionLocal)
+    monkeypatch.setattr(notify, "SessionLocal", TestSessionLocal)
+    notification = Notification(
+        title="Document failed",
+        message="A document could not be processed.",
+        notification_type=NotificationType.DOCUMENT,
+        priority=NotificationPriority.WARNING,
+        delivery_channel=NotificationChannel.IN_APP,
+        delivery_status=NotificationStatus.PENDING,
+        workspace_id=tenant.workspace.id,
+        organization_id=tenant.organization.id,
+        user_id=tenant.contributor.user.id,
+    )
+    db_session.add(notification)
+    db_session.flush()
+    delivery = NotificationDelivery(
+        notification_id=notification.id,
+        organization_id=tenant.organization.id,
+        workspace_id=tenant.workspace.id,
+        channel=NotificationChannel.EMAIL,
+        status=NotificationDeliveryStatus.FAILED,
+        attempts=2,
+        max_attempts=6,
+        next_attempt_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+        payload={"title": "t", "body": "b"},
+    )
+    db_session.add(delivery)
+    db_session.commit()
+
+    result = handle_pipeline_sweep_stuck({})
+
+    assert result["notification_deliveries_requeued"] == 1
+    db_session.expire_all()
+    jobs = db_session.execute(
+        select(Job).where(Job.job_type == outbox_dispatcher.JOB_TYPE)
+    ).scalars().all()
+    assert [job.payload.get("delivery_id") for job in jobs] == [str(delivery.id)]
