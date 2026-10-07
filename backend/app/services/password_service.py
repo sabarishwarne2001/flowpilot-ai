@@ -44,6 +44,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from app.core import password_policy
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
 from app.models.auth_token import AuthTokenPurpose
@@ -198,7 +199,12 @@ def reset_password(
         auth_token_service.InvalidAuthTokenError
         auth_token_service.ExpiredAuthTokenError
         PasswordUnchangedError
+        WeakPasswordError
     """
+    # ASVS V2.1, on the password alone, before the token is touched: a weak
+    # choice must leave the link usable for a better one.
+    password_policy.check_new_password(new_password)
+
     # A SAVEPOINT around the consumption, so a refusal below can undo it
     # precisely.
     #
@@ -227,6 +233,13 @@ def reset_password(
         raise PasswordUnchangedError(
             "Choose a password you have not used on this account before."
         )
+
+    # The same check once more with the account's email, which the token reveals.
+    try:
+        password_policy.check_new_password(new_password, email=user.email)
+    except Exception:
+        savepoint.rollback()
+        raise
 
     savepoint.commit()
 
@@ -286,6 +299,7 @@ def change_password(
     Raises:
         IncorrectPasswordError
         PasswordUnchangedError
+        WeakPasswordError
     """
     if not verify_password(current_password, user.hashed_password):
         logger.warning("PASSWORD_CHANGE_REJECTED | user=%s | bad current", user.id)
@@ -295,6 +309,8 @@ def change_password(
         raise PasswordUnchangedError(
             "Your new password must differ from your current one."
         )
+
+    password_policy.check_new_password(new_password, email=user.email)
 
     user.hashed_password = get_password_hash(new_password)
     db.add(user)

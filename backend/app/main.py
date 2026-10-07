@@ -30,6 +30,7 @@ from app.middleware.client_gone import ClientGoneMiddleware
 from app.middleware.deprecation import DeprecationMiddleware
 from app.middleware.global_rate_limit import GlobalRateLimitMiddleware
 from app.middleware.host_tenant import HostTenantMiddleware
+from app.middleware.cache_control import NoStoreApiResponsesMiddleware
 from app.middleware.nul_guard import NulByteGuardMiddleware
 from app.middleware.public_rate_limit import (
     RATE_LIMIT_HEADERS,
@@ -214,6 +215,9 @@ else:
 app.add_middleware(HostTenantMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(PublicApiRateLimitMiddleware)
+# ASVS V8.2.1: API responses are not cached unless the handler says so
+# (images and rendered pages set their own Cache-Control, which is kept).
+app.add_middleware(NoStoreApiResponsesMiddleware)
 # F-037: a NUL character in the URL or a JSON/form body is a 400, not a 500. Sits
 # just inside RequestTrace so the refusal still carries a request id.
 app.add_middleware(NulByteGuardMiddleware)

@@ -208,6 +208,13 @@ class TestConcurrentRefreshGrace:
 
 
 class TestAuthenticatedAtSurvivesEveryPath:
+    @pytest.fixture(autouse=True)
+    def _months_old_sessions_may_refresh(self, monkeypatch):
+        # These prove the sign-in moment is carried, never restamped, using sessions signed in
+        # months ago as an unmistakable marker. The 12-hour limit (ASVS V3.3.2,
+        # test_session_lifetime.py) would refuse such a refresh outright, so it is off here.
+        monkeypatch.setattr(settings, "SESSION_ABSOLUTE_LIFETIME_HOURS", 0)
+
     def test_grace_path_does_not_restamp_the_authentication_moment(
         self, db, account, monkeypatch
     ):

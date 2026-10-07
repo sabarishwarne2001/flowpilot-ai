@@ -115,7 +115,8 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         success_url: `${returnUrl}?outcome=success`,
         cancel_url: `${returnUrl}?outcome=cancelled`,
         ...(priced ? { interval, currency } : {}),
-        ...(promoQuote ? { promo_code: promoQuote.code } : {}),
+        // A code the gateway cannot honour (no gateway coupon) is never sent to checkout.
+        ...(promoQuote?.online ? { promo_code: promoQuote.code } : {}),
       });
     },
     onSuccess: async (session, plan) => {
@@ -190,6 +191,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   }
 
   const selectedIsFree = selected ? isFreePlan(selected) : false;
+  const hasPaidPlans = plans.some((plan) => !isFreePlan(plan));
   const selectedBlocked = selected !== null && !selectedIsFree && !checkoutAvailable;
 
   return (
@@ -248,6 +250,63 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         )}
       </header>
 
+      {/* N-020 item 3: the promo code is part of the plan picker, visible before a plan is chosen.
+          The quote is priced by the server for the chosen plan, interval, currency and seats, and the
+          code travels with the checkout, which reserves it. */}
+      {hasPaidPlans && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3" data-testid="promo-code">
+          <label htmlFor="promo-code-input" className="text-sm font-medium text-foreground">
+            Promo code
+          </label>
+          <input
+            id="promo-code-input"
+            value={promoCode}
+            maxLength={32}
+            autoComplete="off"
+            placeholder="e.g. LAUNCH20"
+            onChange={(event) => {
+              setPromoCode(event.target.value.toUpperCase());
+              setPromoQuote(null);
+              setPromoError(null);
+            }}
+            className="w-40 rounded-md border border-border bg-background px-3 py-1.5 text-sm uppercase text-foreground placeholder:normal-case placeholder:text-muted-foreground"
+          />
+          <button
+            type="button"
+            disabled={promoCode.trim().length < 3 || applyPromo.isPending || !selected || isFreePlan(selected)}
+            onClick={() => selected && applyPromo.mutate(selected)}
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
+          >
+            {applyPromo.isPending ? "Checking…" : "Apply"}
+          </button>
+          {!selected || isFreePlan(selected) ? (
+            <span className="text-xs text-muted-foreground">Choose a paid plan below, then apply your code.</span>
+          ) : null}
+          {promoQuote && promoQuote.online && (
+            <span className="text-xs text-emerald-700 dark:text-emerald-400" role="status">
+              {`${promoQuote.code}: −${money(promoQuote.discount_micros, currency)} per ${interval} ` +
+                `(${money(promoQuote.final_amount_micros, currency)} instead of ` +
+                `${money(promoQuote.list_amount_micros, currency)}) ` +
+                (promoQuote.duration === "REPEATING"
+                  ? `for ${promoQuote.duration_in_months ?? 0} months`
+                  : promoQuote.duration === "FOREVER"
+                    ? "while subscribed"
+                    : "on the first payment")}
+            </span>
+          )}
+          {promoQuote && !promoQuote.online && (
+            <span className="text-xs text-amber-700 dark:text-amber-400" role="status">
+              {REVOPS_MESSAGES.PROMO_NOT_AVAILABLE_ONLINE}
+            </span>
+          )}
+          {promoError && (
+            <span role="alert" className="text-xs text-destructive">
+              {promoError}
+            </span>
+          )}
+        </div>
+      )}
+
       <ul className="divide-y divide-border">
         {plans.map((plan, index) => {
           const isSelected = plan.key === selectedKey;
@@ -271,6 +330,8 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   onChange={() => {
                     setSelectedKey(plan.key);
                     setConfirming(false);
+                    setPromoQuote(null);
+                    setPromoError(null);
                     checkout.reset();
                   }}
                   disabled={isCurrent}
@@ -309,6 +370,10 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       disabled={!checkoutAvailable}
                       onClick={(event) => {
                         event.preventDefault();
+                        if (plan.key !== selectedKey) {
+                          setPromoQuote(null);
+                          setPromoError(null);
+                        }
                         setSelectedKey(plan.key);
                         setConfirming(true);
                         checkout.reset();
@@ -353,25 +418,6 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             </div>
           )}
 
-          {!selectedIsFree && (
-            <div className="flex flex-wrap items-center gap-2" data-testid="promo-code">
-              <label htmlFor="promo-code-input" className="text-sm font-medium text-foreground">Promo code:</label>
-              <input id="promo-code-input" value={promoCode} maxLength={32}
-                     onChange={(event) => { setPromoCode(event.target.value); setPromoQuote(null); setPromoError(null); }}
-                     className="w-36 rounded-md border border-border bg-background px-3 py-1.5 text-sm uppercase text-foreground" />
-              <button type="button" disabled={promoCode.trim().length < 3 || applyPromo.isPending}
-                      onClick={() => applyPromo.mutate(selected)}
-                      className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60">Apply</button>
-              {promoQuote && (
-                <span className="text-xs text-emerald-700 dark:text-emerald-400">
-                  {promoQuote.code}: −{money(promoQuote.discount_micros, currency)} per {interval}
-                  {promoQuote.duration === "REPEATING" ? ` for ${promoQuote.duration_in_months ?? 0} months` : promoQuote.duration === "FOREVER" ? " while subscribed" : " on the first payment"}
-                </span>
-              )}
-              {promoError && <span role="alert" className="text-xs text-destructive">{promoError}</span>}
-            </div>
-          )}
-
           {checkoutError && (
             <p role="alert" className="text-sm text-destructive">
               {checkoutError}
@@ -392,7 +438,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                 ) : (
                   <>
                     Continue to payment for <strong>{selected.display_name}</strong> ({seats}{" "}
-                    {seats === 1 ? "seat" : "seats"})?
+                    {seats === 1 ? "seat" : "seats"}){promoQuote?.online ? <> with promo code <strong>{promoQuote.code}</strong></> : null}?
                   </>
                 )}
               </span>

@@ -5,6 +5,7 @@ import {
 } from "@/services/api/endpoints";
 import type {
   Notification,
+  NotificationCategory,
   NotificationPage,
   NotificationUpdateRequest,
   MarkAllReadResponse,
@@ -13,11 +14,15 @@ import type {
 export const getNotifications = async (
   workspaceId: string,
   isRead?: boolean | undefined,
+  category?: NotificationCategory | undefined,
 ): Promise<readonly Notification[]> => {
   const queryParams = new URLSearchParams();
 
   if (isRead !== undefined) {
     queryParams.append("is_read", isRead.toString());
+  }
+  if (category !== undefined) {
+    queryParams.append("notification_type", category);
   }
 
   const response = await apiClient.get<readonly Notification[]>(
@@ -86,6 +91,7 @@ export const getOrganizationNotifications = async (
   organizationId: string,
   params: {
     isRead?: boolean | undefined;
+    category?: NotificationCategory | undefined;
     limit?: number | undefined;
     offset?: number | undefined;
   } = {},
@@ -95,6 +101,7 @@ export const getOrganizationNotifications = async (
     {
       params: {
         ...(params.isRead !== undefined ? { is_read: params.isRead } : {}),
+        ...(params.category !== undefined ? { notification_type: params.category } : {}),
         limit: params.limit ?? 25,
         offset: params.offset ?? 0,
       },

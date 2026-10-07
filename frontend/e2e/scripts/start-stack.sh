@@ -41,6 +41,7 @@ stop_all() {
   stop_one api
   stop_one worker
   stop_one smtp
+  stop_one llm
 }
 
 if [[ "${1:-}" == "stop" ]]; then
@@ -64,6 +65,21 @@ ARCH40_CONTRACT=1 "$PY" -m alembic upgrade head >"$LOG_DIR/migrate.log" 2>&1 || 
 if ! port_busy 1025; then
   nohup node "$HERE/../support/smtp-sink.mjs" >"$LOG_DIR/smtp.log" 2>&1 &
   echo $! >"$RUN_DIR/smtp.pid"
+fi
+
+# E2E_LLM=1: a deterministic local model stand-in (support/llm-mock.mjs) behind the sovereign
+# edition's local-model setting, so extraction, verification, the review queue and the assistant
+# run end to end without a provider key. Unset: no model, as in the sandbox before (F-063).
+if [[ "${E2E_LLM:-}" == "1" ]]; then
+  LLM_PORT="${E2E_LLM_PORT:-11434}"
+  if ! port_busy "$LLM_PORT"; then
+    E2E_LLM_PORT="$LLM_PORT" nohup node "$HERE/../support/llm-mock.mjs" >"$LOG_DIR/llm.log" 2>&1 &
+    echo $! >"$RUN_DIR/llm.pid"
+  fi
+  export LOCAL_LLM_MODE=exclusive
+  export LOCAL_LLM_BASE_URL="http://127.0.0.1:$LLM_PORT/v1"
+  export LOCAL_LLM_MODEL="${E2E_LLM_MODEL:-flowpilot-e2e-local}"
+  export LOCAL_LLM_TIMEOUT_SECONDS=30
 fi
 
 nohup "$PY" -m uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$LOG_DIR/api.log" 2>&1 &

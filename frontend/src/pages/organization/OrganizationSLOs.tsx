@@ -1,3 +1,6 @@
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
+import { CAPABILITY } from "@/constants/capabilities";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -87,7 +90,9 @@ const SLORow: React.FC<{
   entry: SLOComplianceEntry;
   organizationId: string;
   onChanged: () => void;
-}> = ({ entry, organizationId, onChanged }) => {
+  /** N-002: setting the organization's own target is Enterprise (capability.priority_slo). */
+  canSetTargets: boolean;
+}> = ({ entry, organizationId, onChanged, canSetTargets }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(entry.target.target_value);
   const [contractual, setContractual] = useState(entry.target.is_contractual);
@@ -230,7 +235,7 @@ const SLORow: React.FC<{
             </p>
           ) : null}
         </div>
-      ) : (
+      ) : canSetTargets ? (
         <button
           type="button"
           onClick={() => {
@@ -242,13 +247,24 @@ const SLORow: React.FC<{
         >
           Change target
         </button>
-      )}
+      ) : entry.target.source === "ORGANIZATION" ? (
+        <button
+          type="button"
+          onClick={() => reset.mutate()}
+          disabled={reset.isPending}
+          className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+        >
+          Use the platform target
+        </button>
+      ) : null}
     </li>
   );
 };
 
 export const OrganizationSLOs: React.FC = () => {
   const { organizationId } = useResolvedOrganization();
+  const prioritySlo = useCapabilityAccess(organizationId, CAPABILITY.prioritySlo);
+  const canSetTargets = prioritySlo.isLoading || prioritySlo.granted;
   const [period, setPeriod] = useState<SLOWindow>("DAY");
   const queryClient = useQueryClient();
 
@@ -325,6 +341,8 @@ export const OrganizationSLOs: React.FC = () => {
           </label>
         </header>
 
+        <PlanLockBanner capability={CAPABILITY.prioritySlo} feature="Setting your own service-level targets" />
+
         {breaches > 0 ? (
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-foreground">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -352,6 +370,7 @@ export const OrganizationSLOs: React.FC = () => {
               entry={entry}
               organizationId={organizationId}
               onChanged={invalidate}
+              canSetTargets={canSetTargets}
             />
           ))}
         </ul>

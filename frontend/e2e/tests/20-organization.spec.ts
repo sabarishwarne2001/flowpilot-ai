@@ -44,6 +44,29 @@ test.describe("Notifications (organization)", () => {
   });
 });
 
+test.describe("Members: invite from the organization page (N-020 item 5)", () => {
+  test("invite with an organization role and workspace access, then resend and revoke", async ({ page, problems }) => {
+    problems.allowHttp(/\/invitations\/[^/]+\/resend$/, [429], "a resend within the cooldown is refused by design");
+    const invitee = `org-invitee-${runId()}@e2e.example.com`;
+    await page.goto(org("C", "members"));
+    const panel = page.getByRole("region", { name: "Invite people" });
+    await panel.getByRole("textbox", { name: "Email address" }).fill(invitee);
+    await panel.getByRole("combobox", { name: "Organization role" }).selectOption("ADMIN");
+    await panel.getByRole("checkbox", { name: "Finance" }).check();
+    await panel.getByRole("combobox", { name: "Role in Finance" }).selectOption("CONTRIBUTOR");
+    await panel.getByRole("button", { name: "Send invitation" }).click();
+    const pending = panel.getByRole("list", { name: "Pending invitations" }).getByRole("listitem").filter({ hasText: invitee });
+    await expect(pending).toContainText("Admin · Finance (Contributor)", { timeout: 15_000 });
+    await pending.getByRole("button", { name: `Resend the invitation to ${invitee}` }).click();
+    // Sent seconds ago: the anti-spam cooldown (INVITATION_RESEND_COOLDOWN_MINUTES) answers, and the
+    // panel says so in plain words instead of sending a second email.
+    await expect(page.getByText("This invitation was sent recently. Try again in a few minutes.").first()).toBeVisible();
+    await pending.getByRole("button", { name: `Revoke the invitation to ${invitee}` }).click();
+    await expect(panel.getByRole("list", { name: "Pending invitations" }).getByText(invitee)).toHaveCount(0, { timeout: 15_000 });
+    await expectHealthyPage(page);
+  });
+});
+
 test.describe("Members: invite, accept, change role, remove", () => {
   test.setTimeout(240_000);
 
@@ -151,6 +174,15 @@ test.describe("Data governance and compliance", () => {
     expect((await saved).status()).toBeLessThan(300);
     await page.reload();
     await expect(page.locator("#retention-work-items")).toHaveValue("90");
+
+    // Put it back ("Forever"): a 90-day floor makes every younger document undeletable
+    // (F-108), which would break any later test, or re-run, that deletes a document.
+    await page.locator("#retention-work-items").fill("");
+    const cleared = page.waitForResponse((r) => /\/compliance/.test(r.url()) && r.request().method() !== "GET");
+    await page.getByRole("button", { name: "Save retention policy" }).click();
+    expect((await cleared).status()).toBeLessThan(300);
+    await page.reload();
+    await expect(page.locator("#retention-work-items")).toHaveValue("");
   });
 
   test("generate a DPA export bundle (GDPR data export)", async ({ page }) => {
@@ -346,9 +378,34 @@ test.describe("Billing", () => {
     await seats.fill("4");
   });
 
-  test("a promo code can be entered at checkout (requested capability)", async ({ page }) => {
+  test("a promo code can be entered at checkout and is priced for the chosen plan (N-020 item 3)", async ({ page, problems }) => {
+    // The platform super-admin publishes a code with a gateway coupon (RevOps console); idempotent.
+    const admin = await loginAs("P.superadmin");
+    const created = await api(admin, "POST", "/admin/revops/promo-codes", {
+      code: "E2ELAUNCH20",
+      description: "Browser suite launch offer",
+      percent_off: 20,
+      duration: "REPEATING",
+      duration_in_months: 3,
+      gateway_coupon_id: "e2e_coupon_launch20",
+    });
+    expect([201, 409]).toContain(created.status);
+
     await page.goto(org("C", "billing"));
-    await expect(page.getByRole("textbox", { name: /promo|coupon/i })).toBeVisible({ timeout: 5_000 });
+    const code = page.getByRole("textbox", { name: /promo code/i });
+    await expect(code).toBeVisible({ timeout: 5_000 });
+    await code.fill("e2elaunch20");
+    // A code is priced for a plan: Apply waits for one.
+    await expect(page.getByRole("button", { name: "Apply" })).toBeDisabled();
+    await page.getByRole("radio", { name: /^Business/ }).check();
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "E2ELAUNCH20" })).toContainText(/for 3 months/);
+
+    // An unknown code is refused with the server's reason.
+    problems.allowHttp(/\/billing\/promo-quote$/, [404], "an unknown promo code is refused");
+    await code.fill("NO-SUCH-CODE");
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /doesn.t exist/ })).toBeVisible();
   });
 });
 

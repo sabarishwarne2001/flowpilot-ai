@@ -397,3 +397,83 @@ helper, billing-account creation, Dodo reconciliation, RevOps contracts) and mus
 `FOR NO KEY UPDATE` (the F-078 deadlock came from plain `FOR UPDATE` there); a lock whose target
 cannot be read fails. It is a pytest test (`tests/isolation/`), not a `verify_*.py` gate, so N-010
 is not touched. F-099 item closed.
+
+---
+
+# Final release (2026-10-06): every open decision taken
+
+The owner granted full founder authority and CTO discretion for the final release ("you do not need
+to pause for owner input"). Each decision below was taken on that authority, with its reason, and
+is implemented and tested on branch `hardening/final-commercial-release`. Nothing is left open
+here; anything you want to change is now an ordinary product change.
+
+## N-002 — Plan gating of the three ungated consoles: DECIDED
+- **Service levels: reading on every plan; setting your own targets is Enterprise.** The page shows
+  every tenant the platform's service levels and its own live compliance (transparency sells).
+  Setting the organization's own, possibly contractual, targets is the "Priority 99.9% SLO" that the
+  Enterprise plan already advertises (`capability.priority_slo`), which nothing enforced until now.
+  Server: 402 below Enterprise; removing an override stays open (N-003). Sidebar locked below
+  Enterprise; the page shows the plan banner.
+- **Data governance & compliance: every plan.** Export and erasure are data-subject rights (GDPR
+  Art. 15–17); a customer must be able to honour them whatever it pays. Retention policies and legal
+  holds protect the customer's own legal position; paywalling them would be a liability, not revenue.
+- **Partner marketplace: every plan.** It installs signed workflows into the automation engine,
+  which every plan has. A workflow step that needs a paid capability is refused by that capability's
+  own server-side gate when it runs, so nothing leaks.
+
+## N-003 — After a downgrade: DECIDED, read + delete
+Confirmed as the policy everywhere: after a downgrade a customer can still **see and remove** what
+it set up (keys, webhooks, destinations, domains, branding, BYOK keys, SLO overrides) but cannot
+create or change it. This is what the code already does and the tests prove.
+
+## N-004 — Legal name: DECIDED
+"FlowPilot AI" stays the copyright holder in `LICENSE` until you incorporate; change one line then.
+**Recommendation (not a blocker):** make the GitHub repository private (a setting only you can change).
+
+## N-005 — Rewrite history to drop `backend/stripe.exe`: DECIDED, no
+A force-push to `main` breaks every clone and fork for a one-time 38 MB saving; the binary is not in
+the tree and is ignored. Not worth the disruption. Making the repository private (N-004) removes
+the only real concern (public download of an old binary).
+
+## N-006 — Webhooks, audit log, enterprise identity for ADMIN: DECIDED, shown to ADMIN
+The API already serves all three to ADMIN; the sidebar now shows them. In Enterprise identity an
+ADMIN reads the configuration and every write (SSO, SCIM tokens, domains) stays OWNER-only on the
+server.
+
+## N-015 — Enforce the Content-Security-Policy: DECIDED, enforced
+The browser suite now runs the whole product under the production policy **enforced**
+(`E2E_CSP=1`, policy read from `deploy/Caddyfile`): no policy violation in any run; the final run
+passed 290 of 291 tests (one skipped by design). `Content-Security-Policy` is now
+enforced in the Caddyfile on the platform host **and** on tenant custom domains, which had sent no
+policy at all (commit c47ae3f).
+
+## N-016 — Historical scripts: DECIDED, archived
+The 286 historical files (`apply_*`, `verify_*`, `run_arch*`, certification reports, evidence dumps)
+moved unchanged to `archive/`; the CI gates job is retired (the pytest suites supersede it). Two gate
+modules that active tests import stay in `backend/scripts/`.
+
+## N-017 — Extras before the first paying customer: DECIDED
+| Extra | Decision |
+|---|---|
+| Redis password | **Done.** Production Redis requires `REDIS_PASSWORD`. |
+| Alerting | **Done.** `flowpilot-uptime-heartbeat` checks the public readiness endpoint every minute and pings a Healthchecks.io check (RUNBOOK 9.6); together with the job heartbeats you hear about an outage before a customer does. |
+| Image split (F-045) | Done in Phase 5 (OCR engine only in the `ocr` image). The CPU-only torch build needs a machine that can reach download.pytorch.org (STATE.md next actions). |
+| Two-factor sign-in (MFA) | **Built in this release** (commit df65332): authenticator-app codes (TOTP) with ten one-time recovery codes, turned on per user from Settings → Profile. Not forced on anyone yet; an organization-wide "require two-factor" switch is the next step after launch. SSO users keep their identity provider's MFA. |
+| Malware scanning | **After launch**, as an optional ClamAV service. Uploads are already type-checked, size-limited, re-encoded and stripped of active content (F-035), which covers the common PDF attack paths. |
+| Pinning images by digest | **At the first deploy**: digests can only be read on a machine that can pull the images; RUNBOOK 9.2 says how (`docker compose pull` then `docker image inspect`). |
+
+## N-018 — Sign-in allowance: DECIDED, option (b) 20 per address per 5 minutes
+The per-account guards (refuse after 5 failures per account and address, slow down per account)
+stop password guessing; the per-address allowance only has to stop a sweep, and 20 leaves room for
+an office behind one address. Option (c) is unnecessary with those guards.
+
+## N-019 — Viewers and Workflows / Run history / Review queue: DECIDED, hidden
+A workspace VIEWER reads documents and dashboards; workflows and the review queue are work and
+configuration. The sidebar hides the three pages from viewers; opened by URL they show the Access
+restricted screen (F-053), and the server keeps refusing.
+
+## N-020 — Missing capabilities: DECIDED, all built
+Items 2 (notification category filters and mark as unread), 3 (promo code at checkout),
+5 (invite from Organization → Members) and 7 (correct a field in the document viewer) are built in
+this release, with the page image beside the fields (item 6, extended from the review hub to the
+document viewer). Items 1 and 4 were built in Phase 4.

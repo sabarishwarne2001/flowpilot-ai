@@ -40,7 +40,7 @@ GUARD_REQUIRED = {
 MUST_BE_BLANK = {
     "JWT_SECRET_KEY", "API_KEY_PEPPER", "REDIS_IDENTITY_PEPPER", "EMAIL_ENCRYPTION_KEYS",
     "POSTGRES_PASSWORD", "RERANKER_INTERNAL_TOKEN", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY",
-    "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRETS", "DODO_API_KEY", "DODO_WEBHOOK_SECRET",
+    "REDIS_PASSWORD", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRETS", "DODO_API_KEY", "DODO_WEBHOOK_SECRET",
     "PLATFORM_SMTP_PASSWORD", "GROQ_API_KEY", "GEMINI_API_KEY", "SEED_ADMIN_PASSWORD",
 }
 
@@ -67,6 +67,7 @@ def secrets_filled_in() -> dict[str, str]:
         EMAIL_ENCRYPTION_KEYS=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
         POSTGRES_PASSWORD=secrets.token_urlsafe(24),
         RERANKER_INTERNAL_TOKEN=secrets.token_hex(32),
+        REDIS_PASSWORD=secrets.token_hex(32),
         S3_ACCESS_KEY_ID="AKIA" + secrets.token_hex(8).upper(),
         S3_SECRET_ACCESS_KEY=secrets.token_urlsafe(30),
     )

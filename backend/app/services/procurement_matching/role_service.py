@@ -115,6 +115,12 @@ def classify_and_store(
         verdict = classify(work_item.extracted_text or "")
         role, source, confidence = verdict.role, SOURCE_CLASSIFIER, verdict.confidence
 
+    # F-115: the number that identifies THIS document, chosen by its role (a receipt's own number,
+    # not the PO number it quotes).
+    document_number = line_extraction.document_number_for_role(
+        work_item.extracted_entities or {}, role, header.document_number
+    )
+
     values = {
         "organization_id": organization_id,
         "workspace_id": work_item.workspace_id,
@@ -123,7 +129,7 @@ def classify_and_store(
         "role_source": source,
         "role_confidence": confidence,
         "vendor_key": header.vendor_key,
-        "document_number": header.document_number,
+        "document_number": document_number,
         "document_date": header.document_date,
         "currency": header.currency,
         "total_micros": header.total_micros,
@@ -152,7 +158,7 @@ def classify_and_store(
         confidence=confidence,
         user_locked=user_locked,
         vendor_key=header.vendor_key,
-        document_number=header.document_number,
+        document_number=document_number,
     )
     logger.info("procurement.role_stored", extra=outcome.as_details())
     return outcome

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
+    # text: one line per event with its context as key=value; json: one JSON object per line.
+    LOG_FORMAT: str = "text"
 
     CORS_ORIGINS: str = "http://localhost:3000"
 
@@ -115,6 +117,11 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    # ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the
+    # session is, and after 30 minutes with no activity. Checked when the access token is
+    # refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_DAYS stays the outer bound.
+    SESSION_ABSOLUTE_LIFETIME_HOURS: int = 12
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 30
     SESSION_REUSE_GRACE_SECONDS: int = 10
     SESSION_CHAIN_WALK_LIMIT: int = 16
 
@@ -207,7 +214,10 @@ class Settings(BaseSettings):
     # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
     # allowance the product had in effect while each attempt was counted twice
     # against a limit of 20; the owner chooses the final value (N-018).
-    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 10
+    # N-018 (decided in the final release): the intended 20 attempts per address per 5 minutes.
+    # Guessing one account is slowed and then refused per account+address (login_account_ip,
+    # login_account), so the per-address allowance only has to stop a sweep, not an office.
+    RATE_LIMIT_LOGIN_IP_PER_5MIN: int = 20
     RATE_LIMIT_CREDENTIAL_PER_HOUR: int = 10
     RATE_LIMIT_EXPORT_PER_HOUR: int = 5
 

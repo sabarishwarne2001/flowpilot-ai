@@ -13,9 +13,16 @@ const emailSchema = z
   .email("Please enter a valid email address.")
   .max(255, "Email cannot exceed 255 characters.");
 
+/**
+ * The length rule only (ASVS V2.1.1: 12). Whether a password is too easy to
+ * guess is the server's call (app/core/password_policy.py, zxcvbn); its
+ * plain-words answer is shown as the form error.
+ */
+export const MIN_PASSWORD_LENGTH = 12;
+
 const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters.")
+  .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters. A few unrelated words work well.`)
   .max(128, "Password cannot exceed 128 characters.");
 
 /**

@@ -519,5 +519,21 @@ async def delete_work_item(
             "Only the uploader or a workspace administrator may delete this document."
         )
 
+    # F-108: a legal hold (or the organization's retention floor) refuses the
+    # single delete exactly as it refuses the bulk one.
+    from app.services.ingestion import retention_service
+
+    block = retention_service.blocking_reasons(
+        db,
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        work_items=[work_item],
+    ).get(work_item.id)
+    if block is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": block.code, "message": block.reason},
+        )
+
     crud.delete_work_item(db, db_obj=work_item)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

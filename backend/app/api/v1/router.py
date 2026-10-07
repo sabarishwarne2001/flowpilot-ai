@@ -28,6 +28,7 @@ from app.api.v1 import (
     global_search,
     payment_risk,
     document_evidence,
+    document_fields,
     compliance,
     custom_domains,
     dashboard,
@@ -40,6 +41,7 @@ from app.api.v1 import (
     internal_tls,
     marketplace,
     me,
+    mfa,
     partner,
     procurement,
     redactions,
@@ -79,6 +81,7 @@ api_router.include_router(organization_notifications.router)
 api_router.include_router(audit_logs.router)
 api_router.include_router(api_keys.router)
 api_router.include_router(me.router)
+api_router.include_router(mfa.router)
 api_router.include_router(avatar.router)
 api_router.include_router(email_change.router)
 api_router.include_router(workspaces.router)
@@ -208,6 +211,7 @@ _SCOPED = (
     (ingestion.work_item_router, "/work-items",        "Work Items"),
     (work_items.router,        "/work-items",         "Work Items"),
     (document_evidence.router, "/work-items",         "Work Items"),  # PHASE 4 review evidence
+    (document_fields.router,   "/work-items",         "Work Items"),  # N-020 items 6/7: viewer text + corrections
     (ingestion.session_router,  "/upload-sessions",    "Batch Ingestion"),
     (ingestion.batch_router,    "/ingestion-batches",  "Batch Ingestion"),
     (ingestion.preset_router,   "/document-presets",   "Document Presets"),

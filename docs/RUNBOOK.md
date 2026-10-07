@@ -127,10 +127,9 @@ flag with `$env:ARCH40_CONTRACT = '1'` before `alembic upgrade head`.
 | API schema | `curl -o openapi.json http://127.0.0.1:8000/api/v1/openapi.json` | `200`; 441 paths / 550 operations at Phase 1 |
 | One migration head | `cd backend && alembic heads` | exactly one line ending `(head)` |
 | Migration round trip | `ARCH40_CONTRACT=1 alembic downgrade -1 && ARCH40_CONTRACT=1 alembic upgrade head` | both exit 0 |
-| No new schema drift | `ARCH40_CONTRACT=1 python scripts/check_migration_drift.py` | `No new drift. 314 known operation(s) remain` (see F-017) |
+| No new schema drift | `ARCH40_CONTRACT=1 python scripts/check_migration_drift.py` | `No new drift. 283 known operation(s) remain` (see F-017) |
 | Encodings | `cd backend && python scripts/normalize_encodings.py --check` | `Encoding clean` |
-| Verification gates | `cd backend && python scripts/run_all_gates.py --static-only` | runs all 78; **33 fail today** (F-029) |
-| Backend tests | `cd backend && pytest -q` | **red today** (F-016); see §5 |
+| Backend tests | `cd backend && pytest -q` | all pass (about 25 minutes); see §5 |
 | Frontend types | `cd frontend && npx tsc --noEmit` | no output, exit 0 |
 | Frontend lint | `cd frontend && npm run lint` | exit 0 |
 | Frontend build | `cd frontend && npm run build` | `✓ built`, exit 0 |
@@ -319,6 +318,7 @@ openssl rand -hex 32   # JWT_SECRET_KEY
 openssl rand -hex 32   # API_KEY_PEPPER
 openssl rand -hex 32   # REDIS_IDENTITY_PEPPER
 openssl rand -hex 32   # RERANKER_INTERNAL_TOKEN
+openssl rand -hex 32   # REDIS_PASSWORD (hex only: it is placed inside a URL)
 openssl rand -hex 24   # POSTGRES_PASSWORD (hex only: it is placed inside a URL)
 python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"   # EMAIL_ENCRYPTION_KEYS
 ```
@@ -435,6 +435,22 @@ has no webhook secret.
 - Upload a small PDF. The first document is slow because the OCR and search models download on
   first use, so the server needs outbound internet until they are cached.
 - Set up backups and scheduled jobs the same day (sections 9.4 and 9.6).
+- Open the app in a browser with the developer console open and click through the main pages:
+  the Content-Security-Policy is **enforced** (N-015), so a blocked resource shows as a red
+  "Refused to load" line. The browser suite runs every page under this exact policy, so there
+  should be none; if there is one, send it to support with the page it appeared on.
+
+**11. Pin the images you deployed (N-017)** *(not run here: needs a machine that can pull)*.
+Tags such as `redis:7.4.6-alpine` can be re-pointed by their publisher; a digest cannot. After the
+first successful deploy, record the exact images that are running and pin them:
+
+```bash
+$COMPOSE images --format json | python3 -c 'import json,sys; [print(i["Repository"]+":"+i["Tag"]) for i in json.load(sys.stdin)]' | sort -u \
+  | while read -r image; do docker image inspect --format '{{index .RepoDigests 0}}' "$image"; done
+```
+
+Each line is `name@sha256:...`. Replace the matching `image:` lines in `docker-compose.prod.yml`
+(Postgres, Redis, MinIO, Caddy) with these, commit, and from then on change a digest only on purpose.
 
 ### 9.3 Deploying a new version
 
@@ -576,6 +592,9 @@ FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
 # HEARTBEAT_UUID_COMPOSE_BACKUP=<check id>
 # HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL=<check id>
 # HEARTBEAT_UUID_COMPLIANCE=<check id>
+# Is the site up? A check with a 1-minute period and a 5-minute grace (N-017):
+# FLOWPILOT_PUBLIC_URL=https://app.example.com
+# HEARTBEAT_UUID_UPTIME=<check id>
 EOF
 sudo chown root:flowpilot /etc/flowpilot/sweepers.env && sudo chmod 640 /etc/flowpilot/sweepers.env
 sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-sweepers /etc/cron.d/flowpilot-sweepers
@@ -596,6 +615,14 @@ tail -n 20 /srv/flowpilot/logs/sweep_compliance.log                      # a "SW
 After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 `compose_backup.log`, `compose_restore_drill.log`), or better, let the monitor tell you.
 
+**Know when the site is down (N-017).** `flowpilot-compose-backups` also runs
+`flowpilot-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
+through Caddy (the API, Postgres and Redis must all answer) and pings `HEARTBEAT_UUID_UPTIME`.
+Create that check in Healthchecks.io with a **1 minute** period and a **5 minute** grace, and add
+your phone or email to it: when the site goes down you get an alert within about five minutes,
+before a customer has to tell you. Test it: `/srv/flowpilot/backend/deploy/bin/flowpilot-uptime-heartbeat; echo $?`
+prints nothing and `0` when the site is up.
+
 ### 9.7 What to look at when something is wrong
 
 | Symptom | Look here |
@@ -607,5 +634,5 @@ After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 | Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
-| People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 10 per address per 5 minutes; NEEDS-OWNER N-018), then `$COMPOSE up -d web` |
+| People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 20 per address per 5 minutes; decided N-018), then `$COMPOSE up -d web` |
 | A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |

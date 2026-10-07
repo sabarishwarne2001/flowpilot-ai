@@ -739,3 +739,9 @@ from app.models.revops import (  # noqa: E402,F401
     PromoRedemption,
     RevenueSnapshot,
 )
+
+# N-020 item 7: corrections made in the document viewer.
+from app.models.work_item_field_correction import WorkItemFieldCorrection  # noqa: E402,F401
+
+# N-017: two-factor sign-in.
+from app.models.user_mfa import UserMfaFactor  # noqa: E402,F401

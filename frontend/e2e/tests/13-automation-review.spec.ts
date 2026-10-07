@@ -6,7 +6,8 @@ import fs from "node:fs";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { runId, ws } from "../support/env";
-import { buildPdf } from "../support/sample-docs";
+import { DISPUTED_INVOICE_PAGE, buildPdf } from "../support/sample-docs";
+import { listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "../support/api";
 
 test.use({ user: "C.owner" });
 
@@ -86,12 +87,15 @@ test.describe("Workflows — run history", () => {
     await expect(page.getByText(/Selected files/i)).toBeVisible();
     await page.getByRole("button", { name: "Start Ingestion" }).click();
     await page.goto(ws("C", "automation/timeline"));
+    // Wait for a run to be listed. (Waiting for "No automation has run yet" to be absent also
+    // passed while the page was still loading, and then found nothing to open.)
+    const firstChain = page.locator("main").getByRole("button").filter({ hasNotText: "Blocked only" }).first();
     await expect(async () => {
       await page.reload();
-      await expect(page.locator("main")).not.toContainText("No automation has run yet", { timeout: 2_000 });
+      await expect(firstChain).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 120_000, intervals: [3_000] });
     // Open the first chain and its steps.
-    await page.locator("main").getByRole("button").filter({ hasNotText: "Blocked only" }).first().click();
+    await firstChain.click();
     await settle(page);
     await page.getByRole("button", { name: "Blocked only" }).click();
     await expectHealthyPage(page);
@@ -131,12 +135,48 @@ test.describe("Review queue", () => {
     await expectHealthyPage(page);
   });
 
-  test("approve, reject and escalate an extraction item with its bounding boxes", async ({ page }) => {
+  test("a disputed extraction is decided against the page, with each agent's reading boxed", async ({ page }, testInfo) => {
+    test.skip(process.env.E2E_LLM !== "1", "needs model output: run with E2E_LLM=1 (support/llm-mock.mjs)");
+    test.setTimeout(180_000);
+    // A fresh copy of the invoice whose bank details changed: the cautious verification agent
+    // refuses to read the account, so the agents disagree and it goes to a person (F-063).
+    const name = `disputed-${runId()}.pdf`;
+    const file = testInfo.outputPath(name);
+    fs.writeFileSync(file, buildPdf([[...DISPUTED_INVOICE_PAGE, `Reference: ${name}`]]));
+    const session = await loginAs("C.owner");
+    const { workspaceId } = await resolveWorkspaceId(session, "caretakers-global", "operations");
+    expect((await uploadFile(session, workspaceId, file)).status).toBeLessThan(300);
+    await expect
+      .poll(async () => {
+        const items = await listWorkItems(session, workspaceId, "pageSize=100&page_size=100");
+        return String(items.find((item) => String(item.original_filename) === name)?.status ?? "missing");
+      }, { timeout: 120_000 })
+      .toBe("COMPLETED");
+
     await page.goto(ws("C", "verification"));
     await page.getByRole("tab", { name: "Extraction", exact: true }).click();
     await settle(page);
-    // Needs a low-confidence extraction; with stub OCR none is produced (see 03-coverage.md).
-    await expect(page.getByRole("button", { name: /approve/i }).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page).toHaveURL(/view=EXTRACTION/);
+    // Only the extraction item: the radar also (rightly) flags the copy's invoice number as a duplicate.
+    const row = page
+      .getByRole("list", { name: "Review items" })
+      .getByRole("listitem")
+      .filter({ hasText: name })
+      .filter({ hasText: "Agents disagreed" });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.getByRole("button", { name: /Extracted fields disagree/ }).click();
+    const evidence = row.getByRole("region", { name: "Where the values are printed" });
+    await expect(evidence.getByRole("img", { name: /Page 1 of the document/ })).toBeVisible({ timeout: 20_000 });
+    await expect(evidence.getByRole("combobox", { name: "Field to show on the page" })).toHaveValue("vendor_bank_account");
+    await expect(evidence).toContainText("not printed on the page"); // the agent that answered null
+    await row.getByRole("button", { name: "Edit", exact: true }).click();
+    await row.getByRole("textbox", { name: "Value for vendor_bank_account" }).fill("GB94 BARC 1020 1530 0934 59");
+    await row.getByRole("button", { name: "Submit corrections" }).click();
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
+    // Calibration holds are not disagreements: they are listed under Autonomy audits (F-111).
+    await page.getByRole("tab", { name: "Autonomy audits", exact: true }).click();
+    await expect(page.getByRole("list", { name: "Review items" })).toContainText("Held for review: confirm every field");
+    await expectHealthyPage(page);
   });
 
   test("resolve the packet-split item from the queue", async ({ page }) => {

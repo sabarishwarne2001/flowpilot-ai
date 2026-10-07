@@ -20,8 +20,8 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
 import { useAuthStore } from "@/store/useAuthStore";
-
-const MIN_PASSWORD_LENGTH = 8;
+import { MIN_PASSWORD_LENGTH } from "@/utils/validation";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 
 /**
  * Reads the token from the fragment and strips it from the address bar.
@@ -34,11 +34,7 @@ const takeTokenFromFragment = (): string | null => {
 
   const token = new URLSearchParams(fragment).get("token");
   if (token) {
-    window.history.replaceState(
-      null,
-      "",
-      window.location.pathname + window.location.search,
-    );
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }
   return token;
 };
@@ -54,6 +50,7 @@ export function ResetPassword() {
   const [confirmation, setConfirmation] = React.useState("");
   const [error, setError] = React.useState("");
   const [working, setWorking] = React.useState(false);
+  const [showPasswords, setShowPasswords] = React.useState(false);
   const [done, setDone] = React.useState(false);
 
   const submit = async (event: React.FormEvent): Promise<void> => {
@@ -77,11 +74,7 @@ export function ResetPassword() {
       useAuthStore.getState().clearAuth();
       setDone(true);
     } catch (caught: unknown) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "We could not reset your password.",
-      );
+      setError(caught instanceof ApiError ? caught.message : "We could not reset your password.");
     } finally {
       setWorking(false);
     }
@@ -130,23 +123,34 @@ export function ResetPassword() {
 
       <form onSubmit={submit} className="w-full max-w-sm space-y-3">
         <input
-          type="password"
+          type={showPasswords ? "text" : "password"}
           required
           autoComplete="new-password"
+          aria-label="New password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="New password"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
+        <PasswordStrengthMeter password={password} />
         <input
-          type="password"
+          type={showPasswords ? "text" : "password"}
           required
           autoComplete="new-password"
+          aria-label="Confirm new password"
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
           placeholder="Confirm new password"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={showPasswords}
+            onChange={(event) => setShowPasswords(event.target.checked)}
+          />
+          Show passwords
+        </label>
 
         {error ? (
           <p className="text-sm text-destructive" role="alert">

@@ -7,8 +7,10 @@ and maps standardized, secure response payloads.
 
 import uuid
 from datetime import datetime
-from typing import Union
+from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
+
+from app.core.password_policy import MIN_LENGTH as MIN_PASSWORD_LENGTH
 
 class UserBase(BaseModel):
     """
@@ -20,7 +22,9 @@ class UserRegister(UserBase):
     """
     Validation schema used to process signup registration requests.
     """
-    password: str = Field(..., min_length=8, max_length=128, description="Plaintext security password.")
+    # ASVS V2.1: length here (12, the standard 422 shape), strength in
+    # app.core.password_policy (422 PASSWORD_TOO_WEAK, in plain words).
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128, description="Plaintext security password.")
 
     redirect: str | None = Field(
         default=None,
@@ -69,6 +73,24 @@ class TokenResponse(BaseModel):
     """
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(BaseModel):
+    """
+    What /auth/login answers. Normally a session (`access_token`). For a user with
+    two-factor sign-in on (N-017) the password alone opens nothing: `mfa_required`
+    is true, `access_token` is absent and `mfa_token` is a five-minute challenge
+    to send to /auth/login/mfa with a code from the authenticator app.
+    """
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
+
+
+class MfaLoginRequest(BaseModel):
+    mfa_token: str = Field(min_length=1, max_length=2048)
+    code: str = Field(min_length=6, max_length=32)
 
 class TokenData(BaseModel):
     """
@@ -135,7 +157,7 @@ class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -145,7 +167,7 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     current_password: str = Field(..., min_length=1, max_length=128)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
 
 
 class PasswordActionResponse(BaseModel):

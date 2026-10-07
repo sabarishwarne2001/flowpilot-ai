@@ -39,22 +39,17 @@ production).
 
 ## Project status
 
-A hardening campaign is in progress. Its plan, findings and progress are in
+**Release-ready.** The hardening campaign is complete; its records are in
 [`docs/hardening/`](docs/hardening/):
 
-- [`STATE.md`](docs/hardening/STATE.md): current phase and next step
-- [`FINDINGS.md`](docs/hardening/FINDINGS.md): known bugs, by severity
-- [`01-baseline.md`](docs/hardening/01-baseline.md): what builds, runs and passes today
-- [`NEEDS-OWNER.md`](docs/hardening/NEEDS-OWNER.md): open product decisions
+- [`05-release-readiness.md`](docs/hardening/05-release-readiness.md): the final release
+  certification (OWASP ASVS L2 and Twelve-Factor audit, test results, GO / NO-GO)
+- [`STATE.md`](docs/hardening/STATE.md): where things stand and what to do next
+- [`FINDINGS.md`](docs/hardening/FINDINGS.md): every defect found, with its fix and evidence
+- [`NEEDS-OWNER.md`](docs/hardening/NEEDS-OWNER.md): the product decisions taken
 
-As of Phase 1 the app installs, migrates, starts and serves the web app from a
-fresh clone. Phase 2 (security and deployment) added a production start-up
-guard, tenant-isolation and plan-gating proofs, a hardened upload path, backup
-and scheduling scripts for a Docker Compose server, and a production guide:
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md) section 9. What it fixed and what is still
-open: [`02-security-deploy.md`](docs/hardening/02-security-deploy.md).
-The backend test suite and the verification gates are **not** fully green yet
-(FINDINGS F-016, F-029).
+Deploying to production (a Linux server with Docker Compose): [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
+section 9.
 
 ## Repository layout
 
@@ -62,17 +57,19 @@ The backend test suite and the verification gates are **not** fully green yet
 backend/            FastAPI app, workers, Alembic migrations, tests, scripts
   app/              application code
   alembic/          database migrations (exactly one head)
-  tests/            pytest suite
-  scripts/          seeding, gates (verify_*.py), maintenance
-  deploy/           host cron files and deployment helpers
-frontend/           React web app
-docs/               runbook and hardening campaign documents
+  tests/            pytest suite (security, isolation, engines, API, infra)
+  scripts/          seeding, sweepers (cron), backups, maintenance tools
+  deploy/           Caddyfile, cron files and deployment helpers
+  docker-compose.yml       local development services
+  docker-compose.prod.yml  production stack
+frontend/           React web app; e2e/ holds the Playwright browser suite
+docs/               RUNBOOK, configuration reference, hardening campaign records
+archive/            historical development records (not used to run anything)
 start_dev.sh/.ps1   one-command local development launchers
 ```
 
-Files named `apply_*.py`, `verify_arch*.py`, `run_arch*.ps1` and
-`*-FINAL-CERTIFICATION.md` are historical records of earlier development
-phases. They are kept for reference and are not part of running the product.
+The `apply_*`, `verify_*`, `run_arch*` scripts and phase certification reports of earlier
+development phases are in [`archive/`](archive/README.md), unchanged.
 
 ## License
 

@@ -14,12 +14,12 @@ How to read this file:
 | ID | Sev | Status | Area | Title |
 |----|-----|--------|------|-------|
 | F-001 | P1 | **fixed** (Phase 1, PR #2) | CI | CI on `main` fails instantly with zero jobs; the encoding gate would also fail (44 files) |
-| F-002 | P1 | **mitigated** (Phases 3–5: browser suite, live engine harness, Phase 5 tests; ledger in COVERAGE.csv) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
+| F-002 | P1 | **resolved** (final release: 291-test browser suite (290 passed, 1 skipped by design) incl. model-dependent flows via the local model stand-in, backend suite, live engine harness; ledger in COVERAGE.csv) | Tests | ARCH-31..50 features, billing webhooks and the frontend have no automated tests |
 | F-003 | P2 | **fixed** (Phase 2) | Config/secrets | Hard-coded default secrets are used if the env var is missing |
 | F-004 | P2 | **fixed** (Phase 2; reads/deletes await N-003) | Plan gating | Some endpoints behind a locked nav item have no server-side plan check |
-| F-005 | P3 | **fixed** (Phase 5, `7adf7b3`; three consoles await N-002) | Plan gating / UX | Sidebar lock state does not match what the server enforces |
+| F-005 | P3 | **fixed** (Phase 5, `7adf7b3`; the three consoles in the final release, `a796946`, `f1a256b`, N-002) | Plan gating / UX | Sidebar lock state does not match what the server enforces |
 | F-006 | P2 | **fixed for Compose** (Phase 2; a real `docker compose` run on the VPS is unverified) | Jobs / ops | Retention, backup and 13 sweepers run only from host cron, which the prod compose file does not start |
-| F-007 | P3 | **partly fixed** (Phase 5: logo/favicon `1a98cdb`; history rewrite and script retirement await N-005, N-016) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
+| F-007 | P3 | **fixed** (logo/favicon `1a98cdb`; README/LICENSE Phase 5; historical scripts archived `ec912e0`, N-016; history rewrite declined, N-005) | Repo hygiene | Binary in history, empty README/LICENSE, UTF-16 requirements, ~250 historical scripts |
 | F-008 | P3 | **fixed** (Phase 5, `cc48275`) | Frontend guards | Route-level role guard exists but is unused; org pages have no route-level role check |
 | F-009 | P3 | **fixed** (Phase 5, `0074f74`; no automated test) | Frontend | `/admin` has no index route (likely an empty screen) |
 | F-010 | P3 | **fixed** (Phase 5, `7c7933f`; checked by grep, no automated test) | Config | `frontend/.env.example` omits `VITE_API_URL`, the only variable the code reads |
@@ -41,7 +41,7 @@ How to read this file:
 | F-026 | P3 | **fixed** (Phase 5, `02a67de`) | Uploads | Storage errors surface as a raw 500 on upload |
 | F-027 | P3 | **fixed** (Phase 5, `f6e4b36`) | Dev env | Dev compose makes the shell's `AWS_ACCESS_KEY_ID` the MinIO root user |
 | F-028 | P3 | **fixed** (Phase 5, `a8a05ec`) | Frontend | Dashboard fires 4 failing avatar requests for users without an avatar |
-| F-029 | P3 | confirmed (gate run); **no gate regressed in Phase 5** (main 37/35/6 → branch 38/34/6); retiring stale gates is N-016 | Gates | 33 of 78 verification gates fail; several are stale |
+| F-029 | P3 | **closed** (final release: gates archived with their scripts and the CI gates job retired, N-016; the two gate modules active tests import still pass) | Gates | 33 of 78 verification gates fail; several are stale |
 | F-030 | P3 | **partly fixed** (Phase 5: the order dependence was F-100, fixed; the suite still takes ~25 min on a RAM disk) | Tests | The test harness is slow and order-dependent |
 | F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
 | F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
@@ -56,7 +56,7 @@ How to read this file:
 | F-041 | P2 | **fixed** (Phase 2) | Logs | gunicorn's access log wrote capability tokens (public upload and calendar-feed paths), query strings and the Referer to stdout |
 | F-042 | P3 | **fixed** (Phase 2) | Ops | No readiness probe: `/health` reported "healthy" with Postgres down |
 | F-043 | P3 | **fixed** (Phase 2) | Containers | Floating image tags (`pg16`, `7-alpine`, `2-alpine`, `python:3.12-slim`) |
-| F-044 | P3 | **mitigated** (Phase 2) | Frontend/ingress | No Content-Security-Policy header |
+| F-044 | P3 | **fixed** (final release, `c47ae3f`: CSP enforced on the platform host and custom domains; whole browser suite passes under it, `fc8c643`) | Frontend/ingress | No Content-Security-Policy header |
 | F-045 | P3 | **partly fixed** (Phase 5, `3d8cff5`: OCR engine only in the `ocr` image, 1.2 GB less per other image; the CUDA build of torch remains, see the entry) | Containers | Every image, including `web`, installs torch, paddle and sentence-transformers (about 8 GB) |
 | F-046 | P3 | **fixed** (Phase 2) | Information exposure | Swagger UI and the full OpenAPI schema (every route and request shape) were public in production |
 | F-047 | P1 | **fixed** (Phase 2) | Deployment / config | 23 settings the production template tells you to fill in never reached the containers (LLM keys, Dodo, billing gateway, price ids, token lifetimes, upload limit) |
@@ -65,7 +65,7 @@ How to read this file:
 | F-050 | P0 | **fixed** (Phase 3; full backend suite re-run pending) | API stability | Opening a scanned packet's review screen aborted the whole API process (PDFium used from several threads) |
 | F-051 | P1 | **fixed** (Phase 4) | Team / billing | Accepting a team invitation fails with HTTP 500 on any organization with a live subscription |
 | F-052 | P2 | **fixed** (Phase 4) | Audit log | Audit log export (CSV and NDJSON) always fails: the page sends `format=CSV`, the API only accepts `csv`/`jsonl` |
-| F-053 | P2 | **fixed as error pages** (Phase 5, `cc48275`; read access for viewers is N-019) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |
+| F-053 | P2 | **fixed** (Phase 5 error pages `cc48275`; final release hides the three pages from viewers, `a796946`, N-019) | Roles / UX | A workspace VIEWER sees Workflows, Run history and Review queue in the sidebar, but each page fails with 403 errors |
 | F-054 | P3 | **fixed** (Phase 5, `cc48275`) | Roles / UX | Admin-only organization pages opened by a MEMBER say "couldn't be loaded. Try again" instead of "you don't have permission"; Branding shows a full edit form |
 | F-055 | P3 | **fixed** (Phase 5, `53f383a`) | Roles / UX | The BILLING role gets a 403 on every organization page (the header bell asks for organization notifications it may not read) |
 | F-056 | P2 | **fixed** (Phase 5, `1e52864`) | AI assistant | When the AI provider is unavailable the user's question disappears; only a 4-second toast says why |
@@ -73,9 +73,9 @@ How to read this file:
 | F-058 | P3 | **fixed** (Phase 5, `07e768b`) | Frontend / noise | Normal pages use 404 as "nothing configured" (workspace email override, branding logo), so the console shows errors on healthy pages |
 | F-059 | P3 | **fixed** (Phase 5, `4192ad8`) | Plan gating / UX | A locked feature opened by URL shows a lock card with no upgrade button; the upgrade path exists only in the sidebar |
 | F-060 | P3 | **fixed** (Phase 5, `903ea97`) | Custom domains / UX | "Claim domain" is offered on a deployment where custom domains are switched off; the click returns 501 |
-| F-061 | P3 | **partly built** (Phase 4: items 1, 4, 6; items 2, 3, 5, 7 await N-020) | Product gaps | Capabilities in the Phase 3 brief that do not exist: global search by invoice number, notification filters and mark-unread, promo code, webhook test ping, page image and field correction in the document viewer |
+| F-061 | P3 | **fixed** (all seven built: items 1, 4, 6 in Phase 4; 2 `e3dc770`, 3 `d77e59e`, 5 `8ef1157`, 6-7 `f53ccc8`/`c9c01cc` in the final release, N-020) | Product gaps | Capabilities in the Phase 3 brief that do not exist: global search by invoice number, notification filters and mark-unread, promo code, webhook test ping, page image and field correction in the document viewer |
 | F-062 | P3 | **fixed** (Phase 5, `32b3721`) | Settings | The unsaved-changes guard does not cover the workspace General form: a rename is lost silently on sidebar navigation |
-| F-063 | P2 | blocked (environment) | Test coverage | With `ML_STUBS=true` and no LLM key, several features cannot be exercised end to end here (entities, tables, three-way match cases, radar flags, extraction review items, assistant answers) |
+| F-063 | P2 | **fixed** (final release, `49182fd`: deterministic OpenAI-compatible model stand-in; model-dependent flows run in every browser run, `E2E_LLM=1` in CI) | Test coverage | With `ML_STUBS=true` and no LLM key, several features cannot be exercised end to end here (entities, tables, three-way match cases, radar flags, extraction review items, assistant answers) |
 | F-064 | P3 | **fixed** (Phase 5, `53d9267`) | Config | `RATE_LIMIT_LOGIN_IP_PER_5MIN` and the other `RATE_LIMIT_*_PER_*` settings are never read; the limits are hard-coded in `policy.py` |
 | F-065 | P2 | **fixed** (Phase 4, owner decision N-019 ERP part) | Roles / ERP | A MEMBER (workspace CONTRIBUTOR) may create ERP postings; the Phase 3 brief expected only admins/owners to |
 | F-066 | P2 | **fixed** (Phase 4) | API stability | Seven other pypdfium2 call sites (redaction, tables, corroboration, OCR) have no PDFium lock; same class as F-050 |
@@ -120,6 +120,21 @@ How to read this file:
 | F-105 | P2 | **fixed** (Phase 5, `3b83fc8`) | Documents | PDF pages were freed by the garbage collector outside the PDFium lock |
 | F-106 | P1 | **fixed** (Phase 5, `8a4253a`) | Email | A client that hung up before the reply was written silently cancelled the request's verification, reset or invitation email |
 | F-107 | P2 | **fixed** (Phase 5, `8541f0a`) | Invitations | Every invitee landed on "That workspace is no longer available to you" after accepting |
+| F-108 | P1 | **fixed** (final release, `2d60e40`) | Compliance | A legal hold did not stop single delete, the purge sweep or GDPR erasure; bulk delete let a member delete other people's documents |
+| F-109 | P2 | **fixed** (final release, `6ce327e`) | Backups | The nightly backup verify could fail on a closed pipe ("bad decrypt") although the backup was good |
+| F-110 | P3 | **fixed** (final release, `e3dc770`) | Notifications | Organization notifications: "Next page" showed the same page (offset not in the cache key) |
+| F-111 | P2 | **fixed** (final release, `b44fddd`) | Review hub | Every extraction review item said "Agents disagreed", including calibration holds, audit samples and memory trials |
+| F-112 | P2 | **fixed** (final release, `975d919`) | Assistant | A question typed while "New" was creating a conversation went to the previous conversation |
+| F-113 | P1 | **fixed** (final release, `6465b6d`) | Enrichment | The first document of a new workspace skipped its AI steps (no provider default yet) |
+| F-114 | P3 | **fixed** (final release, `c12c9f1`) | Logging | Log lines dropped their `extra=` context; no structured (JSON) option |
+| F-115 | P2 | **fixed** (final release, `cec4b18`) | Radar | A goods receipt was flagged as a "duplicate" of the purchase order it quotes |
+| F-116 | P3 | **fixed** (final release, `66130a3`) | Review hub | A tab clicked while the hub was loading was lost |
+| F-117 | P2 | **fixed** (final release, `19aac28`; sign-in page proven by a browser test, the step-up dialog path unverified: no test can open it) | Auth / UX | A wrong password in the "Confirm it's you" dialog signed the user out |
+| F-118 | P2 | **fixed** (final release, `34def1f`) | Sign-up | A refused sign-up still switched to "Check your email" |
+| F-119 | P2 | **fixed** (final release, `f48235b`, `7242b3d`) | Auth (ASVS V2.1) | Any 8-character password was accepted, "Password123!" included; no strength meter |
+| F-120 | P2 | **fixed** (final release, `01a4bfa`) | Sessions (ASVS V3.3.2) | A session refreshed daily never required signing in again |
+| F-121 | P2 | **fixed** (final release, `2a8bb7c`) | Frontend | Every page was thrown away and rebuilt when the user's profile arrived, losing what had just been typed or selected |
+| F-122 | P3 | **fixed** (final release, `c634ee1`) | API (ASVS V8.2.1) | API responses carried no `Cache-Control`, leaving tenant data to browser caching heuristics |
 
 ---
 
@@ -1912,3 +1927,132 @@ member lifecycle through email" passes end to end (it had never got past Accept:
   `test_branding_says_whether_custom_domains_are_served`; e2e `20-organization` expects the message.
 - **F-062 (unsaved guard misses workspace General): fixed** (`32b3721`). Proof: e2e `14-configuration`
   "unsaved changes block navigation until confirmed".
+
+---
+
+# Final release (2026-10-06, branch `hardening/final-commercial-release`)
+
+Found by the live end-to-end pass (the full browser suite with a model attached, under the
+production Content-Security-Policy), by the OWASP ASVS Level 2 audit in `05-release-readiness.md`,
+and by the owner decisions taken under founder authority (NEEDS-OWNER.md). All fixed. "Proof" is the
+test that failed before the change and passes after it; the full suites pass with every change.
+
+## F-108 — A legal hold did not stop three of the ways a document is destroyed (P1, fixed)
+**Plain language.** A legal hold exists so that evidence is never destroyed while a dispute or
+investigation is open. Holding a document stopped the review queue, but not: deleting it from its
+page, the nightly retention purge, or a GDPR erasure of the person who uploaded it. Separately,
+bulk delete let any member delete documents uploaded by other people. **Fix** (`2d60e40`): every
+destroying path asks the retention service first and refuses with 409 `RETENTION_HOLD` (the purge
+skips held items and held workspaces; erasure refuses a subject with held documents); bulk delete
+deletes only the caller's own uploads unless they are a workspace admin. **Proof**
+`tests/api/test_legal_hold_enforcement.py`: 7 of 9 red before.
+
+## F-109 — The nightly backup verify could fail although the backup was good (P2, fixed)
+`pg_restore --list` stops reading once it has the table of contents; `openssl` then wrote into a
+closed pipe, reported "bad decrypt", and the verify deleted a good backup. A race: 4 of 20 runs here,
+almost every night at production size. **Fix** (`6ce327e`): the rest of the stream is drained, so
+the whole file is still decrypted and checked; a corrupted backup still fails. **Proof**
+`tests/infra/test_compose_backup_scripts.py`: 20/20 on three consecutive runs (16/20 before).
+
+## F-110 — Organization notifications: "Next page" showed the same page (P3, fixed)
+The page offset was not part of the cache key, so the next page came back from the cache.
+**Fix** (`e3dc770`, with the inbox filters of N-020 item 2). **Proof** the browser notification
+tests; `tests/api/test_notification_inbox_filters.py` for the new filters.
+
+## F-111 — The review hub said "Agents disagreed" for items where nobody disagreed (P2, fixed)
+Calibrated autonomy parks a held extraction, an audit sample and a memory trial as review items;
+the hub labelled all of them as a disagreement between agents, so reviewers could not tell routine
+sampling from a real conflict. **Fix** (`b44fddd`, migration `p6a2`): the reason is read from the
+item (real disagreement, audit sample, calibration hold, memory trial). **Proof**
+`tests/services/test_review_extraction_reasons.py`: 3 of 8 red before.
+
+## F-112 — A question typed while "New" was creating a conversation went to the old one (P2, fixed)
+Found only with a model attached: the answer appeared lost. **Fix** (`975d919`): New clears the
+selection at once and the new conversation is selected before the list refreshes. **Proof** the
+assistant browser tests (the second test's question landed in the first test's conversation).
+
+## F-113 — The first document of a new workspace skipped its AI steps (P1, fixed)
+The workspace's AI defaults were created lazily with no provider, and the enrichment step refused
+to run for that first document. A new customer's first upload, the most important impression, came
+back without classification or extraction. **Fix** (`6465b6d`). **Proof**
+`tests/services/test_first_document_enrichment.py`.
+
+## F-114 — Log lines dropped their context (P3, fixed)
+Values passed as `extra=` (ids, reasons, counts) never reached the log line, and there was no
+structured format for a log service. **Fix** (`c12c9f1`): every `extra` field is appended as
+`key=value`, secret-looking keys are masked, long values truncated; `LOG_FORMAT=json` for one JSON
+object per line. **Proof** `tests/core/test_log_context_formatter.py`.
+
+## F-115 — A goods receipt was a "duplicate" of the purchase order it quotes (P2, fixed)
+The radar's duplicate check used the first document number on the page; a goods receipt quotes its
+PO number, so every receipt looked like a duplicate. **Fix** (`cec4b18`): each document role reads
+its own number. **Proof** `tests/engines/test_radar_live.py` (new case).
+
+## F-116 — A review-hub tab clicked while the page loaded was lost (P3, fixed)
+**Fix** (`66130a3`): the view lives in the URL (`?view=`), so it survives loading, reloads and
+links. **Proof** browser test `13-automation-review`.
+
+## F-117 — A wrong password in "Confirm it's you" signed the user out (P2, fixed)
+The API client treated every unrefreshable 401 as a lost session, including the answer to a
+sign-in attempt. On the sign-in page that only replaced the server's message; inside the step-up
+dialog (billing portal re-authentication) one typo ended the session the dialog protects.
+**Fix** (`19aac28`): a 401 from `/auth/login` or `/auth/login/mfa` is an error to show.
+**Proof** the two-factor browser test (a wrong code shows the server's message and stays on the
+page). **Unverified** for the step-up dialog itself: it opens only when a session is more than five
+minutes old at the billing portal, which no test can arrange; the code path is the same.
+
+## F-118 — A refused sign-up still said "Check your email" (P2, fixed)
+sonner 2's `toast.promise` returns the toast id, not the request, so the sign-up page's `await`
+never failed. A too-easy password, the rate limit or a server error all showed the error and then
+"Check your email". **Fix** (`34def1f`): `.unwrap()`. **Proof** browser test "a common password is
+refused at sign-up" (failed before).
+
+## F-119 — Any 8-character password was accepted; no strength meter (P2, fixed; ASVS V2.1)
+**Fix** (`f48235b`): at least 12 characters, and zxcvbn (breached passwords, names, words,
+keyboard patterns, the user's email) must score 3 of 4; no composition rules. Sign-up checks
+before the account lookup (no enumeration), reset checks before the link is spent. (`7242b3d`): a
+strength meter on sign-up, reset and change; a show-password control on sign-in and reset.
+Existing passwords keep working. **Proof** `tests/api/test_password_policy.py` (7 of 8 red before);
+browser tests for the meter, the refusal and the reveal button.
+
+## F-120 — A session refreshed daily never required signing in again (P2, fixed; ASVS V3.3.2)
+Each refresh started a new 14-day window. **Fix** (`01a4bfa`): sign in again 12 hours after
+signing in and after 30 idle minutes (`SESSION_ABSOLUTE_LIFETIME_HOURS`,
+`SESSION_IDLE_TIMEOUT_MINUTES`; 0 turns either off). **Proof**
+`tests/services/test_session_lifetime.py` (2 of 5 red before).
+
+## F-121 — Every page was rebuilt when the profile arrived, losing what was typed (P2, fixed)
+**Plain language.** The console formats every date in the user's own time zone. It rendered the
+page with the browser's clock first, then, when the profile (time zone, language) arrived a moment
+later, threw the whole page away and built it again. Every user has a saved time zone, so this
+happened on every page load: whatever was typed or selected in that moment vanished (an
+organization name being edited, a file chosen for upload), and every page fetched its data twice.
+Found by the full browser run under load (two tests failed this way). **Fix** (`2a8bb7c`): the
+console waits for the profile (a failed read falls back to the browser's settings), then renders
+once. **Proof** browser test `known-issues` "F-121": with the profile answering 2 s late, the typed
+organization name was reset before the change and is kept after it.
+
+## F-122 — API responses carried no Cache-Control (P3, fixed; ASVS V8.2.1)
+**Fix** (`c634ee1`): every `/api` and `/scim` response without its own `Cache-Control` gets
+`no-store`; images, logos, avatars and streams keep theirs. **Proof**
+`tests/api/test_api_cache_control.py` (2 of 3 red before).
+
+## Built in this release (owner decisions, not defects)
+- **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery
+  codes, required at sign-in and in the step-up dialog; wrong codes throttled per address and
+  capped per account. Proof `tests/core/test_totp.py` (RFC vectors), `tests/api/test_mfa.py`, and a
+  browser test that turns it on, signs in with an app code and a recovery code, and turns it off.
+- **CSP enforced** on every host (F-044, `c47ae3f`) and a **Permissions-Policy** (`7f8de01`).
+- **Notification filters and mark as unread, promo code at checkout, invite from Organization →
+  Members, page image beside the fields with in-place correction** (N-020; see the table).
+- **Redis password, uptime heartbeat, image pinning steps** (N-017, `2053201`, `4ed724e`, RUNBOOK).
+
+## Still open (not defects of the code; each has an owner and a reason)
+- **F-006** — the production compose stack has not been started on a real server (no Docker daemon
+  in this environment). RUNBOOK "First deploy" is the check.
+- **F-039** — three Python advisories accepted with reasons: torch 2.12.1 (needs loading untrusted
+  model files, which the app never does; 2.13 brings a new CUDA stack), setuptools 81 (pinned by
+  torch), paramiko 3.5.1 (no fixed release; the SFTP client is egress-checked with pinned host keys).
+- **F-045** — images still carry the CUDA build of torch; the CPU build needs download.pytorch.org.
+- **F-011, F-017, F-030** — the harmless long tail (defaults not written in the template, 283
+  ratcheted index/constraint drift lines, a 30-minute test suite).

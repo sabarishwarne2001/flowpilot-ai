@@ -169,8 +169,17 @@ class TestAuthTimeClaim:
 
 
 class TestPortalReauthGate:
-    def test_portal_gate_refuses_a_long_rotated_session(self, db, account):
+    def test_portal_gate_refuses_a_long_rotated_session(self, db, account, monkeypatch):
         stale = datetime.now(timezone.utc) - timedelta(days=270)
+
+        # ASVS V3.3.2: by default such a session cannot even refresh (12-hour limit).
+        refused = session_service.create_session(db, user=account, authenticated_at=stale)
+        db.flush()
+        with pytest.raises(session_service.ExpiredRefreshTokenError):
+            session_service.rotate_session(db, refresh_token=refused.plaintext_token)
+
+        # The portal gate is the second line for an operator who turns that limit off.
+        monkeypatch.setattr(settings, "SESSION_ABSOLUTE_LIFETIME_HOURS", 0)
         issued = session_service.create_session(
             db, user=account, authenticated_at=stale
         )

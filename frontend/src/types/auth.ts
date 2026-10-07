@@ -64,6 +64,24 @@ export interface TokenResponse {
 }
 
 /**
+ * N-017. What /auth/login answers for a user with two-factor sign-in on: the
+ * password was right, but no session exists yet. `mfa_token` is a five-minute
+ * challenge to send to /auth/login/mfa together with a code from the app.
+ */
+export interface MfaChallengeResponse {
+  readonly mfa_required: true;
+  readonly mfa_token: string;
+  readonly token_type: "mfa";
+}
+
+export type LoginResponse = TokenResponse | MfaChallengeResponse;
+
+export const isMfaChallenge = (
+  response: LoginResponse,
+): response is MfaChallengeResponse =>
+  "mfa_required" in response && response.mfa_required === true;
+
+/**
  * Internal authenticated session model.
  *
  * Used only by the frontend to persist the current

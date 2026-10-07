@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationType
 from app.schemas.notification import (
     NotificationResponse,
     NotificationUpdate,
@@ -71,6 +71,9 @@ async def list_notifications(
     db: Session = Depends(deps.get_read_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     is_read: bool | None = Query(default=None, description="Filter by read status."),
+    notification_type: NotificationType | None = Query(
+        default=None, description="Filter by category (DOCUMENT, AUTOMATION, EMAIL, SYSTEM, SECURITY)."
+    ),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=100),
 ) -> list[NotificationResponse]:
@@ -79,6 +82,7 @@ async def list_notifications(
         workspace_id=context.workspace_id,
         user_id=context.user_id,
         is_read=is_read,
+        notification_type=notification_type,
         skip=skip,
         limit=limit,
     )

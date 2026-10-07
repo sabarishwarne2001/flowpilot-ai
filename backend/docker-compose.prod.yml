@@ -46,11 +46,13 @@ x-app-env: &app-env
   DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
   DATABASE_REPLICA_ENFORCE_READ_ONLY: ${DATABASE_REPLICA_ENFORCE_READ_ONLY:-true}
 
-  REDIS_URL: redis://redis:6379/0
+  # N-017 (decided): Redis requires a password even inside the private network (defence in depth).
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set. openssl rand -hex 32}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_BACKEND: redis
   # F-048 / N-018: sign-in attempts per address per 5 minutes.
-  RATE_LIMIT_LOGIN_IP_PER_5MIN: ${RATE_LIMIT_LOGIN_IP_PER_5MIN:-10}
+  RATE_LIMIT_LOGIN_IP_PER_5MIN: ${RATE_LIMIT_LOGIN_IP_PER_5MIN:-20}
 
   # Caddy adds exactly one X-Forwarded-For hop. Leave
   # TRUSTED_PROXY_HOPS_CONFIRMED false until you have verified the header
@@ -113,6 +115,8 @@ x-app-env: &app-env
   # Written out in the template "so they are visible"; they only take effect if passed on.
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10}
   REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-14}
+  SESSION_ABSOLUTE_LIFETIME_HOURS: ${SESSION_ABSOLUTE_LIFETIME_HOURS:-12}
+  SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
   MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-104857600}
 
   # Required: without mail, invitations, verification links and password resets are
@@ -137,6 +141,7 @@ x-app-env: &app-env
 
   LLM_METERING_ENABLED: "true"
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-text}
 
 x-depends-on-migrate: &after-migrate
   depends_on:
@@ -192,11 +197,15 @@ services:
     # noeviction is deliberate. Rate-limit counters and idempotency markers
     # must not be silently dropped under memory pressure; a hard failure is
     # recoverable, a silently-reset rate limiter is not.
-    command: redis-server --maxmemory 512mb --maxmemory-policy noeviction --appendonly yes
+    # N-017: requirepass from the environment (the shell expands it inside the container, so the
+    # password is not written into the compose configuration).
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set. openssl rand -hex 32}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 512mb --maxmemory-policy noeviction --appendonly yes"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 10

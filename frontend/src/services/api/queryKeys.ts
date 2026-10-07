@@ -79,6 +79,9 @@ export const notificationKeys = {
   all: (workspaceId: string) => [...workspaceScope(workspaceId), "notifications"] as const,
   list: (workspaceId: string, unreadOnly = false) =>
     [...notificationKeys.all(workspaceId), "list", unreadOnly] as const,
+  /** N-020 item 2: the inbox page, filtered by read state and category. */
+  inbox: (workspaceId: string, readFilter: string, category: string) =>
+    [...notificationKeys.all(workspaceId), "inbox", readFilter, category] as const,
 };
 
 export const settingsKeys = {
@@ -126,6 +129,9 @@ export const orgNotificationKeys = {
     [...organizationScope(organizationId), "notifications"] as const,
   list: (organizationId: string, isRead?: boolean) =>
     [...orgNotificationKeys.all(organizationId), { isRead }] as const,
+  /** The full page: the offset and the category are part of what was fetched. */
+  page: (organizationId: string, isRead: boolean | undefined, category: string, offset: number) =>
+    [...orgNotificationKeys.all(organizationId), "page", { isRead, category, offset }] as const,
 };
 
 export const sloKeys = {

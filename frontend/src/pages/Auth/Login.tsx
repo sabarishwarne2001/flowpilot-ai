@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { KeyRound, Loader2, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
 
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ROUTES } from "@/constants/routes";
@@ -9,6 +9,7 @@ import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { discoverSso, emailDomain, ssoStartHref } from "@/services/api/sso";
 import { useAuthStore } from "@/store/useAuthStore";
+import { isMfaChallenge } from "@/types/auth";
 
 /**
  * Sign-in page: password, or enterprise single sign-on.
@@ -41,7 +42,8 @@ import { useAuthStore } from "@/store/useAuthStore";
  */
 
 // HARDENING-T3: "identify" is the email-first step (see handleIdentifySubmit).
-type SignInMode = "identify" | "password" | "sso";
+// N-017: "code" is the second step for a user with two-factor sign-in on.
+type SignInMode = "identify" | "password" | "sso" | "code";
 
 const INPUT_CLASS =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-10 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -95,6 +97,10 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const setToken = useAuthStore((state) => state.setToken);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -110,6 +116,24 @@ export const Login: React.FC = () => {
     setError(null);
     setNotice(null);
     setPassword("");
+    setMfaToken(null);
+    setCode("");
+  };
+
+  const finishSignIn = async (accessToken: string) => {
+    // 1. Set the token locally so the /auth/me request can authenticate
+    setToken(accessToken);
+
+    // 2. Resolve the current user profile
+    const userResponse = await authApi.getMeRequest();
+
+    // 3. Commit the authenticated session
+    setAuth(userResponse, accessToken);
+
+    // 4. Shift viewport to the requested destination, or the picker.
+    //    `replace` so the back button does not return to a login form the
+    //    user has already satisfied.
+    navigate(redirectTo, { replace: true });
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -123,22 +147,15 @@ export const Login: React.FC = () => {
     setNotice(null);
 
     try {
-      // 1. Authenticate and receive the JWT token
-      const tokenResponse = await authApi.loginRequest({ email, password });
-
-      // 2. Set the token locally so the /auth/me request can authenticate
-      setToken(tokenResponse.access_token);
-
-      // 3. Resolve the current user profile
-      const userResponse = await authApi.getMeRequest();
-
-      // 4. Commit the authenticated session
-      setAuth(userResponse, tokenResponse.access_token);
-
-      // 5. Shift viewport to the requested destination, or the picker.
-      //    `replace` so the back button does not return to a login form the
-      //    user has already satisfied.
-      navigate(redirectTo, { replace: true });
+      const loginResponse = await authApi.loginRequest({ email, password });
+      if (isMfaChallenge(loginResponse)) {
+        // N-017: right password, second step still to come. No session yet.
+        setPassword("");
+        setMfaToken(loginResponse.mfa_token);
+        setMode("code");
+        return;
+      }
+      await finishSignIn(loginResponse.access_token);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === API_ERROR_CODES.UNAUTHORIZED) {
@@ -149,6 +166,27 @@ export const Login: React.FC = () => {
       } else {
         setError("An unexpected error occurred. Please try again.");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken || !code.trim() || isLoading) {
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const tokenResponse = await authApi.loginSecondFactorRequest(mfaToken, code);
+      await finishSignIn(tokenResponse.access_token);
+    } catch (err) {
+      setCode("");
+      // The server's words: a wrong or expired code, or too many tries.
+      setError(
+        err instanceof ApiError ? err.message : "An unexpected error occurred. Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -220,9 +258,7 @@ export const Login: React.FC = () => {
         window.location.assign(ssoStartHref(domain, redirectTo));
         return;
       }
-      setNotice(
-        `Single sign-on isn't set up for ${domain}. Sign in with your password instead.`,
-      );
+      setNotice(`Single sign-on isn't set up for ${domain}. Sign in with your password instead.`);
     } catch (err) {
       // A 409 means two organizations bind this domain; the backend's message
       // says to contact an administrator, which is the only useful advice.
@@ -241,10 +277,7 @@ export const Login: React.FC = () => {
   const feedback = (
     <>
       {error && (
-        <div
-          className="rounded-md bg-destructive/15 p-3 text-sm text-destructive"
-          role="alert"
-        >
+        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">
           {error}
         </div>
       )}
@@ -314,16 +347,87 @@ export const Login: React.FC = () => {
     );
   }
 
+  if (mode === "code") {
+    return (
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="flex flex-col space-y-2 text-center select-none">
+          <h1 className="text-2xl font-semibold tracking-tight">Two-factor sign-in</h1>
+          <p className="text-sm text-muted-foreground">
+            {useRecoveryCode
+              ? "Enter one of the recovery codes you saved. Each one works once."
+              : "Enter the 6-digit code from your authenticator app."}
+          </p>
+        </div>
+        <form onSubmit={handleCodeSubmit} className="space-y-4">
+          {feedback}
+          <div className="space-y-2">
+            <label className={LABEL_CLASS} htmlFor="mfa-code">
+              {useRecoveryCode ? "Recovery code" : "Authentication code"}
+            </label>
+            <div className="relative">
+              <Smartphone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input
+                id="mfa-code"
+                autoFocus
+                inputMode={useRecoveryCode ? "text" : "numeric"}
+                autoComplete="one-time-code"
+                autoCapitalize="characters"
+                disabled={isLoading}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className={INPUT_CLASS}
+                required
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading || !code.trim()}
+            className={PRIMARY_BUTTON_CLASS}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              "Verify"
+            )}
+          </button>
+          <div className="flex flex-wrap justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUseRecoveryCode((value) => !value);
+                setCode("");
+                setError(null);
+              }}
+              disabled={isLoading}
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+            >
+              {useRecoveryCode ? "Use the authenticator app" : "Use a recovery code"}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("password")}
+              disabled={isLoading}
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline disabled:opacity-50"
+            >
+              Start over
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   if (mode === "sso") {
     return (
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
         <div className="flex flex-col space-y-2 text-center select-none">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Sign in with single sign-on
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in with single sign-on</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your work email and we&apos;ll send you to your company&apos;s
-            sign-in page
+            Enter your work email and we&apos;ll send you to your company&apos;s sign-in page
           </p>
         </div>
 
@@ -360,12 +464,8 @@ export const Login: React.FC = () => {
   return (
     <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
       <div className="flex flex-col space-y-2 text-center select-none">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome back
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Enter your email to sign in to your account
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+        <p className="text-sm text-muted-foreground">Enter your email to sign in to your account</p>
       </div>
 
       <form onSubmit={handlePasswordSubmit} className="space-y-4">
@@ -381,14 +481,23 @@ export const Login: React.FC = () => {
             <input
               id="password"
               placeholder="••••••••"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               disabled={isLoading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={INPUT_CLASS}
+              className={`${INPUT_CLASS} pr-10`}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              disabled={isLoading}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
         </div>
 

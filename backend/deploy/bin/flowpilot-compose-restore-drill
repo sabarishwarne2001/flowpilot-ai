@@ -56,8 +56,10 @@ started="$(date -u +%s)"
 "${PGX[@]}" psql -U "${DB_USER}" -d postgres -qc "CREATE DATABASE \"${SCRATCH}\"" 
 sql "${SCRATCH}" "CREATE EXTENSION IF NOT EXISTS vector" >/dev/null 2>&1 || true
 
+# The trailing `cat` drains whatever pg_restore leaves unread, so openssl always decrypts
+# (and padding-checks) the whole file instead of failing on a closed pipe.
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:${KEY_FILE}" -in "${BACKUP}" \
-    | "${PGX[@]}" pg_restore --no-owner --exit-on-error -U "${DB_USER}" -d "${SCRATCH}" \
+    | { "${PGX[@]}" pg_restore --no-owner --exit-on-error -U "${DB_USER}" -d "${SCRATCH}"; restored=$?; cat > /dev/null; exit "${restored}"; } \
     || { echo "DRILL FAILED: pg_restore could not restore ${BACKUP}" >&2; exit 1; }
 seconds=$(( $(date -u +%s) - started ))
 

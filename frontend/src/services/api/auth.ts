@@ -6,6 +6,7 @@ import type {
   PasswordActionResponse,
   ResendVerificationResponse,
   SessionResponse,
+  LoginResponse,
   TokenResponse,
   UserResponse,
   VerificationStatusResponse,
@@ -31,13 +32,13 @@ export const registerRequest = async (
  */
 export const loginRequest = async (
   data: LoginRequest
-): Promise<TokenResponse> => {
+): Promise<LoginResponse> => {
   const formData = new URLSearchParams({
     username: data.email.trim(),
     password: data.password,
   });
 
-  const response = await apiClient.post<TokenResponse>(
+  const response = await apiClient.post<LoginResponse>(
     "/auth/login",
     formData,
     {
@@ -50,6 +51,23 @@ export const loginRequest = async (
 
   return response.data;
 };
+/**
+ * N-017: the second sign-in step. Trades the challenge from `loginRequest`
+ * plus an authenticator code (or a recovery code) for a session.
+ */
+export const loginSecondFactorRequest = async (
+  mfaToken: string,
+  code: string,
+  options: { skipStepUp?: boolean } = {},
+): Promise<TokenResponse> => {
+  const response = await apiClient.post<TokenResponse>(
+    "/auth/login/mfa",
+    { mfa_token: mfaToken, code: code.trim() },
+    { _skipStepUp: options.skipStepUp ?? false } as never,
+  );
+  return response.data;
+};
+
 /**
  * Returns the currently authenticated user's profile.
  */
@@ -212,6 +230,7 @@ export const logout = logoutRequest;
 export const authApi = {
   registerRequest,
   loginRequest,
+  loginSecondFactorRequest,
   getMeRequest,
   logout,
   logoutRequest,

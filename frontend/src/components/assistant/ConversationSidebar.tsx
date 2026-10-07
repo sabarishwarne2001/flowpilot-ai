@@ -98,8 +98,11 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
 
   const create = useMutation({
     mutationFn: () => assistantApi.createConversation(workspaceId),
+    // Nothing is selected while the new conversation is being created: a question typed in that
+    // moment used to go into the previously selected conversation, and the screen then switched
+    // to the new, empty one, so the answer seemed lost.
+    onMutate: () => onSelect(null),
     onSuccess: async (created) => {
-      await refresh();
       setKind("all");
       setArchived(false);
       onSelect({
@@ -117,6 +120,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
         created_at: created.created_at,
         last_message_at: null,
       });
+      await refresh();
     },
     onError: (error) => toast.error(errorMessage(error, "The conversation could not be created.")),
   });
@@ -155,7 +159,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
 
   // Keep the selection valid when the list changes underneath it.
   useEffect(() => {
-    if (sessions.isFetching || !sessions.data) {
+    if (sessions.isFetching || !sessions.data || create.isPending) {
       return;
     }
     const current = sessions.data.find((row) => row.id === selectedId);
@@ -166,7 +170,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
     }
     // onSelect is deliberately not a dependency: the page passes a new
     // closure each render, and the selection is what this effect follows.
-  }, [sessions.data, sessions.isFetching, selectedId, archived]);
+  }, [sessions.data, sessions.isFetching, selectedId, archived, create.isPending]);
 
   const commitRename = (id: string): void => {
     const title = draftTitle.trim();

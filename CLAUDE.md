@@ -24,7 +24,10 @@ Read STATE.md at the start of every session. Update it before stopping.
 - Use only test-mode credentials. Never contact live payment or production endpoints.
 - Alembic migrations must maintain exactly ONE head.
 - Do NOT read or edit historical scripts: `apply_*.py`, `verify_*.py`, `backend/evidence/`,
-  `backend/arch07_*`, `backend/arch08_*`, `*.pdf`, `*-FINAL-CERTIFICATION.md`.
+  `backend/arch07_*`, `backend/arch08_*`, `*.pdf`, `*-FINAL-CERTIFICATION.md`. Since the final
+  release they live, unchanged, under `archive/` (see `archive/README.md`); the rule still applies
+  there. `backend/scripts/verify_arch14.py` and `verify_arch15.py` stay in place because active
+  tests import them.
 - Keep terminal and command outputs short (use `| tail -50`, `--maxfail=5`, `-q`).
 - Do not decide product/pricing questions. Log them in `NEEDS-OWNER.md`.
 

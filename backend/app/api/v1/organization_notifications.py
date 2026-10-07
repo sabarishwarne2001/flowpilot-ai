@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import RequireAnyOrgRole, get_db, get_read_db
 from app.crud import notification as notification_crud
+from app.models.notification import NotificationType
 from app.schemas.notification import (
     ORG_NOTIFICATIONS_DEFAULT_PAGE_SIZE,
     ORG_NOTIFICATIONS_MAX_PAGE_SIZE,
@@ -35,6 +36,9 @@ def list_organization_notifications(
     is_read: Optional[bool] = Query(
         None, description="Filter by read state. Omit for all."
     ),
+    notification_type: Optional[NotificationType] = Query(
+        None, description="Filter by category. Omit for all."
+    ),
     limit: int = Query(
         ORG_NOTIFICATIONS_DEFAULT_PAGE_SIZE, ge=1,
         le=ORG_NOTIFICATIONS_MAX_PAGE_SIZE,
@@ -46,6 +50,7 @@ def list_organization_notifications(
         organization_id=context.organization.id,
         user_id=context.user.id,
         is_read=is_read,
+        notification_type=notification_type,
         limit=limit,
         offset=offset,
     )

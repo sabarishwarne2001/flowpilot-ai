@@ -4,7 +4,7 @@ Issues that could not be fixed after 3 attempts (loop guard in CLAUDE.md).
 Each entry lists what was tried and what is needed to unblock.
 
 _None so far._ Phase 0 made no fix attempts; in Phase 1 no fix needed more than two
-attempts (the OCR stub took two); in Phases 2 to 5 no fix needed three.
+attempts (the OCR stub took two); in Phases 2 to 5 and the final release no fix needed three.
 
 Not blockers, but deliberately not done, each with its reason in `FINDINGS.md`:
 
@@ -16,4 +16,6 @@ Not blockers, but deliberately not done, each with its reason in `FINDINGS.md`:
 - **Dodo mode guard** (F-033): closed in Phase 5; Dodo's webhook envelope has no mode field.
 - **CPU-only torch** (F-045 rest): download.pytorch.org is blocked here, so the swap that would drop
   the 3.7 GB CUDA stack from every image could not be verified.
-- **AI results with stub models** (F-063): needs an LLM key and model downloads (`E2E_LLM=1`).
+- **AI results with stub models** (F-063): closed in the final release. `E2E_LLM=1` now starts a
+  deterministic local model stand-in (`frontend/e2e/support/llm-mock.mjs`), so the model-dependent
+  flows run in every browser run without a key or downloads.

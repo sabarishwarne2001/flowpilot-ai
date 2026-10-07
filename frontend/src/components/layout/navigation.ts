@@ -365,6 +365,8 @@ export const buildWorkspaceNavigationGroups = (
         icon: Sliders,
         description: "Rules that run when documents change",
         end: true,
+        // N-019 (decided): a VIEWER does not see it (the page shows Access restricted by URL).
+        minimumRole: "CONTRIBUTOR",
         keywords: ["automation", "rules", "triggers"],
       },
       {
@@ -374,6 +376,8 @@ export const buildWorkspaceNavigationGroups = (
         path: automationTimelinePath(orgSlug, workspaceSlug),
         icon: History,
         description: "Every workflow execution, grouped by correlation",
+        // N-019 (decided): a VIEWER does not see it (the page shows Access restricted by URL).
+        minimumRole: "CONTRIBUTOR",
         keywords: ["timeline", "executions", "logs", "suppressed"],
       },
     ],
@@ -389,6 +393,8 @@ export const buildWorkspaceNavigationGroups = (
         path: verificationPath(orgSlug, workspaceSlug),
         icon: ClipboardCheck,
         description: "Extraction fields the models disagreed on",
+        // N-019 (decided): a VIEWER does not see it (the page shows Access restricted by URL).
+        minimumRole: "CONTRIBUTOR",
         keywords: ["verification", "hitl", "triage"],
       },
       {
@@ -510,15 +516,20 @@ export const buildOrganizationNavigationItems = (
   }
 
   if (role === "OWNER" || role === "ADMIN") {
+    // N-002 (decided): every plan reads its service levels; setting its own contractual
+    // targets is the Enterprise priority SLO, so the row is locked below Enterprise.
     items.push({
       name: "Service levels",
       path: organizationSLOsPath(orgSlug),
+      capability: CAPABILITY.prioritySlo,
       icon: Gauge,
     });
     // ARCH-20. ADMIN sees the console because residency, retention and the
     // erasure register are all things an administrator has to be able to
     // read during an audit. The irreversible writes inside it are OWNER-only,
     // enforced by RequireOrgOwner on the route, not by hiding the link.
+    // N-002 (decided): on every plan. Export and erasure are data-subject rights
+    // (GDPR Art. 15-17) a customer must be able to honour whatever it pays.
     items.push({
       name: "Data governance & compliance",
       path: organizationCompliancePath(orgSlug),
@@ -571,6 +582,9 @@ export const buildOrganizationNavigationItems = (
       addon: "addon.warehouse_sync",
       icon: BarChart3,
     });
+    // N-002 (decided): on every plan. It installs signed workflows into the
+    // automation engine, which every plan has; a workflow step that needs a
+    // capability is refused by that capability's own gate when it runs.
     // ARCH-27. ADMIN sees the catalog because reading which third-party
     // workflows are installed, and what they do, is support work. Installing
     // is OWNER-gated by RequireOrgOwner on the endpoint: admitting executable
@@ -601,26 +615,17 @@ export const buildOrganizationNavigationItems = (
       icon: ShieldCheck,
     });
     // F-015 / owner decision N-006: OWNER and ADMIN may both create and
-    // revoke API keys (the API has always allowed ADMIN). Webhooks, the audit
-    // log and enterprise identity stay OWNER-only in the sidebar until the
-    // owner decides them; their pages still open for an ADMIN by URL.
+    // revoke API keys (the API has always allowed ADMIN).
     items.push({
       name: "API keys",
       path: organizationApiKeysPath(orgSlug),
       capability: CAPABILITY.developerApi,
       icon: KeyRound,
     });
-  }
-
-  if (role === "OWNER" || role === "BILLING") {
-    items.push({
-      name: "Billing",
-      path: organizationBillingPath(orgSlug),
-      icon: CreditCard,
-    });
-  }
-
-  if (role === "OWNER") {
+    // N-006 (decided in the final release): ADMIN sees what the API already
+    // lets it use. Webhooks and the audit log are administrator work; in
+    // Enterprise identity an ADMIN reads the configuration and every write
+    // (SSO, SCIM tokens, domains) stays OWNER-only on the server.
     items.push({
       name: "Webhooks",
       path: organizationWebhooksPath(orgSlug),
@@ -637,6 +642,14 @@ export const buildOrganizationNavigationItems = (
       name: "Audit log",
       path: organizationAuditPath(orgSlug),
       icon: ScrollText,
+    });
+  }
+
+  if (role === "OWNER" || role === "BILLING") {
+    items.push({
+      name: "Billing",
+      path: organizationBillingPath(orgSlug),
+      icon: CreditCard,
     });
   }
 

@@ -10,7 +10,7 @@ Every setting can be set as an environment variable of the same name (or in `bac
 that `.env.production.template` asks for (F-047); a setting outside the template keeps its default
 in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.
 
-303 settings. Columns: name, type, default, where it appears (`example` =
+306 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -24,6 +24,7 @@ guard), and the comment written above it in the code.
 | `HOST` | `str` | `'0.0.0.0'` | example |  |
 | `PORT` | `int` | `8000` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
+| `LOG_FORMAT` | `str` | `'text'` | production | text: one line per event with its context as key=value; json: one JSON object per line. |
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `POSTGRES_USER` | `str` | `'postgres'` | example, production |  |
 | `POSTGRES_PASSWORD` | `str` | `'postgres'` | example, production, guard |  |
@@ -36,6 +37,8 @@ guard), and the comment written above it in the code.
 | `REDIS_IDENTITY_PEPPER` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `10` | example, production |  |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `14` | example, production |  |
+| `SESSION_ABSOLUTE_LIFETIME_HOURS` | `int` | `12` | production | ASVS V3.3.2 (Level 2): sign in again 12 hours after signing in however active the session is, and after 30 minutes with no activity. Checked when the access token is refreshed; 0 turns a limit off. REFRESH_TOKEN_EXPIRE_… |
+| `SESSION_IDLE_TIMEOUT_MINUTES` | `int` | `30` | production |  |
 | `SESSION_REUSE_GRACE_SECONDS` | `int` | `10` | example |  |
 | `SESSION_CHAIN_WALK_LIMIT` | `int` | `16` | example |  |
 | `EMAIL_VERIFICATION_TTL_HOURS` | `int` | `24` | example |  |
@@ -83,7 +86,7 @@ guard), and the comment written above it in the code.
 | `TRUSTED_PROXY_HOPS_CONFIRMED` | `bool` | `False` | example, production | ARCH-08 A.3.4 — read by session_policy_service.update_policy to gate enabling IP pinning. It was read through getattr() with a False default and never declared, so the gate could not be opened at all. Set to true only o… |
 | `RATE_LIMIT_GLOBAL_IP_PER_MINUTE` | `int` | `600` | — |  |
 | `RATE_LIMIT_USER_PER_MINUTE` | `int` | `300` | — |  |
-| `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `10` | production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). |
+| `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `20` | production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). N-018 (deci… |
 | `RATE_LIMIT_CREDENTIAL_PER_HOUR` | `int` | `10` | — |  |
 | `RATE_LIMIT_EXPORT_PER_HOUR` | `int` | `5` | — |  |
 | `RAG_TOP_K` | `int` | `5` | example |  |

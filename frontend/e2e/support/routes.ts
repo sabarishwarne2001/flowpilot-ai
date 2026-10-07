@@ -47,7 +47,8 @@ export const ORGANIZATION_PAGES: readonly OrganizationPage[] = [
   { id: "/organizations/:orgSlug/notifications", sub: "notifications", title: /Organization notifications/, plan: "any", navId: "org:notifications" },
   { id: "/organizations/:orgSlug/members", sub: "members", title: /Members/, plan: "any", navId: "org:members" },
   { id: "/organizations/:orgSlug/email-settings", sub: "email-settings", title: /Transactional Email/, plan: "business", navId: "org:transactional-email" },
-  { id: "/organizations/:orgSlug/service-levels", sub: "service-levels", title: /Service levels/, plan: "any", navId: "org:service-levels" },
+  // N-002: every plan reads its service levels; setting its own targets is Enterprise (locked below).
+  { id: "/organizations/:orgSlug/service-levels", sub: "service-levels", title: /Service levels/, plan: "enterprise", navId: "org:service-levels" },
   { id: "/organizations/:orgSlug/compliance", sub: "compliance", title: /Data governance/, plan: "any", navId: "org:compliance" },
   { id: "/organizations/:orgSlug/developer", sub: "developer", title: /Developer platform/, plan: "developer", navId: "org:developer" },
   { id: "/organizations/:orgSlug/byok", sub: "byok", title: /BYOK/, plan: "business", navId: "org:byok" },

@@ -9,7 +9,7 @@ import uuid
 from typing import Sequence
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
-from app.models.notification import Notification, NotificationStatus
+from app.models.notification import Notification, NotificationStatus, NotificationType
 from app.schemas.notification import NotificationCreate
 
 
@@ -60,6 +60,7 @@ def list_notifications(
     workspace_id: uuid.UUID,
     user_id: uuid.UUID,
     is_read: bool | None = None,
+    notification_type: NotificationType | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[Notification]:
@@ -69,6 +70,9 @@ def list_notifications(
     )
     if is_read is not None:
         statement = statement.where(Notification.is_read.is_(is_read))
+    # N-020 item 2: the inbox filters by category (Documents, Automation, ...).
+    if notification_type is not None:
+        statement = statement.where(Notification.notification_type == notification_type)
     statement = (
         statement
         .order_by(Notification.created_at.desc())
@@ -85,6 +89,7 @@ def list_organization_scoped_for_user(
     user_id: uuid.UUID,
     workspace_id: uuid.UUID | None = None,
     is_read: bool | None = None,
+    notification_type: NotificationType | None = None,
     limit: int = 25,
     offset: int = 0,
 ) -> tuple[list[Notification], int, int]:
@@ -96,6 +101,8 @@ def list_organization_scoped_for_user(
     )
     if is_read is not None:
         base = base.where(Notification.is_read.is_(is_read))
+    if notification_type is not None:
+        base = base.where(Notification.notification_type == notification_type)
 
     total = db.execute(
         select(func.count()).select_from(base.subquery())

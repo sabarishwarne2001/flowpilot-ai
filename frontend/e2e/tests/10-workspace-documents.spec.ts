@@ -96,14 +96,28 @@ test.describe("Workspace — notifications", () => {
     await expect(page.getByText("Alert Center")).toBeHidden();
   });
 
-  test("notifications can be filtered by category and marked unread (requested capability)", async ({ page }) => {
+  test("notifications can be filtered by category and marked unread (N-020 item 2)", async ({ page }) => {
     await page.goto(ws("C", "notifications"));
     await settle(page);
-    // The brief asks for category filters and a read/unread toggle. Assert they exist.
-    await expect(page.getByRole("button", { name: /unread|mark as unread/i }).first()).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByRole("tab").or(page.getByRole("combobox", { name: /category|type/i })).first()).toBeVisible({
-      timeout: 5_000,
-    });
+    const categories = page.getByRole("tablist", { name: "Category" });
+    for (const name of ["Documents", "Automation", "Email", "System", "Security", "All categories"]) {
+      await categories.getByRole("tab", { name }).click();
+      await expect(categories.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    }
+    const first = page.getByRole("article").first();
+    await expect(first).toBeVisible({ timeout: 15_000 });
+    // Mark it read (if it is not), then unread again; the Unread tab follows.
+    const markRead = first.getByRole("button", { name: "Mark as read" });
+    if (await markRead.isVisible()) {
+      await markRead.click();
+      await expect(first.getByRole("button", { name: "Mark as unread" })).toBeVisible();
+    }
+    const title = (await first.getByRole("heading").textContent()) ?? "";
+    await first.getByRole("button", { name: "Mark as unread" }).click();
+    await expect(first.getByRole("button", { name: "Mark as read" })).toBeVisible();
+    await page.getByRole("tablist", { name: "Read state" }).getByRole("tab", { name: "Unread" }).click();
+    await expect(page.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
+    await expectHealthyPage(page);
   });
 });
 
@@ -189,27 +203,41 @@ test.describe("Documents — list, viewer, search", () => {
     }
   });
 
-  test("the viewer shows the page image next to the extracted text (side by side)", async ({ page }) => {
+  test("the viewer shows the page image next to the extracted fields and text (side by side)", async ({ page }) => {
     const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
     const invoice = (state.documents.C.items as Array<{ id: string; name: string }>).find((item) =>
       item.name.includes("INV-E2E-1001"),
     );
     await page.goto(ws("C", `work-items/${invoice?.id}`));
+    // The Document tab opens first: the rendered page beside the extracted fields.
+    const pages = page.getByRole("region", { name: "Document pages" });
+    await expect(pages.getByRole("img", { name: "Page 1 of the document" })).toBeVisible({ timeout: 20_000 });
+    await expect(pages).toContainText("Page 1 of 1");
+    await expect(page.getByRole("region", { name: "Extracted fields" })).toBeVisible();
+    await pages.getByRole("button", { name: "Zoom in" }).click();
+    await pages.getByRole("button", { name: "Zoom out" }).click();
+    // The OCR tab puts the same page beside the text read from it.
     await page.getByRole("button", { name: "OCR", exact: true }).click();
-    await expect(page.locator("main canvas, main img[alt*='page' i], main iframe, main embed").first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.locator("main img[alt*='page' i]").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("region", { name: "Extracted text" })).toContainText("Invoice Number: INV-E2E-1001");
+    await expectHealthyPage(page);
   });
 
-  test("an extracted field can be corrected and saved from the viewer", async ({ page }) => {
+  test("a document waiting in the review queue is corrected there, and the viewer says so", async ({ page }) => {
+    test.skip(process.env.E2E_LLM !== "1", "needs extracted fields: run with E2E_LLM=1 (support/llm-mock.mjs)");
     const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
     const invoice = (state.documents.C.items as Array<{ id: string; name: string }>).find((item) =>
       item.name.includes("INV-E2E-1001"),
     );
+    // Tenant C runs calibrated autonomy with no fitted model yet: every extraction waits for a person.
     await page.goto(ws("C", `work-items/${invoice?.id}`));
-    await settle(page);
-    // The brief expects an editable extracted field (e.g. invoice number) with Save.
-    await expect(page.getByRole("button", { name: /edit field|correct|edit/i }).first()).toBeVisible({ timeout: 5_000 });
+    const fields = page.getByRole("region", { name: "Extracted fields" });
+    await expect(fields).toContainText("INV-E2E-1001", { timeout: 20_000 });
+    await expect(fields.getByRole("note")).toContainText("waiting in the review queue");
+    await expect(fields.getByRole("button", { name: /^Edit field/ })).toHaveCount(0);
+    await fields.getByRole("link", { name: "Open the review queue" }).click();
+    await expect(page).toHaveURL(/\/verification/);
+    await expectHealthyPage(page);
   });
 
   test("a document can be deleted after confirmation", async ({ page }, testInfo) => {
@@ -225,5 +253,40 @@ test.describe("Documents — list, viewer, search", () => {
     const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog"));
     await confirm.getByRole("button", { name: /delete/i }).click();
     await expect(page.locator("main")).not.toContainText(name, { timeout: 15_000 });
+  });
+});
+
+test.describe("Document viewer — correcting a field (Business tenant)", () => {
+  test.use({ user: "B.owner" });
+
+  test("an extracted field can be corrected and saved from the viewer (N-020 item 7)", async ({ page }) => {
+    test.skip(process.env.E2E_LLM !== "1", "needs extracted fields: run with E2E_LLM=1 (support/llm-mock.mjs)");
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const invoice = (state.documents.B.items as Array<{ id: string; name: string }>).find((item) =>
+      item.name.includes("INV-E2E-1001"),
+    );
+    await page.goto(ws("B", `work-items/${invoice?.id}`));
+    const fields = page.getByRole("region", { name: "Extracted fields" });
+    await expect(fields).toContainText("INV-E2E-1001", { timeout: 20_000 });
+    // Each field says where it is printed; showing it highlights the box on the page.
+    await fields.getByRole("button", { name: "Show Invoice number on the page" }).click();
+    await expect(page.locator("button[data-field='invoice_number'][data-active='true']").first()).toBeVisible();
+
+    const correct = async (value: string) => {
+      await fields.getByRole("button", { name: "Edit field Payment terms" }).click();
+      await fields.getByRole("textbox", { name: "New value for Payment terms" }).fill(value);
+      await fields.getByRole("textbox", { name: "Reason for the correction (optional)" }).fill("E2E correction");
+      await fields.getByRole("button", { name: "Save correction" }).click();
+      await expect(page.getByText("Payment terms corrected", { exact: false }).first()).toBeVisible();
+      await expect(fields.locator("li[data-field='payment_terms']")).toContainText(value);
+    };
+    await correct("Net 45");
+    await expect(fields.locator("li[data-field='payment_terms']")).toContainText("Corrected");
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Extracted fields" }).locator("li[data-field='payment_terms']")).toContainText(
+      "Net 45",
+    );
+    await correct("Net 30"); // put it back for the other tests
+    await expectHealthyPage(page);
   });
 });

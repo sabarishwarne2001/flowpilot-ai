@@ -9,6 +9,7 @@ import {
   Database,
   Eye,
   FileCheck,
+  FileSearch,
   FileText,
   MessageSquare,
   RefreshCw,
@@ -16,7 +17,7 @@ import {
 
 import { workItemApi } from "@/services/api/workItem";
 import { assistantApi } from "@/services/api/assistant";
-import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { useActiveWorkspace, useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { useTenant } from "@/hooks/useTenant"; // Imported to resolve slug links
 import { workItemKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 
@@ -37,10 +38,17 @@ import DocumentObligations from "@/components/obligations/DocumentObligations";
 // ARCH47-S2:document-postings
 import DocumentPostings from "@/components/erp/DocumentPostings";
 import { formatBytes, formatDateTime } from "@/utils/formatters";
+// N-020 items 6/7: the page beside the extracted fields, correctable in place.
+import DocumentPageViewer, { useDocumentEvidence } from "@/components/workItems/DocumentPageViewer";
+import ExtractedFieldsPanel from "@/components/workItems/ExtractedFieldsPanel";
+import { getDocumentText, getFieldEditability } from "@/services/api/documentEvidence";
+import { verificationPath } from "@/routes/tenantPaths";
+import { canEditOwnContent } from "@/permissions/workspacePermissions";
+import type { WorkspaceRole } from "@/types/tenancy";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
 
-type DetailTab = "summary" | "entities" | "obligations" | "postings" | "ocr" | "chat";
+type DetailTab = "document" | "summary" | "entities" | "obligations" | "postings" | "ocr" | "chat";
 
 const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
   QUEUED: "bg-primary/10 text-primary border-primary/20",
@@ -50,6 +58,7 @@ const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
 };
 
 const DETAIL_TABS = [
+  { value: "document", label: "Document", icon: FileSearch },
   { value: "summary", label: "Summary", icon: FileCheck },
   { value: "entities", label: "Entities", icon: Database },
   // ARCH46-S2:obligations-tab
@@ -67,13 +76,18 @@ export const WorkItemDetails: React.FC = () => {
   const workspaceId = useActiveWorkspaceId();
   const { state: tenantState } = useTenant(); // Retrieve active tenant state for slugs
 
-  const [activeTab, setActiveTab] = useState<DetailTab>("summary");
+  const activeWorkspace = useActiveWorkspace();
+  const [activeTab, setActiveTab] = useState<DetailTab>("document");
   const [conversationId, setConversationId] = useState<string>();
+  const [viewerPage, setViewerPage] = useState(1);
+  const [activeField, setActiveField] = useState<string | null>(null);
 
   useEffect(() => {
     setConversationId(undefined);
-    setActiveTab("summary");
-  }, [workspaceId]);
+    setActiveTab("document");
+    setViewerPage(1);
+    setActiveField(null);
+  }, [workspaceId, id]);
 
   const queryKey = workItemKeys.detail(workspaceId!, id!);
 
@@ -109,6 +123,43 @@ export const WorkItemDetails: React.FC = () => {
       return item.status === "QUEUED" || item.status === "PROCESSING" ? 2000 : false;
     },
   });
+
+  const finished = workItem?.status === "COMPLETED";
+  const evidence = useDocumentEvidence(workspaceId ?? "", id ?? "", finished);
+  const extractedLocations = (evidence.data?.locations ?? []).filter((location) => location.source === "extracted");
+  const documentText = useQuery({
+    queryKey: ["document-text", workspaceId, id],
+    queryFn: () => getDocumentText(workspaceId!, id!),
+    enabled: Boolean(workspaceId && id) && activeTab === "ocr" && finished,
+    staleTime: 300_000,
+  });
+  const role = (activeWorkspace?.role ?? "VIEWER") as WorkspaceRole;
+  // The server decides (review queue, legal hold, role); the viewer only asks before offering Edit.
+  const editability = useQuery({
+    queryKey: ["work-item-field-editability", workspaceId, id],
+    queryFn: () => getFieldEditability(workspaceId!, id!),
+    enabled: Boolean(workspaceId && id) && finished && canEditOwnContent(role),
+    staleTime: 15_000,
+  });
+  const canCorrect = finished && canEditOwnContent(role) && editability.data?.editable === true;
+  const readOnlyReason = !canEditOwnContent(role)
+    ? "You have view-only access to this workspace. Ask a workspace administrator to correct a field."
+    : !finished
+      ? "Fields can be corrected once processing has finished."
+      : editability.data && !editability.data.editable
+        ? editability.data.message
+        : null;
+  const reviewQueueLink =
+    editability.data?.code === "REVIEW_PENDING" && tenantState.status === "ready"
+      ? verificationPath(tenantState.organization.organization_slug, tenantState.workspace.slug)
+      : null;
+
+  const selectField = (field: string, page: number | null) => {
+    setActiveField(field);
+    if (page !== null) {
+      setViewerPage(page);
+    }
+  };
 
   const { mutate: reprocessDocument, isPending: isReprocessing } = useMutation({
     mutationFn: (workItemId: string) => workItemApi.reprocessWorkItem(workspaceId!, workItemId),
@@ -322,6 +373,45 @@ export const WorkItemDetails: React.FC = () => {
             </nav>
 
             <div className="p-6">
+              {activeTab === "document" && (
+                <section className="grid gap-4 lg:grid-cols-5" aria-label="Document and its data">
+                  <div className="lg:col-span-3">
+                    {finished && workspaceId ? (
+                      <DocumentPageViewer
+                        workspaceId={workspaceId}
+                        workItemId={workItem.id}
+                        page={viewerPage}
+                        onPageChange={setViewerPage}
+                        locations={extractedLocations}
+                        activeField={activeField}
+                        onSelectField={(field) => setActiveField(field)}
+                      />
+                    ) : (
+                      <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        {workItem.status === "FAILED"
+                          ? "Processing failed, so there is nothing to show yet. Retry processing above."
+                          : "The document is being processed. Its pages and fields appear here when it finishes."}
+                      </div>
+                    )}
+                  </div>
+                  <div className="lg:col-span-2">
+                    {workspaceId && (
+                      <ExtractedFieldsPanel
+                        workspaceId={workspaceId}
+                        workItemId={workItem.id}
+                        entities={workItem.extracted_entities as Record<string, unknown> | null | undefined}
+                        locations={extractedLocations}
+                        canEdit={canCorrect}
+                        readOnlyReason={readOnlyReason}
+                        readOnlyLink={reviewQueueLink ? { to: reviewQueueLink, label: "Open the review queue" } : null}
+                        activeField={activeField}
+                        onSelectField={selectField}
+                      />
+                    )}
+                  </div>
+                </section>
+              )}
+
               {activeTab === "summary" && (
                 <section className="space-y-4">
                   <div>
@@ -370,9 +460,44 @@ export const WorkItemDetails: React.FC = () => {
                   <div>
                     <h2 className="text-lg font-bold">OCR & Processing Information</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Technical information captured during the document ingestion pipeline.
+                      The page beside the text read from it, and what the ingestion pipeline recorded.
                     </p>
                   </div>
+                  {finished && workspaceId && (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <DocumentPageViewer
+                        workspaceId={workspaceId}
+                        workItemId={workItem.id}
+                        page={viewerPage}
+                        onPageChange={setViewerPage}
+                        locations={extractedLocations}
+                        activeField={activeField}
+                        onSelectField={(field) => setActiveField(field)}
+                      />
+                      <section aria-label="Extracted text" className="rounded-lg border border-border bg-card">
+                        <header className="border-b border-border px-3 py-2 text-xs font-semibold text-muted-foreground">
+                          Extracted text
+                        </header>
+                        <div className="max-h-[75vh] overflow-auto p-3">
+                          {documentText.isLoading ? (
+                            <p className="text-xs text-muted-foreground">Loading the text…</p>
+                          ) : documentText.data?.text ? (
+                            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">
+                              {documentText.data.text}
+                            </pre>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No text was read from this document.</p>
+                          )}
+                          {documentText.data?.truncated && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Showing the first {documentText.data.text.length.toLocaleString()} of{" "}
+                              {documentText.data.characters.toLocaleString()} characters.
+                            </p>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  )}
                   <div className="rounded-lg border border-border/40 bg-muted/10 p-5">
                     <dl className="grid gap-5 sm:grid-cols-2">
                       <div>

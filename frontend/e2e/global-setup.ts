@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "./support/api";
+import { api, listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "./support/api";
 import { API_BASE, BACKEND_DIR, STATE_FILE, TENANTS, USERS, type TenantKey, type UserKey } from "./support/env";
 import { SAMPLE, samplePath, writeSampleDocuments, type SampleName } from "./support/sample-docs";
 
@@ -90,6 +90,16 @@ async function seedDocuments(): Promise<Record<string, unknown>> {
       TENANTS[plan.tenant].org,
       TENANTS[plan.tenant].ws,
     );
+    // With a model (E2E_LLM=1) Tenant C verifies extractions with agents, so a disputed
+    // field reaches the review queue the way it does for a customer (see support/llm-mock.mjs).
+    if (process.env.E2E_LLM === "1" && plan.tenant === "C") {
+      const settings = await api(session, "PUT", `/workspaces/${workspaceId}/document-settings/`, {
+        verification_enabled: true,
+      });
+      if (settings.status >= 300) {
+        throw new Error(`enabling verification for tenant C failed: HTTP ${settings.status} ${settings.text.slice(0, 300)}`);
+      }
+    }
     const existing = await listWorkItems(session, workspaceId);
     const names = new Set(existing.map((item) => String(item.original_filename ?? item.filename ?? item.title ?? "")));
     for (const file of plan.files) {

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# N-017 (decided in the final release) — tell a monitor, every minute, that the API is up.
+#
+# Checks the PUBLIC readiness endpoint through Caddy (TLS, routing, the API, Postgres and Redis
+# answering: F-042) and pings HEARTBEAT_UUID_UPTIME on success. The monitor (a free Healthchecks.io
+# check with a 1-minute period and a few minutes' grace) alerts you when the pings stop, i.e. when
+# the site is down, before a customer has to tell you. On failure it pings /fail so the alert says
+# why at once instead of waiting for the grace period.
+#
+#   FLOWPILOT_PUBLIC_URL=https://app.example.com   (default: https://$APP_DOMAIN)
+#   HEARTBEAT_BASE=https://hc-ping.com  HEARTBEAT_UUID_UPTIME=<check id>
+#
+# Without HEARTBEAT_UUID_UPTIME it only checks and exits non-zero on failure (cron logs it).
+set -uo pipefail
+
+CONFIG_FILE="${FLOWPILOT_SWEEPER_ENV:-/etc/flowpilot/sweepers.env}"
+[[ -r "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+
+BASE_URL="${FLOWPILOT_PUBLIC_URL:-${APP_DOMAIN:+https://${APP_DOMAIN}}}"
+if [[ -z "${BASE_URL}" ]]; then
+    echo "FLOWPILOT_PUBLIC_URL (or APP_DOMAIN) must be set" >&2
+    exit 64
+fi
+
+ping_monitor() {
+    [[ -n "${HEARTBEAT_BASE:-}" && -n "${HEARTBEAT_UUID_UPTIME:-}" ]] || return 0
+    curl -fsS -m 10 --retry 2 -o /dev/null "${HEARTBEAT_BASE}/${HEARTBEAT_UUID_UPTIME}$1" \
+        || echo "HEARTBEAT_PING_FAILED: could not reach the monitor" >&2
+}
+
+if body="$(curl -fsS -m 15 "${BASE_URL%/}/api/v1/health/ready" 2>&1)"; then
+    ping_monitor ""
+    exit 0
+fi
+echo "UPTIME_CHECK_FAILED: ${BASE_URL%/}/api/v1/health/ready: ${body:0:300}" >&2
+ping_monitor "/fail"
+exit 1

@@ -40,6 +40,7 @@ from app.api import deps
 from app.core.config import settings
 from app.core.principal import get_current_principal
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
+from app.models.workspace import WorkspaceRole
 from app.models.ingestion import (
     DocumentSchemaPreset,
     IngestionBatch,
@@ -403,6 +404,7 @@ async def bulk_action(
             tags=payload.tags,
             export_format=payload.export_format,
             user_id=context.user_id,
+            is_admin=context.role is WorkspaceRole.ADMIN,
         )
     except bulk_service.BulkError as exc:
         db.rollback()

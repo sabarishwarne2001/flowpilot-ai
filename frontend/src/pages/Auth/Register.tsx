@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
 
 import { registerSchema, type RegisterInput } from "@/utils/validation";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 
 import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
@@ -33,6 +34,7 @@ export const Register: React.FC = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -60,19 +62,25 @@ export const Register: React.FC = () => {
     setSubmittedEmail(payload.email);
 
     try {
-      await toast.promise(authApi.registerRequest(payload), {
-        loading: "Creating your FlowPilot account...",
+      // F-118. sonner 2's toast.promise returns the toast's id, not the
+      // request: awaiting it never fails, so a refused sign-up (a too-easy
+      // password, the rate limit) still showed "Check your email".
+      // unwrap() is the request itself, and rejects when it does.
+      await toast
+        .promise(authApi.registerRequest(payload), {
+          loading: "Creating your FlowPilot account...",
 
-        success: () => "Check your email to continue.",
+          success: () => "Check your email to continue.",
 
-        error: (error: unknown) => {
-          if (error instanceof ApiError) {
-            return error.message ?? "Registration failed. Please try again.";
-          }
+          error: (error: unknown) => {
+            if (error instanceof ApiError) {
+              return error.message ?? "Registration failed. Please try again.";
+            }
 
-          return "An unexpected registration error occurred.";
-        },
-      });
+            return "An unexpected registration error occurred.";
+          },
+        })
+        .unwrap();
 
       setSubmitted(true);
     } catch {
@@ -86,12 +94,12 @@ export const Register: React.FC = () => {
         <MailCheck className="h-8 w-8 text-emerald-500" />
         <h1 className="text-lg font-semibold tracking-tight">Check your email</h1>
         <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-          We have sent a message to <strong>{submittedEmail}</strong>. Open the
-          link inside to finish setting up your account.
+          We have sent a message to <strong>{submittedEmail}</strong>. Open the link inside to
+          finish setting up your account.
         </p>
         <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-          Nothing arrived after a few minutes? Check your spam folder, and
-          confirm the address above is spelled correctly.
+          Nothing arrived after a few minutes? Check your spam folder, and confirm the address above
+          is spelled correctly.
         </p>
         <Link
           to={ROUTES.LOGIN}
@@ -136,7 +144,11 @@ export const Register: React.FC = () => {
             }`}
           />
           {errors.email && (
-            <p id="email-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
+            <p
+              id="email-error"
+              role="alert"
+              className="pt-0.5 text-xs font-semibold text-destructive"
+            >
               {errors.email.message}
             </p>
           )}
@@ -176,8 +188,13 @@ export const Register: React.FC = () => {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          <PasswordStrengthMeter password={watch("password")} userInputs={[watch("email")]} />
           {errors.password && (
-            <p id="password-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
+            <p
+              id="password-error"
+              role="alert"
+              className="pt-0.5 text-xs font-semibold text-destructive"
+            >
               {errors.password.message}
             </p>
           )}
@@ -218,7 +235,11 @@ export const Register: React.FC = () => {
             </button>
           </div>
           {errors.confirmPassword && (
-            <p id="confirmPassword-error" role="alert" className="pt-0.5 text-xs font-semibold text-destructive">
+            <p
+              id="confirmPassword-error"
+              role="alert"
+              className="pt-0.5 text-xs font-semibold text-destructive"
+            >
               {errors.confirmPassword.message}
             </p>
           )}
@@ -245,7 +266,11 @@ export const Register: React.FC = () => {
         <p className="text-sm font-medium leading-none text-muted-foreground">
           Already have an account?{" "}
           <Link
-            to={validatedRedirectParam ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}` : ROUTES.LOGIN}
+            to={
+              validatedRedirectParam
+                ? `${ROUTES.LOGIN}?redirect=${encodeURIComponent(validatedRedirectParam)}`
+                : ROUTES.LOGIN
+            }
             className="font-bold text-primary hover:underline"
           >
             Sign in instead
