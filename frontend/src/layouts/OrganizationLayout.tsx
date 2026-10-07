@@ -73,7 +73,8 @@ export const OrganizationLayout: React.FC = () => {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/70 bg-background/80 px-3 backdrop-blur-md sm:px-5">
+        <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-5">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-background/75 backdrop-blur-md" />
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"

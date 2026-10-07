@@ -102,7 +102,7 @@ export const IncomingOwnershipBanner: React.FC = () => {
                     type="button"
                     onClick={() => accept.mutate(transfer)}
                     disabled={busy}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                    className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
                   >
                     {busy && <Loader2 className="h-3 w-3 animate-spin" />}
                     Yes, take ownership
@@ -124,7 +124,7 @@ export const IncomingOwnershipBanner: React.FC = () => {
                       setError(null);
                       setConfirming(transfer.id);
                     }}
-                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    className="fp-btn-primary rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
                   >
                     Accept
                   </button>

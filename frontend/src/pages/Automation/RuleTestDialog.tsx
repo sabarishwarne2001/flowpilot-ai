@@ -118,7 +118,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             <Play className="h-4 w-4 text-primary fill-primary" />
             <h2
               id="rule-test-title"
-              className="font-extrabold text-sm uppercase tracking-wider"
+              className="font-semibold text-sm uppercase tracking-wider"
             >
               Test Automation Rule
             </h2>
@@ -136,10 +136,10 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
 
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar">
           <div className="space-y-2 select-none">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Active Target Rule
             </span>
-            <h3 className="text-sm font-extrabold leading-snug">{rule.name}</h3>
+            <h3 className="text-sm font-semibold leading-snug">{rule.name}</h3>
             <p className="text-xs text-muted-foreground leading-normal">
               Evaluate events logic for {rule.conditions.length} configured{" "}
               condition{rule.conditions.length > 1 ? "s" : ""}
@@ -147,14 +147,14 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           </div>
 
           <div className="space-y-1 bg-muted/20 border border-border/40 p-3 rounded-lg text-xs select-none">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block mb-1.5">
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mb-1.5">
               Configured Actions ({rule.actions.length})
             </span>
             <div className="flex flex-col gap-1.5">
               {rule.actions.map((act, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center space-x-1.5 font-bold text-foreground"
+                  className="flex items-center space-x-1.5 font-semibold text-foreground"
                 >
                   <span className="text-[9px] bg-muted border border-border/40 px-1 py-0.5 rounded font-mono text-muted-foreground">
                     #{idx + 1}
@@ -175,7 +175,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           {workItemsError ? (
             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-center select-none">
               <AlertCircle className="h-5 w-5 text-destructive mx-auto mb-1.5" />
-              <p className="text-xs font-bold text-destructive">
+              <p className="text-xs font-semibold text-destructive">
                 Failed to load Work Items
               </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -186,7 +186,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             <div className="space-y-2">
               <label
                 htmlFor="test-work-item"
-                className="text-xs font-bold uppercase tracking-wider text-muted-foreground select-none"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground select-none"
               >
                 Select Test Work Item
               </label>
@@ -201,7 +201,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
               ) : workItems.length === 0 ? (
                 <div className="p-6 text-center border border-dashed border-border rounded-xl bg-muted/10 select-none">
                   <HelpCircle className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1.5" />
-                  <p className="text-xs font-bold text-muted-foreground">
+                  <p className="text-xs font-semibold text-muted-foreground">
                     No Work Items found
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -232,10 +232,10 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           {testResult && (
             <div className="border border-border/60 rounded-xl overflow-hidden shadow-sm bg-muted/5 animate-fade-in select-none">
               <header className="px-4 py-3 border-b border-border/40 bg-muted/10 flex justify-between items-center">
-                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Execution Outputs
                 </span>
-                <span className="text-[10px] font-mono text-muted-foreground font-bold">
+                <span className="text-[10px] font-mono text-muted-foreground font-semibold">
                   {testResult.execution_time_ms} ms
                 </span>
               </header>
@@ -245,7 +245,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                   <div className="flex items-start space-x-3 text-emerald-500">
                     <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-bold leading-snug">
+                      <h4 className="text-xs font-semibold leading-snug">
                         Rule Logic Matched
                       </h4>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -257,7 +257,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                   <div className="flex items-start space-x-3 text-amber-500">
                     <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-bold leading-snug">
+                      <h4 className="text-xs font-semibold leading-snug">
                         Rule Logic Did Not Match
                       </h4>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -274,7 +274,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                       Notification Sent
                     </span>
                     <span
-                      className={`font-bold ${
+                      className={`font-semibold ${
                         testResult.notification_sent
                           ? "text-emerald-500"
                           : "text-muted-foreground"
@@ -285,7 +285,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                   </div>
 
                   <div className="flex flex-col gap-1.5 pt-1">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                       Trace details
                     </span>
                     <div className="p-2.5 bg-background border border-border/30 rounded-lg text-[10px] leading-relaxed text-muted-foreground break-all">
@@ -313,7 +313,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
             disabled={
               isTesting || !selectedWorkItemId || workItems.length === 0
             }
-            className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center min-w-[100px]"
+            className="fp-btn-primary px-5 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:bg-primary/95 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center min-w-[100px]"
           >
             {isTesting ? (
               <>

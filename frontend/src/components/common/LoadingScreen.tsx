@@ -28,7 +28,7 @@ export const LoadingScreen: React.FC = () => {
     >
       <div className="flex flex-col items-center text-center space-y-4 max-w-sm">
         {/* Animated Loading Spinner Container */}
-        <div className="p-3 bg-primary/10 text-primary rounded-xl mb-1 flex items-center justify-center shadow-sm">
+        <div className="mb-1 flex items-center justify-center fp-card p-3 text-primary shadow-elevation-2">
           <Loader2
             className="h-8 w-8 animate-spin"
             aria-hidden="true"
@@ -39,10 +39,10 @@ export const LoadingScreen: React.FC = () => {
 
         {/* Loading Indicators Text Pane */}
         <div className="space-y-1.5">
-          <h1 className="text-sm font-extrabold text-foreground">
+          <h1 className="text-sm font-semibold text-foreground">
             Loading {tenant?.workspace.workspace_name ?? "Workspace"}...
           </h1>
-          <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             Preparing your workspace.
           </p>
         </div>

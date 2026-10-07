@@ -473,7 +473,7 @@ export const OrganizationWebhooks: React.FC = () => {
                 setActionError(null);
                 setCreating(true);
               }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               <WebhookIcon className="h-3.5 w-3.5" />
               New endpoint
@@ -541,7 +541,7 @@ export const OrganizationWebhooks: React.FC = () => {
                 setRevealed(null);
                 setCopied(false);
               }}
-              className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="fp-btn-primary mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               I&apos;ve saved it
             </button>
@@ -623,7 +623,7 @@ export const OrganizationWebhooks: React.FC = () => {
                   url.trim().length === 0 ||
                   events.size === 0
                 }
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
               >
                 {create.isPending && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -785,7 +785,7 @@ export const OrganizationWebhooks: React.FC = () => {
                               })
                             }
                             disabled={update.isPending}
-                            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                            className="fp-btn-primary mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
                           >
                             {update.isPending && (
                               <Loader2 className="h-3 w-3 animate-spin" />

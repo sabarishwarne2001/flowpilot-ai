@@ -29,11 +29,11 @@ export const StepCard: React.FC<StepCardProps> = ({ step, title, subtitle, icon,
     >
       <header className="flex items-start justify-between gap-3 border-b border-border/50 px-5 py-4">
         <div className="flex items-start gap-3 min-w-0">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-black text-primary">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
             {step}
           </span>
           <div className="min-w-0">
-            <h3 id={`${id}-title`} className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider">
+            <h3 id={`${id}-title`} className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
               <span aria-hidden="true" className="text-primary">{icon}</span>
               {title}
             </h3>

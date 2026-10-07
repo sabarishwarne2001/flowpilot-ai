@@ -203,6 +203,26 @@
     @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
   }
 
+  /* Native controls follow the brand. */
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  progress {
+    accent-color: hsl(var(--primary));
+  }
+
+  /* Native selects get the same chevron everywhere. A select that draws its
+     own icon opts out with `appearance-none`. Data URIs are allowed by the
+     CSP's img-src. */
+  select:not([multiple]):not([size]):not(.appearance-none) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b8b94' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 14px 14px;
+    padding-right: 1.9rem !important;
+  }
+
   [disabled],
   [aria-disabled="true"] {
     @apply cursor-not-allowed;
@@ -282,6 +302,23 @@
   .dark .text-blue-800,
   .dark .text-sky-700 {
     color: rgb(147 197 253);
+  }
+}
+
+/* Light-mode contrast: mid-tone status text (text-emerald-500 ...) reads at
+   about 2.5:1 on white. One step deeper in light mode only. */
+@layer base {
+  :root:not(.dark) .text-emerald-500 {
+    color: rgb(5 150 105);
+  }
+  :root:not(.dark) .text-amber-500 {
+    color: rgb(217 119 6);
+  }
+  :root:not(.dark) .text-sky-500 {
+    color: rgb(2 132 199);
+  }
+  :root:not(.dark) .text-green-500 {
+    color: rgb(22 163 74);
   }
 }
 
@@ -472,6 +509,13 @@
 
   :root:not(.dark) .fp-skeleton::after {
     background-image: linear-gradient(90deg, transparent, hsl(var(--highlight) / 0.7), transparent);
+  }
+
+  /* The backdrop a document page sits on: a faint dot grid. */
+  .fp-viewer-canvas {
+    background-color: hsl(var(--muted) / 0.45);
+    background-image: radial-gradient(hsl(var(--foreground) / 0.07) 1px, transparent 1px);
+    background-size: 16px 16px;
   }
 
   /* A soft radial wash behind a hero area. */

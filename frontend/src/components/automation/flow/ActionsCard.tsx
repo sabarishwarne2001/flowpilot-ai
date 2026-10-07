@@ -103,12 +103,12 @@ export const ActionsCard: React.FC<ActionsCardProps> = ({
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                     <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
                     {action?.label ?? entry.action_type}
                     {action && <span className="text-[10px] font-semibold uppercase text-muted-foreground">{action.category}</span>}
                     {action && !action.available && (
-                      <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         <Lock className="h-3 w-3" aria-hidden="true" /> {action.unavailable_reason}
                       </span>
                     )}
@@ -160,7 +160,7 @@ export const ActionsCard: React.FC<ActionsCardProps> = ({
             setPicking(e.target.value);
             add(e.target.value);
           }}
-          className="rounded-lg border border-dashed border-border bg-background px-3 py-1.5 text-xs font-bold text-muted-foreground"
+          className="rounded-lg border border-dashed border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground"
         >
           <option value="">{actions.length >= limit ? `Limit of ${limit} actions reached` : "+ Add an action…"}</option>
           {grouped.map(([category, list]) => (

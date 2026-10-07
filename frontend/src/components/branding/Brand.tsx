@@ -170,7 +170,7 @@ export const Brand: React.FC<BrandProps> = ({
             <Zap className="h-6 w-6 text-primary-foreground fill-primary-foreground" />
           </div>
         ) : (
-          <span className="font-black text-xs sm:text-sm text-primary-foreground">
+          <span className="font-semibold text-xs sm:text-sm text-primary-foreground">
             {initials}
           </span>
         )}
@@ -181,7 +181,7 @@ export const Brand: React.FC<BrandProps> = ({
           <div
             className="
               text-base
-              font-bold
+              font-semibold
               leading-tight
               whitespace-nowrap
               overflow-hidden

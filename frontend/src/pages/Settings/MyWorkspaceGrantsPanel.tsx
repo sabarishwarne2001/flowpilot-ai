@@ -58,14 +58,14 @@ export const MyWorkspaceGrantsPanel: React.FC = () => {
   const items = grants.data ?? [];
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="fp-card p-4">
       <div className="flex items-start gap-3">
         <FolderOpen
           className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
           aria-hidden
         />
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
             Your workspace access
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">

@@ -167,7 +167,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                   .filter(Boolean),
               })
             }
-            className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            className="fp-btn-primary rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
           >
             Apply
           </button>

@@ -255,7 +255,7 @@ export const ActionConfigForm: React.FC<ActionConfigFormProps> = ({
         const wide = ["include_fields", "roles", "datasets", "object_kinds", "body", "message", "title", "subject", "reason", "hold_reason"].includes(key);
         return (
           <div key={key} className={wide ? "md:col-span-2" : ""}>
-            <label htmlFor={`${idPrefix}-${key}`} className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <label htmlFor={`${idPrefix}-${key}`} className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {LABELS[key] ?? prop?.title ?? humanize(key)}
               {required.has(key) && <span className="text-destructive"> *</span>}
             </label>

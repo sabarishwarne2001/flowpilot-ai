@@ -24,9 +24,11 @@ export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, 
     role="status"
     aria-labelledby="access-restricted-title"
     data-testid="access-restricted"
-    className="mx-auto mt-8 flex max-w-xl flex-col items-center gap-3 rounded-xl border border-border/60 bg-muted/10 px-6 py-12 text-center"
+    className="mx-auto mt-8 flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-dashed border-border-strong/70 bg-card/60 px-6 py-12 text-center animate-fade-in"
   >
-    <ShieldAlert className="h-7 w-7 text-muted-foreground" aria-hidden />
+    <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-muted to-muted/30 shadow-elevation-1">
+      <ShieldAlert className="h-5 w-5 text-muted-foreground" aria-hidden />
+    </span>
     <h1 id="access-restricted-title" className="text-base font-semibold text-foreground">
       Access restricted
     </h1>
@@ -39,7 +41,7 @@ export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, 
     {backTo ? (
       <Link
         to={backTo.path}
-        className="mt-2 inline-flex items-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/60"
+        className="fp-btn fp-btn-secondary mt-2"
       >
         {backTo.label}
       </Link>

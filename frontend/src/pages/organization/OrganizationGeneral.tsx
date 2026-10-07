@@ -197,7 +197,7 @@ export const OrganizationGeneral: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             General
           </h1>
           <StatusPill status={status} />
@@ -216,7 +216,7 @@ export const OrganizationGeneral: React.FC = () => {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </span>
           <div className="min-w-0 space-y-0.5">
-            <h2 className="text-sm font-bold text-foreground">
+            <h2 className="text-sm font-semibold text-foreground">
               Organization profile
             </h2>
             <p className="text-xs leading-relaxed text-muted-foreground">
@@ -272,7 +272,7 @@ export const OrganizationGeneral: React.FC = () => {
               type="button"
               disabled={!nameChanged || isSaving}
               onClick={() => saveProfile()}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="fp-btn-primary inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -300,7 +300,7 @@ export const OrganizationGeneral: React.FC = () => {
               <AlertTriangle className="h-4 w-4 text-destructive" />
             </span>
             <div className="min-w-0 space-y-0.5">
-              <h2 className="text-sm font-bold text-foreground">Danger zone</h2>
+              <h2 className="text-sm font-semibold text-foreground">Danger zone</h2>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Actions here affect every member and every workspace in{" "}
                 {organization.organization_name}.
@@ -309,7 +309,7 @@ export const OrganizationGeneral: React.FC = () => {
           </div>
 
           <div className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-4">
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-sm font-semibold text-foreground">
               Archive organization
             </h3>
             <p className="text-xs leading-relaxed text-muted-foreground">

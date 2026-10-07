@@ -361,7 +361,7 @@ export const OrganizationApiKeys: React.FC = () => {
                 setActionError(null);
                 setCreating(true);
               }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               <KeyRound className="h-3.5 w-3.5" />
               New key
@@ -420,7 +420,7 @@ export const OrganizationApiKeys: React.FC = () => {
                 setRevealed(null);
                 setCopied(false);
               }}
-              className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="fp-btn-primary mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               I&apos;ve saved it
             </button>
@@ -495,7 +495,7 @@ export const OrganizationApiKeys: React.FC = () => {
                 disabled={
                   create.isPending || name.trim().length === 0 || scopes.size === 0
                 }
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
               >
                 {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Create key

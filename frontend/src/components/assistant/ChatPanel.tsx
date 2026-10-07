@@ -226,7 +226,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
           <ShieldAlert className="h-5 w-5" />
         </div>
-        <h3 className="mb-2 text-sm font-bold">Unable to load conversation</h3>
+        <h3 className="mb-2 text-sm font-semibold">Unable to load conversation</h3>
         <p className="mb-5 text-xs font-medium leading-relaxed text-muted-foreground">
           Conversation history could not be synchronized with the server.
         </p>
@@ -239,7 +239,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               });
             }
           }}
-          className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+          className="fp-btn-primary rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Retry
         </button>
@@ -253,7 +253,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <MessageSquare className="h-6 w-6" />
         </div>
-        <h2 className="mb-1 text-base sm:text-lg font-bold">AI Assistant</h2>
+        <h2 className="mb-1 text-base sm:text-lg font-semibold">AI Assistant</h2>
         <p className="max-w-md text-xs sm:text-sm leading-relaxed text-muted-foreground">
           {mode === "global"
             ? "Create or select a conversation to start chatting with your knowledge base."

@@ -59,7 +59,8 @@ import { ROUTES } from "@/constants/routes";
 export const PlatformLayout: React.FC = () => {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground transition-colors duration-200">
-      <header className="relative z-20 flex-shrink-0 border-b border-border/70 bg-background/80 backdrop-blur-md">
+      <header className="relative z-20 flex-shrink-0 border-b border-border/70">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-background/75 backdrop-blur-md" />
         <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Link

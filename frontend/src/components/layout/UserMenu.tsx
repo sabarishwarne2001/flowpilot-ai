@@ -37,6 +37,7 @@ import {
 import { Avatar } from "@/components/common/Avatar";
 import { SideTooltip } from "@/components/layout/SideTooltip";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useMeContext } from "@/hooks/useMeContext";
 import { useUIStore, type ThemeMode } from "@/store/useUIStore";
 
 interface UserMenuProps {
@@ -101,7 +102,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     useRole(context, { role: "menu" }),
   ]);
 
-  const name = nameFromEmail(user?.email);
+  const { context: me } = useMeContext();
+  const displayName = me?.user.display_name?.trim() || null;
+  const name = displayName ?? nameFromEmail(user?.email);
   const roleText = roleLabel(role);
   const close = () => setOpen(false);
 
@@ -132,6 +135,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
           userId={user?.id}
           hasAvatar={user?.has_avatar}
           email={user?.email}
+          displayName={displayName}
           size="sm"
           className="ring-1 ring-border-strong/60"
         />
@@ -166,7 +170,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               className="fp-popover z-[60] w-64 p-1.5"
             >
               <div className="flex items-center gap-2.5 px-2 pb-2.5 pt-1.5">
-                <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} size="md" />
+                <Avatar userId={user?.id} hasAvatar={user?.has_avatar} email={user?.email} displayName={displayName} size="md" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground">{name}</p>
                   <p className="truncate text-xs text-muted-foreground">{user?.email}</p>

@@ -47,6 +47,28 @@ interface DocumentPageViewerProps {
 
 const ZOOM_STEPS = [60, 80, 100, 125, 150, 200] as const;
 
+/** One colour per field name, stable across renders and pages. */
+const BOX_TONES = [
+  "border-sky-500/80 bg-sky-400/10 hover:bg-sky-400/25",
+  "border-violet-500/80 bg-violet-400/10 hover:bg-violet-400/25",
+  "border-amber-500/80 bg-amber-300/10 hover:bg-amber-300/25",
+  "border-emerald-500/80 bg-emerald-400/10 hover:bg-emerald-400/25",
+  "border-rose-500/80 bg-rose-400/10 hover:bg-rose-400/25",
+  "border-cyan-500/80 bg-cyan-400/10 hover:bg-cyan-400/25",
+] as const;
+
+const toneFor = (field: string | null | undefined): string => {
+  const key = field ?? "";
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return BOX_TONES[hash % BOX_TONES.length] ?? BOX_TONES[0];
+};
+
+const TOOL =
+  "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-35";
+
 export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
   workspaceId,
   workItemId,
@@ -130,18 +152,19 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
   const zoom = ZOOM_STEPS[zoomIndex] ?? 100;
 
   return (
-    <section aria-label="Document pages" className="rounded-lg border border-border bg-card">
-      <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+    <section aria-label="Document pages" className="overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1">
+      <header className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-2.5 py-1.5">
+        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-elevation-1">
         <button
           type="button"
           onClick={() => onPageChange(Math.max(1, page - 1))}
           disabled={page <= 1}
           aria-label="Previous page"
-          className="rounded border border-border p-1 hover:bg-muted disabled:opacity-40"
+          className={TOOL}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-xs font-semibold tabular-nums" aria-live="polite">
+        <span className="px-1.5 text-xs font-medium tabular-nums text-foreground" aria-live="polite">
           Page {page} of {pageCount}
         </span>
         <button
@@ -149,34 +172,42 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
           onClick={() => onPageChange(Math.min(pageCount, page + 1))}
           disabled={page >= pageCount}
           aria-label="Next page"
-          className="rounded border border-border p-1 hover:bg-muted disabled:opacity-40"
+          className={TOOL}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-        <div className="ml-auto flex items-center gap-1">
+        </div>
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-elevation-1">
           <button
             type="button"
             onClick={() => setZoomIndex((index) => Math.max(0, index - 1))}
             disabled={zoomIndex === 0}
             aria-label="Zoom out"
-            className="rounded border border-border p-1 hover:bg-muted disabled:opacity-40"
+            className={TOOL}
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <span className="w-10 text-center text-xs tabular-nums text-muted-foreground">{zoom}%</span>
+          <button
+            type="button"
+            onClick={() => setZoomIndex(Math.max(0, ZOOM_STEPS.indexOf(100)))}
+            title="Reset zoom"
+            className="w-12 rounded-md py-1 text-center text-xs font-medium tabular-nums text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            {zoom}%
+          </button>
           <button
             type="button"
             onClick={() => setZoomIndex((index) => Math.min(ZOOM_STEPS.length - 1, index + 1))}
             disabled={zoomIndex === ZOOM_STEPS.length - 1}
             aria-label="Zoom in"
-            className="rounded border border-border p-1 hover:bg-muted disabled:opacity-40"
+            className={TOOL}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
       </header>
-      <div className="max-h-[75vh] overflow-auto bg-muted/30 p-3">
-        <div className="relative mx-auto bg-white shadow-sm" style={{ width: `${zoom}%` }}>
+      <div className="fp-viewer-canvas max-h-[75vh] overflow-auto p-4 sm:p-6">
+        <div className="relative mx-auto rounded-sm bg-white shadow-elevation-3 ring-1 ring-black/5" style={{ width: `${zoom}%` }}>
           {imageUrl ? (
             <img src={imageUrl} alt={`Page ${page} of the document`} className="block w-full select-none" draggable={false} />
           ) : (
@@ -196,10 +227,10 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
                   title={`${box.field ?? "Value"}: ${box.value}`}
                   data-field={box.field ?? undefined}
                   data-active={active ? "true" : "false"}
-                  className={`absolute rounded-sm border-2 transition-colors ${
+                  className={`absolute rounded-[3px] border-[1.5px] transition-all duration-150 ${
                     active
-                      ? "border-primary bg-primary/20"
-                      : "border-amber-400/70 bg-amber-300/10 hover:border-amber-500 hover:bg-amber-300/25"
+                      ? "z-[1] border-primary bg-primary/20 shadow-[0_0_0_3px_hsl(var(--primary)/0.25),0_0_18px_hsl(var(--primary)/0.45)]"
+                      : toneFor(box.field)
                   }`}
                   style={{
                     left: `${box.x0 * 100}%`,

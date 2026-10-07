@@ -69,7 +69,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
   const reasonValid = reason.trim().length >= 3;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-6" aria-labelledby="legal-holds-heading">
+    <section className="fp-card p-6" aria-labelledby="legal-holds-heading">
       <header className="mb-4">
         <h2 id="legal-holds-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
           <Lock className="h-4 w-4" aria-hidden="true" />
@@ -130,7 +130,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
           }}
         >
           <div className="sm:col-span-3">
-            <label htmlFor="hold-reason" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label htmlFor="hold-reason" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Reason (recorded in the audit log)
             </label>
             <input
@@ -143,7 +143,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
             />
           </div>
           <div>
-            <label htmlFor="hold-reference" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label htmlFor="hold-reference" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Reference (optional)
             </label>
             <input
@@ -156,7 +156,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
             />
           </div>
           <div>
-            <label htmlFor="hold-document" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <label htmlFor="hold-document" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Document ID (optional)
             </label>
             <input
@@ -171,7 +171,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
             <button
               type="submit"
               disabled={!reasonValid || place.isPending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="fp-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               {place.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               Place hold

@@ -240,12 +240,12 @@ export const WorkItemDetails: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-3">
         <Link
           to={getBackPath()}
-          className="inline-flex items-center rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="fp-btn fp-btn-ghost -ml-2.5"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" />
           Back to Documents
         </Link>
 
@@ -264,69 +264,63 @@ export const WorkItemDetails: React.FC = () => {
             type="button"
             onClick={handleRetry}
             disabled={isReprocessing}
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/95 disabled:pointer-events-none disabled:opacity-50"
+            className="fp-btn fp-btn-primary"
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isReprocessing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isReprocessing ? "animate-spin" : ""}`} />
             Retry Processing
           </button>
         )}
         </div>
       </header>
 
-      <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm dark:border-border/40">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-primary/10 p-3 text-primary">
-                <FileText className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-2xl font-extrabold tracking-tight" title={workItem.original_filename}>
-                  {workItem.original_filename}
-                </h1>
-                <p className="mt-1 text-sm font-medium text-muted-foreground">
-                  AI extraction results and document metadata
-                </p>
-              </div>
+      <section className="fp-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-muted to-muted/40 text-primary shadow-inner-highlight">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-semibold tracking-tight" title={workItem.original_filename}>
+                {workItem.original_filename}
+              </h1>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                AI extraction results and document metadata
+              </p>
+              <h2 className="sr-only">Document Information</h2>
+              <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-[13px]">
+                <div className="flex items-center gap-1.5">
+                  <dt className="text-muted-foreground">File Type</dt>
+                  <dd className="font-mono text-[12px] text-foreground">{workItem.file_type}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="text-muted-foreground">File Size</dt>
+                  <dd className="fp-num font-medium text-foreground">{formatBytes(workItem.file_size)}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="text-muted-foreground">Created</dt>
+                  <dd className="fp-num font-medium text-foreground">{formatDateTime(workItem.created_at)}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="text-muted-foreground">Last Updated</dt>
+                  <dd className="fp-num font-medium text-foreground">{formatDateTime(workItem.updated_at)}</dd>
+                </div>
+              </dl>
             </div>
           </div>
-          <span className={`inline-flex items-center self-start rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
+          <span className={`inline-flex items-center gap-1.5 self-start rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
             {workItem.status}
           </span>
         </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-12">
-        <aside className="space-y-6 xl:col-span-4">
-          <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm dark:border-border/40">
-            <h2 className="mb-5 text-lg font-bold">Document Information</h2>
-            <dl className="space-y-4">
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">File Type</dt>
-                <dd className="mt-1 text-sm font-semibold">{workItem.file_type}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">File Size</dt>
-                <dd className="mt-1 text-sm font-semibold">{formatBytes(workItem.file_size)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Created</dt>
-                <dd className="mt-1 text-sm font-semibold">{formatDateTime(workItem.created_at)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Last Updated</dt>
-                <dd className="mt-1 text-sm font-semibold">{formatDateTime(workItem.updated_at)}</dd>
-              </div>
-            </dl>
-            {/* HARDENING-T1:D4. Identifiers belong in a support drawer, not the
-                primary card. The storage key is no longer sent at all. */}
-            <details className="group mt-5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+        {/* HARDENING-T1:D4. Identifiers belong in a support drawer, not the
+            primary card. The storage key is no longer sent at all. */}
+            <details className="group mt-4 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
               <summary className="cursor-pointer select-none font-semibold text-muted-foreground hover:text-foreground">
                 Technical details
               </summary>
               <dl className="mt-2 space-y-2">
                 <div>
-                  <dt className="font-bold uppercase tracking-wide text-muted-foreground">Reference ID</dt>
+                  <dt className="font-semibold uppercase tracking-wide text-muted-foreground">Reference ID</dt>
                   <dd className="mt-1 flex items-center gap-2">
                     <code className="break-all font-mono text-muted-foreground">{workItem.id}</code>
                     <button
@@ -337,7 +331,7 @@ export const WorkItemDetails: React.FC = () => {
                           .then(() => toast.success("Reference ID copied."))
                           .catch(() => toast.error("Copy failed; select the ID instead."));
                       }}
-                      className="shrink-0 rounded border border-border px-1.5 py-0.5 font-semibold hover:bg-muted"
+                      className="shrink-0 rounded-md border border-border bg-card px-1.5 py-0.5 font-medium hover:bg-accent"
                     >
                       Copy
                     </button>
@@ -346,12 +340,12 @@ export const WorkItemDetails: React.FC = () => {
                 <p className="text-muted-foreground">Quote this ID when contacting support.</p>
               </dl>
             </details>
-          </section>
-        </aside>
+      </section>
 
-        <section className="xl:col-span-8">
-          <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm dark:border-border/40">
-            <nav className="flex border-b border-border/40 bg-muted/10">
+      <div>
+        <section>
+          <div className="overflow-hidden fp-card">
+            <nav className="flex overflow-x-auto border-b border-border bg-muted/20 px-2">
               {DETAIL_TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.value;
@@ -361,21 +355,22 @@ export const WorkItemDetails: React.FC = () => {
                     type="button"
                     onClick={() => setActiveTab(tab.value)}
                     className={`
-                      flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all
-                      ${isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}
+                      relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3.5 py-3 text-[13px] font-medium
+                      after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors
+                      ${isActive ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"}
                     `}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
                     {tab.label}
                   </button>
                 );
               })}
             </nav>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-5">
               {activeTab === "document" && (
-                <section className="grid gap-4 lg:grid-cols-5" aria-label="Document and its data">
-                  <div className="lg:col-span-3">
+                <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]" aria-label="Document and its data">
+                  <div className="min-w-0">
                     {finished && workspaceId ? (
                       <DocumentPageViewer
                         workspaceId={workspaceId}
@@ -394,7 +389,7 @@ export const WorkItemDetails: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="lg:col-span-2">
+                  <div className="min-w-0">
                     {workspaceId && (
                       <ExtractedFieldsPanel
                         workspaceId={workspaceId}
@@ -415,7 +410,7 @@ export const WorkItemDetails: React.FC = () => {
               {activeTab === "summary" && (
                 <section className="space-y-4">
                   <div>
-                    <h2 className="text-lg font-bold">AI Generated Summary</h2>
+                    <h2 className="text-lg font-semibold">AI Generated Summary</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       High-level overview extracted from the uploaded document.
                     </p>
@@ -433,7 +428,7 @@ export const WorkItemDetails: React.FC = () => {
               {activeTab === "entities" && (
                 <section className="space-y-4">
                   <div>
-                    <h2 className="text-lg font-bold">Extracted Entities</h2>
+                    <h2 className="text-lg font-semibold">Extracted Entities</h2>
                     <p className="mt-1 text-sm text-muted-foreground">Structured data extracted from the document.</p>
                   </div>
                   <ExtractionMemoryProvenance workItemId={workItem.id} />
@@ -458,7 +453,7 @@ export const WorkItemDetails: React.FC = () => {
               {activeTab === "ocr" && (
                 <section className="space-y-4">
                   <div>
-                    <h2 className="text-lg font-bold">OCR & Processing Information</h2>
+                    <h2 className="text-lg font-semibold">OCR & Processing Information</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       The page beside the text read from it, and what the ingestion pipeline recorded.
                     </p>
@@ -501,33 +496,33 @@ export const WorkItemDetails: React.FC = () => {
                   <div className="rounded-lg border border-border/40 bg-muted/10 p-5">
                     <dl className="grid gap-5 sm:grid-cols-2">
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Processing Status</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Processing Status</dt>
                         <dd className="mt-2">
-                          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-black uppercase leading-none tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
+                          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase leading-none tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
                             {workItem.status}
                           </span>
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">File Format</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">File Format</dt>
                         <dd className="mt-2 text-sm font-semibold">{workItem.file_type}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Original Filename</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Original Filename</dt>
                         <dd className="mt-2 break-all text-sm font-semibold" title={workItem.original_filename}>
                           {workItem.original_filename}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Uploaded Size</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Uploaded Size</dt>
                         <dd className="mt-2 text-sm font-semibold">{formatBytes(workItem.file_size)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Uploaded At</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Uploaded At</dt>
                         <dd className="mt-2 text-sm font-semibold">{formatDateTime(workItem.created_at)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Last Updated</dt>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Last Updated</dt>
                         <dd className="mt-2 text-sm font-semibold">{formatDateTime(workItem.updated_at)}</dd>
                       </div>
                     </dl>
@@ -538,7 +533,7 @@ export const WorkItemDetails: React.FC = () => {
               {activeTab === "chat" && (
                 <section className="space-y-4">
                   <div>
-                    <h2 className="text-lg font-bold">AI Assistant</h2>
+                    <h2 className="text-lg font-semibold">AI Assistant</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Ask questions about this document using its processed content and extracted knowledge.
                     </p>

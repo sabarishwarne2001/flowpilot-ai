@@ -44,10 +44,10 @@ const filterFormSchema = z.object({
 type FilterFormInput = z.infer<typeof filterFormSchema>;
 
 const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
-  QUEUED: "bg-primary/10 text-primary border-primary/20",
-  PROCESSING: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-  COMPLETED: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  FAILED: "bg-destructive/10 text-destructive border-destructive/20",
+  QUEUED: "bg-primary/[0.08] text-primary border-primary/20 dark:text-[hsl(213_94%_72%)]",
+  PROCESSING: "bg-amber-500/[0.08] text-amber-600 border-amber-500/25 dark:text-amber-400",
+  COMPLETED: "bg-emerald-500/[0.08] text-emerald-600 border-emerald-500/25 dark:text-emerald-400",
+  FAILED: "bg-destructive/[0.08] text-destructive border-destructive/25",
 };
 
 export const WorkItems: React.FC = () => {
@@ -220,7 +220,7 @@ export const WorkItems: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="space-y-1 select-none">
-          <h2 className="text-2xl font-extrabold tracking-tight">Documents Pipeline</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Documents Pipeline</h2>
           <div className="h-4 w-96 rounded bg-muted/40 animate-pulse" />
         </div>
         <SkeletonTable rows={10} />
@@ -249,8 +249,8 @@ export const WorkItems: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="space-y-1 select-none">
-        <h2 className="text-2xl font-extrabold tracking-tight">Documents Database</h2>
-        <p className="text-sm font-semibold leading-relaxed text-muted-foreground">
+        <h2 className="text-2xl font-semibold tracking-tight">Documents Database</h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">
           Monitor ingestion pipelines, search uploaded documents, inspect AI processing status, and navigate into detailed extraction results.
         </p>
       </div>
@@ -258,7 +258,7 @@ export const WorkItems: React.FC = () => {
       <form
         onSubmit={handleSubmit(handleApplyFiltersSubmit)}
         noValidate
-        className="grid grid-cols-1 gap-4 rounded-xl border border-border/40 bg-card p-4 shadow-sm sm:grid-cols-12"
+        className="fp-card grid grid-cols-1 gap-3 p-3 sm:grid-cols-12"
       >
         <div className="relative sm:col-span-6">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -266,14 +266,14 @@ export const WorkItems: React.FC = () => {
             {...register("search")}
             type="text"
             placeholder="Search documents..."
-            className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-4 text-sm font-semibold transition-all placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="fp-input h-9 pl-9 pr-4"
           />
         </div>
 
         <div className="relative sm:col-span-4">
           <select
             {...register("status")}
-            className="w-full cursor-pointer appearance-none rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="fp-input h-9 cursor-pointer appearance-none pr-9"
           >
             <option value="ALL">All Statuses</option>
             <option value="QUEUED">Queued</option>
@@ -286,14 +286,14 @@ export const WorkItems: React.FC = () => {
 
         <button
           type="submit"
-          className="flex items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/95 active:scale-[0.98] sm:col-span-2"
+          className="fp-btn fp-btn-primary h-9 text-[13px] sm:col-span-2"
         >
           <Search className="h-3.5 w-3.5" />
           <span>Apply Filters</span>
         </button>
       </form>
 
-      <div className="relative overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm dark:border-border/40">
+      <div className="relative overflow-hidden fp-card">
         {isFetching && (
           <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-primary/20">
             <div className="h-full w-full animate-pulse bg-primary" />
@@ -311,9 +311,9 @@ export const WorkItems: React.FC = () => {
           ) : (
             <table className="w-full table-fixed border-collapse text-left">
               <thead>
-                <tr className="border-b border-border/40 bg-muted/20 text-xs font-bold uppercase tracking-wider text-muted-foreground dark:bg-muted/5">
+                <tr className="sticky top-0 z-[1] border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground backdrop-blur">
                   <th
-                    className="w-5/12 p-4"
+                    className="w-5/12 px-4 py-2.5"
                     aria-sort={
                       sortBy === "original_filename"
                         ? sortOrder === "asc"
@@ -326,15 +326,15 @@ export const WorkItems: React.FC = () => {
                       type="button"
                       disabled={isFetching}
                       onClick={() => handleSortToggle("original_filename")}
-                      className="flex items-center space-x-1.5 font-bold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                      className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
                       <span>Document Filename</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-2/12 p-4">Format</th>
+                  <th className="w-2/12 px-4 py-2.5">Format</th>
                   <th
-                    className="w-2/12 p-4"
+                    className="w-2/12 px-4 py-2.5"
                     aria-sort={
                       sortBy === "file_size"
                         ? sortOrder === "asc"
@@ -347,14 +347,14 @@ export const WorkItems: React.FC = () => {
                       type="button"
                       disabled={isFetching}
                       onClick={() => handleSortToggle("file_size")}
-                      className="flex items-center space-x-1.5 font-bold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                      className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
                       <span>File Size</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-2/12 p-4">Status</th>
-                  <th className="w-1/12 p-4 text-right">Actions</th>
+                  <th className="w-2/12 px-4 py-2.5">Status</th>
+                  <th className="w-1/12 px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
 
@@ -362,38 +362,43 @@ export const WorkItems: React.FC = () => {
                 {items.map((item) => (
                   <tr
                     key={item.id}
-                    className="border-b border-border/40 text-sm last:border-b-0"
+                    className="group border-b border-border/60 text-sm transition-colors last:border-b-0 hover:bg-muted/40"
                   >
-                    <td className="p-4">
-                      <div className="flex items-center space-x-3.5">
-                        <FileText className="h-5 w-5 flex-shrink-0 text-primary/80" />
-                        <span className="truncate font-bold text-foreground/90" title={item.original_filename}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground group-hover:text-primary">
+                          <FileText className="h-4 w-4" />
+                        </span>
+                        <span className="truncate font-medium text-foreground" title={item.original_filename}>
                           {item.original_filename}
                         </span>
                       </div>
                     </td>
-                    <td className="p-4 font-semibold text-muted-foreground">
-                      {item.file_type.split("/")[1]?.toUpperCase() ?? "UNKNOWN"}
+                    <td className="px-4 py-3">
+                      <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                        {item.file_type.split("/")[1]?.toUpperCase() ?? "UNKNOWN"}
+                      </span>
                     </td>
-                    <td className="p-4 text-xs font-bold text-muted-foreground">
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       {formatBytes(item.file_size)}
                     </td>
-                    <td className="p-4 select-none">
+                    <td className="px-4 py-3 select-none">
                       <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase leading-none tracking-wide ${STATUS_BADGE_MAP[item.status]}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold uppercase leading-4 tracking-wide ${STATUS_BADGE_MAP[item.status]}`}
                       >
+                        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                         {item.status.toLowerCase()}
                       </span>
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-end space-x-2">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
                         {item.status === "FAILED" && (
                           <button
                             type="button"
                             disabled={reprocessMutation.isPending}
                             onClick={() => triggerReprocess(item.id)}
                             title="Retry Processing"
-                            className="rounded-md border border-amber-500/20 bg-amber-500/10 p-1.5 text-amber-500 transition-all hover:bg-amber-500/20 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50"
+                            className="rounded-md p-1.5 text-amber-600 hover:bg-amber-500/10 disabled:pointer-events-none disabled:opacity-50 dark:text-amber-400"
                           >
                             <RefreshCw className={`h-4 w-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
                           </button>
@@ -401,7 +406,7 @@ export const WorkItems: React.FC = () => {
                         <Link
                           to={getDetailsPath(item.id)}
                           title="View Details"
-                          className="rounded-md border border-border bg-background p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-[0.96]"
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
@@ -410,7 +415,7 @@ export const WorkItems: React.FC = () => {
                           onClick={() => triggerDelete(item.id)}
                           disabled={deleteMutation.isPending}
                           title="Delete Document"
-                          className="rounded-md border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-all hover:bg-destructive/20 active:scale-[0.96]"
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -426,7 +431,7 @@ export const WorkItems: React.FC = () => {
 
       {totalPages > 1 && (
         <footer className="flex items-center justify-between select-none">
-          <p className="text-xs font-bold text-muted-foreground">
+          <p className="fp-num text-xs text-muted-foreground">
             Page {currentPage} of {totalPages}
           </p>
           <div className="flex items-center space-x-2">
@@ -434,7 +439,7 @@ export const WorkItems: React.FC = () => {
               type="button"
               onClick={handlePreviousPage}
               disabled={currentPage === 1}
-              className="rounded-lg border border-border bg-card px-3.5 py-1.5 text-xs font-black uppercase transition-all hover:bg-muted active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+              className="fp-btn fp-btn-secondary text-xs"
             >
               Previous
             </button>
@@ -442,7 +447,7 @@ export const WorkItems: React.FC = () => {
               type="button"
               onClick={handleNextPage}
               disabled={currentPage === totalPages}
-              className="rounded-lg border border-border bg-card px-3.5 py-1.5 text-xs font-black uppercase transition-all hover:bg-muted active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+              className="fp-btn fp-btn-secondary text-xs"
             >
               Next
             </button>

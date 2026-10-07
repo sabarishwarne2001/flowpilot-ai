@@ -34,9 +34,9 @@ export const KnowledgeBaseReindex: React.FC<Props> = ({
   if (!canManage) {return null;}
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <div className="fp-card p-6 shadow-sm">
       <header className="border-b border-border pb-3 mb-4">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Database className="h-5 w-5 text-primary" />
           Knowledge Base Reindexing
         </h2>
@@ -84,7 +84,7 @@ export const KnowledgeBaseReindex: React.FC<Props> = ({
                 type="button"
                 onClick={() => reindex.mutate()}
                 disabled={reindex.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
               >
                 {reindex.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />

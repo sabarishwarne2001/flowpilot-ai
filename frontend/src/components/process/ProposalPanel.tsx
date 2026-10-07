@@ -38,7 +38,7 @@ export const ProposalSummary: React.FC<{ readonly proposal: ProposalRow }> = ({ 
     <div className="flex flex-wrap items-center gap-2">
       <Bot className="h-4 w-4 text-primary" aria-hidden />
       <span className="text-sm font-semibold">{proposal.label}</span>
-      {proposal.verdict ? <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-bold">{proposal.verdict}</span> : null}
+      {proposal.verdict ? <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold">{proposal.verdict}</span> : null}
       <ProposalStatusBadge status={proposal.status} />
       <span className={HINT}>
         confidence {pct(proposal.confidence)}

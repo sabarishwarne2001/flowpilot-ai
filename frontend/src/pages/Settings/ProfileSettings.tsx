@@ -196,7 +196,7 @@ export const ProfileSettings: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold tracking-tight text-foreground">Profile</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">Profile</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           How you appear across FlowPilot — in the member directory, on audit
           entries, and in notifications.
@@ -204,7 +204,7 @@ export const ProfileSettings: React.FC = () => {
       </div>
 
       {/* Avatar */}
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-4 fp-card p-4">
         <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted border border-border">
           {avatarSrc ? (
             <img
@@ -275,7 +275,7 @@ export const ProfileSettings: React.FC = () => {
       </div>
 
       {/* Profile fields */}
-      <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <div className="space-y-4 fp-card p-4">
         {error && (
           <p
             role="alert"
@@ -369,7 +369,7 @@ export const ProfileSettings: React.FC = () => {
             type="button"
             onClick={() => save.mutate()}
             disabled={save.isPending || !dirty || !isKnownTimezone(timezone)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            className="fp-btn-primary inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Save changes

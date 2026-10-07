@@ -49,7 +49,7 @@ const OperatorToggle: React.FC<{
         aria-checked={value === option}
         disabled={disabled}
         onClick={() => onChange(option)}
-        className={`rounded px-2 py-0.5 text-[10px] font-black ${
+        className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
           value === option ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
         }`}
       >
@@ -133,7 +133,7 @@ export const ConditionsCard: React.FC<ConditionsCardProps> = ({
         {groups.map((group, g) => (
           <div key={group.uid} className="rounded-lg border border-border/70 bg-muted/20 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                 <span>Group {g + 1}: match</span>
                 <OperatorToggle
                   value={group.logic_operator}
@@ -251,7 +251,7 @@ export const ConditionsCard: React.FC<ConditionsCardProps> = ({
                 type="button"
                 disabled={disabled || triggers.length === 0 || group.conditions.length >= limits.conditions_per_group}
                 onClick={() => addCondition(g)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-primary hover:bg-primary/10 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" /> Condition
               </button>
@@ -263,7 +263,7 @@ export const ConditionsCard: React.FC<ConditionsCardProps> = ({
           type="button"
           disabled={disabled || triggers.length === 0 || groups.length >= limits.groups}
           onClick={addGroup}
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5" /> {groups.length === 0 ? "Add a condition group" : "Add another group"}
         </button>

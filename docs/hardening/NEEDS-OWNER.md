@@ -422,6 +422,17 @@ certificate) and that `admin@flowpilot.ai` is a mailbox you can read (password r
 seeded administrator go there). If not, change `APP_DOMAIN`, `FRONTEND_URL`, `CORS_ORIGINS`,
 `PLATFORM_RESERVED_HOSTS` and `SEED_ADMIN_EMAIL` together.
 
+## N-029 — Trust claims on the sign-in page (production config & UI)
+The brief for the new sign-in screen asked for "SOC-2 Ready" and "99.9% Extraction Accuracy" badges.
+Neither is backed by anything in the repository: there is no SOC 2 audit or readiness assessment,
+and no accuracy benchmark that produces 99.9% (the evaluation golden set measures retrieval, not
+extraction accuracy). On a page every prospect sees, an unbacked certification or accuracy figure
+is a misleading claim. **Shipped instead:** three safeguards the product delivers today (SAML & OIDC
+single sign-on, tenant-isolated data, full audit trail); the sample invoice's confidence figures are
+part of the illustration. **Decide:** add either claim only with evidence you can show a customer
+(an auditor's letter; a published benchmark). They are one line each in
+`frontend/src/components/auth/DocumentShowcase.tsx` (`TRUST`).
+
 ---
 
 # Final release (2026-10-06): every open decision taken

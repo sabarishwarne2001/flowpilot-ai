@@ -31,28 +31,28 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
 }) => {
   return (
     <div
-      className={`flex flex-col items-center justify-center text-center p-8 bg-card border border-border/60 dark:border-border/40 rounded-xl max-w-sm mx-auto shadow-sm select-none animate-fade-in ${className}`}
+      className={`relative mx-auto flex max-w-sm flex-col items-center justify-center overflow-hidden rounded-xl border border-destructive/25 bg-card/60 px-8 py-10 text-center select-none animate-fade-in ${className}`}
       role="alert"
       aria-live="assertive"
       aria-labelledby="error-state-title"
       aria-describedby="error-state-desc"
     >
       {/* Visual Error Icon Container */}
-      <div className="p-4 bg-destructive/10 text-destructive rounded-full mb-4">
-        <AlertCircle className="h-7 w-7 flex-shrink-0" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-destructive/25 bg-destructive/10 text-destructive">
+        <AlertCircle className="h-5 w-5 flex-shrink-0" />
       </div>
 
       {/* Main Descriptions Labels */}
       <h3
         id="error-state-title"
-        className="text-sm font-extrabold tracking-tight text-foreground/90 font-sans mb-1.5"
+        className="mb-1 text-sm font-semibold tracking-tight text-foreground"
       >
         {title}
       </h3>
 
       <p
         id="error-state-desc"
-        className="text-xs text-muted-foreground font-semibold leading-relaxed mb-5 max-w-[280px]"
+        className="mb-5 max-w-[280px] text-[13px] leading-relaxed text-muted-foreground"
       >
         {description}
       </p>
@@ -61,9 +61,9 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-sm active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="fp-btn fp-btn-secondary text-[13px]"
       >
-        <RefreshCw className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
+        <RefreshCw className="h-3.5 w-3.5 flex-shrink-0" />
         <span>Retry Connection</span>
       </button>
     </div>

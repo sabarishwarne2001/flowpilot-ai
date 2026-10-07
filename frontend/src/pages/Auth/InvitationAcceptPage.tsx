@@ -303,7 +303,7 @@ export const InvitationAcceptPage: React.FC = () => {
             </div>
             <button
               onClick={() => handleAuthRedirect(ROUTES.LOGIN)}
-              className="w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
             >
               Log In with Matching Account
             </button>
@@ -327,7 +327,7 @@ export const InvitationAcceptPage: React.FC = () => {
             </div>
             <button
               onClick={handleSwitchAccount}
-              className="w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
             >
               Sign out and switch account
             </button>

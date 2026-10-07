@@ -66,9 +66,13 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
 
   return (
     <header
-      className={`relative z-20 flex h-14 shrink-0 select-none items-center justify-between gap-3 border-b border-border/70 bg-background/80 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-5 ${className}`}
+      className={`relative z-20 flex h-14 shrink-0 select-none items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-5 ${className}`}
       aria-label="Dashboard Header"
     >
+      {/* The glass is a layer behind the bar, not a filter on it: a filter on an
+          ancestor would become the containing block of any fixed-position
+          overlay a header control opens. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-background/75 backdrop-blur-md" />
       <div className="flex min-w-0 items-center gap-2">
         {/* Only below 1024px: the sidebar is a drawer there. */}
         <button

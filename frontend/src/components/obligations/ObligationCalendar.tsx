@@ -95,7 +95,7 @@ export const ObligationCalendar: React.FC<Props> = ({ workspaceId, orgSlug, work
           return (
             <div key={day} role="gridcell" aria-label={day}
               className={`min-h-24 space-y-1 bg-card p-1.5 ${inMonth ? "" : "opacity-50"} ${day === today ? "ring-2 ring-inset ring-primary" : ""}`}>
-              <div className={`text-right tabular-nums ${day === today ? "font-bold text-primary" : "text-muted-foreground"}`}>
+              <div className={`text-right tabular-nums ${day === today ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                 {Number.parseInt(day.slice(8), 10)}
               </div>
               {items.slice(0, 4).map((item) => (

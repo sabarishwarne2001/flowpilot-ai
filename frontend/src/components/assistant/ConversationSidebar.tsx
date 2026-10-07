@@ -369,7 +369,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
       aria-label="Conversations"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Conversations
         </p>
         <button
@@ -455,7 +455,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
           <>
             {pinned.length > 0 && (
               <>
-                <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Pinned
                 </p>
                 <ul className="mb-2 space-y-1">{pinned.map(renderRow)}</ul>
@@ -464,7 +464,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
             {others.length > 0 && (
               <>
                 {pinned.length > 0 && (
-                  <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Recent
                   </p>
                 )}

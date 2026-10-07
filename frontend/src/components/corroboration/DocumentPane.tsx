@@ -47,7 +47,7 @@ export const DocumentPane: React.FC<DocumentPaneProps> = ({
   return (
     <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border/60 bg-card" aria-label={document.label}>
       <header className="flex items-center gap-2 border-b border-border/60 px-2 py-1.5">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
           {document.position + 1}
         </span>
         <span className="min-w-0 flex-1 truncate text-xs font-semibold" title={document.label}>

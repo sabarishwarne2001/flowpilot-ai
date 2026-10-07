@@ -60,7 +60,7 @@ export const NoAccess: React.FC = () => {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
             {copy.title}
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -74,7 +74,7 @@ export const NoAccess: React.FC = () => {
         <div className="space-y-2">
           <Link
             to={ROUTES.WORKSPACES}
-            className="block w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+            className="fp-btn-primary block w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
           >
             Choose another workspace
           </Link>

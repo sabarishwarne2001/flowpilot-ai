@@ -140,6 +140,8 @@ export interface MeUser {
   id: string;
   email: string;
   is_active: boolean;
+  /** Set in Settings -> Profile; null until the user chooses one. */
+  display_name?: string | null;
 }
 
 export interface OrganizationMembershipSummary {
