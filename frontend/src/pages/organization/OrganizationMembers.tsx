@@ -321,7 +321,7 @@ export const OrganizationMembers: React.FC = () => {
         )}
 
         {/* N-020 item 5: invite from here, not only from a workspace's settings. */}
-        {canManage && <InviteMembersPanel organizationId={organizationId} />}
+        {canManage && <InviteMembersPanel organizationId={organizationId} actorRole={actorRole} />}
 
         {/* Ownership Transfer Panel */}
         <OwnershipTransferPanel

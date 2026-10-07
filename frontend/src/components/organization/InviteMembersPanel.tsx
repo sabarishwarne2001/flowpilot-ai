@@ -8,7 +8,8 @@
  * plus the pending list with Resend and Revoke.
  *
  * OWNER is not invitable (ownership moves through the two-party transfer);
- * an ADMIN may invite ADMIN, BILLING and MEMBER, as the server enforces. A
+ * an OWNER may invite ADMIN, BILLING and MEMBER, an ADMIN only BILLING and
+ * MEMBER, as the server enforces, and the form offers only those (F-139). A
  * pending invitation holds a seat, so the plan's seat limit is checked when
  * it is sent and the server's refusal is shown as it is worded.
  */
@@ -27,6 +28,7 @@ import {
 import { listOrganizationWorkspaces } from "@/services/api/organization";
 import { ApiError } from "@/services/api/client";
 import { formatTimestampDate } from "@/utils/displayTime";
+import { canAssignOrganizationRole } from "@/permissions/organizationPermissions";
 import type { OrganizationRole, WorkspaceRole } from "@/types/tenancy";
 
 interface PendingInvitation {
@@ -57,8 +59,18 @@ export const invitationKeys = {
   pending: (organizationId: string) => ["organizations", "invitations", organizationId] as const,
 };
 
-export const InviteMembersPanel: React.FC<{ readonly organizationId: string }> = ({ organizationId }) => {
+export const InviteMembersPanel: React.FC<{
+  readonly organizationId: string;
+  /** The inviter's own role: only the roles it may grant are offered (F-139). */
+  readonly actorRole: OrganizationRole;
+}> = ({ organizationId, actorRole }) => {
   const queryClient = useQueryClient();
+  // The server's rule (an admin cannot create a peer admin). Offering every role let an admin
+  // fill the form in for "Admin" and be refused only on submit.
+  const invitable = useMemo(
+    () => INVITABLE.filter((candidate) => canAssignOrganizationRole(actorRole, candidate)),
+    [actorRole],
+  );
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<OrganizationRole>("MEMBER");
   const [grants, setGrants] = useState<Record<string, WorkspaceRole>>({});
@@ -156,7 +168,7 @@ export const InviteMembersPanel: React.FC<{ readonly organizationId: string }> =
               onChange={(event) => setRole(event.target.value as OrganizationRole)}
               className="mt-1 block rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
             >
-              {INVITABLE.map((value) => (
+              {invitable.map((value) => (
                 <option key={value} value={value}>
                   {ROLE_WORDS[value]}
                 </option>
