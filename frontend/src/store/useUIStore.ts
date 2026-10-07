@@ -15,14 +15,19 @@ const getSystemTheme = (): Exclude<ThemeMode, "system"> => {
     : "light";
 };
 
-const applyTheme = (theme: ThemeMode): void => {
-  if (typeof document === "undefined") {
-    return;
+export type ResolvedTheme = Exclude<ThemeMode, "system">;
+
+export const resolveTheme = (theme: ThemeMode): ResolvedTheme =>
+  theme === "system" ? getSystemTheme() : theme;
+
+/** Applies the theme to the page and returns what it resolved to. public/theme-boot.js does the
+ *  same before the app loads, so a dark-mode page is never painted light first. */
+const applyTheme = (theme: ThemeMode): ResolvedTheme => {
+  const resolved = resolveTheme(theme);
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.toggle("dark", resolved === "dark");
   }
-
-  const resolved = theme === "system" ? getSystemTheme() : theme;
-
-  document.documentElement.classList.toggle("dark", resolved === "dark");
+  return resolved;
 };
 
 interface UIState {
@@ -30,6 +35,8 @@ interface UIState {
   readonly isMobileSidebarOpen: boolean;
 
   readonly theme: ThemeMode;
+  /** What `theme` resolves to right now ("system" follows the computer). Icons and labels use it. */
+  readonly resolvedTheme: ResolvedTheme;
   readonly notificationBadgeCount: number;
 
   readonly toggleSidebarCollapse: () => void;
@@ -51,6 +58,7 @@ export const useUIStore = create<UIState>()(
         isSidebarCollapsed: false,
         isMobileSidebarOpen: false,
         theme: "system",
+        resolvedTheme: resolveTheme("system"),
         notificationBadgeCount: 0,
 
         toggleSidebarCollapse: () =>
@@ -82,20 +90,19 @@ export const useUIStore = create<UIState>()(
           ),
 
         setTheme: (theme) => {
-          applyTheme(theme);
           set(
-            { theme },
+            { theme, resolvedTheme: applyTheme(theme) },
             false,
             "ui/setTheme",
           );
         },
 
+        // From what is on screen: "system" on a light computer goes to dark. It went to light,
+        // so the first click did nothing.
         toggleTheme: () => {
-          const current = get().theme;
-          const next = current === "light" ? "dark" : "light";
-          applyTheme(next);
+          const next: ResolvedTheme = get().resolvedTheme === "dark" ? "light" : "dark";
           set(
-            { theme: next },
+            { theme: next, resolvedTheme: applyTheme(next) },
             false,
             "ui/toggleTheme",
           );
@@ -136,7 +143,8 @@ export const useUIStore = create<UIState>()(
           if (!state) {
             return;
           }
-          applyTheme(state.theme);
+          const resolvedTheme = applyTheme(state.theme);
+          queueMicrotask(() => useUIStore.setState({ resolvedTheme }));
         },
       },
     ),
@@ -152,7 +160,7 @@ if (typeof window !== "undefined") {
     .addEventListener("change", () => {
       const theme = useUIStore.getState().theme;
       if (theme === "system") {
-        applyTheme("system");
+        useUIStore.setState({ resolvedTheme: applyTheme("system") });
       }
     });
 }

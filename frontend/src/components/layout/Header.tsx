@@ -45,7 +45,7 @@ function usePageLabel(): string | null {
 
 export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
-  const { toggleMobileSidebar, theme, toggleTheme, notificationBadgeCount } = useUIStore();
+  const { toggleMobileSidebar, resolvedTheme, toggleTheme, notificationBadgeCount } = useUIStore();
   const { organization, workspace } = useResolvedTenant();
   const pageLabel = usePageLabel();
   const shortcut = commandPaletteShortcutLabel();
@@ -137,9 +137,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
           onClick={toggleTheme}
           className={iconButton}
           aria-label="Toggle Theme"
-          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+          title={`Switch to ${resolvedTheme === "light" ? "dark" : "light"} mode`}
         >
-          {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          {resolvedTheme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </button>
 
         <div className="relative">
