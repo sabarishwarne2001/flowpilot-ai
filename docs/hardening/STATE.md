@@ -1,30 +1,34 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-07 (production configuration & UI elevation)_
+_Last updated: 2026-10-07 (final systemic polish and live engine hardening)_
 
 ## Current phase
-**Production configuration & UI elevation — COMPLETE, in review.** Branch
-`hardening/production-config-and-ui-elevation` (session branch `claude/sweet-bell-ahiem4`); PR #8 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/8).
-The final release (PR #7, GO) is merged into `main`; this branch builds on it.
+**Final systemic polish & live engine hardening — COMPLETE, in review.** Branch
+`hardening/final-systemic-polish-and-live-engine-hardening` (session branch
+`claude/wonderful-gates-5fid79`); PR: see "Next action". Builds on PR #8 (merged into `main`).
 
-- **Track 1 (configuration).** Every key the app, the compose files and the scripts read was checked
-  against the four env files. Fixed F-123 (SSO advertised `http://localhost:8000` on every deployment;
-  the settings that should fix it were ignored). Templates aligned (R2 = `STORAGE_BACKEND=r2`, model
-  names and `PUBLIC_API_URL` passed to the containers, Vite port, reranker token, Enterprise price id).
-  The owner's real `.env` / `.env.production` were finalized outside the repository and the production
-  one was verified with `docker compose config` plus the app's start-up guard: its only refusal is the
-  Stripe webhook secret (F-125). New owner items N-026 to N-029.
-- **Track 2 (UI).** Design tokens (layered dark zinc, cool light), bundled Inter/JetBrains Mono,
-  tactile shared primitives; split-screen auth (sign-in with steps, sign-up, reset, verification,
-  invitations) with a product showcase; Linear-style shell (collapsible sidebar, portal workspace
-  switcher, profile menu, glass top bar with Ctrl+K); page polish (type weights, unified cards and
-  buttons, Overview, Documents, the document workbench, settings, dialogs, palette, selects).
-- **Verified on the final build:** backend suite **3,309 passed, 0 failed, 9 skipped** (3,298 + the 11
-  F-123 tests); browser suite **290 passed, 0 failed, 1 skipped** (by design; fresh database,
-  production CSP enforced, bundle built from this branch); `npm run build`, both `tsc` projects, lint,
-  `check-no-sourcemaps --dist` and the encoding check clean. Two test-side issues recorded, neither
-  caused by this branch: F-126 (pre-existing session race, seen once) and F-127 (a review-queue test
-  that depends on how many runs the database has seen).
+- **Live engine defects.** F-128 (knowledge reindex crashed every job on the spend guard),
+  F-129 (a later reindex queued nothing), F-126 (two tabs refreshing signed each other out),
+  F-130 (sign-out never reached the server), F-127 (offset-paged lists without a stable order,
+  18 of them; the review hub stuck on an emptied page; the flaky browser test).
+- **Live exploratory sweep.** The real stack (API, worker loop, Redis, Postgres, model stand-in,
+  production bundle with the production CSP): a crawler clicked every non-destructive button on
+  all 39 pages (populated workspace) and all 21 workspace pages of a brand-new empty workspace;
+  305 parameter-free GETs on populated, second and empty workspaces (zero 5xx); every named
+  secondary action triggered by hand. API and worker logs: zero tracebacks. Jobs table: every
+  background job the live system ran SUCCEEDED (33 job types, none failed or dead). Found and
+  fixed F-138 (DPA export not downloadable on local storage); noted N-030 (seat price) and N-031
+  (local-model price alerts).
+- **Lifecycle and roles.** Archive is now reversible and enforced end to end: F-131 (workspace
+  restore impossible; archived workspaces in members' switchers), F-132 (no organization restore),
+  F-133 (sign-in into an archived organization), F-134 (archived tenants kept their background
+  work, billable sweeps and data exports included). The picker shows archived tenants apart with
+  Restore. Both members pages explain organization roles vs workspace roles.
+- **UI.** Softer light theme (zinc canvas, white cards), F-135 (theme toggle from "system", white
+  flash on dark), F-136 (stale profile picture/logo), F-137 (eleven dialogs ignored Escape and let
+  focus escape), "Only if" conditions styled like code, Run history with status dots, rule names,
+  duration badges and node timelines. The tenant self-checks now run in CI (`npm run check:self`).
+- **Verified:** see "What is done".
 
 ## What is done
 - **Phases 0 to 5:** `00-map.md` … `05-production-readiness.md` (PRs #1 to #6).
