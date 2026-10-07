@@ -28,7 +28,9 @@ into `main`).
   polish:** PRs #1 to #9 (merged).
 - **Live feedback & Tier-1 elevation** (this branch): F-141 to F-154 fixed; N-026 to N-031 decided.
   - Backend suite (full): in progress at this commit; result recorded when it completes.
-  - Browser suite on a fresh database, production CSP, model stand-in: in progress at this commit.
+  - Browser suite on a fresh database, production CSP, model stand-in: **316 passed, 0 failed,
+    1 skipped** (by design; was 302 passed). The 12 tests in the new `21-live-feedback.spec.ts`
+    each failed on the previous code before its fix.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
     --dist`, encoding check: clean. One Alembic head (`p7a1_automation_rule_soft_delete`); drift
     check: no new drift. `npm audit`: 5 high remain, all Tailwind 3 build tooling (FINDINGS).
