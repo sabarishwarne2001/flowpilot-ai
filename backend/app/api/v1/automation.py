@@ -511,7 +511,7 @@ async def list_rule_logs(
         .join(AutomationRule, AutomationExecution.rule_id == AutomationRule.id)
         .join(WorkItem, AutomationExecution.work_item_id == WorkItem.id)
         .where(AutomationExecution.workspace_id == context.workspace_id)
-        .order_by(AutomationExecution.created_at.desc())
+        .order_by(AutomationExecution.created_at.desc(), AutomationExecution.id.desc())
         .offset(skip)
         .limit(limit)
     ).all()

@@ -183,7 +183,7 @@ def list_runs(workspace_id: uuid.UUID, status_filter: Optional[str] = Query(defa
     if status_filter:
         wanted = status_filter.strip().upper()
         query, count = query.where(CorroborationRun.status == wanted), count.where(CorroborationRun.status == wanted)
-    runs = list(db.execute(query.order_by(CorroborationRun.created_at.desc()).limit(limit).offset(offset)).scalars())
+    runs = list(db.execute(query.order_by(CorroborationRun.created_at.desc(), CorroborationRun.id.desc()).limit(limit).offset(offset)).scalars())
     briefs = _briefs(db, [r.id for r in runs])
     return RunList(items=[_summary(r, briefs[r.id]) for r in runs], total=int(db.execute(count).scalar_one()),
                    counts_by_status=service.workspace_counts(db, workspace_id))

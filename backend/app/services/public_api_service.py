@@ -369,7 +369,7 @@ def list_documents(
         db.execute(
             select(WorkItem)
             .where(*predicates)
-            .order_by(WorkItem.created_at.desc())
+            .order_by(WorkItem.created_at.desc(), WorkItem.id.desc())
             .offset((safe_page - 1) * safe_size)
             .limit(safe_size)
         )

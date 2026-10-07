@@ -51,7 +51,7 @@ def list_automation_rules(
     statement = (
         select(AutomationRule)
         .where(AutomationRule.workspace_id == workspace_id)
-        .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc())
+        .order_by(AutomationRule.priority.asc(), AutomationRule.created_at.desc(), AutomationRule.id.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -142,7 +142,7 @@ def get_logs_by_rule(
             AutomationLog.workspace_id == workspace_id,
             AutomationLog.rule_id == rule_id,
         )
-        .order_by(AutomationLog.created_at.desc())
+        .order_by(AutomationLog.created_at.desc(), AutomationLog.id.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -160,7 +160,7 @@ def list_automation_logs(
         .join(AutomationRule, AutomationLog.rule_id == AutomationRule.id)
         .join(WorkItem, AutomationLog.work_item_id == WorkItem.id)
         .where(AutomationLog.workspace_id == workspace_id)
-        .order_by(AutomationLog.created_at.desc())
+        .order_by(AutomationLog.created_at.desc(), AutomationLog.id.desc())
         .offset(skip)
         .limit(limit)
     )

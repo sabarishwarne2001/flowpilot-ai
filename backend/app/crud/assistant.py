@@ -70,7 +70,7 @@ def list_conversations(
             Conversation.workspace_id == workspace_id,
             Conversation.user_id == user_id,
         )
-        .order_by(Conversation.created_at.desc())
+        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
         .offset(skip)
         .limit(limit)
     )

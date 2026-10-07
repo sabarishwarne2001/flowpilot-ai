@@ -365,7 +365,7 @@ def list_review_queue(
             AssertionEvaluation.routed_to == vocab.ROUTE_TRIAGE,
             AssertionEvaluation.reviewer_verdict.is_(None),
         )
-        .order_by(AssertionEvaluation.created_at.desc())
+        .order_by(AssertionEvaluation.created_at.desc(), AssertionEvaluation.id.desc())
         .limit(limit)
         .offset(offset)
     )

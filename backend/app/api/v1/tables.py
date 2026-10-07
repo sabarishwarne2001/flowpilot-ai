@@ -152,7 +152,7 @@ def list_tables(workspace_id: uuid.UUID, status_filter: Optional[str] = Query(de
     if status_filter:
         wanted = status_filter.strip().upper()
         query, count = query.where(ExtractedTable.status == wanted), count.where(ExtractedTable.status == wanted)
-    rows = db.execute(query.order_by(ExtractedTable.created_at.desc(), ExtractedTable.ordinal).limit(limit).offset(offset)).all()
+    rows = db.execute(query.order_by(ExtractedTable.created_at.desc(), ExtractedTable.ordinal, ExtractedTable.id).limit(limit).offset(offset)).all()
     return TableList(items=[_summary(t, name) for t, name in rows], total=int(db.execute(count).scalar_one()),
                      counts_by_status=service.workspace_counts(db, workspace_id))
 

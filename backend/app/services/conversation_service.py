@@ -166,6 +166,7 @@ def list_sessions(
         statement.order_by(
             Conversation.pinned_at.desc().nulls_last(),
             func.coalesce(Conversation.last_message_at, Conversation.created_at).desc(),
+            Conversation.id.desc(),
         )
         .offset(max(0, int(offset)))
         .limit(max(1, min(int(limit), 100)))
