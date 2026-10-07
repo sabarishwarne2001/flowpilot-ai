@@ -214,7 +214,7 @@ export async function signInContext(page: Page, userKey: UserKey): Promise<ApiSe
       name: "flowpilot_refresh",
       value: session.refreshToken,
       domain: new URL(BROWSER_API_ORIGIN).hostname,
-      path: "/api/v1/auth/refresh",
+      path: "/api/v1/auth",
       httpOnly: true,
       secure: false,
       sameSite: "Lax",

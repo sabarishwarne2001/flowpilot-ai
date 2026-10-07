@@ -129,6 +129,22 @@ export const archiveOrganization = async (
   return response.data;
 };
 
+/**
+ * Reverses archiveOrganization. Owner only, with the same typed confirmation (F-132).
+ * API keys the archive deactivated stay deactivated.
+ */
+export const restoreOrganization = async (
+  organizationId: string,
+  confirmSlug: string,
+): Promise<Organization> => {
+  const response = await apiClient.post<Organization>(
+    ORGANIZATION_ENDPOINTS.restore(organizationId),
+    { confirm_slug: confirmSlug },
+    { headers: { Accept: "application/json" } },
+  );
+  return response.data;
+};
+
 /* ==========================================================================
  * Workspaces within an organization
  * ========================================================================== */
@@ -142,10 +158,15 @@ export const archiveOrganization = async (
  */
 export const listOrganizationWorkspaces = async (
   organizationId: string,
+  options: { readonly includeArchived?: boolean } = {},
 ): Promise<Workspace[]> => {
   const response = await apiClient.get<Workspace[]>(
     ORGANIZATION_ENDPOINTS.workspaces(organizationId),
-    { headers: { Accept: "application/json" } },
+    {
+      headers: { Accept: "application/json" },
+      // Owners and admins only; for anyone else the server ignores it (F-131).
+      ...(options.includeArchived ? { params: { include_archived: true } } : {}),
+    },
   );
   return response.data;
 };
@@ -276,6 +297,7 @@ export const organizationApi = {
   getOrganization,
   updateOrganization,
   archiveOrganization,
+  restoreOrganization,
   listOrganizationWorkspaces,
   createWorkspace,
   listOrganizationMembers,

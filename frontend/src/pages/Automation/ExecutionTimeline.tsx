@@ -63,6 +63,91 @@ const TONE_CLASSES: Record<string, string> = {
   muted: "border-border bg-card",
 };
 
+/** "840 ms", "1.2 s", "2 min 05 s": a run's duration at a glance. */
+export const formatDuration = (ms: number): string => {
+  if (ms < 1_000) {
+    return `${Math.max(0, Math.round(ms))} ms`;
+  }
+  if (ms < 60_000) {
+    return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+  }
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1_000);
+  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
+};
+
+type DotTone = "ok" | "warn" | "danger" | "live" | "muted";
+
+const DOT_CLASSES: Record<DotTone, string> = {
+  ok: "bg-emerald-500 ring-emerald-500/20",
+  warn: "bg-amber-500 ring-amber-500/25",
+  danger: "bg-destructive ring-destructive/25",
+  live: "bg-primary ring-primary/25 animate-pulse",
+  muted: "bg-muted-foreground/60 ring-muted-foreground/15",
+};
+
+const DOT_LABEL: Record<DotTone, string> = {
+  ok: "Completed",
+  warn: "Blocked",
+  danger: "Failed",
+  live: "Running",
+  muted: "Waiting",
+};
+
+const StatusDot: React.FC<{ readonly tone: DotTone; readonly label?: string }> = ({ tone, label }) => (
+  <span
+    role="img"
+    aria-label={label ?? DOT_LABEL[tone]}
+    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-4 ${DOT_CLASSES[tone]}`}
+  />
+);
+
+const DurationBadge: React.FC<{ readonly ms: number | null }> = ({ ms }) =>
+  ms === null ? null : (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background/70 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <Clock className="h-3 w-3" aria-hidden="true" />
+      {formatDuration(ms)}
+    </span>
+  );
+
+const executionTone = (execution: AutomationExecution): DotTone => {
+  if (execution.status === "FAILED" || execution.status === "TIMED_OUT") {
+    return "danger";
+  }
+  if (execution.is_suppressed) {
+    return "warn";
+  }
+  if (IN_FLIGHT.has(execution.status)) {
+    return "live";
+  }
+  return execution.status === "COMPLETED" ? "ok" : "muted";
+};
+
+/** A chain is as bad as its worst step: failed, then blocked, then still running. */
+const chainTone = (executions: readonly AutomationExecution[]): DotTone => {
+  const tones = executions.map(executionTone);
+  for (const tone of ["danger", "warn", "live", "muted"] as const) {
+    if (tones.includes(tone)) {
+      return tone;
+    }
+  }
+  return "ok";
+};
+
+const nodeTone = (status: string): DotTone => {
+  const normalized = status.toUpperCase();
+  if (normalized === "FAILED" || normalized === "TIMED_OUT") {
+    return "danger";
+  }
+  if (normalized === "SUCCEEDED" || normalized === "COMPLETED" || normalized === "OK") {
+    return "ok";
+  }
+  if (normalized === "RUNNING" || normalized === "PENDING" || normalized === "QUEUED") {
+    return "live";
+  }
+  return "muted";
+};
+
 const StatusIcon: React.FC<{ status: AutomationExecutionStatus }> = ({
   status,
 }) => {
@@ -137,15 +222,25 @@ export const ExecutionTimeline: React.FC = () => {
           (sum, execution) => sum + execution.spent_cost_micros,
           0,
         ),
+        tone: chainTone(ordered),
+        title: ordered[0]?.rule_name ?? (ordered[0] ? `Rule ${ordered[0].rule_id.slice(0, 8)}` : "Run"),
+        durationMs: ordered.some((execution) => execution.duration_ms !== null)
+          ? ordered.reduce((sum, execution) => sum + (execution.duration_ms ?? 0), 0)
+          : null,
       };
     });
   }, [data]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading executions…
+      <div className="space-y-3" role="status" aria-label="Loading executions">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading executions…
+        </div>
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="h-14 animate-pulse rounded-lg border border-border bg-card" />
+        ))}
       </div>
     );
   }
@@ -222,13 +317,17 @@ export const ExecutionTimeline: React.FC = () => {
                     className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
                     aria-hidden="true"
                   />
+                  <StatusDot tone={chain.tone} />
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium truncate">
-                      {chain.executions.length}{" "}
-                      {chain.executions.length === 1 ? "step" : "steps"}
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                      <span className="truncate">{chain.title}</span>
+                      <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                        {chain.executions.length}{" "}
+                        {chain.executions.length === 1 ? "step" : "steps"}
+                      </span>
                       {hasSuppression && (
-                        <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                        <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
                           {chain.suppressed.length} blocked
                         </span>
                       )}
@@ -241,6 +340,7 @@ export const ExecutionTimeline: React.FC = () => {
                     </span>
                   </span>
 
+                  <DurationBadge ms={chain.durationMs} />
                   {chain.totalSpentMicros > 0 && (
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {formatMicros(chain.totalSpentMicros)}
@@ -325,9 +425,9 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
           <span className="text-sm font-medium break-words">
             {execution.rule_name ?? `Rule ${execution.rule_id.slice(0, 8)}`}
           </span>
-          <span className="text-xs text-muted-foreground shrink-0">
+          <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
             depth {execution.depth}
-            {execution.duration_ms !== null && ` · ${execution.duration_ms}ms`}
+            <DurationBadge ms={execution.duration_ms} />
           </span>
         </div>
 
@@ -422,15 +522,21 @@ const NodeRuns: React.FC<{ readonly executionId: string }> = ({ executionId }) =
     return <p className="mt-2 text-[11px] text-destructive">Steps could not be loaded.</p>;
   }
   return (
-    <ol className="mt-2 space-y-1 rounded bg-background/60 p-2 text-[11px]">
-      {data.map((node) => (
-        <li key={node.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+    <ol className="relative mt-2 space-y-1.5 rounded-md border border-border/60 bg-background/60 p-2 pl-3 text-[11px]" aria-label="Steps of this run">
+      {data.map((node, index) => (
+        <li key={node.id} className="relative flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-4">
+          {index < data.length - 1 && (
+            <span aria-hidden="true" className="absolute left-[4px] top-3.5 h-[calc(100%+0.375rem)] w-px bg-border" />
+          )}
+          <span className="absolute left-0 top-1">
+            <StatusDot tone={nodeTone(node.status)} label={node.status.toLowerCase()} />
+          </span>
           <span className="font-mono text-muted-foreground">#{node.sequence}</span>
           <span className="font-semibold">{node.action_type ?? node.node_type ?? node.node_key}</span>
           <span className={node.status === "FAILED" ? "text-destructive" : "text-muted-foreground"}>
             {node.status.toLowerCase()}
           </span>
-          {node.duration_ms !== null && <span className="text-muted-foreground">{node.duration_ms}ms</span>}
+          <DurationBadge ms={node.duration_ms} />
           {node.external_ref && (
             <span className="font-mono text-muted-foreground break-all" title="Reference to what this step created">
               ref {node.external_ref.slice(0, 12)}

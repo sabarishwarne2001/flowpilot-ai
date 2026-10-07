@@ -370,6 +370,12 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      # The tenant-resolution, path, reconciliation and permission self-checks; before, they ran
+      # only in a development browser's console.
+      - name: Self-checks
+        working-directory: frontend
+        run: npm run check:self
+
       - name: Build
         working-directory: frontend
         run: npm run build

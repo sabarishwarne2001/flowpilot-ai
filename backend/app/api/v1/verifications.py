@@ -75,7 +75,9 @@ async def list_verifications(
     stmt = (
         select(DocumentVerification)
         .where(DocumentVerification.workspace_id == context.workspace_id)
-        .order_by(DocumentVerification.created_at.desc())
+        # The id breaks ties (F-127): rows written in one transaction share created_at, and
+        # without it their order, and so the page each lands on, changed between requests.
+        .order_by(DocumentVerification.created_at.desc(), DocumentVerification.id.desc())
         .offset(skip)
         .limit(limit)
     )

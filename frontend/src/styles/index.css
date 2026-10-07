@@ -12,48 +12,51 @@
  *
  * Dark is built as layers on a deep zinc base: background < sidebar < card <
  * popover, each a step lighter, separated by hairline borders rather than
- * heavy outlines. Light mirrors the hierarchy on a cool off-white.
+ * heavy outlines. Light mirrors the hierarchy: white cards on a soft zinc canvas.
  */
 @layer base {
   :root {
-    --background: 240 9% 98.4%;
-    --foreground: 240 10% 8%;
+    /* Light: a soft zinc canvas (between zinc-50 and zinc-100) with white cards on it, so the
+       page no longer reads as one sheet of white. Text is a deep slate; secondary text stays
+       above 4.5:1 on both the canvas and a card (WCAG AA). */
+    --background: 240 5% 96.5%;
+    --foreground: 224 32% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 8%;
+    --card-foreground: 224 32% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 8%;
+    --popover-foreground: 224 32% 11%;
 
     --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 6% 94%;
-    --secondary-foreground: 240 10% 10%;
+    --secondary: 240 5% 93%;
+    --secondary-foreground: 224 32% 13%;
 
-    --muted: 240 6% 95%;
-    --muted-foreground: 240 4% 44%;
+    --muted: 240 5% 94%;
+    --muted-foreground: 240 5% 38%;
 
-    --accent: 240 6% 93.5%;
-    --accent-foreground: 240 10% 10%;
+    --accent: 240 5% 92%;
+    --accent-foreground: 224 32% 13%;
 
-    --destructive: 0 72% 48%;
+    --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 69% 34%;
+    --success: 152 69% 31%;
     --success-foreground: 0 0% 100%;
-    --warning: 35 92% 42%;
+    --warning: 32 92% 38%;
     --warning-foreground: 0 0% 100%;
-    --info: 199 89% 40%;
+    --info: 199 89% 36%;
     --info-foreground: 0 0% 100%;
 
-    --border: 240 6% 89%;
-    --border-strong: 240 5% 80%;
-    --input: 240 6% 86%;
+    --border: 240 6% 88.5%;
+    --border-strong: 240 5% 79%;
+    --input: 240 6% 84%;
     --ring: 221 83% 53%;
 
-    --sidebar: 240 8% 97%;
-    --sidebar-foreground: 240 10% 10%;
+    --sidebar: 240 5% 95%;
+    --sidebar-foreground: 224 32% 13%;
 
     --radius: 0.625rem;
 
@@ -361,9 +364,11 @@
   .fp-card {
     @apply rounded-xl border bg-card text-card-foreground;
     border-color: hsl(var(--border));
+    /* Light: a hairline plus a soft two-step shadow lifts the white card off the zinc canvas. */
     box-shadow:
       0 1px 0 0 hsl(var(--highlight) / 0.03) inset,
-      0 1px 2px 0 hsl(var(--shadow-color) / 0.05);
+      0 1px 2px 0 hsl(var(--shadow-color) / 0.05),
+      0 2px 6px -2px hsl(var(--shadow-color) / 0.04);
   }
 
   .dark .fp-card {

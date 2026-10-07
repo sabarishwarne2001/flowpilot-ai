@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "check:self": "node scripts/run-self-checks.mjs",
     "codegen:types": "openapi-typescript http://localhost:8000/api/v1/openapi.json -o src/types/api.generated.d.ts",
     "verify:contracts": "node scripts/verify-api-contracts.mjs",
     "verify:contracts:ci": "node scripts/verify-api-contracts.mjs --schema ../openapi.json",

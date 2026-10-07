@@ -34,6 +34,7 @@ from app.schemas.user import (  # ARCH30-T4:detected-timezone-import
     UserProfileUpdate,
 )
 from app.schemas.workspace import WorkspaceSummary
+from app.models.organization import OrganizationStatus
 from app.models.workspace import WorkspaceStatus
 from app.services import organization_service
 from app.services import user_service
@@ -128,12 +129,19 @@ async def get_my_context(
             )
         )
 
-    default_organization_id = summaries[0].organization_id if summaries else None
-    default_workspace_id = (
-        summaries[0].workspaces[0].id
-        if summaries and summaries[0].workspaces
-        else None
+    # F-133. Never an archived organization: its workspaces refuse every request, so landing
+    # there showed "no access" to someone with a working organization. Archived ones stay in
+    # the list above so the picker can show them as archived.
+    first = next(
+        (
+            summary
+            for summary in summaries
+            if summary.organization_status is OrganizationStatus.ACTIVE
+        ),
+        summaries[0] if summaries else None,
     )
+    default_organization_id = first.organization_id if first else None
+    default_workspace_id = first.workspaces[0].id if first and first.workspaces else None
 
     return MeContextResponse(
         user=MeUser.model_validate(current_user),

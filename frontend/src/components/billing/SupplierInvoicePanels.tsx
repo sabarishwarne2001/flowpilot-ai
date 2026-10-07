@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, History, Loader2, Upload } from "lucide-react";
 
@@ -292,10 +293,13 @@ export const SupplierInvoiceModal: React.FC<{
     "mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm";
   const label = "text-sm font-medium text-foreground";
   const hint = "mt-1 text-xs text-muted-foreground";
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: create.isPending });
 
   return (
     <div
       className={OVERLAY}
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="supplier-invoice-title"

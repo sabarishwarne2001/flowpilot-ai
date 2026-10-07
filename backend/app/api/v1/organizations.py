@@ -202,6 +202,35 @@ async def archive_organization(
     )
 
 
+@router.post(
+    "/organizations/{organization_id}/restore",
+    response_model=OrganizationResponse,
+    summary="Restore Organization",
+)
+async def restore_organization(
+    db: deps.DbSession,
+    payload: OrganizationArchiveRequest,
+    context=Depends(deps.get_archived_organization_owner_context),
+) -> Any:
+    """
+    Reverses `archive`. Owner only, with the same typed confirmation.
+
+    F-132: archiving was documented as reversible and the "no access" page told
+    people an owner could restore it, but nothing could. API keys the archive
+    deactivated stay deactivated: an owner issues new ones deliberately.
+    """
+    if payload.confirm_slug.strip() != context.organization.slug:
+        raise HTTPException(
+            status_code=422,
+            detail="Type the organization's slug exactly to confirm restoring.",
+        )
+    return organization_service.restore_organization(
+        db,
+        organization=context.organization,
+        actor_id=context.user_id,
+    )
+
+
 # ============================================================================
 # Workspaces within an organization
 # ============================================================================
@@ -214,18 +243,25 @@ async def archive_organization(
 async def list_organization_workspaces(
     db: deps.ReadDbSession,
     context: deps.OrgContext,
+    include_archived: bool = Query(
+        False,
+        description="Owners and admins: also list archived workspaces, so they can be restored.",
+    ),
 ) -> Any:
     """
     Returns the workspaces the actor may enter within this organization.
 
     Organization OWNER and ADMIN see every workspace through their derived
     grant; everyone else sees only those where they hold an explicit one.
+    `include_archived` adds the archived ones for OWNER and ADMIN only (F-131:
+    nothing listed them, so nothing could restore them).
     """
     return workspace_service.list_accessible_workspaces(
         db,
         organization=context.organization,
         user_id=context.user_id,
         organization_role=context.role,
+        include_archived=include_archived,
     )
 
 

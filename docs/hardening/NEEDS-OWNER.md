@@ -433,6 +433,24 @@ part of the illustration. **Decide:** add either claim only with evidence you ca
 (an auditor's letter; a published benchmark). They are one line each in
 `frontend/src/components/auth/DocumentShowcase.tsx` (`TRUST`).
 
+## N-030 — The price of one seat (final systemic polish)
+The price book that `scripts/seed_price_book.py` writes has no `billing.seat` entry. Wherever the
+product shows what a seat change will cost before you make it (Billing → Seats, adding members past
+the purchased seats), it therefore says "unpriced", and the API logs
+`ERROR billing.seat_disclosure_unpriced` each time. The plan cards already advertise per-seat prices
+($49 / $299 / $799 for Developer / Business / Enterprise), but the price book is what invoices and
+disclosures read, so the figure must be set there on purpose. **Decide:** the per-seat price for
+each plan (and whether it differs from the plan cards); it is then one entry per plan in the price
+book seed. Not set here: pricing is yours.
+
+## N-031 — Pricing a self-hosted model (final systemic polish)
+With the sovereign edition's local model, every model call logs
+`CRITICAL llm.settle_price_unavailable` and its cost is counted as UNKNOWN. That is the designed
+behaviour (ARCH-50: an unpriced operator model is never counted as free). **Decide**, when you
+first sell the sovereign edition: either add a price-book entry for provider `local` (your
+hardware cost per token, which may be zero on purpose) or route these alerts to a quieter channel.
+Until then the alert is correct but loud.
+
 ---
 
 # Final release (2026-10-06): every open decision taken

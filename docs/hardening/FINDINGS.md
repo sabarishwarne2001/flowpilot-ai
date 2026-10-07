@@ -138,7 +138,21 @@ How to read this file:
 | F-123 | P2 | **fixed** (production config & UI, `c1068be`) | SSO / config | SAML and OIDC advertised `http://localhost:8000` and an empty redirect URI on every deployment; the settings meant to fix it were ignored |
 | F-124 | P3 | **unverified** (code reading) | SCIM | The SCIM token HMAC falls back to `str(JWT_SECRET_KEY)`, which for a `SecretStr` is the constant `**********`, not the secret |
 | F-125 | P2 | **open, owner action** (production config & UI) | Billing config | The production webhook secret was the `stripe listen` CLI secret, so every Stripe event to the server would be refused |
-| F-126 | P3 | **confirmed, open** (pre-existing; found by the final browser run) | Sessions | Two refreshes of one token within the reuse grace revoke the session the first one just handed out, so that page's next request is refused once |
+| F-126 | P3 | **fixed** (final systemic polish, `cbcf88e`; proven live) | Sessions | Two refreshes of one token within the reuse grace revoke the session the first one just handed out, so that page's next request is refused once; every refresh in one tab cost the other tab a 401 |
+| F-127 | P3 | **fixed** (final systemic polish, `dcc6f57`, `d68d215`) | Review queue / API | Lists paged by offset sorted on non-unique keys (18 of them, the extraction queue first): rows sharing a timestamp moved between pages; the hub stayed on an emptied last page; the browser test depended on how many runs the database had seen |
+| F-128 | P2 | **fixed** (final systemic polish, `5e6f997`; proven live) | Knowledge base | "Reindex knowledge base": every job crashed with `SpendLimitMisconfiguredError: 'embedding.backfill_token' is neither the wildcard '*' nor a billable usage event type` |
+| F-129 | P3 | **fixed** (final systemic polish, `695e40a`) | Knowledge base | After the first reindex (or the crash) every later click answered "Queued N" and queued nothing |
+| F-130 | P2 | **fixed** (final systemic polish, `dfbd797`) | Auth (ASVS V3.3.1) | "Sign out" never ended the session on the server: the refresh cookie's path kept it from reaching `/auth/logout` |
+| F-131 | P2 | **fixed** (final systemic polish, `e7fc1ec`, `fae4a50`) | Tenancy | An archived workspace could never be restored (the restore route refused archived workspaces) and stayed in members' switchers |
+| F-132 | P3 | **fixed** (final systemic polish, `e7fc1ec`, `fae4a50`) | Tenancy | An archived organization could not be restored at all, though archive is documented as reversible |
+| F-133 | P3 | **fixed** (final systemic polish, `d3bd89a`, `e7fc1ec`) | Tenancy | Sign-in could land in an archived organization ("no access") while the person had a working one |
+| F-134 | P2 | **fixed** (final systemic polish, `493efb7`) | Workers | Archived tenants kept their background work: billable nightly sweeps, warehouse exports of their data, queued automations and ERP deliveries |
+| F-135 | P3 | **fixed** (final systemic polish, `22528cd`) | Theme | The toggle did nothing on its first click from "system" on a light computer; dark-mode pages flashed white on every load |
+| F-136 | P3 | **fixed** (final systemic polish, `9e25b07`) | Profile | A new profile picture (or logo) was replaced by the old one after a reload or on another device |
+| F-137 | P3 | **fixed** (final systemic polish, `ca3b053`) | Accessibility | Eleven dialogs ignored Escape and let Tab leave them; two inline panels were marked modal |
+| F-138 | P3 | **fixed** (final systemic polish, `e72a65a`) | Compliance | A DPA/GDPR export bundle could not be downloaded where storage cannot presign URLs (local disk) |
+| F-139 | P3 | **fixed** (final systemic polish, `9567cc3`) | Roles / UX | The invite form offered "Admin" to organization admins, who may not grant it; they were refused only on submit |
+| F-140 | P3 | **fixed** (final systemic polish) | Run history | Every execution came back with `rule_name` null, so Run history could only say "Rule 1f3a9c0e" |
 
 ---
 
@@ -2096,6 +2110,21 @@ remedy is a session-design choice (let an access token of a session revoked only
 its expiry, or have the grace path branch a sibling session instead of rotating the tip), each with
 a security trade-off for revoked devices, so it needs its own failing test and review.
 
+**Fixed (final systemic polish, `cbcf88e`).** The failing tests are
+`tests/services/test_concurrent_refresh_f126.py` (4 of 9 failed). The design keeps the two
+properties the rotation tests protect (one live session per sign-in; a refresh token presented
+twice outside the grace window ends the sign-in):
+- an access token of a session retired only by ROTATION stays valid until it expires while its
+  sign-in still has a live session (that is the other tab's case: no more 401 after the other
+  tab refreshes);
+- a token a racing tab retired before its own holder presented it (B in the trace) is served on
+  its first presentation, at any age; its second presentation outside the grace is reuse;
+- sign-out and "revoke this device" now end the whole sign-in, so the first point cannot keep an
+  older access token alive (this exposed F-130);
+- the rotation lookup takes a row lock, so two simultaneous refreshes queue instead of forking.
+**Proven live** against the running API (2026-10-07): the trace's every step answers 200; the
+only refusals in the log are the two checks made after signing out.
+
 ## F-127 — The review-queue browser test depends on how many runs the database has seen (P4, test only, open)
 **Seen** when 13-automation-review was repeated three times against the same database
 ("Review queue › type tabs…", 3rd repeat: no button named /Packet split/). **Evidence** (snapshot of
@@ -2106,6 +2135,134 @@ test, which uploads a fresh copy each time (the radar rightly flags it). The onl
 CI and in both full runs of this branch; the queue's page size and ordering are unchanged on this
 branch. **Not changed here**: the remedy is test isolation (open the "Packet splits" tab before
 looking for the item, or clear the run's disputed copies), which belongs in a test-only change.
+
+**Fixed (final systemic polish, `dcc6f57`, `d68d215`).** The test now opens the "Packet splits"
+tab before looking for the item. Behind it were two real defects:
+- the extraction workbench's list (`GET /verifications`) sorted by `created_at` only and paged by
+  offset. Rows written in one transaction share `created_at`, so their order changed between
+  requests: the cursor pointed at another document after a refetch and a row could land on two
+  pages or none. Seventeen more offset-paged lists had the same flaw (Run history, anomalies, ERP
+  postings, corroboration runs, obligations, tables, notifications, conversations, the public
+  API's documents, and the SCIM user and group listings an identity provider pages through).
+  Each now ends its sort on a unique key. Proof: `tests/api/test_verification_queue_order.py`
+  (2 failed) and the source guard `tests/security/test_paged_lists_have_a_stable_order.py`
+  (failed on all 18 sites).
+- the review hub stayed on a page emptied by resolutions: an empty list and, once everything fit
+  on one page, no pager to leave by. Proof: the browser test "a page emptied by resolving its
+  items steps back" (failed before).
+
+## Final systemic polish and live engine hardening (2026-10-07)
+
+How these were found: the owner clicked "Reindex knowledge base" on a running server and the
+worker crashed (F-128), which no test had caught because the job was marked **untested** in the
+coverage ledger. So this pass drove the live stack (API, worker loop, Redis, Postgres, the model
+stand-in, the production bundle with the production CSP) the way a person would: a crawler opened
+all 39 pages and clicked every non-destructive button (on the populated workspace and on a
+brand-new empty one), a sweep called every parameter-free GET on three workspaces (populated,
+second, empty: 305 calls, **zero 5xx**), and the named secondary actions were triggered one by
+one. The API and worker logs were watched throughout, and the jobs table is the record of every
+background job the live system ran: **all SUCCEEDED, none failed or dead** (33 job types).
+
+### F-128 — "Reindex knowledge base" crashed every worker job (P2, fixed)
+**Plain language.** The button said "Queued N documents" and nothing happened: each job died
+with a spend-limit error and retried until dead. Re-embedding is metered on a non-billable meter
+(the tenant already paid to embed), and the spend guard asked for the tenant's limits on it; a
+non-billable meter cannot carry a limit, so the guard called it misconfigured.
+**Fix** `5e6f997`: limits are looked up only for meters that can carry one. **Proof**
+`tests/engines/test_knowledge_reindex_live.py` runs the button's request and the jobs as the
+worker does; it failed with the exact live error. **Live**: 8 of 8 then 16 of 16 jobs
+`reindex.complete`, no error.
+
+### F-129 — A later reindex queued nothing (P3, fixed)
+Jobs were keyed per document forever, so after the first run (or F-128's crash) every click
+answered "Queued N" and queued nothing. Now a document is skipped only while its reindex still
+waits or runs (a double click), and the backfill meter counts each run. `695e40a`.
+
+### F-130 — Sign-out did not end the session on the server (P2, fixed)
+**Plain language.** "Sign out" cleared the cookie in the browser, but the server never learned
+which session to end: the refresh cookie was scoped to `/api/v1/auth/refresh`, so it was never
+sent to `/api/v1/auth/logout`. The session stayed live for 14 days, stayed in "Active sessions",
+and a copy of the refresh token kept working (ASVS V3.3.1). Found while testing F-126; the old
+logout tests passed because the browser's cookie was gone. **Fix** `dfbd797`: the cookie is
+scoped to `/api/v1/auth` (still never sent to the rest of the API); old-path cookies are
+cleared. **Proof** `tests/services/test_sign_out_reaches_the_server.py` (3 of 4 failed).
+
+### F-131, F-132, F-133 — Archiving was not reversible (P2/P3/P3, fixed)
+**Plain language.** "Archive" is described as reversible and the "no access" page says an owner
+or admin can restore. In fact: restoring a workspace was refused by the same check that blocks
+archived workspaces (F-131), and its only Restore button sat on its own unreachable settings
+page; for members an archived workspace stayed in the switcher; an archived organization had
+no restore at all (F-132); and sign-in could land in an archived organization (F-133).
+**Fix** `d3bd89a`, `e7fc1ec`, `fae4a50`: restore routes for both (organization: owner, typed
+slug; workspace: owner/admin, workspace limit applies), archived workspaces listed for owners
+and admins, the picker shows archived organizations apart with badges and Restore, sign-in skips
+archived organizations. While archived, every request into it is still refused (reads and
+writes), people keep their sessions (they belong to the person), and API keys deactivated by the
+archive stay deactivated after a restore. **Proof** `tests/api/test_archive_lifecycle.py` (6 of
+8 failed), the tenant self-check (2 cases failed), `e2e/tests/16-lifecycle.spec.ts` (failed on
+the old picker).
+
+### F-134 — Archived tenants kept their background work (P2, fixed)
+The nightly anomaly sweep and the procurement re-score (both emit billable usage) walked every
+workspace, scheduled warehouse exports kept pushing an archived organization's data, and queued
+automations, ERP deliveries and engine jobs ran for it. **Fix** `493efb7`:
+`app/workers/tenant_gate.py` skips tenant-activity jobs for a tenant that is not active (the job
+succeeds with outcome SKIPPED), and the three cross-tenant sweeps filter archived tenants.
+Billing, usage, compliance and housekeeping still run. **Proof**
+`tests/engines/test_archived_tenants_live.py` (5 of 5 failed).
+
+### F-135 — Theme toggle and white flash (P3, fixed)
+From "system" on a light computer the header toggle went to light (nothing happened); its icon
+read the stored choice, not the screen; and the theme was applied only after the app's code
+loaded, so dark-mode users saw a white page first. `22528cd`: the toggle and icon use the
+resolved theme; `public/theme-boot.js` applies it before first paint (same-origin, as the CSP
+requires). **Proof** `e2e/tests/15-theme.spec.ts` (2 of 3 failed).
+
+### F-136 — An old profile picture came back after a reload (P3, fixed)
+The signed-in user is cached in the browser and a restored session refreshed it only when
+nothing was cached, so a picture or name changed elsewhere never showed until the next sign-in;
+and avatar and logo were cached for five minutes at a fixed address. `9e25b07`: the user is
+refreshed on every session restore; both images are `no-cache` with an ETag (304 when
+unchanged). **Proof** `e2e/tests/17-identity-images.spec.ts` (3 of 3 failed).
+
+### F-137 — Dialogs ignored the keyboard (P3, fixed)
+Eleven dialogs did not close on Escape, did not move focus in, and let Tab walk into the page
+behind (WCAG 2.1.2, 2.4.3). The API-key and webhook secret panels were marked modal while
+inline. `ca3b053`: one hook (`useDialogFocus`) applied to all eleven; the secret panels are
+labelled regions. **Proof** `e2e/tests/18-dialog-keyboard.spec.ts` (2 of 2 failed).
+
+### F-138 — DPA export bundle not downloadable on local storage (P3, fixed)
+Found by the crawler: "Download" answered 409 "cannot mint presigned URLs" where storage is the
+local disk (development and test; production refuses local storage). `e72a65a`: the API streams
+the archive itself in that case (owners/admins, audited). **Proof**
+`tests/api/test_compliance_export_stream.py` (2 of 2 failed) and a browser download test.
+
+### F-139 — The invite form offered a role the inviter cannot grant (P3, fixed)
+Found by the role audit. The server lets an owner invite Member, Billing or Admin and an admin
+only Member or Billing (an admin cannot create a peer). The form offered Admin to everyone, so
+an admin who chose it was refused after filling it in. The form now offers exactly the roles the
+inviter may grant (the same rule, `canAssignOrganizationRole`). **Proof**
+`e2e/tests/19-invite-roles.spec.ts` (the admin case failed). The rest of the role matrix held:
+the server enforces organization scope (billing, members, SSO, compliance, keys) and workspace
+scope (documents, review, workflows) separately, `tests/security/test_role_matrix.py` and the
+browser role matrix pass, and both members pages now explain the two kinds of role.
+
+### F-140 — Run history never named the rule (P3, fixed)
+Found on the new Run history screenshots: every chain read "Rule abf060bb" although the rules had
+names. The executions API filled `rule_name` from a `rule` relationship the execution model does
+not have, so it was always null. The names are now looked up for each page in one query.
+**Proof** `tests/engines/test_automation_live.py::test_run_history_names_the_rule_that_ran`
+(failed with `{None}`); live, the API returns the rules' names.
+
+### Seen live, not defects
+- `CRITICAL llm.settle_price_unavailable` for provider `local`: by design (ARCH-50), an unpriced
+  operator model is counted as UNKNOWN, never zero, and alerts until the operator prices it. In
+  the test stack there is no price for the model stand-in. Owner note N-031.
+- `ERROR billing.seat_disclosure_unpriced` when a seat change is previewed: the price book has
+  no `billing.seat` entry, so the disclosure says "unpriced". A pricing decision: N-030.
+- Billing portal 503 (no Stripe key in the sandbox), identity-domain verification 409 (no DNS
+  TXT record can exist here), custom domains 501 (not enabled on this deployment): each refuses
+  with a message that says exactly why.
 
 ## Built in this release (owner decisions, not defects)
 - **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery

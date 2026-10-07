@@ -484,7 +484,7 @@ def list_postings(workspace_id: uuid.UUID, state: Optional[str] = Query(default=
         states = [s_ for s_ in state.split(",") if s_ in v.STATES]
         filtered = filtered.where(ErpPosting.state.in_(states))
     total = db.execute(select(func.count()).select_from(filtered.subquery())).scalar_one()
-    rows = list(db.execute(filtered.order_by(ErpPosting.created_at.desc()).limit(limit).offset(offset)).scalars())
+    rows = list(db.execute(filtered.order_by(ErpPosting.created_at.desc(), ErpPosting.id.desc()).limit(limit).offset(offset)).scalars())
     return PostingList(items=_posting_rows(db, rows), total=int(total),
                        counts_by_state={s_: int(counts.get(s_, 0)) for s_ in v.STATES})
 

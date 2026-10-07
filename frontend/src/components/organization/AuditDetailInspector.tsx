@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React from "react";
+import React, { useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { Bot, Globe, Monitor, User, X } from "lucide-react";
 
 import type { AuditLogRead } from "@/services/api/audit";
@@ -62,10 +63,13 @@ export const AuditDetailInspector: React.FC<AuditDetailInspectorProps> = ({
 }) => {
   const succeeded = entry.outcome.toUpperCase() === "SUCCESS";
   const isSystem = !entry.actor_id && !entry.api_key_id;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="audit-detail-title"

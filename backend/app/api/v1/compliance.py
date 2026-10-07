@@ -11,6 +11,7 @@
     GET    /organizations/{id}/compliance/exports             list
     POST   /organizations/{id}/compliance/exports             generate
     GET    /organizations/{id}/compliance/exports/{id}/download  mint URL
+    GET    /organizations/{id}/compliance/exports/{id}/archive   stream it (no presign)
 
 Reads are ADMIN. The two irreversible writes — repinning residency and erasing
 a subject — are OWNER. Retention is OWNER because enabling auto-purge destroys
@@ -29,6 +30,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -38,6 +40,7 @@ from app.api.deps import (
     RequireOrgOwner,
     get_db,
 )
+from app.core.config import settings
 from app.core.storage import StorageError
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.models.compliance import (
@@ -491,6 +494,60 @@ def create_export(
 
 
 @router.get(
+    f"{BASE}/exports/{{export_id}}/archive",
+    summary="Stream a completed bundle, where the storage cannot presign a URL",
+)
+def stream_export_archive(
+    organization_id: uuid.UUID,
+    export_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    context: OrganizationContext = Depends(RequireOrgAdmin),
+) -> StreamingResponse:
+    """F-138. The same bundle the presigned URL would serve, for local-disk storage.
+
+    Owners and admins of this organization only (as for the download URL), scoped by
+    organization_id, and audited as an access like a presigned download.
+    """
+    _assert_scope(context, organization_id)
+    record = db.execute(
+        select(ComplianceExport).where(
+            ComplianceExport.id == export_id,
+            ComplianceExport.organization_id == organization_id,
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found.")
+    try:
+        stream = export_service.open_archive(record)
+    except export_service.ExportNotReadyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StorageError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    audit_service.record(
+        db,
+        organization_id=organization_id,
+        actor_id=context.user_id,
+        resource_type=AuditResourceType.COMPLIANCE_EXPORT,
+        resource_id=record.id,
+        action=AuditAction.ACCESSED,
+        details={"residency_region": record.residency_region, "delivery": "STREAM"},
+        **_client_context(request),
+    )
+    db.commit()
+    return StreamingResponse(
+        content=stream,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="flowpilot-export-{record.id}.zip"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get(
     f"{BASE}/exports/{{export_id}}/download",
     response_model=ComplianceExportDownloadResponse,
     summary="Mint a short-lived download URL for a completed bundle",
@@ -516,7 +573,7 @@ def download_export(
         )
 
     try:
-        url = export_service.download_url_for(context.organization, record)
+        url = export_service.presigned_url_or_none(context.organization, record)
     except export_service.ExportNotReadyError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
@@ -525,6 +582,15 @@ def download_export(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
+    if url is None:
+        # F-138. Storage that cannot presign (local disk): the archive route streams it.
+        return ComplianceExportDownloadResponse(
+            export_id=record.id,
+            download_url=f"{settings.API_V1_STR}{BASE.format(organization_id=organization_id)}"
+            f"/exports/{record.id}/archive",
+            expires_in_seconds=0,
+            delivery="STREAM",
+        )
 
     audit_service.record(
         db,

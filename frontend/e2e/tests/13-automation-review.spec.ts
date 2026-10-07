@@ -116,6 +116,10 @@ test.describe("Review queue", () => {
     await page.getByRole("combobox", { name: "Assignee" }).selectOption({ index: 0 });
     await page.getByRole("textbox", { name: "Tag" }).fill("e2e");
     await page.getByRole("textbox", { name: "Tag" }).fill("");
+    // F-127: look for the packet-split item under its own tab. On "All" it sorts behind every
+    // higher-severity item, and a database that has seen many runs (each adds a HIGH duplicate
+    // finding for its disputed upload) pushes it to page 2.
+    await page.getByRole("tab", { name: "Packet splits", exact: true }).click();
     const item = page.getByRole("button", { name: /Packet split/ }).first();
     await expect(item).toBeVisible();
     const take = page.getByRole("button", { name: "Take it" }).first();
@@ -125,6 +129,50 @@ test.describe("Review queue", () => {
     }
     await page.getByRole("button", { name: "Discuss this item" }).first().click();
     await settle(page);
+    await expectHealthyPage(page);
+  });
+
+  test("a page emptied by resolving its items steps back instead of showing an empty queue", async ({ page }) => {
+    // F-127. The queue is served from a stand-in so the page arithmetic is exact: 30 open
+    // anomalies (two pages of 25), then the five on page 2 are confirmed in bulk.
+    let open = 30;
+    const synthetic = (n: number) => ({
+      kind: "ANOMALY", item_id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, work_item_id: null,
+      document_name: `synthetic-${n}.pdf`, headline: `Synthetic finding ${n}`, severity: "LOW", confidence: null,
+      created_at: new Date().toISOString(), age_seconds: 60, status: "OPEN", assignee_user_id: null,
+      assignee_email: null, under_retention_hold: false, tags: [], review_reason: "", version: 1, open_threads: 0,
+    });
+    await page.route(/\/api\/v1\/workspaces\/[^/]+\/review\?/, async (route) => {
+      const asked = Number(new URL(route.request().url()).searchParams.get("page") ?? "1");
+      const start = (asked - 1) * 25;
+      const items = Array.from({ length: Math.max(0, Math.min(25, open - start)) }, (_, i) => synthetic(start + i + 1));
+      await route.fulfill({ json: { items, total: open, page: asked, page_size: 25,
+        counts_by_kind: { ANOMALY: open }, allowed_kinds: ["EXTRACTION", "ANOMALY"] } });
+    });
+    await page.route(/\/api\/v1\/workspaces\/[^/]+\/review\/bulk$/, async (route) => {
+      const ids = (route.request().postDataJSON() as { ids: string[] }).ids;
+      open -= ids.length;
+      await route.fulfill({ json: { action: "resolve", kind: "ANOMALY", ok: ids.length, refused: 0, skipped: 0,
+        results: ids.map((id) => ({ id, outcome: "ok" })) } });
+    });
+
+    await page.goto(ws("C", "verification"));
+    const pager = page.getByRole("navigation", { name: "Pages" });
+    await expect(pager).toContainText("page 1 of 2");
+    await pager.getByRole("button", { name: "Next" }).click();
+    await expect(pager).toContainText("page 2 of 2");
+    const list = page.getByRole("list", { name: "Review items" });
+    const unselected = list.getByRole("button", { name: "Select", exact: true });
+    await expect(unselected).toHaveCount(5);
+    for (let left = 5; left > 0; left -= 1) {
+      await unselected.first().click(); // its label becomes "Deselect"
+      await expect(unselected).toHaveCount(left - 1);
+    }
+    await page.getByRole("button", { name: "Confirm all" }).click();
+
+    // 25 left: one page. The hub shows it rather than an empty page 2 with no pager to leave by.
+    await expect(list).toContainText("Synthetic finding 1");
+    await expect(page.getByText("Nothing is waiting for review here.")).toHaveCount(0);
     await expectHealthyPage(page);
   });
 

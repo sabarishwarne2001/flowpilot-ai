@@ -135,6 +135,30 @@ export const createComplianceExport = async (
  * expired link on the second click and keeping a live credential in memory in
  * between.
  */
+/**
+ * F-138. Where the storage cannot presign a URL (local disk), the API streams the archive and
+ * the browser saves it from memory. Fetched with the session, never handed out as a link.
+ */
+export const downloadComplianceExportArchive = async (
+  organizationId: string,
+  exportId: string,
+): Promise<void> => {
+  const response = await apiClient.get<Blob>(COMPLIANCE_ENDPOINTS.exportArchive(organizationId, exportId), {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(response.data);
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `flowpilot-export-${exportId}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+};
+
 export const getComplianceExportDownloadUrl = async (
   organizationId: string,
   exportId: string,

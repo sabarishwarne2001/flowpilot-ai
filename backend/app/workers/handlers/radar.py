@@ -147,8 +147,19 @@ def handle_anomaly_nightly(db: Any, payload: dict[str, Any]) -> dict[str, Any]:
     failure mode least likely to be noticed until somebody asks why nothing
     has been flagged in a month.
     """
+    from app.models.organization import Organization, OrganizationStatus
+    from app.models.workspace import WorkspaceStatus
+
     workspace_filter = payload.get("workspace_id")
-    stmt = select(Workspace.id, Workspace.organization_id)
+    # F-134: archived (or suspended) workspaces and organizations are not swept.
+    stmt = (
+        select(Workspace.id, Workspace.organization_id)
+        .join(Organization, Organization.id == Workspace.organization_id)
+        .where(
+            Workspace.status == WorkspaceStatus.ACTIVE,
+            Organization.status == OrganizationStatus.ACTIVE,
+        )
+    )
     if workspace_filter:
         stmt = stmt.where(Workspace.id == uuid.UUID(str(workspace_filter)))
     else:

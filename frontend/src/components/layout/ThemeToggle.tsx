@@ -6,7 +6,7 @@ import { useUIStore } from "@/store/useUIStore";
 export const ThemeToggle: React.FC<{ readonly className?: string }> = ({
   className = "",
 }) => {
-  const theme = useUIStore((state) => state.theme);
+  const theme = useUIStore((state) => state.resolvedTheme);
   const toggleTheme = useUIStore((state) => state.toggleTheme);
 
   return (

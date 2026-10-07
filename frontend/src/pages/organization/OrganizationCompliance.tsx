@@ -1,5 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useCallback,  useMemo, useState  } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
 import {
   createComplianceExport,
   createErasure,
+  downloadComplianceExportArchive,
   getComplianceExportDownloadUrl,
   getComplianceOverview,
   listComplianceExports,
@@ -361,7 +363,11 @@ const ExportsCard: React.FC<{
         organizationId,
         record.id,
       );
-      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      if (result.delivery === "STREAM") {
+        await downloadComplianceExportArchive(organizationId, record.id);
+      } else {
+        window.open(result.download_url, "_blank", "noopener,noreferrer");
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -523,10 +529,13 @@ const ErasureModal: React.FC<{
     confirmEmail.trim().length > 0 &&
     typedPhrase === PHRASE &&
     previewIsCurrent;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: mutation.isPending });
 
   return (
     <div
       className={OVERLAY}
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="erasure-title"

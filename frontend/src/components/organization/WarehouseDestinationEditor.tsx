@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, RefreshCw } from "lucide-react";
 
@@ -130,6 +131,8 @@ export const WarehouseDestinationEditor: React.FC<
 
   const dirty = labelChanged || statusChanged || credentialReady;
   const rotationIncomplete = rotating && !credentialReady;
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: save.isPending });
 
   const LABEL = "text-sm font-medium text-foreground";
   const HINT = "mt-1 text-xs text-muted-foreground";
@@ -139,6 +142,7 @@ export const WarehouseDestinationEditor: React.FC<
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="destination-editor-title"

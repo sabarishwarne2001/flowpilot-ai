@@ -1,52 +1,51 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-07 (production configuration & UI elevation)_
+_Last updated: 2026-10-07 (final systemic polish and live engine hardening)_
 
 ## Current phase
-**Production configuration & UI elevation — COMPLETE, in review.** Branch
-`hardening/production-config-and-ui-elevation` (session branch `claude/sweet-bell-ahiem4`); PR #8 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/8).
-The final release (PR #7, GO) is merged into `main`; this branch builds on it.
+**Final systemic polish & live engine hardening — COMPLETE, in review.** Branch
+`hardening/final-systemic-polish-and-live-engine-hardening` (session branch
+`claude/wonderful-gates-5fid79`); PR #9 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/9). Builds on PR #8 (merged into `main`).
 
-- **Track 1 (configuration).** Every key the app, the compose files and the scripts read was checked
-  against the four env files. Fixed F-123 (SSO advertised `http://localhost:8000` on every deployment;
-  the settings that should fix it were ignored). Templates aligned (R2 = `STORAGE_BACKEND=r2`, model
-  names and `PUBLIC_API_URL` passed to the containers, Vite port, reranker token, Enterprise price id).
-  The owner's real `.env` / `.env.production` were finalized outside the repository and the production
-  one was verified with `docker compose config` plus the app's start-up guard: its only refusal is the
-  Stripe webhook secret (F-125). New owner items N-026 to N-029.
-- **Track 2 (UI).** Design tokens (layered dark zinc, cool light), bundled Inter/JetBrains Mono,
-  tactile shared primitives; split-screen auth (sign-in with steps, sign-up, reset, verification,
-  invitations) with a product showcase; Linear-style shell (collapsible sidebar, portal workspace
-  switcher, profile menu, glass top bar with Ctrl+K); page polish (type weights, unified cards and
-  buttons, Overview, Documents, the document workbench, settings, dialogs, palette, selects).
-- **Verified on the final build:** backend suite **3,309 passed, 0 failed, 9 skipped** (3,298 + the 11
-  F-123 tests); browser suite **290 passed, 0 failed, 1 skipped** (by design; fresh database,
-  production CSP enforced, bundle built from this branch); `npm run build`, both `tsc` projects, lint,
-  `check-no-sourcemaps --dist` and the encoding check clean. Two test-side issues recorded, neither
-  caused by this branch: F-126 (pre-existing session race, seen once) and F-127 (a review-queue test
-  that depends on how many runs the database has seen).
+- **Live engine defects.** F-128 (knowledge reindex crashed every job on the spend guard),
+  F-129 (a later reindex queued nothing), F-126 (two tabs refreshing signed each other out),
+  F-130 (sign-out never reached the server), F-127 (offset-paged lists without a stable order,
+  18 of them; the review hub stuck on an emptied page; the flaky browser test).
+- **Live exploratory sweep.** The real stack (API, worker loop, Redis, Postgres, model stand-in,
+  production bundle with the production CSP): a crawler clicked every non-destructive button on
+  all 39 pages (populated workspace) and all 21 workspace pages of a brand-new empty workspace;
+  305 parameter-free GETs on populated, second and empty workspaces (zero 5xx); every named
+  secondary action triggered by hand. API and worker logs: zero tracebacks. Jobs table: every
+  background job the live system ran SUCCEEDED (33 job types, none failed or dead). Found and
+  fixed F-138 (DPA export not downloadable on local storage); noted N-030 (seat price) and N-031
+  (local-model price alerts).
+- **Lifecycle and roles.** Archive is now reversible and enforced end to end: F-131 (workspace
+  restore impossible; archived workspaces in members' switchers), F-132 (no organization restore),
+  F-133 (sign-in into an archived organization), F-134 (archived tenants kept their background
+  work, billable sweeps and data exports included). The picker shows archived tenants apart with
+  Restore. Both members pages explain organization roles vs workspace roles.
+- **UI.** Softer light theme (zinc canvas, white cards), F-135 (theme toggle from "system", white
+  flash on dark), F-136 (stale profile picture/logo), F-137 (eleven dialogs ignored Escape and let
+  focus escape), "Only if" conditions styled like code, Run history with status dots, rule names,
+  duration badges and node timelines. The tenant self-checks now run in CI (`npm run check:self`).
+- **Verified:** see "What is done".
 
 ## What is done
-- **Phases 0 to 5:** `00-map.md` … `05-production-readiness.md` (PRs #1 to #6).
-- **Final release** (this branch; the PR lists every commit):
-  - **Stage 1 — decisions and missing features.** N-002 to N-020 decided and applied:
-    notification filters and mark as unread, promo code at checkout, invite from Organization →
-    Members, page image beside the fields with in-place correction, Service levels targets on
-    Enterprise, viewer/admin sidebar rules, sign-in allowance 20/5 min, Redis password, uptime
-    heartbeat, CSP enforced, two-factor sign-in.
-  - **Stage 2 — live end-to-end pass** over all 27 module trees with a deterministic local model
-    stand-in (F-063 closed) and the production CSP enforced. New defects F-108 to F-122 found and
-    fixed (two P1: legal hold bypass F-108, first document skipping AI F-113).
-  - **Stage 3 — repository.** 286 historical files moved unchanged to `archive/`; CI gates job
-    retired; README and RUNBOOK updated.
-  - **Stage 4 — certification.** OWASP ASVS 4.0.3 Level 2 and Twelve-Factor reviews; the ASVS
-    audit found and fixed four authentication gaps (F-117 to F-120: password policy and strength
-    meter, show-password, session lifetime, sign-out on a typo), API caching (F-122), and added a
-    Permissions-Policy.
-  - Backend suite: **3,298 passed, 0 failed, 9 skipped**. Browser suite: **290 passed, 0 failed, 1 skipped** (by design) (start of release:
-    272 passed, 7 failed, 2 skipped). One Alembic head (`p6a3_user_mfa_factors`), 0 new drift.
-  - `COVERAGE.csv` (1,345 rows): deep 270 → **305**, smoke 634 → 622, untested **418** (unchanged;
-    endpoints untested 34).
+- **Phases 0 to 5, final release, production configuration & UI elevation:** PRs #1 to #8 (merged).
+- **Final systemic polish & live engine hardening** (this branch): F-126 to F-140 fixed, each with
+  a test that failed first (FINDINGS.md). Owner items N-030 (seat price), N-031 (pricing a
+  self-hosted model).
+  - Browser suite on a fresh database, production CSP, model stand-in: **302 passed, 0 failed,
+    1 skipped** (by design; was 290 passed: 12 new tests).
+  - Backend suite (full, second Postgres cluster): **3,343 passed, 0 failed, 9 skipped** (was 3,309:
+    34 new tests). Run before the last two backend changes (F-140, the narrowed `/me/context`
+    default); after them the touched files (107 tests) and the security suite (388) pass.
+  - After the full browser run: the F-139 tests, the updated lifecycle test and the Run history and
+    automation tests (13) pass on the final bundle and API.
+  - `npm run build`, both `tsc` projects, lint, `npm run check:self` (new), `check-no-sourcemaps
+    --dist`, encoding check: clean. One Alembic head (`p6a3_user_mfa_factors`), no migration added.
+  - `COVERAGE.csv` (1,347 rows): deep 305 → **317**, untested 418 → **397** (21 background jobs
+    now have live evidence from the jobs table), 2 new routes.
 
 ## Owner decisions in force (do not re-ask)
 All of Phase 5's (N-004, N-006 to N-014, N-019 ERP part, N-020 items 1/4/6, N-021 to N-025) plus,
@@ -57,19 +56,16 @@ per 5 minutes; **N-019** viewers do not see Workflows / Run history / Review que
 seven capabilities built. Details: NEEDS-OWNER.md, "Final release".
 
 ## Next action (exact)
-1. Owner: review and merge the PR (before/after screenshots were sent with the session summary).
-2. Owner decisions N-026 (gateway and the three plan price ids), N-027 (email provider), N-028 (domain
-   and admin mailbox), N-029 (sign-in page claims).
-3. Stripe Dashboard (test mode): add the webhook endpoint
-   `https://app.flowpilot.ai/api/v1/billing/webhooks/stripe` and put its signing secret in
-   `.env.production` (F-125); the app refuses to start until then.
-4. Test the Gemini `AQ.` key from your own machine (CHANGES note); replace it with an AI Studio key if
-   it is refused.
-5. Before the first deploy, regenerate the server secrets on the server and roll the R2 token, Gmail
-   app password and Groq keys (they were pasted into a chat).
-6. Then the first deploy as before: `docs/RUNBOOK.md` §9 (sweepers.env now carries
-   `HEARTBEAT_UUID_UPTIME`).
-7. Before the first customer configures SCIM: F-124 (SCIM token pepper).
+1. Owner: review and merge the PR for this branch (screenshots of the new picker, Run history,
+   workflow conditions and role guide were sent with the session summary).
+2. Owner decisions N-030 (per-seat price in the price book), N-031 (pricing a self-hosted model),
+   and the earlier N-026 to N-029.
+3. Stripe Dashboard (test mode): the webhook endpoint and its signing secret in `.env.production`
+   (F-125); the app refuses to start until then.
+4. Before the first deploy, regenerate the server secrets and roll the keys pasted into a chat
+   (R2 token, Gmail app password, Groq keys); test the Gemini `AQ.` key from your own machine.
+5. Then the first deploy: `docs/RUNBOOK.md` §9.
+6. Before the first customer configures SCIM: F-124 (SCIM token pepper).
 
 How to bring the test stack up in a fresh sandbox: `frontend/e2e/scripts/start-db.sh` (pgvector
 0.8.0 built from source: `apt-get install postgresql-server-dev-16`, then `make && make install` in a
@@ -83,8 +79,9 @@ None in engineering. Not verifiable from this environment: the production compos
 server (F-006) and the CPU-only torch image (F-045).
 
 ## Budget notes
-One session: environment set-up, the Stage 1 features, three full browser runs and three full
-backend runs (on two RAM-disk Postgres clusters in parallel), the fixes, and the documentation. The
+One session: environment set-up, the fixes with their tests, a live click-through crawl (two
+runs), API sweeps, one full browser run and one full backend run (in parallel on two RAM-disk
+Postgres clusters, which slows the backend run to well over an hour), and the documentation. The
 exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
@@ -99,3 +96,9 @@ exact spend is not visible from inside the session; check your usage page.
   runs without reload). `E2E_LLM=1` starts the model stand-in; `E2E_CSP=1` enforces the Caddyfile CSP.
 - `pkill -f <pattern>` can kill the calling shell; use anchored `pgrep -f '^...'` and kill by PID.
 - Model hosts, Stripe, Groq and Dodo are blocked; PyPI and npm are reachable.
+- **Live sweeps**: the crawler and API sweep scripts used in this pass are described in
+  FINDINGS.md ("Final systemic polish"); the jobs table (`select job_type, status, count(*) from
+  jobs group by 1,2`) is the record of every background job the live stack ran, and survives the
+  log rotation that `start-stack.sh` does on every restart.
+- The browser suite reuses a preview server on port 3000 if one is running (outside CI), so a run
+  started while another is serving tests the older bundle.

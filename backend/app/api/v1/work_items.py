@@ -455,6 +455,8 @@ def reindex_knowledge_base(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> ReindexResponse:
+    from app.models.job import Job, JobStatus
+
     work_item_ids = db.execute(
         select(WorkItem.id).where(
             WorkItem.workspace_id == context.workspace_id,
@@ -462,8 +464,26 @@ def reindex_knowledge_base(
         )
     ).scalars().all()
 
+    # A document whose reindex is still waiting or running is not queued again (a double click),
+    # but one whose earlier reindex finished or died is. The key used to be one per document,
+    # forever: after the first run every click answered "Queued N" and queued nothing.
+    waiting = {
+        str(payload.get("work_item_id"))
+        for payload in db.execute(
+            select(Job.payload).where(
+                Job.job_type == "knowledge.reindex",
+                Job.organization_id == context.organization_id,
+                Job.status.in_((JobStatus.PENDING, JobStatus.CLAIMED, JobStatus.FAILED)),
+            )
+        ).scalars()
+        if isinstance(payload, dict)
+    }
+    request_id = uuid.uuid4().hex
+
     queued = 0
     for work_item_id in work_item_ids:
+        if str(work_item_id) in waiting:
+            continue
         job_service.enqueue(
             db,
             job_type="knowledge.reindex",
@@ -472,26 +492,31 @@ def reindex_knowledge_base(
                 "work_item_id": str(work_item_id),
                 "workspace_id": str(context.workspace_id),
             },
-            idempotency_key=f"knowledge.reindex:{work_item_id}",
+            idempotency_key=f"knowledge.reindex:{work_item_id}:{request_id}",
         )
         queued += 1
 
     db.commit()
 
     logger.info(
-        "AUDIT | KNOWLEDGE_REINDEX_REQUESTED | workspace=%s | user=%s | documents=%d",
+        "AUDIT | KNOWLEDGE_REINDEX_REQUESTED | workspace=%s | user=%s | documents=%d | already_waiting=%d",
         context.workspace_id,
         context.user_id,
         queued,
+        len(work_item_ids) - queued,
     )
 
+    if queued or not work_item_ids:
+        detail = (
+            f"Queued {queued} document(s) for re-embedding. "
+            "This runs in the background and may take several minutes."
+        )
+    else:
+        detail = "Every document is already waiting to be re-embedded. Nothing new was queued."
     return ReindexResponse(
         queued=queued,
         total_documents=len(work_item_ids),
-        detail=(
-            f"Queued {queued} document(s) for re-embedding. "
-            "This runs in the background and may take several minutes."
-        ),
+        detail=detail,
     )
 
 

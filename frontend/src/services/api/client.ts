@@ -679,13 +679,24 @@ export const restoreSession = async (): Promise<string | null> => {
     // and every guard reading the user (the platform shell's superuser check,
     // the sidebar's name) acted as if nobody were signed in. Found by the ARCH-50
     // browser smoke: a superadmin was sent from /admin/sovereign to /workspaces.
+    const fetchUser = async (): Promise<User> =>
+      (await apiClient.get<User>("/auth/me", { headers: { Accept: "application/json" } })).data;
     if (!useAuthStore.getState().user) {
       try {
-        const me = await apiClient.get<User>("/auth/me", { headers: { Accept: "application/json" } });
-        useAuthStore.getState().setAuth(me.data, token);
+        useAuthStore.getState().setAuth(await fetchUser(), token);
       } catch {
         // The guards ask for the session again; an unreadable /auth/me is not a sign-out.
       }
+    } else {
+      // The cached user survives reloads and may be days old: a profile picture or name changed
+      // on another device never showed until the next sign-in. Start with it, then replace it.
+      void fetchUser()
+        .then((user) => {
+          if (useAuthStore.getState().isAuthenticated) {
+            useAuthStore.getState().setUser(user);
+          }
+        })
+        .catch(() => undefined);
     }
     return token;
   } catch {

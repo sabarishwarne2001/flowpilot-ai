@@ -149,9 +149,12 @@ def list_granted_workspaces_for_user(
     user_id: uuid.UUID,
     organization_id: uuid.UUID | None = None,
     statuses: Sequence[MembershipStatus] | None = ACTIVE_ONLY,
+    workspace_statuses: Sequence[WorkspaceStatus] | None = None,
 ) -> list[Workspace]:
     """
     Returns workspaces where the user holds an explicit grant.
+
+    `statuses` filters the grant; `workspace_statuses` the workspace itself.
     """
     stmt = (
         select(Workspace)
@@ -160,6 +163,8 @@ def list_granted_workspaces_for_user(
     )
     if statuses is not None:
         stmt = stmt.where(WorkspaceMember.status.in_(statuses))
+    if workspace_statuses is not None:
+        stmt = stmt.where(Workspace.status.in_(workspace_statuses))
     if organization_id is not None:
         stmt = stmt.where(Workspace.organization_id == organization_id)
 

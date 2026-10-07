@@ -235,7 +235,8 @@ def list_obligations(workspace_id: uuid.UUID, state: Optional[str] = Query(defau
         like = f"%{q.strip()}%"
         base = base.where(or_(Obligation.title.ilike(like), Obligation.counterparty_name.ilike(like)))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
-    obs = list(db.execute(base.order_by(Obligation.due_date.asc().nulls_last(), Obligation.created_at.desc())
+    obs = list(db.execute(base.order_by(Obligation.due_date.asc().nulls_last(), Obligation.created_at.desc(),
+                                        Obligation.id.desc())
                           .limit(limit).offset(offset)).scalars())
     counts = {s: 0 for s in v.STATES}
     for s, n in db.execute(_visible(select(Obligation.state, func.count()).where(Obligation.workspace_id == workspace_id))

@@ -195,6 +195,9 @@ class ComplianceExportDownloadResponse(BaseModel):
     export_id: uuid.UUID
     download_url: str
     expires_in_seconds: int
+    #: PRESIGNED: open `download_url` (a short-lived storage URL). STREAM: the storage cannot
+    #: presign, so `download_url` is the API's own archive route, fetched with the session (F-138).
+    delivery: Literal["PRESIGNED", "STREAM"] = "PRESIGNED"
 
 
 # ---------------------------------------------------------------------------

@@ -103,3 +103,16 @@ def test_a_new_workspace_can_build_data_conditions_before_its_first_document(eng
     assert fields.get("classification_details.document_classification") == "string", fields
     assert fields.get("total_amount") == "number", fields
     assert engines.post("/automation/rules", RULE).status_code == 201
+
+
+def test_run_history_names_the_rule_that_ran(engines: Engines) -> None:
+    """F-140. Every execution in Run history came back with rule_name null, so the page could only
+    say "Rule 1f3a9c0e": the serializer read a `rule` relationship the model does not have."""
+    _invoice(engines, "INV-AU-N0", "10.00")
+    rule = engines.post("/automation/rules", RULE).json()
+    _invoice(engines, "INV-AU-N1", "5000.00")
+
+    page = engines.get("/automation/executions", params={"rule_id": rule["id"]}).json()
+    items = page if isinstance(page, list) else page.get("items", [])
+    assert items, "the rule did not run"
+    assert {item["rule_name"] for item in items} == {RULE["name"]}, items

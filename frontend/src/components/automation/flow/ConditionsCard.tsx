@@ -59,6 +59,24 @@ const OperatorToggle: React.FC<{
   </div>
 );
 
+/** The logic word in front of a condition row or between groups, styled like code. */
+const Keyword: React.FC<{ readonly word: "IF" | "AND" | "OR"; readonly className?: string }> = ({
+  word,
+  className = "",
+}) => (
+  <span
+    className={`inline-flex h-6 min-w-[2.75rem] items-center justify-center rounded-md border px-1.5 font-mono text-[10px] font-bold tracking-wider ${
+      word === "IF"
+        ? "border-primary/30 bg-primary/10 text-primary"
+        : word === "AND"
+          ? "border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-300"
+          : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    } ${className}`}
+  >
+    {word}
+  </span>
+);
+
 export const ConditionsCard: React.FC<ConditionsCardProps> = ({
   catalog, triggers, groups, groupsOperator, onChange, issues, disabled,
 }) => {
@@ -131,132 +149,147 @@ export const ConditionsCard: React.FC<ConditionsCardProps> = ({
     >
       <div className="space-y-3">
         {groups.map((group, g) => (
-          <div key={group.uid} className="rounded-lg border border-border/70 bg-muted/20 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <span>Group {g + 1}: match</span>
-                <OperatorToggle
-                  value={group.logic_operator}
-                  onChange={(value) => setGroup(g, { ...group, logic_operator: value })}
-                  label={`Group ${g + 1} combines with`}
-                  disabled={disabled}
-                />
+          <React.Fragment key={group.uid}>
+            {g > 0 && (
+              <div className="flex items-center gap-2" aria-hidden="true">
+                <span className="h-px flex-1 bg-border" />
+                <Keyword word={groupsOperator === "AND" ? "AND" : "OR"} />
+                <span className="h-px flex-1 bg-border" />
               </div>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange(groups.filter((_, i) => i !== g), groupsOperator)}
-                className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Remove group ${g + 1}`}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            )}
+            <div className="rounded-lg border border-border/70 border-l-2 border-l-primary/50 bg-muted/20 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <span>Group {g + 1}: match</span>
+                  <OperatorToggle
+                    value={group.logic_operator}
+                    onChange={(value) => setGroup(g, { ...group, logic_operator: value })}
+                    label={`Group ${g + 1} combines with`}
+                    disabled={disabled}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onChange(groups.filter((_, i) => i !== g), groupsOperator)}
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Remove group ${g + 1}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
-            <div className="space-y-2">
-              {group.conditions.map((condition, c) => {
-                const field = fieldFor(catalog, triggers, condition.field);
-                const operators = operatorsFor(catalog, field?.type);
-                const own = issues.filter((issue) => issue.index === g && issue.subIndex === c);
-                const byField = (name: string) => own.filter((issue) => issue.field === name);
-                const custom = condition.field !== "" && field === undefined && !condition.field.startsWith("event.");
-                return (
-                  <div key={condition.uid} className="grid grid-cols-1 gap-2 md:grid-cols-12">
-                    <div className="md:col-span-5">
-                      <select
-                        aria-label="Field"
-                        disabled={disabled}
-                        value={custom ? "__custom__" : condition.field}
-                        onChange={(e) =>
-                          setCondition(g, c, { field: e.target.value === "__custom__" ? "custom_field" : e.target.value })
-                        }
-                        className={inputClass(byField("field").length > 0)}
-                      >
-                        <option value="" disabled>Choose a field…</option>
-                        {eventFields.length > 0 && (
-                          <optgroup label="From the trigger">
-                            {eventFields.map((f) => (
-                              <option key={f.key} value={f.key}>{f.label}</option>
+              <div className="space-y-2">
+                {group.conditions.map((condition, c) => {
+                  const field = fieldFor(catalog, triggers, condition.field);
+                  const operators = operatorsFor(catalog, field?.type);
+                  const own = issues.filter((issue) => issue.index === g && issue.subIndex === c);
+                  const byField = (name: string) => own.filter((issue) => issue.field === name);
+                  const custom = condition.field !== "" && field === undefined && !condition.field.startsWith("event.");
+                  return (
+                    <div key={condition.uid} className="flex items-start gap-2">
+                      <Keyword
+                        word={c === 0 ? "IF" : group.logic_operator === "AND" ? "AND" : "OR"}
+                        className="mt-2 shrink-0"
+                      />
+                      <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 md:grid-cols-12">
+                        <div className="md:col-span-5">
+                          <select
+                            aria-label="Field"
+                            disabled={disabled}
+                            value={custom ? "__custom__" : condition.field}
+                            onChange={(e) =>
+                              setCondition(g, c, { field: e.target.value === "__custom__" ? "custom_field" : e.target.value })
+                            }
+                            className={inputClass(byField("field").length > 0)}
+                          >
+                            <option value="" disabled>Choose a field…</option>
+                            {eventFields.length > 0 && (
+                              <optgroup label="From the trigger">
+                                {eventFields.map((f) => (
+                                  <option key={f.key} value={f.key}>{f.label}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {documentFields.length > 0 && (
+                              <optgroup label="From the document">
+                                {documentFields.map((f) => (
+                                  <option key={f.key} value={f.key}>{f.label}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {triggers.length > 0 && <option value="__custom__">Another document field…</option>}
+                          </select>
+                          {custom && (
+                            <input
+                              aria-label="Document field path"
+                              disabled={disabled}
+                              value={condition.field}
+                              onChange={(e) => setCondition(g, c, { field: e.target.value.trim() })}
+                              placeholder="e.g. invoice_number"
+                              className={`${inputClass(false)} mt-1 font-mono text-xs`}
+                            />
+                          )}
+                          <IssueText issues={byField("field")} />
+                        </div>
+                        <div className="md:col-span-3">
+                          <select
+                            aria-label="Comparison"
+                            disabled={disabled}
+                            value={condition.operator}
+                            onChange={(e) => setCondition(g, c, { operator: e.target.value })}
+                            className={inputClass(byField("operator").length > 0)}
+                          >
+                            {operators.map((op) => (
+                              <option key={op} value={op}>{operatorLabel(op)}</option>
                             ))}
-                          </optgroup>
-                        )}
-                        {documentFields.length > 0 && (
-                          <optgroup label="From the document">
-                            {documentFields.map((f) => (
-                              <option key={f.key} value={f.key}>{f.label}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {triggers.length > 0 && <option value="__custom__">Another document field…</option>}
-                      </select>
-                      {custom && (
-                        <input
-                          aria-label="Document field path"
-                          disabled={disabled}
-                          value={condition.field}
-                          onChange={(e) => setCondition(g, c, { field: e.target.value.trim() })}
-                          placeholder="e.g. invoice_number"
-                          className={`${inputClass(false)} mt-1 font-mono text-xs`}
-                        />
-                      )}
-                      <IssueText issues={byField("field")} />
+                          </select>
+                          <IssueText issues={byField("operator")} />
+                        </div>
+                        <div className="md:col-span-3">
+                          {!isValueless(catalog, condition.operator) && (
+                            <input
+                              aria-label="Value"
+                              disabled={disabled}
+                              type={field?.type === "number" && !["IN", "NOT_IN", "BETWEEN"].includes(condition.operator) ? "number" : "text"}
+                              value={condition.value}
+                              placeholder={
+                                ["IN", "NOT_IN", "BETWEEN", "ARRAY_CONTAINS_ANY", "ARRAY_CONTAINS_ALL"].includes(condition.operator)
+                                  ? "comma, separated"
+                                  : field?.example || "value"
+                              }
+                              onChange={(e) => setCondition(g, c, { value: e.target.value })}
+                              className={inputClass(byField("value").length > 0)}
+                            />
+                          )}
+                          <IssueText issues={[...byField("value"), ...own.filter((i) => i.field === null)]} />
+                        </div>
+                        <div className="flex items-start justify-end md:col-span-1">
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setGroup(g, { ...group, conditions: group.conditions.filter((_, i) => i !== c) })}
+                            className="rounded p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            aria-label="Remove condition"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="md:col-span-3">
-                      <select
-                        aria-label="Comparison"
-                        disabled={disabled}
-                        value={condition.operator}
-                        onChange={(e) => setCondition(g, c, { operator: e.target.value })}
-                        className={inputClass(byField("operator").length > 0)}
-                      >
-                        {operators.map((op) => (
-                          <option key={op} value={op}>{operatorLabel(op)}</option>
-                        ))}
-                      </select>
-                      <IssueText issues={byField("operator")} />
-                    </div>
-                    <div className="md:col-span-3">
-                      {!isValueless(catalog, condition.operator) && (
-                        <input
-                          aria-label="Value"
-                          disabled={disabled}
-                          type={field?.type === "number" && !["IN", "NOT_IN", "BETWEEN"].includes(condition.operator) ? "number" : "text"}
-                          value={condition.value}
-                          placeholder={
-                            ["IN", "NOT_IN", "BETWEEN", "ARRAY_CONTAINS_ANY", "ARRAY_CONTAINS_ALL"].includes(condition.operator)
-                              ? "comma, separated"
-                              : field?.example || "value"
-                          }
-                          onChange={(e) => setCondition(g, c, { value: e.target.value })}
-                          className={inputClass(byField("value").length > 0)}
-                        />
-                      )}
-                      <IssueText issues={[...byField("value"), ...own.filter((i) => i.field === null)]} />
-                    </div>
-                    <div className="flex items-start justify-end md:col-span-1">
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => setGroup(g, { ...group, conditions: group.conditions.filter((_, i) => i !== c) })}
-                        className="rounded p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        aria-label="Remove condition"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              <button
-                type="button"
-                disabled={disabled || triggers.length === 0 || group.conditions.length >= limits.conditions_per_group}
-                onClick={() => addCondition(g)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
-              >
-                <Plus className="h-3.5 w-3.5" /> Condition
-              </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  disabled={disabled || triggers.length === 0 || group.conditions.length >= limits.conditions_per_group}
+                  onClick={() => addCondition(g)}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Condition
+                </button>
+              </div>
             </div>
-          </div>
+          </React.Fragment>
         ))}
 
         <button

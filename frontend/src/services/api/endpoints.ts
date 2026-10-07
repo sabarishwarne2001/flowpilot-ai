@@ -35,6 +35,7 @@ export const ORGANIZATION_ENDPOINTS = {
   slugAvailable: "/organizations/slug-available",
   detail: (organizationId: string): string => `/organizations/${seg(organizationId)}`,
   archive: (organizationId: string): string => `/organizations/${seg(organizationId)}/archive`,
+  restore: (organizationId: string): string => `/organizations/${seg(organizationId)}/restore`,
   leave: (organizationId: string): string => `/organizations/${seg(organizationId)}/leave`,
   workspaces: (organizationId: string): string => `/organizations/${seg(organizationId)}/workspaces`,
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
@@ -304,6 +305,8 @@ export const COMPLIANCE_ENDPOINTS = {
     `/organizations/${org(organizationId)}/compliance/exports`,
   exportDownload: (organizationId: string, exportId: string): string =>
     `/organizations/${org(organizationId)}/compliance/exports/${seg(exportId)}/download`,
+  exportArchive: (organizationId: string, exportId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/exports/${seg(exportId)}/archive`,
 } as const;
 
 /**

@@ -148,10 +148,15 @@ export const CreateWorkspacePage: React.FC = () => {
     return <Navigate to={ROUTES.ONBOARDING} replace />;
   }
 
-  // The organization is unreachable, or the actor's role does not permit
-  // creating workspaces in it. Both resolve to the picker rather than a
-  // permission error: a dead end here would leave them with nowhere to go.
-  if (!organization || !canCreateWorkspace(organization.role)) {
+  // The organization is unreachable, archived, or the actor's role does not
+  // permit creating workspaces in it. All resolve to the picker rather than a
+  // permission error: a dead end here would leave them with nowhere to go, and
+  // an archived organization is restored from the picker.
+  if (
+    !organization ||
+    organization.organization_status !== "ACTIVE" ||
+    !canCreateWorkspace(organization.role)
+  ) {
     return <Navigate to={ROUTES.WORKSPACES} replace />;
   }
 

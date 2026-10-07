@@ -209,6 +209,51 @@ def get_organization_or_raise(
     return organization
 
 
+def restore_organization(
+    db: Session,
+    *,
+    organization: Organization,
+    actor_id: uuid.UUID,
+) -> Organization:
+    """F-132. Reverses archive_organization. The caller has already checked OWNER.
+
+    Only an ARCHIVED organization is restored here: SUSPENDED is imposed by the platform (billing,
+    abuse) and is not the owner's to lift. API keys the archive deactivated stay deactivated.
+    """
+    if organization.status is OrganizationStatus.ACTIVE:
+        return organization
+    if organization.status is not OrganizationStatus.ARCHIVED:
+        raise OrganizationPermissionDeniedError(
+            f"This organization is {organization.status.value.lower()}; contact support to restore it."
+        )
+    try:
+        restored = organization_crud.set_organization_status(
+            db,
+            organization=organization,
+            status=OrganizationStatus.ACTIVE,
+        )
+        audit_service.record(
+            db,
+            organization_id=organization.id,
+            actor_id=actor_id,
+            resource_type=AuditResourceType.ORGANIZATION,
+            resource_id=organization.id,
+            action=AuditAction.RESTORED,
+            details={"name": organization.name, "slug": organization.slug},
+        )
+        commit_and_refresh(db, restored)
+        return restored
+    except Exception as exc:
+        rollback_and_log_error(
+            db,
+            logger,
+            "Failed to restore organization %s: %s",
+            organization.id,
+            str(exc),
+            exc=exc,
+        )
+
+
 def assert_organization_operational(organization: Organization) -> None:
     if organization.status is not OrganizationStatus.ACTIVE:
         raise TenantSuspendedError(

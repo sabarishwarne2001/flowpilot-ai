@@ -297,7 +297,7 @@ def list_users(db, *, key: ScimApiKey, query: ScimQuery) -> dict:
         q = q.filter(DirectoryIdentity.id == query.value)
 
     total = q.count()
-    rows = (q.order_by(DirectoryIdentity.created_at.asc())
+    rows = (q.order_by(DirectoryIdentity.created_at.asc(), DirectoryIdentity.id.asc())
              .offset(query.offset).limit(query.count).all())
     return list_response([user_to_scim(db, r) for r in rows],
                          total=total, query=query)
@@ -644,7 +644,7 @@ def list_groups(db, *, key: ScimApiKey, query: ScimQuery) -> dict:
         q = q.filter(ScimGroup.external_id == query.value)
 
     total = q.count()
-    rows = (q.order_by(ScimGroup.created_at.asc())
+    rows = (q.order_by(ScimGroup.created_at.asc(), ScimGroup.id.asc())
              .offset(query.offset).limit(query.count).all())
     return list_response([group_to_scim(db, r) for r in rows],
                          total=total, query=query)

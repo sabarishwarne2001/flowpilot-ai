@@ -163,9 +163,20 @@ def _sweep_targets(db: Any, *, workspace_id: Optional[uuid.UUID]) -> list[Docume
         ProcurementCase.invoice_work_item_id.is_not(None),
     )
 
-    statement = select(DocumentRole).where(
-        DocumentRole.role == ROLE_INVOICE,
-        DocumentRole.work_item_id.notin_(decided_invoices),
+    from app.models.organization import Organization, OrganizationStatus
+    from app.models.workspace import Workspace, WorkspaceStatus
+
+    # F-134: nothing in an archived (or suspended) workspace or organization is re-scored.
+    statement = (
+        select(DocumentRole)
+        .join(Workspace, Workspace.id == DocumentRole.workspace_id)
+        .join(Organization, Organization.id == Workspace.organization_id)
+        .where(
+            DocumentRole.role == ROLE_INVOICE,
+            DocumentRole.work_item_id.notin_(decided_invoices),
+            Workspace.status == WorkspaceStatus.ACTIVE,
+            Organization.status == OrganizationStatus.ACTIVE,
+        )
     )
     if workspace_id is not None:
         statement = statement.where(DocumentRole.workspace_id == workspace_id)

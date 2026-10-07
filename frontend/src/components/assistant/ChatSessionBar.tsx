@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -60,6 +61,10 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
   const [docSearch, setDocSearch] = useState("");
   const [newName, setNewName] = useState("");
   const [newBody, setNewBody] = useState("");
+  // The two pickers are popovers over the chat: Escape closes them and focus returns to the
+  // chip that opened them, but Tab is not trapped.
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  useDialogFocus(panelRef, () => setPanel(null), { open: panel !== null, trap: false });
 
   useEffect(() => {
     setPanel(null);
@@ -260,7 +265,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
       </button>
 
       {panel === "scope" && !isDocument && (
-        <div className={PANEL_CLASS} role="dialog" aria-label="Choose documents to search">
+        <div ref={panelRef} className={PANEL_CLASS} role="dialog" aria-label="Choose documents to search">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold">Search which documents?</p>
             <button type="button" onClick={() => setPanel(null)} aria-label="Close" className="rounded p-1 hover:bg-muted">
@@ -327,7 +332,7 @@ const ChatSessionBar: React.FC<ChatSessionBarProps> = ({
       )}
 
       {panel === "templates" && (
-        <div className={PANEL_CLASS} role="dialog" aria-label="Prompt templates">
+        <div ref={panelRef} className={PANEL_CLASS} role="dialog" aria-label="Prompt templates">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold">Prompt templates</p>
             <button type="button" onClick={() => setPanel(null)} aria-label="Close" className="rounded p-1 hover:bg-muted">

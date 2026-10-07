@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, UserPlus } from "lucide-react";
 
@@ -145,10 +146,13 @@ export const GrantWorkspaceAccessModal: React.FC<
   });
 
   const ready = userId.length > 0 && !(role === "ADMIN" && !canGrantAdmin);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, onClose, { busy: grant.isPending });
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="grant-access-title"

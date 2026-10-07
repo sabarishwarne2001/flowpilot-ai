@@ -182,10 +182,10 @@ async def archive_workspace(
 )
 async def restore_workspace(
     db: deps.DbSession,
-    context: deps.WorkspaceCtx,
+    context: deps.TenantContext = Depends(deps.get_archived_workspace_context),
 ) -> Any:
     """
-    Restores an archived workspace.
+    Restores an archived workspace. Organization owners and admins only.
     """
     return workspace_service.restore_workspace(
         db,

@@ -41,7 +41,7 @@ from app.models.organization import (
     OrganizationRole,
 )
 from app.models.user import User
-from app.models.user_session import UserSession
+from app.models.user_session import SessionRevokedReason, UserSession
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.services import api_key_service
 from app.services import organization_service
@@ -211,9 +211,9 @@ def _session_is_revoked(
         return False
 
     row = db.execute(
-        select(UserSession.revoked_at).where(
-            UserSession.id == claims.session_id
-        )
+        select(
+            UserSession.revoked_at, UserSession.revoked_reason, UserSession.family_id
+        ).where(UserSession.id == claims.session_id)
     ).first()
 
     # No row at all means the session was hard-deleted (erasure sweep, or a
@@ -223,7 +223,20 @@ def _session_is_revoked(
     if row is None:
         return True
 
-    return row[0] is not None
+    revoked_at, revoked_reason, family_id = row
+    if revoked_at is None:
+        return False
+
+    # F-126. A session retired only by ROTATION was not revoked by anyone: another tab of
+    # the same sign-in refreshed. Its access token keeps working until it expires, as long
+    # as the sign-in itself is alive. Refusing it made every refresh in one tab cost the
+    # other tab a 401. Sign-out, device revocation and reuse detection end the whole
+    # sign-in (no live session left), so they still refuse it at once.
+    if revoked_reason is SessionRevokedReason.ROTATED:
+        from app.services import session_service
+
+        return not session_service.family_is_live(db, family_id=family_id)
+    return True
 
 
 async def get_current_active_user(
@@ -494,6 +507,71 @@ async def get_workspace_context(
         workspace=workspace,
         workspace_membership=access.workspace_membership,
         effective_workspace_role=access.effective_role,
+    )
+
+
+async def get_archived_workspace_context(
+    workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+) -> TenantContext:
+    """The workspace context WITHOUT the "is it active" check, for restoring it and nothing else.
+
+    F-131. `POST /workspaces/{id}/restore` used get_workspace_context, which refuses an archived
+    workspace, so a restore could never succeed. Access is resolved exactly as for any workspace
+    route, the organization must still be operational, and the restore itself checks the
+    organization role (owner or admin).
+    """
+    workspace = workspace_service.get_workspace_or_raise(db, workspace_id=workspace_id)
+    access = workspace_member_service.resolve_workspace_access(
+        db, workspace=workspace, user_id=current_user.id
+    )
+    if not access.has_access:
+        raise WorkspaceAccessDeniedError("Workspace not found.")
+
+    organization_service.assert_organization_operational(workspace.organization)
+
+    assert access.organization_membership is not None
+    assert access.effective_role is not None
+    return TenantContext(
+        user=current_user,
+        organization=workspace.organization,
+        organization_membership=access.organization_membership,
+        workspace=workspace,
+        workspace_membership=access.workspace_membership,
+        effective_workspace_role=access.effective_role,
+    )
+
+
+async def get_archived_organization_owner_context(
+    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+) -> OrganizationContext:
+    """The organization context WITHOUT the "is it active" check, for its owner to restore it.
+
+    F-132. Archiving was described as reversible, but every organization route refuses an
+    archived organization, so nothing could reverse it. Only an active OWNER membership passes.
+    """
+    organization = organization_service.get_organization_or_raise(
+        db, organization_id=organization_id
+    )
+    membership = crud.get_organization_member(
+        db,
+        organization_id=organization.id,
+        user_id=current_user.id,
+        statuses=ACTIVE_ONLY,
+    )
+    if membership is None:
+        raise OrganizationAccessDeniedError("Organization not found.")
+    if membership.role is not OrganizationRole.OWNER:
+        raise OrganizationPermissionDeniedError(
+            "Only an organization owner can restore the organization."
+        )
+    return OrganizationContext(
+        user=current_user,
+        organization=organization,
+        membership=membership,
     )
 
 

@@ -215,7 +215,7 @@ def list_anomalies(
 
     rows = list(
         db.execute(
-            stmt.order_by(AnomalyFinding.created_at.desc()).limit(limit).offset(offset)
+            stmt.order_by(AnomalyFinding.created_at.desc(), AnomalyFinding.id.desc()).limit(limit).offset(offset)
         ).scalars()
     )
     labels = _labels(db, rows)

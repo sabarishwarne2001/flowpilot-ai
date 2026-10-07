@@ -518,9 +518,25 @@ def _assert_vocabulary_matches_registry() -> None:
 _assert_vocabulary_matches_registry()
 
 
+def _gate_tenant_activity() -> dict[str, Any]:
+    """F-134. Tenant-activity handlers skip a job whose organization or workspace is archived."""
+    from app.workers.tenant_gate import TENANT_ACTIVITY_JOB_TYPES, gated
+
+    unknown = TENANT_ACTIVITY_JOB_TYPES - frozenset(_HANDLERS)
+    if unknown:
+        raise RuntimeError(f"tenant gate names job types with no handler: {sorted(unknown)}")
+    return {
+        job_type: gated(job_type, handler) if job_type in TENANT_ACTIVITY_JOB_TYPES else handler
+        for job_type, handler in _HANDLERS.items()
+    }
+
+
+_REGISTERED = _gate_tenant_activity()
+
+
 def register_all(*, replace: bool = False) -> list[str]:
     registered: list[str] = []
-    for job_type, handler in _HANDLERS.items():
+    for job_type, handler in _REGISTERED.items():
         existing = job_service.JOB_HANDLERS.get(job_type)
         if existing is handler:
             continue

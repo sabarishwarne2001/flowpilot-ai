@@ -75,7 +75,7 @@ def list_notifications(
         statement = statement.where(Notification.notification_type == notification_type)
     statement = (
         statement
-        .order_by(Notification.created_at.desc())
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
         .offset(skip)
         .limit(limit)
     )

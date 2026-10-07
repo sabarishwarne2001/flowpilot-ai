@@ -381,8 +381,7 @@ export const OrganizationApiKeys: React.FC = () => {
 
         {revealed && (
           <div
-            role="dialog"
-            aria-modal="true"
+            role="region"
             aria-label="New API key"
             className="rounded-lg border-2 border-primary bg-card p-4"
           >

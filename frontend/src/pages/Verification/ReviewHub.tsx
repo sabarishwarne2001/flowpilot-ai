@@ -179,6 +179,8 @@ export const ReviewHub: React.FC = () => {
   const [tag, setTag] = useState("");
   const [minAge, setMinAge] = useState<number | undefined>(undefined);
   const [page, setPage] = useState(1);
+  // Another workspace, or a view reached by back/forward rather than a tab click, starts on page 1.
+  useEffect(() => setPage(1), [workspaceId, tab]);
   const [cursor, setCursor] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
@@ -531,6 +533,16 @@ export const ReviewHub: React.FC = () => {
   const onlyKind = selectedKinds.size === 1 ? selectedItems[0]?.kind : undefined;
   const counts = queue?.counts_by_kind ?? {};
   const totalPages = queue ? Math.max(1, Math.ceil(queue.total / queue.page_size)) : 1;
+
+  // F-127. A page emptied by resolutions (here, in bulk, or by another reviewer) steps back to the
+  // last page that still exists. It used to stay put: an empty list, and once everything fitted on
+  // one page the pager itself disappeared, leaving no way back.
+  const servedPage = queue?.page;
+  useEffect(() => {
+    if (servedPage !== undefined && servedPage === page && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [servedPage, page, totalPages]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">

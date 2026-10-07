@@ -352,9 +352,14 @@ def ensure_within_limits(
     requested_cost = int(cost_micros or 0)
 
     checks: list[EffectiveLimit] = []
-    checks.extend(
-        effective_limits(db, organization_id=organization_id, limit_key=event_type)
-    )
+    # A non-billable meter (embedding.backfill_token, document.processed, api.request) cannot
+    # carry a tenant limit: set_limit refuses one and no tier or platform default names it. So
+    # there is nothing to check it against. Asking effective_limits() anyway raised
+    # SpendLimitMisconfiguredError and crashed every knowledge.reindex job.
+    if is_limit_key(event_type):
+        checks.extend(
+            effective_limits(db, organization_id=organization_id, limit_key=event_type)
+        )
     if requested_cost > 0 or USAGE_EVENT_TYPES[event_type].billable:
         checks.extend(
             effective_limits(
