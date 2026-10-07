@@ -2079,8 +2079,9 @@ boot until the endpoint's secret is filled in (verified by rendering the file wi
 `docker compose config` and building `Settings` from the result).
 
 ## F-126 — A concurrent refresh revokes the session the other caller just received (P3, confirmed, open)
-**Seen** once in the final browser run of this branch (13-automation-review "an upload fires the
-'Document uploaded' rule…": a 401 on `/me/context`); it passed in the two full runs before it.
+**Seen** once in a full browser run of this branch (13-automation-review "an upload fires the
+'Document uploaded' rule…": a 401 on `/me/context`); it passed in every other full run (the final
+one included) and in three repeats of its file.
 The test opens a page and reloads it at once, so the first page's `/auth/refresh` is
 cut off by the browser while the server is still processing it. **Evidence** (trace + API log,
 2026-10-07 07:20:15): the new page's refresh rotated `e5ba…` → `0097…` and the page received

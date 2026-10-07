@@ -19,7 +19,12 @@ The final release (PR #7, GO) is merged into `main`; this branch builds on it.
   invitations) with a product showcase; Linear-style shell (collapsible sidebar, portal workspace
   switcher, profile menu, glass top bar with Ctrl+K); page polish (type weights, unified cards and
   buttons, Overview, Documents, the document workbench, settings, dialogs, palette, selects).
-- Verification in progress: browser suite and backend suite on the final build (see the PR).
+- **Verified on the final build:** backend suite **3,309 passed, 0 failed, 9 skipped** (3,298 + the 11
+  F-123 tests); browser suite **290 passed, 0 failed, 1 skipped** (by design; fresh database,
+  production CSP enforced, bundle built from this branch); `npm run build`, both `tsc` projects, lint,
+  `check-no-sourcemaps --dist` and the encoding check clean. Two test-side issues recorded, neither
+  caused by this branch: F-126 (pre-existing session race, seen once) and F-127 (a review-queue test
+  that depends on how many runs the database has seen).
 
 ## What is done
 - **Phases 0 to 5:** `00-map.md` … `05-production-readiness.md` (PRs #1 to #6).
@@ -52,7 +57,7 @@ per 5 minutes; **N-019** viewers do not see Workflows / Run history / Review que
 seven capabilities built. Details: NEEDS-OWNER.md, "Final release".
 
 ## Next action (exact)
-1. Owner: review and merge the PR (screenshots in it).
+1. Owner: review and merge the PR (before/after screenshots were sent with the session summary).
 2. Owner decisions N-026 (gateway and the three plan price ids), N-027 (email provider), N-028 (domain
    and admin mailbox), N-029 (sign-in page claims).
 3. Stripe Dashboard (test mode): add the webhook endpoint
