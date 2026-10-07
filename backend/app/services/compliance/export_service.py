@@ -8,7 +8,7 @@ import logging
 import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, BinaryIO, Optional
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -401,10 +401,7 @@ def generate_export(
     return export
 
 
-def download_url_for(
-    organization: Organization,
-    export: ComplianceExport,
-) -> str:
+def _assert_servable(export: ComplianceExport) -> None:
     if not export.is_downloadable:
         raise ExportNotReadyError(
             f"Export {export.id} is {export.status} and has no archive to serve."
@@ -414,15 +411,41 @@ def download_url_for(
     ):
         raise ExportNotReadyError(f"Export {export.id} has expired.")
 
+
+def presigned_url_or_none(
+    organization: Organization,
+    export: ComplianceExport,
+) -> Optional[str]:
+    """A short-lived URL straight to the archive, or None when the storage cannot presign one.
+
+    F-138. Local-disk storage cannot presign, and the download used to fail there with 409;
+    the caller then streams the archive through the API instead (open_archive).
+    """
+    _assert_servable(export)
     driver = residency_service.driver_for_region(export.residency_region)
     url = driver.presigned_get_url(
         export.storage_key or "", expires_in=DOWNLOAD_URL_TTL_SECONDS
     )
+    return url or None
+
+
+def download_url_for(
+    organization: Organization,
+    export: ComplianceExport,
+) -> str:
+    url = presigned_url_or_none(organization, export)
     if not url:
         raise ExportNotReadyError(
             "The storage backend for this region cannot mint presigned URLs."
         )
     return url
+
+
+def open_archive(export: ComplianceExport) -> BinaryIO:
+    """The archive's bytes as a stream, for storage that cannot presign (F-138)."""
+    _assert_servable(export)
+    driver = residency_service.driver_for_region(export.residency_region)
+    return driver.stream(export.storage_key or "")
 
 
 def list_exports(

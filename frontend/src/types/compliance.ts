@@ -99,6 +99,8 @@ export interface ComplianceExportDownload {
   readonly export_id: string;
   readonly download_url: string;
   readonly expires_in_seconds: number;
+  /** STREAM: the storage cannot presign; fetch the archive through the API (F-138). */
+  readonly delivery?: "PRESIGNED" | "STREAM";
 }
 
 export interface ComplianceOverview {

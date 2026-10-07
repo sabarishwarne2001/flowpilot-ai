@@ -305,6 +305,8 @@ export const COMPLIANCE_ENDPOINTS = {
     `/organizations/${org(organizationId)}/compliance/exports`,
   exportDownload: (organizationId: string, exportId: string): string =>
     `/organizations/${org(organizationId)}/compliance/exports/${seg(exportId)}/download`,
+  exportArchive: (organizationId: string, exportId: string): string =>
+    `/organizations/${org(organizationId)}/compliance/exports/${seg(exportId)}/archive`,
 } as const;
 
 /**

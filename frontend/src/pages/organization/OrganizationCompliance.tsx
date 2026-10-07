@@ -16,6 +16,7 @@ import {
 import {
   createComplianceExport,
   createErasure,
+  downloadComplianceExportArchive,
   getComplianceExportDownloadUrl,
   getComplianceOverview,
   listComplianceExports,
@@ -362,7 +363,11 @@ const ExportsCard: React.FC<{
         organizationId,
         record.id,
       );
-      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      if (result.delivery === "STREAM") {
+        await downloadComplianceExportArchive(organizationId, record.id);
+      } else {
+        window.open(result.download_url, "_blank", "noopener,noreferrer");
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {

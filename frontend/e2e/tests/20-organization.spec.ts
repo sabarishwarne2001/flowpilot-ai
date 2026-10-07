@@ -191,6 +191,16 @@ test.describe("Data governance and compliance", () => {
     await expect(page.locator("main")).toContainText(/queued|generating|ready|download|requested/i, { timeout: 30_000 });
   });
 
+  test("download a generated bundle (F-138: also where storage cannot presign a URL)", async ({ page }) => {
+    await page.goto(org("C", "compliance"));
+    await page.getByRole("button", { name: "Generate bundle" }).click();
+    const download = page.waitForEvent("download", { timeout: 30_000 });
+    await page.getByRole("button", { name: "Download", exact: true }).first().click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/\.zip$/);
+    await expectHealthyPage(page);
+  });
+
   test("right to be forgotten: preview the impact of erasing a member", async ({ page }) => {
     const member = await loginAs("C.member");
     await page.goto(org("C", "compliance"));
