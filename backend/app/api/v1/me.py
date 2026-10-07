@@ -132,13 +132,14 @@ async def get_my_context(
     # F-133. Never an archived organization: its workspaces refuse every request, so landing
     # there showed "no access" to someone with a working organization. Archived ones stay in
     # the list above so the picker can show them as archived.
-    usable = [
-        summary
-        for summary in summaries
-        if summary.organization_status is OrganizationStatus.ACTIVE
-    ]
-    preferred = next((summary for summary in usable if summary.workspaces), None)
-    first = preferred or (usable[0] if usable else (summaries[0] if summaries else None))
+    first = next(
+        (
+            summary
+            for summary in summaries
+            if summary.organization_status is OrganizationStatus.ACTIVE
+        ),
+        summaries[0] if summaries else None,
+    )
     default_organization_id = first.organization_id if first else None
     default_workspace_id = first.workspaces[0].id if first and first.workspaces else None
 
