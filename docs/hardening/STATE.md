@@ -1,14 +1,25 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-06 (final commercial release)_
+_Last updated: 2026-10-07 (production configuration & UI elevation)_
 
 ## Current phase
-**Final release — COMPLETE. Verdict: GO for production deployment** (`05-release-readiness.md`).
-Branch `hardening/final-commercial-release` (mirrored to the session branch
-`claude/vigilant-heisenberg-ytagy4`). PR: https://github.com/sabarishwarne2001/flowpilot-ai/pull/7.
-Run under founder authority: every open owner decision was taken and is recorded in
-NEEDS-OWNER.md ("Final release"). The campaign's engineering work is done; what remains is the
-first deployment (RUNBOOK §9) and the post-launch list in `05-release-readiness.md` §6.
+**Production configuration & UI elevation — COMPLETE, in review.** Branch
+`hardening/production-config-and-ui-elevation` (session branch `claude/sweet-bell-ahiem4`); PR: to be opened from this branch.
+The final release (PR #7, GO) is merged into `main`; this branch builds on it.
+
+- **Track 1 (configuration).** Every key the app, the compose files and the scripts read was checked
+  against the four env files. Fixed F-123 (SSO advertised `http://localhost:8000` on every deployment;
+  the settings that should fix it were ignored). Templates aligned (R2 = `STORAGE_BACKEND=r2`, model
+  names and `PUBLIC_API_URL` passed to the containers, Vite port, reranker token, Enterprise price id).
+  The owner's real `.env` / `.env.production` were finalized outside the repository and the production
+  one was verified with `docker compose config` plus the app's start-up guard: its only refusal is the
+  Stripe webhook secret (F-125). New owner items N-026 to N-029.
+- **Track 2 (UI).** Design tokens (layered dark zinc, cool light), bundled Inter/JetBrains Mono,
+  tactile shared primitives; split-screen auth (sign-in with steps, sign-up, reset, verification,
+  invitations) with a product showcase; Linear-style shell (collapsible sidebar, portal workspace
+  switcher, profile menu, glass top bar with Ctrl+K); page polish (type weights, unified cards and
+  buttons, Overview, Documents, the document workbench, settings, dialogs, palette, selects).
+- Verification in progress: browser suite and backend suite on the final build (see the PR).
 
 ## What is done
 - **Phases 0 to 5:** `00-map.md` … `05-production-readiness.md` (PRs #1 to #6).
@@ -41,15 +52,19 @@ per 5 minutes; **N-019** viewers do not see Workflows / Run history / Review que
 seven capabilities built. Details: NEEDS-OWNER.md, "Final release".
 
 ## Next action (exact)
-1. Owner: review and merge the PR.
-2. On the VPS, follow `docs/RUNBOOK.md` §9 "First deploy": build the four images, fill
-   `.env.production` from the template (new this release: `REDIS_PASSWORD`; optional
-   `LOG_FORMAT=json`, `SESSION_*` for other session limits), set `HEARTBEAT_UUID_UPTIME` in the
-   installed cron file (`deploy/cron.d`, RUNBOOK 9.6), `docker compose ... config`,
-   migrate, start, run the smoke checks, open the browser console once (CSP check), pin the image
-   digests (step 11).
-3. Turn on two-factor sign-in for your own account (Settings → Profile).
-4. Post-launch list: `05-release-readiness.md` §6.
+1. Owner: review and merge the PR (screenshots in it).
+2. Owner decisions N-026 (gateway and the three plan price ids), N-027 (email provider), N-028 (domain
+   and admin mailbox), N-029 (sign-in page claims).
+3. Stripe Dashboard (test mode): add the webhook endpoint
+   `https://app.flowpilot.ai/api/v1/billing/webhooks/stripe` and put its signing secret in
+   `.env.production` (F-125); the app refuses to start until then.
+4. Test the Gemini `AQ.` key from your own machine (CHANGES note); replace it with an AI Studio key if
+   it is refused.
+5. Before the first deploy, regenerate the server secrets on the server and roll the R2 token, Gmail
+   app password and Groq keys (they were pasted into a chat).
+6. Then the first deploy as before: `docs/RUNBOOK.md` §9 (sweepers.env now carries
+   `HEARTBEAT_UUID_UPTIME`).
+7. Before the first customer configures SCIM: F-124 (SCIM token pepper).
 
 How to bring the test stack up in a fresh sandbox: `frontend/e2e/scripts/start-db.sh` (pgvector
 0.8.0 built from source: `apt-get install postgresql-server-dev-16`, then `make && make install` in a
