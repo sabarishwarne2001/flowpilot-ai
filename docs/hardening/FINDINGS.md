@@ -138,6 +138,7 @@ How to read this file:
 | F-123 | P2 | **fixed** (production config & UI, `c1068be`) | SSO / config | SAML and OIDC advertised `http://localhost:8000` and an empty redirect URI on every deployment; the settings meant to fix it were ignored |
 | F-124 | P3 | **unverified** (code reading) | SCIM | The SCIM token HMAC falls back to `str(JWT_SECRET_KEY)`, which for a `SecretStr` is the constant `**********`, not the secret |
 | F-125 | P2 | **open, owner action** (production config & UI) | Billing config | The production webhook secret was the `stripe listen` CLI secret, so every Stripe event to the server would be refused |
+| F-126 | P3 | **confirmed, open** (pre-existing; found by the final browser run) | Sessions | Two refreshes of one token within the reuse grace revoke the session the first one just handed out, so that page's next request is refused once |
 
 ---
 
@@ -2076,6 +2077,23 @@ signature verification and no checkout, renewal or failed payment would ever be 
 finalized file leaves `STRIPE_WEBHOOK_SECRETS` blank on purpose: the start-up guard then refuses to
 boot until the endpoint's secret is filled in (verified by rendering the file with
 `docker compose config` and building `Settings` from the result).
+
+## F-126 — A concurrent refresh revokes the session the other caller just received (P3, confirmed, open)
+**Seen** once in the final browser run of this branch (13-automation-review "an upload fires the
+'Document uploaded' rule…": a 401 on `/me/context`); it passed in the two full runs before it.
+The test opens a page and reloads it at once, so the first page's `/auth/refresh` is
+cut off by the browser while the server is still processing it. **Evidence** (trace + API log,
+2026-10-07 07:20:15): the new page's refresh rotated `e5ba…` → `0097…` and the page received
+`0097`'s access token; the cut-off refresh then presented `e5ba…` inside the 10 s grace, and
+`_handle_rotated_token_replay` rotated the chain tip `0097…` → `bdd4…`, which revokes `0097`
+(`SESSION_CONCURRENT_REFRESH`); the page's next request carried `0097`'s token and was refused
+(`AUTH_REJECTED … reason=session_revoked`); the app refreshed again and recovered. Real users meet
+the same race with two tabs refreshing together, or a reload during a refresh: one refused request
+and a console error, then recovery. **Not introduced here**: `session_service.py`, `deps.py`,
+`auth.py` and the client's refresh code are unchanged on this branch. **Not fixed here**: the
+remedy is a session-design choice (let an access token of a session revoked only by ROTATION live to
+its expiry, or have the grace path branch a sibling session instead of rotating the tip), each with
+a security trade-off for revoked devices, so it needs its own failing test and review.
 
 ## Built in this release (owner decisions, not defects)
 - **Two-factor sign-in** (N-017, `df65332`, `c47a990`): authenticator app (TOTP), ten recovery
