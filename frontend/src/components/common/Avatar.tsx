@@ -52,6 +52,7 @@
 import React from "react";
 
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
 import { useAvatarVersion } from "@/store/useAvatarVersionStore";
 
@@ -175,6 +176,8 @@ export const Avatar: React.FC<AvatarProps> = ({
     : null;
 
   const src = useAuthenticatedImage(path);
+  // F-143. Bytes the browser cannot decode fall back to initials, not a broken icon.
+  const image = useImageFallback(src);
 
   const initials = initialsFor(displayName, email);
   const label = displayName ?? email ?? "User";
@@ -205,12 +208,13 @@ export const Avatar: React.FC<AvatarProps> = ({
       aria-label={`${label} avatar`}
       title={label}
     >
-      {src ? (
+      {src && !image.failed ? (
         <img
           src={src}
           alt=""
           aria-hidden="true"
           className="h-full w-full object-cover"
+          onError={image.onError}
         />
       ) : (
         <span aria-hidden="true">{initials}</span>

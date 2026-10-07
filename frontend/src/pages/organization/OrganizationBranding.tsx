@@ -35,6 +35,7 @@ import {
 import { brandingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 import { BRANDING_ENDPOINTS } from "@/services/api/endpoints";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
@@ -336,6 +337,7 @@ const ThemePreview: React.FC<{
   readonly brandName: string;
   readonly logoUrl: string | null;
 }> = ({ draft, brandName, logoUrl }) => {
+  const logoImage = useImageFallback(logoUrl);
   const background = isValidHexColor(draft.background_color)
     ? draft.background_color
     : "#ffffff";
@@ -362,12 +364,13 @@ const ThemePreview: React.FC<{
       style={{ backgroundColor: background, color: foreground }}
     >
       <div className="flex items-center gap-3">
-        {logoUrl ? (
+        {logoUrl && !logoImage.failed ? (
           <img
             src={logoUrl}
             alt=""
             className="h-8 w-auto"
             style={{ maxWidth: 160 }}
+            onError={logoImage.onError}
           />
         ) : null}
         <span className="text-lg font-semibold">

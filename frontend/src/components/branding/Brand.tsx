@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { Zap } from "lucide-react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { resolveApiAssetUrl } from "@/services/api/client";
 
@@ -101,7 +102,6 @@ export const Brand: React.FC<BrandProps> = ({
   className = "",
 }) => {
   const tenant = useOptionalTenant();
-  const [imgError, setImgError] = useState(false);
 
   const manifest = usePublicBrandingManifest({ enabled: tenant === null });
   const publicBrand =
@@ -120,6 +120,8 @@ export const Brand: React.FC<BrandProps> = ({
   // unauthenticated input, and the helper refuses any URL off the API origin.
   const publicLogo = resolveApiAssetUrl(publicBrand?.logo_url);
   const logoSrc = authenticatedLogo ?? publicLogo;
+  // F-143. Remembered per source, so a newly uploaded logo is tried again.
+  const { failed: imgError, onError: onLogoError } = useImageFallback(logoSrc);
 
   const initials = (workspaceName || companyName || "FP")
     .trim()
@@ -163,7 +165,7 @@ export const Brand: React.FC<BrandProps> = ({
             src={logoSrc}
             alt={publicBrand?.brand_name ?? companyName}
             className="h-full w-full object-cover"
-            onError={() => setImgError(true)}
+            onError={onLogoError}
           />
         ) : isAuthPage && !publicBrand ? (
           <div className="flex h-full w-full items-center justify-center bg-primary">
