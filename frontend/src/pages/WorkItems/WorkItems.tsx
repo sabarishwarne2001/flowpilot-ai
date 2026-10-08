@@ -444,6 +444,15 @@ export const WorkItems: React.FC = () => {
                         <span className="truncate font-medium text-foreground" title={item.original_filename}>
                           {item.original_filename}
                         </span>
+                        {item.duplicate_of && (
+                          <Link
+                            to={getDetailsPath(item.duplicate_of.id)}
+                            title={`Same file as ${item.duplicate_of.original_filename}`}
+                            className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 hover:border-amber-500/60 dark:text-amber-300"
+                          >
+                            Duplicate
+                          </Link>
+                        )}
                       </div>
                     </td>
                     <td className="truncate px-4 py-3 text-xs text-muted-foreground" title={formatTimestamp(item.created_at)}>

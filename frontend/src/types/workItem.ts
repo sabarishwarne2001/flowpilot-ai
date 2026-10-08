@@ -44,6 +44,12 @@ export interface ExtractedEntities {
   readonly [key: string]: readonly string[] | undefined;
 }
 
+/** Another document, named: enough to link to it. */
+export interface WorkItemReference {
+  readonly id: string;
+  readonly original_filename: string;
+}
+
 export interface WorkItemResponse {
   readonly id: string;
   readonly original_filename: string;
@@ -55,6 +61,8 @@ export interface WorkItemResponse {
   readonly user_id: string;
   readonly created_at: string;
   readonly updated_at: string;
+  /** F-158: the earlier document in this workspace with the same file, when this upload is a copy. */
+  readonly duplicate_of?: WorkItemReference | null;
 }
 
 /**

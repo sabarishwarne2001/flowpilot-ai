@@ -45,6 +45,11 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
             unique=True,
             postgresql_where=text("uploaded_file_id IS NOT NULL"),
         ),
+        Index(
+            "ix_work_items_duplicate_of",
+            "duplicate_of_work_item_id",
+            postgresql_where=text("duplicate_of_work_item_id IS NOT NULL"),
+        ),
     )
 
     original_filename: Mapped[str] = mapped_column(
@@ -134,6 +139,18 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     # --- ARCH43-S1:lineage. A child of a packet split names its parent and
     # the parent's pages it came from; the composite FK onto (id, workspace_id)
     # lives in arch43_step1_case_intelligence.
+    # --- F-158: the earliest document in this workspace with the same file
+    # (SHA-256), recorded at upload while "Duplicate detection" is on.
+    duplicate_of_work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "work_items.id",
+            ondelete="SET NULL",
+            name="fk_work_items_duplicate_of_work_item_id_work_items",
+        ),
+        nullable=True,
+    )
+
     parent_work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )
@@ -159,6 +176,12 @@ class WorkItem(Base, UUIDMixin, TimestampMixin):
     workspace: Mapped["Workspace"] = relationship("Workspace")
     created_by: Mapped[Union["User", None]] = relationship("User")
     uploaded_file: Mapped[Optional["UploadedFile"]] = relationship("UploadedFile")
+    duplicate_of: Mapped[Optional["WorkItem"]] = relationship(
+        "WorkItem",
+        remote_side="WorkItem.id",
+        foreign_keys=[duplicate_of_work_item_id],
+        viewonly=True,
+    )
 
     # Child relationships
     automation_logs: Mapped[list["AutomationLog"]] = relationship(

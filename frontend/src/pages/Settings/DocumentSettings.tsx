@@ -273,7 +273,7 @@ export const DocumentSettings: React.FC = () => {
             <div className="flex items-center justify-between rounded-lg border border-border p-4">
               <div>
                 <h3 className="font-medium">{renderLabel("duplicate_detection", "Duplicate Detection")}</h3>
-                <p className="text-sm text-muted-foreground mt-1">Detect and flag potential duplicate documents during upload.</p>
+                <p className="text-sm text-muted-foreground mt-1">Flag an upload whose file is identical to a document already in this workspace.</p>
               </div>
               <input
                 type="checkbox"

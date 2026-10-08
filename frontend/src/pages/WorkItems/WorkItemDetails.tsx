@@ -312,6 +312,21 @@ export const WorkItemDetails: React.FC = () => {
             {workItem.status}
           </span>
         </div>
+        {workItem.duplicate_of && (
+          <p
+            role="note"
+            className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[13px] leading-relaxed text-amber-800 dark:text-amber-200"
+          >
+            <span className="font-semibold">Duplicate upload.</span> This file is identical to{" "}
+            <Link
+              to={`${getBackPath()}/${workItem.duplicate_of.id}`}
+              className="font-medium underline underline-offset-2 hover:no-underline"
+            >
+              {workItem.duplicate_of.original_filename}
+            </Link>
+            , already in this workspace. Delete this copy if it was uploaded by mistake.
+          </p>
+        )}
         {/* HARDENING-T1:D4. Identifiers belong in a support drawer, not the
             primary card. The storage key is no longer sent at all. */}
             <details className="group mt-4 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
