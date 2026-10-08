@@ -146,7 +146,10 @@ export const OrganizationLayout: React.FC = () => {
             with the portal button, everybody else gets the summary
             with no amounts and no actions they cannot take. */}
         {canSeeBilling ? (
-          <DunningBanner organizationId={organizationId} canManageBilling />
+          <DunningBanner
+            organizationId={organizationId}
+            canManageBilling={String(organizationRole).toUpperCase() === "OWNER"}
+          />
         ) : (
           <MemberAccessNotice organizationId={organizationId} />
         )}

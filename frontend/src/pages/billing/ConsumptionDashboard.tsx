@@ -8,7 +8,6 @@ import { meterLabel, unitFor } from "@/types/planEntitlements";
 
 interface Props {
   readonly organizationId: string;
-  readonly canManageBilling: boolean;
 }
 
 const MICROS = 1_000_000;
@@ -16,7 +15,6 @@ const money = (micros: number) => `$${(micros / MICROS).toFixed(2)}`;
 
 export const ConsumptionDashboard: React.FC<Props> = ({
   organizationId,
-  canManageBilling,
 }) => {
   const [days, setDays] = useState(30);
 
@@ -34,7 +32,7 @@ export const ConsumptionDashboard: React.FC<Props> = ({
         from: rangeStart.toISOString(),
         to: rangeEnd.toISOString(),
       }),
-    enabled: Boolean(organizationId) && canManageBilling,
+    enabled: Boolean(organizationId),
     staleTime: 5 * 60_000,
   });
 
@@ -66,7 +64,6 @@ export const ConsumptionDashboard: React.FC<Props> = ({
     grandTotal > 0 ? Math.round(((grandTotal - estimated) / grandTotal) * 100) : 100;
   const peak = byEventType[0]?.[1].cost ?? 1;
 
-  if (!canManageBilling) {return null;}
 
   if (isLoading) {
     return (

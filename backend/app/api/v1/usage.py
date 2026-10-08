@@ -11,7 +11,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import OrganizationContext, RequireOrgAdmin, RequireWorkspaceViewer, get_db, get_read_db
+from app.api.deps import (
+    OrganizationContext,
+    RequireOrgAdmin,
+    RequireOrgUsageReader,
+    RequireWorkspaceViewer,
+    get_db,
+    get_read_db,
+)
 from app.core.principal import Principal, get_current_principal
 from app.schemas.usage import (
     SpendLimitResponse,
@@ -90,7 +97,7 @@ def get_usage_summary(
         description="YYYY-MM, YYYY-MM-DD, or an ISO-8601 instant. Defaults to now.",
     ),
     db: Session = Depends(get_read_db),
-    context: OrganizationContext = Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgUsageReader),
 ) -> UsageSummaryResponse:
     return usage_metrics_service.summary(
         db,
@@ -111,7 +118,7 @@ def get_usage_series(
     range_from: datetime = Query(..., alias="from"),
     range_to: Optional[datetime] = Query(None, alias="to"),
     db: Session = Depends(get_read_db),
-    context: OrganizationContext = Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgUsageReader),
 ) -> UsageSeriesResponse:
     since = _require(range_from, name="from")
     until = _require(range_to, name="to") if range_to else None
@@ -147,7 +154,7 @@ def get_usage_series(
 def get_usage_limits(
     organization_id: uuid.UUID,
     db: Session = Depends(get_read_db),
-    context: OrganizationContext = Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgUsageReader),
 ) -> UsageLimitsResponse:
     moment = datetime.now(timezone.utc)
     tier = quota_service.resolve_tier(
@@ -198,7 +205,7 @@ def list_usage_limits(
         False,
         description="Include superseded rows.",
     ),
-    context: OrganizationContext = Depends(RequireOrgAdmin),
+    context: OrganizationContext = Depends(RequireOrgUsageReader),
     db: Session = Depends(get_read_db),
 ) -> list[SpendLimitResponse]:
     if context.organization_id != organization_id:

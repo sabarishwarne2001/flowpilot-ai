@@ -1,18 +1,20 @@
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Info, Loader2, ShieldAlert } from "lucide-react";
 
-import { getUsageLimits, setSpendLimit } from "@/services/api/billing";
+import { getUsageLimits, listSpendLimits, setSpendLimit } from "@/services/api/billing";
 import { usageKeys } from "@/services/api/queryKeys";
 import { SPEND_LIMIT_KEYS } from "@/types/usage";
-import type { SpendLimit, SpendLimitPeriod } from "@/types/usage";
+import type { SpendLimitPeriod } from "@/types/usage";
 import type { UsageLimit } from "@/types/billing";
 import { errorMessage } from "@/services/api/errors";
 import { meterLabel } from "@/types/planEntitlements";
 
 interface Props {
   readonly organizationId: string;
-  readonly canManageBilling: boolean;
+  /** F-192: OWNER and ADMIN set limits (the server's rule); BILLING reads them. */
+  readonly canSetLimits: boolean;
 }
 
 
@@ -24,8 +26,9 @@ function detailOf(error: unknown, fallback: string): string {
 
 export const SpendLimitForm: React.FC<Props> = ({
   organizationId,
-  canManageBilling,
+  canSetLimits,
 }) => {
+  const queryClient = useQueryClient();
   const [limitKey, setLimitKey] = useState<string>("*");
   const [period, setPeriod] = useState<SpendLimitPeriod>("MONTH");
   const [maxQuantity, setMaxQuantity] = useState("");
@@ -34,7 +37,15 @@ export const SpendLimitForm: React.FC<Props> = ({
   const [note, setNote] = useState("");
 
   const [error, setError] = useState<string | null>(null);
-  const [sessionLimits, setSessionLimits] = useState<SpendLimit[]>([]);
+
+  // F-193. The limits this organization set, from the server: the page used to keep only the
+  // ones saved in this session and said "Configured limits can't be listed back yet".
+  const { data: configured } = useQuery({
+    queryKey: usageKeys.spendLimits(organizationId),
+    queryFn: () => listSpendLimits(organizationId),
+    enabled: Boolean(organizationId),
+    staleTime: 60_000,
+  });
 
   const { data: effective } = useQuery({
     queryKey: usageKeys.limits(organizationId),
@@ -70,19 +81,13 @@ export const SpendLimitForm: React.FC<Props> = ({
         hard_stop: hardStop,
         note: note.trim() || null,
       }),
-    onSuccess: (limit) => {
+    onSuccess: async () => {
       setError(null);
-      setSessionLimits((current) => [
-        limit,
-        ...current.filter(
-          (existing) =>
-            !(existing.limit_key === limit.limit_key &&
-              existing.period === limit.period),
-        ),
-      ]);
       setMaxQuantity("");
       setMaxCost("");
       setNote("");
+      toast.success("Spend limit saved.");
+      await queryClient.invalidateQueries({ queryKey: usageKeys.all(organizationId) });
     },
     onError: (err) =>
       setError(
@@ -90,7 +95,7 @@ export const SpendLimitForm: React.FC<Props> = ({
       ),
   });
 
-  if (!canManageBilling) {return null;}
+  const inForce = (configured ?? []).filter((limit) => limit.is_active);
 
   return (
     <section className="rounded-lg border border-border bg-card">
@@ -105,8 +110,9 @@ export const SpendLimitForm: React.FC<Props> = ({
       <div className="space-y-4 p-4">
         <p className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-          Saving replaces any existing limit for the same measure and period.
-          Configured limits can&apos;t be listed back yet, so note what you set.
+          {canSetLimits
+            ? "Saving replaces any limit you set for the same measure and period."
+            : "Only an organization owner or administrator can change spend limits."}
         </p>
 
         {error && (
@@ -119,6 +125,8 @@ export const SpendLimitForm: React.FC<Props> = ({
           </p>
         )}
 
+        {canSetLimits ? (
+          <>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="limit-key" className="text-sm font-medium text-foreground">
@@ -139,10 +147,15 @@ export const SpendLimitForm: React.FC<Props> = ({
             {currentEffective && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Currently in force:{" "}
-                {currentEffective.max_quantity === null
-                  ? "unlimited"
-                  : Number(currentEffective.max_quantity).toLocaleString()}
-                {" — includes your plan's default, which this would override."}
+                {currentEffective.max_quantity !== null
+                  ? `${Number(currentEffective.max_quantity).toLocaleString()} per ${currentEffective.period.toLowerCase()}`
+                  : currentEffective.max_cost_micros !== null
+                    ? `$${(currentEffective.max_cost_micros / MICROS_PER_UNIT).toFixed(2)} per ${currentEffective.period.toLowerCase()}`
+                    : "no ceiling"}
+                {currentEffective.hard_stop ? " (work stops at it)" : ""}
+                {currentEffective.source === "PLAN" || currentEffective.quota_tier_key
+                  ? " — your plan's default; a limit you set here overrides it."
+                  : " — a limit you set."}
               </p>
             )}
           </div>
@@ -266,21 +279,27 @@ export const SpendLimitForm: React.FC<Props> = ({
             </span>
           )}
         </div>
+          </>
+        ) : null}
 
-        {sessionLimits.length > 0 && (
-          <div className="border-t border-border pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Set in this session
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Limits you set
+          </p>
+          {inForce.length === 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              None. Your plan&apos;s defaults apply (listed under Limits above).
             </p>
-            <ul className="mt-1.5 space-y-1">
-              {sessionLimits.map((limit) => (
+          ) : (
+            <ul className="mt-1.5 space-y-1" aria-label="Limits you set">
+              {inForce.map((limit) => (
                 <li key={limit.id} className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
                     {meterLabel(limit.limit_key)}
                   </span>{" "}
                   · {limit.period === "DAY" ? "per day" : "per month"}
                   {limit.max_quantity !== null &&
-                    ` · max ${Number(limit.max_quantity).toLocaleString()}`}
+                    ` · max ${Number(limit.max_quantity).toLocaleString("en-US")}`}
                   {limit.max_cost_micros !== null &&
                     ` · max $${(limit.max_cost_micros / MICROS_PER_UNIT).toFixed(2)}`}
                   {limit.hard_stop ? " · stops work" : " · bills overage"}
@@ -288,8 +307,8 @@ export const SpendLimitForm: React.FC<Props> = ({
                 </li>
               ))}
             </ul>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </section>
   );

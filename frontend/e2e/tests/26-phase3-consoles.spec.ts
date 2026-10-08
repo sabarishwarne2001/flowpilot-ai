@@ -162,7 +162,7 @@ test.describe("Billing speaks in the customer's words (F-187)", () => {
 
   test("limits and the usage breakdown name each meter, not its internal key", async ({ page }) => {
     await page.goto(org("C", "billing"));
-    await expect(page.getByRole("heading", { name: "Limits" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Limits", exact: true })).toBeVisible();
     const main = page.locator("main");
     // Before the fix: "*", "llm.input_token", "ocr.page", "Overage: allow_and_bill".
     for (const key of ["llm.input_token", "llm.output_token", "embedding.token", "ocr.page", "storage.gb_month"]) {
@@ -189,6 +189,51 @@ test.describe("Archiving an organization says how to undo it (F-191)", () => {
     await zone.getByRole("button", { name: "Archive organization" }).click();
     await expect(zone.getByRole("button", { name: /permanently/i })).toHaveCount(0);
     await zone.getByRole("button", { name: "Cancel" }).click();
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("The Billing role on the Billing page (F-192)", () => {
+  test.use({ user: "A.billing" });
+
+  test("sees usage and limits, and is not offered what only the owner may change", async ({ page }) => {
+    // Before the fix: three 403s (usage summary, series, limits) failed this test under the
+    // strict fixture, "Manage payment method" and "Save limit" were offered and refused.
+    await page.goto(org("A", "billing"));
+    await expect(page.getByRole("heading", { name: "Limits", exact: true })).toBeVisible();
+    await expect(page.locator("main")).toContainText("AI tokens in");
+    await settle(page);
+    await expect(page.getByRole("button", { name: "Manage payment method" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save limit" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Switch to / })).toHaveCount(0);
+    await expect(page.locator("main")).toContainText(/owner/i);
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("Spend limits that are set stay listed (F-193)", () => {
+  test.use({ user: "B.owner" });
+
+  test("a saved limit is shown after a reload", async ({ page }) => {
+    await page.goto(org("B", "billing"));
+    const spendLimits = () => page.getByRole("heading", { name: "Spend limits", exact: true }).locator("xpath=ancestor::section[1]");
+    const section = spendLimits();
+    await section.getByLabel("Measure", { exact: true }).selectOption("ocr.page");
+    await section.getByLabel("Period", { exact: true }).selectOption("DAY");
+    const quantity = String(900_000 + Math.floor(Math.random() * 90_000));
+    await section.getByLabel("Maximum quantity", { exact: true }).fill(quantity);
+    await section.getByRole("checkbox", { name: /Stop work at the limit/ }).uncheck();
+    await section.getByRole("button", { name: "Save limit" }).click();
+    await expect(section).toContainText(Number(quantity).toLocaleString("en-US"));
+
+    // Before the fix the limit lived only in the page's memory ("Set in this session") and the
+    // page said "Configured limits can't be listed back yet, so note what you set".
+    await page.reload();
+    const limits = spendLimits();
+    await expect(limits).toBeVisible();
+    await expect(limits).not.toContainText("can't be listed back");
+    await expect(limits).toContainText(Number(quantity).toLocaleString("en-US"));
+    await expect(limits).toContainText("Document pages processed");
     await expectHealthyPage(page);
   });
 });

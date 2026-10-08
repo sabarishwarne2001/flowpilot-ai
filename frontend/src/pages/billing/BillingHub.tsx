@@ -17,17 +17,23 @@ import {
 import { billingKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
+import { canManageBilling as canManageBillingFor } from "@/permissions/organizationPermissions";
+import type { OrganizationRole } from "@/types/tenancy";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-const BILLING_ROLES = new Set(["OWNER", "BILLING"]);
 
 export const BillingHub: React.FC = () => {
   const { organization, organizationId, organizationRole } =
     useResolvedOrganization();
 
-  const canManageBilling = BILLING_ROLES.has(
-    String(organizationRole).toUpperCase(),
-  );
+  // F-192. This page had its own rule (OWNER and BILLING "manage billing"), which matched
+  // neither the server nor the permission model: BILLING was offered the payment portal, plan
+  // switches and spend-limit edits the server refuses, and ADMIN could not set the spend limits
+  // the server lets it set. Plan, payment method and seats: the owner. Spend limits: owner and
+  // admin. Everything else on the page: every role that may open it, BILLING included.
+  const role = String(organizationRole).toUpperCase() as OrganizationRole;
+  const canManageBilling = canManageBillingFor(role);
+  const canSetLimits = role === "OWNER" || role === "ADMIN";
 
   const { data: state, isLoading } = useQuery({
     queryKey: billingKeys.subscription(organizationId),
@@ -127,15 +133,9 @@ export const BillingHub: React.FC = () => {
 
             <UsageDashboard organizationId={organizationId} />
 
-            <ConsumptionDashboard
-              organizationId={organizationId}
-              canManageBilling={canManageBilling}
-            />
+            <ConsumptionDashboard organizationId={organizationId} />
 
-            <SpendLimitForm
-              organizationId={organizationId}
-              canManageBilling={canManageBilling}
-            />
+            <SpendLimitForm organizationId={organizationId} canSetLimits={canSetLimits} />
 
             <SeatManager
               organizationId={organizationId}
@@ -161,8 +161,8 @@ export const BillingHub: React.FC = () => {
 
         {!canManageBilling && (
           <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-            You can see usage and invoices. Changing the plan, seats, or payment
-            method requires an organization owner or billing administrator.
+            You can see the plan, usage, limits and invoices. Changing the plan,
+            seats or payment method needs an organization owner.
           </p>
         )}
       </div>

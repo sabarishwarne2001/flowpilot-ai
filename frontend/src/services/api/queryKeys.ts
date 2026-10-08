@@ -300,6 +300,8 @@ export const usageKeys = {
     [...usageKeys.all(organizationId), "series", from, granularity] as const,
   limits: (organizationId: string) =>
     [...usageKeys.all(organizationId), "limits"] as const,
+  spendLimits: (organizationId: string) =>
+    [...usageKeys.all(organizationId), "spend-limits"] as const,
 };
 
 export const identityKeys = {
