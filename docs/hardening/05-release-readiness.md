@@ -6,9 +6,17 @@ history)._
 
 ## Verdict
 
-**<<VERDICT>>**
+**GO for production deployment.**
 
-<<VERDICT_TEXT>>
+The code is release-ready. Every defect this phase found (F-182 to F-206) is fixed and proven by a
+test that failed first; both full suites pass with no failures on the final code (the backend run
+covers every backend commit; the final browser run came after the last fix); the API and worker logs
+stayed clean through the whole browser run; the database has exactly one migration head and no new
+drift; the frontend builds, lints and type-checks clean with no source maps; no new dependency
+advisory. No owner decision blocks release (N-032 and N-033 have provisional placements in force).
+
+In plain words: the product is ready to sell. Deploy it by following the runbook step by step, set
+up Stripe test-mode prices and Postmark before taking the first payment, and you are live.
 
 What this verdict does **not** cover, because it cannot be done from this environment, is the
 deployment itself: building the images and starting the production stack on the VPS (no Docker
@@ -57,8 +65,8 @@ the remaining settings and auth screens; the organization session limit as a rea
 | Check | Start of Phase 3 | Final | Command |
 |---|---|---|---|
 | Backend test suite | 3,479 passed, 0 failed, 9 skipped | **3,527 passed, 0 failed, 9 skipped** (48 min; 48 more tests than Phase 2) | `pytest -q` (backend) |
-| Browser suite (Playwright, Chromium; fresh database, production preview, CSP, model stand-in) | 360 passed, 0 failed, 1 skipped | **<<BROWSER>>** | `E2E_LLM=1 E2E_CSP=1 npx playwright test -c e2e` |
-| API / worker logs during the browser run | clean | **<<LOGS>>** | tracebacks, ERROR, 5xx, failed or dead jobs |
+| Browser suite (Playwright, Chromium; fresh database, production preview, CSP, model stand-in) | 360 passed, 0 failed, 1 skipped | **380 passed, 0 failed, 1 skipped** (by design) in 12.3 min | `E2E_LLM=1 E2E_CSP=1 npx playwright test -c e2e` |
+| API / worker logs during the browser run | clean | **clean**: no traceback, ERROR line or 5xx; 403 background jobs of 38 types, all SUCCEEDED, none failed or dead | tracebacks, ERROR, 5xx, failed or dead jobs |
 | Alembic heads | 1 (`p9a1`) | **1** (`q1a1_retired_groq_models`); up, down, up checked | `alembic heads` |
 | Model/migration drift | 283 known, 0 new | **283 known, 0 new** | `scripts/check_migration_drift.py` |
 | Frontend type-check | clean | **clean** (`tsc -b`, `tsc --noEmit`) | `npx tsc -b` |

@@ -27,12 +27,14 @@ into `main`).
   processing and TruthMesh):** merged.
 - **Phase 3 — final commercial hardening** (this branch): F-182 to F-206 fixed, each proven.
   - Backend suite (full): **3,527 passed, 0 failed, 9 skipped** (48 min; 48 more tests than Phase 2).
-  - Browser suite (full, fresh database, production preview, CSP, model stand-in): **<<BROWSER>>**.
+  - Browser suite (full, fresh database, production preview, CSP, model stand-in): **380 passed, 0 failed, 1 skipped** (by design; 12.3 min). The first full run had 2
+    failures, both fixed and re-proven: the API-keys header added here matched a test's phrase
+    (`a29d764`) and F-206. Logs clean; 403 jobs of 38 types, all SUCCEEDED.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
     --dist`, encoding check, `npm audit --omit=dev` (0): clean. One Alembic head
     (`q1a1_retired_groq_models`); migration up, down and up again checked; drift 283 known, 0 new.
   - `COVERAGE.csv` (1,400 rows): deep 380 → **408**.
-  - Release certification: `05-release-readiness.md` (Phase 3), verdict **<<VERDICT>>**.
+  - Release certification: `05-release-readiness.md` (Phase 3), verdict **GO**.
 
 ## Owner decisions in force (do not re-ask)
 Open: **N-033** (which plans include TruthMesh; provisionally Enterprise only) and **N-032**

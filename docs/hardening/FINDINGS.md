@@ -2922,6 +2922,21 @@ so per the Evidence Rule they are **unverified**:
   role labels are attached to their fields (`cddb596`, `396c386`).
 - The organization sidebar shows a truncated entry's full name on hover (`166bf08`).
 
+### Verification (Phase 3)
+- Backend, full suite: **3,527 passed, 0 failed, 9 skipped** (48 min). Phase 2 ended at 3,479 passed;
+  the 48 more are this phase's (live-defect, session-limit, SAML logout, sweeper, billing-role,
+  BYOK, margin and RevOps tests). No backend file changed after this run.
+- Browser, full suite on a fresh database (production preview, CSP enforced, model stand-in):
+  **380 passed, 0 failed, 1 skipped** in 12.3 min (the skip is by design: the "provider is down" test
+  runs only without the model stand-in). The first full run had 2 failures, both fixed before this
+  one: the API-keys console header added in this branch read "shown once", the phrase a test uses to
+  detect the one-time secret panel (`a29d764`, header reworded, test unchanged); and F-206. No
+  traceback, no ERROR-level line and no 5xx in the API or worker logs; 403 background jobs of 38
+  types, all SUCCEEDED.
+- Build, both `tsc` runs, lint, self-checks, no source maps, encoding, `npm audit --omit=dev` (0),
+  `pip-audit` (the same 5 accepted advisories): clean. One Alembic head (`q1a1_retired_groq_models`);
+  migration up / down / up checked; drift 283 known, 0 new.
+
 ### Checked and not defects
 - AI settings answered 404/409 in the platform organization's workspace: the seed creates that
   workspace directly, without the service that creates its settings row; product-created workspaces
