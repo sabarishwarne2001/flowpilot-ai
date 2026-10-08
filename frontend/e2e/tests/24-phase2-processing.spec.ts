@@ -8,6 +8,10 @@
  *        its bank account: the check did not read `vendor_bank_account`. (12-processing's test of the
  *        same name only checked that the radar was not empty, which the duplicate finding satisfied.)
  * F-174: the queue and the radar showed the internal vendor key ("name:acme industrial supplies").
+ * F-175: assistant sources have no id; every source shared one React key (a console error on each
+ *        answer in development) and the citation drawer printed an empty "Citation ID". The passage
+ *        sat in a nested scroll box that collapsed on short screens.
+ * F-176: the extraction workbench named documents by their id's first eight characters.
  */
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { ws } from "../support/env";
@@ -68,5 +72,66 @@ test.describe("Forensic audit radar (F-173, F-174)", () => {
     await finding.click();
     await expect(page.locator("main")).toContainText("Acme Industrial Supplies");
     await expect(page.locator("main")).not.toContainText("name:acme");
+  });
+});
+
+const LLM_AVAILABLE = process.env.E2E_LLM === "1";
+
+test.describe("Assistant citations (F-175)", () => {
+  test.use({ user: "C.owner" });
+  test.setTimeout(150_000);
+
+  async function askAndOpenFirstSource(page: import("@playwright/test").Page) {
+    await page.goto(ws("C", "assistant"));
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const box = page.getByPlaceholder("Ask anything about your knowledge base...");
+    await box.fill("What is the total amount due on invoice INV-E2E-1001?");
+    await page.getByRole("button", { name: "Send message" }).click();
+    const first = page.getByRole("button", { name: "Open citation 1" }).first();
+    await expect(first).toBeVisible({ timeout: 90_000 });
+    await first.click();
+    const drawer = page.getByTestId("citation-drawer");
+    await expect(drawer).toBeVisible();
+    return drawer;
+  }
+
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 700 }]) {
+    test(`the cited passage reads at full width and sources can be walked (${viewport.width}px)`, async ({ page }) => {
+      test.skip(!LLM_AVAILABLE, "needs the model stand-in (E2E_LLM=1) to answer with sources");
+      await page.setViewportSize(viewport);
+      const drawer = await askAndOpenFirstSource(page);
+      const passage = page.getByTestId("citation-passage");
+      await expect(passage).toContainText("INV-E2E-1001");
+      const [drawerBox, passageBox] = await Promise.all([drawer.boundingBox(), passage.boundingBox()]);
+      expect(drawerBox && passageBox, "drawer and passage are laid out").toBeTruthy();
+      // The passage keeps (nearly) the drawer's width: no squeezed column breaking letter by letter.
+      expect(passageBox!.width).toBeGreaterThan(drawerBox!.width * 0.75);
+      // Lines hold words, not single letters: a 30-character line is at least 150px wide.
+      expect(passageBox!.width).toBeGreaterThan(150);
+      await expect(drawer).toContainText(/Source 1 of \d+/);
+      await expect(drawer).not.toContainText("Citation ID");
+      const title = await page.locator("#citation-drawer-title").innerText();
+      await page.getByRole("button", { name: "Next source" }).click();
+      await expect(drawer).toContainText(/Source 2 of \d+/);
+      await expect(page.locator("#citation-drawer-title")).not.toHaveText("");
+      test.info().annotations.push({ type: "sources", description: `${title} -> ${await page.locator("#citation-drawer-title").innerText()}` });
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+    });
+  }
+});
+
+test.describe("Review queue (F-176)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the extraction workbench names the document by its file", async ({ page }) => {
+    test.skip(!LLM_AVAILABLE, "needs the model stand-in (E2E_LLM=1) for a disagreed extraction");
+    await page.goto(ws("C", "verification"));
+    await settle(page);
+    await page.getByText("Extracted fields disagree").first().click();
+    const workbench = page.locator("aside").filter({ has: page.getByRole("heading", { name: /^Review queue/ }) }).first();
+    await expect(workbench).toContainText("invoice-INV-E2E-1002.pdf");
+    await expect(page.getByRole("heading", { name: "invoice-INV-E2E-1002.pdf" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^Document [0-9a-f]{8}$/ })).toHaveCount(0);
   });
 });
