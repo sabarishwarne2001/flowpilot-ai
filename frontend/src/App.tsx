@@ -332,7 +332,7 @@ function AppRoutes() {
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationAudit}
-                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AuditExplorer /></RequireOrganizationRole>}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AuditExplorer asPage /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationSLOs}
