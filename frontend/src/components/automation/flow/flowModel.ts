@@ -133,6 +133,19 @@ export const findAction = (catalog: FlowCatalog | undefined, actionType: string)
 export const triggerLabel = (catalog: FlowCatalog | undefined, key: string): string =>
   findTrigger(catalog, key)?.label ?? humanize(key);
 
+/**
+ * Phase 2: what a rule listens to, named from its stored event types when no catalog trigger is
+ * held whole (a clause check listens to `work_item.enriched`, one of the two events "Document
+ * processed" covers, so the API's trigger list for it is empty).
+ */
+export const triggerLabelsForEvents = (catalog: FlowCatalog | undefined, eventTypes: readonly string[]): string[] => [
+  ...new Set(
+    eventTypes.map(
+      (event) => catalog?.triggers.find((trigger) => trigger.event_types.includes(event))?.label ?? humanize(event),
+    ),
+  ),
+];
+
 export const actionLabel = (catalog: FlowCatalog | undefined, actionType: string): string =>
   findAction(catalog, actionType)?.label ?? humanize(actionType);
 
