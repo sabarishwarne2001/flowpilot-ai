@@ -19,6 +19,7 @@ import {
 } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { CASE_STATUSES, CASE_STATUS_LABELS, type TemplateWrite } from "@/types/cases";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const EXAMPLE: TemplateWrite = {
@@ -56,6 +57,8 @@ const Cases: React.FC = () => {
   const open = useMutation({ mutationFn: () => createCase(workspaceId, manual.templateId, manual.title), onSuccess: refresh });
   const failure = create.error ?? publish.error ?? retire.error ?? open.error;
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return (
       <section className={`${SURFACE} mx-auto mt-6 max-w-2xl space-y-3 p-6`} aria-labelledby="cases-lock">

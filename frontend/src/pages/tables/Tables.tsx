@@ -12,6 +12,7 @@ import { tablePath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { listTables, tableKeys } from "@/services/api/tables";
 import { STATUS_LABELS, STATUS_TONE, type TableStatus } from "@/types/tables";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const FILTERS: readonly { readonly id: TableStatus | undefined; readonly label: string }[] = [
@@ -33,6 +34,8 @@ const Tables: React.FC = () => {
     queryFn: () => listTables(workspaceId, status),
     enabled: Boolean(workspaceId && capability.granted),
   });
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <div className={`${SURFACE} p-6 text-sm`}><p>Table intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }

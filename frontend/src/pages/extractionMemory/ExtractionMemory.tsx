@@ -41,6 +41,7 @@ import {
 } from "@/services/api/extractionMemory";
 import type { MemoryMode } from "@/types/extractionMemory";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 const MODES: ReadonlyArray<{ readonly mode: MemoryMode; readonly label: string; readonly help: string }> = [
   { mode: "OFF", label: "Off", help: "Nothing is learned and nothing is applied." },
@@ -175,6 +176,8 @@ const ExtractionMemory: React.FC = () => {
       </div>
     );
   }
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return (
       <div className="p-6">

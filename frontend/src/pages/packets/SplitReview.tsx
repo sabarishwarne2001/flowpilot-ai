@@ -22,6 +22,7 @@ import { approvePacketSplit, correctPacketSplit, getPacketSplit, rejectPacketSpl
 import type { PageScore } from "@/types/packets";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 import { useImageFallback } from "@/hooks/useImageFallback";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 const PageThumb: React.FC<{ readonly workspaceId: string; readonly splitId: string; readonly score: PageScore }> = ({
   workspaceId, splitId, score,
@@ -88,6 +89,8 @@ const SplitReview: React.FC = () => {
     setEdited(boundaries.map((b) => (b === from ? to : b)).sort((a, b) => a - b));
   };
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <div className={`${SURFACE} p-6 text-sm`}><p>The packet dicer is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }

@@ -29,6 +29,7 @@ import {
   CHECK_LABELS, COLUMN_ROLES, ROLE_LABELS, STATUS_LABELS, STATUS_TONE, confidenceTone,
   type ColumnRole, type ExportFormat, type RowKind, type TableCell, type TableDetail, type TableValidationRow,
 } from "@/types/tables";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const ROW_STYLE: Readonly<Record<RowKind, string>> = {
@@ -245,6 +246,8 @@ const TableViewer: React.FC = () => {
       setExporting(null);
     }
   };
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <div className={`${SURFACE} p-6 text-sm`}><p>Table intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }

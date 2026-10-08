@@ -12,7 +12,7 @@ import fs from "node:fs";
 
 import type { Page } from "@playwright/test";
 
-import { test, expect, expectHealthyPage } from "../support/fixtures";
+import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, listWorkItems, loginAs, resolveWorkspaceId } from "../support/api";
 import { ws } from "../support/env";
 import { buildPdf } from "../support/sample-docs";
@@ -155,5 +155,57 @@ test.describe("Viewers are not offered an upload (F-160)", () => {
     await expect(page.locator("main")).toContainText("Documents Database");
     await expect(page.getByRole("button", { name: "Upload documents" })).toHaveCount(0);
     await expectHealthyPage(page);
+  });
+});
+
+/**
+ * F-164: plan-gated pages rendered their "included on the Business and Enterprise plans" lock while
+ * the plan was still being read, so a paying customer saw an upgrade message flash before every
+ * page. The entitlements request is slowed here to make the window visible.
+ */
+const LOCK_TEXT = /included on the [A-Za-z ]+plans?|Upgrade your plan|Change your plan/;
+
+async function watchForLocks(page: Page): Promise<void> {
+  await page.addInitScript((source) => {
+    const pattern = new RegExp(source);
+    const seen: string[] = [];
+    (window as unknown as { __locks: string[] }).__locks = seen;
+    new MutationObserver(() => {
+      const match = pattern.exec(document.body?.innerText ?? "");
+      if (match && !seen.includes(match[0])) seen.push(match[0]);
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  }, LOCK_TEXT.source);
+  await page.route("**/entitlements**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    await route.continue();
+  });
+}
+
+test.describe("Plan-gated pages while the plan loads (F-164)", () => {
+  test.use({ user: "C.owner" });
+
+  test("an Enterprise workspace never sees a plan lock", async ({ page }) => {
+    test.setTimeout(180_000);
+    await watchForLocks(page);
+    for (const sub of ["tables", "cases", "packet-splits", "extraction-memory", "entities", "obligations"]) {
+      const answered = page.waitForResponse(/\/entitlements/);
+      await page.goto(ws("C", sub));
+      await answered;
+      await settle(page, 600);
+      await expect(page.getByTestId("capability-loading")).toHaveCount(0, { timeout: 20_000 });
+      await expectHealthyPage(page);
+      const seen = await page.evaluate(() => (window as unknown as { __locks: string[] }).__locks);
+      expect(seen, `${sub} showed a plan lock while loading`).toEqual([]);
+    }
+  });
+});
+
+test.describe("Plan-gated pages on a plan without them (F-164)", () => {
+  test.use({ user: "A.owner" });
+
+  test("the Developer plan still sees the lock once its plan is read", async ({ page }) => {
+    await watchForLocks(page);
+    await page.goto(ws("A", "tables"));
+    await expect(page.locator("main")).toContainText(/included on the Business and Enterprise plans/);
   });
 });

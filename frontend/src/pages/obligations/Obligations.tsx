@@ -25,6 +25,7 @@ import { downloadObligations, listObligations, obligationKeys, type ObligationFi
 import { errorMessage } from "@/services/api/errors";
 import { KINDS, KIND_LABELS, STATE_LABELS, type ObligationDetail, type ObligationState } from "@/types/obligations";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 type Tab = "list" | "calendar" | "holidays" | "feeds";
 
@@ -67,6 +68,8 @@ const Obligations: React.FC = () => {
     navigate(obligationPath(orgSlug, workspaceSlug, detail.obligation.id));
   };
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return (
       <section className={`${SURFACE} mx-auto mt-6 max-w-2xl space-y-3 p-6`} aria-labelledby="obligations-lock">
