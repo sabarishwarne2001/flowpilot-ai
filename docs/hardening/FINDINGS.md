@@ -2679,7 +2679,9 @@ amount change rippled to sibling invoices; a document centroid came back as text
 `1b6e5c4`).
 
 ### Verification (Phase 2)
-- Backend, full suite: PENDING.
+- Backend, full suite: **3,479 passed, 0 failed, 9 skipped** (50 min). Phase 1 ended at 3,451
+  tests (3,450 passed, 1 failure since fixed); the 28 more are this phase's (3 live-defect, 1 API,
+  1 process-count, 19 TruthMesh engine, 4 TruthMesh live-pipeline).
 - Browser, full suite on a fresh database (production preview, CSP enforced, model stand-in):
   **360 passed, 0 failed, 1 skipped** in 14.3 min (the skip is by design: the "provider is down"
   test runs only without the model stand-in). No traceback, no ERROR-level line and no 5xx in the

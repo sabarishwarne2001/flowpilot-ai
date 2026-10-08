@@ -32,7 +32,8 @@ summary). Builds on Phase 1 (merged into `main`, PR #11).
   polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence):** merged.
 - **Phase 2 — enterprise processing and TruthMesh** (this branch): F-171 to F-181 fixed;
   TruthMesh built.
-  - Backend suite (full): PENDING.
+  - Backend suite (full): **3,479 passed, 0 failed, 9 skipped** (was 3,450 passed, 1 failed:
+    28 new tests; the Phase 1 failure was fixed before merge).
   - Browser suite (full, fresh database, production preview, CSP, model stand-in): **360 passed,
     0 failed, 1 skipped** (by design: the provider-down test needs no model). Logs clean.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
