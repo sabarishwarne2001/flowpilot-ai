@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { Bot, User, FileText } from "lucide-react";
 import { useOptionalTenant } from "@/routes/TenantContext";
 
-import type { ConversationMessage, SourceCitation } from "@/types/assistant";
+import { citationKey, type ConversationMessage, type SourceCitation } from "@/types/assistant";
 import { formatUsageCost } from "@/utils/usageCost";
 
 interface ChatBubbleProps {
@@ -16,7 +16,7 @@ interface ChatBubbleProps {
    * Fired when the user clicks a citation.
    * Parent ChatPanel owns the CitationDrawer state.
    */
-  readonly onCitationClick?: (citation: SourceCitation) => void;
+  readonly onCitationClick?: (citation: SourceCitation, sources: readonly SourceCitation[]) => void;
 
   readonly className?: string;
 }
@@ -38,14 +38,14 @@ const INLINE_CITATION_REGEX = /\[(\d+)\]/g;
  */
 function renderMessageContent(
   message: ConversationMessage,
-  onCitationClick?: (citation: SourceCitation) => void
+  onCitationClick?: (citation: SourceCitation, sources: readonly SourceCitation[]) => void
 ): React.ReactNode {
   const content = message.content;
   const sources = message.sources ?? [];
 
   if (sources.length === 0) {
     return (
-      <p className="whitespace-pre-wrap break-words text-sm leading-7">
+      <p className="whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]">
         {content}
       </p>
     );
@@ -54,7 +54,7 @@ function renderMessageContent(
   const parts = content.split(INLINE_CITATION_REGEX);
 
   return (
-    <p className="whitespace-pre-wrap break-words text-sm leading-7">
+    <p className="whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]">
       {parts.map((part, index) => {
         if (index % 2 === 1) {
           const citation = sources[Number(part) - 1];
@@ -65,9 +65,9 @@ function renderMessageContent(
 
           return (
             <button
-              key={citation.citation_id}
+              key={`cite-${index}-${citationKey(citation)}`}
               type="button"
-              onClick={() => onCitationClick?.(citation)}
+              onClick={() => onCitationClick?.(citation, sources)}
               className="
                   mx-0.5
                   align-super
@@ -151,7 +151,9 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
         <div
           className={`
             flex
-            max-w-[75%]
+            min-w-0
+            max-w-[85%]
+            sm:max-w-[75%]
             flex-col
             rounded-2xl
             border
@@ -238,9 +240,9 @@ export const ChatBubble: React.FC<ChatBubbleProps> = React.memo(
               <div className="flex flex-wrap gap-2">
                 {(message.sources ?? []).map((citation, index) => (
                   <button
-                    key={citation.citation_id}
+                    key={`${index}-${citationKey(citation)}`}
                     type="button"
-                    onClick={() => onCitationClick?.(citation)}
+                    onClick={() => onCitationClick?.(citation, message.sources ?? [])}
                     className="
                           inline-flex
                           items-center

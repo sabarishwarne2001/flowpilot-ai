@@ -8,6 +8,7 @@ import {
   Scissors,
   Table2,
   Layers,
+  Waypoints,
   Bell,
   CalendarClock,
   BookUp,
@@ -55,6 +56,7 @@ import {
   packetSplitsPath,
   tablesPath,
   batchesPath,
+  truthMeshPath,
   corroborationsPath,
   obligationsPath,
   erpPath,
@@ -300,6 +302,17 @@ export const buildWorkspaceNavigationGroups = (
     key: "processing",
     label: "Enterprise processing",
     items: [
+      // PHASE2:nav-truthmesh
+      {
+        id: "truthmesh",
+        name: "TruthMesh",
+        route: "workspaceTruthMesh",
+        path: truthMeshPath(orgSlug, workspaceSlug),
+        icon: Waypoints,
+        description: "Your documents as one connected record: cross-document conflicts, money at risk and what-if ripple simulation",
+        capability: CAPABILITY.truthmesh,
+        keywords: ["truthmesh", "digital twin", "graph", "mesh", "cross-document", "conflict", "discrepancy", "matrix", "what if", "simulation", "ripple", "risk", "exposure", "cockpit", "overrun", "duplicate"],
+      },
       // PHASE1:nav-batches
       {
         id: "batches",

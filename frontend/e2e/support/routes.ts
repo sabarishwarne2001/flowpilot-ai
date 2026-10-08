@@ -28,6 +28,7 @@ export const WORKSPACE_PAGES: readonly WorkspacePage[] = [
   { id: "/:orgSlug/:workspaceSlug/process", sub: "process", title: /Process intelligence/, plan: "enterprise", navId: "ws:process" },
   { id: "/:orgSlug/:workspaceSlug/radar", sub: "radar", title: /Audit radar/, plan: "business", navId: "ws:radar" },
   { id: "/:orgSlug/:workspaceSlug/corroboration", sub: "corroboration", title: /Document corroborator/, plan: "enterprise", navId: "ws:corroboration" },
+  { id: "/:orgSlug/:workspaceSlug/truthmesh", sub: "truthmesh", title: /TruthMesh/, plan: "enterprise", navId: "ws:truthmesh" },
   { id: "/:orgSlug/:workspaceSlug/automation", sub: "automation", title: /Automation Dashboard/, plan: "any", navId: "ws:workflows" },
   { id: "/:orgSlug/:workspaceSlug/automation/timeline", sub: "automation/timeline", title: /Execution traces/, plan: "any", navId: "ws:run-history" },
   { id: "/:orgSlug/:workspaceSlug/verification", sub: "verification", title: /Review/, plan: "any", navId: "ws:review-queue" },
@@ -81,6 +82,7 @@ export const NAV_LABEL: Record<string, string> = {
   "ws:process": "Process intelligence",
   "ws:radar": "Forensic audit radar",
   "ws:corroboration": "Document corroborator",
+  "ws:truthmesh": "TruthMesh",
   "ws:assertion-reviews": "Clause assertions",
 };
 

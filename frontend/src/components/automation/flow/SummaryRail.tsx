@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { AlertTriangle, CheckCircle2, Keyboard, Loader2, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Keyboard, Loader2, Save } from "lucide-react";
 
 import type { CardIssue, CardKey } from "./flowModel";
 
@@ -27,13 +27,15 @@ const CARD_ANCHORS: Readonly<Record<CardKey, string>> = {
 interface SummaryRailProps {
   readonly sentence: string;
   readonly issues: readonly CardIssue[];
+  /** Phase 2: false until the first save attempt; open issues are then listed neutrally, not red. */
+  readonly attempted: boolean;
   readonly dirty: boolean;
   readonly saving: boolean;
   readonly isEdit: boolean;
   readonly onSave: () => void;
 }
 
-export const SummaryRail: React.FC<SummaryRailProps> = ({ sentence, issues, dirty, saving, isEdit, onSave }) => (
+export const SummaryRail: React.FC<SummaryRailProps> = ({ sentence, issues, attempted, dirty, saving, isEdit, onSave }) => (
   <aside className="space-y-4 lg:sticky lg:top-0" aria-label="Rule summary">
     <div className="fp-card p-4">
       <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">This rule</h3>
@@ -47,10 +49,17 @@ export const SummaryRail: React.FC<SummaryRailProps> = ({ sentence, issues, dirt
         </p>
       ) : (
         <>
-          <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-            {issues.length} {issues.length === 1 ? "thing" : "things"} to fix
-          </p>
+          {attempted ? (
+            <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              {issues.length} {issues.length === 1 ? "thing" : "things"} to fix
+            </p>
+          ) : (
+            <p className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <CircleDashed className="h-4 w-4" aria-hidden="true" />
+              {issues.length} {issues.length === 1 ? "thing" : "things"} left before it can be saved
+            </p>
+          )}
           <ul className="mt-2 space-y-1">
             {issues.slice(0, 8).map((issue, index) => (
               <li key={index}>

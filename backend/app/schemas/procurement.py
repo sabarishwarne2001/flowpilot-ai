@@ -108,6 +108,19 @@ class CaseSummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
+    # F-172 / F-174: what a person reads. The currency the variance is in (the
+    # invoice's, else the PO's), the vendor as the invoice prints it rather than
+    # the normalised matching key, and each document's own number and file name.
+    currency: Optional[str] = None
+    vendor_name: Optional[str] = None
+    invoice_number: Optional[str] = None
+    po_number: Optional[str] = None
+    receipt_number: Optional[str] = None
+    invoice_filename: Optional[str] = None
+    po_filename: Optional[str] = None
+    receipt_filename: Optional[str] = None
+    invoice_total_micros: Optional[int] = None
+    po_total_micros: Optional[int] = None
 
 
 class CaseDetailResponse(CaseSummaryResponse):

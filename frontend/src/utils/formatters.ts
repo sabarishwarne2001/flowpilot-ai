@@ -176,3 +176,63 @@ export const capitalize = (
     value.slice(1)
   );
 };
+
+/**
+ * An amount held in micros (millionths), in the currency the document states.
+ * Without a currency it is a plain grouped number: printing a guessed symbol
+ * (F-172 printed every variance in rupees) is worse than printing none.
+ */
+export const formatMoneyMicros = (
+  micros: number | null | undefined,
+  currency: string | null | undefined,
+  options: { signed?: boolean } = {},
+): string => {
+  if (micros === null || micros === undefined || !Number.isFinite(micros)) {
+    return "—";
+  }
+  const amount = micros / 1_000_000;
+  const signDisplay = options.signed ? "exceptZero" : "auto";
+  if (currency && /^[A-Za-z]{3}$/.test(currency)) {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currency.toUpperCase(),
+        maximumFractionDigits: 2,
+        signDisplay,
+      }).format(amount);
+    } catch {
+      // an ISO-shaped code the browser does not know: fall through to a plain number
+    }
+  }
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    signDisplay,
+  }).format(amount);
+};
+
+/**
+ * F-174. The vendor a person reads: the name the document prints, else the
+ * matching key made readable ("name:acme industrial supplies" is an internal
+ * normalised key, never a label).
+ */
+export const vendorLabel = (
+  name: string | null | undefined,
+  key: string | null | undefined,
+): string => {
+  if (name && name.trim()) {
+    return name.trim();
+  }
+  if (!key) {
+    return "Unknown vendor";
+  }
+  const [kind, ...rest] = key.split(":");
+  const value = rest.join(":").trim();
+  if (!value) {
+    return key;
+  }
+  if (kind === "tax") {
+    return `Tax ID ${value.toUpperCase()}`;
+  }
+  return value.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+};

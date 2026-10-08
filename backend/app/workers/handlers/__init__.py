@@ -86,6 +86,8 @@ HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
 BATCH_ENGINE_JOB_TYPES: frozenset[str] = frozenset(
     {"batches.build_export_package", "batches.sweep_export_packages"}
 )
+#: Phase 2 TruthMesh: a document's twin and links, and a workspace rebuild, on LIGHT.
+TRUTHMESH_JOB_TYPES: frozenset[str] = frozenset({"truthmesh.index_document", "truthmesh.rebuild_workspace"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -124,6 +126,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH50_JOB_TYPES
     | HARDENING_JOB_TYPES
     | BATCH_ENGINE_JOB_TYPES
+    | TRUTHMESH_JOB_TYPES
 )
 
 
@@ -405,6 +408,16 @@ def _batches_sweep_export_packages(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_sweep_export_packages(payload)
 
 
+def _truthmesh_index_document(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.truthmesh import handle_index_document
+    return handle_index_document(payload)
+
+
+def _truthmesh_rebuild_workspace(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.truthmesh import handle_rebuild_workspace
+    return handle_rebuild_workspace(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -510,6 +523,9 @@ _HANDLERS = {
     # Phase 1 batch engine. On the LIGHT profile (app/workers/profiles.py).
     "batches.build_export_package": _batches_build_export_package,
     "batches.sweep_export_packages": _batches_sweep_export_packages,
+    # Phase 2 TruthMesh. On the LIGHT profile (app/workers/profiles.py).
+    "truthmesh.index_document": _truthmesh_index_document,
+    "truthmesh.rebuild_workspace": _truthmesh_rebuild_workspace,
 }
 
 

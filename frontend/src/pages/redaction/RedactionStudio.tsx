@@ -1,7 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Eye, Loader2, Square } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Keyboard,
+  Loader2,
+  ShieldCheck,
+  Square,
+} from "lucide-react";
 
 import RedactionLockCard from "@/components/redaction/RedactionLockCard";
 import {
@@ -104,6 +115,9 @@ const RedactionStudio: React.FC = () => {
   const [showBurned, setShowBurned] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Phase 2: the page at 100% of the panel or larger, and the region list for this page or all.
+  const [zoom, setZoom] = useState<1 | 1.5 | 2>(1);
+  const [scope, setScope] = useState<"page" | "all">("page");
 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
@@ -169,6 +183,20 @@ const RedactionStudio: React.FC = () => {
       toggleRegion(workspaceId as string, jobId, id, enabled),
     onSuccess: invalidate,
     onError: report,
+  });
+
+  // Switch a whole detector's regions on or off in one go (one request per region that changes).
+  const bulkToggle = useMutation({
+    mutationFn: async ({ ids, enabled }: { ids: readonly string[]; enabled: boolean }) => {
+      for (const id of ids) {
+        await toggleRegion(workspaceId as string, jobId, id, enabled);
+      }
+    },
+    onSuccess: invalidate,
+    onError: (caught) => {
+      invalidate();
+      report(caught);
+    },
   });
 
   const addMutation = useMutation({
@@ -387,35 +415,127 @@ const RedactionStudio: React.FC = () => {
     [addMutation],
   );
 
+  // F-181: the edit accumulates while an arrow key is held (each auto-repeat adds one step, shown
+  // as a dashed outline) and is saved once, on key-up. Saving on every keydown placed one region
+  // per key repeat: holding Alt+Right left a smear of overlapping boxes, all of them burned.
+  const pendingNudge = useRef<{ region: RedactionRegion; dx: number; dy: number; resize: boolean } | null>(null);
+  const [nudged, setNudged] = useState<Rect | null>(null);
+
   useEffect(() => {
     if (!editable) {
       return undefined;
     }
-    const handler = (event: KeyboardEvent) => {
-      if (!selectedId) {
+    const ARROWS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, 1],
+      ArrowDown: [0, -1],
+    };
+    const shifted = (pending: NonNullable<typeof pendingNudge.current>): Rect => {
+      const { region, dx, dy, resize } = pending;
+      return resize
+        ? { x0: region.x0, y0: region.y0, x1: region.x1 + dx, y1: region.y1 + dy }
+        : { x0: region.x0 + dx, y0: region.y0 + dy, x1: region.x1 + dx, y1: region.y1 + dy };
+    };
+    const commit = () => {
+      const pending = pendingNudge.current;
+      pendingNudge.current = null;
+      setNudged(null);
+      if (pending && (pending.dx !== 0 || pending.dy !== 0)) {
+        nudge(pending.region, pending.dx, pending.dy, pending.resize);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = ARROWS[event.key];
+      if (!direction || !selectedId) {
         return;
       }
       const region = regions.find((r) => r.id === selectedId);
       if (!region) {
         return;
       }
+      event.preventDefault();
       const step = event.altKey ? NUDGE_COARSE : NUDGE;
-      const map: Record<string, [number, number]> = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, step],
-        ArrowDown: [0, -step],
-      };
-      const delta = map[event.key];
-      if (!delta) {
+      const current =
+        pendingNudge.current && pendingNudge.current.region.id === region.id
+          ? pendingNudge.current
+          : { region, dx: 0, dy: 0, resize: event.shiftKey };
+      const next = { ...current, dx: current.dx + direction[0] * step, dy: current.dy + direction[1] * step };
+      const rect = shifted(next);
+      if (rect.x1 <= rect.x0 || rect.y1 <= rect.y0) {
         return;
       }
-      event.preventDefault();
-      nudge(region, delta[0], delta[1], event.shiftKey);
+      pendingNudge.current = next;
+      setNudged(rect);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (ARROWS[event.key]) {
+        commit();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    // A key released while the window is not focused never sends key-up: save what was held.
+    window.addEventListener("blur", commit);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", commit);
+    };
   }, [editable, selectedId, regions, nudge]);
+
+  // Phase 2: single-key shortcuts (ignored while typing): B draw, P preview the result, [ and ]
+  // (or Page Up / Page Down) change page, Delete switches the selected region off.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey || applyOpen) {
+        return;
+      }
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (key === "b" && editable) {
+        event.preventDefault();
+        setDrawing((value) => !value);
+      } else if (key === "p") {
+        event.preventDefault();
+        setShowBurned((value) => !value);
+      } else if (key === "[" || key === "PageUp") {
+        event.preventDefault();
+        setPage((n) => Math.max(1, n - 1));
+      } else if (key === "]" || key === "PageDown") {
+        event.preventDefault();
+        setPage((n) => Math.min(pageCount, n + 1));
+      } else if ((key === "Delete" || key === "Backspace") && editable && selectedId) {
+        const region = regions.find((r) => r.id === selectedId);
+        if (region?.enabled) {
+          event.preventDefault();
+          toggleMutation.mutate({ id: region.id, enabled: false });
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editable, applyOpen, pageCount, selectedId, regions, toggleMutation]);
+
+  // The confirmation closes on Escape like every other dialog.
+  useEffect(() => {
+    if (!applyOpen) {
+      return undefined;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !applyMutation.isPending) {
+        setApplyOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [applyOpen, applyMutation.isPending]);
 
   // ARCH41-S3:draw-escape. Escape abandons the drag in progress; pressed with
   // no drag in progress it leaves drawing mode.
@@ -555,31 +675,52 @@ const RedactionStudio: React.FC = () => {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         {/* ---- page + overlay ---- */}
         <section className={`${SURFACE} space-y-3 p-3`}>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={BUTTON_GHOST}
-              onClick={() => setPage((n) => Math.max(1, n - 1))}
-              disabled={page <= 1}
-            >
-              Previous
-            </button>
-            <span className="text-sm">
-              Page {page} of {pageCount}
-            </span>
-            <button
-              type="button"
-              className={BUTTON_GHOST}
-              onClick={() => setPage((n) => Math.min(pageCount, n + 1))}
-              disabled={page >= pageCount}
-            >
-              Next
-            </button>
+          <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Studio tools">
+            <div className="inline-flex items-center rounded-lg border border-border">
+              <button
+                type="button"
+                className="rounded-l-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                onClick={() => setPage((n) => Math.max(1, n - 1))}
+                disabled={page <= 1}
+                aria-label="Previous page"
+                title="Previous page ( [ )"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </button>
+              <span className="border-x border-border px-2.5 py-1 text-sm tabular-nums">
+                Page {page} of {pageCount}
+              </span>
+              <button
+                type="button"
+                className="rounded-r-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                onClick={() => setPage((n) => Math.min(pageCount, n + 1))}
+                disabled={page >= pageCount}
+                aria-label="Next page"
+                title="Next page ( ] )"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label="Zoom">
+              {([1, 1.5, 2] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  aria-pressed={zoom === level}
+                  onClick={() => setZoom(level)}
+                  className={`rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${zoom === level ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {level === 1 ? "Fit" : `${level * 100}%`}
+                </button>
+              ))}
+            </div>
             <span className="flex-1" />
             <button
               type="button"
               className={showBurned ? BUTTON_PRIMARY : BUTTON_SECONDARY}
               onClick={() => setShowBurned((v) => !v)}
+              aria-pressed={showBurned}
+              title="Preview the result (P)"
             >
               <Eye className="mr-1 inline h-4 w-4" aria-hidden />
               {showBurned ? "Showing result" : "Preview result"}
@@ -589,12 +730,16 @@ const RedactionStudio: React.FC = () => {
               className={drawing ? BUTTON_PRIMARY : BUTTON_SECONDARY}
               onClick={() => setDrawing((v) => !v)}
               disabled={!editable}
+              aria-pressed={drawing}
+              title="Draw a box (B)"
             >
               <Square className="mr-1 inline h-4 w-4" aria-hidden />
               {drawing ? "Drawing" : "Draw a box"}
             </button>
           </div>
 
+          <div className="max-h-[78vh] overflow-auto overscroll-contain rounded">
+          <div style={{ width: `${zoom * 100}%` }}>
           <div
             ref={surfaceRef}
             className={`relative select-none ${drawing ? "cursor-crosshair touch-none" : ""}`}
@@ -674,6 +819,14 @@ const RedactionStudio: React.FC = () => {
                 style={toCss(draft, size)}
               />
             ) : null}
+            {nudged && size ? (
+              <div
+                className="pointer-events-none absolute border-2 border-dashed border-primary bg-primary/20"
+                style={toCss(nudged, size)}
+              />
+            ) : null}
+          </div>
+          </div>
           </div>
 
           {preview.status === "error" ? (
@@ -693,76 +846,73 @@ const RedactionStudio: React.FC = () => {
           {editable ? (
             <p className={HINT}>
               Select a region, then use the arrow keys to place a copy one
-              point away — hold Alt for ten, Shift to resize instead of move.
-              Drawing works without a mouse this way.
+              point away (held keys add up; it is placed when you let go) —
+              hold Alt for ten, Shift to resize instead of move. Drawing works
+              without a mouse this way.
             </p>
           ) : null}
         </section>
 
         {/* ---- region list ---- */}
-        <aside className={`${SURFACE} space-y-3 p-3`}>
-          <h2 className={SECTION_TITLE}>Regions on this page</h2>
+        <aside className={`${SURFACE} space-y-3 self-start p-3 lg:sticky lg:top-4`} aria-label="Regions">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className={SECTION_TITLE}>Regions</h2>
+            <div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label="Which regions">
+              {(
+                [
+                  ["page", `This page (${pageRegions.length})`],
+                  ["all", `All pages (${regions.length})`],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={scope === value}
+                  onClick={() => setScope(value)}
+                  className={`rounded-md px-2 py-0.5 text-xs font-semibold ${scope === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Phase 2: the document-wide counts said so; under "Regions on this page" they read as
+              this page's. */}
           <p className={HINT}>
-            {regions.length} region{regions.length === 1 ? "" : "s"} ·{" "}
-            {enabledCount} on
-            {blockCount > 0
-              ? ` · ${blockCount} widened to a whole line`
-              : ""}
+            {enabledCount} of {regions.length} switched on across the document
+            {blockCount > 0 ? ` · ${blockCount} widened to a whole line` : ""}
           </p>
 
-          <ul className="space-y-1">
-            {pageRegions.map((region) => (
-              <li key={region.id}>
-                <label
-                  className={`flex cursor-pointer items-center gap-2 rounded p-1.5 text-sm ${
-                    selectedId === region.id ? "bg-muted" : ""
-                  }`}
-                  onMouseEnter={() => setSelectedId(region.id)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={region.enabled}
-                    disabled={!editable || toggleMutation.isPending}
-                    onChange={(event) =>
-                      toggleMutation.mutate({
-                        id: region.id,
-                        enabled: event.target.checked,
-                      })
-                    }
-                  />
-                  <span className="flex-1">
-                    {DETECTOR_LABELS[region.detector] ?? region.detector}
-                  </span>
-                  {region.checksum_validated ? (
-                    <span
-                      className="rounded bg-emerald-100 px-1 text-[10px] font-medium text-emerald-800"
-                      title="The issuer's own checksum agrees"
-                    >
-                      checksum
-                    </span>
-                  ) : null}
-                  <span
-                    className="rounded border border-border px-1 font-mono text-[10px]"
-                    title={precisionTitle(region.geometry_precision)}
-                  >
-                    {precisionBadge(region.geometry_precision)}
-                  </span>
-                </label>
-              </li>
-            ))}
-            {pageRegions.length === 0 ? (
-              <li className={HINT}>Nothing was found on this page.</li>
-            ) : null}
-          </ul>
+          <RegionGroups
+            regions={scope === "page" ? pageRegions : regions}
+            showPage={scope === "all"}
+            selectedId={selectedId}
+            editable={editable}
+            busy={toggleMutation.isPending || bulkToggle.isPending}
+            onSelect={(region) => {
+              setSelectedId(region.id);
+              setPage(region.page_number);
+            }}
+            onToggle={(region, enabled) => toggleMutation.mutate({ id: region.id, enabled })}
+            onToggleGroup={(ids, enabled) => bulkToggle.mutate({ ids, enabled })}
+            emptyText={scope === "page" ? "Nothing was found on this page." : "Nothing was found in this document."}
+          />
+
+          <p className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+            <span><span className="rounded border border-border px-1 font-mono">G</span> on the characters</span>
+            <span><span className="rounded border border-border px-1 font-mono">B</span> whole line</span>
+            <span><span className="rounded border border-border px-1 font-mono">M</span> drawn by hand</span>
+          </p>
 
           {editable ? (
             <button
               type="button"
-              className={`${BUTTON_PRIMARY} w-full`}
+              className={`${BUTTON_PRIMARY} inline-flex w-full items-center justify-center gap-1.5`}
               onClick={() => setApplyOpen(true)}
               disabled={enabledCount === 0}
             >
-              Apply and download
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+              Apply {enabledCount} redaction{enabledCount === 1 ? "" : "s"}
             </button>
           ) : null}
           {editable && enabledCount === 0 ? (
@@ -771,13 +921,29 @@ const RedactionStudio: React.FC = () => {
               that looks redacted and is not.
             </p>
           ) : null}
+
+          <div className="rounded-lg bg-muted/40 p-2 text-[11px] text-muted-foreground">
+            <p className="mb-1 flex items-center gap-1.5 font-semibold uppercase tracking-wider">
+              <Keyboard className="h-3.5 w-3.5" aria-hidden /> Shortcuts
+            </p>
+            <p><Kbd>B</Kbd> draw a box · <Kbd>P</Kbd> preview the result · <Kbd>[</Kbd> <Kbd>]</Kbd> page</p>
+            <p><Kbd>Del</Kbd> switch the selected region off · <Kbd>Esc</Kbd> stop drawing</p>
+            <p><Kbd>←</Kbd><Kbd>→</Kbd><Kbd>↑</Kbd><Kbd>↓</Kbd> place a copy · <Kbd>Alt</Kbd> ×10 · <Kbd>Shift</Kbd> resize</p>
+          </div>
         </aside>
       </div>
 
       {applyOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className={`${SURFACE_DIALOG} max-w-lg space-y-3 p-5`} role="dialog" aria-modal="true">
-            <h2 className={SECTION_TITLE}>Apply {enabledCount} redactions?</h2>
+          <div
+            className={`${SURFACE_DIALOG} max-w-lg space-y-3 p-5`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apply-redactions-title"
+          >
+            <h2 id="apply-redactions-title" className={SECTION_TITLE}>
+              Apply {enabledCount} redaction{enabledCount === 1 ? "" : "s"}?
+            </h2>
             {/* §3.6 requires this to be stated plainly rather than implied. */}
             <p className="text-sm">
               Pages become images, and annotations, form fields, comments and
@@ -787,7 +953,8 @@ const RedactionStudio: React.FC = () => {
             <p className={HINT}>
               The result is checked for any surviving trace of what was
               redacted before it is offered for download. If that check fails,
-              nothing is published.
+              nothing is published. The download buttons appear on this page when it
+              is done.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className={BUTTON_SECONDARY} onClick={() => setApplyOpen(false)}>
@@ -799,12 +966,136 @@ const RedactionStudio: React.FC = () => {
                 onClick={() => applyMutation.mutate()}
                 disabled={applyMutation.isPending}
               >
-                {applyMutation.isPending ? "Applying…" : "Apply and download"}
+                {applyMutation.isPending ? "Applying…" : "Apply"}
               </button>
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+};
+
+const Kbd: React.FC<{ readonly children: React.ReactNode }> = ({ children }) => (
+  <kbd className="mx-0.5 rounded border border-border bg-background px-1 font-mono text-[10px]">{children}</kbd>
+);
+
+const GroupCheckbox: React.FC<{
+  readonly checked: boolean;
+  readonly indeterminate: boolean;
+  readonly disabled: boolean;
+  readonly label: string;
+  readonly onChange: (checked: boolean) => void;
+}> = ({ checked, indeterminate, disabled, label, onChange }) => {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.checked)}
+    />
+  );
+};
+
+/**
+ * Phase 2 — the regions grouped by what found them (IBAN, email, drawn by hand…), each group with
+ * one switch for all of it; a row's switch is its own, and its name selects it (and opens its page).
+ */
+const RegionGroups: React.FC<{
+  readonly regions: readonly RedactionRegion[];
+  readonly showPage: boolean;
+  readonly selectedId: string | null;
+  readonly editable: boolean;
+  readonly busy: boolean;
+  readonly onSelect: (region: RedactionRegion) => void;
+  readonly onToggle: (region: RedactionRegion, enabled: boolean) => void;
+  readonly onToggleGroup: (ids: readonly string[], enabled: boolean) => void;
+  readonly emptyText: string;
+}> = ({ regions, showPage, selectedId, editable, busy, onSelect, onToggle, onToggleGroup, emptyText }) => {
+  if (regions.length === 0) {
+    return <p className={HINT}>{emptyText}</p>;
+  }
+  const groups = new Map<string, RedactionRegion[]>();
+  for (const region of regions) {
+    groups.set(region.detector, [...(groups.get(region.detector) ?? []), region]);
+  }
+  const ordered = [...groups.entries()].sort(([a], [b]) =>
+    (DETECTOR_LABELS[a] ?? a).localeCompare(DETECTOR_LABELS[b] ?? b),
+  );
+  return (
+    <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain pr-0.5">
+      {ordered.map(([detector, items]) => {
+        const label = DETECTOR_LABELS[detector] ?? detector;
+        const on = items.filter((r) => r.enabled).length;
+        return (
+          <section key={detector} className="rounded-lg border border-border/70" aria-label={`${label}: ${on} of ${items.length} on`}>
+            <header className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
+              <GroupCheckbox
+                checked={on === items.length}
+                indeterminate={on > 0 && on < items.length}
+                disabled={!editable || busy}
+                label={`Every ${label} region`}
+                onChange={(checked) =>
+                  onToggleGroup(items.filter((r) => r.enabled !== checked).map((r) => r.id), checked)
+                }
+              />
+              <span className="flex-1 text-xs font-semibold">{label}</span>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {on}/{items.length} on
+              </span>
+            </header>
+            <ul className="divide-y divide-border/50">
+              {items
+                .slice()
+                .sort((a, b) => a.page_number - b.page_number || b.y1 - a.y1 || a.x0 - b.x0)
+                .map((region, index) => (
+                  <li
+                    key={region.id}
+                    className={`flex items-center gap-2 px-2 py-1 text-sm ${selectedId === region.id ? "bg-primary/10" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`${label} ${index + 1}${showPage ? ` on page ${region.page_number}` : ""}`}
+                      checked={region.enabled}
+                      disabled={!editable || busy}
+                      onChange={(event) => onToggle(region, event.target.checked)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onSelect(region)}
+                      className={`min-w-0 flex-1 truncate text-left text-xs hover:underline ${region.enabled ? "" : "text-muted-foreground line-through"}`}
+                    >
+                      {label} {index + 1}
+                      {showPage ? <span className="text-muted-foreground"> · page {region.page_number}</span> : null}
+                    </button>
+                    {region.checksum_validated ? (
+                      <span
+                        className="rounded bg-emerald-100 px-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
+                        title="The issuer's own checksum agrees"
+                      >
+                        checksum
+                      </span>
+                    ) : null}
+                    <span
+                      className="rounded border border-border px-1 font-mono text-[10px]"
+                      title={precisionTitle(region.geometry_precision)}
+                    >
+                      {precisionBadge(region.geometry_precision)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 };

@@ -117,6 +117,77 @@ def _assert_workspace(context: TenantContext, workspace_id: uuid.UUID) -> None:
 # Cases
 # ---------------------------------------------------------------------------
 
+_VENDOR_NAME_KEYS = ("vendor_name", "supplier_name", "seller_name", "vendor", "supplier", "seller")
+
+
+def _vendor_name(entities: Any) -> Optional[str]:
+    if not isinstance(entities, dict):
+        return None
+    for key in _VENDOR_NAME_KEYS:
+        value = entities.get(key)
+        if isinstance(value, dict):
+            value = value.get("value")
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:300]
+    return None
+
+
+def _annotated(db: Session, workspace_id: uuid.UUID, cases: list[Any], schema: Any) -> list[Any]:
+    """F-172 / F-174: each case with the currency, vendor name and document numbers a person reads.
+
+    Two indexed reads for the whole page (roles and documents of every side), never one per case.
+    """
+    from app.models.work_item import WorkItem
+
+    ids = {
+        work_item_id
+        for case in cases
+        for work_item_id in (case.invoice_work_item_id, case.po_work_item_id, case.receipt_work_item_id)
+        if work_item_id is not None
+    }
+    roles: dict[uuid.UUID, DocumentRole] = {}
+    documents: dict[uuid.UUID, Any] = {}
+    if ids:
+        roles = {
+            role.work_item_id: role
+            for role in db.execute(
+                select(DocumentRole).where(
+                    DocumentRole.workspace_id == workspace_id, DocumentRole.work_item_id.in_(ids)
+                )
+            ).scalars()
+        }
+        documents = {
+            row.id: row
+            for row in db.execute(
+                select(WorkItem.id, WorkItem.original_filename, WorkItem.extracted_entities).where(
+                    WorkItem.workspace_id == workspace_id, WorkItem.id.in_(ids)
+                )
+            )
+        }
+    out = []
+    for case in cases:
+        invoice, po, receipt = (
+            roles.get(case.invoice_work_item_id), roles.get(case.po_work_item_id), roles.get(case.receipt_work_item_id)
+        )
+        sides = [d for d in (documents.get(case.invoice_work_item_id), documents.get(case.po_work_item_id),
+                             documents.get(case.receipt_work_item_id)) if d is not None]
+        item = schema.model_validate(case, from_attributes=True)
+        extra = {
+            "currency": (invoice.currency if invoice else None) or (po.currency if po else None),
+            "vendor_name": next((name for name in (_vendor_name(d.extracted_entities) for d in sides) if name), None),
+            "invoice_number": invoice.document_number if invoice else None,
+            "po_number": po.document_number if po else None,
+            "receipt_number": receipt.document_number if receipt else None,
+            "invoice_filename": getattr(documents.get(case.invoice_work_item_id), "original_filename", None),
+            "po_filename": getattr(documents.get(case.po_work_item_id), "original_filename", None),
+            "receipt_filename": getattr(documents.get(case.receipt_work_item_id), "original_filename", None),
+            "invoice_total_micros": invoice.total_micros if invoice else None,
+            "po_total_micros": po.total_micros if po else None,
+        }
+        out.append(item.model_copy(update=extra))
+    return out
+
+
 
 @router.get(
     "/workspaces/{workspace_id}/procurement/cases",
@@ -136,7 +207,7 @@ def list_cases(
 ) -> list[Any]:
     _assert_workspace(context, workspace_id)
     _gate(db, context, "procurement.cases.list")
-    return case_service.list_cases(
+    cases = case_service.list_cases(
         db,
         workspace_id=workspace_id,
         statuses=case_status,
@@ -147,6 +218,7 @@ def list_cases(
         limit=limit,
         offset=offset,
     )
+    return _annotated(db, workspace_id, cases, CaseSummaryResponse)
 
 
 @router.get(
@@ -166,7 +238,7 @@ def get_case(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Case not found."
         )
-    return case
+    return _annotated(db, workspace_id, [case], CaseDetailResponse)[0]
 
 
 @router.post(
@@ -208,7 +280,9 @@ def approve_case(
             detail={"code": "CASE_NOT_LIVE", "message": str(exc), "details": {}},
         ) from exc
     db.commit()
-    return case_service.get_case(db, workspace_id=workspace_id, case_id=case.id)
+    return _annotated(
+        db, workspace_id, [case_service.get_case(db, workspace_id=workspace_id, case_id=case.id)], CaseDetailResponse
+    )[0]
 
 
 @router.post(
@@ -243,7 +317,9 @@ def dispute_case(
             detail={"code": "DISPUTE_REASON_TOO_SHORT", "message": str(exc), "details": {}},
         ) from exc
     db.commit()
-    return case_service.get_case(db, workspace_id=workspace_id, case_id=case.id)
+    return _annotated(
+        db, workspace_id, [case_service.get_case(db, workspace_id=workspace_id, case_id=case.id)], CaseDetailResponse
+    )[0]
 
 
 @router.post(

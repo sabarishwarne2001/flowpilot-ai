@@ -754,3 +754,12 @@ from app.models.batches import (  # noqa: E402,F401
     ProcessingBatchItem,
     SchemaHealingEvent,
 )
+
+# Phase 2: TruthMesh, the cross-document digital twin.
+from app.models.truthmesh import (  # noqa: E402,F401
+    MeshConflict,
+    MeshLink,
+    MeshNode,
+    MeshSimulation,
+    MeshState,
+)

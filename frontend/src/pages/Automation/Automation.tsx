@@ -25,7 +25,7 @@ import {
 import { automationApi } from "@/services/api/automation";
 // ARCH37-S2:flow-builder-wired. The step builder replaces RuleForm; labels come from the catalog.
 import { FlowBuilder } from "@/pages/Automation/FlowBuilder";
-import { actionLabel, fieldLabel, triggerLabel } from "@/components/automation/flow/flowModel";
+import { actionLabel, fieldLabel, triggerLabel, triggerLabelsForEvents } from "@/components/automation/flow/flowModel";
 import { RuleTestDialog } from "@/pages/Automation/RuleTestDialog";
 import { formatDateTime } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
@@ -815,7 +815,9 @@ export const Automation: React.FC = () => {
                           When:{" "}
                           {(rule.triggers ?? []).length > 0
                             ? (rule.triggers ?? []).map((key) => triggerLabel(catalog, key)).join(" or ")
-                            : "No trigger (paused)"}
+                            : (rule.trigger_events ?? []).length > 0
+                              ? triggerLabelsForEvents(catalog, rule.trigger_events ?? []).join(" or ")
+                              : "No trigger (paused)"}
                         </span>
                         {(rule.else_actions ?? []).length > 0 && (
                           <span className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-md font-semibold select-none whitespace-nowrap">
@@ -881,9 +883,16 @@ export const Automation: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-muted/30 dark:bg-muted/10 border border-border/40 rounded-xl p-3.5 select-none">
                     <div className="sm:col-span-7 flex flex-col justify-center space-y-2.5 border-b sm:border-b-0 pb-2.5 sm:pb-0">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                        IF Conditions ({rule.logic_operator})
+                        IF Conditions{rule.conditions.length > 1 ? ` (${rule.logic_operator})` : ""}
                       </span>
                       <div className="flex flex-col gap-2">
+                        {rule.conditions.length === 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {(rule.graph_version ?? 0) >= 1
+                              ? "Checked inside its graph."
+                              : "None: it runs on every document the trigger brings."}
+                          </span>
+                        )}
                         {rule.conditions.map((cond: any, idx: number) => (
                           <React.Fragment key={idx}>
                             {idx > 0 && (
@@ -916,6 +925,16 @@ export const Automation: React.FC = () => {
                         THEN Actions ({rule.actions.length})
                       </span>
                       <div className="flex flex-col gap-2 select-none">
+                        {rule.actions.length === 0 &&
+                          ((rule.graph_version ?? 0) >= 1 ? (
+                            <span className="text-xs text-muted-foreground">
+                              Its steps are a graph (a clause check or an installed flow), not a list.
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                              None yet: this rule does nothing until an action is added.
+                            </span>
+                          ))}
                         {rule.actions.map((act: any, idx: number) => (
                           <div
                             key={idx}

@@ -125,6 +125,8 @@ __all__ = [
     "BYOK_CAPABILITY",
     # PHASE1:capability-batch-dispatch-export
     "BATCH_DISPATCH_CAPABILITY",
+    # PHASE2:capability-truthmesh-export
+    "TRUTHMESH_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -282,6 +284,13 @@ TABLE_INTELLIGENCE_CAPABILITY: str = "capability.table_intelligence"
 #: and verification stored; packages are zip and hash work on the LIGHT worker.
 BATCH_DISPATCH_CAPABILITY: str = "capability.batch_dispatch"
 
+#: PHASE2:capability-truthmesh. TruthMesh, the cross-document digital twin: typed links between a
+#: tenant's documents (identifiers, parties, semantic similarity), relation-aware conflicts across
+#: them, what-if ripple simulation and the executive cockpit. ONE key. Not metered: it reads stored
+#: extractions and chunk embeddings and runs deterministic rules on the LIGHT worker; no model is
+#: called. Plan placement is provisional (N-033, NEEDS-OWNER.md): Enterprise.
+TRUTHMESH_CAPABILITY: str = "capability.truthmesh"
+
 #: ARCH45-S1:capability-universal-corroborator. The Universal Document
 #: Corroborator & Discrepancy Matrix: 2 to 5 documents aligned by fields,
 #: canonical entities, clauses and line items, with materiality, ARCH-33 rules
@@ -370,6 +379,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     EGRESS_LOCKDOWN_CAPABILITY,  # ARCH50-S1:capability-keys
     BYOK_CAPABILITY,  # N-021:capability-keys
     BATCH_DISPATCH_CAPABILITY,  # PHASE1:capability-keys
+    TRUTHMESH_CAPABILITY,  # PHASE2:capability-keys
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -517,6 +527,16 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Batch operations: document batches with live progress, confidence "
             "analytics, schema self-healing, dispatch lanes and export packages "
             "with a SHA-256 integrity manifest. Bundled into a tier."
+        ),
+    ),
+    # PHASE2:capability-truthmesh-entitlement
+    Entitlement(
+        name=TRUTHMESH_CAPABILITY,
+        description=(
+            "TruthMesh: the cross-document digital twin. Documents linked by identifiers, parties "
+            "and meaning; conflicts across them (amounts beyond authority, overruns, duplicate "
+            "billing, changed payee accounts, contradictory dates and terms); what-if ripple "
+            "simulation and an executive cockpit. Bundled into a tier."
         ),
     ),
     # ARCH45-S1:capability-corroborator-entitlement

@@ -238,7 +238,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
                 issues={general.filter((i) => i.field === null)}
               >
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-                  <div className="md:col-span-6">
+                  <div className="md:col-span-5">
                     <label htmlFor="flow-name" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</label>
                     <input
                       id="flow-name"
@@ -266,7 +266,7 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
                     />
                     <IssueText issues={general.filter((i) => i.field === "priority")} />
                   </div>
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-3">
                     <label htmlFor="flow-on-error" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On failure</label>
                     <select
                       id="flow-on-error"
@@ -336,7 +336,10 @@ export const FlowBuilder: React.FC<FlowBuilderProps> = ({
 
             <SummaryRail
               sentence={summarize(draft, catalog)}
-              issues={shown}
+              // Phase 2: every open issue, not only the ones shown on the cards. Before the first
+              // save attempt the cards stay quiet, but the rail said "Ready to save" on an empty rule.
+              issues={issues}
+              attempted={attempted}
               dirty={dirty}
               saving={busy}
               isEdit={isEdit}

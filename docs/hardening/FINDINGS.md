@@ -2584,3 +2584,146 @@ error. It is now reported as tampering (or "not a package" for an unreadable man
 - **Overview** (`c2dba06`): page heading, five KPI cards (Failed was returned by the API and never
   shown; it links to the failed documents), document types from the classifier's label beside
   file formats, activity that opens the document, a one-row upload zone.
+
+## Phase 2 — enterprise processing and TruthMesh
+
+Branch `hardening/phase-2-enterprise-processing-and-truthmesh`. Found by driving the running stack
+(Postgres 16 + pgvector, Redis, API, worker, Vite, the local model stand-in) through the Phase 2
+pages as each role — three-way matching and tolerance policies, ERP posting, process intelligence,
+the forensic radar and payment risk, the document corroborator, workflows and run history, the
+review hub, clause assertions, redaction and the assistant — while the API and worker logs were
+watched for tracebacks and 5xx (none appeared). Every numbered item has a test that failed on the
+previous code before its fix, as the Evidence Rule requires.
+
+### F-171 — A matching case that compared no line was "Matched" and could be approved (P1, fixed)
+**Plain language.** When extraction found no line items on an invoice, its purchase order and its
+receipt, the three-way match compared nothing, found nothing wrong, called the case MATCHED and
+offered "Approve match" — an approval resting on no evidence. Such a case now carries a
+"nothing compared" finding, stays in Needs review, and approving it needs a written reason; the
+calibration labels no longer learn that an empty case is clean. `2959130`. **Proof**
+`tests/engines/test_phase2_live_defects.py`, browser `24-phase2-processing` (Three-way matching).
+
+### F-172 — The matching queue printed every amount in rupees (P2, fixed)
+The currency was a constant in the queue. Cases now carry the currency of their documents, and the
+queue and the comparison print it. `dd59cae`. **Proof** as F-171.
+
+### F-173 — Payment risk missed the changed bank account it exists to catch (P1, fixed)
+INV-E2E-1002 asks to be paid into a new account, and the radar said "No invoice changed its bank
+account": the model names the field `vendor_bank_account`, which the check did not read. It now
+reads the account fields the extractors actually produce (vendor, supplier, beneficiary, payee,
+IBAN, remit-to; nested too). `672fdda`. **Proof** `tests/engines/test_phase2_live_defects.py`,
+browser `24-phase2-processing` (radar). The older `12-processing` test of the same name only
+checked that the radar was not empty, which a duplicate finding satisfied.
+
+### F-174 — The internal vendor key was shown to people (P3, fixed)
+The queue and the radar's evidence printed "name:acme industrial supplies". They print the name as
+the documents spell it. `dd59cae`, `672fdda`. **Proof** as F-171 and F-173.
+
+### F-175 — Assistant sources shared one React key; the citation drawer squeezed its text (P3, fixed)
+Sources carry no id, yet the inline [n] buttons and chips used one as their key (a console error on
+every answer) and the drawer printed an empty "Citation ID". On short or narrow screens the passage
+sat in a nested box that could be squeezed until the text broke letter by letter. Keys come from the
+document and passage; the drawer is rebuilt with one scroll region that keeps its width, previous /
+next, copy and open. `64475dd`. **Proof** browser `24-phase2-processing` (F-175, at 1440 and 390 px).
+
+### F-176 — The extraction workbench named documents by an id fragment (P3, fixed)
+"d48d4635" and "Document d48d4635" where a reviewer needs the file name. `ce2fb80`. **Proof**
+`tests/api/test_verification_names_document.py`, browser F-176.
+
+### F-177 — Process intelligence counted an event once per object it touched (P3, fixed)
+"181 events" and, in the same card, "Documents · 182 events": a finding that names two documents is
+one event. `f652ae3`. **Proof** `tests/services/test_process_object_event_counts.py`.
+
+### F-178 — In the review hub, "a" (assign to me) also accepted every disputed value (P1, fixed)
+**Plain language.** With an extraction item open, the hub's "a" shortcut assigns it to you. The
+embedded workbench listened for the same key as "accept all", so one keypress assigned the item
+*and* approved every value the agents disagreed on, recorded as your decision. ("e", collapse, also
+switched the workbench to editing.) Inside the hub the workbench now leaves the keyboard to the hub.
+`fe2d386`. **Proof** browser `24-phase2-processing` (F-178): it sent the resolve request before the
+fix.
+
+### F-179 — The rule builder called an empty rule "Ready to save" (P4, fixed)
+The summary rail only heard about problems after a first save attempt. It now lists what is left,
+neutrally, before one ("3 things left before it can be saved"). `44107eb`. **Proof** browser F-179.
+
+### F-180 — A clause check's Workflows card said "No trigger (paused)" (P3, fixed)
+Clause checks listen to "document processed" (one of the two events that trigger covers), so the
+rule list's exact match found no trigger; the card also read as a rule with no actions. It now names
+the trigger and says the steps are a graph. `cab5c67`. **Proof** browser F-180.
+
+### F-181 — Holding an arrow key in the Redaction Studio left a smear of regions (P3, fixed)
+Arrow keys place a copy of the selected region a point away. Each key repeat saved a new region (all
+burned into the output) although the code meant to save once on key-up. The offset now accumulates
+while the key is held, with a dashed preview, and is saved once. `3bbfff6`. **Proof** browser F-181
+(five keydowns saved three regions before the fix, one after).
+
+### Smaller corrections found during the visual pass (no failing test written: unverified)
+Fixed while reworking the pages; each is a wording or display correction checked by eye in the
+running app, not by a test that failed first, so per the Evidence Rule they are **unverified**:
+- Run history: a chain's duration added its runs' durations, overstating chains whose rules ran side
+  by side; it is now first start to last finish (`c8c674c`).
+- Redaction Studio: the counts under "Regions on this page" were the whole document's; the confirm
+  read "Apply 1 redactions?" and promised a download that applying does not start (`29f4a98`). The
+  breadcrumb stopped at the workspace name (`46f0cf5`).
+- Radar: the severity select clipped ("Any severit"); a reason typed for one finding carried over to
+  the next one opened (`6a1f82f`).
+- Rule builder: the "On failure" select clipped ("Stop the ru") (`44107eb`).
+- ERP posting: "No postings." above "0 posting(s)" (`c05ed77`).
+
+### Fixed while building TruthMesh (before release)
+Seen on the live mesh, each covered by `tests/services/test_truthmesh_engine.py`: a payee-account
+change counted once per copy of the invoice (its identity is now the vendor and the two accounts); a
+procurement policy labelled "Purchase Order" by the classifier became an order (a role of OTHER now
+beats a transactional label); termination exposure counted the order and its invoices twice; an
+amount change rippled to sibling invoices; a document centroid came back as text (`67bba71`,
+`1b6e5c4`).
+
+### Verification (Phase 2)
+- Backend, full suite: **3,479 passed, 0 failed, 9 skipped** (50 min). Phase 1 ended at 3,451
+  tests (3,450 passed, 1 failure since fixed); the 28 more are this phase's (3 live-defect, 1 API,
+  1 process-count, 19 TruthMesh engine, 4 TruthMesh live-pipeline).
+- Browser, full suite on a fresh database (production preview, CSP enforced, model stand-in):
+  **360 passed, 0 failed, 1 skipped** in 14.3 min (the skip is by design: the "provider is down"
+  test runs only without the model stand-in). No traceback, no ERROR-level line and no 5xx in the
+  API or worker logs during the run.
+- Build, both `tsc` projects, lint, self-checks, no source maps, encoding: clean. One Alembic head
+  (`p9a1_truthmesh_engine`); migration up / down / up checked.
+
+### Checked and not defects
+- Every matching case reads "Needs review" with "none read" lines: the model stand-in extracts no
+  line items, so nothing can be compared (F-171 is what makes that visible).
+- The process event log stops at the last sweep; documents uploaded since appear after the next one
+  (Sweep now, or the scheduled sweep).
+- Clause checks start switched off: by design, a check is turned on after its clause is written.
+- The chunk-size warning in `npm run build` predates this branch.
+
+### Built in this phase (features, not defects)
+- **TruthMesh — the cross-document digital twin** (`90ca4ac`, `1b6e5c4`, `b0ab2e3`, `67bba71`,
+  `33132cc`, `901a77a`). Every processed document becomes a twin (kind, parties, numbers, amounts,
+  dates, terms) linked to the others by what ties them — the numbers they cite, shared parties, and
+  meaning (pgvector centroids of the document's own chunks, the local MiniLM embeddings; no paid API)
+  — with typed, directed relations (bills against, issued under, governed by, version of…).
+  Relation-aware rules find conflicts across documents (eleven kinds: exceeds its authority,
+  cumulative overrun, duplicate billing, amounts disagree, contradictory dates, outside the
+  agreement's term, party not on the agreement, payee account changed, currencies disagree,
+  conflicting terms, no authorising document) with stable fingerprints, so a person's "resolved" or "not a conflict" (with a reason) survives
+  every rebuild. A what-if engine ripples a delay, an invoked clause, an amount change, a termination
+  or a counterparty default through the graph, ring by ring, with breaches and money at risk. The
+  cockpit shows a size-weighted risk index, money at risk, a layered document graph, a discrepancy
+  matrix and a CSV audit export. Capability `capability.truthmesh` (Enterprise, provisional: N-033),
+  migration `p9a1`, 12 routes, worker jobs (index on enrichment, rebuild). **Proof** 19 engine unit
+  tests, 4 live-pipeline tests (`tests/engines/test_truthmesh_live.py`, including workspace
+  isolation), 5 browser tests (`25-truthmesh`), and the plan matrix and smoke suites.
+- **Review hub** (`55b3ab2`): fields to decide as one diff grid (a column per agent, the characters
+  that differ from the proposal highlighted, disagreements first, a confidence bar); open counts on
+  the tabs; a tab bar that shows when it scrolls; severity stripes; the workbench uses the full width.
+- **Workflows and Run history** (`cab5c67`, `44107eb`, `c8c674c`): honest rule cards and builder
+  rail; Run history with a page title, a run summary (completed share, blocked, failed, median and
+  p95) and a time axis per chain.
+- **Forensic radar** (`6a1f82f`): severity tiles that filter, a findings grid, a duplicate matrix.
+- **Redaction Studio** (`29f4a98`): toolbar with zoom, single-key shortcuts, regions for this page
+  or all grouped by detector with one switch per group, precision legend.
+- **Process intelligence** (`0f50386`): a top-to-bottom discovery map with activities in words;
+  compact exception-agent proposals.
+- **Three-way matching, radar, assistant, review** (Phase 2 fixes above): the queue shows the
+  vendor, the document numbers and amounts in the case's currency.

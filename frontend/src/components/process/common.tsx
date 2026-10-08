@@ -77,7 +77,32 @@ export const duration = (seconds: number | null | undefined): string => {
 };
 
 /** "posting.attempt.send.failed" → "posting › attempt › send › failed". */
-export const activityLabel = (activity: string): string => activity.split(".").join(" › ").split("_").join(" ");
+const JOB_OUTCOME: Readonly<Record<string, string>> = {
+  enqueued: "queued",
+  started: "started",
+  succeeded: "done",
+  failed: "failed",
+  retried: "retried",
+  cancelled: "cancelled",
+};
+
+const sentence = (words: string): string => {
+  const text = words.split("_").join(" ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+};
+
+/**
+ * An activity key in words: "job.document_extract.enqueued" reads "Document extract · queued",
+ * "document.uploaded" reads "Document uploaded" (Phase 2; the raw key, "job › document extract ›
+ * enqueued", was cut off in the discovery map).
+ */
+export const activityLabel = (activity: string): string => {
+  const parts = activity.split(".");
+  if (parts[0] === "job" && parts.length === 3) {
+    return `${sentence(parts[1] ?? "")} · ${JOB_OUTCOME[parts[2] ?? ""] ?? sentence(parts[2] ?? "").toLowerCase()}`;
+  }
+  return sentence(parts.join(" "));
+};
 
 /** The cost line: the known figure, and how much of it is unknown (never summed as zero). */
 export const CostCell: React.FC<{ readonly cost: CostSummary | null | undefined; readonly perObject?: boolean }> = ({ cost, perObject = true }) => {

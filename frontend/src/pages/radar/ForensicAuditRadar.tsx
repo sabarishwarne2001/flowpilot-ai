@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileWarning, Loader2, Scale, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChevronRight, FileWarning, Grid3x3, Loader2, Scale, TrendingUp } from "lucide-react";
 
 import {
   BUTTON_GHOST,
@@ -28,6 +28,7 @@ import {
   percent,
 } from "@/services/api/radar";
 import { formatTimestamp } from "@/utils/displayTime";
+import { vendorLabel } from "@/utils/formatters";
 import type {
   AnomalyEvidence,
   AnomalyFindingSummary,
@@ -245,13 +246,16 @@ const EvidenceBlock: React.FC<{ readonly item: AnomalyEvidence }> = ({ item }) =
   if (item.kind === "identifiers" || item.kind === "chunk_pair") {
     const left = side(item, "subject");
     const right = side(item, "counterpart");
+    // F-174: a vendor is evidenced by its normalised key ("name:acme industrial supplies"); show it readable.
+    const shown = (value: unknown): string =>
+      label === "Vendor" ? vendorLabel(null, asText(value)) : asText(value);
     return (
       <SideBySide
         label={label}
         leftTitle="This document"
         rightTitle="Matched document"
-        left={asText(left["text"] ?? left["value"] ?? left["work_item_id"])}
-        right={asText(right["text"] ?? right["value"] ?? right["work_item_id"])}
+        left={shown(left["text"] ?? left["value"] ?? left["work_item_id"])}
+        right={shown(right["text"] ?? right["value"] ?? right["work_item_id"])}
         note={item.note}
       />
     );
@@ -331,6 +335,9 @@ export const ForensicAuditRadar: React.FC = () => {
   const [status, setStatus] = useState<AnomalyStatus | "">("OPEN");
   const [openId, setOpenId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [showMatrix, setShowMatrix] = useState(true);
+  // A reason typed for one finding is not carried to the next one opened.
+  useEffect(() => setReason(""), [openId]);
 
   const filters = useMemo(
     () => ({
@@ -411,15 +418,54 @@ export const ForensicAuditRadar: React.FC = () => {
 
   return (
     <div className="space-y-4 p-6">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
+      <header className="space-y-1">
         <h1 className={PAGE_TITLE}>Audit radar</h1>
-        {counts ? (
-          <p className={HINT}>
-            {counts.high} high &middot; {counts.medium} medium &middot;{" "}
-            {counts.dismissed} dismissed
-          </p>
-        ) : null}
+        <p className={HINT}>
+          Duplicate documents, price changes and contract drift, raised as documents arrive and checked
+          nightly; payment risk first, because money leaves on it.
+        </p>
       </header>
+
+      {counts ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Findings at a glance">
+          {(
+            [
+              { key: "HIGH", label: "Open high", value: counts.high, tone: "text-red-600 dark:text-red-400", bar: "bg-red-500" },
+              { key: "MEDIUM", label: "Open medium", value: counts.medium, tone: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" },
+              { key: "LOW", label: "Open low", value: counts.low, tone: "text-sky-600 dark:text-sky-400", bar: "bg-sky-500" },
+              { key: "CONFIRMED", label: "Confirmed", value: counts.confirmed, tone: "text-foreground", bar: "bg-foreground/40" },
+              { key: "DISMISSED", label: "Dismissed", value: counts.dismissed, tone: "text-muted-foreground", bar: "bg-muted-foreground/40" },
+            ] as const
+          ).map((tile) => {
+            const isSeverity = tile.key === "HIGH" || tile.key === "MEDIUM" || tile.key === "LOW";
+            const active = isSeverity ? severity === tile.key && status === "OPEN" : status === tile.key && severity === "";
+            return (
+              <button
+                key={tile.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  if (active) {
+                    setSeverity("");
+                    setStatus("OPEN");
+                  } else if (isSeverity) {
+                    setSeverity(tile.key);
+                    setStatus("OPEN");
+                  } else {
+                    setSeverity("");
+                    setStatus(tile.key);
+                  }
+                }}
+                className={`${SURFACE} relative overflow-hidden px-3 py-2 text-left transition-colors hover:bg-muted/40 ${active ? "ring-2 ring-primary/60" : ""}`}
+              >
+                <span aria-hidden className={`absolute inset-x-0 top-0 h-0.5 ${tile.bar}`} />
+                <span className="block text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{tile.label}</span>
+                <span className={`block text-2xl font-semibold tabular-nums ${tile.tone}`}>{tile.value}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       <PaymentRiskPanel workspaceId={workspaceId} role={workspace?.role ?? "VIEWER"} />
 
@@ -438,7 +484,7 @@ export const ForensicAuditRadar: React.FC = () => {
         </div>
         <div className="ml-auto flex gap-2">
           <select
-            className={SELECT}
+            className={`${SELECT} w-auto min-w-[9.5rem]`}
             value={severity}
             aria-label="Severity"
             onChange={(event) =>
@@ -451,7 +497,7 @@ export const ForensicAuditRadar: React.FC = () => {
             <option value="LOW">Low</option>
           </select>
           <select
-            className={SELECT}
+            className={`${SELECT} w-auto min-w-[9rem]`}
             value={status}
             aria-label="Status"
             onChange={(event) => setStatus(event.target.value as AnomalyStatus | "")}
@@ -476,34 +522,78 @@ export const ForensicAuditRadar: React.FC = () => {
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
+        <>
+        {(tab === "ALL" || tab === "DUPLICATE_DOCUMENT") ? (
+          <DuplicateMatrix
+            findings={items}
+            open={showMatrix}
+            onToggle={() => setShowMatrix((value) => !value)}
+            selected={openId}
+            onSelect={(id) => {
+              setOpenId(id);
+              window.requestAnimationFrame(() =>
+                document.getElementById(`finding-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+              );
+            }}
+          />
+        ) : null}
+        <div className={`${SURFACE} overflow-hidden`}>
+        <div
+          aria-hidden
+          className="hidden grid-cols-[5.5rem_minmax(0,1fr)_9rem_6.5rem_9.5rem_1.25rem] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground md:grid"
+        >
+          <span>Severity</span>
+          <span>Finding</span>
+          <span>Kind</span>
+          <span>Confidence</span>
+          <span>Raised</span>
+          <span />
+        </div>
+        <ul className="divide-y divide-border" aria-label="Findings">
           {items.map((finding: AnomalyFindingSummary) => (
-            <li key={finding.id} className={`${SURFACE} p-4`}>
+            <li key={finding.id} id={`finding-${finding.id}`} className={`relative ${openId === finding.id ? "bg-primary/[0.03]" : ""}`}>
+              <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${SEVERITY_STRIPE[finding.severity]}`} />
               <button
                 type="button"
-                className="w-full space-y-1 text-left"
+                className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left hover:bg-muted/40 md:grid-cols-[5.5rem_minmax(0,1fr)_9rem_6.5rem_9.5rem_1.25rem]"
                 onClick={() =>
                   setOpenId((current) => (current === finding.id ? null : finding.id))
                 }
                 aria-expanded={openId === finding.id}
               >
-                <div className="flex items-center gap-2">
+                <span>
                   <SeverityBadge severity={finding.severity} />
-                  <KindIcon kind={finding.kind} />
-                  <span className="text-sm font-medium text-foreground">
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
                     {finding.headline}
                   </span>
-                </div>
-                <p className={HINT}>
-                  {LAYER_LABELS[finding.layer]} &middot;{" "}
-                  {percent(finding.score)}% &middot;{" "}
+                  <span className={`${HINT} block`}>
+                    {LAYER_LABELS[finding.layer]}
+                    {finding.status === "OPEN" ? "" : ` · ${finding.status.toLowerCase()}`}
+                  </span>
+                </span>
+                <span className="col-span-2 flex items-center gap-1.5 text-xs text-muted-foreground md:col-span-1">
+                  <KindIcon kind={finding.kind} />
+                  {KIND_LABELS[finding.kind]}
+                </span>
+                <span className="hidden items-center gap-1.5 md:flex" title={`${percent(finding.score)}% confident`}>
+                  <span className="relative h-1.5 w-10 overflow-hidden rounded-full bg-muted">
+                    <span className="absolute inset-y-0 left-0 rounded-full bg-foreground/60" style={{ width: `${percent(finding.score)}%` }} />
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{percent(finding.score)}%</span>
+                </span>
+                <span className="hidden text-xs tabular-nums text-muted-foreground md:block">
                   {formatTimestamp(finding.created_at)}
-                  {finding.status === "OPEN" ? "" : ` · ${finding.status.toLowerCase()}`}
-                </p>
+                </span>
+                <ChevronRight
+                  aria-hidden
+                  className={`hidden h-4 w-4 text-muted-foreground transition-transform md:block ${openId === finding.id ? "rotate-90" : ""}`}
+                />
               </button>
 
               {openId === finding.id ? (
-                <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
+                <div className="space-y-3 border-t border-border/60 px-4 pb-4 pt-4 md:pl-[7.75rem]">
                   {detail.isPending ? (
                     <p className={HINT}>Loading evidence&hellip;</p>
                   ) : detail.isError ? (
@@ -587,8 +677,133 @@ export const ForensicAuditRadar: React.FC = () => {
             </li>
           ))}
         </ul>
+        </div>
+        </>
       )}
     </div>
+  );
+};
+
+const SEVERITY_STRIPE: Readonly<Record<AnomalySeverity, string>> = {
+  HIGH: "bg-red-500",
+  MEDIUM: "bg-amber-500",
+  LOW: "bg-sky-500",
+};
+
+const SEVERITY_CELL: Readonly<Record<AnomalySeverity, string>> = {
+  HIGH: "bg-red-500 hover:bg-red-600",
+  MEDIUM: "bg-amber-500 hover:bg-amber-600",
+  LOW: "bg-sky-500 hover:bg-sky-600",
+};
+
+const MATRIX_LIMIT = 14;
+
+/**
+ * Phase 2 — which documents the duplicate findings tie together, as a matrix: a document per row
+ * and per column, a filled cell where the radar found the two to be the same document (coloured by
+ * severity, hollow once decided). Five copies of one invoice read as one dense block instead of ten
+ * list rows; click a cell to open that finding below.
+ */
+const DuplicateMatrix: React.FC<{
+  readonly findings: readonly AnomalyFindingSummary[];
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly selected: string | null;
+  readonly onSelect: (id: string) => void;
+}> = ({ findings, open, onToggle, selected, onSelect }) => {
+  const pairs = findings.filter(
+    (finding) => finding.kind === "DUPLICATE_DOCUMENT" && finding.counterpart_work_item_id,
+  );
+  const documents = new Map<string, string>();
+  for (const finding of pairs) {
+    documents.set(finding.subject_work_item_id, finding.subject_label);
+    documents.set(finding.counterpart_work_item_id as string, finding.counterpart_label);
+  }
+  if (pairs.length < 2 || documents.size < 3) {
+    return null;
+  }
+  const degree = new Map<string, number>();
+  for (const finding of pairs) {
+    for (const id of [finding.subject_work_item_id, finding.counterpart_work_item_id as string]) {
+      degree.set(id, (degree.get(id) ?? 0) + 1);
+    }
+  }
+  const ids = [...documents.keys()]
+    .sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (documents.get(a) ?? "").localeCompare(documents.get(b) ?? ""))
+    .slice(0, MATRIX_LIMIT);
+  const cell = new Map<string, AnomalyFindingSummary>();
+  for (const finding of pairs) {
+    const a = finding.subject_work_item_id;
+    const b = finding.counterpart_work_item_id as string;
+    cell.set(`${a}|${b}`, finding);
+    cell.set(`${b}|${a}`, finding);
+  }
+  return (
+    <section className={`${SURFACE} overflow-hidden`} aria-labelledby="duplicate-matrix-title">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-muted/40"
+      >
+        <Grid3x3 className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <span id="duplicate-matrix-title" className="text-sm font-semibold">Duplicate matrix</span>
+        <span className="text-xs text-muted-foreground">
+          {pairs.length} pairs across {documents.size} documents
+          {documents.size > MATRIX_LIMIT ? ` (the ${MATRIX_LIMIT} most connected shown)` : ""}
+        </span>
+        <ChevronRight aria-hidden className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open ? (
+        <div className="overflow-x-auto overscroll-x-contain border-t border-border/60 p-4">
+          <table className="border-separate border-spacing-1 text-xs" data-testid="duplicate-matrix">
+            <thead>
+              <tr>
+                <th scope="col" className="sr-only">Document</th>
+                {ids.map((id, index) => (
+                  <th key={id} scope="col" className="h-6 w-6 text-center font-mono text-[10.5px] font-semibold text-muted-foreground" title={documents.get(id)}>
+                    {index + 1}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ids.map((row, rowIndex) => (
+                <tr key={row}>
+                  <th scope="row" className="max-w-[16rem] whitespace-nowrap pr-2 text-left font-normal">
+                    <span className="mr-1.5 inline-block w-4 text-right font-mono text-[10.5px] font-semibold text-muted-foreground">{rowIndex + 1}</span>
+                    <span className="inline-block max-w-[14rem] truncate align-bottom text-foreground" title={documents.get(row)}>
+                      {documents.get(row)}
+                    </span>
+                  </th>
+                  {ids.map((column) => {
+                    if (row === column) {
+                      return <td key={column} className="h-6 w-6 rounded bg-muted/60" aria-hidden />;
+                    }
+                    const finding = cell.get(`${row}|${column}`);
+                    if (!finding) {
+                      return <td key={column} className="h-6 w-6 rounded border border-dashed border-border/70" aria-hidden />;
+                    }
+                    const decided = finding.status !== "OPEN";
+                    return (
+                      <td key={column} className="h-6 w-6 p-0">
+                        <button
+                          type="button"
+                          onClick={() => onSelect(finding.id)}
+                          aria-label={`${documents.get(row)} and ${documents.get(column)}: ${finding.severity.toLowerCase()} duplicate, ${finding.status.toLowerCase()}`}
+                          title={`${documents.get(row)} ↔ ${documents.get(column)}`}
+                          className={`block h-6 w-6 rounded ${decided ? "border-2 border-muted-foreground/50 bg-transparent hover:bg-muted" : SEVERITY_CELL[finding.severity]} ${selected === finding.id ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""}`}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
   );
 };
 

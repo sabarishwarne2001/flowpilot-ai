@@ -318,11 +318,13 @@ def _from_assertions(
 
 
 def _case_is_clean(case: ProcurementCase) -> bool:
-    self_inconsistent = any(
-        isinstance(finding, dict) and finding.get("code") == "SELF_INCONSISTENT_TOTAL"
+    from app.services.procurement_matching.matcher import BLOCKING_HEADER_CODES
+
+    blocked = any(
+        isinstance(finding, dict) and finding.get("code") in BLOCKING_HEADER_CODES
         for finding in (case.header_findings or [])
     )
-    return case.exception_count == 0 and not self_inconsistent
+    return case.exception_count == 0 and not blocked
 
 
 def _from_procurement(

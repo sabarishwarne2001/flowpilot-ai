@@ -133,6 +133,19 @@ export const findAction = (catalog: FlowCatalog | undefined, actionType: string)
 export const triggerLabel = (catalog: FlowCatalog | undefined, key: string): string =>
   findTrigger(catalog, key)?.label ?? humanize(key);
 
+/**
+ * Phase 2: what a rule listens to, named from its stored event types when no catalog trigger is
+ * held whole (a clause check listens to `work_item.enriched`, one of the two events "Document
+ * processed" covers, so the API's trigger list for it is empty).
+ */
+export const triggerLabelsForEvents = (catalog: FlowCatalog | undefined, eventTypes: readonly string[]): string[] => [
+  ...new Set(
+    eventTypes.map(
+      (event) => catalog?.triggers.find((trigger) => trigger.event_types.includes(event))?.label ?? humanize(event),
+    ),
+  ),
+];
+
 export const actionLabel = (catalog: FlowCatalog | undefined, actionType: string): string =>
   findAction(catalog, actionType)?.label ?? humanize(actionType);
 
@@ -378,7 +391,7 @@ const joinWords = (parts: readonly string[], word: string): string => {
 export const summarize = (draft: FlowDraft, catalog: FlowCatalog | undefined): string => {
   const when = draft.triggers.length
     ? joinWords(draft.triggers.map((key) => triggerLabel(catalog, key).toLowerCase()), "or")
-    : "…";
+    : "(pick when it runs)";
   const groups = draft.groups
     .filter((group) => group.conditions.length > 0)
     .map((group) => {
@@ -393,7 +406,7 @@ export const summarize = (draft: FlowDraft, catalog: FlowCatalog | undefined): s
     : "";
   const then = draft.actions.length
     ? joinWords(draft.actions.map((a) => actionLabel(catalog, a.action_type).toLowerCase()), "then")
-    : "…";
+    : "(add what it does)";
   const otherwise = draft.else_actions.length
     ? `; otherwise ${joinWords(draft.else_actions.map((a) => actionLabel(catalog, a.action_type).toLowerCase()), "then")}`
     : "";

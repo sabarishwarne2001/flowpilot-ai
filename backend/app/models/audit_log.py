@@ -103,6 +103,9 @@ class AuditResourceType(str, PyEnum):
     # PostgreSQL type by p8a2_batch_dispatch_engine.
     PROCESSING_BATCH = "PROCESSING_BATCH"
     EXPORT_PACKAGE = "EXPORT_PACKAGE"
+    # Phase 2 TruthMesh: conflict decisions, link decisions, rebuilds and what-if simulations.
+    # Added to the PostgreSQL type by p9a1_truthmesh_engine.
+    TRUTH_MESH = "TRUTH_MESH"
 
 
 class AuditAction(str, PyEnum):

@@ -43,6 +43,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
+  const [activeSources, setActiveSources] = useState<readonly SourceCitation[]>([]);
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([]);
 
   const {
@@ -107,13 +108,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     // Re-applied per nonce, so choosing the same template twice works.
   }, [draft?.nonce, setValue]);
 
-  const handleCitationClick = useCallback((citation: SourceCitation): void => {
-    setActiveCitation(citation);
-    setIsDrawerOpen(true);
-  }, []);
+  const handleCitationClick = useCallback(
+    (citation: SourceCitation, sources: readonly SourceCitation[] = []): void => {
+      setActiveCitation(citation);
+      setActiveSources(sources);
+      setIsDrawerOpen(true);
+    },
+    [],
+  );
 
   const handleDrawerClose = useCallback((): void => {
     setActiveCitation(null);
+    setActiveSources([]);
     setIsDrawerOpen(false);
   }, []);
 
@@ -369,6 +375,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         isOpen={isDrawerOpen}
         onClose={handleDrawerClose}
         citation={activeCitation}
+        citations={activeSources}
+        onSelect={setActiveCitation}
       />
     </div>
   );

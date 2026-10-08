@@ -48,6 +48,7 @@ import {
   AlertTriangle,
   CheckSquare,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Keyboard,
   Loader2,
@@ -135,6 +136,83 @@ const SEVERITY_STYLES: Readonly<Record<ReviewSeverity, string>> = {
   HIGH: "bg-destructive/15 text-destructive",
   MEDIUM: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   LOW: "bg-muted text-muted-foreground",
+};
+
+/** A stripe down each row's left edge, so the queue's severity reads at a glance (with the word). */
+const SEVERITY_STRIPE: Readonly<Record<ReviewSeverity, string>> = {
+  CRITICAL: "bg-red-600",
+  HIGH: "bg-red-400",
+  MEDIUM: "bg-amber-400",
+  LOW: "bg-transparent",
+};
+
+/**
+ * A tab bar that may be wider than the page: fades and a chevron button appear on the side that has
+ * more tabs, and the active tab is kept in view.
+ */
+const ScrollingTabs: React.FC<{ readonly active: string; readonly children: React.ReactElement }> = ({ active, children }) => {
+  const wrapper = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const bar = useCallback(() => wrapper.current?.querySelector<HTMLElement>("[role=tablist]") ?? null, []);
+  const measure = useCallback(() => {
+    const element = bar();
+    if (!element) {
+      return;
+    }
+    const left = element.scrollLeft > 2;
+    const right = element.scrollLeft + element.clientWidth < element.scrollWidth - 2;
+    setEdges((current) => (current.left === left && current.right === right ? current : { left, right }));
+  }, [bar]);
+  useEffect(() => {
+    const element = bar();
+    if (!element) {
+      return undefined;
+    }
+    measure();
+    element.addEventListener("scroll", measure, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => {
+      element.removeEventListener("scroll", measure);
+      observer?.disconnect();
+    };
+  }, [bar, measure]);
+  // Tabs widen when their counts arrive, which resizes nothing the observer watches: measure after
+  // every render too.
+  useEffect(() => {
+    measure();
+  });
+  useEffect(() => {
+    bar()?.querySelector<HTMLElement>(`[data-tab="${active}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active, bar]);
+  const nudge = (direction: 1 | -1) => bar()?.scrollBy({ left: direction * 240, behavior: "smooth" });
+  return (
+    <div ref={wrapper} className="relative">
+      {children}
+      {edges.left ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => nudge(-1)}
+          className="absolute inset-y-0 left-0 flex w-10 items-center justify-start bg-gradient-to-r from-background via-background/90 to-transparent text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      ) : null}
+      {edges.right ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => nudge(1)}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-end bg-gradient-to-l from-background via-background/90 to-transparent text-muted-foreground hover:text-foreground"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      ) : null}
+    </div>
+  );
 };
 
 const PAGE_SIZE = 25;
@@ -560,35 +638,62 @@ export const ReviewHub: React.FC = () => {
             others={new Set(live.viewers.filter((v) => v.user_id !== user.id).map((v) => v.user_id)).size}
           />
         )}
-        <dl className="flex gap-2" aria-label="Open items by source">
-          {allowed.map((kind) => (
-            <div key={kind} className="rounded-lg border border-border bg-card px-3 py-1.5 text-center">
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{KIND_LABELS[kind]}</dt>
-              <dd className="text-lg font-semibold tabular-nums">{counts[kind] ?? 0}</dd>
-            </div>
-          ))}
-        </dl>
       </header>
 
-      <nav className="flex gap-1 overflow-x-auto border-b border-border no-scrollbar" role="tablist" aria-label="Review views">
-        {tabs.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.id}
-            onClick={() => {
-              setTab(entry.id);
-              setPage(1);
-            }}
-            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${
-              tab === entry.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
+      {/* Phase 2: the open count per source sits on its tab (it used to be a second row of tiles
+          repeating the tabs), and a bar wider than the page says so and scrolls by button. */}
+      <p id="review-open-counts" className="sr-only">
+        Open items: {allowed.map((kind) => `${KIND_LABELS[kind]} ${counts[kind] ?? 0}`).join(", ")}.
+      </p>
+      <ScrollingTabs active={tab}>
+        <nav
+          className="flex gap-0.5 overflow-x-auto border-b border-border no-scrollbar"
+          role="tablist"
+          aria-label="Review views"
+          aria-describedby="review-open-counts"
+        >
+          {tabs.map((entry) => {
+            const count =
+              entry.id === "ALL"
+                ? allowed.reduce((total, kind) => total + (counts[kind] ?? 0), 0)
+                : entry.kind && entry.id !== "AUTONOMY"
+                  ? counts[entry.kind] ?? 0
+                  : null;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                data-tab={entry.id}
+                aria-selected={tab === entry.id}
+                onClick={() => {
+                  setTab(entry.id);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-[13px] font-semibold ${
+                  tab === entry.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {entry.label}
+                {count !== null ? (
+                  <span
+                    aria-hidden="true"
+                    className={`min-w-[1.25rem] rounded-full px-1.5 py-px text-center text-[10.5px] font-semibold tabular-nums ${
+                      count === 0
+                        ? "bg-muted text-muted-foreground/70"
+                        : tab === entry.id
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+      </ScrollingTabs>
 
       <div className="flex flex-wrap items-center gap-2" aria-label="Filters">
         {REVIEW_SEVERITIES.map((severity) => {
@@ -777,7 +882,13 @@ export const ReviewHub: React.FC = () => {
             const isOpen = expanded === key;
             const isSelected = selected.has(key);
             return (
-              <li key={key} data-index={index} className={isCurrent ? "bg-primary/5" : ""}>
+              <li
+                key={key}
+                data-index={index}
+                data-severity={item.severity}
+                className={`relative ${isCurrent ? "bg-primary/5" : ""}`}
+              >
+                <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-[3px] ${SEVERITY_STRIPE[item.severity]}`} />
                 <div className="flex items-start gap-3 px-4 py-3">
                   <button
                     type="button"

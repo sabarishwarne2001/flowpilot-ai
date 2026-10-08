@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Keyboard, Loader2, Pencil } from "lucide-react";
+import { Check, CheckCircle2, Keyboard, Loader2, Pencil } from "lucide-react";
 
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import {
@@ -11,6 +11,7 @@ import {
 import { verificationKeys } from "@/services/api/queryKeys";
 import { DocumentEvidence } from "@/components/review/DocumentEvidence";
 import {
+  documentLabel,
   formatFieldValue,
   parseScore,
 } from "@/types/verification";
@@ -19,6 +20,7 @@ import type {
   VerificationSummaryResponse,
 } from "@/types/verification";
 import { formatMicros } from "@/types/billing";
+import { diffSegments } from "@/utils/textDiff";
 
 /**
  * ARCH40-S2:workbench-focus. The field-level extraction workbench.
@@ -160,6 +162,12 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   }, [detail, edits, resolve, isReviewable]);
 
   useEffect(() => {
+    // F-178: mounted in the review hub the hub owns the keyboard. Its "a" is "assign to me" and its
+    // "e" collapses the item; heard here as well, the same key accepted every value or started
+    // editing. Standalone, the workbench keeps its own shortcuts.
+    if (focusVerificationId) {
+      return undefined;
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing =
@@ -207,7 +215,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [items.length, acceptConsensus]);
+  }, [items.length, acceptConsensus, focusVerificationId]);
 
   useEffect(() => {
     if (cursor > 0 && cursor >= items.length) {
@@ -242,6 +250,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
 
   return (
     <div className="flex h-full min-h-0">
+      {/* In the hub (focus mode) the item is already chosen: no one-item list beside it. */}
+      {focusVerificationId ? null : (
       <aside className="flex w-72 shrink-0 flex-col border-r border-border">
         <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-medium">
@@ -272,8 +282,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
                       : "border-transparent hover:bg-muted/50",
                   ].join(" ")}
                 >
-                  <span className="block truncate text-sm">
-                    {item.work_item_id.slice(0, 8)}
+                  <span className="block truncate text-sm" title={documentLabel(item)}>
+                    {documentLabel(item)}
                   </span>
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                     {score !== null && <>{Math.round(score * 100)}% agreement</>}
@@ -294,8 +304,12 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
           </p>
         </div>
       </aside>
+      )}
 
-      <section className="min-w-0 flex-1 overflow-y-auto p-4">
+      <section
+        className={`min-w-0 flex-1 overflow-y-auto ${focusVerificationId ? "" : "p-4"}`}
+        aria-label="Extraction workbench"
+      >
         {detailQuery.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -309,8 +323,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
           <>
             <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
               <div>
-                <h2 className="text-sm font-medium">
-                  Document {detail.work_item_id.slice(0, 8)}
+                <h2 className="break-words text-sm font-medium">
+                  {documentLabel(detail)}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {detail.agent_count} agents ·{" "}
@@ -367,25 +381,18 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
               </div>
             )}
 
-            <ul className="mt-3 space-y-3">
-              {detail.fields
-                .filter(isReviewable)
-                .map((field) => (
-                  <FieldDiff
-                    key={field.field_path}
-                    field={field}
-                    onSelect={() => setEvidenceField(field.field_path)}
-                    editing={editing}
-                    value={edits[field.field_path]}
-                    onChange={(value) =>
-                      setEdits((current) => ({
-                        ...current,
-                        [field.field_path]: value,
-                      }))
-                    }
-                  />
-                ))}
-            </ul>
+            {detail.fields.filter(isReviewable).length > 0 && (
+              <FieldTable
+                fields={detail.fields.filter(isReviewable)}
+                activeField={evidenceField}
+                onSelect={setEvidenceField}
+                editing={editing}
+                edits={edits}
+                onChange={(fieldPath, value) =>
+                  setEdits((current) => ({ ...current, [fieldPath]: value }))
+                }
+              />
+            )}
 
             {detail.fields.filter(isReviewable).length === 0 && (
               <p className="mt-3 text-sm text-muted-foreground">
@@ -421,91 +428,203 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   );
 };
 
-const DISAGREEMENT_COPY: Record<string, string> = {
-  MISSING: "At least one agent found nothing here — often a scan-quality issue.",
-  CONFLICT: "The agents read different values. This one needs a decision.",
-  FORMAT: "Same value, different formatting. Usually safe to accept.",
+const DISAGREEMENT: Record<string, { label: string; copy: string; tone: string }> = {
+  MISSING: {
+    label: "Not found by all",
+    copy: "At least one agent found nothing here — often a scan-quality issue.",
+    tone: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  },
+  CONFLICT: {
+    label: "Different values",
+    copy: "The agents read different values. This one needs a decision.",
+    tone: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+  },
+  FORMAT: {
+    label: "Formatting only",
+    copy: "Same value, different formatting. Usually safe to accept.",
+    tone: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  },
 };
 
-interface FieldDiffProps {
+interface FieldTableProps {
+  readonly fields: readonly VerificationFieldResponse[];
+  readonly activeField: string | null;
+  readonly onSelect: (fieldPath: string) => void;
+  readonly editing: boolean;
+  readonly edits: Readonly<Record<string, string>>;
+  readonly onChange: (fieldPath: string, value: string) => void;
+}
+
+/**
+ * Phase 2 — the fields to decide as one comparison grid: a row per field, a column per agent and
+ * the value proposed. In each agent's reading the characters that differ from the proposal are
+ * highlighted, so "GB94 BARC 1020" against "GB94 BARC 1O20" shows the one letter at a glance; an
+ * agent that found nothing says so in words.
+ */
+const DECISION_ORDER: Readonly<Record<string, number>> = { CONFLICT: 0, MISSING: 1, FORMAT: 2 };
+
+const FieldTable: React.FC<FieldTableProps> = ({ fields: given, activeField, onSelect, editing, edits, onChange }) => {
+  const agents = Math.max(1, ...given.map((field) => field.agent_values.length));
+  // What needs a decision first: different values, then missing ones, then formatting, then the
+  // least confident; the rest keep the server's order.
+  const fields = given
+    .map((field, index) => ({ field, index }))
+    .sort(
+      (a, b) =>
+        (DECISION_ORDER[a.field.disagreement_kind ?? ""] ?? 3) - (DECISION_ORDER[b.field.disagreement_kind ?? ""] ?? 3) ||
+        (parseScore(a.field.confidence) ?? 1) - (parseScore(b.field.confidence) ?? 1) ||
+        a.index - b.index,
+    )
+    .map(({ field }) => field);
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="text-xs font-semibold text-foreground">
+          {fields.length} field{fields.length === 1 ? "" : "s"} to decide
+        </h3>
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <mark className="rounded-sm bg-red-500/20 px-1 font-mono text-red-700 dark:text-red-300">abc</mark>
+          differs from the proposed value · click a field to see it on the page
+        </p>
+      </div>
+      <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border" role="region" aria-label="Field comparison">
+        <table className="w-full min-w-[36rem] border-collapse text-xs">
+          <thead className="bg-muted/40 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            <tr>
+              <th scope="col" className="px-3 py-2">Field</th>
+              {Array.from({ length: agents }, (_, index) => (
+                <th key={index} scope="col" className="px-3 py-2">Agent {index + 1}</th>
+              ))}
+              <th scope="col" className="px-3 py-2">{editing ? "Your value" : "Proposed"}</th>
+              <th scope="col" className="w-24 px-3 py-2 text-right">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((field) => (
+              <FieldRow
+                key={field.field_path}
+                field={field}
+                agents={agents}
+                active={activeField === field.field_path}
+                onSelect={() => onSelect(field.field_path)}
+                editing={editing}
+                value={edits[field.field_path]}
+                onChange={(value) => onChange(field.field_path, value)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+interface FieldRowProps {
   readonly field: VerificationFieldResponse;
+  readonly agents: number;
+  readonly active: boolean;
   readonly onSelect: () => void;
   readonly editing: boolean;
   readonly value: string | undefined;
   readonly onChange: (value: string) => void;
 }
 
-const FieldDiff: React.FC<FieldDiffProps> = ({
-  field,
-  onSelect,
-  editing,
-  value,
-  onChange,
-}) => {
+const FieldRow: React.FC<FieldRowProps> = ({ field, agents, active, onSelect, editing, value, onChange }) => {
   const confidence = parseScore(field.confidence);
-
+  const proposed = field.consensus_value === null || field.consensus_value === undefined ? null : formatFieldValue(field.consensus_value);
+  const kind = field.disagreement_kind ? DISAGREEMENT[field.disagreement_kind] : undefined;
   return (
-    <li className="rounded-md border border-border bg-card p-3" onFocusCapture={onSelect}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <tr
+      className={`border-t border-border align-top ${active ? "bg-primary/[0.04] shadow-[inset_2px_0_0_hsl(var(--primary))]" : "hover:bg-muted/30"}`}
+      onFocusCapture={onSelect}
+      data-field={field.field_path}
+    >
+      <th scope="row" className="px-3 py-2 text-left font-normal">
         <button
           type="button"
           onClick={onSelect}
           title="Show this field on the page"
-          className="font-mono text-xs font-medium underline-offset-2 hover:underline"
+          className="font-mono text-xs font-medium text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:underline"
         >
           {field.field_path}
         </button>
-        <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          {field.disagreement_kind && (
-            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-800">
-              {field.disagreement_kind}
-            </span>
-          )}
-          {confidence !== null && <>{Math.round(confidence * 100)}% confident</>}
-        </span>
-      </div>
-
-      {field.disagreement_kind &&
-        DISAGREEMENT_COPY[field.disagreement_kind] && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {DISAGREEMENT_COPY[field.disagreement_kind]}
-          </p>
-        )}
-
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {field.agent_values.map((agentValue, index) => (
-          <div
-            key={index}
-            className="rounded border border-border bg-background p-2"
+        {kind ? (
+          <span
+            className={`mt-1 inline-flex items-center whitespace-nowrap rounded border px-1.5 py-px text-[10.5px] font-medium ${kind.tone}`}
+            title={kind.copy}
           >
-            <p className="text-[11px] text-muted-foreground">
-              Agent {index + 1}
-            </p>
-            <p className="mt-0.5 break-words font-mono text-xs">
-              {formatFieldValue(agentValue)}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-2">
-        <p className="text-[11px] text-muted-foreground">
-          {editing ? "Your value" : "Proposed"}
-        </p>
+            {kind.label}
+            <span className="sr-only">: {kind.copy}</span>
+          </span>
+        ) : null}
+      </th>
+      {Array.from({ length: agents }, (_, index) => {
+        const raw = field.agent_values[index];
+        if (index >= field.agent_values.length) {
+          return <td key={index} className="px-3 py-2 text-muted-foreground">–</td>;
+        }
+        if (raw === null || raw === undefined) {
+          return (
+            <td key={index} className="px-3 py-2 italic text-muted-foreground">
+              not found
+            </td>
+          );
+        }
+        const text = formatFieldValue(raw);
+        const matches = proposed !== null && text === proposed;
+        return (
+          <td key={index} className="px-3 py-2">
+            <span className="inline-flex max-w-full items-start gap-1">
+              {matches ? (
+                <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Matches the proposed value" />
+              ) : null}
+              <span className="font-mono [overflow-wrap:anywhere]">
+                {proposed === null
+                  ? text
+                  : diffSegments(text, proposed).map((segment, i) =>
+                      segment.same ? (
+                        <React.Fragment key={i}>{segment.text}</React.Fragment>
+                      ) : (
+                        <mark key={i} className="rounded-sm bg-red-500/20 text-red-700 dark:text-red-300">
+                          {segment.text}
+                        </mark>
+                      ),
+                    )}
+              </span>
+            </span>
+          </td>
+        );
+      })}
+      <td className="px-3 py-2">
         {editing ? (
           <input
             value={value ?? formatFieldValue(field.consensus_value)}
             onChange={(e) => onChange(e.target.value)}
             aria-label={`Value for ${field.field_path}`}
-            className="mt-0.5 w-full rounded border border-primary/50 bg-background px-2 py-1.5 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full min-w-[10rem] rounded border border-primary/50 bg-background px-2 py-1 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         ) : (
-          <p className="mt-0.5 break-words rounded bg-muted/50 px-2 py-1.5 font-mono text-xs">
+          <span className="inline-block max-w-full rounded bg-muted/60 px-1.5 py-0.5 font-mono font-semibold text-foreground [overflow-wrap:anywhere]">
             {formatFieldValue(field.consensus_value)}
-          </p>
+          </span>
         )}
-      </div>
-    </li>
+      </td>
+      <td className="px-3 py-2 text-right">
+        {confidence !== null ? (
+          <span className="inline-flex items-center gap-1.5" title={`${Math.round(confidence * 100)}% confident`}>
+            <span className="relative h-1.5 w-10 overflow-hidden rounded-full bg-muted">
+              <span
+                className={`absolute inset-y-0 left-0 rounded-full ${confidence >= 0.8 ? "bg-emerald-500" : confidence >= 0.5 ? "bg-amber-500" : "bg-red-500"}`}
+                style={{ width: `${Math.round(confidence * 100)}%` }}
+              />
+            </span>
+            <span className="tabular-nums text-muted-foreground">{Math.round(confidence * 100)}%</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">–</span>
+        )}
+      </td>
+    </tr>
   );
 };
 

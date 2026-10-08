@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2, TriangleAlert } from "lucide-react";
 
 import CapabilityLockCard from "@/components/procurement/CapabilityLockCard";
 import PdfViewer from "@/components/pdf/PdfViewer";
@@ -19,8 +19,9 @@ import {
   SURFACE_DIALOG,
   TEXTAREA,
 } from "@/components/ui/primitives";
-import type { CaseLine, EvidencePointer } from "@/types/procurement";
-import { RED_OUTCOMES, outcomeLabel, outcomeTone } from "@/types/procurement";
+import type { CaseDetail, CaseLine, EvidencePointer } from "@/types/procurement";
+import { NOTHING_COMPARED, RED_OUTCOMES, outcomeLabel, outcomeTone, statusTone } from "@/types/procurement";
+import { formatMoneyMicros, vendorLabel } from "@/utils/formatters";
 import { formatTimestamp } from "@/utils/displayTime";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
@@ -30,14 +31,16 @@ const MINIMUM_DISPUTE_REASON = 10;
 
 type Side = "po" | "receipt" | "invoice";
 
-const formatMicros = (micros: number | null, currency: string): string =>
-  micros === null
-    ? "—"
-    : new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 2,
-      }).format(micros / 1_000_000);
+/** F-172: amounts in the case's own currency (it was a constant, INR). */
+const formatMicros = (micros: number | null, currency: string | null): string =>
+  formatMoneyMicros(micros, currency);
+
+const SIDE_LABEL: Readonly<Record<string, string>> = {
+  po: "Purchase order",
+  receipt: "Goods receipt",
+  invoice: "Invoice",
+  case: "Whole case",
+};
 
 const formatQuantity = (value: string | null): string => value ?? "—";
 
@@ -64,7 +67,6 @@ export const ThreeWayComparison: React.FC = () => {
   const organizationId = workspace?.organizationId ?? "";
   const { caseId = "" } = useParams<{ caseId: string }>();
   const queryClient = useQueryClient();
-  const currency = "INR";
 
   const capability = useCapabilityAccess(organizationId, RECONCILIATION_CAPABILITY);
 
@@ -86,7 +88,15 @@ export const ThreeWayComparison: React.FC = () => {
   });
 
   const detail = caseQuery.data ?? null;
+  const currency = detail?.currency ?? null;
   const lines = useMemo<readonly CaseLine[]>(() => detail?.lines ?? [], [detail]);
+  // F-171: a case that compared nothing is approved only with a written reason, as one with exceptions.
+  const nothingCompared = useMemo(
+    () =>
+      detail !== null &&
+      (lines.length === 0 || detail.header_findings.some((finding) => finding.code === NOTHING_COMPARED)),
+    [detail, lines.length],
+  );
   const activeLine = lines[cursor] ?? null;
   const redLineCount = useMemo(
     () => lines.filter((line) => RED_OUTCOMES.has(line.outcome)).length,
@@ -112,7 +122,7 @@ export const ThreeWayComparison: React.FC = () => {
   const describeFailure = useCallback((error: unknown): string => {
     if (error instanceof ApiError) {
       if (error.is("OVERRIDE_REASON_REQUIRED")) {
-        return "This case has exceptions. Write why you're approving it anyway.";
+        return "This case has exceptions, or nothing could be compared. Write why you're approving it anyway.";
       }
       if (error.is("CASE_NOT_LIVE")) {
         return "This case was already resolved or re-scored. Reload to see the current one.";
@@ -159,12 +169,12 @@ export const ThreeWayComparison: React.FC = () => {
 
   const startApprove = useCallback(() => {
     setActionError(null);
-    if (redLineCount > 0) {
+    if (redLineCount > 0 || nothingCompared) {
       setDialog("approve");
       return;
     }
     approve.mutate(undefined);
-  }, [approve, redLineCount]);
+  }, [approve, redLineCount, nothingCompared]);
 
   /** j/k move, e evidence, a approve, d dispute. */
   useEffect(() => {
@@ -251,10 +261,18 @@ export const ThreeWayComparison: React.FC = () => {
     <div className="space-y-4 p-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h1 className={PAGE_TITLE}>Three-way match</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className={PAGE_TITLE}>
+              Three-way match{detail.invoice_number ? ` · ${detail.invoice_number}` : ""}
+            </h1>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(detail.status)}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+              {detail.status.replace("_", " ").toLowerCase()}
+            </span>
+          </div>
           <p className={HINT}>
-            {detail.line_count} lines · {redLineCount} needing attention · scored{" "}
-            {formatTimestamp(detail.created_at)} under policy {detail.policy_version}
+            {vendorLabel(detail.vendor_name, detail.vendor_key)} · {detail.line_count} lines · {redLineCount} needing
+            attention · scored {formatTimestamp(detail.created_at)} under policy {detail.policy_version}
           </p>
         </div>
         <div className="flex gap-2">
@@ -280,14 +298,21 @@ export const ThreeWayComparison: React.FC = () => {
         </div>
       </header>
 
+      <DocumentStrip detail={detail} />
+
       {detail.header_findings.length > 0 ? (
-        <section className={`${SURFACE} space-y-1 border-amber-500/40 p-4`}>
-          <h2 className="text-sm font-semibold">Before comparing documents</h2>
+        <section className={`${SURFACE} space-y-2 border-amber-500/40 p-4`}>
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <TriangleAlert className="h-4 w-4 text-amber-600" aria-hidden />
+            {nothingCompared ? "Nothing could be compared" : "Before comparing documents"}
+          </h2>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {detail.header_findings.map((finding: any, index: number) => (
-              <li key={`${finding.code}-${index}`}>
-                <span className="font-mono">{finding.side ?? "—"}</span> ·{" "}
-                {finding.detail ?? finding.code}
+              <li key={`${finding.code}-${index}`} className="flex gap-2">
+                <span className="w-28 shrink-0 font-medium text-foreground/80">
+                  {SIDE_LABEL[finding.side ?? ""] ?? finding.side ?? "—"}
+                </span>
+                <span className="min-w-0">{finding.detail ?? finding.code}</span>
               </li>
             ))}
           </ul>
@@ -415,8 +440,9 @@ export const ThreeWayComparison: React.FC = () => {
       {dialog === "approve" ? (
         <div className={`${SURFACE_DIALOG} fixed inset-x-0 bottom-0 z-50 m-4 space-y-3 p-4 sm:mx-auto sm:max-w-lg`}>
           <h2 className="text-sm font-semibold">
-            Approve with {redLineCount} unresolved line
-            {redLineCount === 1 ? "" : "s"}
+            {redLineCount > 0
+              ? `Approve with ${redLineCount} unresolved line${redLineCount === 1 ? "" : "s"}`
+              : "Approve without a line-by-line comparison"}
           </h2>
           <p className={HINT}>
             Write why this is being approved anyway. An auditor reads this when
@@ -478,6 +504,53 @@ export const ThreeWayComparison: React.FC = () => {
         </div>
       ) : null}
     </div>
+  );
+};
+
+/** The three documents of the case, with the number and total each prints. */
+const DocumentStrip: React.FC<{ detail: CaseDetail }> = ({ detail }) => {
+  const sides: ReadonlyArray<{
+    key: string;
+    label: string;
+    id: string | null;
+    number: string | null | undefined;
+    file: string | null | undefined;
+    total: number | null | undefined;
+  }> = [
+    { key: "invoice", label: "Invoice", id: detail.invoice_work_item_id, number: detail.invoice_number,
+      file: detail.invoice_filename, total: detail.invoice_total_micros },
+    { key: "po", label: "Purchase order", id: detail.po_work_item_id, number: detail.po_number,
+      file: detail.po_filename, total: detail.po_total_micros },
+    { key: "receipt", label: "Goods receipt", id: detail.receipt_work_item_id, number: detail.receipt_number,
+      file: detail.receipt_filename, total: null },
+  ];
+  return (
+    <section aria-label="Documents in this case" className="grid gap-3 sm:grid-cols-3">
+      {sides.map((side) => (
+        <div key={side.key} className={`${SURFACE} flex items-start gap-3 p-3.5 ${side.id ? "" : "opacity-60"}`}>
+          <span className="rounded-md bg-primary/10 p-2 text-primary">
+            <FileText className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{side.label}</div>
+            {side.id ? (
+              <>
+                <div className="truncate font-mono text-sm font-medium" title={side.file ?? undefined}>
+                  {side.number ?? side.file ?? "Unnumbered"}
+                </div>
+                <div className="truncate text-xs text-muted-foreground" title={side.file ?? undefined}>
+                  {side.total !== null && side.total !== undefined
+                    ? `Total ${formatMoneyMicros(side.total, detail.currency ?? null)}`
+                    : side.file}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">Not found</div>
+            )}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 };
 

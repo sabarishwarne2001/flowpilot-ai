@@ -168,7 +168,31 @@ def chunks_of_document(
     return list(db.execute(statement).scalars().all())
 
 
+def document_centroids(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID | str,
+    work_item_ids: Sequence[uuid.UUID | str],
+) -> dict[uuid.UUID, list[float]]:
+    """Phase 2 TruthMesh. Each document's semantic centroid: the mean of its chunk embeddings
+    (pgvector's avg over vector), always under its workspace. Documents with no chunks are absent."""
+    from sqlalchemy import func, type_coerce
+
+    if not work_item_ids:
+        return {}
+    mean = type_coerce(func.avg(DocumentChunk.embedding), DocumentChunk.embedding.type)
+    statement = scoped_chunk_query(
+        db, workspace_id, work_item_ids=work_item_ids, entity=(DocumentChunk.work_item_id, mean),
+    ).group_by(DocumentChunk.work_item_id)
+    out: dict[uuid.UUID, list[float]] = {}
+    for work_item_id, centroid in db.execute(statement).all():
+        if centroid is not None:
+            out[work_item_id] = [float(x) for x in centroid]
+    return out
+
+
 __all__ = [
+    "document_centroids",
     "COSINE_DISTANCE",
     "VectorScopeError",
     "chunks_of_document",

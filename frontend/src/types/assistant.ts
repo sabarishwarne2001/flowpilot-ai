@@ -61,10 +61,11 @@ export type ConversationStatus =
  */
 export interface SourceCitation {
   /**
-   * Stable unique identifier.
-   * React rendering should never depend on array indexes.
+   * F-175: the API does not send one (app/schemas/assistant.py SourceCitation). Typed as required, it
+   * was used as the React key of every source, so all sources of an answer shared the key
+   * `undefined`. Use `citationKey` instead.
    */
-  readonly citation_id: string;
+  readonly citation_id?: string;
 
   readonly work_item_id: string;
 
@@ -87,6 +88,10 @@ export interface SourceCitation {
 
   readonly snippet: string;
 }
+
+/** A stable identity for a source: its document and passage. */
+export const citationKey = (citation: Pick<SourceCitation, "citation_id" | "work_item_id" | "chunk_index">): string =>
+  citation.citation_id ?? `${citation.work_item_id}:${citation.chunk_index}`;
 
 /* ========================================================================== */
 /* Message Models                                                             */

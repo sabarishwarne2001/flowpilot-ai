@@ -88,7 +88,21 @@ export interface CaseSummary {
   readonly created_at: string;
   readonly updated_at: string;
   readonly resolved_at: string | null;
+  /** F-172 / F-174: the case's currency, the printed vendor name, each document's number and file. */
+  readonly currency?: string | null;
+  readonly vendor_name?: string | null;
+  readonly invoice_number?: string | null;
+  readonly po_number?: string | null;
+  readonly receipt_number?: string | null;
+  readonly invoice_filename?: string | null;
+  readonly po_filename?: string | null;
+  readonly receipt_filename?: string | null;
+  readonly invoice_total_micros?: number | null;
+  readonly po_total_micros?: number | null;
 }
+
+/** F-171: header findings that keep a case out of MATCHED (matcher.BLOCKING_HEADER_CODES). */
+export const NOTHING_COMPARED = "NOTHING_COMPARED";
 
 export interface CaseDetail extends CaseSummary {
   readonly input_digest: string;

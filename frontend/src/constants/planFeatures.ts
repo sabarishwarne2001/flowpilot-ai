@@ -30,6 +30,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.tableIntelligence]: "Table intelligence (multi-page, rotated and ruled tables, validated, CSV/XLSX export)",
   // PHASE1:plan-feature
   [CAPABILITY.batchDispatch]: "Batch operations (confidence analytics, schema self-healing, dispatch lanes, SHA-256 verified export packages)",
+  // PHASE2:plan-feature
+  [CAPABILITY.truthmesh]: "TruthMesh digital twin (documents linked across the workspace, cross-document conflicts, what-if ripple simulation)",
   // ARCH45-S2:plan-feature
   [CAPABILITY.universalCorroborator]: "Document corroborator (compare 2–5 documents clause by clause, discrepancy matrix, PDF report)",
   // ARCH46-S2:plan-feature
@@ -82,6 +84,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,
   CAPABILITY.universalCorroborator,
+  // PHASE2:plan-feature-order — Enterprise only (provisional, N-033).
+  CAPABILITY.truthmesh,
   // ARCH48-S2:plan-feature-order — Enterprise only.
   CAPABILITY.collaborativeReview,
   CAPABILITY.enterpriseIdentity,
