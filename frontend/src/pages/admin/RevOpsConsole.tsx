@@ -480,7 +480,7 @@ const ContractsTab: React.FC = () => {
 const RevOpsConsole: React.FC = () => {
   const [tab, setTab] = useUrlTab<Tab>(TAB_IDS);
   return (
-    <div className="space-y-6" data-testid="revops-console">
+    <div className="mx-auto max-w-7xl space-y-6" data-testid="revops-console">
       <PageHeader
         icon={Banknote}
         eyebrow="Platform"

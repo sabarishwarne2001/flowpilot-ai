@@ -13,14 +13,16 @@
  */
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+import { BadgeCheck, Cpu, LayoutDashboard, LifeBuoy, Loader2, Network, PackageCheck, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, PAGE_TITLE, SCROLL_X, SECTION_TITLE, SELECT, SURFACE,
+  BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, SCROLL_X, SECTION_TITLE, SELECT, SURFACE,
   TABLE_HEAD, TABLE_ROW, TEXTAREA,
 } from "@/components/ui/primitives";
 import { errorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { TabList, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 import {
   getAllRefusals, getLocalModelHealth, getReleaseStatus, getSovereignStatus, installLicence, operatorEgressTest,
   sovereignKeys,
@@ -31,10 +33,15 @@ import {
 import { formatTimestamp } from "@/utils/displayTime";
 
 type Tab = "overview" | "egress" | "model" | "licence" | "release" | "recovery";
-const TABS: readonly (readonly [Tab, string])[] = [
-  ["overview", "Overview"], ["egress", "Egress"], ["model", "Local model"], ["licence", "Licence"],
-  ["release", "Release"], ["recovery", "Recovery"],
+const TABS: readonly TabDefinition<Tab>[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "egress", label: "Egress", icon: Network },
+  { id: "model", label: "Local model", icon: Cpu },
+  { id: "licence", label: "Licence", icon: BadgeCheck },
+  { id: "release", label: "Release", icon: PackageCheck },
+  { id: "recovery", label: "Recovery", icon: LifeBuoy },
 ];
+const TAB_IDS = TABS.map((entry) => entry.id);
 const COUNT = new Intl.NumberFormat();
 
 const seconds = (value: string | number | null | undefined): string => {
@@ -55,7 +62,7 @@ const Stat: React.FC<{ readonly label: string; readonly value: React.ReactNode; 
 
 const SovereignConsole: React.FC = () => {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>(TAB_IDS);
   const [days, setDays] = useState(7);
   const [channel, setChannel] = useState<Channel>("LLM_PROVIDER");
   const [destination, setDestination] = useState("");
@@ -84,24 +91,19 @@ const SovereignConsole: React.FC = () => {
 
   const s = status.data;
   return (
-    <div className="space-y-6 p-4" data-testid="sovereign-console">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className={PAGE_TITLE}>Sovereign edition</h1>
-          <p className="text-sm text-muted-foreground">Egress, the local model, the licence, the release and recovery evidence for this deployment.</p>
-        </div>
-        <button type="button" className={BUTTON_SECONDARY} onClick={() => void queryClient.invalidateQueries({ queryKey: sovereignKeys.all() })}>
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden />Refresh
-        </button>
-      </header>
-      <nav className="flex flex-wrap gap-1 border-b border-border/60" aria-label="Sovereign console">
-        {TABS.map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setTab(key)} aria-current={tab === key ? "page" : undefined}
-                  className={`rounded-t-md px-3 py-2 text-sm ${tab === key ? "border-b-2 border-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-            {label}
+    <div className="mx-auto max-w-7xl space-y-6" data-testid="sovereign-console">
+      <PageHeader
+        icon={ShieldCheck}
+        eyebrow="Platform"
+        title="Sovereign edition"
+        description="Egress, the local model, the licence, the release and recovery evidence for this deployment."
+        actions={
+          <button type="button" className={BUTTON_SECONDARY} onClick={() => void queryClient.invalidateQueries({ queryKey: sovereignKeys.all() })}>
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden />Refresh
           </button>
-        ))}
-      </nav>
+        }
+      />
+      <TabList label="Sovereign console" idBase="sovereign" tabs={TABS} value={tab} onChange={setTab} />
 
       {status.isLoading ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div> : null}
       {status.isError ? <p role="alert" className="text-sm text-destructive">{errorMessage(status.error, "The status could not be loaded.")}</p> : null}
