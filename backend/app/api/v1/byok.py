@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.api import capability_gate
@@ -240,7 +240,13 @@ def _savings(
     db: Session, *, organization_id: uuid.UUID, window_days: int
 ) -> BYOKSavingsResponse:
     since = datetime.now(timezone.utc) - timedelta(days=window_days)
-    is_byok = UsageEvent.cost_basis_source == SOURCE_ZERO_BYOK
+    # F-190. ZERO_BYOK is a cost basis, not a credential: the self-hosted model is priced at a
+    # declared zero with it too (N-031). A call ran on the tenant's key only when the metering
+    # zeroed it for that key (llm_metering._byok_applies).
+    is_byok = and_(
+        UsageEvent.cost_basis_source == SOURCE_ZERO_BYOK,
+        UsageEvent.details["cost_basis_zeroed_by"].astext == "byok_tenant_key",
+    )
 
     row = db.execute(
         select(
