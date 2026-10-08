@@ -5,9 +5,12 @@
  */
 import fs from "node:fs";
 
-import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { api, resolveWorkspaceId } from "../support/api";
-import { STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
+
+import { ProblemTracker, attachProblemListeners, test, expect, expectHealthyPage, settle } from "../support/fixtures";
+import { api, apiLogin, resolveWorkspaceId, type ApiSession } from "../support/api";
+import { API_BASE, BROWSER_API_ORIGIN, PASSWORD, STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
+import { linkFrom, waitForMail } from "../support/mail";
 
 interface NoticePage {
   readonly items: readonly { id: string; title: string; is_read: boolean }[];
@@ -390,4 +393,124 @@ test.describe("The audit log on a phone and a tablet (F-203)", () => {
       await expectHealthyPage(page);
     });
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Two-party ownership transfer, end to end, between two people who sign up for this test (so no
+// seeded account changes role while other tests run).
+// ---------------------------------------------------------------------------------------------
+
+/** The token of an emailed link: in the fragment (#token=…) so it never reaches server logs. */
+function tokenOf(link: string): string | null {
+  const url = new URL(link, "http://x");
+  return new URLSearchParams(url.hash.replace(/^#/, "")).get("token") ?? url.searchParams.get("token");
+}
+
+async function signUpVerified(email: string): Promise<ApiSession> {
+  const since = Date.now() - 1_000;
+  const registered = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: PASSWORD }),
+  });
+  expect(registered.status, await registered.text()).toBeLessThan(300);
+  const mail = await waitForMail(email, /verify-email/, since);
+  const token = tokenOf(linkFrom(mail, /\/verify-email/));
+  const verified = await fetch(`${API_BASE}/auth/verify-email`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  expect(verified.status, await verified.text()).toBe(200);
+  return apiLogin(email);
+}
+
+async function openAs(browser: Browser, session: ApiSession): Promise<{ context: BrowserContext; page: Page }> {
+  const context = await browser.newContext();
+  await context.addCookies([
+    {
+      name: "flowpilot_refresh",
+      value: session.refreshToken,
+      domain: new URL(BROWSER_API_ORIGIN).hostname,
+      path: "/api/v1/auth",
+      httpOnly: true,
+      secure: false,
+      sameSite: "Lax",
+    },
+  ]);
+  const persisted = JSON.stringify({ state: { user: session.me, isAuthenticated: true }, version: 0 });
+  await context.addInitScript(
+    ({ value }) => {
+      if (!window.sessionStorage.getItem("__e2e_auth_seeded")) {
+        window.localStorage.setItem("flowpilot_auth_session", value);
+        window.sessionStorage.setItem("__e2e_auth_seeded", "1");
+      }
+    },
+    { value: persisted },
+  );
+  return { context, page: await context.newPage() };
+}
+
+test.describe("Ownership transfer, two parties", () => {
+  test.setTimeout(240_000);
+
+  test("the owner proposes, the member accepts, and the roles swap", async ({ browser }) => {
+    const id = runId();
+    const ownerEmail = `transfer-owner-${id}@e2e.example.com`;
+    const heirEmail = `transfer-heir-${id}@e2e.example.com`;
+    const owner = await signUpVerified(ownerEmail);
+    const heir = await signUpVerified(heirEmail);
+
+    const slug = `transfer-${id}`.toLowerCase().slice(0, 40);
+    const created = await api<{ id: string; slug: string; name: string }>(owner, "POST", "/organizations", {
+      organization_name: `Transfer Co ${id}`,
+      organization_slug: slug,
+    });
+    expect(created.status, created.text).toBeLessThan(300);
+    const orgId = created.body.id;
+
+    const since = Date.now() - 1_000;
+    const invited = await api(owner, "POST", `/organizations/${orgId}/invitations`, { email: heirEmail, organization_role: "ADMIN" });
+    expect(invited.status, invited.text).toBeLessThan(300);
+    const invitation = await waitForMail(heirEmail, /invitations\/accept/, since);
+    const inviteToken = tokenOf(linkFrom(invitation, /invitations\/accept/));
+    const accepted = await api(heir, "POST", "/invitations/accept", { token: inviteToken });
+    expect(accepted.status, accepted.text).toBeLessThan(300);
+
+    // The owner proposes from the Members page.
+    const ownerSide = await openAs(browser, owner);
+    const ownerProblems = new ProblemTracker();
+    attachProblemListeners(ownerSide.page, ownerProblems);
+    await ownerSide.page.goto(`/organizations/${slug}/members`);
+    await ownerSide.page.getByRole("button", { name: "Transfer ownership…" }).click();
+    await ownerSide.page.getByLabel("New owner").selectOption({ index: 1 });
+    await ownerSide.page.getByLabel("Confirm your password").fill(PASSWORD);
+    await ownerSide.page.getByRole("button", { name: "Propose transfer" }).click();
+    await expect(ownerSide.page.getByText(/Waiting for .* to accept/)).toBeVisible();
+
+    // The heir accepts from the banner in their workspace.
+    const heirSide = await openAs(browser, heir);
+    const heirProblems = new ProblemTracker();
+    attachProblemListeners(heirSide.page, heirProblems);
+    await heirSide.page.goto("/workspaces");
+    await heirSide.page.getByRole("link", { name: /General/ }).first().click();
+    await expect(heirSide.page.getByText(/asked to take ownership of/)).toBeVisible({ timeout: 20_000 });
+    await heirSide.page.getByRole("button", { name: "Accept", exact: true }).click();
+    await heirSide.page.getByRole("button", { name: "Yes, take ownership" }).click();
+    await expect(heirSide.page.getByText(/asked to take ownership of/)).toHaveCount(0, { timeout: 20_000 });
+
+    const members = await api<{ items: { role: string; user: { email: string } }[] }>(owner, "GET", `/organizations/${orgId}/members`);
+    const roles = Object.fromEntries(members.body.items.map((m) => [m.user.email, m.role]));
+    expect(roles[heirEmail]).toBe("OWNER");
+    expect(roles[ownerEmail]).toBe("ADMIN");
+
+    // The former owner's Members page no longer offers a transfer.
+    await ownerSide.page.reload();
+    await expect(ownerSide.page.getByRole("button", { name: "Transfer ownership…" })).toHaveCount(0);
+
+    expect(ownerProblems.unexpected(), ownerProblems.summary()).toEqual([]);
+    expect(heirProblems.unexpected(), heirProblems.summary()).toEqual([]);
+    await ownerSide.context.close();
+    await heirSide.context.close();
+  });
 });
