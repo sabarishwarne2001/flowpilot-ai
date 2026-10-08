@@ -22,6 +22,7 @@ import { approvePacketSplit, correctPacketSplit, getPacketSplit, rejectPacketSpl
 import type { PageScore } from "@/types/packets";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 import { useImageFallback } from "@/hooks/useImageFallback";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 const PageThumb: React.FC<{ readonly workspaceId: string; readonly splitId: string; readonly score: PageScore }> = ({
   workspaceId, splitId, score,
@@ -65,7 +66,10 @@ const SplitReview: React.FC = () => {
   const detail = query.data;
   const original = useMemo(() => (detail ? detail.segments.slice(1).map((s) => s.page_start) : []), [detail]);
   const boundaries = edited ?? original;
-  const editable = detail?.split.status === "PROPOSED" || detail?.split.status === "SINGLE";
+  // F-167: correcting, approving and rejecting a split need a contributor; a viewer reads it.
+  const role = workspace?.role;
+  const canAct = role === "OWNER" || role === "ADMIN" || role === "CONTRIBUTOR";
+  const editable = canAct && (detail?.split.status === "PROPOSED" || detail?.split.status === "SINGLE");
   const refresh = (): void => {
     setEdited(null);
     void client.invalidateQueries({ queryKey: caseKeys.split(workspaceId, splitId) });
@@ -88,6 +92,8 @@ const SplitReview: React.FC = () => {
     setEdited(boundaries.map((b) => (b === from ? to : b)).sort((a, b) => a - b));
   };
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <div className={`${SURFACE} p-6 text-sm`}><p>The packet dicer is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }
@@ -160,18 +166,22 @@ const SplitReview: React.FC = () => {
       </section>
       {failure ? <p className="text-sm text-destructive">{errorMessage(failure, "Something went wrong.")}</p> : null}
       {detail.failure_reason ? <p className="text-sm text-destructive">{detail.failure_reason}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className={BUTTON_SECONDARY} disabled={!editable || busy || edited === null} onClick={() => save.mutate()}>
-          Save boundaries
-        </button>
-        <button type="button" className={BUTTON_PRIMARY} disabled={!editable || busy || boundaries.length === 0} onClick={() => approve.mutate()}>
-          Approve split
-        </button>
-        <button type="button" className={BUTTON_SECONDARY} disabled={!editable || busy} onClick={() => reject.mutate()}>
-          Keep as one document
-        </button>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-label="Working" />}
-      </div>
+      {canAct ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={BUTTON_SECONDARY} disabled={!editable || busy || edited === null} onClick={() => save.mutate()}>
+            Save boundaries
+          </button>
+          <button type="button" className={BUTTON_PRIMARY} disabled={!editable || busy || boundaries.length === 0} onClick={() => approve.mutate()}>
+            Approve split
+          </button>
+          <button type="button" className={BUTTON_SECONDARY} disabled={!editable || busy} onClick={() => reject.mutate()}>
+            Keep as one document
+          </button>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-label="Working" />}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Contributors and admins correct, approve or reject a split.</p>
+      )}
     </div>
   );
 };

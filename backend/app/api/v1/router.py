@@ -162,6 +162,10 @@ api_router.include_router(cases.router)
 api_router.include_router(public_document_requests.router)
 # ARCH44-S1:tables-router. Every route is gated on capability.table_intelligence.
 api_router.include_router(tables.router)
+# Phase 1 batch engine. Every route is gated on capability.batch_dispatch.
+from app.api.v1 import batches as batches_api  # noqa: E402
+
+api_router.include_router(batches_api.router)
 # ARCH45-S1:corroboration-router. Every route is gated on capability.universal_corroborator.
 api_router.include_router(corroboration.router)
 # ARCH46-S1:obligations-router. Every route is gated on capability.obligations;

@@ -32,6 +32,7 @@ import {
 } from "@/types/obligations";
 import { formatDateTime } from "@/utils/formatters";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 const EVENT_LABELS: Readonly<Record<string, string>> = {
   CREATED: "Created", UPDATED: "Edited", DUE_SOON: "Became due soon", OVERDUE: "Became overdue", REOPENED: "Reopened",
@@ -77,6 +78,8 @@ const ObligationDetail: React.FC = () => {
   const busy = complete.isPending || waive.isPending || reopen.isPending || review.isPending || edit.isPending || remove.isPending;
   const failure = [complete, waive, reopen, review, edit, remove].find((m) => m.isError)?.error;
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return (
       <div className="m-6">

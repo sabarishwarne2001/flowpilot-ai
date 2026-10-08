@@ -62,6 +62,7 @@ from app.services.obligations import holidays as H
 from app.services.obligations import service
 from app.services.obligations import temporal as T
 from app.services.obligations import vocabulary as v
+from app.utils.like import LIKE_ESCAPE, contains_pattern
 
 router = APIRouter(tags=["Obligations"])
 
@@ -232,8 +233,9 @@ def list_obligations(workspace_id: uuid.UUID, state: Optional[str] = Query(defau
     if due_to is not None:
         base = base.where(Obligation.due_date <= due_to)
     if q:
-        like = f"%{q.strip()}%"
-        base = base.where(or_(Obligation.title.ilike(like), Obligation.counterparty_name.ilike(like)))
+        like = contains_pattern(q.strip())
+        base = base.where(or_(Obligation.title.ilike(like, escape=LIKE_ESCAPE),
+                              Obligation.counterparty_name.ilike(like, escape=LIKE_ESCAPE)))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     obs = list(db.execute(base.order_by(Obligation.due_date.asc().nulls_last(), Obligation.created_at.desc(),
                                         Obligation.id.desc())

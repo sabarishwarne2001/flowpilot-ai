@@ -7,6 +7,10 @@
  * restarted when the graph changes. Nodes can be dragged; a click opens the
  * record. A visually hidden list gives keyboard and screen-reader users the
  * same nodes as buttons, because a canvas is not navigable.
+ *
+ * Phase 1: labels carry a halo in the surface colour so edges never run through
+ * them; "Find a record" dims every other node; hover and search only redraw
+ * (they used to restart the layout, so the graph shifted under the pointer).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -48,8 +52,17 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ graph, onOpen, hei
   const frameRef = useRef<number | null>(null);
   const tickRef = useRef(0);
   const dragRef = useRef<{ id: string; moved: boolean } | null>(null);
-  const [hover, setHover] = useState<string | null>(null);
+  const hoverRef = useRef<string | null>(null);
+  const matchRef = useRef<ReadonlySet<string> | null>(null);
+  const [query, setQuery] = useState("");
   const [width, setWidth] = useState(640);
+
+  const matches = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    if (!text) {return null;}
+    return new Set(graph.nodes.filter((n) => n.label.toLowerCase().includes(text)).map((n) => n.id));
+  }, [graph.nodes, query]);
+  const kindsShown = useMemo(() => new Set(graph.nodes.map((n) => n.kind)), [graph.nodes]);
 
   const edges = useMemo(() => graph.edges.map((e) => ({ ...e })), [graph]);
 
@@ -73,12 +86,25 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ graph, onOpen, hei
     ctx.clearRect(0, 0, width, height);
     const byId = new Map(nodesRef.current.map((n) => [n.id, n]));
     const ink = getComputedStyle(canvas).color || "#334155";
+    const surfaceVar = getComputedStyle(document.documentElement).getPropertyValue("--card").trim();
+    const surface = surfaceVar ? `hsl(${surfaceVar})` : "#ffffff";
+    const hover = hoverRef.current;
+    const found = matchRef.current;
+    const label = (text: string, x: number, y: number): void => {
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = surface;
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = ink;
+      ctx.fillText(text, x, y);
+    };
     ctx.lineWidth = 1;
     for (const edge of edges) {
       const a = byId.get(edge.source);
       const b = byId.get(edge.target);
       if (!a || !b) {continue;}
       const active = hover === a.id || hover === b.id;
+      ctx.globalAlpha = found && !(found.has(a.id) && found.has(b.id)) && !active ? 0.25 : 1;
       ctx.strokeStyle = active ? ink : "rgba(148,163,184,0.55)";
       ctx.lineWidth = Math.min(4, 1 + edge.weight * 0.5);
       ctx.beginPath();
@@ -86,28 +112,33 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ graph, onOpen, hei
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
       if (active) {
-        ctx.fillStyle = ink;
         ctx.font = "10px ui-sans-serif, system-ui";
-        ctx.fillText(edge.relation.toLowerCase().replace(/_/g, " "), (a.x + b.x) / 2 + 4, (a.y + b.y) / 2 - 4);
+        label(edge.relation.toLowerCase().replace(/_/g, " "), (a.x + b.x) / 2 + 4, (a.y + b.y) / 2 - 4);
       }
     }
     for (const node of nodesRef.current) {
       const root = node.id === graph.root_id;
+      const isMatch = found?.has(node.id) ?? false;
+      ctx.globalAlpha = found && !isMatch && hover !== node.id ? 0.25 : 1;
       ctx.beginPath();
       ctx.arc(node.x, node.y, root ? RADIUS + 4 : RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = KIND_COLOR[node.kind] ?? "#64748b";
       ctx.fill();
-      if (root || hover === node.id) {
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = ink;
-        ctx.stroke();
-      }
-      ctx.fillStyle = ink;
-      ctx.font = `${root ? "600 12px" : "11px"} ui-sans-serif, system-ui`;
-      const label = node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label;
-      ctx.fillText(label, node.x + RADIUS + 5, node.y + 4);
+      // A ring in the surface colour keeps touching nodes apart; the root, the hovered node and
+      // the search results get an ink ring.
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = root || hover === node.id || isMatch ? ink : surface;
+      ctx.stroke();
+      ctx.font = `${root || isMatch ? "600 12px" : "11px"} ui-sans-serif, system-ui`;
+      label(node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label, node.x + RADIUS + 5, node.y + 4);
     }
-  }, [edges, graph.root_id, height, hover, width]);
+    ctx.globalAlpha = 1;
+  }, [edges, graph.root_id, height, width]);
+
+  useEffect(() => {
+    matchRef.current = matches;
+    draw();
+  }, [draw, matches]);
 
   const step = useCallback(() => {
     const nodes = nodesRef.current;
@@ -247,8 +278,11 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ graph, onOpen, hei
             }
             return;
           }
-          const node = hit(event);
-          setHover(node?.id ?? null);
+          const id = hit(event)?.id ?? null;
+          if (id !== hoverRef.current) {
+            hoverRef.current = id;
+            draw();
+          }
         }}
         onPointerUp={() => {
           const drag = dragRef.current;
@@ -259,10 +293,28 @@ export const GraphExplorer: React.FC<GraphExplorerProps> = ({ graph, onOpen, hei
             restart();
           }
         }}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={() => {
+          if (hoverRef.current !== null) {
+            hoverRef.current = null;
+            draw();
+          }
+        }}
       />
-      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {(Object.keys(KIND_COLOR) as EntityKind[]).map((kind) => (
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <input
+          type="search"
+          className="fp-input h-7 w-48 py-0 text-xs"
+          placeholder="Find a record"
+          aria-label="Find a record in the graph"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {matches ? (
+          <span role="status" data-testid="graph-matches">
+            {matches.size === 0 ? "No record matches" : `${matches.size} of ${graph.nodes.length} records match`}
+          </span>
+        ) : null}
+        {(Object.keys(KIND_COLOR) as EntityKind[]).filter((kind) => kindsShown.has(kind)).map((kind) => (
           <span key={kind} className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: KIND_COLOR[kind] }} />
             {kind.toLowerCase()}

@@ -12,6 +12,7 @@ import { packetSplitPath } from "@/routes/tenantPaths";
 import { caseKeys } from "@/services/api/cases";
 import { errorMessage } from "@/services/api/errors";
 import { listPacketSplits } from "@/services/api/packets";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const PacketSplits: React.FC = () => {
@@ -24,6 +25,8 @@ const PacketSplits: React.FC = () => {
     queryFn: () => listPacketSplits(workspaceId),
     enabled: Boolean(workspaceId && capability.granted),
   });
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <div className={`${SURFACE} p-6 text-sm`}><p>The packet dicer is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;
   }

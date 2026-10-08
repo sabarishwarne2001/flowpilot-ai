@@ -15,6 +15,7 @@ from app.api.deps import TenantContext
 from app.crud.work_item import (
     count_work_items,
     count_completed_today,
+    get_classification_distribution,
     get_document_type_distribution,
     get_recent_work_items,
     get_processing_status,
@@ -65,6 +66,17 @@ def get_dashboard_overview(
         )
     ]
 
+    kinds = get_classification_distribution(db, workspace_id=workspace_id)
+    classified = sum(count for _, count in kinds)
+    classification_distribution = [
+        DocumentTypeDistribution(
+            document_type=kind,
+            count=count,
+            percentage=round(count / classified * 100, 1),
+        )
+        for kind, count in kinds
+    ]
+
     recent_activity = [
         DashboardActivity(
             id=str(item.id),
@@ -80,7 +92,8 @@ def get_dashboard_overview(
     completed, failed = get_completion_statistics(db, workspace_id=workspace_id)
 
     finished = completed + failed
-    success_rate = 100.0 if finished == 0 else round(completed / finished * 100, 1)
+    # F-161: with nothing finished there is no rate (it used to read 100%).
+    success_rate = None if finished == 0 else round(completed / finished * 100, 1)
 
     return DashboardOverviewResponse(
         total_work_items=total_documents,
@@ -91,5 +104,6 @@ def get_dashboard_overview(
         failed_count=failed,
         automation_success_rate=success_rate,
         document_type_distribution=document_distribution,
+        classification_distribution=classification_distribution,
         recent_activity=recent_activity,
     )

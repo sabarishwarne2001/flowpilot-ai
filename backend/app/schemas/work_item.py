@@ -77,6 +77,15 @@ class WorkItemUpdate(BaseModel):
     )
 
 
+class WorkItemReference(BaseModel):
+    """Another document, named: enough to link to it."""
+
+    id: uuid.UUID
+    original_filename: str
+
+    model_config = {"from_attributes": True}
+
+
 class WorkItemResponse(WorkItemBase):
     """
     Serialization schema returning structured Work Item data to client layers.
@@ -89,6 +98,8 @@ class WorkItemResponse(WorkItemBase):
     created_by_user_id: Union[uuid.UUID, None] = None
     created_at: datetime
     updated_at: datetime
+    # F-158: the earlier document in this workspace with the same file, when this is a copy.
+    duplicate_of: Union[WorkItemReference, None] = None
 
     model_config = {
         "from_attributes": True  # Enables direct mapping from SQLAlchemy 2.0 ORM objects

@@ -225,6 +225,8 @@ export const apiClient = axios.create({
  * boundary. Fixing it here rather than at each call site means the next
  * FormData upload cannot reintroduce it.
  */
+const SIGN_OUT_PATHS: ReadonlySet<string> = new Set(["/auth/logout", "/auth/logout-all"]);
+
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -235,7 +237,15 @@ apiClient.interceptors.request.use(
       delete (config.headers as Record<string, unknown>)["content-type"];
     }
 
-    const token = useAuthStore.getState().token;
+    const { token, isSigningOut } = useAuthStore.getState();
+
+    // F-170: once a sign-out has begun the server may already have revoked the
+    // session, so a page that loads data in that moment (a click, a poll, a
+    // route that just mounted) would send it and get 401, then a refresh 401.
+    // Nothing but the sign-out itself leaves until it has finished.
+    if (isSigningOut && !SIGN_OUT_PATHS.has(config.url ?? "")) {
+      throw new axios.CanceledError("Signing out.");
+    }
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -461,6 +471,11 @@ apiClient.interceptors.response.use(
   },
 
   async (error: AxiosError<unknown>) => {
+    // A request this client refused to send (F-170) is not a network failure.
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     if (!error.response) {
       return Promise.reject(
         new ApiError(

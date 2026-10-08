@@ -342,7 +342,11 @@ def _line_from(
         except nz.NormalizationError as exc:
             warnings.append(f"unreadable sku {raw_sku!r}: {exc}")
 
-    line_currency = _as_text(_first(entry, _CURRENCY_KEYS)) or document_currency
+    raw_line_currency = _as_text(_first(entry, _CURRENCY_KEYS))
+    # F-163: "US Dollars" is read as USD; a currency that cannot be read is a warning, not a value.
+    line_currency = nz.currency_code(raw_line_currency) or document_currency
+    if raw_line_currency and nz.currency_code(raw_line_currency) is None:
+        warnings.append(f"unreadable currency {raw_line_currency!r}")
 
     quantity, unit, qty_warning = _quantity(
         _first(entry, _QUANTITY_KEYS),
@@ -474,7 +478,11 @@ def _header_from(
         except nz.NormalizationError as exc:
             warnings.append(f"unreadable document date {raw_date!r}: {exc}")
 
-    currency = _as_text(_first(entities, _CURRENCY_KEYS))
+    raw_currency = _as_text(_first(entities, _CURRENCY_KEYS))
+    # F-163: the column holds an ISO code; "US Dollars" is USD, "monopoly money" is a warning.
+    currency = nz.currency_code(raw_currency)
+    if raw_currency and currency is None:
+        warnings.append(f"unreadable currency {raw_currency!r}")
     total_micros, total_ccy, total_warning = _money(
         _first(entities, _TOTAL_KEYS),
         currency_hint=currency,

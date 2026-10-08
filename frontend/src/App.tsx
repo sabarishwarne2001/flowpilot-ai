@@ -103,6 +103,8 @@ const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestU
 // ARCH44-S2:lazy-pages
 const Tables = lazy(() => import("@/pages/tables/Tables"));
 const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
+const Batches = lazy(() => import("@/pages/batches/Batches"));
+const BatchDetail = lazy(() => import("@/pages/batches/BatchDetail"));
 // ARCH45-S2:lazy-pages
 const Corroborations = lazy(() => import("@/pages/corroboration/Corroborations"));
 const CorroborationRun = lazy(() => import("@/pages/corroboration/CorroborationRun"));
@@ -499,6 +501,8 @@ function AppRoutes() {
                 {/* ARCH44-S2:routes */}
                 <Route path={ROUTE_PATTERNS.workspaceTables} element={<Tables />} />
                 <Route path={ROUTE_PATTERNS.workspaceTable} element={<TableViewer />} />
+                <Route path={ROUTE_PATTERNS.workspaceBatches} element={<Batches />} />
+                <Route path={ROUTE_PATTERNS.workspaceBatch} element={<BatchDetail />} />
                 {/* ARCH45-S2:routes */}
                 <Route path={ROUTE_PATTERNS.workspaceCorroborations} element={<Corroborations />} />
                 <Route path={ROUTE_PATTERNS.workspaceCorroboration} element={<CorroborationRun />} />

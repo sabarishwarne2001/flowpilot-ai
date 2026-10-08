@@ -21,6 +21,7 @@ import { errorMessage } from "@/services/api/errors";
 import { ENTITY_KIND_LABELS, ENTITY_KINDS, type EntityKind } from "@/types/entities";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
 import { formatTimestampDate } from "@/utils/displayTime";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
 const PAGE_SIZE = 25;
@@ -73,6 +74,8 @@ const Entities: React.FC = () => {
   if (capability.isLoading) {
     return <Loader2 className="mx-auto mt-10 h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading" />;
   }
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {
     return <LockedView workspaceId={workspaceId} />;
   }

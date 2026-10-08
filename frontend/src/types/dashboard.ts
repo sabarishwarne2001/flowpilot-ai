@@ -92,12 +92,19 @@ export interface DashboardMetricsResponse {
    * Automation success rate expressed
    * as a percentage between 0 and 100.
    */
-  readonly automation_success_rate: number;
+  /** Null until a document has finished processing (F-161). */
+  readonly automation_success_rate: number | null;
 
   /**
    * Distribution of uploaded document types.
    */
   readonly document_type_distribution: readonly DashboardDocTypeDistribution[];
+
+  /**
+   * What the documents are (Invoice, Purchase Order, ...), from the classifier's
+   * label, over the documents that have one. Most common first.
+   */
+  readonly classification_distribution: readonly DashboardDocTypeDistribution[];
 
   /**
    * Recent dashboard activity.

@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Scissors,
   Table2,
+  Layers,
   Bell,
   CalendarClock,
   BookUp,
@@ -53,6 +54,7 @@ import {
   casesPath,
   packetSplitsPath,
   tablesPath,
+  batchesPath,
   corroborationsPath,
   obligationsPath,
   erpPath,
@@ -298,6 +300,17 @@ export const buildWorkspaceNavigationGroups = (
     key: "processing",
     label: "Enterprise processing",
     items: [
+      // PHASE1:nav-batches
+      {
+        id: "batches",
+        name: "Batch operations",
+        route: "workspaceBatches",
+        path: batchesPath(orgSlug, workspaceSlug),
+        icon: Layers,
+        description: "Batches with live progress, confidence analytics, schema healing, dispatch lanes and verified export packages",
+        capability: CAPABILITY.batchDispatch,
+        keywords: ["batch", "bulk", "dispatch", "straight through", "confidence", "schema", "healing", "export", "package", "sha-256", "checksum", "integrity", "compliance"],
+      },
       {
         id: "procurement",
         name: "Three-way matching",

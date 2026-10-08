@@ -123,6 +123,8 @@ __all__ = [
     "EGRESS_LOCKDOWN_CAPABILITY",
     # N-021:capability-byok-export
     "BYOK_CAPABILITY",
+    # PHASE1:capability-batch-dispatch-export
+    "BATCH_DISPATCH_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -273,6 +275,13 @@ CASE_INTELLIGENCE_CAPABILITY: str = "capability.case_intelligence"
 #: reads the OCR already stored and the PDF text layer; nothing is re-OCR'd.
 TABLE_INTELLIGENCE_CAPABILITY: str = "capability.table_intelligence"
 
+#: PHASE1:capability-batch-dispatch. The batch processing & document dispatch
+#: engine: named batches with live progress, extraction-confidence analytics,
+#: schema self-healing, confidence-based dispatch lanes and export packages with
+#: a SHA-256 integrity manifest. ONE key. Not metered: it reads what extraction
+#: and verification stored; packages are zip and hash work on the LIGHT worker.
+BATCH_DISPATCH_CAPABILITY: str = "capability.batch_dispatch"
+
 #: ARCH45-S1:capability-universal-corroborator. The Universal Document
 #: Corroborator & Discrepancy Matrix: 2 to 5 documents aligned by fields,
 #: canonical entities, clauses and line items, with materiality, ARCH-33 rules
@@ -360,6 +369,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     PROCESS_INTELLIGENCE_CAPABILITY,  # ARCH49-S1:capability-keys
     EGRESS_LOCKDOWN_CAPABILITY,  # ARCH50-S1:capability-keys
     BYOK_CAPABILITY,  # N-021:capability-keys
+    BATCH_DISPATCH_CAPABILITY,  # PHASE1:capability-keys
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -498,6 +508,15 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Table intelligence: complex, multi-page and rotated tables extracted "
             "into typed cells with confidence, arithmetic validation and "
             "CSV/XLSX export. Bundled into a tier."
+        ),
+    ),
+    # PHASE1:capability-batch-dispatch-entitlement
+    Entitlement(
+        name=BATCH_DISPATCH_CAPABILITY,
+        description=(
+            "Batch operations: document batches with live progress, confidence "
+            "analytics, schema self-healing, dispatch lanes and export packages "
+            "with a SHA-256 integrity manifest. Bundled into a tier."
         ),
     ),
     # ARCH45-S1:capability-corroborator-entitlement

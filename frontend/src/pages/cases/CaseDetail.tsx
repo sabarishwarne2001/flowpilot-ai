@@ -21,6 +21,7 @@ import { CASE_STATUS_LABELS, type RuleOutcome } from "@/types/cases";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
 import { formatTimestamp } from "@/utils/displayTime";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 
 const OUTCOME_STYLE: Readonly<Record<RuleOutcome, string>> = {
   PASS: "bg-green-100 text-green-800", FAIL: "bg-red-100 text-red-800", MISSING: "bg-muted text-muted-foreground", ERROR: "bg-amber-100 text-amber-800",
@@ -48,11 +49,16 @@ const CaseDetailPage: React.FC = () => {
   const revoke = useMutation({ mutationFn: (id: string) => revokeDocumentRequest(workspaceId, caseId, id), onSuccess: done });
   const failure = evaluate.error ?? close.error ?? add.error ?? remove.error ?? request.error ?? revoke.error;
 
+  // F-164: no lock verdict while the plan is still being read.
+  if (capability.isLoading) {return <CapabilityLoading />;}
   if (!capability.granted) {return <div className={`${SURFACE} m-4 p-6 text-sm`}><p>Case intelligence is included on the Business and Enterprise plans.</p><ViewPlansAction /></div>;}
   if (query.isLoading) {return <Loader2 className="m-6 h-5 w-5 animate-spin" aria-label="Loading" />;}
   if (query.isError || !query.data) {return <p className="m-4 text-sm text-destructive">{errorMessage(query.error, "The case could not be loaded.")}</p>;}
   const { case: c, checklist, documents, rules, requests, template } = query.data;
   const closed = c.status === "CLOSED";
+  // F-167: every change to a case needs a contributor; a viewer reads it.
+  const role = workspace?.role;
+  const editable = !closed && (role === "OWNER" || role === "ADMIN" || role === "CONTRIBUTOR");
   return (
     <div className="space-y-4 p-4">
       <header className="flex flex-wrap items-center gap-2">
@@ -75,7 +81,7 @@ const CaseDetailPage: React.FC = () => {
               {slot.satisfied ? <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="present" /> : <CircleDashed className="h-4 w-4" aria-label="missing" />}
               <span>{slot.label}</span>
               <span className={HINT}>{slot.present}/{slot.min_count}</span>
-              {!slot.satisfied && !closed && (
+              {!slot.satisfied && editable && (
                 <button type="button" className={BUTTON_SECONDARY} disabled={request.isPending} onClick={() => request.mutate(slot.doc_type)}>
                   Request upload link
                 </button>
@@ -108,11 +114,11 @@ const CaseDetailPage: React.FC = () => {
           {documents.map((d) => (
             <li key={d.work_item_id} className="flex flex-wrap items-center gap-2">
               <span>{d.original_filename}</span><span className={HINT}>{d.document_type.replace(/_/g, " ")} · {d.source.toLowerCase()}</span>
-              {!closed && <button type="button" className="text-xs underline" onClick={() => remove.mutate(d.work_item_id)}>Remove</button>}
+              {editable && <button type="button" className="text-xs underline" onClick={() => remove.mutate(d.work_item_id)}>Remove</button>}
             </li>
           ))}
         </ul>
-        {!closed && (
+        {editable && (
           <div className="flex gap-2">
             <input className={INPUT} aria-label="Document id" placeholder="Document id" value={addId} onChange={(e) => setAddId(e.target.value)} />
             <button type="button" className={BUTTON_SECONDARY} disabled={!addId.trim() || add.isPending} onClick={() => add.mutate()}>Add document</button>
@@ -125,12 +131,12 @@ const CaseDetailPage: React.FC = () => {
           {requests.map((r) => (
             <p key={r.id} className="flex flex-wrap items-center gap-2">
               {r.document_type.replace(/_/g, " ")} · {r.status.toLowerCase()} · expires {formatTimestamp(r.expires_at)}
-              {r.status === "OPEN" && <button type="button" className="text-xs underline" onClick={() => revoke.mutate(r.id)}>Withdraw</button>}
+              {r.status === "OPEN" && editable && <button type="button" className="text-xs underline" onClick={() => revoke.mutate(r.id)}>Withdraw</button>}
             </p>
           ))}
         </section>
       )}
-      {!closed && (
+      {editable && (
         <div className="flex gap-2">
           <button type="button" className={BUTTON_SECONDARY} disabled={evaluate.isPending} onClick={() => evaluate.mutate()}>Re-check</button>
           <button type="button" className={BUTTON_PRIMARY} disabled={close.isPending} onClick={() => close.mutate()}>Close case</button>

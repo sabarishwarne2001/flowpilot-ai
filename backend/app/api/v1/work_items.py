@@ -197,6 +197,8 @@ async def list_work_items(
     total = crud.count_work_items(
         db,
         workspace_id=context.workspace_id,
+        search=search,
+        status=status_filter,
         created_by_user_id=context.user_id if mine_only else None,
     )
     page = (skip // limit) + 1

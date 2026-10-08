@@ -82,6 +82,10 @@ ARCH49_JOB_TYPES: frozenset[str] = frozenset({"process.sweep_workspace"})
 ARCH50_JOB_TYPES: frozenset[str] = frozenset({"revops.sweep"})
 #: HARDENING-T1:D25. The stuck-document backstop (app/workers/dead_letter.py).
 HARDENING_JOB_TYPES: frozenset[str] = frozenset({"pipeline.sweep_stuck"})
+#: Phase 1 batch engine: export packages are built (zip + SHA-256) and expired on LIGHT.
+BATCH_ENGINE_JOB_TYPES: frozenset[str] = frozenset(
+    {"batches.build_export_package", "batches.sweep_export_packages"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -119,6 +123,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | ARCH49_JOB_TYPES
     | ARCH50_JOB_TYPES
     | HARDENING_JOB_TYPES
+    | BATCH_ENGINE_JOB_TYPES
 )
 
 
@@ -390,6 +395,16 @@ def _obligations_extract_document(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_extract_document(payload)
 
 
+def _batches_build_export_package(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.batches import handle_build_export_package
+    return handle_build_export_package(payload)
+
+
+def _batches_sweep_export_packages(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.batches import handle_sweep_export_packages
+    return handle_sweep_export_packages(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -492,6 +507,9 @@ _HANDLERS = {
     "process.sweep_workspace": _process_sweep_workspace,
     # ARCH50-S1:revops-handler. On the LIGHT profile (app/workers/profiles.py).
     "revops.sweep": _revops_sweep,
+    # Phase 1 batch engine. On the LIGHT profile (app/workers/profiles.py).
+    "batches.build_export_package": _batches_build_export_package,
+    "batches.sweep_export_packages": _batches_sweep_export_packages,
 }
 
 

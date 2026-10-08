@@ -134,7 +134,8 @@ export async function uploadFile(
 export async function listWorkItems(
   session: ApiSession,
   workspaceId: string,
-  query = "pageSize=100",
+  // The API pages with `limit` (at most 100); `pageSize` is not one of its parameters.
+  query = "limit=100",
 ): Promise<Array<Record<string, unknown>>> {
   const result = await api<unknown>(session, "GET", `/workspaces/${workspaceId}/work-items?${query}`);
   const body = result.body as { items?: unknown[]; data?: unknown[] } | unknown[];

@@ -57,6 +57,60 @@ def _suffix_for(mime_type: str) -> Optional[str]:
     return _SUFFIX_BY_MIME.get(mime_type)
 
 
+#: The longest name a document keeps (work_items / uploaded_files original_filename).
+MAX_FILENAME_LENGTH = 255
+
+
+def fit_filename(name: str, limit: int = MAX_FILENAME_LENGTH) -> str:
+    """`name` cut to `limit` characters, keeping its extension (F-159).
+
+    A plain slice of a long name dropped the ".pdf", so the document downloaded without one.
+    """
+    if len(name) <= limit:
+        return name
+    stem, dot, extension = name.rpartition(".")
+    if dot and stem and 0 < len(extension) <= 16:
+        return f"{stem[: limit - len(extension) - 1]}.{extension}"
+    return name[:limit]
+
+
+def duplicate_detection_enabled(db: Session, *, workspace_id: uuid.UUID) -> bool:
+    """The workspace's "Duplicate detection" setting; on when the workspace never saved one."""
+    from sqlalchemy import select
+
+    from app.models.document_settings import DocumentSettings
+
+    value = db.execute(
+        select(DocumentSettings.duplicate_detection).where(DocumentSettings.workspace_id == workspace_id)
+    ).scalar_one_or_none()
+    return True if value is None else bool(value)
+
+
+def find_duplicate(db: Session, *, workspace_id: uuid.UUID, checksum_sha256: str) -> Optional[WorkItem]:
+    """The earliest document in the workspace whose stored file has these exact bytes (F-158).
+
+    Takes a transaction-scoped advisory lock on (workspace, checksum) first, so two copies uploaded
+    at the same moment are serialised: the second waits for the first to commit and then sees it.
+    """
+    from sqlalchemy import func, select, text
+
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"work-item-duplicate:{workspace_id}:{checksum_sha256}"},
+    )
+    return db.execute(
+        select(WorkItem)
+        .join(UploadedFile, UploadedFile.id == WorkItem.uploaded_file_id)
+        .where(
+            WorkItem.workspace_id == workspace_id,
+            UploadedFile.checksum_sha256 == func.lower(checksum_sha256),
+            UploadedFile.deleted_at.is_(None),
+        )
+        .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def quarantine(
     validated_bytes: Any,
     *,
@@ -145,13 +199,20 @@ def ingest_validated(
     )
 
     try:
+        original_filename = fit_filename(validated.original_filename)
+        duplicate_of: Optional[WorkItem] = None
+        if duplicate_detection_enabled(db, workspace_id=workspace_id):
+            duplicate_of = find_duplicate(
+                db, workspace_id=workspace_id, checksum_sha256=stored.checksum_sha256
+            )
+
         uploaded = UploadedFile(
             id=file_id,
             owner_id=uploader_id,
             organization_id=organization_id,
             workspace_id=workspace_id,
             file_path=stored.key,
-            original_filename=validated.original_filename[:255],
+            original_filename=original_filename,
             mime_type=validated.mime_type,
             file_size=stored.size,
             checksum_sha256=stored.checksum_sha256,
@@ -160,7 +221,7 @@ def ingest_validated(
         db.flush([uploaded])
 
         work_item = WorkItem(
-            original_filename=validated.original_filename[:255],
+            original_filename=original_filename,
             stored_filename=stored.key[:255],
             file_type=validated.mime_type,
             file_size=stored.size,
@@ -169,6 +230,7 @@ def ingest_validated(
             created_by_user_id=uploader_id,
             uploaded_file_id=uploaded.id,
             page_count=validated.page_count,
+            duplicate_of_work_item_id=duplicate_of.id if duplicate_of else None,
         )
         db.add(work_item)
         db.flush([work_item])
@@ -210,6 +272,7 @@ def ingest_validated(
                 "work_item_id": str(work_item.id),
                 "job_id": str(job.id) if job else None,
                 "notes": validated.notes or None,
+                "duplicate_of_work_item_id": str(duplicate_of.id) if duplicate_of else None,
             },
         )
 

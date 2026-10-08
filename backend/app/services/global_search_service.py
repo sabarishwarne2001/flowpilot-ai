@@ -32,6 +32,7 @@ from app.models.entity_graph import Entity
 from app.models.organization import Organization, OrganizationRole
 from app.models.work_item import WorkItem
 from app.models.workspace import Workspace
+from app.utils.like import contains_pattern
 
 MIN_QUERY_LENGTH = 2
 MAX_QUERY_LENGTH = 120
@@ -64,8 +65,7 @@ class SearchResults:
 
 
 def _pattern(query: str) -> str:
-    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
+    return contains_pattern(query)
 
 
 def _matched_field(entities: Any, needle: str) -> Optional[str]:

@@ -2430,3 +2430,157 @@ Python advisories under F-039; plan the Tailwind 4 move as its own change.
 See NEEDS-OWNER.md, "Live feedback and Tier-1 elevation". N-030 and N-031 are implemented
 (`53bb7d4`, proof `tests/services/test_price_book_seed_seat_and_local.py`, 6 tests failed first).
 
+
+## Phase 1 — Document intelligence (2026-10-08)
+
+Branch `hardening/phase-1-document-intelligence`. How these were found: the whole stack live
+(Postgres 16 + pgvector, Redis, the API, the worker on every queue, the model stand-in, the
+built app) with the API and worker logs watched for tracebacks and 5xx throughout, then each
+Phase-1 page driven in a browser as an owner, a contributor, a viewer and a Developer-plan
+customer: uploads (single, many, corrupt, duplicate, very long names), filters and search with
+wildcard characters, a phone-width pass, the plan-gated pages while their plan loads, and the
+document, table, case and packet screens. Every item below has a test that failed on the
+previous code before its fix (pytest or the browser suite), as the Evidence Rule requires.
+
+### F-155 — A filtered Documents list reported the wrong total (P2, fixed)
+**Plain language.** Searching or filtering the Documents list showed the right first page but
+"page 1 of 7" for three matches; the later pages were empty. The count ignored the filters.
+**Fix** `b014c74`: the page and its total share one filter function. **Proof**
+`tests/api/test_work_item_list_filters.py`.
+
+### F-156 — "_" and "%" in a search box matched everything (P3, fixed)
+The text went into a SQL `ILIKE` pattern unescaped, so `_` (any character) and `%` (anything)
+listed every document, entity and obligation. A shared helper (`app/utils/like.py`) escapes the
+text; global search, which did it by hand, now reuses it. `b014c74`, `440d0a5`. **Proof**
+`tests/api/test_work_item_list_filters.py`, `tests/engines/test_search_wildcards_live.py`.
+
+### F-157 — Paging could repeat one document and skip another (P3, fixed)
+Rows with the same sort value (same size, same name) had no tie-breaker, so their order could
+change between pages. The document id now ends the sort. `b014c74` (same proof file).
+
+### F-158 — "Duplicate detection" was a setting nothing read (P2, fixed)
+Document settings offered it, on by default; five copies of one file became five unrelated
+documents. Intake now finds the earliest document in the workspace with the same SHA-256 (under
+an advisory lock, so copies uploaded at the same moment are caught) and records it
+(`work_items.duplicate_of_work_item_id`, migration `p8a1`, additive). The list shows a Duplicate
+chip, the document page names the original, the upload toast says which document it repeats.
+Copies are flagged, not refused: the forensic radar and repeat uploads rely on them being kept
+(the setting's text now says so). `53a3c6c`. **Proof** `tests/engines/test_upload_duplicates_live.py`.
+
+### F-159 — A long file name lost its extension (P4, fixed)
+Names over 255 characters were cut at 255, extension included. `fit_filename` keeps it. `53a3c6c`.
+
+### F-160 — One refused file silently dropped the rest of a multi-file upload (P2, fixed)
+A corrupt PDF or a type the workspace does not accept threw out of the upload loop: the files
+after it were never sent and vanished from the list, the overview did not refresh, and the error
+escaped as an unhandled promise rejection. Each file now uploads on its own and keeps its own
+outcome (the refused one stays with the server's reason and Retry). The tray states this
+workspace's own types and size limit (it always said "100 MB"), the Documents page can upload,
+and viewers are not offered an upload the server refuses. `8e014bf`. **Proof** browser suite
+`22-phase1-documents` (5 of 6 failed on the old bundle).
+
+### F-161 — An empty workspace showed "Success rate 100%" (P3, fixed)
+With nothing finished the rate is now absent and the overview shows a dash. `732b383`.
+**Proof** `tests/api/test_dashboard_overview.py`.
+
+### F-162 — The bulk CSV export let a document plant a spreadsheet formula (P2, fixed; security)
+Extracted values such as `=HYPERLINK(...)` went into the CSV as they were and ran when the file
+was opened in Excel or Sheets. The bulk export now uses the same `safe_text` as the table,
+obligation and audit exports. `2bd86c5`. **Proof** `tests/api/test_bulk_export_csv_injection.py`.
+
+### F-163 — A currency written in words stopped every engine after extraction (P1, fixed)
+**Plain language.** When the model wrote the currency as "US Dollars" (it often does), saving it
+into a three-letter column failed, and because that row is written first, the document silently
+skipped anomaly scanning, three-way matching, entity resolution, tables, obligations and case
+assembly. `normalize.currency_code()` reads a currency written any way as its ISO code, or
+nothing (never a guess, with a warning). `672430e`. **Proof**
+`tests/engines/test_currency_words_live.py` (both failed: no role row, `dispatch_failed` logged).
+
+### F-164 — Paying customers saw an upgrade message while a page loaded (P2, fixed)
+Ten plan-gated pages (Tables, Cases, Scanned packets, Extraction memory, Entity graph,
+Obligations and their detail pages) showed "… is included on the Business and Enterprise plans"
+with View plans until the plan arrived (over a second on a slow answer). They now show the
+page's outline until then. `1fbb0a6`. **Proof** browser test F-164 (failed on the old bundle).
+
+### F-165 — The closed phone menu was focusable and shaded every page (P3, fixed)
+Off screen but not inert: its shadow ran down the left edge, and the first Tab press went into
+navigation nobody could see. Closed, it is now inert and hidden from assistive technology.
+`4fe647f`. **Proof** browser test (failed: "Tab 1 moved focus into the closed drawer").
+
+### F-166 — Documents was unreadable on a phone (P3, fixed)
+Eight fixed columns on a phone cut names to "po...." and printed headers over each other. Below
+the tablet breakpoint each document is a card with its full name and actions. `6307d7b`.
+**Proof** browser tests "Phone width" (both failed on the old bundle).
+
+### F-167 — Cases and packet review offered actions the role could not take (P2, fixed)
+A viewer saw the template editor, Save draft, Publish, Retire and Open case; on a case, Close,
+Re-check, Add/Remove document, Withdraw and Request upload link; on a scanned packet, boundary
+editing, Approve and Reject. The server refuses all of them (templates need a workspace admin,
+the rest a contributor), so the person met a 403 after acting. The controls now follow the role
+with a line saying who can act; Cases also confirms each action and labels empty columns.
+`4340396`. **Proof** three browser tests (`22-phase1-documents`, F-167; all failed before).
+
+### F-168 — The browser-suite seed uploaded its samples again once a workspace was large (P4, test only, fixed)
+The global setup looked for its sample documents on one page of the workspace, asked for with
+`pageSize=100`, a parameter the API does not have (it pages with `limit`, default 50). Past 50
+documents the samples fell off that page and every run uploaded them again, which broke the
+tests that expect exactly the two sample invoices. Each sample is now looked up by name.
+`86b2941`. The copies already made in the long-lived local database are flagged duplicates
+(F-158 working as designed); a fresh database, as in CI, has none.
+
+### F-169 — Hovering the entity graph restarted its layout (P3, fixed)
+**Plain language.** Moving the pointer over a record made the whole graph start moving again
+for several seconds, so the record you were reaching for slid away. Hover was React state the
+drawing depended on; each hover rebuilt the simulation and the layout effect restarted it. Hover
+and search now only redraw. With it: labels carry a halo so edges no longer cross them, touching
+nodes keep a ring between them, the legend lists only kinds present, and "Find a record" dims
+the rest. `e3bdf90`. **Proof** browser test "Entity graph (Phase 1, F-169)" counts animation
+frames after one hover: 66 on the previous code, under 10 now.
+
+### F-170 — A page loading during sign-out sent the revoked session (P3, fixed)
+Seen in the full browser suite: the overview mounted just after Sign Out was clicked, asked for
+its data with the session the server had just ended, got 401, and the client then tried a refresh
+(401 again). Harmless to the person, but the same moment could leave any page in an error state.
+While a sign-out is in progress the API client now sends nothing but the sign-out itself.
+`25ee4b4`. **Proof** browser test "Signing out (F-170)" (holds the sign-out's answer for 1.5 s
+while the overview opens): failed before with both 401s, passes now; `30-auth` passes (13).
+
+### Batch operations verifier: a corrupted package answered 500 (P2, fixed before release)
+Found while testing the new module below: one changed byte inside a zip entry raised a CRC
+error. It is now reported as tampering (or "not a package" for an unreadable manifest).
+`74e13d7`. **Proof** `test_a_corrupted_byte_is_tampering_not_a_server_error`.
+
+### Verification (Phase 1)
+- Backend, full suite: 3,450 passed, 1 failed, 9 skipped. The one failure was the
+  storage-boundary guard flagging the export-package writer's in-memory `write_bytes` method;
+  renamed (`8b4eac7`), the guard and the batch suites pass (69). The guard is unchanged.
+- Browser, full suite (production CSP, model stand-in): 333 passed, 5 failed, 1 skipped. One
+  failure was F-170 (fixed, `30-auth` 13/13 after). Four are data only on the long-lived local
+  database (second copies of the samples from F-168; tests that expect exactly two sample
+  invoices); they pass on a fresh database. No traceback or 5xx in the API or worker logs
+  during the run.
+- Build, both `tsc` projects, lint, self-checks, no source maps, encoding: clean. One Alembic
+  head (`p8a2`); drift check: no new drift.
+
+### Checked and not defects
+- Every verification reads "agents disagree" (a review hold) while no calibration model exists:
+  the calibrated-autonomy design, not a fault.
+- `obligations.extract_document` jobs run later than the rest: scheduled delay by design.
+- The chunk-size warning in `npm run build` predates this branch (no dependency changed).
+
+### Built in this phase (features, not defects)
+- **Batch processing & document dispatch engine** (`66dc0bb`, `7ccac8c`): batches with live
+  progress; confidence analytics (histogram, weakest fields, per-type straight-through,
+  throughput); schema self-healing with undo; dispatch to straight-through, review or exception
+  lanes with reasons, per a workspace policy; export packages with a SHA-256 manifest,
+  `SHA256SUMS` and a verifier (VERIFIED / TAMPERED / UNRECOGNISED / INVALID). Capability
+  `capability.batch_dispatch` (provisional plan placement: N-032). Migration `p8a2`.
+  **Proof** 53 + 7 backend tests, 4 browser tests (`23-batch-operations`), real worker build.
+- **Document workbench** (`f20c7c1`): fitted, sticky page viewer with zoom, pan, page jump and
+  keyboard shortcuts; per-field confidence; compact header. New read route
+  `GET …/work-items/{id}/confidence`.
+- **Tables** (`3f729fd`): sticky header, a Σ row that adds each additive column and checks it
+  against the table's total row, grouped CSV/XLSX/JSON export, list polish.
+- **Overview** (`c2dba06`): page heading, five KPI cards (Failed was returned by the API and never
+  shown; it links to the failed documents), document types from the classifier's label beside
+  file formats, activity that opens the document, a one-row upload zone.

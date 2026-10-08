@@ -15,12 +15,14 @@ uploader leaves.
 
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.work_item import WorkItem
 from app.schemas.work_item import WorkItemCreate, WorkItemStatus, WorkItemUpdate
+from app.utils.like import LIKE_ESCAPE, contains_pattern
 
 
 #: Sortable columns, allow-listed. The previous implementation resolved
@@ -65,6 +67,30 @@ def get_work_item(
     return db.execute(statement).scalar_one_or_none()
 
 
+def _filtered(
+    statement: Select[Any],
+    *,
+    search: str | None,
+    status: WorkItemStatus | None,
+    created_by_user_id: uuid.UUID | None,
+) -> Select[Any]:
+    """The list's filters, shared by the page and its total so the two always agree (F-155).
+
+    The search text is matched literally: `_` and `%` are not wildcards (F-156).
+    """
+    if search:
+        statement = statement.where(
+            WorkItem.original_filename.ilike(contains_pattern(search), escape=LIKE_ESCAPE)
+        )
+    if status:
+        statement = statement.where(WorkItem.status == status)
+    if created_by_user_id:
+        statement = statement.where(
+            WorkItem.created_by_user_id == created_by_user_id
+        )
+    return statement
+
+
 def list_work_items(
     db: Session,
     *,
@@ -87,23 +113,20 @@ def list_work_items(
     and therefore the effective role. This layer does not import WorkspaceRole.
     """
     limit = min(limit, 100)
-    statement = _scoped(workspace_id)
-
-    if search:
-        statement = statement.where(
-            WorkItem.original_filename.ilike(f"%{search}%")
-        )
-    if status:
-        statement = statement.where(WorkItem.status == status)
-    if created_by_user_id:
-        statement = statement.where(
-            WorkItem.created_by_user_id == created_by_user_id
-        )
+    statement = _filtered(
+        _scoped(workspace_id),
+        search=search,
+        status=status,
+        created_by_user_id=created_by_user_id,
+    )
 
     column = sort_by if sort_by in SORTABLE_COLUMNS else "created_at"
     sort_column = getattr(WorkItem, column)
+    descending = sort_order.lower() != "asc"
+    # F-157: the id breaks ties, so rows that share a sort value keep one order across pages.
     statement = statement.order_by(
-        sort_column.asc() if sort_order.lower() == "asc" else sort_column.desc()
+        sort_column.desc() if descending else sort_column.asc(),
+        WorkItem.id.desc() if descending else WorkItem.id.asc(),
     )
 
     statement = statement.offset(skip).limit(limit)
@@ -114,17 +137,18 @@ def count_work_items(
     db: Session,
     *,
     workspace_id: uuid.UUID,
+    search: str | None = None,
+    status: WorkItemStatus | None = None,
     created_by_user_id: uuid.UUID | None = None,
 ) -> int:
-    statement = (
+    statement = _filtered(
         select(func.count())
         .select_from(WorkItem)
-        .where(WorkItem.workspace_id == workspace_id)
+        .where(WorkItem.workspace_id == workspace_id),
+        search=search,
+        status=status,
+        created_by_user_id=created_by_user_id,
     )
-    if created_by_user_id:
-        statement = statement.where(
-            WorkItem.created_by_user_id == created_by_user_id
-        )
     return db.execute(statement).scalar_one()
 
 
@@ -213,6 +237,34 @@ def get_document_type_distribution(
         select(WorkItem.file_type, func.count())
         .where(WorkItem.workspace_id == workspace_id)
         .group_by(WorkItem.file_type)
+    )
+    return list(db.execute(statement).all())
+
+
+def get_classification_distribution(
+    db: Session, *, workspace_id: uuid.UUID
+) -> list[tuple[str, int]]:
+    """
+    How many documents the classifier labelled with each kind (Invoice,
+    Purchase Order, ...), most common first. The label is in
+    classification_details when the pipeline recorded its reasoning, and at
+    the top level otherwise. Documents without a label are not counted.
+    """
+    entities = WorkItem.extracted_entities
+    label = func.nullif(
+        func.trim(
+            func.coalesce(
+                entities[("classification_details", "document_classification")].as_string(),
+                entities["document_classification"].as_string(),
+            )
+        ),
+        "",
+    )
+    statement = (
+        select(label.label("kind"), func.count())
+        .where(WorkItem.workspace_id == workspace_id, label.is_not(None))
+        .group_by(label)
+        .order_by(func.count().desc(), label)
     )
     return list(db.execute(statement).all())
 

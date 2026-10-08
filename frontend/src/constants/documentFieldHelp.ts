@@ -44,7 +44,7 @@ export const DOCUMENT_FIELD_HELP = {
   duplicate_detection: {
     title: "Duplicate Detection",
     description:
-      "Detect previously uploaded documents and prevent duplicate processing.",
+      "Flag an upload whose file is identical to a document already in this workspace, with a link to the original.",
     recommended: "Enabled",
   },
 

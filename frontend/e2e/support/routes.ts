@@ -21,6 +21,7 @@ export const WORKSPACE_PAGES: readonly WorkspacePage[] = [
   { id: "/:orgSlug/:workspaceSlug/packet-splits", sub: "packet-splits", title: /Scanned packets/, plan: "business", navId: "ws:packet-splits" },
   { id: "/:orgSlug/:workspaceSlug/tables", sub: "tables", title: /Tables/, plan: "business", navId: "ws:tables" },
   { id: "/:orgSlug/:workspaceSlug/obligations", sub: "obligations", title: /Obligations/, plan: "business", navId: "ws:obligations" },
+  { id: "/:orgSlug/:workspaceSlug/batches", sub: "batches", title: /Batch operations/, plan: "business", navId: "ws:batches" },
   { id: "/:orgSlug/:workspaceSlug/procurement", sub: "procurement", title: /Invoice matching/, plan: "business", navId: "ws:procurement" },
   { id: "/:orgSlug/:workspaceSlug/procurement/policies", sub: "procurement/policies", title: /Matching tolerances/, plan: "business", navId: "palette:procurement-policies" },
   { id: "/:orgSlug/:workspaceSlug/erp", sub: "erp", title: /ERP posting/, plan: "business", navId: "ws:erp" },

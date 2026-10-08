@@ -337,6 +337,8 @@ def build_export(
     if fmt == "json":
         return "application/json", json.dumps(rows, ensure_ascii=False, indent=2)
 
+    from app.services.tables.export import safe_text
+
     columns: list[str] = []
     for row in rows:
         for key in row:
@@ -346,7 +348,8 @@ def build_export(
     writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
-        writer.writerow(row)
+        # F-162: a value starting with = + - @ (or a tab/CR) would run as a spreadsheet formula.
+        writer.writerow({key: safe_text(value) if isinstance(value, str) else value for key, value in row.items()})
     return "text/csv", buffer.getvalue()
 
 

@@ -58,9 +58,14 @@ class DashboardOverviewResponse(BaseModel):
 
     failed_count: int
 
-    automation_success_rate: float
+    # F-161: completed / (completed + failed) as a percentage; None until a document finishes.
+    automation_success_rate: float | None = None
 
+    # File formats (PDF, PNG, ...) over every document.
     document_type_distribution: list[DocumentTypeDistribution]
+
+    # Phase 1: what the documents are, from the classifier's label, over the classified ones.
+    classification_distribution: list[DocumentTypeDistribution] = []
 
     recent_activity: list[DashboardActivity]
 

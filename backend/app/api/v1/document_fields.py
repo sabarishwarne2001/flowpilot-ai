@@ -152,6 +152,53 @@ def correct_fields(
     )
 
 
+class FieldConfidenceOut(BaseModel):
+    field: str
+    confidence: float
+    agreed: bool
+    disagreement: Optional[str] = None
+
+
+class DocumentConfidenceOut(BaseModel):
+    """How sure verification is about this document and each of its fields (null: never verified)."""
+
+    work_item_id: uuid.UUID
+    confidence: Optional[float] = None
+    verification_status: Optional[str] = None
+    in_review: bool = False
+    reason: Optional[str] = None
+    fields: list[FieldConfidenceOut] = Field(default_factory=list)
+
+
+@router.get(
+    "/{work_item_id}/confidence",
+    response_model=DocumentConfidenceOut,
+    summary="Verification confidence for the document and each extracted field",
+)
+def document_confidence(
+    work_item_id: uuid.UUID,
+    db: Session = Depends(deps.get_read_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
+) -> DocumentConfidenceOut:
+    from app.services.batches import confidence as conf
+
+    item = _item(db, context, work_item_id)
+    score = conf.for_documents(db, [item.id]).get(item.id)
+    if score is None:
+        return DocumentConfidenceOut(work_item_id=item.id)
+    return DocumentConfidenceOut(
+        work_item_id=item.id,
+        confidence=score.confidence,
+        verification_status=score.verification_status,
+        in_review=score.blocking,
+        reason=score.reason,
+        fields=[
+            FieldConfidenceOut(field=f.field, confidence=f.confidence, agreed=f.agreed, disagreement=f.disagreement)
+            for f in score.fields
+        ],
+    )
+
+
 @router.get(
     "/{work_item_id}/fields/history",
     response_model=list[FieldCorrectionOut],

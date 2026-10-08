@@ -395,6 +395,40 @@ def _detect_currency(raw: str) -> tuple[Optional[str], str]:
     return None, text
 
 
+#: Currencies named in words, as models write them in a `currency` field (F-163).
+_CURRENCY_NAMES = {
+    "US DOLLAR": "USD", "US DOLLARS": "USD", "DOLLAR": "USD", "DOLLARS": "USD", "U.S. DOLLARS": "USD",
+    "EURO": "EUR", "EUROS": "EUR",
+    "POUND": "GBP", "POUNDS": "GBP", "POUND STERLING": "GBP", "POUNDS STERLING": "GBP", "STERLING": "GBP",
+    "RUPEE": "INR", "RUPEES": "INR", "INDIAN RUPEE": "INR", "INDIAN RUPEES": "INR",
+    "YEN": "JPY", "JAPANESE YEN": "JPY",
+    "A$": "AUD", "AUSTRALIAN DOLLARS": "AUD", "C$": "CAD", "CANADIAN DOLLARS": "CAD",
+    "S$": "SGD", "SINGAPORE DOLLARS": "SGD", "DIRHAM": "AED", "DIRHAMS": "AED", "SWISS FRANCS": "CHF",
+}
+
+
+def currency_code(raw: Optional[str]) -> Optional[str]:
+    """A currency as its ISO 4217 code: "usd", "US Dollars", "€", "Rs." -> "USD", "USD", "EUR", "INR".
+
+    None when the text names no currency this module knows. Never a guess: a column that holds
+    three letters must not receive "monopoly money" (F-163).
+    """
+    if raw is None:
+        return None
+    text = " ".join(str(raw).strip().split())
+    if not text:
+        return None
+    upper = text.upper()
+    if re.fullmatch(r"[A-Z]{3}", upper):
+        return upper
+    if upper in _CURRENCY_NAMES:
+        return _CURRENCY_NAMES[upper]
+    code, rest = _detect_currency(text)
+    if code is not None and not re.sub(r"[\s().,]", "", rest):
+        return code
+    return None
+
+
 def money_micros(
     raw: Optional[str],
     *,

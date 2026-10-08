@@ -50,9 +50,14 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
       />
 
       {/* Slide-out Drawer */}
+      {/* F-165: closed, the drawer is inert (out of the tab order and the accessibility tree) and casts
+          no shadow; it used to keep both, so Tab walked into hidden links and a grey strip ran down
+          the left edge of every page on a phone. */}
       <aside
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? "true" : undefined}
+        aria-hidden={open ? undefined : "true"}
+        inert={!open}
         aria-label="Navigation Menu"
         className={`
           fixed inset-y-0 left-0 z-50
@@ -60,15 +65,14 @@ const MobileDrawer: React.FC<MobileDrawerProps> = ({
           bg-sidebar
           border-r
           border-border
-          shadow-elevation-3
-          transition-transform
+          transition-[transform,box-shadow]
           duration-200
           ease-out-expo
           lg:hidden
           ${
             open
-              ? "translate-x-0"
-              : "-translate-x-full"
+              ? "translate-x-0 shadow-elevation-3"
+              : "-translate-x-full shadow-none"
           }
         `}
       >

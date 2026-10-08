@@ -78,6 +78,7 @@ from app.services.entities import annotations as ann
 from app.services.entities import crypto, erasure, graph, resolver
 from app.services.entities import normalize as n
 from app.services.entities import vocabulary as v
+from app.utils.like import LIKE_ESCAPE, contains_pattern
 
 router = APIRouter(tags=["Entity Graph"])
 
@@ -226,7 +227,7 @@ def list_entities(workspace_id: uuid.UUID, kind: Optional[str] = Query(default=N
             by_identifier = True
         else:
             folded = n.fold(q.strip())
-            statement = statement.where(or_(Entity.normalized_name.ilike(f"%{folded}%"),
+            statement = statement.where(or_(Entity.normalized_name.ilike(contains_pattern(folded), escape=LIKE_ESCAPE),
                                             func.similarity(Entity.normalized_name, folded) >= v.TRIGRAM_THRESHOLD))
     total = db.execute(select(func.count()).select_from(statement.subquery())).scalar_one()
     ids = list(db.execute(statement.order_by(Entity.last_seen_at.desc().nulls_last(), Entity.id)
