@@ -134,3 +134,80 @@ def test_cron_lines_route_through_the_wrapper():
             continue
         command = match.group("command")
         assert "flowpilot-sweep" in shlex.split(command)[0]
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 (F-182). Each flag being known is not enough: `compliance --apply` passes the
+# check above, yet sweep_compliance.py refuses to run without a mode ("Nothing selected"),
+# so the nightly retention purge and export expiry never ran. Every scheduled line is now
+# run with exactly its arguments (database unreachable, so nothing is written) and must get
+# past its argument parser.
+# ---------------------------------------------------------------------------
+
+WRAPPER = BACKEND_ROOT / "deploy" / "bin" / "flowpilot-sweep"
+WRAPPER_CASE = re.compile(
+    r'^\s*(?P<name>[a-z0-9_-]+)\)\s+SCRIPT="(?P<script>scripts/[a-z0-9_]+\.py)"\s*;'
+    r'(?:\s*set -- (?P<prefix>[^;]*?)\s*"\$@"\s*;)?',
+    re.MULTILINE,
+)
+
+
+def _wrapper_scripts() -> dict[str, tuple[str, list[str]]]:
+    found: dict[str, tuple[str, list[str]]] = {}
+    for match in WRAPPER_CASE.finditer(WRAPPER.read_text()):
+        module = match.group("script")[: -len(".py")].replace("/", ".")
+        prefix = shlex.split(match.group("prefix") or "")
+        found[match.group("name")] = (module, prefix)
+    return found
+
+
+def _scheduled_argv() -> list[tuple[str, list[str]]]:
+    lines: list[tuple[str, list[str]]] = []
+    for raw in CRON_FILE.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" in line.split()[0]:
+            continue
+        match = CRON_LINE.match(line)
+        if match is None:
+            continue
+        argv = shlex.split(match.group("command"))
+        if argv[0].endswith("flowpilot-sweep"):
+            lines.append((argv[1], argv[2:]))
+    return lines
+
+
+def test_every_scheduled_sweeper_is_known_to_the_wrapper():
+    known = _wrapper_scripts()
+    unknown = sorted({name for name, _ in _scheduled_argv()} - set(known))
+    assert not unknown, f"cron schedules sweepers the wrapper does not know: {unknown}"
+
+
+@pytest.mark.parametrize("name,args", _scheduled_argv(), ids=lambda value: str(value))
+def test_every_scheduled_command_gets_past_its_argument_parser(name: str, args: list[str]):
+    module, prefix = _wrapper_scripts()[name]
+    env = {
+        **__import__("os").environ,
+        # Unreachable on purpose: the run must fail AFTER parsing, never write anything.
+        "POSTGRES_HOST": "127.0.0.1",
+        "POSTGRES_PORT": "1",
+        "DATABASE_URL": "postgresql://nobody@127.0.0.1:1/none",
+        "REDIS_URL": "redis://127.0.0.1:1/0",
+        "SERVICE_ROLE": "sweeper",
+    }
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", module, *prefix, *args],
+            capture_output=True,
+            text=True,
+            cwd=BACKEND_ROOT,
+            check=False,
+            env=env,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return  # still running past its parser: the arguments were accepted
+    refused = result.returncode == 2 and "usage:" in result.stderr and "error:" in result.stderr
+    assert not refused, (
+        f"cron runs `flowpilot-sweep {name} {' '.join(args)}` and {module} refuses it:\n"
+        f"{result.stderr[-600:]}"
+    )

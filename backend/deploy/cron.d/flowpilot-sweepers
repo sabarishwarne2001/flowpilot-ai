@@ -10,7 +10,11 @@ MAILTO=""
 # dispatched by nothing: not by this file, not by the flowpilot-sweep
 # case statement, not by any job handler. Retention and erasure
 # enforcement has therefore never executed on a deployed host.
-53 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --apply
+# F-182. `--apply` alone selects no sweep: the script stopped at "Nothing
+# selected" every night. --all expires stale export archives and reports;
+# --purge runs the age-based purge, for organizations that turned auto-purge
+# on (Compliance → Retention) and never for documents under a legal hold.
+53 3 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --all --purge --apply
 # ARCH41-S2:cron-extraction-memory
 29 4 * * *  flowpilot  /srv/flowpilot/backend/deploy/bin/flowpilot-sweep extraction_memory --apply
 # ARCH42-S1:cron-entities
