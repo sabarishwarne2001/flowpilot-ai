@@ -169,13 +169,13 @@ class _Writer:
         info.external_attr = 0o644 << 16
         return info
 
-    def write_bytes(self, path: str, data: bytes) -> _Entry:
+    def add_bytes(self, path: str, data: bytes) -> _Entry:
         self.zip.writestr(self._info(path), data)
         entry = _Entry(path, hashlib.sha256(data).hexdigest(), len(data))
         self.entries.append(entry)
         return entry
 
-    def write_stream(self, path: str, chunks: Iterable[bytes]) -> _Entry:
+    def add_stream(self, path: str, chunks: Iterable[bytes]) -> _Entry:
         digest = hashlib.sha256()
         size = 0
         with self.zip.open(self._info(path), "w", force_zip64=True) as out:
@@ -351,13 +351,13 @@ def build(db: Session, *, package: ExportPackage) -> ExportPackage:
                 file_path = None
                 if package.include_originals and item.stored_filename:
                     uploaded = files.get(item.uploaded_file_id) if item.uploaded_file_id else None
-                    entry = writer.write_stream(f"files/{prefix}", driver.iter_chunks(item.stored_filename, chunk_size=_CHUNK))
+                    entry = writer.add_stream(f"files/{prefix}", driver.iter_chunks(item.stored_filename, chunk_size=_CHUNK))
                     file_path = entry.path
                     record["source_sha256"] = uploaded.checksum_sha256 if uploaded else None
                     record["source_verified"] = (
                         uploaded.checksum_sha256.lower() == entry.sha256 if uploaded and uploaded.checksum_sha256 else None
                     )
-                data_entry = writer.write_bytes(f"data/documents/{stem}.json", _json_bytes(record))
+                data_entry = writer.add_bytes(f"data/documents/{stem}.json", _json_bytes(record))
                 documents_manifest.append({
                     "work_item_id": record["work_item_id"],
                     "original_filename": item.original_filename,
@@ -366,8 +366,8 @@ def build(db: Session, *, package: ExportPackage) -> ExportPackage:
                     "source_sha256": record["source_sha256"],
                     "source_verified": record["source_verified"],
                 })
-            writer.write_bytes("data/extractions.json", _json_bytes(records))
-            writer.write_bytes("data/extractions.csv", _csv_bytes(records))
+            writer.add_bytes("data/extractions.json", _json_bytes(records))
+            writer.add_bytes("data/extractions.csv", _csv_bytes(records))
             manifest = {
                 "format": v.PACKAGE_FORMAT,
                 "package_id": str(package.id),
@@ -384,14 +384,14 @@ def build(db: Session, *, package: ExportPackage) -> ExportPackage:
                 "files": [{"path": e.path, "sha256": e.sha256, "bytes": e.size} for e in writer.entries],
             }
             manifest_bytes = _json_bytes(manifest)
-            manifest_entry = writer.write_bytes("manifest.json", manifest_bytes)
-            writer.write_bytes(
+            manifest_entry = writer.add_bytes("manifest.json", manifest_bytes)
+            writer.add_bytes(
                 "README.txt",
                 _readme(package, manifest_entry.sha256, len(items), len(manifest["files"]),
                         workspace.workspace_name if workspace else str(package.workspace_id)),
             )
             sums = "".join(f"{e.sha256}  {e.path}\n" for e in writer.entries).encode("utf-8")
-            writer.write_bytes("SHA256SUMS", sums)
+            writer.add_bytes("SHA256SUMS", sums)
         finally:
             writer.close()
 
