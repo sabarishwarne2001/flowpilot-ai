@@ -327,8 +327,9 @@ export const OrganizationGeneral: React.FC = () => {
                 Every API key is deactivated immediately. Integrations stop.
               </li>
               <li className="flex gap-2">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                Reactivation is a support request, not a button.
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                An owner can restore it later from All organizations &amp;
+                workspaces. API keys stay deactivated after a restore.
               </li>
             </ul>
 
@@ -375,7 +376,7 @@ export const OrganizationGeneral: React.FC = () => {
                     ) : (
                       <Archive className="h-4 w-4" />
                     )}
-                    {isArchiving ? "Archiving…" : "Archive permanently"}
+                    {isArchiving ? "Archiving…" : "Archive organization"}
                   </button>
                   <button
                     type="button"
@@ -401,8 +402,8 @@ export const OrganizationGeneral: React.FC = () => {
         <section className="rounded-xl border border-border/60 bg-muted/20 p-6">
           <p className="text-sm leading-relaxed text-muted-foreground">
             This organization is {status.toLowerCase()}. Its records are
-            retained and readable, but it cannot be modified. Reactivation is
-            handled through support.
+            retained, but nothing in it can be changed until an owner restores
+            it from All organizations &amp; workspaces.
           </p>
         </section>
       )}

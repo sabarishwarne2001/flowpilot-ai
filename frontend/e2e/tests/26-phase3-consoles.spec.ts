@@ -174,3 +174,21 @@ test.describe("Billing speaks in the customer's words (F-187)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Archiving an organization says how to undo it (F-191)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the danger zone promises what the product does: the owner restores it from the picker", async ({ page }) => {
+    await page.goto(org("C", "settings"));
+    const zone = page.locator("section", { has: page.getByRole("heading", { name: "Danger zone" }) });
+    await expect(zone).toBeVisible();
+    // Before the fix: "Reactivation is a support request, not a button." and "Archive permanently",
+    // although the owner restores an archived organization from the workspace picker (F-132).
+    await expect(zone).not.toContainText(/support request|not a button/i);
+    await expect(zone).toContainText(/restore/i);
+    await zone.getByRole("button", { name: "Archive organization" }).click();
+    await expect(zone.getByRole("button", { name: /permanently/i })).toHaveCount(0);
+    await zone.getByRole("button", { name: "Cancel" }).click();
+    await expectHealthyPage(page);
+  });
+});
