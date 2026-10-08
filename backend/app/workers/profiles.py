@@ -177,6 +177,11 @@ LIGHT = WorkerProfile(
             # ARCH50-S1:revops-light-profile. The daily RevOps sweep: contracts,
             # invoices, promo reservations and revenue snapshots -- SQL only.
             "revops.sweep",
+            # Phase 1 batch engine. An export package streams stored files into a
+            # zip and hashes them (zipfile, hashlib); expiry deletes objects. No
+            # model, OCR or PDF engine. Not optional bookkeeping (see above).
+            "batches.build_export_package",
+            "batches.sweep_export_packages",
         }
     ),
     allow_heavy=frozenset(),

@@ -745,3 +745,12 @@ from app.models.work_item_field_correction import WorkItemFieldCorrection  # noq
 
 # N-017: two-factor sign-in.
 from app.models.user_mfa import UserMfaFactor  # noqa: E402,F401
+
+# Phase 1: the batch processing & document dispatch engine.
+from app.models.batches import (  # noqa: E402,F401
+    DispatchPolicy,
+    ExportPackage,
+    ProcessingBatch,
+    ProcessingBatchItem,
+    SchemaHealingEvent,
+)

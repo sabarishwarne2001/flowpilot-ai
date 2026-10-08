@@ -99,6 +99,10 @@ class AuditResourceType(str, PyEnum):
     # N-020 item 7. A field corrected in the document viewer. Added to the
     # PostgreSQL type by p6a1_work_item_field_corrections.
     WORK_ITEM = "WORK_ITEM"
+    # Phase 1 batch engine: batches, dispatch and export packages. Added to the
+    # PostgreSQL type by p8a2_batch_dispatch_engine.
+    PROCESSING_BATCH = "PROCESSING_BATCH"
+    EXPORT_PACKAGE = "EXPORT_PACKAGE"
 
 
 class AuditAction(str, PyEnum):

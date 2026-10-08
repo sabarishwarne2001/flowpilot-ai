@@ -156,6 +156,13 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
     # HARDENING-T1:D25. Documents stranded in a working stage with no live
     # job are failed with PROCESSING_STALLED, so the UI stops spinning and
     # the "Document failed" trigger fires.
+    # Phase 1 batch engine: a ready export package can be downloaded for seven
+    # days; then its archive is deleted (its digests stay, as the record).
+    ScheduledJob(
+        job_type="batches.sweep_export_packages",
+        interval_seconds=3_600,
+        description="Delete expired export package archives (Phase 1 batch engine).",
+    ),
     ScheduledJob(
         job_type="pipeline.sweep_stuck",
         interval_seconds=600,
