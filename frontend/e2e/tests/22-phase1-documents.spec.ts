@@ -131,7 +131,9 @@ test.describe("Uploading from the Documents page (F-158, F-160)", () => {
 
     const created = await waitForDocument(`copy-${id}.pdf`);
     await page.goto(ws("C", `work-items/${created.id as string}`));
-    await expect(page.getByRole("note")).toContainText(`This file is identical to original-${id}.pdf`);
+    await expect(page.getByRole("note").filter({ hasText: "Duplicate upload." })).toContainText(
+      `This file is identical to original-${id}.pdf`,
+    );
     await expectHealthyPage(page);
   });
 
@@ -207,5 +209,44 @@ test.describe("Plan-gated pages on a plan without them (F-164)", () => {
     await watchForLocks(page);
     await page.goto(ws("A", "tables"));
     await expect(page.locator("main")).toContainText(/included on the Business and Enterprise plans/);
+  });
+});
+
+/**
+ * F-165: on a phone the closed navigation drawer kept its shadow (a grey strip down the left edge of
+ *        every page) and its links stayed in the tab order and the accessibility tree as an open
+ *        dialog, so Tab walked into navigation nobody could see.
+ * F-166: on a phone the Documents table squeezed eight fixed-width columns into the screen: names
+ *        cut to "po....", headers printed over each other.
+ */
+test.describe("Phone width (F-165, F-166)", () => {
+  test.use({ user: "C.owner", viewport: { width: 390, height: 844 } });
+
+  test("the closed navigation drawer is not reachable and casts no shadow", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await expect(page.locator("main")).toContainText("Documents Database");
+    const drawer = page.locator('aside[aria-label="Navigation Menu"]');
+    for (let i = 0; i < 12; i += 1) {
+      await page.keyboard.press("Tab");
+      const inside = await drawer.evaluate((element) => element.contains(document.activeElement));
+      expect(inside, `Tab ${i + 1} moved focus into the closed drawer`).toBe(false);
+    }
+    const shadow = await drawer.evaluate((element) => getComputedStyle(element).boxShadow);
+    // Tailwind's shadow-none computes to transparent zero-size shadows; no shadow may have any size.
+    expect(/(?<![\d.])[1-9]\d*(?:\.\d+)?px/.test(shadow), `the closed drawer casts a shadow: ${shadow}`).toBe(false);
+
+    await page.getByRole("button", { name: "Toggle Navigation Drawer" }).click();
+    await expect(drawer.getByRole("link", { name: "Documents" })).toBeVisible();
+  });
+
+  test("documents read as a list with full names", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await page.getByPlaceholder("Search documents...").fill("INV-E2E-1001");
+    await page.getByRole("button", { name: "Apply Filters" }).click();
+    const name = page.getByTestId("document-card").getByText("invoice-INV-E2E-1001.pdf");
+    await expect(name).toBeVisible();
+    const fits = await name.evaluate((element) => element.scrollWidth <= element.clientWidth + 1);
+    expect(fits, "the file name is cut off").toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });

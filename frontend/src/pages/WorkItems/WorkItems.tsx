@@ -350,7 +350,83 @@ export const WorkItems: React.FC = () => {
               />
             </div>
           ) : (
-            <table className="w-full table-fixed border-collapse text-left">
+            <>
+            {/* F-166: on a phone, documents are cards with their full name; the table needs width. */}
+            <ul className="divide-y divide-border/60 md:hidden" aria-label="Documents">
+              {items.map((item) => (
+                <li
+                  key={item.id}
+                  data-testid="document-card"
+                  className={`flex items-start gap-3 px-3 py-3 ${selectedIds.includes(item.id) ? "bg-primary/[0.04]" : ""}`}
+                >
+                  {canWrite && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${item.original_filename}`}
+                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-primary"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={(event) =>
+                        setSelectedIds((current) =>
+                          event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id),
+                        )
+                      }
+                    />
+                  )}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Link to={getDetailsPath(item.id)} className="block break-all text-sm font-medium leading-snug text-foreground hover:text-primary">
+                      {item.original_filename}
+                    </Link>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${STATUS_BADGE_MAP[item.status]}`}
+                      >
+                        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                        {item.status.toLowerCase()}
+                      </span>
+                      {item.duplicate_of && (
+                        <Link
+                          to={getDetailsPath(item.duplicate_of.id)}
+                          title={`Same file as ${item.duplicate_of.original_filename}`}
+                          className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
+                        >
+                          Duplicate
+                        </Link>
+                      )}
+                      <span className="font-mono text-[11px]">{item.file_type.split("/")[1]?.toUpperCase() ?? "UNKNOWN"}</span>
+                      <span>·</span>
+                      <span className="font-mono text-[11px]">{formatBytes(item.file_size)}</span>
+                      <span>·</span>
+                      <time dateTime={item.created_at}>{formatTimestampDate(item.created_at)}</time>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {canWrite && item.status === "FAILED" && (
+                      <button
+                        type="button"
+                        disabled={reprocessMutation.isPending}
+                        onClick={() => triggerReprocess(item.id)}
+                        aria-label={`Retry processing ${item.original_filename}`}
+                        className="rounded-md p-1.5 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => triggerDelete(item.id)}
+                        disabled={deleteMutation.isPending}
+                        aria-label={`Delete ${item.original_filename}`}
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden w-full table-fixed border-collapse text-left md:table">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground backdrop-blur">
                   {canWrite && (
@@ -541,6 +617,7 @@ export const WorkItems: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       </div>
