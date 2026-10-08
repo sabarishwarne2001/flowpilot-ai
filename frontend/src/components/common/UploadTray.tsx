@@ -43,6 +43,8 @@ const EXTENSION_ALIASES: Readonly<Record<string, readonly string[]>> = {
 interface UploadTrayProps {
   readonly onUploadSuccess?: () => void;
   readonly className?: string;
+  /** One row instead of a tall drop area (the overview, where the numbers matter more). */
+  readonly compact?: boolean;
 }
 
 interface QueuedFile {
@@ -68,6 +70,7 @@ const describeError = (error: unknown, name: string): string => {
 export const UploadTray: React.FC<UploadTrayProps> = ({
   onUploadSuccess,
   className = "",
+  compact = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceId = useActiveWorkspaceId();
@@ -244,7 +247,11 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`group relative flex cursor-pointer flex-col items-center justify-center space-y-3 overflow-hidden rounded-xl border border-dashed px-8 py-9 text-center transition-all duration-200 ${
+        className={`group relative flex cursor-pointer overflow-hidden rounded-xl border border-dashed transition-all duration-200 ${
+          compact
+            ? "flex-row items-center gap-3 px-4 py-3 text-left"
+            : "flex-col items-center justify-center space-y-3 px-8 py-9 text-center"
+        } ${
           isUploading
             ? "cursor-not-allowed opacity-60"
             : isDragActive
@@ -262,11 +269,11 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
           aria-label="Upload document picker"
         />
 
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-card to-muted/60 text-muted-foreground shadow-elevation-1 transition-colors group-hover:text-primary">
-          <UploadCloud className="h-5 w-5" />
+        <div className={`flex shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-card to-muted/60 text-muted-foreground shadow-elevation-1 transition-colors group-hover:text-primary ${compact ? "h-9 w-9" : "h-11 w-11"}`}>
+          <UploadCloud className={compact ? "h-4 w-4" : "h-5 w-5"} />
         </div>
 
-        <div className="space-y-1 select-none">
+        <div className={`select-none ${compact ? "min-w-0 space-y-0.5" : "space-y-1"}`}>
           <p className="text-sm font-medium tracking-tight text-foreground">
             Click to upload or drag & drop files
           </p>

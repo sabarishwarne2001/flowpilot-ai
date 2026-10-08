@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Search,
@@ -78,10 +78,17 @@ export const WorkItems: React.FC = () => {
   const [sortBy, setSortBy] = useState<WorkItemSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
+  // Phase 1: a link can open the list already filtered (the overview's "Failed" card uses ?status=FAILED).
+  const [searchParams] = useSearchParams();
+  const linkedStatus = useMemo((): WorkItemStatus | undefined => {
+    const value = searchParams.get("status");
+    return value === "QUEUED" || value === "PROCESSING" || value === "COMPLETED" || value === "FAILED" ? value : undefined;
+  }, [searchParams]);
+
   const [activeFilters, setActiveFilters] = useState<{
     search?: string;
     status?: WorkItemStatus;
-  }>({});
+  }>(() => (linkedStatus ? { status: linkedStatus } : {}));
 
   const queryFilters = useMemo(
     () => ({
@@ -183,7 +190,7 @@ export const WorkItems: React.FC = () => {
     resolver: zodResolver(filterFormSchema),
     defaultValues: {
       search: "",
-      status: "ALL",
+      status: linkedStatus ?? "ALL",
     },
   });
 

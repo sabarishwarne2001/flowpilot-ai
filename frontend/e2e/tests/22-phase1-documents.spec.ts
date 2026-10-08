@@ -310,3 +310,39 @@ test.describe("Table viewer (Phase 1)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Overview (Phase 1)", () => {
+  test.use({ user: "C.owner" });
+
+  test("KPI cards include failures, document types come from the classifier, activity opens the document", async ({ page }) => {
+    await page.goto(ws("C"));
+    await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("kpi-failed")).toContainText("Failed");
+
+    const kinds = page.getByRole("list", { name: "Documents by type" });
+    await expect(kinds).toContainText("Invoice");
+    await expect(kinds).toContainText("Purchase Order");
+    const formats = page.getByRole("list", { name: "Documents by file format" });
+    await expect(formats).toContainText("PDF");
+    await expect(formats).not.toContainText("APPLICATION/");
+    await expect(formats).not.toContainText("IMAGE/");
+
+    const activity = page.getByRole("region", { name: "Recent Activity" });
+    const first = activity.getByRole("link").first();
+    const name = (await first.textContent())?.trim() ?? "";
+    await first.click();
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+    await expectHealthyPage(page);
+  });
+
+  test("a link can open the Documents list already filtered by status", async ({ page }) => {
+    await page.goto(ws("C", "work-items?status=COMPLETED"));
+    await expect(page.locator("main select").first()).toHaveValue("COMPLETED");
+    const rows = page.locator("main tbody tr");
+    await expect(rows.first()).toBeVisible();
+    const statuses = await rows.locator("td").filter({ hasText: /^\s*(queued|processing|completed|failed)\s*$/i }).allTextContents();
+    expect(statuses.length).toBeGreaterThan(0);
+    expect(new Set(statuses.map((status) => status.trim().toLowerCase()))).toEqual(new Set(["completed"]));
+    await expectHealthyPage(page);
+  });
+});

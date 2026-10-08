@@ -241,6 +241,34 @@ def get_document_type_distribution(
     return list(db.execute(statement).all())
 
 
+def get_classification_distribution(
+    db: Session, *, workspace_id: uuid.UUID
+) -> list[tuple[str, int]]:
+    """
+    How many documents the classifier labelled with each kind (Invoice,
+    Purchase Order, ...), most common first. The label is in
+    classification_details when the pipeline recorded its reasoning, and at
+    the top level otherwise. Documents without a label are not counted.
+    """
+    entities = WorkItem.extracted_entities
+    label = func.nullif(
+        func.trim(
+            func.coalesce(
+                entities[("classification_details", "document_classification")].as_string(),
+                entities["document_classification"].as_string(),
+            )
+        ),
+        "",
+    )
+    statement = (
+        select(label.label("kind"), func.count())
+        .where(WorkItem.workspace_id == workspace_id, label.is_not(None))
+        .group_by(label)
+        .order_by(func.count().desc(), label)
+    )
+    return list(db.execute(statement).all())
+
+
 # ---------------------------------------------------------------------
 # Writes
 # ---------------------------------------------------------------------

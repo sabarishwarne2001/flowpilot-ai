@@ -101,6 +101,12 @@ export interface DashboardMetricsResponse {
   readonly document_type_distribution: readonly DashboardDocTypeDistribution[];
 
   /**
+   * What the documents are (Invoice, Purchase Order, ...), from the classifier's
+   * label, over the documents that have one. Most common first.
+   */
+  readonly classification_distribution: readonly DashboardDocTypeDistribution[];
+
+  /**
    * Recent dashboard activity.
    */
   readonly recent_activity: readonly DashboardActivityFeed[];
