@@ -8,8 +8,9 @@ import random
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from types import FrameType
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from app.core.config import settings
 from app.workers.handlers import register_all
@@ -299,7 +300,7 @@ def run_jobs_loop(
                 job_types=job_types,
             )
             snapshot = [
-                (j.id, j.job_type, j.payload, j.attempts, j.max_attempts, j.organization_id)
+                (j.id, j.job_type, j.payload, j.attempts, j.max_attempts, j.organization_id, j.created_at)
                 for j in claimed
             ]
             db.commit()
@@ -311,7 +312,7 @@ def run_jobs_loop(
         if shutdown.requested:
             logger.info("jobs.draining", extra={"remaining": len(snapshot)})
 
-        for job_id, job_type, payload, attempts, max_attempts, org_id in snapshot:
+        for job_id, job_type, payload, attempts, max_attempts, org_id, enqueued_at in snapshot:
             with job_scope(
                 job_id=job_id,
                 job_type=job_type,
@@ -326,6 +327,7 @@ def run_jobs_loop(
                             error=f"UNKNOWN_JOB_TYPE: no handler registered for {job_type!r}",
                         )
                         db.commit()
+                    _observe_job_outcome(org_id, enqueued_at, succeeded=False)
                     continue
 
                 try:
@@ -355,6 +357,7 @@ def run_jobs_loop(
                             )
                         db.commit()
                     if died:
+                        _observe_job_outcome(org_id, enqueued_at, succeeded=False)
                         # HARDENING-T1:D25. A dead document job fails its
                         # document instead of leaving it processing forever.
                         from app.workers.dead_letter import on_job_dead
@@ -369,8 +372,36 @@ def run_jobs_loop(
                 with SessionLocal() as db:
                     mark_job_succeeded(db, job_id, result=result)
                     db.commit()
+                _observe_job_outcome(org_id, enqueued_at, succeeded=True)
 
     logger.info("worker.stopped", extra={"worker": worker, "loop": "jobs", "passes": passes})
+
+
+def _observe_job_outcome(organization_id: Any, enqueued_at: Optional[datetime], *, succeeded: bool) -> None:
+    """F-189. Record a job's terminal state for the organization's job service levels.
+
+    "Job completion rate" counts claimed jobs that reached SUCCEEDED rather than DEAD (a failure
+    that will be retried is not terminal and is not counted); "Job end-to-end p95" is enqueue to
+    terminal state, time queued included. Nothing recorded them, so both read "No traffic" on
+    every organization's dashboard. Platform jobs (no organization) are not a tenant's SLO.
+    """
+    if organization_id is None:
+        return
+    from app.core import slo_recorder
+
+    slo_recorder.recorder.observe_ratio_event(
+        organization_id=organization_id, slo_key="jobs.completion", success=succeeded
+    )
+    if enqueued_at is not None:
+        if enqueued_at.tzinfo is None:
+            enqueued_at = enqueued_at.replace(tzinfo=timezone.utc)
+        elapsed_ms = max(0.0, (datetime.now(timezone.utc) - enqueued_at).total_seconds() * 1000.0)
+        slo_recorder.recorder.observe(
+            organization_id=organization_id,
+            slo_key="jobs.latency.p95_ms",
+            value=elapsed_ms,
+            is_error=not succeeded,
+        )
 
 
 def run_stripe_inbound_loop(
