@@ -397,15 +397,8 @@ def _persist(
     result: Any,
 ) -> ProcurementCase:
     exception_count = result.exception_count
-    self_inconsistent = any(
-        finding.get("code") == "SELF_INCONSISTENT_TOTAL"
-        for finding in result.header_findings
-    )
-    status = (
-        CASE_STATUS_MATCHED
-        if exception_count == 0 and not self_inconsistent
-        else CASE_STATUS_NEEDS_REVIEW
-    )
+    # F-171: a case that compared nothing is not clean either (matcher.BLOCKING_HEADER_CODES).
+    status = CASE_STATUS_MATCHED if result.is_clean else CASE_STATUS_NEEDS_REVIEW
 
     case = ProcurementCase(
         organization_id=organization_id,
@@ -560,6 +553,12 @@ def approve_case(
             f"Approving it anyway requires a written reason, which is what "
             f"an auditor reads when asking why this invoice was paid despite "
             f"the exception."
+        )
+    if not case.lines and not reason:
+        # F-171: nothing was compared, so an approval is a person's judgement alone.
+        raise OverrideReasonRequired(
+            "no line item could be compared on this case. Approving it requires "
+            "a written reason saying how the invoice was checked."
         )
 
     case.status = CASE_STATUS_APPROVED

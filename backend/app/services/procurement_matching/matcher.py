@@ -98,11 +98,20 @@ __all__ = [
     "SIDE_PO",
     "SIDE_RECEIPT",
     "SIDE_INVOICE",
+    "BLOCKING_HEADER_CODES",
+    "NOTHING_COMPARED",
 ]
 
 SIDE_PO = "po"
 SIDE_RECEIPT = "receipt"
 SIDE_INVOICE = "invoice"
+
+#: F-171. Not one line could be read on any document in the case, so nothing
+#: was compared. Before this finding such a case had no red line and was
+#: scored MATCHED, with "Approve match" offered, on no evidence at all.
+NOTHING_COMPARED = "NOTHING_COMPARED"
+#: Header findings that keep a case out of MATCHED, as a red line does.
+BLOCKING_HEADER_CODES: frozenset[str] = frozenset({"SELF_INCONSISTENT_TOTAL", NOTHING_COMPARED})
 
 # ---------------------------------------------------------------------------
 # Cost weights. They sum to COST_SCALE, so a pair cost is always 0..1_000_000
@@ -191,7 +200,7 @@ class MatchResult:
     @property
     def is_clean(self) -> bool:
         return self.exception_count == 0 and not any(
-            finding.get("code") == "SELF_INCONSISTENT_TOTAL"
+            finding.get("code") in BLOCKING_HEADER_CODES
             for finding in self.header_findings
         )
 
@@ -600,6 +609,19 @@ def match(
         if i in consumed_receipt:
             continue
         add(po_line=None, receipt_line=receipt_lines[i], invoice_line=None, cost=None)
+
+    if not rows:
+        header_findings.append(
+            {
+                "side": "case",
+                "code": NOTHING_COMPARED,
+                "detail": (
+                    "no line item could be read on any document in this case, so "
+                    "nothing was compared; open the documents, then approve with a "
+                    "reason or dispute"
+                ),
+            }
+        )
 
     return MatchResult(
         lines=tuple(rows),
