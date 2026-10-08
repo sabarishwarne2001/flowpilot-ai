@@ -4,7 +4,8 @@ _Last updated: 2026-10-08 (Phase 3 — final commercial hardening)_
 
 ## Current phase
 **Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
-`hardening/phase-3-final-commercial-hardening` (PR: see "Next action"). Builds on Phase 2 (merged
+`hardening/phase-3-final-commercial-hardening`; PR #13
+(https://github.com/sabarishwarne2001/flowpilot-ai/pull/13). Builds on Phase 2 (merged
 into `main`).
 
 - **Live defects (each with a failing test first): F-182 to F-206** (FINDINGS.md, "Phase 3").
@@ -45,7 +46,7 @@ Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
 **N-030** seat price = plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge the Phase 3 PR. Decide N-032 and N-033 when convenient (provisional
+1. Owner: review and merge the Phase 3 PR (#13). Decide N-032 and N-033 when convenient (provisional
    placements are in force and are not release blockers).
 2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
    (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
