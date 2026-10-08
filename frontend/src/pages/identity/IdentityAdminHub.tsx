@@ -19,8 +19,10 @@ import JitPolicyPanel from "@/pages/identity/JitPolicyPanel";
 import ScimTokenManager from "@/pages/identity/ScimTokenManager";
 import {
   getSecurityPolicy,
+  listIdpConfigs,
   updateSecurityPolicy,
 } from "@/services/api/identity";
+import { errorMessage } from "@/services/api/errors";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
@@ -60,7 +62,7 @@ export const IdentityAdminHub: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl space-y-5">
         <PlanLockBanner capability={CAPABILITY.enterpriseIdentity} feature="Enterprise SSO and SCIM" />
         <PageHeader
           icon={Fingerprint}
@@ -95,6 +97,16 @@ const SecurityPolicyPanel: React.FC = () => {
     enabled: Boolean(organizationId),
     staleTime: 30_000,
   });
+  // F-188. Requiring SSO with no active identity provider locked every member out; the server
+  // now refuses it, and the option says why it is unavailable instead of failing on click.
+  const idpQuery = useQuery({
+    queryKey: identityKeys.idpConfigs(organizationId),
+    queryFn: () => listIdpConfigs(organizationId),
+    enabled: Boolean(organizationId),
+    staleTime: 30_000,
+  });
+  const hasActiveIdp = (idpQuery.data ?? []).some((config) => config.is_active);
+  const [confirmRequire, setConfirmRequire] = useState(false);
 
   const update = useMutation({
     mutationFn: (patch: Parameters<typeof updateSecurityPolicy>[1]) =>
@@ -105,6 +117,7 @@ const SecurityPolicyPanel: React.FC = () => {
         updated,
       );
       setConfirmBypassOff(false);
+      setConfirmRequire(false);
     },
   });
 
@@ -129,8 +142,14 @@ const SecurityPolicyPanel: React.FC = () => {
           <input
             type="checkbox"
             checked={policy.require_sso}
-            onChange={(e) => update.mutate({ require_sso: e.target.checked })}
-            disabled={update.isPending}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setConfirmRequire(true);
+                return;
+              }
+              update.mutate({ require_sso: false });
+            }}
+            disabled={update.isPending || (!policy.require_sso && !hasActiveIdp)}
             className="mt-0.5 h-4 w-4 rounded border-border"
           />
           <span>
@@ -141,8 +160,47 @@ const SecurityPolicyPanel: React.FC = () => {
               Members must sign in through your identity provider. Passwords
               stop working.
             </span>
+            {!policy.require_sso && !hasActiveIdp && !idpQuery.isLoading ? (
+              <span className="mt-1 block text-xs font-medium text-foreground">
+                Connect and activate an identity provider under Single sign-on
+                first: with none, nobody could sign in.
+              </span>
+            ) : null}
           </span>
         </label>
+
+        {confirmRequire && (
+          <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+            <p className="flex items-start gap-1.5 text-xs text-foreground">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>
+                Members signed in with a password lose access to this
+                organization until they sign in again through your identity
+                provider.
+                {policy.sso_bypass_for_owners
+                  ? " Owners can still use their password (break-glass access is on)."
+                  : " This includes owners: break-glass access is off."}
+              </span>
+            </p>
+            <div className="mt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRequire(false)}
+                className="rounded border border-border px-2.5 py-1 text-xs hover:bg-muted"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={() => update.mutate({ require_sso: true })}
+                disabled={update.isPending}
+                className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground disabled:opacity-50"
+              >
+                Require single sign-on
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="mt-3 border-t border-border pt-3">
           <label className="flex items-start gap-3">
@@ -243,7 +301,7 @@ const SecurityPolicyPanel: React.FC = () => {
 
       {update.isError && (
         <p role="alert" className="text-sm text-destructive">
-          That change wasn&apos;t applied. The policy is unchanged.
+          {errorMessage(update.error, "That change wasn't applied. The policy is unchanged.")}
         </p>
       )}
     </div>

@@ -145,6 +145,27 @@ def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
     hops_confirmed = bool(getattr(settings, "TRUSTED_PROXY_HOPS_CONFIRMED", False))
     requested = changes.get("ip_pinning")
 
+    # F-188. With SSO required, every password session is refused in the organization. With no
+    # active identity provider there is no SSO to sign in with, so requiring it locked every
+    # member out (and the owners too, with the break-glass bypass off).
+    if changes.get("require_sso") is True and not policy.require_sso:
+        from app.models.identity import EnterpriseIdpConfig
+
+        has_active_idp = (
+            db.query(EnterpriseIdpConfig.id)
+            .filter(
+                EnterpriseIdpConfig.organization_id == policy.organization_id,
+                EnterpriseIdpConfig.is_active.is_(True),
+            )
+            .first()
+            is not None
+        )
+        if not has_active_idp:
+            raise ValueError(
+                "Connect and activate an identity provider before requiring single sign-on: "
+                "with no provider, nobody could sign in."
+            )
+
     if requested and str(requested) != IpPinningMode.OFF.value and not hops_confirmed:
         raise ValueError(
             "IP pinning cannot be enabled until TRUSTED_PROXY_HOPS is confirmed "
