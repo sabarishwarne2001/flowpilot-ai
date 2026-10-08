@@ -8,21 +8,13 @@ import { SPEND_LIMIT_KEYS } from "@/types/usage";
 import type { SpendLimit, SpendLimitPeriod } from "@/types/usage";
 import type { UsageLimit } from "@/types/billing";
 import { errorMessage } from "@/services/api/errors";
+import { meterLabel } from "@/types/planEntitlements";
 
 interface Props {
   readonly organizationId: string;
   readonly canManageBilling: boolean;
 }
 
-const KEY_LABEL: Readonly<Record<string, string>> = {
-  "*": "Total spend (all usage)",
-  "ocr.page": "OCR pages",
-  "embedding.token": "Embedding tokens",
-  "llm.input_token": "LLM input tokens",
-  "llm.output_token": "LLM output tokens",
-  "storage.gb_month": "Storage (GB-months)",
-  "document.processed": "Documents processed",
-};
 
 const MICROS_PER_UNIT = 1_000_000;
 
@@ -140,7 +132,7 @@ export const SpendLimitForm: React.FC<Props> = ({
             >
               {SPEND_LIMIT_KEYS.map((key) => (
                 <option key={key} value={key}>
-                  {KEY_LABEL[key] ?? key}
+                  {meterLabel(key)}
                 </option>
               ))}
             </select>
@@ -284,7 +276,7 @@ export const SpendLimitForm: React.FC<Props> = ({
               {sessionLimits.map((limit) => (
                 <li key={limit.id} className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    {KEY_LABEL[limit.limit_key] ?? limit.limit_key}
+                    {meterLabel(limit.limit_key)}
                   </span>{" "}
                   · {limit.period === "DAY" ? "per day" : "per month"}
                   {limit.max_quantity !== null &&

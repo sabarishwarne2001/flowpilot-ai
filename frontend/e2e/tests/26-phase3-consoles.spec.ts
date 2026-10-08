@@ -85,3 +85,21 @@ test.describe("Organization console breadcrumb (F-185)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Billing speaks in the customer's words (F-187)", () => {
+  test.use({ user: "C.owner" });
+
+  test("limits and the usage breakdown name each meter, not its internal key", async ({ page }) => {
+    await page.goto(org("C", "billing"));
+    await expect(page.getByRole("heading", { name: "Limits" })).toBeVisible();
+    const main = page.locator("main");
+    // Before the fix: "*", "llm.input_token", "ocr.page", "Overage: allow_and_bill".
+    for (const key of ["llm.input_token", "llm.output_token", "embedding.token", "ocr.page", "storage.gb_month"]) {
+      await expect(main.getByText(key, { exact: true })).toHaveCount(0);
+    }
+    await expect(main).not.toContainText(/allow_and_bill|allow_and_warn|Overage: refuse/);
+    await expect(main).toContainText("AI tokens in");
+    await expect(main).toContainText("Total spend (all usage)");
+    await expectHealthyPage(page);
+  });
+});

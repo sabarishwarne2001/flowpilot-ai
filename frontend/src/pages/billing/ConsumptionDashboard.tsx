@@ -4,6 +4,7 @@ import { BarChart3, Info, Loader2 } from "lucide-react";
 
 import { getUsageSeries } from "@/services/api/billing";
 import { usageKeys } from "@/services/api/queryKeys";
+import { meterLabel, unitFor } from "@/types/planEntitlements";
 
 interface Props {
   readonly organizationId: string;
@@ -149,12 +150,13 @@ export const ConsumptionDashboard: React.FC<Props> = ({
             {byEventType.map(([eventType, totals]) => (
               <li key={eventType}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-mono text-xs text-foreground font-medium">{eventType}</span>
+                  <span className="text-sm font-medium text-foreground">{meterLabel(eventType)}</span>
                   <span className="text-xs text-muted-foreground">
                     {totals.quantity.toLocaleString(undefined, {
                       maximumFractionDigits: 2,
                     })}{" "}
-                    {totals.unit} · {totals.events.toLocaleString()} events ·{" "}
+                    {unitFor(totals.unit, totals.quantity)} · {totals.events.toLocaleString()}{" "}
+                    {totals.events === 1 ? "event" : "events"} ·{" "}
                     <strong className="text-foreground font-semibold">
                       {money(totals.cost)}
                     </strong>

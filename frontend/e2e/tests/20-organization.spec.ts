@@ -296,7 +296,7 @@ test.describe("Analytics and BI egress", () => {
     await page.getByRole("button", { name: "Add destination" }).last().click();
     await expect(page.locator("main")).toContainText(/E2E S3|added|saved|could not|unreachable|failed/i, { timeout: 20_000 });
     for (const tab of ["Sync schedules", "Run history", "Usage analytics", "Warehouse destinations"]) {
-      await page.getByRole("button", { name: tab, exact: true }).click();
+      await page.getByRole("tab", { name: tab, exact: true }).click();
       await settle(page, 300);
     }
   });
@@ -356,7 +356,7 @@ test.describe("Billing", () => {
   test("seats and the current subscription are shown", async ({ page }) => {
     await page.goto(org("C", "billing"));
     await expect(page.locator("main")).toContainText("Seats");
-    await expect(page.locator("main")).toContainText(/Plan: enterprise · active/);
+    await expect(page.locator("main")).toContainText(/Enterprise plan · active/);
   });
 
   test("a spend limit can be saved", async ({ page }) => {
