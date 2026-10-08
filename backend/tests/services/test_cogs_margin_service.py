@@ -678,3 +678,41 @@ def test_t15_a_duplicate_invoice_period_is_refused(db_session: Session):
     ).scalars().all()
     assert len(remaining) == 1
     assert remaining[0].invoiced_total_micros == 100
+
+
+def test_f202_the_self_hosted_model_is_not_counted_as_byok_traffic(
+    db_session: Session, org: Organization
+):
+    """F-202. The self-hosted model is priced at a declared zero (N-031) with the ZERO_BYOK cost
+    basis, as a call on a tenant's own key is. Unit economics counted every ZERO_BYOK event as
+    "BYOK traffic": on the e2e deployment, 110 events and none of them on a tenant's key. Only
+    the calls the metering zeroed for a tenant's key (details.cost_basis_zeroed_by) are BYOK."""
+    book = _publish(db_session, version=1, with_cost=True)
+    for provider, zeroed_by in (("local", None), ("local", None), ("groq", "byok_tenant_key")):
+        usage_service.record_usage(
+            db_session,
+            organization_id=org.id,
+            event_type="llm.input_token",
+            quantity=Decimal(1000),
+            cost_micros=int(Decimal(1000) * PRICE_MICROS),
+            price_book_id=book.id,
+            unit_price_micros=PRICE_MICROS,
+            cost_basis_micros=0,
+            cost_basis_source="ZERO_BYOK",
+            provider=provider,
+            details={"cost_basis_zeroed_by": zeroed_by} if zeroed_by else {"model": "self-hosted"},
+            occurred_at=datetime.now(timezone.utc),
+            idempotency_key=f"t-{uuid.uuid4().hex}",
+            require_active_transaction=False,
+        )
+    db_session.flush()
+
+    summary = margin_service.platform_summary(
+        db_session,
+        period_start=datetime.now(timezone.utc) - timedelta(hours=1),
+        period_end=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    assert summary.figures.zero_byok_event_count == 1
+    assert summary.figures.zero_byok_revenue_micros == int(Decimal(1000) * PRICE_MICROS)
+    # The self-hosted calls are still known, zero-cost usage in the margin.
+    assert summary.figures.known_cost_event_count == 3
