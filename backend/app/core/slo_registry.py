@@ -31,7 +31,10 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=300.0,
             default_window=SLOWindow.DAY,
-            description="Hybrid search from query to merged candidate set.",
+            description=(
+                "Time to find the passages that answer a question, across keyword and "
+                "semantic search."
+            ),
             stage_name="retrieval",
         ),
         SLOSpec(
@@ -40,9 +43,10 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=200.0,
             default_window=SLOWindow.DAY,
+            # A degraded rerank is recorded as an error, not a fast success (slo_recorder).
             description=(
-                "Cross-encoder scoring. Degraded reranks are recorded as "
-                "errors, not as fast successes — see `slo_recorder`."
+                "Time to put the passages found in order of relevance. A rerank that falls "
+                "back to the unranked order counts as a miss, not as a fast answer."
             ),
             stage_name="rerank",
         ),
@@ -52,7 +56,7 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=50.0,
             default_window=SLOWindow.DAY,
-            description="Assembling retrieved chunks into a fenced context.",
+            description="Time to assemble the passages found into the context the model reads.",
             stage_name="context_assembly",
         ),
         SLOSpec(
@@ -61,7 +65,9 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=8000.0,
             default_window=SLOWindow.DAY,
-            description="Provider call, excluding time spent streaming to the client.",
+            description=(
+                "Time the AI model takes to answer, not counting streaming the answer to you."
+            ),
             stage_name="llm",
         ),
         SLOSpec(
@@ -70,7 +76,7 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=500.0,
             default_window=SLOWindow.DAY,
-            description="Server time for authenticated tenant-scoped requests.",
+            description="Time the server takes to answer your organization's signed-in requests.",
         ),
         SLOSpec(
             key="api.availability",
@@ -79,9 +85,9 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             default_target=0.995,
             default_window=SLOWindow.MONTH,
             description=(
-                "Share of tenant requests not answered with a 5xx. 4xx is "
-                "excluded: a client sending malformed input is not the "
-                "platform being unavailable."
+                "Share of your organization's requests answered without a server error. "
+                "Requests refused because of the request itself (a 4xx) do not count "
+                "against it."
             ),
         ),
         SLOSpec(
@@ -90,7 +96,10 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.RATIO,
             default_target=0.99,
             default_window=SLOWindow.DAY,
-            description="Share of claimed jobs reaching SUCCEEDED rather than DEAD.",
+            description=(
+                "Share of background jobs (document processing, exports, deliveries) that "
+                "finish successfully rather than failing for good."
+            ),
         ),
         SLOSpec(
             key="jobs.latency.p95_ms",
@@ -98,7 +107,9 @@ SLO_REGISTRY: dict[str, SLOSpec] = {
             unit=SLOUnit.MILLISECONDS,
             default_target=30000.0,
             default_window=SLOWindow.DAY,
-            description="Enqueue to terminal state, including time queued.",
+            description=(
+                "Time from a background job being queued to it finishing, including the wait."
+            ),
         ),
     )
 }
