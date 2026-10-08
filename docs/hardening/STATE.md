@@ -4,8 +4,8 @@ _Last updated: 2026-10-08 (Phase 2 — enterprise processing and TruthMesh)_
 
 ## Current phase
 **Phase 2 — Enterprise processing and TruthMesh: COMPLETE, in review.** Branch
-`hardening/phase-2-enterprise-processing-and-truthmesh`; PR opened from it (link in the session
-summary). Builds on Phase 1 (merged into `main`, PR #11).
+`hardening/phase-2-enterprise-processing-and-truthmesh`; PR #12
+(https://github.com/sabarishwarne2001/flowpilot-ai/pull/12). Builds on Phase 1 (merged into `main`, PR #11).
 
 - **Live defects (each with a failing test first): F-171 to F-181** (FINDINGS.md, "Phase 2").
   The heavy ones: F-171 a three-way match that compared no line was MATCHED and approvable;
