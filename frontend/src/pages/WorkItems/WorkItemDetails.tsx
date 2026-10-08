@@ -41,7 +41,7 @@ import { formatBytes, formatDateTime } from "@/utils/formatters";
 // N-020 items 6/7: the page beside the extracted fields, correctable in place.
 import DocumentPageViewer, { useDocumentEvidence } from "@/components/workItems/DocumentPageViewer";
 import ExtractedFieldsPanel from "@/components/workItems/ExtractedFieldsPanel";
-import { getDocumentText, getFieldEditability } from "@/services/api/documentEvidence";
+import { getDocumentConfidence, getDocumentText, getFieldEditability } from "@/services/api/documentEvidence";
 import { verificationPath } from "@/routes/tenantPaths";
 import { canEditOwnContent } from "@/permissions/workspacePermissions";
 import type { WorkspaceRole } from "@/types/tenancy";
@@ -133,6 +133,13 @@ export const WorkItemDetails: React.FC = () => {
     enabled: Boolean(workspaceId && id) && activeTab === "ocr" && finished,
     staleTime: 300_000,
   });
+  // Phase 1 workbench: verification's confidence for the document and each field.
+  const confidence = useQuery({
+    queryKey: ["document-confidence", workspaceId, id],
+    queryFn: () => getDocumentConfidence(workspaceId!, id!),
+    enabled: Boolean(workspaceId && id) && finished,
+    staleTime: 30_000,
+  });
   const role = (activeWorkspace?.role ?? "VIEWER") as WorkspaceRole;
   // The server decides (review queue, legal hold, role); the viewer only asks before offering Edit.
   const editability = useQuery({
@@ -196,6 +203,12 @@ export const WorkItemDetails: React.FC = () => {
 
     createConversation();
   }, [id, workspaceId]);
+
+  const classification = (workItem?.extracted_entities as Record<string, unknown> | null | undefined)?.classification_details as
+    | { document_classification?: string }
+    | undefined;
+  const documentType = classification?.document_classification ?? null;
+  const pageCount = evidence.data?.pages.length ?? null;
 
   // Construct back navigation path dynamically
   const getBackPath = () => {
@@ -273,21 +286,24 @@ export const WorkItemDetails: React.FC = () => {
         </div>
       </header>
 
-      <section className="fp-card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-start gap-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-muted to-muted/40 text-primary shadow-inner-highlight">
+      <section className="fp-card p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-b from-muted to-muted/40 text-primary shadow-inner-highlight">
               <FileText className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight" title={workItem.original_filename}>
+              <h1 className="break-all text-lg font-semibold leading-snug tracking-tight sm:truncate sm:text-xl" title={workItem.original_filename}>
                 {workItem.original_filename}
               </h1>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                AI extraction results and document metadata
-              </p>
               <h2 className="sr-only">Document Information</h2>
-              <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-[13px]">
+              <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
+                {documentType ? (
+                  <div className="flex items-center gap-1.5">
+                    <dt className="sr-only">Document type</dt>
+                    <dd className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11.5px] font-medium text-foreground">{documentType}</dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-1.5">
                   <dt className="text-muted-foreground">File Type</dt>
                   <dd className="font-mono text-[12px] text-foreground">{workItem.file_type}</dd>
@@ -296,6 +312,12 @@ export const WorkItemDetails: React.FC = () => {
                   <dt className="text-muted-foreground">File Size</dt>
                   <dd className="fp-num font-medium text-foreground">{formatBytes(workItem.file_size)}</dd>
                 </div>
+                {pageCount ? (
+                  <div className="flex items-center gap-1.5">
+                    <dt className="text-muted-foreground">Pages</dt>
+                    <dd className="fp-num font-medium text-foreground">{pageCount}</dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-1.5">
                   <dt className="text-muted-foreground">Created</dt>
                   <dd className="fp-num font-medium text-foreground">{formatDateTime(workItem.created_at)}</dd>
@@ -307,10 +329,31 @@ export const WorkItemDetails: React.FC = () => {
               </dl>
             </div>
           </div>
-          <span className={`inline-flex items-center gap-1.5 self-start rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
-            {workItem.status}
-          </span>
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+            {confidence.data && confidence.data.confidence !== null ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  confidence.data.confidence >= 0.9
+                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : confidence.data.confidence >= 0.6
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                      : "border-destructive/30 bg-destructive/10 text-destructive"
+                }`}
+                title={confidence.data.reason ?? "Verified by independent agents"}
+              >
+                Verified {Math.round(confidence.data.confidence * 100)}%
+              </span>
+            ) : null}
+            {confidence.data?.in_review ? (
+              <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300" title={confidence.data.reason ?? undefined}>
+                In review
+              </span>
+            ) : null}
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_BADGE_MAP[workItem.status]}`}>
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+              {workItem.status}
+            </span>
+          </div>
         </div>
         {workItem.duplicate_of && (
           <p
@@ -384,8 +427,8 @@ export const WorkItemDetails: React.FC = () => {
 
             <div className="p-4 sm:p-5">
               {activeTab === "document" && (
-                <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]" aria-label="Document and its data">
-                  <div className="min-w-0">
+                <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]" aria-label="Document and its data">
+                  <div className="min-w-0 xl:sticky xl:top-2 xl:self-start">
                     {finished && workspaceId ? (
                       <DocumentPageViewer
                         workspaceId={workspaceId}
@@ -395,6 +438,7 @@ export const WorkItemDetails: React.FC = () => {
                         locations={extractedLocations}
                         activeField={activeField}
                         onSelectField={(field) => setActiveField(field)}
+                        canvasClassName="max-h-[75vh] xl:h-[calc(100vh-15rem)] xl:max-h-none"
                       />
                     ) : (
                       <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -416,6 +460,7 @@ export const WorkItemDetails: React.FC = () => {
                         readOnlyLink={reviewQueueLink ? { to: reviewQueueLink, label: "Open the review queue" } : null}
                         activeField={activeField}
                         onSelectField={selectField}
+                        confidence={confidence.data}
                       />
                     )}
                   </div>

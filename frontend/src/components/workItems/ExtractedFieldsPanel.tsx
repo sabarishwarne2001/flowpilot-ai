@@ -16,11 +16,12 @@ import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, History, Loader2, MapPin, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, History, Loader2, MapPin, Pencil, Search, ShieldCheck, X } from "lucide-react";
 
 import {
   correctFields,
   getFieldHistory,
+  type DocumentConfidence,
   type EvidenceLocation,
   type FieldCorrection,
 } from "@/services/api/documentEvidence";
@@ -81,7 +82,19 @@ interface ExtractedFieldsPanelProps {
   readonly readOnlyLink?: { readonly to: string; readonly label: string } | null;
   readonly activeField: string | null;
   readonly onSelectField: (field: string, page: number | null) => void;
+  /** Verification's score for the document and each field; absent or null when never verified. */
+  readonly confidence?: DocumentConfidence | undefined;
 }
+
+/** The pipeline's own bookkeeping, shown in the header rather than as a field. */
+const HIDDEN_KEYS = new Set(["classification_details"]);
+
+const confidenceTone = (value: number): string =>
+  value >= 0.9
+    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : value >= 0.6
+      ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+      : "border-destructive/30 bg-destructive/10 text-destructive";
 
 export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
   workspaceId,
@@ -93,8 +106,14 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
   readOnlyLink = null,
   activeField,
   onSelectField,
+  confidence,
 }) => {
   const queryClient = useQueryClient();
+  const [filter, setFilter] = useState("");
+  const fieldScores = useMemo(
+    () => new Map((confidence?.fields ?? []).map((f) => [f.field, f] as const)),
+    [confidence],
+  );
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [reason, setReason] = useState("");
@@ -154,9 +173,15 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
     },
   });
 
-  const entries = Object.entries(entities ?? {});
-  const plain = entries.filter(([, value]) => isPlain(value));
-  const grouped = entries.filter(([, value]) => !isPlain(value));
+  const entries = Object.entries(entities ?? {}).filter(([key]) => !HIDDEN_KEYS.has(key));
+  const details = (entities?.classification_details ?? null) as { document_classification?: string; confidence_score?: number } | null;
+  const documentType = details?.document_classification ?? (typeof entities?.document_classification === "string" ? entities.document_classification : null);
+  const needle = filter.trim().toLowerCase();
+  const matches = ([key, value]: [string, unknown]) =>
+    !needle || key.toLowerCase().includes(needle) || fieldLabel(key).toLowerCase().includes(needle) || show(value).toLowerCase().includes(needle);
+  const plain = entries.filter(([, value]) => isPlain(value)).filter(matches);
+  const grouped = entries.filter(([, value]) => !isPlain(value)).filter(matches);
+  const total = entries.length;
 
   if (entries.length === 0) {
     return (
@@ -171,14 +196,56 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
 
   return (
     <section aria-label="Extracted fields" className="overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1 xl:sticky xl:top-0">
-      <header className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
-        <h2 className="text-sm font-semibold">Extracted fields</h2>
-        {history.data && history.data.length > 0 && (
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <History className="h-3.5 w-3.5" aria-hidden />
-            {history.data.length} correction{history.data.length === 1 ? "" : "s"}
-          </span>
-        )}
+      <header className="space-y-2 border-b border-border bg-muted/30 px-4 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">
+            Extracted fields <span className="font-normal text-muted-foreground">({total})</span>
+          </h2>
+          {history.data && history.data.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <History className="h-3.5 w-3.5" aria-hidden />
+              {history.data.length} correction{history.data.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {documentType ? (
+            <span className="rounded-full border border-border bg-card px-2 py-0.5 font-medium text-foreground" data-testid="document-type">
+              {documentType}
+            </span>
+          ) : null}
+          {confidence && confidence.confidence !== null ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${confidenceTone(confidence.confidence)}`}
+              title={confidence.reason ?? "Verified by independent agents"}
+              data-testid="document-confidence"
+            >
+              <ShieldCheck className="h-3 w-3" aria-hidden />
+              Verified {Math.round(confidence.confidence * 100)}%
+            </span>
+          ) : confidence ? (
+            <span className="rounded-full border border-border bg-card px-2 py-0.5 text-muted-foreground" title="Turn on verification in Settings → Documents to score every field">
+              Not verified
+            </span>
+          ) : null}
+          {confidence?.in_review ? (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
+              In review
+            </span>
+          ) : null}
+        </div>
+        {total > 8 ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Find a field or value"
+              aria-label="Find a field or value"
+              className="fp-input h-8 pl-7 text-xs"
+            />
+          </div>
+        ) : null}
       </header>
       {!canEdit && readOnlyReason && (
         <p role="note" className="border-b border-border bg-primary/[0.04] px-4 py-2.5 text-xs leading-relaxed text-muted-foreground">
@@ -193,6 +260,9 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           )}
         </p>
       )}
+      {plain.length === 0 && grouped.length === 0 ? (
+        <p className="px-4 py-6 text-center text-xs text-muted-foreground">No field matches &ldquo;{filter}&rdquo;.</p>
+      ) : null}
       <ul className="max-h-[70vh] divide-y divide-border/70 overflow-y-auto">
         {plain.map(([key, value]) => {
           const page = firstPage.get(key) ?? null;
@@ -212,8 +282,19 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                   className="min-w-0 flex-1 text-left"
                   aria-label={`Show ${fieldLabel(key)} on the page`}
                 >
-                  <span className="fp-eyebrow block text-[10.5px]">
-                    {fieldLabel(key)}
+                  <span className="flex items-center gap-1.5">
+                    <span className="fp-eyebrow block text-[10.5px]">{fieldLabel(key)}</span>
+                    {fieldScores.get(key) ? (
+                      <span
+                        className={`inline-flex items-center gap-0.5 rounded border px-1 text-[10px] font-semibold tabular-nums ${confidenceTone(fieldScores.get(key)?.confidence ?? 0)}`}
+                        title={fieldScores.get(key)?.agreed ? "Verification agents agree" : "Verification agents disagree"}
+                        data-testid="field-confidence"
+                      >
+                        {fieldScores.get(key)?.agreed ? null : <AlertTriangle className="h-2.5 w-2.5" aria-hidden />}
+                        {Math.round((fieldScores.get(key)?.confidence ?? 0) * 100)}%
+                        {fieldScores.get(key)?.agreed ? null : <span className="sr-only">, agents disagree</span>}
+                      </span>
+                    ) : null}
                   </span>
                   {!isEditing && (
                     <span className="mt-1 block break-words text-sm font-medium text-foreground">{show(value)}</span>

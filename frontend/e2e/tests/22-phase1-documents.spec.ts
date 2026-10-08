@@ -14,7 +14,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, listWorkItems, loginAs, resolveWorkspaceId } from "../support/api";
-import { ws } from "../support/env";
+import { STATE_FILE, ws } from "../support/env";
 import { buildPdf } from "../support/sample-docs";
 
 function stamp(): string {
@@ -248,5 +248,39 @@ test.describe("Phone width (F-165, F-166)", () => {
     const fits = await name.evaluate((element) => element.scrollWidth <= element.clientWidth + 1);
     expect(fits, "the file name is cut off").toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+test.describe("Document workbench (Phase 1)", () => {
+  test.use({ user: "C.owner" });
+
+  test("fields carry verification confidence, pages turn from the keyboard", async ({ page }) => {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const items = state.documents.C.items as Array<{ id: string; name: string }>;
+    const invoice = items.find((item) => item.name.includes("INV-E2E-1001"));
+    await page.goto(ws("C", `work-items/${invoice?.id}`));
+    const fields = page.getByRole("region", { name: "Extracted fields" });
+    await expect(fields.getByTestId("document-type")).toHaveText("Invoice");
+    await expect(fields.getByTestId("document-confidence")).toContainText(/Verified \d+%/);
+    await expect(fields.getByTestId("field-confidence").first()).toContainText(/\d+%/);
+    await fields.getByRole("textbox", { name: "Find a field or value" }).fill("vendor");
+    await expect(fields.locator("li[data-field]")).not.toHaveCount(0);
+    await expect(fields.locator("li[data-field='invoice_number']")).toHaveCount(0);
+
+    const packet = items.find((item) => item.name.includes("scanned-packet"));
+    await page.goto(ws("C", `work-items/${packet?.id}`));
+    const pages = page.getByRole("region", { name: "Document pages" });
+    await expect(pages.getByRole("img", { name: "Page 1 of the document" })).toBeVisible({ timeout: 20_000 });
+    await pages.getByRole("group", { name: /canvas/ }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(pages.getByRole("img", { name: "Page 2 of the document" })).toBeVisible({ timeout: 20_000 });
+    await page.keyboard.press("+");
+    await expect(pages.getByRole("button", { name: /^Zoom 125%/ })).toBeVisible();
+    await page.keyboard.press("0");
+    await expect(pages.getByRole("button", { name: /^Zoom 100%/ })).toBeVisible();
+    await pages.getByRole("textbox", { name: "Go to page" }).fill("4");
+    await pages.getByRole("textbox", { name: "Go to page" }).press("Enter");
+    await expect(pages.getByRole("img", { name: "Page 4 of the document" })).toBeVisible({ timeout: 20_000 });
+    await expectHealthyPage(page);
   });
 });

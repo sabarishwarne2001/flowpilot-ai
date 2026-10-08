@@ -113,3 +113,20 @@ export const getFieldEditability = async (workspaceId: string, workItemId: strin
   const response = await apiClient.get<FieldEditability>(EVIDENCE_ENDPOINTS.fields(workspaceId, workItemId));
   return response.data;
 };
+
+/** Verification's confidence for a document and each field (null confidence: never verified). */
+export interface DocumentConfidence {
+  work_item_id: string;
+  confidence: number | null;
+  verification_status: string | null;
+  in_review: boolean;
+  reason: string | null;
+  fields: { field: string; confidence: number; agreed: boolean; disagreement: string | null }[];
+}
+
+export const getDocumentConfidence = async (workspaceId: string, workItemId: string): Promise<DocumentConfidence> =>
+  (
+    await apiClient.get<DocumentConfidence>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/work-items/${encodeURIComponent(workItemId)}/confidence`,
+    )
+  ).data;
