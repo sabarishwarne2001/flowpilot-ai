@@ -12,9 +12,16 @@
  *        answer in development) and the citation drawer printed an empty "Citation ID". The passage
  *        sat in a nested scroll box that collapsed on short screens.
  * F-176: the extraction workbench named documents by their id's first eight characters.
+ * F-178: with an extraction item open in the review hub, "a" (the hub's "assign to me") also
+ *        reached the embedded workbench, whose "a" is "accept all": one key assigned the item and
+ *        approved every value the agents disagreed on. "e" (collapse) also switched it to editing.
  */
+import fs from "node:fs";
+
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { ws } from "../support/env";
+import { listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "../support/api";
+import { runId, ws } from "../support/env";
+import { DISPUTED_INVOICE_PAGE, buildPdf } from "../support/sample-docs";
 
 test.describe("Three-way matching (F-171, F-172, F-174)", () => {
   test.use({ user: "C.owner" });
@@ -133,5 +140,61 @@ test.describe("Review queue (F-176)", () => {
     await expect(workbench).toContainText("invoice-INV-E2E-1002.pdf");
     await expect(page.getByRole("heading", { name: "invoice-INV-E2E-1002.pdf" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /^Document [0-9a-f]{8}$/ })).toHaveCount(0);
+  });
+});
+
+test.describe("Review hub keyboard (F-178)", () => {
+  test.use({ user: "C.owner" });
+
+  test("'a' on an open extraction item assigns it and decides nothing", async ({ page }, testInfo) => {
+    test.skip(!LLM_AVAILABLE, "needs the model stand-in (E2E_LLM=1) for a disagreed extraction");
+    test.setTimeout(180_000);
+    // A fresh copy of the invoice whose bank details changed, so the agents disagree on it.
+    const name = `keys-${runId()}.pdf`;
+    const file = testInfo.outputPath(name);
+    fs.writeFileSync(file, buildPdf([[...DISPUTED_INVOICE_PAGE, `Reference: ${name}`]]));
+    const session = await loginAs("C.owner");
+    const { workspaceId } = await resolveWorkspaceId(session, "caretakers-global", "operations");
+    expect((await uploadFile(session, workspaceId, file)).status).toBeLessThan(300);
+    await expect
+      .poll(async () => {
+        const items = await listWorkItems(session, workspaceId, "limit=100");
+        return String(items.find((item) => String(item.original_filename) === name)?.status ?? "missing");
+      }, { timeout: 120_000 })
+      .toBe("COMPLETED");
+
+    const decisions: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() !== "GET" && /\/verifications\/[^/]+\/resolve/.test(request.url())) {
+        decisions.push(request.url());
+      }
+    });
+    await page.goto(ws("C", "verification"));
+    await page.getByRole("tab", { name: "Extraction", exact: true }).click();
+    await settle(page);
+    const row = page
+      .getByRole("list", { name: "Review items" })
+      .getByRole("listitem")
+      .filter({ hasText: name })
+      .filter({ hasText: "Agents disagreed" });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.getByRole("button", { name: /Extracted fields disagree/ }).click();
+    await expect(row.getByRole("button", { name: "Accept all" })).toBeVisible();
+
+    // Focus nothing that takes text, then press the hub's "assign to me".
+    await page.getByRole("heading", { name: "Review", level: 1 }).click();
+    await page.keyboard.press("a");
+    await settle(page, 1500);
+    expect(decisions, "no value was accepted by the key").toEqual([]);
+    await page.reload();
+    await page.getByRole("tab", { name: "Extraction", exact: true }).click();
+    await settle(page);
+    await expect(row).toBeVisible();
+
+    // Tidy up: decide it on purpose, with the button.
+    await row.getByRole("button", { name: /Extracted fields disagree/ }).click();
+    await row.getByRole("button", { name: "Accept all" }).click();
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
+    await expectHealthyPage(page);
   });
 });

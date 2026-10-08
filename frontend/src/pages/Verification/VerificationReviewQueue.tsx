@@ -161,6 +161,12 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   }, [detail, edits, resolve, isReviewable]);
 
   useEffect(() => {
+    // F-178: mounted in the review hub the hub owns the keyboard. Its "a" is "assign to me" and its
+    // "e" collapses the item; heard here as well, the same key accepted every value or started
+    // editing. Standalone, the workbench keeps its own shortcuts.
+    if (focusVerificationId) {
+      return undefined;
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing =
@@ -208,7 +214,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [items.length, acceptConsensus]);
+  }, [items.length, acceptConsensus, focusVerificationId]);
 
   useEffect(() => {
     if (cursor > 0 && cursor >= items.length) {
