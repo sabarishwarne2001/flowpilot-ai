@@ -40,9 +40,20 @@ function usePageLabel(): string | null {
         best = { name: item.name, length: item.path.length };
       }
     }
-    return best?.name ?? null;
+    if (best) {
+      return best.name;
+    }
+    // Phase 2: pages opened from inside another page, never from the sidebar, still say where you are
+    // (the Redaction Studio's breadcrumb stopped at the workspace name).
+    const sub = pathname.split("/")[3];
+    return (sub && SUBPAGE_LABELS[sub]) ?? null;
   }, [pathname, organization.organization_slug, workspace.slug, organizationRole]);
 }
+
+/** Workspace pages with no sidebar entry, by their first path segment after the workspace. */
+const SUBPAGE_LABELS: Readonly<Record<string, string>> = {
+  redactions: "Redaction studio",
+};
 
 export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
