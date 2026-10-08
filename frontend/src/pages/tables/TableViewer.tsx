@@ -17,7 +17,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, Download, Loader2, RotateCw, Ta
 
 import { CAPABILITY } from "@/constants/capabilities";
 import {
-  BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, PAGE_TITLE, SCROLL_X, SECTION_TITLE, SELECT, SURFACE,
+  BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, PAGE_TITLE, SECTION_TITLE, SELECT, SURFACE,
 } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
@@ -67,6 +67,8 @@ const describe = (cell: TableCell | undefined, failure: TableValidationRow | und
   return parts.join(" · ");
 };
 
+const ADDITIVE_ROLES: ReadonlySet<ColumnRole> = new Set<ColumnRole>(["AMOUNT", "DEBIT", "CREDIT", "QUANTITY", "TAX", "DISCOUNT", "TOTAL"]);
+
 const TableGrid: React.FC<{
   readonly detail: TableDetail;
   readonly canEdit: boolean;
@@ -95,6 +97,28 @@ const TableGrid: React.FC<{
     return out;
   }, [cells]);
   const labelCol = useMemo(() => columns.find((c) => c.value_type === "TEXT")?.index ?? 0, [columns]);
+  // Phase 1: each additive column's body rows added up, and compared with the table's own total row.
+  // A unit price, a running balance or a percentage does not add up, so those columns get no sum.
+  const sums = useMemo(() => {
+    const bodyRows = new Set(rows.filter((r) => r.kind === "BODY" && r.index >= table.header_rows).map((r) => r.index));
+    const totalRow = [...rows].reverse().find((r) => r.kind === "TOTAL");
+    const out = new Map<number, { sum: number; total: number | null }>();
+    for (const c of columns) {
+      if (!ADDITIVE_ROLES.has(c.role) || (c.value_type !== "MONEY" && c.value_type !== "NUMBER")) {continue;}
+      let sum = 0;
+      let seen = 0;
+      for (const cell of cells) {
+        if (cell.col === c.index && bodyRows.has(cell.row) && cell.value_number !== null) {
+          sum += Number(cell.value_number);
+          seen += 1;
+        }
+      }
+      if (seen === 0) {continue;}
+      const printed = totalRow ? cells.find((cell) => cell.row === totalRow.index && cell.col === c.index)?.value_number : null;
+      out.set(c.index, { sum: Math.round(sum * 1e6) / 1e6, total: printed === null || printed === undefined ? null : Number(printed) });
+    }
+    return out;
+  }, [cells, columns, rows, table.header_rows]);
   const headerRows = rows.filter((r) => r.index < table.header_rows);
   const bodyRows = rows.filter((r) => r.index >= table.header_rows);
   const commit = (): void => {
@@ -105,7 +129,7 @@ const TableGrid: React.FC<{
   };
   return (
     <table className="w-full border-collapse text-sm" aria-label={`Table ${table.ordinal + 1}`}>
-      <thead>
+      <thead className="sticky top-0 z-[2] bg-card shadow-[0_1px_0_hsl(var(--border))]">
         {canEdit ? (
           <tr className="bg-muted/20">
             <th className="w-10 p-1 text-xs text-muted-foreground" scope="col">Role</th>
@@ -113,7 +137,7 @@ const TableGrid: React.FC<{
               <th key={c.index} className="p-1" scope="col">
                 <select
                   aria-label={`Role of ${c.path.join(" / ") || `column ${c.index + 1}`}`}
-                  className={`${SELECT} h-7 w-full text-xs`}
+                  className={`${SELECT} h-7 w-full py-0 pl-2 text-xs`}
                   value={c.role}
                   disabled={saving}
                   onChange={(e) => onRole(c.index, e.target.value as ColumnRole)}
@@ -207,6 +231,33 @@ const TableGrid: React.FC<{
           </tr>
         ))}
       </tbody>
+      {sums.size > 0 ? (
+        <tfoot className="sticky bottom-0 z-[2] bg-card shadow-[0_-1px_0_hsl(var(--border))]">
+          <tr className="text-xs">
+            <th scope="row" className="w-10 p-1 text-center font-semibold text-muted-foreground" title="Body rows added up">Σ</th>
+            {columns.map((c) => {
+              const entry = sums.get(c.index);
+              if (!entry) {return <td key={c.index} className="p-1.5" />;}
+              const matches = entry.total === null ? null : Math.abs(entry.sum - entry.total) < 0.005;
+              return (
+                <td key={c.index} className="p-1.5 text-right tabular-nums" data-testid={`column-sum-${c.index}`}>
+                  <span className="font-semibold">{entry.sum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                  {matches === null ? null : matches ? (
+                    <span className="ml-1 inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300" title="Matches the table's total row">
+                      <CheckCircle2 className="h-3 w-3" aria-hidden /><span className="sr-only">matches the total row</span>
+                    </span>
+                  ) : (
+                    <span className="ml-1 inline-flex items-center gap-0.5 text-destructive" title={`The total row says ${entry.total}`}>
+                      <AlertTriangle className="h-3 w-3" aria-hidden />
+                      <span className="text-[10px]">Δ {(entry.sum - (entry.total ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                    </span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        </tfoot>
+      ) : null}
     </table>
   );
 };
@@ -285,13 +336,24 @@ const TableViewer: React.FC = () => {
         <span className={`rounded px-2 py-1 text-xs font-semibold ${STATUS_TONE[t.status]}`}>{STATUS_LABELS[t.status]}</span>
       </header>
       <div className="flex flex-wrap items-center gap-2">
-        {(["csv", "xlsx", "json"] as const).map((format) => (
-          <button key={format} type="button" className={BUTTON_SECONDARY} disabled={exporting !== null}
-                  onClick={() => void download(format)}>
-            {exporting === format ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-            {format.toUpperCase()}
-          </button>
-        ))}
+        <div className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-card shadow-elevation-1" role="group" aria-label="Export">
+          <span className="flex items-center gap-1.5 border-r border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+            <Download className="h-3.5 w-3.5" aria-hidden /> Export
+          </span>
+          {(["csv", "xlsx", "json"] as const).map((format) => (
+            <button
+              key={format}
+              type="button"
+              disabled={exporting !== null}
+              onClick={() => void download(format)}
+              aria-label={`Download ${format.toUpperCase()}`}
+              className="flex items-center gap-1 border-r border-border px-2.5 py-1.5 text-xs font-semibold last:border-r-0 hover:bg-muted disabled:opacity-50"
+            >
+              {exporting === format ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+              {format.toUpperCase()}
+            </button>
+          ))}
+        </div>
         {canEdit && t.status === "FLAGGED" ? (
           <>
             <button type="button" className={BUTTON_PRIMARY} disabled={busy} onClick={() => review.mutate("ACCEPT")}>
@@ -316,7 +378,7 @@ const TableViewer: React.FC = () => {
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-5 rounded-sm ring-2 ring-inset ring-red-500" aria-hidden />fails a check</span>
         {canEdit ? <span>· double-click a cell (or press Enter) to correct it</span> : null}
       </div>
-      <div className={`${SURFACE} ${SCROLL_X}`}>
+      <div className={`${SURFACE} max-h-[70vh] overflow-auto overscroll-contain`} data-testid="table-grid">
         <TableGrid detail={detail} canEdit={canEdit} focus={focus} saving={busy}
                    onSave={(row, col, text) => correct.mutate({ row, col, text })}
                    onRole={(col, r) => role.mutate({ col, role: r })} />

@@ -67,35 +67,47 @@ const Tables: React.FC = () => {
       {query.isLoading ? <Loader2 className="h-5 w-5 animate-spin" aria-label="Loading" /> : null}
       {query.isError ? <p className="text-sm text-destructive">{errorMessage(query.error, "Something went wrong.")}</p> : null}
       {query.data ? (
-        <div className={`${SURFACE} ${SCROLL_X}`}>
-          <table className="w-full text-sm">
-            <thead>
+        <div className={`${SURFACE} ${SCROLL_X} max-h-[75vh] overflow-y-auto`}>
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="sticky top-0 z-[1] bg-card">
               <tr className={TABLE_HEAD}>
-                <th className="p-2 text-left">Document</th>
-                <th className="p-2">Table</th>
-                <th className="p-2">Pages</th>
-                <th className="p-2">Size</th>
-                <th className="p-2">Checks</th>
-                <th className="p-2">Confidence</th>
-                <th className="p-2">Status</th>
+                <th className="px-3 py-2.5 text-left">Document</th>
+                <th className="px-3 py-2.5 text-right">Table</th>
+                <th className="px-3 py-2.5 text-right">Pages</th>
+                <th className="px-3 py-2.5 text-right">Size</th>
+                <th className="px-3 py-2.5 text-left">Checks</th>
+                <th className="px-3 py-2.5 text-right">Confidence</th>
+                <th className="px-3 py-2.5 text-left">Status</th>
               </tr>
             </thead>
             <tbody>
               {query.data.items.map((row) => (
                 <tr key={row.id} className={TABLE_ROW}>
-                  <td className="p-2">
-                    <Link className="underline" to={tablePath(orgSlug, workspaceSlug, row.id)}>{row.original_filename}</Link>
-                    {row.title ? <span className="block text-xs text-muted-foreground">{row.title}</span> : null}
+                  <td className="max-w-[18rem] px-3 py-2.5">
+                    <Link className="block truncate font-medium text-foreground hover:text-primary" title={row.original_filename} to={tablePath(orgSlug, workspaceSlug, row.id)}>
+                      {row.original_filename}
+                    </Link>
+                    {row.title ? <span className="block truncate text-xs text-muted-foreground" title={row.title}>{row.title}</span> : null}
                   </td>
-                  <td className="p-2 text-center">{row.ordinal + 1}</td>
-                  <td className="p-2 text-center">{row.page_start === row.page_end ? row.page_start : `${row.page_start}–${row.page_end}`}</td>
-                  <td className="p-2 text-center">{row.n_rows - row.header_rows} × {row.n_cols}</td>
-                  <td className="p-2 text-center">
-                    {row.checked_relations === 0 ? "—" : row.failed_checks === 0 ? `${row.checked_relations} pass` : `${row.failed_checks} fail`}
+                  <td className="px-3 py-2.5 text-right tabular-nums">{row.ordinal + 1}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{row.page_start === row.page_end ? row.page_start : `${row.page_start}–${row.page_end}`}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{row.n_rows - row.header_rows} × {row.n_cols}</td>
+                  <td className="px-3 py-2.5">
+                    {row.checked_relations === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : row.failed_checks === 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <span aria-hidden>✓</span> {row.checked_relations} pass
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
+                        <span aria-hidden>!</span> {row.failed_checks} fail
+                      </span>
+                    )}
                   </td>
-                  <td className="p-2 text-center">{Math.round(row.confidence * 100)}%</td>
-                  <td className="p-2 text-center">
-                    <span className={`rounded px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[row.status]}`}>{STATUS_LABELS[row.status]}</span>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{Math.round(row.confidence * 100)}%</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONE[row.status]}`}>{STATUS_LABELS[row.status]}</span>
                   </td>
                 </tr>
               ))}

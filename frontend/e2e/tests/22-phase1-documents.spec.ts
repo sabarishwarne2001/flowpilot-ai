@@ -284,3 +284,29 @@ test.describe("Document workbench (Phase 1)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Table viewer (Phase 1)", () => {
+  test.use({ user: "C.owner" });
+
+  test("additive columns add up against the total row, the header stays in view, exports download", async ({ page }) => {
+    await page.goto(ws("C", "tables"));
+    await page.getByRole("link", { name: "scanned-packet-E2E.pdf" }).first().click();
+    const grid = page.getByTestId("table-grid");
+    await expect(grid.locator("tfoot")).toContainText("Σ");
+    // Quantity and amount add up; a unit price does not, so it gets no sum.
+    await expect(grid.getByTestId("column-sum-2")).toContainText("220");
+    await expect(grid.getByTestId("column-sum-4")).toContainText("2,200");
+    await expect(grid.getByTestId("column-sum-3")).toHaveCount(0);
+
+    const head = grid.locator("thead");
+    const before = await head.boundingBox();
+    await grid.evaluate((element) => element.scrollBy(0, 400));
+    const after = await head.boundingBox();
+    expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(2);
+
+    const downloading = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download XLSX" }).click();
+    expect((await downloading).suggestedFilename()).toMatch(/\.xlsx$/);
+    await expectHealthyPage(page);
+  });
+});
