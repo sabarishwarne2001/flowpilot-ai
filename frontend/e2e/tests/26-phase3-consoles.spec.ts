@@ -237,3 +237,18 @@ test.describe("Spend limits that are set stay listed (F-193)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Billing opened by its address by a member (F-194)", () => {
+  test.use({ user: "A.member" });
+
+  test("a member is told the page is not theirs, and no billing request is made", async ({ page }) => {
+    // Before the fix: "Loading billing…" for ever, five 403s behind it, and the line "You can
+    // see usage and invoices" beneath. No 403 is allowed here: the page must not ask.
+    await page.goto(org("A", "billing"));
+    await expect(page.getByTestId("access-restricted")).toBeVisible();
+    await expect(page.locator("main")).toContainText(/billing managers/i);
+    await settle(page);
+    await expectHealthyPage(page);
+  });
+});
+

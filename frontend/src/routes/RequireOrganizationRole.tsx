@@ -23,6 +23,8 @@ import type { OrganizationRole } from "@/types/tenancy";
 export const OWNERS_AND_ADMINS: readonly OrganizationRole[] = ["OWNER", "ADMIN"];
 export const OWNERS_ONLY: readonly OrganizationRole[] = ["OWNER"];
 export const OWNERS_AND_BILLING: readonly OrganizationRole[] = ["OWNER", "BILLING"];
+/** Who reads the plan, usage and invoices (the server's RequireOrgUsageReader, F-192). */
+export const BILLING_READERS: readonly OrganizationRole[] = ["OWNER", "ADMIN", "BILLING"];
 
 const ROLE_WORDS: Readonly<Record<OrganizationRole, string>> = {
   OWNER: "owners",
