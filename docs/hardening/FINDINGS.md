@@ -2727,3 +2727,203 @@ amount change rippled to sibling invoices; a document centroid came back as text
   compact exception-agent proposals.
 - **Three-way matching, radar, assistant, review** (Phase 2 fixes above): the queue shows the
   vendor, the document numbers and amounts in the case's currency.
+
+## Phase 3 — final commercial hardening (2026-10-08)
+
+Branch `hardening/phase-3-final-commercial-hardening`. Found by driving the running stack (Postgres
+16 + pgvector, Redis, API, the real worker loop, Vite, the local model stand-in) through every
+organization console, the identity, billing, marketplace, autonomy and audit hubs, the platform
+admin consoles, workspace settings, lifecycle, sign-in and the app shell, as eleven seeded people
+across the four plans and every organization and workspace role, while the API and worker logs
+were watched for tracebacks, ERROR lines and 5xx (none appeared outside deliberate restarts). A
+crawler clicked every control a page offers (414 actions as the Enterprise owner alone, with zero
+console errors and zero failed requests) and recorded every refused request per role; every page
+was also loaded at 390 px and 768 px. All 13 scheduled sweeps were run by hand with their cron
+arguments, and 225 background jobs of 35 types ran to SUCCEEDED (none failed or dead). Every
+numbered item has a test that failed on the previous code before its fix, as the Evidence Rule
+requires.
+
+### F-182 — The nightly compliance sweep never ran (P1, fixed)
+**Plain language.** The retention promise ("documents older than N days are removed") and the
+expiry of old data-export archives depend on a nightly job. Its cron line passed one argument the
+script does not act on alone, so on a deployed server it printed "Nothing selected" every night and
+did nothing. The line now selects the sweeps (`compliance --all --purge --apply`); the purge still
+acts only for organizations that turned auto-purge on, and never on documents under a legal hold.
+`485b9c2`. **Proof** `tests/operational/test_sweeper_entrypoints.py` now runs every scheduled line
+with exactly its arguments (the compliance line failed, the other 16 passed).
+
+### F-183 — The retention purge left the purged documents' files in storage (P1, fixed)
+The purge deleted the database rows with its own SQL; the uploaded file stayed in object storage and
+its upload record stayed live, so a document the retention policy had "removed" was still held.
+It now marks each upload deleted in the same transaction and deletes the stored objects after the
+commit, through the same helpers as the delete button (F-151). `c65c2b4`. **Proof**
+`tests/engines/test_retention_purge_releases_file_live.py` (a real processed document, backdated past
+a 90-day policy: the file was still in storage before the fix).
+
+### F-184 — Reading the last unread notice stranded the page on "Nothing matches" (P3, fixed)
+With "Unread only" on, reading the only notice on the last page left "25 total · 25 unread" above
+"Nothing matches these filters" with no pager. The page now steps back to the last page with
+notices, and the previous page stays on screen while the next one loads. `c4559c4`. **Proof** browser
+`26-phase3-consoles` (F-184), with 30 seeded organization notices.
+
+### F-185 — Every organization console's top bar said "Settings" (P3, fixed)
+Notifications, Billing and Webhooks all read "<Organization> › Settings", as a second `<h1>`. It is
+now a breadcrumb: the organization (a link to General) and the current page. `8f62f38`. **Proof**
+browser F-185.
+
+### F-186 — Revenue operations: Cancel on a prompt still sent the action; one click ended a contract (P2, fixed)
+"Mark paid" and "Void" asked through `window.prompt`, and Cancel still sent the request (an empty
+reference: a 422 and "The action failed."); "Cancel contract" asked nothing. The actions now ask in a
+dialog with a text field (confirm disabled until valid), nothing is sent on Cancel, and each success
+is confirmed. Drafting a contract picks the organization by name from a new superadmin route,
+`GET /admin/revops/organizations`, instead of a pasted UUID. `ebbb54e`. **Proof** browser F-186,
+`tests/engines/test_revops_organization_picker_live.py`.
+
+### F-187 — Billing named meters by their internal keys (P3, fixed)
+Limits read "*", "llm.input_token", "ocr.page" with "Overage: allow_and_bill"; the seat card read
+"Plan: enterprise · active · $ billing". One helper now names every meter and billed event as the
+plan cards do ("Total spend (all usage)", "AI tokens in", "Document pages processed"),
+"Beyond this, usage is billed as overage", "Enterprise plan · active · billed in USD". `fb74970`.
+**Proof** browser F-187.
+
+### F-188 — Requiring single sign-on with no identity provider locked the whole organization out (P1, fixed)
+The switch was accepted with no identity provider connected; every member's password session was
+then refused and there was no SSO to sign in with (the owners too, with break-glass off). The server
+now refuses (409, with the reason) until an active provider exists; the Security tab says why and
+asks before requiring SSO. `a1e4e8c`. **Proof** `tests/engines/test_require_sso_needs_an_idp_live.py`.
+
+### F-189 — Two of the eight service levels were never measured (P2, fixed)
+"Job completion rate" and "Job end-to-end p95" had no recorder: every dashboard said "No traffic in
+this window" however many documents were processed (Enterprise buys a priority SLO). The worker now
+records each organization job's terminal state and its enqueue-to-finish time. `a6a7b9a`. **Proof**
+`tests/engines/test_job_slos_are_measured_live.py`.
+
+### F-190 — The BYOK page counted the self-hosted model as "on your own keys" (P2, fixed)
+The self-hosted model is priced at a declared zero with the same cost basis as a tenant's own key
+(N-031), so an organization with no key stored read "On your own keys 86%". Only calls the metering
+zeroed for the tenant's key count now. `8bdf313`. **Proof**
+`tests/api/test_byok_endpoints.py::TestSavingsCountsOnlyTenantKeys`.
+
+### F-191 — Archiving an organization said it could not be undone (P3, fixed)
+"Reactivation is a support request, not a button" and "Archive permanently", although an owner
+restores an archived organization from All organizations & workspaces (F-132). The page now says so.
+`bf97f28`. **Proof** browser F-191.
+
+### F-192 — The Billing role could not read usage (P2, fixed)
+The role exists for a finance contact, yet the usage endpoints admitted owners and admins only: the
+page showed "couldn't be loaded" three times. Reads now admit OWNER, ADMIN and BILLING
+(`RequireOrgUsageReader`); the page offers each action only to the role the server allows (plan and
+payment: owner; spend limits: owner and admin). `ff692f6`. **Proof**
+`tests/api/test_billing_role_reads_usage.py`, browser F-192.
+
+### F-193 — A spend limit you set disappeared from the page (P2, fixed)
+After saving, the form showed only the plan's limits, and "Currently in force" ignored the limit just
+set. Limits you set are now listed, and "Currently in force" is the tighter of the two. `ff692f6`
+(shared component with F-192). **Proof** browser F-193.
+
+### F-194 — A member opening Billing by its address got a broken page (P3, fixed)
+The route had no role guard: "Loading billing…" forever, with every request refused. It now shows
+Access restricted before any request is made. `37013ed`. **Proof** browser F-194 (976 problems before).
+
+### F-195 — A failed request was re-asked about 30 times a second (P1, fixed)
+The query client refetches on every mount; Billing hid its body while a query was pending, and a
+child reading the same query remounted on each answer. A 403 (or an outage) looped for as long as the
+page was open: 976 failed requests in 15 seconds from one tab, a load multiplier on the API during
+any incident. A failed query is no longer fetched again because another component mounted
+(`retryOnMount: false`); Billing shows the failure with "Try again". `e7c289a`. **Proof** browser F-195.
+
+### F-196 — Every new workspace was set to an AI model the provider had retired (P1, fixed)
+New workspaces were given `mixtral-8x7b-32768`, retired by Groq in March 2025 (and
+`llama-3.3-70b-versatile` and `llama-3.1-8b-instant` on 16 August 2026): in production the first
+document in any new workspace would have failed at the provider. New workspaces take the platform's
+listed default (`openai/gpt-oss-20b`); BYOK suggests the models Groq serves; a data-only migration
+(`q1a1_retired_groq_models`) moves existing workspaces off retired models. `e053c34`. **Proof**
+`tests/engines/test_new_workspace_model_is_served_live.py`.
+
+### F-197 — Workspace settings asked everyone for the organization's invitations (P3, fixed)
+A contributor got a 403 and "No active pending invitations found."; a workspace admin who is not an
+organization admin was offered an invite form the server refuses. The directory is now shown to
+organization owners and admins; others are told who manages invitations. `fb156e0`. **Proof**
+browser F-197.
+
+### F-198 — Matching tolerances offered preview and publish to people who cannot (P3, fixed)
+### F-199 — The next tolerance version started from zeros and reset every other tolerance (P2, fixed)
+The "Next version" form always started from zeros, so changing one field and publishing silently
+reset price slack, quantity slack and the candidate window for every case scored afterwards. It now
+starts from the version in force; contributors and viewers read it without publish controls.
+`00fb9a2`. **Proof** browser F-198, F-199.
+
+### F-200 — The assistant offered a viewer New, Delete and Send, all refused (P3, fixed)
+Those are now offered to contributors and above; a viewer is told what they can do. `861101c`.
+**Proof** browser F-200.
+
+### F-201 — On a plan without custom branding every brand control sent a refused save (P3, fixed)
+The controls are now read-only with a line saying why; removing a logo on file stays possible.
+`afaff67`. **Proof** browser F-201 (three 402s before).
+
+### F-202 — Unit economics reported the self-hosted model as BYOK traffic (P2, fixed)
+As F-190, for the operator's margin view: "BYOK traffic · 110 events" with no tenant key stored.
+`edc3152`. **Proof** `tests/services/test_cogs_margin_service.py::test_f202…`.
+
+### F-203 — The audit log pushed the whole page sideways on a phone or tablet (P3, fixed)
+Screen-reader-only labels inside an unpositioned scroller escaped its clipping, making the page about
+800 px wide at 390 px. The scroller (and the shared `SCROLL_X` class every console table uses) is now
+positioned. A crawl of every page at 390 and 768 px found no other overflow. `0061c17`. **Proof**
+browser F-203.
+
+### F-204 — An organization's maximum session age was shown as in force but never applied (P2, fixed)
+**Plain language.** The Security tab of Enterprise identity read "Sessions end after N hours" from
+the organization's policy, and the owner can set that limit; nothing enforced it, so sessions lasted
+the platform's 12 hours whatever the organization asked. With no limit set, the tab said "No maximum
+session age is set" although every session ends after 12 hours. Now: refresh enforces the strictest
+limit among the organizations a person is an active member of (the platform's still applies); the
+endpoint validates the value (5 minutes to a year, a real integer: it stored 60 seconds or text
+before) and accepts null to remove it; the read reports the platform's limits; the tab states the
+limit in force and lets the owner pick a shorter one. `03bccf8`, `4d09072`, `2b87b9d`. **Proof**
+`tests/services/test_organization_session_limit.py`, `tests/engines/test_session_age_policy_live.py`,
+browser F-204, and live: a session aged past a 1-hour limit was refused at refresh (401,
+`organization_session_limit` in the log).
+
+### F-205 — Anyone could sign a person out through the public SAML logout endpoint (P2, fixed)
+**Plain language.** Single logout lets the identity provider end a person's sessions. The endpoint
+read the session index from the request and revoked every matching session without checking who
+sent it, so anyone who knew a session index (it passes through the person's browser) could sign
+them out, repeatedly. A logout request is now accepted only when signed by a live certificate of an
+active identity provider named in its Issuer (same algorithm allowlist and certificate windows as
+sign-in), and only that provider's sessions end; anything else gets 403. `064cb55`. **Proof**
+`tests/engines/test_saml_logout_must_be_signed_live.py` (an unsigned and an attacker-signed request
+both signed the person out before), the 324 existing SAML tests, and live (403 from the running API).
+
+### Smaller corrections (no failing test written: unverified)
+Wording and display corrections checked by eye in the running app, not by a test that failed first,
+so per the Evidence Rule they are **unverified**:
+- Members: roles in words; a refused role change or removal shows the server's reason instead of a
+  guess (`8ec6258`, `cdf4a22`). Ownership transfer names the candidates.
+- Identity: the Security tab describes signed single logout instead of an inert "session sync" flag
+  that nothing reads (`f27dd46`); SCIM token failures say so (`8ec6258`).
+- Service levels: each target described in the customer's words, not "claimed jobs reaching
+  SUCCEEDED rather than DEAD" or "see `slo_recorder`" (`5015a54`).
+- Unit economics: a zero-revenue banner and the rate card in dollars per million tokens (`4802ccb`).
+- Sentence case on the sign-up screen and workspace Settings → General; the invite form's email and
+  role labels are attached to their fields (`cddb596`, `396c386`).
+- The organization sidebar shows a truncated entry's full name on hover (`166bf08`).
+
+### Checked and not defects
+- AI settings answered 404/409 in the platform organization's workspace: the seed creates that
+  workspace directly, without the service that creates its settings row; product-created workspaces
+  have one.
+- Retention purge "missing": it exists, run by cron (F-182 was its arguments).
+- "Paid checkout is not configured: STRIPE_SECRET_KEY…" on the plan cards: the development stack has
+  no Stripe key by design (F-125 is the owner's test-mode setup).
+- The build's chunk-size warning predates this branch (the entry chunk is 412 KB gzipped; the item is
+  in the release-readiness open list).
+
+### Built in this phase (elevation, not defects)
+- **One console header and real tabs** (`7270773` and the console commits): a shared `PageHeader`
+  (icon, organization eyebrow, title, one-line description, actions) on every organization console,
+  the identity and billing hubs, marketplace, autonomy, the audit log and the platform admin
+  consoles; URL-synced, keyboard-operable tabs (`useUrlTab`, `TabList`, `TabPanel`: roving tabindex,
+  arrow keys, Home/End) on Analytics, Enterprise identity, Sovereign and Revenue operations.
+- **Two-party ownership transfer** proven end to end in the browser (`a3961a0`): two people who sign
+  up for the test, the offer, the acceptance and the role swap.
+- **Organization session limit** as a real control (F-204), and signed single logout (F-205).

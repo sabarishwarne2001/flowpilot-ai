@@ -1,45 +1,38 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-08 (Phase 2 — enterprise processing and TruthMesh)_
+_Last updated: 2026-10-08 (Phase 3 — final commercial hardening)_
 
 ## Current phase
-**Phase 2 — Enterprise processing and TruthMesh: COMPLETE, in review.** Branch
-`hardening/phase-2-enterprise-processing-and-truthmesh`; PR #12
-(https://github.com/sabarishwarne2001/flowpilot-ai/pull/12). Builds on Phase 1 (merged into `main`, PR #11).
+**Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
+`hardening/phase-3-final-commercial-hardening` (PR: see "Next action"). Builds on Phase 2 (merged
+into `main`).
 
-- **Live defects (each with a failing test first): F-171 to F-181** (FINDINGS.md, "Phase 2").
-  The heavy ones: F-171 a three-way match that compared no line was MATCHED and approvable;
-  F-173 the payment-risk check never read `vendor_bank_account`, so a changed payee account
-  went unflagged; F-178 in the review hub, "a" (assign to me) also accepted every disputed
-  extracted value. Also F-172 amounts in rupees, F-174 internal vendor keys shown, F-175
-  assistant citations (shared React key, squeezed drawer), F-176 documents named by an id
-  fragment, F-177 double-counted process events, F-179 "Ready to save" on an empty rule,
-  F-180 clause checks shown with no trigger, F-181 a held arrow key smearing redaction regions.
-- **New module: TruthMesh** — the cross-document digital twin: linked documents, eleven kinds of
-  cross-document conflict with decisions that survive rebuilds, what-if ripples, a risk cockpit,
-  a discrepancy matrix and an audit export (migration `p9a1`, 12 routes, worker jobs, a page).
-  $0 external cost: pgvector and the local embedding model. Plan placement is provisional:
-  **N-033** (NEEDS-OWNER.md, Enterprise only for now).
-- **Tier-1 views:** review hub (field diff grid, tab counts, severity stripes), workflows and run
-  history (honest rule cards, run summary, a time axis per chain), forensic radar (severity
-  tiles, findings grid, duplicate matrix), Redaction Studio (toolbar, zoom, shortcuts, grouped
-  regions), process intelligence (top-to-bottom discovery map, activities in words, compact
-  proposals), matching queue (vendor, numbers, currency), assistant citation drawer, ERP empty
-  state.
+- **Live defects (each with a failing test first): F-182 to F-205** (FINDINGS.md, "Phase 3").
+  The heavy ones: F-182/F-183 the nightly retention purge never ran, and when run it left the files
+  in storage; F-188 requiring SSO with no identity provider locked out the whole organization;
+  F-195 a failed request re-asked ~30 times a second (976 failed requests in 15 s from one tab);
+  F-196 every new workspace was set to a Groq model Groq had retired; F-204 an organization's
+  maximum session age was shown as in force but never applied; F-205 the public SAML logout
+  endpoint signed people out on an unsigned request. Also role-matrix truthfulness (F-192 to
+  F-201), the job SLOs never measured (F-189), BYOK and margin miscounts (F-190, F-202), RevOps
+  prompts that sent on Cancel (F-186), billing in internal keys (F-187), and a phone-width overflow
+  (F-203).
+- **Elevation:** one console header (`PageHeader`) and URL-synced keyboard tabs across every
+  organization console, the identity and billing hubs, marketplace, autonomy, audit and the platform
+  admin consoles; sentence case and labelled fields on the remaining settings and auth screens.
 
 ## What is done
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
-  polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence):** merged.
-- **Phase 2 — enterprise processing and TruthMesh** (this branch): F-171 to F-181 fixed;
-  TruthMesh built.
-  - Backend suite (full): **3,479 passed, 0 failed, 9 skipped** (was 3,450 passed, 1 failed:
-    28 new tests; the Phase 1 failure was fixed before merge).
-  - Browser suite (full, fresh database, production preview, CSP, model stand-in): **360 passed,
-    0 failed, 1 skipped** (by design: the provider-down test needs no model). Logs clean.
+  polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence), Phase 2 (enterprise
+  processing and TruthMesh):** merged.
+- **Phase 3 — final commercial hardening** (this branch): F-182 to F-205 fixed, each proven.
+  - Backend suite (full): **<<BACKEND>>**.
+  - Browser suite (full, fresh database, production preview, CSP, model stand-in): **<<BROWSER>>**.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
-    --dist`, encoding check: clean. One Alembic head (`p9a1_truthmesh_engine`); migration up,
-    down and up again checked.
-  - `COVERAGE.csv` (1,396 rows): deep 360 → **380**, 14 TruthMesh rows added.
+    --dist`, encoding check, `npm audit --omit=dev` (0): clean. One Alembic head
+    (`q1a1_retired_groq_models`); migration up, down and up again checked; drift 283 known, 0 new.
+  - `COVERAGE.csv` (1,400 rows): deep 380 → **408**.
+  - Release certification: `05-release-readiness.md` (Phase 3), verdict **<<VERDICT>>**.
 
 ## Owner decisions in force (do not re-ask)
 Open: **N-033** (which plans include TruthMesh; provisionally Enterprise only) and **N-032**
@@ -50,11 +43,14 @@ Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
 **N-030** seat price = plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: decide N-033 (and N-032 if still open), review and merge the Phase 2 PR.
-2. Small items noticed and left for a later pass: the matching queue lists one case per copy of
-   an invoice (the copies are flagged duplicates; grouping them is a product choice); the
-   corroborator's "Highest" column is a raw score (0.90); the ERP and process pages still put
-   their description beside the title.
+1. Owner: review and merge the Phase 3 PR. Decide N-032 and N-033 when convenient (provisional
+   placements are in force and are not release blockers).
+2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
+   (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
+   console no longer shows it; drop the column or build the feature). From Phase 2, still open:
+   the matching queue lists one case per copy of an invoice (grouping them is a product choice);
+   the corroborator's "Highest" column is a raw score (0.90); the ERP and process pages put their
+   description beside the title.
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy
    (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.
@@ -75,11 +71,11 @@ None in engineering. Not verifiable from this environment: the production compos
 server (F-006) and the CPU-only torch image (F-045).
 
 ## Budget notes
-One long session (continued twice after its context filled): the live stack with log watch across
-every Phase-2 page and role, eleven fixes each proven by a failing test, the TruthMesh module
-(engine, API, worker, UI, 23 backend and 5 browser tests), the Tier-1 views, one full backend run and
-one full browser run on a fresh database, and the documentation. The exact spend is not visible from
-inside the session; check your usage page.
+One long session (continued after its context filled): the live stack with log watch across every
+console, hub, admin page, role and plan; a crawler pass per seeded person and at phone and tablet
+widths; every scheduled sweep by hand; 24 fixes each proven by a failing test; the console
+elevation; one full backend run and one full browser run on a fresh database; the documentation.
+The exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
 - **Two pytest processes against one Postgres server corrupt each other** (fixed database names,
@@ -115,4 +111,11 @@ inside the session; check your usage page.
   and run with `E2E_TEST_DIR=./tools`; this phase's probes were kept out of the repository.
 - `seed_price_book.py --version auto` publishes the next price book only when the seed changed;
   the start scripts and the e2e seed use it.
-
+- **TanStack Query**: the client refetches on mount ("always"); `retryOnMount: false` (F-195) stops a
+  failed query being re-asked whenever another component reading it mounts. Do not gate a page on
+  `isLoading` while a child reads the same query without it.
+- **Groq models**: Groq retired `mixtral-8x7b-32768` (March 2025), `llama-3.3-70b-versatile` and
+  `llama-3.1-8b-instant` (16 August 2026). The platform default is `openai/gpt-oss-20b`; check
+  https://console.groq.com/docs/deprecations before adding a model to `app/core/ai_models.py`.
+- Sessions live in the `sessions` table; a refresh that fails revokes the family, so a script that
+  ages a session and refreshes loses its access token too.
