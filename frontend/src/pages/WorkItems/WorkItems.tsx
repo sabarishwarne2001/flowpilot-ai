@@ -20,6 +20,10 @@ import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { useTenant } from "@/hooks/useTenant"; // Imported to resolve slug links
 import { workItemKeys, invalidateWorkspace, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 
+import { useOptionalTenant } from "@/routes/TenantContext";
+import { canCreateContent } from "@/permissions/workspacePermissions";
+import { BulkActionBar } from "@/components/workItems/BulkActionBar";
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -54,6 +58,11 @@ export const WorkItems: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
   const { state: tenantState } = useTenant(); // Retrieve active tenant state for slugs
+  // Viewers read documents; uploading, reprocessing, deleting and bulk actions are contributor
+  // work (the server refuses them to viewers), so the controls are not offered to them.
+  const resolvedTenant = useOptionalTenant();
+  const canWrite = resolvedTenant ? canCreateContent(resolvedTenant.workspaceRole) : false;
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -85,6 +94,11 @@ export const WorkItems: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [workspaceId]);
+
+  // A selection only ever covers rows on screen: changing page, filter, sort or workspace clears it.
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [workspaceId, queryFilters]);
 
   const {
     data: response,
@@ -220,7 +234,7 @@ export const WorkItems: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="space-y-1 select-none">
-          <h2 className="text-2xl font-semibold tracking-tight">Documents Pipeline</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Documents Database</h2>
           <div className="h-4 w-96 rounded bg-muted/40 animate-pulse" />
         </div>
         <SkeletonTable rows={10} />
@@ -312,8 +326,27 @@ export const WorkItems: React.FC = () => {
             <table className="w-full table-fixed border-collapse text-left">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground backdrop-blur">
+                  {canWrite && (
+                    <th className="w-10 py-2.5 pl-4 pr-0">
+                      <input
+                        type="checkbox"
+                        aria-label="Select every document on this page"
+                        className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                        checked={items.length > 0 && selectedIds.length === items.length}
+                        ref={(element) => {
+                          if (element) {
+                            element.indeterminate =
+                              selectedIds.length > 0 && selectedIds.length < items.length;
+                          }
+                        }}
+                        onChange={(event) =>
+                          setSelectedIds(event.target.checked ? items.map((item) => item.id) : [])
+                        }
+                      />
+                    </th>
+                  )}
                   <th
-                    className="w-5/12 px-4 py-2.5"
+                    className="w-[34%] px-4 py-2.5"
                     aria-sort={
                       sortBy === "original_filename"
                         ? sortOrder === "asc"
@@ -332,9 +365,29 @@ export const WorkItems: React.FC = () => {
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-2/12 px-4 py-2.5">Format</th>
                   <th
-                    className="w-2/12 px-4 py-2.5"
+                    className="w-[14%] px-4 py-2.5"
+                    aria-sort={
+                      sortBy === "created_at"
+                        ? sortOrder === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                    }
+                  >
+                    <button
+                      type="button"
+                      disabled={isFetching}
+                      onClick={() => handleSortToggle("created_at")}
+                      className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <span className="whitespace-nowrap">Uploaded</span>
+                      <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </th>
+                  <th className="w-[9%] px-4 py-2.5">Format</th>
+                  <th
+                    className="w-[12%] px-4 py-2.5"
                     aria-sort={
                       sortBy === "file_size"
                         ? sortOrder === "asc"
@@ -349,12 +402,12 @@ export const WorkItems: React.FC = () => {
                       onClick={() => handleSortToggle("file_size")}
                       className="flex items-center space-x-1.5 font-semibold uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <span>File Size</span>
+                      <span className="whitespace-nowrap">File Size</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </th>
-                  <th className="w-2/12 px-4 py-2.5">Status</th>
-                  <th className="w-1/12 px-4 py-2.5 text-right">Actions</th>
+                  <th className="w-[14%] px-4 py-2.5">Status</th>
+                  <th className="w-[12%] px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
 
@@ -362,8 +415,27 @@ export const WorkItems: React.FC = () => {
                 {items.map((item) => (
                   <tr
                     key={item.id}
-                    className="group border-b border-border/60 text-sm transition-colors last:border-b-0 hover:bg-muted/40"
+                    className={`group border-b border-border/60 text-sm transition-colors last:border-b-0 hover:bg-muted/40 ${
+                      selectedIds.includes(item.id) ? "bg-primary/[0.04]" : ""
+                    }`}
                   >
+                    {canWrite && (
+                      <td className="py-3 pl-4 pr-0">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${item.original_filename}`}
+                          className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                          checked={selectedIds.includes(item.id)}
+                          onChange={(event) =>
+                            setSelectedIds((current) =>
+                              event.target.checked
+                                ? [...current, item.id]
+                                : current.filter((id) => id !== item.id),
+                            )
+                          }
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground group-hover:text-primary">
@@ -373,6 +445,9 @@ export const WorkItems: React.FC = () => {
                           {item.original_filename}
                         </span>
                       </div>
+                    </td>
+                    <td className="truncate px-4 py-3 text-xs text-muted-foreground" title={formatTimestamp(item.created_at)}>
+                      <time dateTime={item.created_at}>{formatTimestampDate(item.created_at)}</time>
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
@@ -392,12 +467,13 @@ export const WorkItems: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {item.status === "FAILED" && (
+                        {canWrite && item.status === "FAILED" && (
                           <button
                             type="button"
                             disabled={reprocessMutation.isPending}
                             onClick={() => triggerReprocess(item.id)}
                             title="Retry Processing"
+                            aria-label="Retry Processing"
                             className="rounded-md p-1.5 text-amber-600 hover:bg-amber-500/10 disabled:pointer-events-none disabled:opacity-50 dark:text-amber-400"
                           >
                             <RefreshCw className={`h-4 w-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
@@ -406,19 +482,23 @@ export const WorkItems: React.FC = () => {
                         <Link
                           to={getDetailsPath(item.id)}
                           title="View Details"
+                          aria-label="View Details"
                           className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => triggerDelete(item.id)}
-                          disabled={deleteMutation.isPending}
-                          title="Delete Document"
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            onClick={() => triggerDelete(item.id)}
+                            disabled={deleteMutation.isPending}
+                            title="Delete Document"
+                            aria-label="Delete Document"
+                            className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -428,6 +508,21 @@ export const WorkItems: React.FC = () => {
           )}
         </div>
       </div>
+
+      {canWrite && workspaceId && selectedIds.length > 0 && (
+        <BulkActionBar
+          workspaceId={workspaceId}
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds([])}
+          onDone={(result) => {
+            // Rows that were refused stay selected, so they can be acted on again.
+            const refused = new Set(
+              result.results.filter((row) => row.outcome === "refused").map((row) => row.work_item_id),
+            );
+            setSelectedIds((current) => current.filter((id) => refused.has(id)));
+          }}
+        />
+      )}
 
       {totalPages > 1 && (
         <footer className="flex items-center justify-between select-none">

@@ -116,3 +116,33 @@ def test_run_history_names_the_rule_that_ran(engines: Engines) -> None:
     items = page if isinstance(page, list) else page.get("items", [])
     assert items, "the rule did not run"
     assert {item["rule_name"] for item in items} == {RULE["name"]}, items
+
+
+def test_a_rule_that_has_run_can_be_deleted_and_its_history_is_kept(engines: Engines) -> None:
+    """F-150. Deleting a rule was a plain row delete, and every execution references its rule
+    with ON DELETE RESTRICT (Run history must survive), so a rule that had ever run could not be
+    deleted: the request failed with a server error. Deleting it now removes the rule and keeps
+    its executions in Run history, still named."""
+    rule = engines.post("/automation/rules", RULE).json()
+    _invoice(engines, "INV-AU-D1", "5000.00")
+    before = engines.get("/automation/executions", params={"rule_id": rule["id"]}).json()
+    before_items = before if isinstance(before, list) else before.get("items", [])
+    assert before_items, "the rule did not run"
+
+    deleted = engines.delete(f"/automation/rules/{rule['id']}")
+    assert deleted.status_code == 204, deleted.text
+    assert rule["id"] not in {r["id"] for r in engines.get("/automation/rules").json()}
+
+    history = engines.get("/automation/executions").json()
+    items = history if isinstance(history, list) else history.get("items", [])
+    kept = [item for item in items if item.get("rule_id") == rule["id"]]
+    assert len(kept) == len(before_items), "Run history lost the deleted rule's executions"
+    assert {item["rule_name"] for item in kept} == {f"{RULE['name']} (deleted)"}
+    # It cannot be edited or re-enabled once deleted.
+    assert engines.patch(f"/automation/rules/{rule['id']}", {"is_active": True}).status_code == 404
+
+    # The deleted rule does not run again.
+    _invoice(engines, "INV-AU-D2", "6000.00")
+    after = engines.get("/automation/executions").json()
+    after_items = after if isinstance(after, list) else after.get("items", [])
+    assert len([i for i in after_items if i.get("rule_id") == rule["id"]]) == len(before_items)

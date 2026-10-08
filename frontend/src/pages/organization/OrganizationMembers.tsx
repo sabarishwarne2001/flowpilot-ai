@@ -1,5 +1,6 @@
 import { formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
+import { Avatar } from "@/components/common/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, ShieldAlert, UserMinus, Users } from "lucide-react";
 
@@ -231,12 +232,20 @@ export const OrganizationMembers: React.FC = () => {
                     isRemoved ? "opacity-60" : ""
                   }`}
                 >
+                  <Avatar
+                    userId={member.user.id}
+                    email={member.user.email}
+                    displayName={member.user.display_name ?? null}
+                    hasAvatar={member.user.has_avatar ?? false}
+                    size="md"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {member.user.email}
+                      {member.user.display_name || member.user.email}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {member.status.toLowerCase()} member
+                      {member.user.display_name ? `${member.user.email} · ` : ""}
+                      {member.status === "ACTIVE" ? "Active member" : member.status === "INVITED" ? "Invited" : "Former member"}
                     </p>
                     {isRemoved && (
                       <p className="mt-0.5 text-xs text-muted-foreground">

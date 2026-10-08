@@ -60,6 +60,8 @@ export const ORG_NOTIFICATION_ENDPOINTS = {
 export const KNOWLEDGE_ENDPOINTS = {
   reindex: (workspaceId: string): string =>
     `${scoped(workspaceId)}/work-items/knowledge-base/reindex`,
+  reindexStatus: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/work-items/knowledge-base/reindex/status`,
 } as const;
 
 export const PROFILE_ENDPOINTS = {

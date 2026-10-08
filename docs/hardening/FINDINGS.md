@@ -153,6 +153,20 @@ How to read this file:
 | F-138 | P3 | **fixed** (final systemic polish, `e72a65a`) | Compliance | A DPA/GDPR export bundle could not be downloaded where storage cannot presign URLs (local disk) |
 | F-139 | P3 | **fixed** (final systemic polish, `9567cc3`) | Roles / UX | The invite form offered "Admin" to organization admins, who may not grant it; they were refused only on submit |
 | F-140 | P3 | **fixed** (final systemic polish) | Run history | Every execution came back with `rule_name` null, so Run history could only say "Rule 1f3a9c0e" |
+| F-141 | P2 | **fixed** (live feedback, `ac12570`) | Knowledge base / UX | "Reindex knowledge base" gave no feedback after the 202: button always enabled, nothing said whether re-embedding ran, finished or failed |
+| F-142 | P3 | **fixed** (live feedback, `42d3f5b`) | Tenancy / UX | "Your workspace access" listed a workspace of an archived organization like an active one and dropped grants on archived workspaces |
+| F-143 | P3 | **fixed** (live feedback, `a0ee2e7`, page images `15c971e`) | Profile / branding | An undecodable profile picture or logo showed a broken-image icon; the profile page refetched it in a loop (`?v=1155` within seconds) |
+| F-144 | P2 | **fixed** (live feedback, `5b91104`) | Frontend resilience | One page's render error (or a deploy while a tab was open) replaced the whole app; "Retry" re-rendered the same crash |
+| F-145 | P3 | **fixed** (live feedback, `19b012d`; browser test for the bulk path in `6346f92`) | UX | 20 mutations (bulk actions, domains, IdP, presets, SLO reset, analytics schedules, calendars, …) gave no feedback on failure, some none on success |
+| F-146 | P3 | **fixed** (live feedback, `a9f1e39`) | Automation / workers | `reap_stranded` (times out runs stranded in RUNNING) existed and was tested but never scheduled |
+| F-147 | P3 | **fixed** (live feedback, `57ad3c4`) | Notifications / workers | `sweep_due_deliveries` (re-enqueues an email whose job died) was documented as scheduled and never called |
+| F-148 | P3 | **fixed** (live feedback, `9ac4681`) | Members / UX | An expired organization invitation was listed as "Pending … expires <a past date>" |
+| F-149 | P2 | **fixed** (live feedback, `6346f92`) | Documents | The bulk API (delete, reprocess, export, tag) and its action bar existed but nothing mounted the bar: bulk actions were unreachable; viewers were offered Delete/Retry the server refuses |
+| F-150 | P2 | **fixed** (live feedback, `078b21f`) | Automation / database | Deleting an automation rule that had ever run failed with a foreign-key violation (HTTP 500) |
+| F-151 | P2 | **fixed** (live feedback, `65e773f`) | Documents / privacy | Deleting a document left its original file in storage with a live `uploaded_files` record, though the dialog promised permanent deletion |
+| F-152 | P2 | **fixed** (live feedback, `d628560`) | Compliance (GDPR Art. 17) | A subject erasure listed the subject's stored files as "orphaned" and never deleted them |
+| F-153 | P3 | **fixed** (live feedback, `2a6a899`) | Members / UX | Organization → Members showed bare email addresses: the display name the API sent was unused and there was no way to show a picture without a 404 per member |
+| F-154 | P3 | **fixed** (live feedback, `c857fa0`) | UX | Every browser tab and history entry was titled "FlowPilot AI": open tabs could not be told apart |
 
 ---
 
@@ -2283,3 +2297,136 @@ not have, so it was always null. The names are now looked up for each page in on
 - **F-045** — images still carry the CUDA build of torch; the CPU build needs download.pytorch.org.
 - **F-011, F-017, F-030** — the harmless long tail (defaults not written in the template, 283
   ratcheted index/constraint drift lines, a 30-minute test suite).
+
+---
+
+## Live feedback and Tier-1 elevation (2026-10-07)
+
+How these were found: the owner's live testing after PR #9 (F-141, F-142, F-143), then an audit
+of the whole product for the same classes of gap: a mutation that can fail silently, a page that
+can take the shell down, background work that can be stranded, a delete the database refuses or
+that does not delete what it says. Every item below has a test that failed on the previous code
+(backend pytest or the browser suite), as the Evidence Rule requires; F-145 was found by a static
+scan of all 267 mutations and its browser proof covers the bulk path (the rest are the same
+one-line pattern, reviewed by reading).
+
+### F-141 — Reindex gave no feedback (P2, fixed)
+**Plain language.** After "Reindex knowledge base" the page went quiet: the button could be
+clicked again, and nothing said whether the background work was running, done or broken.
+**Fix** `ac12570`: `GET …/work-items/knowledge-base/reindex/status` reports the active jobs, the
+latest run's counts (waiting, completed, failed) and when the last settled run finished. The
+card polls every 2.5 s only while a run is active, disables the button (spinner) while a run or
+the request is in flight, shows a progress bar, then "Last completed on <time>", and toasts the
+start and the end. **Proof** `tests/engines/test_knowledge_reindex_status_live.py` (5 tests; the
+route did not exist) and two browser tests (a real run to its completion toast; the running state).
+
+### F-142 — Archived access looked active (P3, fixed)
+`/me/workspaces` skipped archived workspaces and never read the organization's status (archiving
+an organization leaves its workspaces' own status unchanged). It now returns archived grants with
+the organization's name and status and an `archived` flag; the panel shows a muted ARCHIVED badge
+with the reason and who can restore, and no longer counts an archived organization's workspaces
+as reachable. **Proof** `tests/api/test_me_workspace_grants_archived.py` (3/3 failed) and a
+browser test with an archived workspace and an archived organization. `42d3f5b`.
+
+### F-143 — Broken pictures (P3, fixed)
+**Plain language.** If a stored picture could not be shown, the sidebar showed a broken-image
+icon, and the profile page kept downloading it again forever. **Fix** `a0ee2e7`: one
+`useImageFallback` hook (remembered per image, so a new upload is tried again; a broken cached
+copy is evicted), used by the avatar, the header logo, the workspace switcher logo and the
+settings previews, which fall back to the initials badge; a non-image response (an HTML error
+page answered with 200) is refused before it becomes an image. The same fallback covers the page
+images (`15c971e`): the document viewer, review evidence, corroborator and redaction studio now
+say a page could not be displayed, and a packet-split thumbnail whose request failed no longer
+spins forever. **Proof** three browser tests that serve undecodable bytes; on the old code the
+profile page had requested the picture 1,155 times.
+
+### F-144 — One page could take the application down (P2, fixed)
+The only error boundary sat above the router. Now each layout's content area has its own: a
+crashing page shows an in-page card (Try again, Reload) with the sidebar intact, and the next
+route clears it; a missing page file after a deploy is recognised as "a new version is
+available" (one automatic reload, then the card). **Proof** a browser test that removes a page's
+code file mid-session; on the old code the whole app was replaced. `5b91104`.
+
+### F-145 — Mutations that failed silently (P3, fixed)
+A scan of every `useMutation` found 20 with no failure feedback (bulk actions, entity re-resolve,
+domain verify and SSO bind, IdP activate / role mapping / dry run, marketplace uninstall, preset
+apply and enable, SLO reset, analytics test / pause / reset / delete, holiday calendar default /
+delete, feed revoke) and two clipboard copies that could reject unhandled (one claimed success
+regardless). Each now toasts the server's reason, confirms success, and the bulk bar and presets
+show which action is running. `19b012d`; browser proof for the bulk path in `6346f92`.
+
+### F-146, F-147 — Two sweeps nobody ran (P3, fixed)
+`executor.reap_stranded` (an automation run whose worker was killed stays RUNNING; this times it
+out) and `sweep_due_deliveries` (an email whose job died is never retried; this re-enqueues it)
+both existed, one with its own test, and nothing called either. The ten-minute
+`pipeline.sweep_stuck` job (light profile, already failing stranded documents) now runs both and
+reports the counts. **Proof** `tests/services/test_automation_reaper_scheduled.py`. `a9f1e39`,
+`57ad3c4`. A scan of every `reap_*`/`sweep_*`/`purge_*` function found two more uncalled ones,
+both housekeeping with read-time checks already in place (expired invitations, expired
+sessions/tokens); the invitation case is now visible in the UI (F-148).
+
+### F-148 — Expired invitations looked pending (P3, fixed)
+Accepting is refused at `expires_at`, but the Members list kept saying "Pending … expires <past
+date>". The row now carries an Expired badge and says to resend (which issues a new link and
+expiry). Browser proof. `9ac4681`.
+
+### F-149 — Bulk actions were unreachable (P2, fixed)
+**Plain language.** The product could delete, reprocess, export and tag many documents at once,
+but the Documents table had no way to select them. **Fix** `6346f92`: a checkbox per row and a
+page select-all for contributors and above; the action bar reports each run and keeps refused
+rows selected; viewers no longer see Delete, Retry or selection (the server refuses all three);
+a sortable "Uploaded" column. **Proof** four browser tests, all failed on the old code.
+
+### F-150 — A rule that had run could not be deleted (P2, fixed)
+**Plain language.** "Delete rule" failed with a server error for any rule that had ever run,
+because its run history must outlive it. **Fix** `078b21f`: deleting marks the rule deleted
+(migration `p7a1_automation_rule_soft_delete`, additive; one Alembic head) and deactivates it;
+it disappears from every list, lookup and trigger, cannot be edited or re-enabled, and Run
+history keeps its runs as "<rule> (deleted)". **Proof** in `tests/engines/test_automation_live.py`
+(failed with the foreign-key violation). Drift check: no new drift.
+
+### F-151, F-152 — Deleted files were kept (P2, fixed)
+**Plain language.** Deleting a document, and erasing a person under GDPR, removed the database
+records but left the original files in storage. **Fix** `65e773f`, `d628560`: both now delete the
+stored files once the deletion is committed (`app/services/storage_cleanup.py`; storage errors are
+logged, never raised). A file a supplier invoice keeps as its source document is a financial
+record and is kept, as the erasure already does for financial tables. **Proof**
+`tests/engines/test_document_delete_releases_file_live.py` (single delete, bulk delete, erasure
+failed; the financial-record guard passes).
+
+### F-153 — Members were bare email addresses (P3, fixed)
+The member summary now says `has_avatar`; Organization → Members shows the picture (or initials),
+the display name and the email. **Proof** `tests/api/test_member_list_identity.py`. `2a6a899`.
+
+### F-154 — Every tab was "FlowPilot AI" (P3, fixed)
+The workspace header sets "<page> · <workspace> · FlowPilot AI" from the navigation model the
+breadcrumb uses; the organization console "<page> · <organization> · FlowPilot AI"; leaving
+restores the product name (`useDocumentTitle`). Browser proof. `c857fa0`.
+
+### Polish in this pass (no defect number)
+Automation shows "No automation rules yet" with "Create your first rule" for a new workspace
+(it used to suggest clearing filters that were never set) and "—" instead of 0% rates when
+nothing has run; the Documents table shows a compact upload date and stops wrapping its headers;
+the reindex card keeps its button beside the heading.
+
+### Dependencies
+`npm audit` (an advisory CI step) found a new high advisory in `source-map-js`; the non-breaking
+fix (1.2.1 → 1.2.2, `6208434`) is applied. Five high advisories remain, all in Tailwind CSS 3's
+build-time file watching and globbing (`braces`, `micromatch`, `chokidar`, `fast-glob`): they run
+only on the build machine against the project's own config, nothing of them ships in the bundle,
+and their fix is the Tailwind 4 migration (a rewrite of the CSS configuration). Accepted, like the
+Python advisories under F-039; plan the Tailwind 4 move as its own change.
+
+### Observations (not defects)
+- Archived organizations count towards an account's limit of three organizations (restoring one
+  therefore never exceeds the limit). Workspaces work the other way (archived ones do not count;
+  restore checks the limit). Both are consistent; a browser test that created an organization per
+  run had to reuse one instead (`b8954b8`).
+- Two more uncalled sweeps exist (expired invitations, expired sessions/tokens). Both are
+  enforced at read time already, so they are table housekeeping; the visible symptom (an expired
+  invitation reading as pending) is fixed in the UI (F-148).
+
+### Owner decisions taken (N-026 to N-031)
+See NEEDS-OWNER.md, "Live feedback and Tier-1 elevation". N-030 and N-031 are implemented
+(`53bb7d4`, proof `tests/services/test_price_book_seed_seat_and_local.py`, 6 tests failed first).
+

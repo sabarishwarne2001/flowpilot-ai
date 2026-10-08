@@ -409,11 +409,30 @@ without one. For Stripe also add a Dashboard webhook endpoint for
 `BILLING_SEAT_PRICE_ID` is obsolete (prices are per plan since ARCH-29). **Default in the finalized
 files:** Stripe, because it is the only gateway with keys.
 
+**Decision 2026-10-07 (founder authority delegated for this release): DECIDED. Stripe, test mode,
+for launch; Dodo stays built and selectable.** Stripe is the only gateway with keys and a webhook
+path proven end to end (F-125), and `BILLING_GATEWAY=STRIPE` is already the default in code, in
+`.env.example` and in `.env.production.template`. Prices stay per plan and per seat at the plan
+cards' figures (Developer $49, Business $299, Enterprise $799), now also in the price book (N-030).
+Nothing here touches a live gateway. **Your steps (test mode, no code change):** create the three
+recurring per-seat prices in the Stripe Dashboard, put their ids in `GATEWAY_PRICE_ID_*`, add the
+webhook endpoint and its signing secret (RUNBOOK §9). `BILLING_SEAT_PRICE_ID` is obsolete and
+ignored; leave it unset. To switch to Dodo later: `BILLING_GATEWAY=DODO`, its key, webhook secret
+and the Dodo product ids in the same `GATEWAY_PRICE_ID_*` variables.
+
 ## N-027 — Transactional email provider before real volume (production config)
 Production sends from a personal Gmail account. It works for launch testing, but Gmail caps a
 personal account at about 500 messages a day, the FROM address must stay that Gmail address, and
 mail cannot carry SPF/DKIM for flowpilot.ai. **Decide:** a provider (Postmark, Amazon SES, Resend,
 Mailgun) and a sending address on your domain. **Default:** Gmail until you choose.
+
+**Decision 2026-10-07: DECIDED. Postmark for transactional mail before the first paying customer;
+Gmail only for launch testing.** Postmark is built for transactional mail (invitations, password
+resets), has a plain SMTP relay that the existing `PLATFORM_SMTP_*` settings use unchanged, and
+`.env.production.template` already points at `smtp.postmarkapp.com`. Sender:
+`noreply@flowpilot.ai` once the domain's SPF/DKIM records from Postmark are published. No code
+change: when you create the Postmark server, put its SMTP token in `PLATFORM_SMTP_USERNAME` and
+`PLATFORM_SMTP_PASSWORD` and the sender in `PLATFORM_SMTP_FROM_EMAIL`, then restart.
 
 ## N-028 — Confirm the domain and the mailbox names (production config)
 The production file uses `app.flowpilot.ai` and `admin@flowpilot.ai`. **Confirm** you control
@@ -421,6 +440,13 @@ The production file uses `app.flowpilot.ai` and `admin@flowpilot.ai`. **Confirm*
 certificate) and that `admin@flowpilot.ai` is a mailbox you can read (password resets for the
 seeded administrator go there). If not, change `APP_DOMAIN`, `FRONTEND_URL`, `CORS_ORIGINS`,
 `PLATFORM_RESERVED_HOSTS` and `SEED_ADMIN_EMAIL` together.
+
+**Decision 2026-10-07: DECIDED. Keep `app.flowpilot.ai` and `admin@flowpilot.ai`.** They are what
+the production file, the Caddyfile and the runbook already use. The two facts only you can check
+stay on the first-deploy checklist (RUNBOOK §9): the DNS A record for `app.flowpilot.ai` before
+Caddy's first start, and a readable `admin@flowpilot.ai` mailbox. If either is not true, change
+`APP_DOMAIN`, `FRONTEND_URL`, `CORS_ORIGINS`, `PLATFORM_RESERVED_HOSTS` and `SEED_ADMIN_EMAIL`
+together (the five are listed side by side in `.env.production.template`).
 
 ## N-029 — Trust claims on the sign-in page (production config & UI)
 The brief for the new sign-in screen asked for "SOC-2 Ready" and "99.9% Extraction Accuracy" badges.
@@ -433,6 +459,12 @@ part of the illustration. **Decide:** add either claim only with evidence you ca
 (an auditor's letter; a published benchmark). They are one line each in
 `frontend/src/components/auth/DocumentShowcase.tsx` (`TRUST`).
 
+**Decision 2026-10-07: DECIDED. No "SOC-2 Ready" or "99.9% Extraction Accuracy" badge.** A claim on
+the sign-in page is a representation to every prospect; neither is backed by evidence today. The
+three safeguards the product does deliver stay (SAML & OIDC single sign-on, tenant-isolated data,
+full audit trail). Add a claim when there is an auditor's letter or a published benchmark to show;
+it is one line in `frontend/src/components/auth/DocumentShowcase.tsx` (`TRUST`).
+
 ## N-030 — The price of one seat (final systemic polish)
 The price book that `scripts/seed_price_book.py` writes has no `billing.seat` entry. Wherever the
 product shows what a seat change will cost before you make it (Billing → Seats, adding members past
@@ -443,6 +475,18 @@ disclosures read, so the figure must be set there on purpose. **Decide:** the pe
 each plan (and whether it differs from the plan cards); it is then one entry per plan in the price
 book seed. Not set here: pricing is yours.
 
+**Decision 2026-10-07: DECIDED and implemented (`53bb7d4`). The seat price is the plan card's
+price: Developer $49, Business $299, Enterprise $799 per seat per month; Free sells no seats.**
+One `billing.seat` entry per plan in `scripts/seed_price_book.py`; the seat lookup now reads the
+subscription's plan (it used to take whichever seat entry sorted first). A seat is a subscription
+line, not metered usage, so it is priced in the book without joining the usage vocabulary.
+`seed_price_book.py --version auto` (now used by the start scripts and the runbook) publishes the
+next price book version only when the entries changed, so a server seeded by an earlier release
+picks the seat prices up on its next start; subscriptions pin a price book, so an existing test
+subscription gets them at its next plan change (the e2e seed re-pins its own). `ERROR
+billing.seat_disclosure_unpriced` no longer appears for a subscription on the current book.
+Proof `tests/services/test_price_book_seed_seat_and_local.py`.
+
 ## N-031 — Pricing a self-hosted model (final systemic polish)
 With the sovereign edition's local model, every model call logs
 `CRITICAL llm.settle_price_unavailable` and its cost is counted as UNKNOWN. That is the designed
@@ -450,6 +494,15 @@ behaviour (ARCH-50: an unpriced operator model is never counted as free). **Deci
 first sell the sovereign edition: either add a price-book entry for provider `local` (your
 hardware cost per token, which may be zero on purpose) or route these alerts to a quieter channel.
 Until then the alert is correct but loud.
+
+**Decision 2026-10-07: DECIDED and implemented (`53bb7d4`). A self-hosted (`local`) model is priced
+at zero, declared.** It runs on the operator's own hardware: the platform buys nothing per token,
+so the price book carries provider-wide `local` entries for input and output tokens at 0 with a
+zero cost basis declared as `ZERO_BYOK` (an undeclared zero is still refused, ARCH-18). The
+`CRITICAL llm.settle_price_unavailable` alert stays for any other unpriced provider, where it is
+right; a named local model resolves to the provider-wide entry without a fallback warning. Token
+quantity quotas still apply. If you later sell the sovereign edition with a per-token hardware
+charge, change the two `local` entries and publish (`--version auto`).
 
 ---
 
@@ -530,3 +583,17 @@ Items 2 (notification category filters and mark as unread), 3 (promo code at che
 5 (invite from Organization → Members) and 7 (correct a field in the document viewer) are built in
 this release, with the page image beside the fields (item 6, extended from the review hub to the
 document viewer). Items 1 and 4 were built in Phase 4.
+
+---
+
+# Live feedback and Tier-1 elevation (2026-10-07): N-026 to N-031 decided
+
+Founder authority and CTO discretion were delegated again for this release ("you do not need to
+pause for owner input"). Each remaining item is decided above, under its own heading, with the
+reason: **N-026** Stripe in test mode for launch (Dodo stays selectable); **N-027** Postmark
+before the first paying customer; **N-028** keep `app.flowpilot.ai` / `admin@flowpilot.ai`;
+**N-029** no unbacked trust claims; **N-030** seat price = plan card price, implemented;
+**N-031** self-hosted model priced at a declared zero, implemented. Nothing is open in this file.
+What is left is yours to *do*, not to decide (STATE.md, "Next action"): the Stripe test-mode
+prices and webhook, the Postmark server, the DNS record, and rolling the keys pasted in chats.
+

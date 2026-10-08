@@ -11,6 +11,7 @@ import {
 import { profileKeys } from "@/services/api/queryKeys";
 import { PROFILE_ENDPOINTS } from "@/services/api/endpoints";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 import EmailChangePanel from "@/pages/Settings/EmailChangePanel";
 import PasswordChangePanel from "@/pages/Settings/PasswordChangePanel";
 import TwoFactorPanel from "@/pages/Settings/TwoFactorPanel";
@@ -93,6 +94,11 @@ export const ProfileSettings: React.FC = () => {
     : null;
 
   const avatarSrc = useAuthenticatedImage(avatarUrl);
+  // F-143. The error handler used to bump the version, which refetched the same
+  // undecodable picture, failed again and bumped again, for as long as the page
+  // was open. A picture that cannot be shown now shows the placeholder (and
+  // Remove stays available, so it can be replaced).
+  const avatarImage = useImageFallback(avatarSrc);
 
   const save = useMutation({
     mutationFn: () =>
@@ -206,11 +212,11 @@ export const ProfileSettings: React.FC = () => {
       {/* Avatar */}
       <div className="flex flex-wrap items-center gap-4 fp-card p-4">
         <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted border border-border">
-          {avatarSrc ? (
+          {avatarSrc && !avatarImage.failed ? (
             <img
               src={avatarSrc}
               alt="Avatar"
-              onError={() => setAvatarVersion((v) => v + 1)}
+              onError={avatarImage.onError}
               className="h-full w-full object-cover"
             />
           ) : (

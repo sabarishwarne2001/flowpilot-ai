@@ -5,9 +5,11 @@ Database representation of Automation Rules and Audit History Logs for FlowPilot
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any, Union
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import (
+    DateTime,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -103,6 +105,14 @@ class AutomationRule(Base, UUIDMixin, TimestampMixin):
         Boolean,
         nullable=False,
         default=True,
+    )
+
+    # F-150. Deleting a rule sets this instead of removing the row: its executions reference it
+    # (ON DELETE RESTRICT) so Run history, per-rule spend and audit keep naming it. A deleted rule
+    # is inactive, absent from every rule list and trigger lookup, and cannot be edited.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(

@@ -6,6 +6,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Loader2, Network } from "lucide-react";
+import { toast } from "sonner";
 
 import { CAPABILITY } from "@/constants/capabilities";
 import { HINT, SURFACE_INSET } from "@/components/ui/primitives";
@@ -13,6 +14,7 @@ import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { entityPath } from "@/routes/tenantPaths";
 import { entityKeys, getWorkItemEntities, resolveWorkItemEntities } from "@/services/api/entities";
+import { errorMessage } from "@/services/api/errors";
 
 const DECISION_TONE: Readonly<Record<string, string>> = {
   REVIEW: "border-amber-500/50 bg-amber-500/10",
@@ -33,7 +35,11 @@ export const EntityChips: React.FC<{ readonly workItemId: string }> = ({ workIte
   });
   const resolve = useMutation({
     mutationFn: () => resolveWorkItemEntities(workspaceId, workItemId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: entityKeys.all(workspaceId) }),
+    onSuccess: () => {
+      toast.success("Records re-resolved for this document.");
+      void queryClient.invalidateQueries({ queryKey: entityKeys.all(workspaceId) });
+    },
+    onError: (error) => toast.error(errorMessage(error, "The records could not be re-resolved.")),
   });
   if (!capability.granted || !query.data) {
     return null;

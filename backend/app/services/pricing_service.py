@@ -25,6 +25,25 @@ logger = logging.getLogger("app.services.pricing")
 _ANY = ""
 _MICROS_QUANTUM = Decimal("0.000000001")
 
+#: Providers whose provider-wide entry is the designed price of every model they serve: the
+#: sovereign edition's local model is whatever the operator deploys under any name (N-031), so
+#: resolving a named local model to the provider-wide entry is not a fallback worth a warning.
+_PROVIDER_WIDE_BY_DESIGN: frozenset[str] = frozenset({"local"})
+
+
+def _line_item_unit(event_type: str) -> Optional[str]:
+    """N-030. Commercial line items a price book prices that are not metered usage.
+
+    A seat is a subscription line, not a usage event: it is never emitted, never
+    counted against a quota and never a limit key, so it is not in the ARCH-10
+    usage vocabulary. The invoice's seat line and the seat-change disclosure
+    still read its price from the pinned price book, so the book must be able
+    to carry it.
+    """
+    if event_type == settings.BILLING_SEAT_EVENT_TYPE:
+        return "seat"
+    return None
+
 
 class PricingError(Exception):
     """Base class for price-path refusals."""
@@ -296,7 +315,7 @@ def resolve(
             "This is a refusal, not a zero price."
         )
 
-    if fallback:
+    if fallback and normalised_provider not in _PROVIDER_WIDE_BY_DESIGN:
         logger.warning(
             "pricing.model_fallback",
             extra={
@@ -407,16 +426,19 @@ def _validate(entries: Sequence[PriceSpec]) -> list[PriceSpec]:
 
     for spec in entries:
         descriptor = USAGE_EVENT_TYPES.get(spec.event_type)
-        if descriptor is None:
+        expected_unit = (
+            descriptor.unit.value if descriptor is not None else _line_item_unit(spec.event_type)
+        )
+        if expected_unit is None:
             raise PriceBookValidationError(
                 f"'{spec.event_type}' is not in the ARCH-10 usage vocabulary. "
                 "Add it to app/core/usage_events.py first."
             )
 
-        unit = spec.unit or descriptor.unit.value
-        if unit != descriptor.unit.value:
+        unit = spec.unit or expected_unit
+        if unit != expected_unit:
             raise PriceBookValidationError(
-                f"'{spec.event_type}' is metered in {descriptor.unit.value!r}, "
+                f"'{spec.event_type}' is metered in {expected_unit!r}, "
                 f"not {unit!r}."
             )
 

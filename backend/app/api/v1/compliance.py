@@ -427,7 +427,13 @@ def create_erasure(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
 
+    # F-152. The subject's files were marked deleted in the erasure; their bytes go now that it
+    # is committed (they used to be only listed as "orphaned" in the tombstone).
+    from app.services import storage_cleanup
+
+    released = storage_cleanup.deletable_keys(db, result.orphaned_storage_keys)
     db.commit()
+    storage_cleanup.delete_stored_objects(released)
     db.refresh(result.erased_subject)
 
     return ErasureResultResponse(

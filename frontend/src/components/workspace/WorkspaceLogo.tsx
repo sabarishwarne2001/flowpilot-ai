@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 interface WorkspaceLogoProps {
   workspace: {
@@ -17,7 +17,7 @@ export function WorkspaceLogo({
   fallbackClassName = "flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-xs font-semibold text-primary",
 }: WorkspaceLogoProps) {
   const src = useAuthenticatedImage(workspace.company_logo_url ?? null);
-  const [loadError, setLoadError] = useState(false);
+  const { failed: loadError, onError } = useImageFallback(src);
 
   const initials = (workspace.workspace_name || "WS")
     .trim()
@@ -29,7 +29,7 @@ export function WorkspaceLogo({
   if (!src || loadError) {
     return (
       <div className={fallbackClassName}>
-        {initials}
+        {initials || "WS"}
       </div>
     );
   }
@@ -39,7 +39,7 @@ export function WorkspaceLogo({
       src={src}
       alt={`${workspace.workspace_name} logo`}
       className={className}
-      onError={() => setLoadError(true)}
+      onError={onError}
     />
   );
 }

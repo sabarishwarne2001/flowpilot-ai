@@ -15,6 +15,7 @@ import { ChevronLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { useAuthorizedBlobUrl } from "@/hooks/useAuthorizedBlobUrl";
 import { pageImagePath } from "@/services/api/corroboration";
 import type { EvidenceSpan, RunDocument, Severity } from "@/types/corroboration";
+import { useImageFallback } from "@/hooks/useImageFallback";
 
 const BOX_TONE: Readonly<Record<Severity, string>> = {
   HIGH: "border-red-600 bg-red-500/15",
@@ -42,6 +43,7 @@ export const DocumentPane: React.FC<DocumentPaneProps> = ({
   const blob = useAuthorizedBlobUrl(
     document.renderable ? pageImagePath(workspaceId, runId, document.work_item_id, page) : null,
   );
+  const pageImage = useImageFallback(blob.url);
   const onThisPage = spans.filter((s) => s.page === page && s.bbox);
   const otherPages = [...new Set(spans.filter((s) => s.page !== page).map((s) => s.page))].sort((a, b) => a - b);
   return (
@@ -80,8 +82,18 @@ export const DocumentPane: React.FC<DocumentPaneProps> = ({
       <div className="relative min-h-[16rem] flex-1 overflow-auto bg-muted/20 p-2">
         {document.renderable && geometry && geometry.width > 0 && geometry.height > 0 ? (
           <div className="relative mx-auto w-full max-w-[52rem]">
-            {blob.url ? (
-              <img src={blob.url} alt={`${document.label}, page ${page}`} className="block w-full select-none shadow" draggable={false} />
+            {blob.url && !pageImage.failed ? (
+              <img
+                src={blob.url}
+                alt={`${document.label}, page ${page}`}
+                className="block w-full select-none shadow"
+                draggable={false}
+                onError={pageImage.onError}
+              />
+            ) : blob.status === "error" || pageImage.failed ? (
+              <div className="flex aspect-[1/1.3] w-full items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                This page could not be displayed.
+              </div>
             ) : (
               <div className="aspect-[1/1.3] w-full animate-pulse rounded bg-muted" />
             )}

@@ -13,6 +13,10 @@ export interface UserSummary {
   id: string;
   email: string;
   is_active: boolean;
+  /** Set in Settings -> Profile; null until the person chooses one (show the email then). */
+  display_name?: string | null;
+  /** F-153: whether a profile picture is set, so lists request only real avatars. */
+  has_avatar?: boolean;
 }
 
 export interface Organization {
@@ -91,6 +95,17 @@ export interface WorkspaceSummary {
   status: WorkspaceStatus;
   company_logo_url: string | null;
   effective_role: WorkspaceRole;
+}
+
+/**
+ * One explicit workspace grant (`/me/workspaces`), with its organization (F-142).
+ * `archived` is true when the workspace or its organization is archived.
+ */
+export interface WorkspaceGrantSummary extends WorkspaceSummary {
+  organization_name: string;
+  organization_slug: string;
+  organization_status: OrganizationStatus;
+  archived: boolean;
 }
 
 export interface WorkspaceCreateRequest {

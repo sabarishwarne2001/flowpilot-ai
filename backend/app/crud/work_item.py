@@ -266,5 +266,26 @@ def update_work_item_state(
 
 
 def delete_work_item(db: Session, *, db_obj: WorkItem) -> None:
+    """Delete a document, and with it the file it was made from (F-151).
+
+    The original upload's record is marked deleted and its stored object removed once the
+    deletion is committed (app/services/storage_cleanup.py), except for a file a supplier
+    invoice keeps as its source document, a financial record.
+    """
+    from app.models.uploaded_file import UploadedFile
+    from app.services import storage_cleanup
+
+    keys: list[str] = []
+    uploaded = (
+        db.get(UploadedFile, db_obj.uploaded_file_id) if db_obj.uploaded_file_id else None
+    )
+    if uploaded is not None and uploaded.deleted_at is None:
+        uploaded.deleted_at = datetime.now(timezone.utc)
+        db.add(uploaded)
+        keys = storage_cleanup.deletable_keys(db, [uploaded.file_path])
+        if keys and db_obj.stored_filename and db_obj.stored_filename not in keys:
+            keys.append(db_obj.stored_filename)
+
     db.delete(db_obj)
     db.commit()
+    storage_cleanup.delete_stored_objects(keys)

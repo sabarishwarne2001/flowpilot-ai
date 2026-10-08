@@ -8,6 +8,7 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Link2, Loader2, XCircle } from "lucide-react";
+import { toast } from "sonner";
 
 import { BUTTON_DESTRUCTIVE, BUTTON_GHOST, BUTTON_PRIMARY, FIELD_LABEL, HINT, INPUT, SELECT, SURFACE } from "@/components/ui/primitives";
 import { feedUrls, issueFeed, listFeeds, obligationKeys, revokeFeed } from "@/services/api/obligations";
@@ -42,12 +43,23 @@ export const CalendarFeeds: React.FC<Props> = ({ workspaceId }) => {
     },
     onSuccess: (result) => { setIssued(result); setCopied(false); refresh(); },
   });
-  const revoke = useMutation({ mutationFn: (id: string) => revokeFeed(workspaceId, id), onSuccess: refresh });
+  const revoke = useMutation({
+    mutationFn: (id: string) => revokeFeed(workspaceId, id),
+    onSuccess: () => {
+      toast.success("Feed revoked. Calendars subscribed to it stop updating.");
+      return refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The feed could not be revoked.")),
+  });
   const urls = issued ? feedUrls(issued.token) : null;
   const copy = async (): Promise<void> => {
     if (urls) {
-      await navigator.clipboard.writeText(urls.https);
-      setCopied(true);
+      try {
+        await navigator.clipboard.writeText(urls.https);
+        setCopied(true);
+      } catch {
+        toast.error("The link could not be copied. Select it and copy it by hand.");
+      }
     }
   };
 

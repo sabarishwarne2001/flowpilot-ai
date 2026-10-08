@@ -51,6 +51,8 @@
 
 import React from "react";
 import { Link, Outlet } from "react-router-dom";
+
+import { RouteErrorBoundary } from "@/components/common/RouteErrorBoundary";
 import { ArrowLeft, Globe2, ShieldAlert } from "lucide-react";
 
 import ThemeToggle from "@/components/layout/ThemeToggle";
@@ -110,7 +112,9 @@ export const PlatformLayout: React.FC = () => {
       </header>
 
       <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
-        <Outlet />
+        <RouteErrorBoundary>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
     </div>
   );

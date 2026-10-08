@@ -11,6 +11,7 @@ import RoleGuide from "@/components/tenancy/RoleGuide";
 import { ApiError } from "@/services/api/client";
 import { uploadLogo } from "@/services/api/upload";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
+import { useImageFallback } from "@/hooks/useImageFallback";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { workspaceSchema, type WorkspaceFormData } from "@/schemas/workspace";
 
@@ -51,6 +52,14 @@ import type {
 import { InfoTooltip } from "@/components/forms/InfoTooltip";
 import { LegalHoldsPanel } from "@/components/compliance/LegalHoldsPanel";
 
+const workspaceInitials = (name: string): string =>
+  (name || "WS")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("") || "WS";
+
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,6 +79,7 @@ export const Workspace: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const authenticatedLogoSrc = useAuthenticatedImage(logoPreview);
+  const logoImage = useImageFallback(authenticatedLogoSrc);
 
   const canEditWorkspace = canManageWorkspaceSettings(workspaceRole);
   const canManageTeam = canManageWorkspaceMembers(workspaceRole);
@@ -485,15 +495,26 @@ export const Workspace: React.FC = () => {
               Company Logo
             </label>
             <div className="flex items-center gap-4">
-              {authenticatedLogoSrc ? (
+              {authenticatedLogoSrc && !logoImage.failed ? (
                 <img
                   src={authenticatedLogoSrc}
                   alt="Company logo preview"
                   className="h-20 w-20 rounded-lg border border-border object-cover"
+                  onError={logoImage.onError}
                 />
               ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-border text-xs text-muted-foreground bg-muted/20">
-                  No Logo
+                <div
+                  className="flex h-20 w-20 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-primary/10 text-primary"
+                  title={logoImage.failed ? "The logo could not be displayed" : undefined}
+                >
+                  <span className="text-xl font-semibold" aria-hidden="true">
+                    {workspaceInitials(workspace.workspace_name)}
+                  </span>
+                  {(logoImage.failed || !logoPreview) && (
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {logoImage.failed ? "Unavailable" : "No logo"}
+                    </span>
+                  )}
                 </div>
               )}
 

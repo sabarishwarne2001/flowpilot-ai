@@ -157,13 +157,13 @@ def _ensure_catalog(db) -> None:
     """
     import os
 
-    from app.models.price_book import PriceBook
     from app.services import pricing_service, quota_service
 
-    if db.query(PriceBook).first() is None:
-        if _load_seed_module("seed_price_book").main(["--version", "1"]) != 0:
-            raise RuntimeError("seed_price_book.py failed")
-        pricing_service.clear_cache()
+    # `auto`: version 1 on a new database; on one seeded by an earlier release, the next version
+    # when the seed's entries changed (N-030 seat prices, N-031 local model), else nothing.
+    if _load_seed_module("seed_price_book").main(["--version", "auto"]) != 0:
+        raise RuntimeError("seed_price_book.py failed")
+    pricing_service.clear_cache()
 
     for name, value in E2E_PRICE_IDS.items():
         # Empty counts as unset: backend/.env lists these keys with no value.
@@ -235,6 +235,7 @@ def _seed_billing(db, organization, tier, seats: int, owner_email: str) -> dict[
         subscription.status = SubscriptionStatus.ACTIVE
         subscription.quota_tier_key = tier.key
         subscription.quota_tier_id = tier.id
+        subscription.price_book_id = price_book.id
         subscription.seats_purchased = seats
         subscription.cancel_at_period_end = False
         subscription.cancel_at = None

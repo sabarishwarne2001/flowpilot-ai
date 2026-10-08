@@ -253,16 +253,29 @@ export const InviteMembersPanel: React.FC<{
           <p className="mt-1 text-xs text-muted-foreground">No invitations are waiting for an answer.</p>
         ) : (
           <ul className="mt-2 divide-y divide-border rounded-md border border-border" aria-label="Pending invitations">
-            {invitations.map((invitation) => (
+            {invitations.map((invitation) => {
+              // The link stops working at expires_at (accepting it is refused); the row says so
+              // instead of still reading as pending. Resend issues a fresh link and a new expiry.
+              const expired = new Date(invitation.expires_at).getTime() <= Date.now();
+              return (
               <li key={invitation.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
+                  <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
+                    <span className="truncate">{invitation.email}</span>
+                    {expired && (
+                      <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                        Expired
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {ROLE_WORDS[invitation.organization_role] ?? invitation.organization_role}
                     {invitation.grants && invitation.grants.length > 0
                       ? ` · ${invitation.grants.map((g) => `${g.workspace_name} (${ROLE_WORDS[g.role] ?? g.role})`).join(", ")}`
                       : ""}
-                    {` · expires ${formatTimestampDate(invitation.expires_at)}`}
+                    {expired
+                      ? ` · expired ${formatTimestampDate(invitation.expires_at)}; resend to renew it`
+                      : ` · expires ${formatTimestampDate(invitation.expires_at)}`}
                   </p>
                 </div>
                 <button
@@ -284,7 +297,8 @@ export const InviteMembersPanel: React.FC<{
                   <XCircle className="h-3 w-3" aria-hidden /> Revoke
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

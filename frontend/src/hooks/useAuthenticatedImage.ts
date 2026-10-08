@@ -65,6 +65,33 @@ function cacheSet(key: string, objectUrl: string): void {
   blobCache.set(key, objectUrl);
 }
 
+/**
+ * F-143. Forget a cached image the browser could not decode (or whose object
+ * URL was revoked by an LRU eviction while still on screen), so the next
+ * component to mount fetches it again instead of being handed the same broken
+ * URL. The component that saw the failure shows its fallback (initials).
+ */
+export function forgetBrokenImage(objectUrl: string): void {
+  for (const [key, value] of blobCache) {
+    if (value === objectUrl) {
+      blobCache.delete(key);
+      URL.revokeObjectURL(value);
+    }
+  }
+}
+
+/**
+ * A body that is not an image: an HTML error page from a proxy, or a JSON
+ * error answered with 200 by something between the browser and the API. Made
+ * into an object URL it renders as a broken-image icon, so it is refused here.
+ * An empty type and `application/octet-stream` are allowed: some storage
+ * backends serve images without a precise type and the browser sniffs them.
+ */
+function isNotAnImage(blob: Blob): boolean {
+  const type = (blob.type || "").toLowerCase();
+  return type !== "" && !type.startsWith("image/") && type !== "application/octet-stream";
+}
+
 /** Drop every cached image. Call on logout — these are authenticated bytes. */
 export function clearAuthenticatedImageCache(): void {
   for (const objectUrl of blobCache.values()) {
@@ -115,6 +142,10 @@ export function useAuthenticatedImage(url: string | null): string | null {
         const data = response.data;
         if (data && (data.size > 0 || (data.byteLength && data.byteLength > 0))) {
           const blob = data instanceof Blob ? data : new Blob([data], { type: "image/png" });
+          if (isNotAnImage(blob)) {
+            setObjectUrl(null);
+            return;
+          }
           const newBlobUrl = URL.createObjectURL(blob);
           // Ownership transfers to the cache, which is why nothing revokes it
           // on unmount any more. See the module docstring.

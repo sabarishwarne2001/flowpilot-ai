@@ -14,6 +14,7 @@ import DunningBanner from "@/components/billing/DunningBanner";
 // ARCH30-T4F:ts-member-notice-import-dash — A5.
 import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
+import { RouteErrorBoundary } from "@/components/common/RouteErrorBoundary";
 import { useTenant } from "@/hooks/useTenant";
 // ARCH30-T4:ts-mount-tz-import — A3. Mounted on the layout every
 // authenticated route renders, because login is not the only way a
@@ -103,7 +104,9 @@ export const DashboardLayout: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
           <DisplayPreferencesBoundary>
-            <Outlet />
+            <RouteErrorBoundary>
+              <Outlet />
+            </RouteErrorBoundary>
           </DisplayPreferencesBoundary>
         </main>
       </div>

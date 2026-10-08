@@ -221,10 +221,13 @@ def _rule_names(db: Session, rule_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     so reading one always gave None and Run history could only say "Rule 1f3a9c0e"."""
     if not rule_ids:
         return {}
+    # F-150: a deleted rule's runs stay in the history, named and marked as deleted.
     return {
-        rule_id: name
-        for rule_id, name in db.execute(
-            select(AutomationRule.id, AutomationRule.name).where(AutomationRule.id.in_(rule_ids))
+        rule_id: f"{name} (deleted)" if deleted_at is not None else name
+        for rule_id, name, deleted_at in db.execute(
+            select(AutomationRule.id, AutomationRule.name, AutomationRule.deleted_at).where(
+                AutomationRule.id.in_(rule_ids)
+            )
         ).all()
     }
 

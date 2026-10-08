@@ -27,7 +27,7 @@ import { ME_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   MeContext,
   Organization,
-  WorkspaceSummary,
+  WorkspaceGrantSummary,
 } from "@/types/tenancy";
 
 /**
@@ -66,8 +66,8 @@ export const getMyOrganizations = async (): Promise<Organization[]> => {
  * receive every workspace in it — correct, but not what a personal workspace
  * list means. Use getMeContext for the complete, grouped view.
  */
-export const getMyWorkspaces = async (): Promise<WorkspaceSummary[]> => {
-  const response = await apiClient.get<WorkspaceSummary[]>(
+export const getMyWorkspaces = async (): Promise<WorkspaceGrantSummary[]> => {
+  const response = await apiClient.get<WorkspaceGrantSummary[]>(
     ME_ENDPOINTS.workspaces,
     { headers: { Accept: "application/json" } },
   );

@@ -1,7 +1,10 @@
 import React, { useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
-import { Download, RotateCcw, Tag, Trash2, X } from "lucide-react";
+import { Download, Loader2, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import { errorMessage } from "@/services/api/errors";
 
 import { runBulkAction, type BulkActionResult } from "@/services/api/ingestion";
 import { ingestionKeys, workItemKeys } from "@/services/api/queryKeys";
@@ -25,6 +28,25 @@ export interface BulkActionBarProps {
 const newIdempotencyKey = (): string =>
   globalThis.crypto?.randomUUID?.() ??
   `bulk-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const PAST_TENSE: Readonly<Record<string, string>> = {
+  delete: "deleted",
+  reprocess: "queued for reprocessing",
+  export: "exported",
+  tag: "tagged",
+};
+
+/** One toast per run: what happened, and how many were kept back. */
+function announce(result: BulkActionResult): void {
+  const done = `${result.succeeded} document${result.succeeded === 1 ? "" : "s"} ${
+    PAST_TENSE[result.action] ?? "updated"
+  }`;
+  if (result.refused > 0) {
+    toast.warning(`${done}; ${result.refused} could not be (listed below).`);
+  } else {
+    toast.success(`${done}.`);
+  }
+}
 
 export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   workspaceId,
@@ -81,9 +103,14 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
       setConfirmingDelete(false);
       setShowTagInput(false);
       setTagDraft("");
+      announce(result);
       onDone?.(result);
     },
+    onError: (error) => {
+      toast.error(errorMessage(error, "The bulk action could not be run. Please try again."));
+    },
   });
+  const running = mutation.isPending ? mutation.variables?.action : undefined;
 
   if (selectedIds.length === 0) {
     return null;
@@ -106,7 +133,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           disabled={mutation.isPending}
           className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          {running === "reprocess" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
           Reprocess
         </button>
 
@@ -128,7 +159,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           disabled={mutation.isPending}
           className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          {running === "export" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
           Export
         </button>
 

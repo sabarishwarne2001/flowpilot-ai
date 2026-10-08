@@ -1,21 +1,33 @@
 import React, { useCallback, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Menu, X } from "lucide-react";
 
 import OrganizationSidebarNavigation from "@/components/layout/OrganizationSidebarNavigation";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { buildOrganizationNavigationItems } from "@/components/layout/navigation";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import DunningBanner from "@/components/billing/DunningBanner";
 // ARCH30-T4F:ts-member-notice-import — A5.
 import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
+import { RouteErrorBoundary } from "@/components/common/RouteErrorBoundary";
 import { authApi } from "@/services/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ROUTES } from "@/constants/routes";
 
 export const OrganizationLayout: React.FC = () => {
   const { organization, organizationId, organizationRole } = useResolvedOrganization();
+  // The tab title names the console page (longest matching navigation path) and the organization.
+  const { pathname } = useLocation();
+  const consolePage = buildOrganizationNavigationItems(
+    organization.organization_slug,
+    String(organizationRole ?? ""),
+  )
+    .filter((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0]?.name;
+  useDocumentTitle(consolePage, organization.organization_name);
   // ARCH-30 Tranche 3 (D-11). Billing state is visible wherever the tenant
   // works, not only on the Billing page. Limited to roles that can read billing
   // so members do not generate a denied request on every navigation.
@@ -119,7 +131,9 @@ export const OrganizationLayout: React.FC = () => {
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background p-4 sm:p-5 lg:px-8 lg:py-7">
           <DisplayPreferencesBoundary>
-            <Outlet />
+            <RouteErrorBoundary>
+              <Outlet />
+            </RouteErrorBoundary>
           </DisplayPreferencesBoundary>
         </main>
       </div>

@@ -123,6 +123,7 @@ export default function MarketplaceCatalog() {
         queryKey: marketplaceKeys.all(organizationId),
       });
     },
+    onError: (error) => toast.error(errorMessage(error, "The installation could not be removed.")),
   });
 
   return (

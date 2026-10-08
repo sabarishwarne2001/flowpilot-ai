@@ -33,9 +33,8 @@ from app.schemas.user import (  # ARCH30-T4:detected-timezone-import
     UserProfileResponse,
     UserProfileUpdate,
 )
-from app.schemas.workspace import WorkspaceSummary
+from app.schemas.workspace import WorkspaceGrantSummary, WorkspaceSummary
 from app.models.organization import OrganizationStatus
-from app.models.workspace import WorkspaceStatus
 from app.services import organization_service
 from app.services import user_service
 from app.services import workspace_service
@@ -154,7 +153,7 @@ async def get_my_context(
 
 @router.get(
     "/me/workspaces",
-    response_model=list[WorkspaceSummary],
+    response_model=list[WorkspaceGrantSummary],
     summary="List My Workspace Grants",
 )
 async def list_my_workspaces(
@@ -163,21 +162,24 @@ async def list_my_workspaces(
 ) -> Any:
     """
     Returns every workspace the actor holds an explicit grant on, across all
-    organizations.
+    organizations, archived ones included and marked as such (F-142).
     """
     grants = workspace_members_crud.list_memberships_for_user(
         db, user_id=current_user.id, statuses=ACTIVE_ONLY
     )
 
-    summaries: list[WorkspaceSummary] = []
+    summaries: list[WorkspaceGrantSummary] = []
     for grant in grants:
         workspace = workspace_crud.get_workspace_by_id(
             db, workspace_id=grant.workspace_id
         )
-        if workspace is None or workspace.status is not WorkspaceStatus.ACTIVE:
+        if workspace is None:
+            continue
+        organization = workspace.organization
+        if organization is None:
             continue
         summaries.append(
-            WorkspaceSummary(
+            WorkspaceGrantSummary(
                 id=workspace.id,
                 organization_id=workspace.organization_id,
                 slug=workspace.slug,
@@ -185,8 +187,13 @@ async def list_my_workspaces(
                 status=workspace.status,
                 logo_file_id=workspace.logo_file_id,
                 effective_role=grant.role,
+                organization_name=organization.name,
+                organization_slug=organization.slug,
+                organization_status=organization.status,
             )
         )
+    # Usable workspaces first; the archived ones follow, so the list reads as "what you can open".
+    summaries.sort(key=lambda summary: summary.archived)
     return summaries
 
 

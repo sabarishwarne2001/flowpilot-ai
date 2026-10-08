@@ -9,6 +9,7 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Loader2, Star, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { BUTTON_DESTRUCTIVE, BUTTON_GHOST, BUTTON_PRIMARY, FIELD_LABEL, HINT, INPUT, SELECT, SURFACE, TEXTAREA } from "@/components/ui/primitives";
 import {
@@ -69,11 +70,19 @@ export const HolidayCalendars: React.FC<Props> = ({ workspaceId, isAdmin }) => {
   });
   const makeDefaultMutation = useMutation({
     mutationFn: (id: string) => updateHolidayCalendar(workspaceId, id, { is_default: true }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      toast.success("Default calendar changed. New obligations count working days with it.");
+      return refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The default calendar could not be changed.")),
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteHolidayCalendar(workspaceId, id),
-    onSuccess: refresh,
+    onSuccess: () => {
+      toast.success("Calendar deleted.");
+      return refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The calendar could not be deleted.")),
   });
 
   const readFile = (file: File | undefined): void => {

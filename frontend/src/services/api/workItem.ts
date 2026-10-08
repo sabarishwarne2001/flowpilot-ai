@@ -3,6 +3,7 @@ import apiClient from "@/services/api/client";
 import { KNOWLEDGE_ENDPOINTS, WORK_ITEM_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   ReindexResult,
+  ReindexStatus,
   UploadDocumentResponse,
   WorkItemQueryFilters,
   WorkItemsListResponse,
@@ -94,6 +95,16 @@ export const reindexKnowledgeBase = async (
   return response.data;
 };
 
+export const getReindexStatus = async (
+  workspaceId: string,
+): Promise<ReindexStatus> => {
+  const response = await apiClient.get<ReindexStatus>(
+    KNOWLEDGE_ENDPOINTS.reindexStatus(workspaceId),
+    { headers: JSON_HEADERS },
+  );
+  return response.data;
+};
+
 export const workItemApi = {
   uploadDocument,
   getWorkItems,
@@ -101,6 +112,7 @@ export const workItemApi = {
   reprocessWorkItem,
   deleteWorkItem,
   reindexKnowledgeBase,
+  getReindexStatus,
 };
 
 export default workItemApi;

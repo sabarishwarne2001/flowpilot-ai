@@ -73,7 +73,8 @@ def flows(db: Session, *, workspace_id: uuid.UUID, days: int = v.DEFAULT_WINDOW_
 
     moment = at or service.now()
     since = moment - timedelta(days=max(1, min(int(days), v.MAX_WINDOW_DAYS)))
-    rules = db.execute(select(AutomationRule).where(AutomationRule.workspace_id == workspace_id)
+    rules = db.execute(select(AutomationRule).where(AutomationRule.workspace_id == workspace_id,
+                                                    AutomationRule.deleted_at.is_(None))
                        .order_by(AutomationRule.name)).scalars().all()
     out = []
     for rule in rules:

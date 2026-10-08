@@ -87,7 +87,8 @@ def sweep_due_deliveries(limit: int = 200) -> int:
 
     Belt to the handler's braces. A job lost to a lease expiry that exhausted
     its own `max_attempts` would otherwise strand a FAILED row forever; this
-    runs on the same schedule as `reap_expired_leases` and is served by
+    runs in the ten-minute `pipeline.sweep_stuck` job (F-147: it was written
+    to run on a schedule and nothing called it) and is served by
     `ix_notification_deliveries_due`.
     """
     from datetime import datetime, timezone

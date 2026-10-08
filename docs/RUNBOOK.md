@@ -104,7 +104,7 @@ alembic heads                           # must print exactly one "(head)"
 ARCH40_CONTRACT=1 alembic upgrade head
 
 # 3.5 Seed data
-python scripts/seed_price_book.py --version 1
+python scripts/seed_price_book.py --version auto
 python scripts/seed_quota_tiers.py --allow-unpriced
 python scripts/seed_admin.py --json
 
@@ -393,7 +393,7 @@ create the three products and prices, paste their ids into `GATEWAY_PRICE_ID_DEV
 
 ```bash
 $COMPOSE up -d      # hands the ids to the containers
-$COMPOSE exec -T web python scripts/seed_price_book.py --version 1
+$COMPOSE exec -T web python scripts/seed_price_book.py --version auto
 $COMPOSE exec -T web python scripts/seed_quota_tiers.py
 ```
 

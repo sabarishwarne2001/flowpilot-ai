@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Play, Plus, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   activateIdpConfig,
@@ -11,6 +12,7 @@ import {
   listDomains,
   listIdpConfigs,
 } from "@/services/api/identity";
+import { errorMessage } from "@/services/api/errors";
 import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type {
@@ -58,7 +60,11 @@ export const IdpConnectionBuilder: React.FC = () => {
   const activate = useMutation({
     mutationFn: (configId: string) =>
       activateIdpConfig(organizationId, configId),
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      toast.success("The connection is active. People on its domain now sign in through it.");
+      await invalidate();
+    },
+    onError: (error) => toast.error(errorMessage(error, "The connection could not be activated.")),
   });
 
   const configs = configsQuery.data ?? [];
@@ -578,6 +584,8 @@ const RoleMappingPanel: React.FC<{
         organization_role: role,
         priority: 100,
       }),
+    onSuccess: () => toast.success("Role mapping saved. It applies from the next sign-in."),
+    onError: (error) => toast.error(errorMessage(error, "The role mapping could not be saved.")),
   });
 
   const dryRun = useMutation({
@@ -591,6 +599,7 @@ const RoleMappingPanel: React.FC<{
         },
       }),
     onSuccess: setResult,
+    onError: (error) => toast.error(errorMessage(error, "The test could not be run.")),
   });
 
   return (
