@@ -173,7 +173,8 @@ const OrganizationSidebarNavigation: React.FC<
                 const content = (
                   <>
                     <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.85} />
-                    <span className="ml-2.5 min-w-0 flex-1 truncate text-left">
+                    {/* The longest names ("Branding & custom domains") truncate at 260px. */}
+                    <span className="ml-2.5 min-w-0 flex-1 truncate text-left" title={item.name}>
                       {item.name}
                     </span>
                     {lockKey !== undefined ? (
