@@ -80,6 +80,20 @@ function runSeed(): Record<string, unknown> {
   return summary;
 }
 
+/** The first upload of a sample document in the workspace, if it has one. */
+async function findSample(
+  session: Awaited<ReturnType<typeof loginAs>>,
+  workspaceId: string,
+  name: string,
+): Promise<Record<string, unknown> | undefined> {
+  const matches = await listWorkItems(
+    session,
+    workspaceId,
+    `search=${encodeURIComponent(name)}&limit=100&sort_by=created_at&sort_order=asc`,
+  );
+  return matches.find((item) => item.original_filename === name);
+}
+
 async function seedDocuments(): Promise<Record<string, unknown>> {
   writeSampleDocuments();
   const result: Record<string, unknown> = {};
@@ -100,11 +114,16 @@ async function seedDocuments(): Promise<Record<string, unknown>> {
         throw new Error(`enabling verification for tenant C failed: HTTP ${settings.status} ${settings.text.slice(0, 300)}`);
       }
     }
-    const existing = await listWorkItems(session, workspaceId);
-    const names = new Set(existing.map((item) => String(item.original_filename ?? item.filename ?? item.title ?? "")));
+    // Each sample is looked up by its name: a workspace that has collected more documents than
+    // one page (the suite uploads many) still has its samples, and they must not be uploaded again.
+    const samples: Array<Record<string, unknown>> = [];
     for (const file of plan.files) {
       const name = SAMPLE[file];
-      if ([...names].some((existingName) => existingName.includes(name))) continue;
+      const found = await findSample(session, workspaceId, name);
+      if (found) {
+        samples.push(found);
+        continue;
+      }
       const upload = await uploadFile(session, workspaceId, samplePath(file));
       if (upload.status >= 300) {
         throw new Error(`seed upload of ${name} to tenant ${plan.tenant} failed: HTTP ${upload.status} ${upload.text.slice(0, 300)}`);
@@ -119,10 +138,18 @@ async function seedDocuments(): Promise<Record<string, unknown>> {
       if (pending.length === 0) break;
       await new Promise((resolve) => setTimeout(resolve, 2_000));
     }
+    // The samples first (their first upload), then the newest documents.
+    for (const file of plan.files) {
+      if (!samples.some((item) => item.original_filename === SAMPLE[file])) {
+        const found = await findSample(session, workspaceId, SAMPLE[file]);
+        if (found) samples.push(found);
+      }
+    }
+    const listed = [...samples, ...items.filter((item) => !samples.some((sample) => sample.id === item.id))];
     result[plan.tenant] = {
       organizationId,
       workspaceId,
-      items: items.map((item) => ({
+      items: listed.map((item) => ({
         id: item.id,
         name: item.original_filename ?? item.filename ?? item.title,
         status: item.status,
