@@ -349,3 +349,24 @@ test.describe("The assistant for a workspace viewer (F-200)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Branding on a plan without custom branding (F-201)", () => {
+  test.use({ user: "P.superadmin" });
+
+  test("the brand controls are shown but not live, so nothing is saved and refused", async ({ page }) => {
+    // The platform's own organization is on Free, which has no custom branding. Before the fix
+    // each colour-scheme button sent PUT /branding and got 402 (strict fixture: test fails).
+    await page.goto("/organizations/e2e-platform-ops/branding");
+    await expect(page.getByRole("heading", { name: "Branding & custom domains" })).toBeVisible();
+    await settle(page);
+    for (const scheme of ["System", "Light", "Dark"]) {
+      const button = page.getByRole("button", { name: scheme, exact: true });
+      if ((await button.count()) && (await button.isEnabled())) {
+        await button.click();
+        await settle(page, 300);
+      }
+    }
+    await expect(page.getByRole("button", { name: "Dark", exact: true })).toBeDisabled();
+    await expectHealthyPage(page);
+  });
+});
