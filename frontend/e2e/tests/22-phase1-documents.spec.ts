@@ -446,3 +446,26 @@ test.describe("Entity graph (Phase 1, F-169)", () => {
     await expectHealthyPage(page);
   });
 });
+
+// F-170: a page that asked the API for data while a sign-out was finishing sent the revoked
+// session and got 401 (seen in the full suite: the overview mounted just after "Sign Out" was
+// clicked). Nothing but the sign-out itself goes out once it has begun.
+test.describe("Signing out (F-170)", () => {
+  test.use({ user: "C.admin" });
+
+  test("no request leaves with the revoked session while the sign-out finishes", async ({ page }) => {
+    await page.goto(ws("C", "work-items"));
+    await expect(page.locator("main")).toContainText("Documents Database");
+    // The server ends the session at once; its answer reaches the page 1.5 s later.
+    await page.route("**/api/v1/auth/logout", async (route) => {
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await route.fulfill({ response });
+    });
+    await page.getByRole("button", { name: "Sign Out" }).first().click();
+    // Meanwhile a page that loads its own data opens.
+    await page.getByRole("link", { name: "Overview", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+    await settle(page, 500);
+  });
+});
