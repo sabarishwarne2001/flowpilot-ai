@@ -1,5 +1,5 @@
 type,id,description,plan_required,roles_allowed,test_file,status,last_result,finding_ids
-page,/login,[CRITICAL:auth] Login (PublicRoute+AuthLayout),any,anonymous,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/30-auth.spec.ts,deep,pass (e2e 2),
+page,/login,[CRITICAL:auth] Login (PublicRoute+AuthLayout),any,anonymous,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/30-auth.spec.ts,deep,"pass (Phase 3, live, 2026-10-08): voluntary sign-out lands on bare /login",F-206
 page,/register,[CRITICAL:auth] Register (PublicRoute+AuthLayout),any,anonymous,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/30-auth.spec.ts,deep,pass (e2e 2),
 page,/verify-email,[CRITICAL:auth] VerifyEmail (public),any,anonymous,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/30-auth.spec.ts,deep,pass (e2e 2),
 page,/forgot-password,[CRITICAL:auth] ForgotPassword (public),any,anonymous,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/30-auth.spec.ts,deep,pass (e2e 2),

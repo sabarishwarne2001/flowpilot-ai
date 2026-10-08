@@ -35,7 +35,7 @@ then fixed, then proven by that test and the full suites (the Evidence Rule).
 
 ## 2. What Phase 3 changed
 
-**Fixed (FINDINGS.md F-182 to F-205)** — five P1s: the nightly compliance sweep never ran (F-182) and
+**Fixed (FINDINGS.md F-182 to F-206)** — five P1s: the nightly compliance sweep never ran (F-182) and
 the retention purge left files in storage (F-183); requiring SSO with no identity provider locked the
 organization out (F-188); a failed request was re-asked ~30 times a second (F-195); every new
 workspace was set to an AI model Groq had retired, so its first document would have failed in
@@ -43,9 +43,9 @@ production (F-196). Nine P2s, among them an organization's maximum session age s
 applied (F-204), unsigned SAML logout requests accepted (F-205), the job SLOs never measured
 (F-189), BYOK and margin reports counting the self-hosted model as customer keys (F-190, F-202), the
 Billing role unable to read usage (F-192), spend limits vanishing from the page (F-193), tolerance
-versions resetting to zero (F-199) and RevOps actions sent on Cancel (F-186). Ten P3s of role
+versions resetting to zero (F-199) and RevOps actions sent on Cancel (F-186). Eleven P3s of role
 truthfulness, wording and layout (F-184, F-185, F-187, F-191, F-194, F-197, F-198, F-200, F-201,
-F-203).
+F-203, F-206).
 
 **Elevated** — one console header and URL-synced keyboard tabs across the organization consoles,
 identity, billing, marketplace, autonomy, audit and the platform admin consoles; billing in the

@@ -2894,6 +2894,20 @@ sign-in), and only that provider's sessions end; anything else gets 403. `064cb5
 `tests/engines/test_saml_logout_must_be_signed_live.py` (an unsigned and an attacker-signed request
 both signed the person out before), the 324 existing SAML tests, and live (403 from the running API).
 
+### F-206 — Signing out on purpose sent you back to where you were, and could send a request without a token (P3, fixed)
+**Plain language.** Clicking Sign Out cleared the session and, in the same step, the "signing out"
+marker, while the workspace was still on screen. The route guard then read the exit as an expired
+session and wrote `/login?redirect=<workspace>` (every time, on `main` too), the opposite of the
+documented intent that a deliberate sign-out does not take you back; and any query the page
+refetched in that moment went out without a token (a 401 the strict browser policy caught about
+once in ten runs: `/me/profile`, another time `/dashboard/overview`). A deliberate sign-out now
+keeps the marker raised, so the request guard of F-170 holds every request and the guard treats the
+exit as voluntary, until the sign-in layout mounts and lowers it before its own queries run; a new
+session lowers it too, so a later involuntary expiry still keeps its destination. `00bae2a`.
+**Proof** browser 30-auth "signing out on purpose lands on a plain sign-in page" (failed with
+`?redirect=%2Fcaretakers-global%2Ffinance`); it, "sign out ends the session" and F-170 passed 30 of 30
+repeats.
+
 ### Smaller corrections (no failing test written: unverified)
 Wording and display corrections checked by eye in the running app, not by a test that failed first,
 so per the Evidence Rule they are **unverified**:

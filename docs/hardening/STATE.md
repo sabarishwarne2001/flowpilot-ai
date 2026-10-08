@@ -7,7 +7,7 @@ _Last updated: 2026-10-08 (Phase 3 — final commercial hardening)_
 `hardening/phase-3-final-commercial-hardening` (PR: see "Next action"). Builds on Phase 2 (merged
 into `main`).
 
-- **Live defects (each with a failing test first): F-182 to F-205** (FINDINGS.md, "Phase 3").
+- **Live defects (each with a failing test first): F-182 to F-206** (FINDINGS.md, "Phase 3").
   The heavy ones: F-182/F-183 the nightly retention purge never ran, and when run it left the files
   in storage; F-188 requiring SSO with no identity provider locked out the whole organization;
   F-195 a failed request re-asked ~30 times a second (976 failed requests in 15 s from one tab);
@@ -15,8 +15,8 @@ into `main`).
   maximum session age was shown as in force but never applied; F-205 the public SAML logout
   endpoint signed people out on an unsigned request. Also role-matrix truthfulness (F-192 to
   F-201), the job SLOs never measured (F-189), BYOK and margin miscounts (F-190, F-202), RevOps
-  prompts that sent on Cancel (F-186), billing in internal keys (F-187), and a phone-width overflow
-  (F-203).
+  prompts that sent on Cancel (F-186), billing in internal keys (F-187), a phone-width overflow
+  (F-203), and a deliberate sign-out that sent people back where they were (F-206).
 - **Elevation:** one console header (`PageHeader`) and URL-synced keyboard tabs across every
   organization console, the identity and billing hubs, marketplace, autonomy, audit and the platform
   admin consoles; sentence case and labelled fields on the remaining settings and auth screens.
@@ -25,7 +25,7 @@ into `main`).
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
   polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence), Phase 2 (enterprise
   processing and TruthMesh):** merged.
-- **Phase 3 — final commercial hardening** (this branch): F-182 to F-205 fixed, each proven.
+- **Phase 3 — final commercial hardening** (this branch): F-182 to F-206 fixed, each proven.
   - Backend suite (full): **3,527 passed, 0 failed, 9 skipped** (48 min; 48 more tests than Phase 2).
   - Browser suite (full, fresh database, production preview, CSP, model stand-in): **<<BROWSER>>**.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
@@ -73,7 +73,7 @@ server (F-006) and the CPU-only torch image (F-045).
 ## Budget notes
 One long session (continued after its context filled): the live stack with log watch across every
 console, hub, admin page, role and plan; a crawler pass per seeded person and at phone and tablet
-widths; every scheduled sweep by hand; 24 fixes each proven by a failing test; the console
+widths; every scheduled sweep by hand; 25 fixes each proven by a failing test; the console
 elevation; one full backend run and one full browser run on a fresh database; the documentation.
 The exact spend is not visible from inside the session; check your usage page.
 
