@@ -31,6 +31,13 @@ const ALL_ROLES: readonly OrganizationRole[] = [
   "MEMBER",
 ] as const;
 
+const ROLE_NAME: Readonly<Record<OrganizationRole, string>> = {
+  OWNER: "Owner",
+  ADMIN: "Admin",
+  BILLING: "Billing",
+  MEMBER: "Member",
+};
+
 const ROLE_BLURB: Readonly<Record<OrganizationRole, string>> = {
   OWNER: "Full control, including billing and ownership transfer.",
   ADMIN: "Manages members and workspaces. Cannot transfer ownership.",
@@ -274,7 +281,7 @@ export const OrganizationMembers: React.FC = () => {
                     >
                       {assignable.map((role) => (
                         <option key={role} value={role} title={ROLE_BLURB[role]}>
-                          {role}
+                          {ROLE_NAME[role]}
                         </option>
                       ))}
                     </select>
@@ -283,7 +290,7 @@ export const OrganizationMembers: React.FC = () => {
                       title={ROLE_BLURB[member.role]}
                       className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
                     >
-                      {member.role}
+                      {ROLE_NAME[member.role] ?? member.role}
                     </span>
                   )}
 

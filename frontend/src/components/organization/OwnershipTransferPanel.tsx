@@ -173,7 +173,9 @@ export const OwnershipTransferPanel: React.FC<Props> = ({
                 <option value="">Select a member…</option>
                 {candidates.map((member) => (
                   <option key={member.id} value={member.id}>
-                    {member.user.email} ({member.role})
+                    {member.user.display_name ? `${member.user.display_name} (${member.user.email})` : member.user.email}
+                    {" · "}
+                    {member.role.charAt(0) + member.role.slice(1).toLowerCase()}
                   </option>
                 ))}
               </select>

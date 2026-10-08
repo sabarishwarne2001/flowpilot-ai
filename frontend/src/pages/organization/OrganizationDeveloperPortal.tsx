@@ -866,9 +866,11 @@ export const OrganizationDeveloperPortal: React.FC = () => {
                   )}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {formatCount(tier.rate_limit_per_minute)} req/min ·{" "}
-                  {formatCount(tier.monthly_request_quota)}/month · ef_search{" "}
-                  {tier.ef_search}
+                  {formatCount(tier.rate_limit_per_minute)} requests/min ·{" "}
+                  {formatCount(tier.monthly_request_quota)}/month ·{" "}
+                  <span title="How many candidates each semantic search examines: deeper finds more, a little slower.">
+                    search depth {tier.ef_search}
+                  </span>
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {tier.description}

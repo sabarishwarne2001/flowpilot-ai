@@ -16,6 +16,7 @@ import {
   type Notification,
   type NotificationCategory,
 } from "@/types/notification";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PAGE_SIZE = 25;
 
@@ -100,16 +101,13 @@ export const OrganizationNotifications: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-        <header>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-            <Bell className="h-5 w-5" />
-            Organization notifications
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name} · Events that concern the whole organization.
-          </p>
-        </header>
+      <div className="mx-auto max-w-4xl space-y-5">
+        <PageHeader
+          icon={Bell}
+          eyebrow={organization.organization_name}
+          title="Organization notifications"
+          description="Events that concern the whole organization: billing, security, membership and identity."
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <span className="text-sm text-foreground">
@@ -166,7 +164,7 @@ export const OrganizationNotifications: React.FC = () => {
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+          <ul aria-label="Organization notifications" className="divide-y divide-border rounded-lg border border-border bg-card">
             {items.map((notification: Notification) => (
               <li
                 key={notification.id}
