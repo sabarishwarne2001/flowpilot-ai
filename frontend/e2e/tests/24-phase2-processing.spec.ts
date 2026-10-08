@@ -136,7 +136,8 @@ test.describe("Review queue (F-176)", () => {
     await page.goto(ws("C", "verification"));
     await settle(page);
     await page.getByText("Extracted fields disagree").first().click();
-    const workbench = page.locator("aside").filter({ has: page.getByRole("heading", { name: /^Review queue/ }) }).first();
+    // In the hub the workbench opens on the one item (no one-item list beside it, Phase 2 visual pass).
+    const workbench = page.getByRole("region", { name: "Extraction workbench" }).first();
     await expect(workbench).toContainText("invoice-INV-E2E-1002.pdf");
     await expect(page.getByRole("heading", { name: "invoice-INV-E2E-1002.pdf" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /^Document [0-9a-f]{8}$/ })).toHaveCount(0);
