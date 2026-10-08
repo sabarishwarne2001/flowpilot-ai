@@ -401,3 +401,48 @@ test.describe("Cases offer only what the role can do (F-167)", () => {
     });
   });
 });
+
+// F-169: hovering a node in the entity graph restarted its layout (hover was React state the
+// drawing depended on, so each hover rebuilt the simulation): the records moved under the pointer
+// and the page animated for six seconds after every hover.
+test.describe("Entity graph (Phase 1, F-169)", () => {
+  test.use({ user: "C.owner" });
+
+  test("hovering a record redraws without restarting the layout; a record can be found", async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = window.requestAnimationFrame.bind(window);
+      (window as unknown as { __frames: number }).__frames = 0;
+      window.requestAnimationFrame = (callback) => {
+        (window as unknown as { __frames: number }).__frames += 1;
+        return original(callback);
+      };
+    });
+    const frames = (): Promise<number> => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+
+    await page.goto(ws("C", "entities"));
+    await page.getByRole("link", { name: "Acme Industrial Supplies Ltd" }).first().click();
+    const canvas = page.getByRole("img", { name: /Relationship graph/ });
+    await expect(canvas).toBeVisible({ timeout: 20_000 });
+
+    // Let the layout cool and stop.
+    await expect.poll(async () => {
+      const before = await frames();
+      await page.waitForTimeout(500);
+      return (await frames()) - before;
+    }, { timeout: 20_000 }).toBeLessThan(3);
+
+    // The record itself sits at the centre of the canvas.
+    const box = await canvas.boundingBox();
+    const before = await frames();
+    await page.mouse.move((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+    await page.mouse.move((box?.x ?? 0) + 4, (box?.y ?? 0) + 4);
+    await page.waitForTimeout(1_000);
+    expect(await frames() - before, "animation frames after a hover").toBeLessThan(10);
+
+    await page.getByRole("searchbox", { name: "Find a record in the graph" }).fill("Acme");
+    await expect(page.getByTestId("graph-matches")).toContainText(/^1 of \d+ records match$/);
+    await page.getByRole("searchbox", { name: "Find a record in the graph" }).fill("zzz-no-such-record");
+    await expect(page.getByTestId("graph-matches")).toHaveText("No record matches");
+    await expectHealthyPage(page);
+  });
+});
