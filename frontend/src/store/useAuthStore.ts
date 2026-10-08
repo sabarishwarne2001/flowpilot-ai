@@ -119,8 +119,20 @@ interface AuthState {
 
   /**
    * Clears the authenticated session.
+   *
+   * F-206. `leaving: true` (a deliberate sign-out) keeps `isSigningOut` raised
+   * after the session is gone. Lowered here, the page still on screen re-rendered
+   * without a token before the navigation to /login committed: the guard read the
+   * exit as an expired session (`/login?redirect=<page>`) and the page's queries
+   * went out unauthenticated (401). The sign-in screens lower it when they mount
+   * (`endSignOut`), as does any new session.
    */
-  readonly clearAuth: () => void;
+  readonly clearAuth: (options?: { readonly leaving?: boolean }) => void;
+
+  /**
+   * F-206. Lowers `isSigningOut` once the sign-in screen is on display.
+   */
+  readonly endSignOut: () => void;
 
   /**
    * Drops the cached user without ending the session.
@@ -190,6 +202,7 @@ export const useAuthStore = create<AuthState>()(
             // restored session would hold a working token while every guard
             // still believed the user was signed out.
             isAuthenticated: true,
+            isSigningOut: false,
           })),
 
         /**
@@ -200,6 +213,7 @@ export const useAuthStore = create<AuthState>()(
             user,
             token,
             isAuthenticated: true,
+            isSigningOut: false,
           }),
 
         /**
@@ -214,7 +228,7 @@ export const useAuthStore = create<AuthState>()(
          * One-way dependency: the tenant store imports nothing from here, so
          * there is no cycle.
          */
-        clearAuth: () => {
+        clearAuth: (options) => {
           useTenantStore.getState().resetTenantSelection();
 
           set({
@@ -228,9 +242,18 @@ export const useAuthStore = create<AuthState>()(
             // silently discarding its destination — the involuntary case
             // wearing the voluntary case's behaviour, which is the exact
             // inversion of the bug this flag was added to fix.
-            isSigningOut: false,
+            // F-206: a deliberate sign-out keeps it raised until the sign-in
+            // screen mounts (endSignOut), so nothing on the page being left
+            // can send a request or turn the exit into an expiry.
+            isSigningOut: options?.leaving === true,
           });
         },
+
+        endSignOut: () =>
+          set((state) => ({
+            ...state,
+            isSigningOut: false,
+          })),
 
         clearUserCache: () =>
           set((state) => ({

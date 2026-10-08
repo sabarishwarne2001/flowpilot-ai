@@ -184,6 +184,21 @@ test.describe("login and logout", () => {
     await page.goto(ws("C", "work-items"));
     await expect(page).toHaveURL(/\/login/);
   });
+
+  test("signing out on purpose lands on a plain sign-in page, not a link back (F-206)", async ({ page, problems }) => {
+    problems.allowHttp(/\/auth\/refresh$/, [401], "no session after sign-out");
+    await loginThroughForm(page, USERS["C.admin"].email, PASSWORD);
+    await expect(page).toHaveURL(/\/caretakers-global\//, { timeout: 20_000 });
+    await settle(page);
+    await page.getByRole("button", { name: "Sign Out" }).click();
+    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+    await settle(page);
+    // Before the fix, clearing the session lowered the "signing out" flag while the workspace was
+    // still on screen: the route guard took the exit for an expired session and wrote
+    // /login?redirect=<workspace>, and the page's queries went out without a token (401s).
+    expect(new URL(page.url()).search).toBe("");
+    await expectHealthyPage(page);
+  });
 });
 
 test.describe("password reset", () => {

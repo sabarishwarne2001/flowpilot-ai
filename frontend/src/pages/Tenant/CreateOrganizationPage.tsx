@@ -59,7 +59,8 @@ export const CreateOrganizationPage: React.FC = () => {
     try {
       await authApi.logoutRequest();
     } finally {
-      clearAuth();
+      // F-206: leaving keeps the flag raised until the sign-in screen mounts.
+      clearAuth({ leaving: true });
       navigate(ROUTES.LOGIN, { replace: true });
     }
   };

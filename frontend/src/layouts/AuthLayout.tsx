@@ -4,6 +4,7 @@ import { Outlet } from "react-router-dom";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { resolveApiAssetUrl } from "@/services/api/client";
+import { useAuthStore } from "@/store/useAuthStore";
 import type { BrandingManifest } from "@/types/branding";
 
 /**
@@ -67,6 +68,14 @@ function useDocumentBranding(brand: BrandingManifest | null): void {
  * password and verification pages, which are routed on their own).
  */
 export const AuthLayout = () => {
+  const endSignOut = useAuthStore((state) => state.endSignOut);
+  // F-206. A deliberate sign-out keeps `isSigningOut` raised (and every request
+  // held) until a sign-in screen is on display. A layout effect, so it runs
+  // before any query on these screens subscribes and fetches (passive effects).
+  React.useLayoutEffect(() => {
+    endSignOut();
+  }, [endSignOut]);
+
   const manifest = usePublicBrandingManifest({ enabled: true });
   const custom = manifest?.has_custom_branding ? manifest : null;
 

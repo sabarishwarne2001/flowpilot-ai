@@ -55,10 +55,12 @@ export const OrganizationLayout: React.FC = () => {
       await authApi.logoutRequest();
     } finally {
       // `finally`, because a network failure on the way out must still end the
-      // session locally. It also lowers `isSigningOut`: left raised by a failed
-      // request, the flag would make the NEXT involuntary expiry discard its
-      // destination, which is the bug inverted rather than fixed.
-      clearAuth();
+      // session locally. F-206: `leaving` keeps `isSigningOut` raised until the
+      // sign-in screen mounts and lowers it (AuthLayout), so the page being left
+      // sends nothing and the guard does not read the exit as an expiry. It is
+      // never left raised: the sign-in screen, or any new session, lowers it,
+      // so the NEXT involuntary expiry still keeps its destination.
+      clearAuth({ leaving: true });
       navigate(ROUTES.LOGIN, { replace: true });
     }
   }, [beginSignOut, clearAuth, navigate]);
