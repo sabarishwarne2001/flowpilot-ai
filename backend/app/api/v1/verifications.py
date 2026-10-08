@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api import deps
+from app.models.work_item import WorkItem
 from app.models.verification import (
     DocumentVerification,
     VerificationStatus,
@@ -40,7 +41,10 @@ def _get_scoped(
 ) -> DocumentVerification:
     verification = db.execute(
         select(DocumentVerification)
-        .options(selectinload(DocumentVerification.fields))
+        .options(
+            selectinload(DocumentVerification.fields),
+            selectinload(DocumentVerification.work_item).load_only(WorkItem.id, WorkItem.original_filename),
+        )
         .where(
             DocumentVerification.id == verification_id,
             DocumentVerification.workspace_id == workspace_id,
@@ -74,6 +78,8 @@ async def list_verifications(
 ) -> Any:
     stmt = (
         select(DocumentVerification)
+        # F-176: the file name, without loading the document's text.
+        .options(selectinload(DocumentVerification.work_item).load_only(WorkItem.id, WorkItem.original_filename))
         .where(DocumentVerification.workspace_id == context.workspace_id)
         # The id breaks ties (F-127): rows written in one transaction share created_at, and
         # without it their order, and so the page each lands on, changed between requests.

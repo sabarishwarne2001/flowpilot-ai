@@ -34,7 +34,13 @@ export interface VerificationSummaryResponse {
   readonly reviewed_by_user_id: string | null;
   readonly reviewed_at: string | null;
   readonly created_at: string;
+  /** F-176: the document's file name. */
+  readonly original_filename?: string | null;
 }
+
+/** The name a reviewer reads for a verification's document. */
+export const documentLabel = (item: Pick<VerificationSummaryResponse, "original_filename" | "work_item_id">): string =>
+  item.original_filename ?? `Document ${item.work_item_id.slice(0, 8)}`;
 
 export interface VerificationDetailResponse
   extends VerificationSummaryResponse {

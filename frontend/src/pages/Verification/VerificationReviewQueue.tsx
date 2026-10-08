@@ -11,6 +11,7 @@ import {
 import { verificationKeys } from "@/services/api/queryKeys";
 import { DocumentEvidence } from "@/components/review/DocumentEvidence";
 import {
+  documentLabel,
   formatFieldValue,
   parseScore,
 } from "@/types/verification";
@@ -272,8 +273,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
                       : "border-transparent hover:bg-muted/50",
                   ].join(" ")}
                 >
-                  <span className="block truncate text-sm">
-                    {item.work_item_id.slice(0, 8)}
+                  <span className="block truncate text-sm" title={documentLabel(item)}>
+                    {documentLabel(item)}
                   </span>
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                     {score !== null && <>{Math.round(score * 100)}% agreement</>}
@@ -309,8 +310,8 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
           <>
             <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
               <div>
-                <h2 className="text-sm font-medium">
-                  Document {detail.work_item_id.slice(0, 8)}
+                <h2 className="break-words text-sm font-medium">
+                  {documentLabel(detail)}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {detail.agent_count} agents ·{" "}

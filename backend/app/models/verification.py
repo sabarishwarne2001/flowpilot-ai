@@ -184,6 +184,12 @@ class DocumentVerification(Base, UUIDMixin, TimestampMixin):
     work_item: Mapped["WorkItem"] = relationship("WorkItem")
 
     @property
+    def original_filename(self) -> Optional[str]:
+        """F-176: the reviewer reads the file name, never an id prefix."""
+        work_item = self.work_item
+        return work_item.original_filename if work_item is not None else None
+
+    @property
     def blocks_automation(self) -> bool:
         return self.status in BLOCKING_STATUSES
 

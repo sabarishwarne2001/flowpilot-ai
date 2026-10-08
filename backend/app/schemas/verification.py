@@ -38,6 +38,8 @@ class VerificationSummaryResponse(BaseModel):
     reviewed_by_user_id: Optional[uuid.UUID] = None
     reviewed_at: Optional[datetime] = None
     created_at: datetime
+    #: F-176: the document's file name (the workbench showed the id's first eight characters).
+    original_filename: Optional[str] = None
 
 
 class VerificationDetailResponse(VerificationSummaryResponse):
