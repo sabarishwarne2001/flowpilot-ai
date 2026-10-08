@@ -148,8 +148,10 @@ const SessionLifetime: React.FC<{
           </option>
         ))}
       </select>
+      {/* The stored idp_session_sync flag changes nothing; signed single logout always applies. */}
       <p className="mt-2 text-xs text-muted-foreground">
-        Identity provider session sync: {policy.idp_session_sync ? "on" : "off"}
+        When your SAML identity provider sends a signed single-logout request, that person&apos;s
+        FlowPilot sessions end too.
       </p>
     </section>
   );
