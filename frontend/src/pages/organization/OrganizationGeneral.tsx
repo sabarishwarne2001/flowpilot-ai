@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import OrganizationDetailPanel from "@/components/organization/OrganizationDetailPanel";
 import {
@@ -194,19 +195,14 @@ export const OrganizationGeneral: React.FC = () => {
   /* --- Render ----------------------------------------------------------- */
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            General
-          </h1>
-          <StatusPill status={status} />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Organization profile and lifecycle. These settings apply to every
-          workspace and every member.
-        </p>
-      </header>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        icon={Building2}
+        eyebrow={organization.organization_name}
+        title="General"
+        badge={<StatusPill status={status} />}
+        description="Organization profile and lifecycle. These settings apply to every workspace and every member."
+      />
 
       {/* --- Profile ------------------------------------------------------ */}
 

@@ -1,6 +1,16 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Lock } from "lucide-react";
+import {
+  AlertTriangle,
+  Fingerprint,
+  Globe2,
+  KeyRound,
+  Loader2,
+  ScrollText,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import AuditExplorer from "@/pages/admin/AuditExplorer";
 import DomainManager from "@/pages/identity/DomainManager";
@@ -15,83 +25,60 @@ import { identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
+import { AccessRestricted } from "@/components/common/AccessRestricted";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { organizationMembersPath } from "@/routes/tenantPaths";
+import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 
 type Tab = "domains" | "sso" | "jit" | "scim" | "security" | "audit";
 
-const TABS: readonly { id: Tab; label: string }[] = [
-  { id: "domains", label: "Domains" },
-  { id: "sso", label: "Single sign-on" },
-  { id: "jit", label: "Provisioning" },
-  { id: "scim", label: "SCIM" },
-  { id: "security", label: "Security" },
-  { id: "audit", label: "Audit log" },
+const TABS: readonly TabDefinition<Tab>[] = [
+  { id: "domains", label: "Domains", icon: Globe2 },
+  { id: "sso", label: "Single sign-on", icon: KeyRound },
+  { id: "jit", label: "Provisioning", icon: UserPlus },
+  { id: "scim", label: "SCIM", icon: Users },
+  { id: "security", label: "Security", icon: ShieldCheck },
+  { id: "audit", label: "Audit log", icon: ScrollText },
 ];
+const TAB_IDS = TABS.map((entry) => entry.id);
 
 export const IdentityAdminHub: React.FC = () => {
   const { organization, organizationRole } = useResolvedOrganization();
-  const [tab, setTab] = useState<Tab>("domains");
+  const [tab, setTab] = useUrlTab<Tab>(TAB_IDS);
 
   const role = String(organizationRole).toUpperCase();
 
   if (role !== "OWNER") {
     return (
-      <div className="mx-auto max-w-md p-8 text-center">
-        <Lock
-          className="mx-auto h-6 w-6 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <h1 className="mt-3 text-base font-semibold">Owners only</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Identity and directory settings can only be managed by an organization
-          owner.
-        </p>
-      </div>
+      <AccessRestricted
+        allowedFor="organization owners (identity and directory settings decide who can sign in)"
+        askWho="an organization owner"
+        backTo={{ path: organizationMembersPath(organization.organization_slug), label: "Back to members" }}
+      />
     );
   }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
         <PlanLockBanner capability={CAPABILITY.enterpriseIdentity} feature="Enterprise SSO and SCIM" />
-        <header>
-          <h1 className="text-xl font-semibold">Enterprise identity</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name}
-          </p>
-        </header>
+        <PageHeader
+          icon={Fingerprint}
+          eyebrow={organization.organization_name}
+          title="Enterprise identity"
+          description="Verified domains, single sign-on, just-in-time provisioning, SCIM directory sync and the sign-in policy for every member."
+        />
 
-        <nav
-          role="tablist"
-          aria-label="Identity settings"
-          className="mt-4 flex flex-wrap gap-1 border-b border-border"
-        >
-          {TABS.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === entry.id}
-              onClick={() => setTab(entry.id)}
-              className={[
-                "-mb-px border-b-2 px-3 py-2 text-sm",
-                tab === entry.id
-                  ? "border-primary font-medium text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </nav>
+        <TabList label="Identity settings" idBase="identity" tabs={TABS} value={tab} onChange={setTab} />
 
-        <div className="py-5">
+        <TabPanel idBase="identity" id={tab} className="pt-1">
           {tab === "domains" && <DomainManager />}
           {tab === "sso" && <IdpConnectionBuilder />}
           {tab === "jit" && <JitPolicyPanel />}
           {tab === "scim" && <ScimTokenManager />}
           {tab === "security" && <SecurityPolicyPanel />}
           {tab === "audit" && <AuditExplorer />}
-        </div>
+        </TabPanel>
       </div>
     </div>
   );

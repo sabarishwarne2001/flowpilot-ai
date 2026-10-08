@@ -36,6 +36,7 @@ import { canManageMembers } from "@/permissions/organizationPermissions";
 import { WEBHOOK_EVENT_TYPES } from "@/types/webhook";
 import type { WebhookEndpoint } from "@/types/webhook";
 import { errorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 function detailOf(error: unknown, fallback: string): string {
   return errorMessage(error, fallback);
@@ -456,30 +457,29 @@ export const OrganizationWebhooks: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         <PlanLockBanner capability={CAPABILITY.outgoingWebhooks} feature="Outgoing webhooks" />
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Webhooks</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {organization.organization_name}
-            </p>
-          </div>
-
-          {canManage && !creating && (
-            <button
-              type="button"
-              onClick={() => {
-                setActionError(null);
-                setCreating(true);
-              }}
-              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <WebhookIcon className="h-3.5 w-3.5" />
-              New endpoint
-            </button>
-          )}
-        </header>
+        <PageHeader
+          icon={WebhookIcon}
+          eyebrow={organization.organization_name}
+          title="Webhooks"
+          description="Signed HTTPS callbacks for the events you subscribe to. Every delivery is signed with the endpoint's secret and retried with backoff."
+          actions={
+            canManage && !creating ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionError(null);
+                    setCreating(true);
+                  }}
+                  className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+                >
+                  <WebhookIcon className="h-3.5 w-3.5" />
+                  New endpoint
+                </button>
+            ) : null
+          }
+        />
 
         {actionError && (
           <p

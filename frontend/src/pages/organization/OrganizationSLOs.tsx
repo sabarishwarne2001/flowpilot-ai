@@ -27,6 +27,7 @@ import {
   type SLOComplianceEntry,
   type SLOWindow,
 } from "@/types/slo";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PERIODS: readonly { readonly value: SLOWindow; readonly label: string }[] = [
   { value: "HOUR", label: "Last 24 hours" },
@@ -266,7 +267,7 @@ const SLORow: React.FC<{
 };
 
 export const OrganizationSLOs: React.FC = () => {
-  const { organizationId } = useResolvedOrganization();
+  const { organization, organizationId } = useResolvedOrganization();
   const prioritySlo = useCapabilityAccess(organizationId, CAPABILITY.prioritySlo);
   const canSetTargets = prioritySlo.isLoading || prioritySlo.granted;
   const [period, setPeriod] = useState<SLOWindow>("DAY");
@@ -317,33 +318,29 @@ export const OrganizationSLOs: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-              <Gauge className="h-5 w-5" />
-              Service levels
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Live compliance for this organization, measured per tenant.
-            </p>
-          </div>
-
-          <label className="text-xs text-muted-foreground">
-            History
-            <select
-              value={period}
-              onChange={(event) => setPeriod(event.target.value as SLOWindow)}
-              className="mt-1 block rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-            >
-              {PERIODS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </header>
+      <div className="mx-auto max-w-4xl space-y-5">
+        <PageHeader
+          icon={Gauge}
+          eyebrow={organization.organization_name}
+          title="Service levels"
+          description="Live compliance for this organization, measured per tenant against each availability and latency target."
+          actions={
+            <label className="text-xs text-muted-foreground">
+              History
+              <select
+                value={period}
+                onChange={(event) => setPeriod(event.target.value as SLOWindow)}
+                className="mt-1 block rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+              >
+                {PERIODS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          }
+        />
 
         <PlanLockBanner capability={CAPABILITY.prioritySlo} feature="Setting your own service-level targets" />
 

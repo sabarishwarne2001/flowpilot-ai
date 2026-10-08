@@ -22,6 +22,7 @@ import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
 import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
 import InviteMembersPanel from "@/components/organization/InviteMembersPanel";
 import RoleGuide from "@/components/tenancy/RoleGuide";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const ALL_ROLES: readonly OrganizationRole[] = [
   "OWNER",
@@ -157,13 +158,13 @@ export const OrganizationMembers: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-        <header>
-          <h1 className="text-xl font-semibold text-foreground">Members</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name}
-          </p>
-        </header>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <PageHeader
+          icon={Users}
+          eyebrow={organization.organization_name}
+          title="Members"
+          description="Everyone in this organization, the role each person holds, and the invitations still open."
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-sm">

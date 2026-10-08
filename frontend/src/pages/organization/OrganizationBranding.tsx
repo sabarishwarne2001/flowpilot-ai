@@ -55,6 +55,7 @@ import {
   type TenantBrandingResponse,
   type TenantBrandingUpdate,
 } from "@/types/branding";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -403,7 +404,7 @@ const ThemePreview: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationBranding: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   const queryClient = useQueryClient();
   const isOwner = String(organizationRole).toUpperCase() === "OWNER";
 
@@ -671,18 +672,14 @@ const OrganizationBranding: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PlanLockBanner capability={CAPABILITY.customBranding} feature="Custom branding" />
-      <header>
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Palette className="h-5 w-5 text-muted-foreground" aria-hidden />
-          Branding &amp; custom domains
-        </h1>
-        <p className={`${HINT} mt-1`}>
-          Reach FlowPilot at your own hostname, show your own brand, and send
-          notifications from your own domain.
-        </p>
-      </header>
+      <PageHeader
+        icon={Palette}
+        eyebrow={organization.organization_name}
+        title="Branding & custom domains"
+        description="Reach FlowPilot at your own hostname, show your own brand, and send notifications from your own domain."
+      />
 
       {notice ? (
         <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">

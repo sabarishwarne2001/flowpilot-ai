@@ -39,6 +39,7 @@ import {
   type SnippetLanguage,
   type TierCatalogue,
 } from "@/types/developer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 /**
  * ARCH-21 §3.4 — the developer platform console.
@@ -738,7 +739,7 @@ const ApiExplorer: React.FC<{ organizationId: string }> = ({
 /* ------------------------------------------------------------------------ */
 
 export const OrganizationDeveloperPortal: React.FC = () => {
-  const { organizationId } = useResolvedOrganization();
+  const { organization, organizationId } = useResolvedOrganization();
   const queryClient = useQueryClient();
   const [windowDays, setWindowDays] = useState(30);
   const [issuing, setIssuing] = useState(false);
@@ -792,44 +793,40 @@ export const OrganizationDeveloperPortal: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-              <TerminalSquare className="h-5 w-5" />
-              Developer platform
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              API keys, rate tiers and consumption for the public API.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">
-              History
-              <select
-                value={windowDays}
-                onChange={(event) =>
-                  setWindowDays(Number(event.target.value))
-                }
-                className="mt-1 block rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+      <div className="mx-auto max-w-5xl space-y-5">
+        <PageHeader
+          icon={TerminalSquare}
+          eyebrow={organization.organization_name}
+          title="Developer platform"
+          description="API keys, rate tiers and consumption for the public API, with ready-to-run examples."
+          actions={
+            <div className="flex items-end gap-2">
+              <label className="text-xs text-muted-foreground">
+                History
+                <select
+                  value={windowDays}
+                  onChange={(event) =>
+                    setWindowDays(Number(event.target.value))
+                  }
+                  className="mt-1 block rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                >
+                  {WINDOW_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIssuing(true)}
+                className="fp-btn fp-btn-secondary"
               >
-                {WINDOW_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => setIssuing(true)}
-              className="mt-4 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              Issue key
-            </button>
-          </div>
-        </header>
+                Issue key
+              </button>
+            </div>
+          }
+        />
 
         <section className="rounded-lg border border-border p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">

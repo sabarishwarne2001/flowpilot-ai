@@ -27,6 +27,7 @@ import { API_KEY_SCOPES } from "@/types/apiKey";
 import type { ApiKeyRead, ApiKeyScope } from "@/types/apiKey";
 import type { OrganizationRole } from "@/types/tenancy";
 import { ApiError } from "@/services/api/client";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const SCOPE_BLURB: Readonly<Record<string, string>> = {
   "organizations:read": "Read organization details.",
@@ -344,30 +345,29 @@ export const OrganizationApiKeys: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         <PlanLockBanner capability={CAPABILITY.developerApi} feature="The developer API" />
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">API keys</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {organization.organization_name}
-            </p>
-          </div>
-
-          {canManage && !creating && (
-            <button
-              type="button"
-              onClick={() => {
-                setActionError(null);
-                setCreating(true);
-              }}
-              className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              New key
-            </button>
-          )}
-        </header>
+        <PageHeader
+          icon={KeyRound}
+          eyebrow={organization.organization_name}
+          title="API keys"
+          description="Scoped keys for server-to-server access. A key's secret is shown once, when it is created; revoking one takes effect immediately."
+          actions={
+            canManage && !creating ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionError(null);
+                    setCreating(true);
+                  }}
+                  className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  New key
+                </button>
+            ) : null
+          }
+        />
 
         {actionError && (
           <p

@@ -4,14 +4,17 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   BarChart3,
+  CalendarClock,
   CheckCircle2,
   Database,
+  History,
   Loader2,
   Pencil,
   PlayCircle,
   Plug,
   Trash2,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -66,6 +69,8 @@ import {
   type WarehouseCredentialInput,
   type WarehouseDestination,
 } from "@/types/analytics";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -93,6 +98,19 @@ const TAB_LABELS: Record<Tab, string> = {
   runs: "Run history",
   consumption: "Usage analytics",
 };
+
+const TAB_ICONS: Record<Tab, LucideIcon> = {
+  destinations: Database,
+  schedules: CalendarClock,
+  runs: History,
+  consumption: BarChart3,
+};
+
+const TAB_DEFINITIONS: readonly TabDefinition<Tab>[] = TABS.map((id) => ({
+  id,
+  label: TAB_LABELS[id],
+  icon: TAB_ICONS[id],
+}));
 
 const errorMessage = (error: unknown): string =>
   apiErrorMessage(error, "Something went wrong. Please try again.");
@@ -861,8 +879,8 @@ const ManualTrigger: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationAnalytics: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
-  const [tab, setTab] = useState<Tab>("destinations");
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
+  const [tab, setTab] = useUrlTab<Tab>(TABS);
   const [adding, setAdding] = useState(false);
 
   // ARCH-30 Tranche 2 (D-8, D-6). Consumption analytics is not part of the
@@ -927,32 +945,17 @@ const OrganizationAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">Analytics &amp; BI egress</h1>
-        <p className={`${HINT} mt-1`}>
-          Schedule tenant-scoped exports of your usage, documents, assistant
-          activity and automation runs into your own data warehouse. Exports
-          carry consumption volumes and the prices you were invoiced.
-        </p>
-      </header>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        icon={BarChart3}
+        eyebrow={organization.organization_name}
+        title="Analytics & BI egress"
+        description="Schedule tenant-scoped exports of your usage, documents, assistant activity and automation runs into your own data warehouse. Exports carry consumption volumes and the prices you were invoiced."
+      />
 
-      <nav className="flex flex-wrap gap-2 border-b border-border pb-2">
-        {TABS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`rounded-md px-3 py-2 text-sm font-medium ${
-              tab === option
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted"
-            }`}
-            onClick={() => setTab(option)}
-          >
-            {TAB_LABELS[option]}
-          </button>
-        ))}
-      </nav>
+      <TabList label="Analytics views" idBase="analytics" tabs={TAB_DEFINITIONS} value={tab} onChange={setTab} />
+
+      <TabPanel idBase="analytics" id={tab} className="space-y-6">
 
       {warehouseTab && warehouseLocked && warehouseAddon.access ? (
         <AddOnLockCard
@@ -1185,6 +1188,7 @@ const OrganizationAnalytics: React.FC = () => {
           </div>
         </div>
       ) : null}
+      </TabPanel>
     </div>
   );
 };

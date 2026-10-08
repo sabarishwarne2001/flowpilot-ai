@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { CreditCard, ExternalLink, Loader2 } from "lucide-react";
 
 import ConsumptionDashboard from "@/pages/billing/ConsumptionDashboard";
 import InvoiceBrowser from "@/pages/billing/InvoiceBrowser";
@@ -17,6 +17,7 @@ import {
 import { billingKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const BILLING_ROLES = new Set(["OWNER", "BILLING"]);
 
@@ -74,31 +75,30 @@ export const BillingHub: React.FC = () => {
     <div className="min-h-0 flex-1 overflow-y-auto">
       {/* The dunning banner is rendered by the organization layout (ARCH-30 Tranche 3). */}
 
-      <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Billing</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {organization.organization_name}
-            </p>
-          </div>
-
-          {canManageBilling && state?.has_billing_account && (
-            <button
-              type="button"
-              onClick={() => portal.mutate()}
-              disabled={portal.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60 text-foreground"
-            >
-              {portal.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ExternalLink className="h-3.5 w-3.5" />
-              )}
-              Manage payment method
-            </button>
-          )}
-        </header>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <PageHeader
+          icon={CreditCard}
+          eyebrow={organization.organization_name}
+          title="Billing"
+          description="Your plan, seats, usage, spend limits and invoices."
+          actions={
+            canManageBilling && state?.has_billing_account ? (
+              <button
+                type="button"
+                onClick={() => portal.mutate()}
+                disabled={portal.isPending}
+                className="fp-btn fp-btn-secondary"
+              >
+                {portal.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-3.5 w-3.5" />
+                )}
+                Manage payment method
+              </button>
+            ) : null
+          }
+        />
 
         {portal.isError && !awaitingReauth && !stepUpPending && (
           <p role="alert" className="text-sm text-destructive">
