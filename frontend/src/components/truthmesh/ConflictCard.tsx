@@ -54,6 +54,7 @@ export const ConflictCard: React.FC<ConflictCardProps> = ({ workspaceId, conflic
     <article
       className={`fp-card overflow-hidden ${active ? "" : "opacity-75"}`}
       data-testid="mesh-conflict"
+      data-conflict-id={conflict.id}
       data-kind={conflict.kind}
       data-severity={conflict.severity}
     >

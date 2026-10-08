@@ -35,6 +35,7 @@ const WS_PROBES: Record<string, { path: string; plan: Plan }> = {
   "ws:radar": { path: "anomalies", plan: "business" },
   "ws:process": { path: "process/overview", plan: "enterprise" },
   "ws:corroboration": { path: "corroboration/runs", plan: "enterprise" },
+  "ws:truthmesh": { path: "truthmesh/overview", plan: "enterprise" },
   "ws:assertion-reviews": { path: "assertions/clause-checks", plan: "enterprise" },
 };
 
