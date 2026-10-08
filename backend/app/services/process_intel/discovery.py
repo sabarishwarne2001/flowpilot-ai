@@ -89,7 +89,8 @@ def object_types(db: Session, *, workspace_id: uuid.UUID, days: int = v.DEFAULT_
     moment = at or service.now()
     since = moment - timedelta(days=max(1, min(int(days), v.MAX_WINDOW_DAYS)))
     counts = db.execute(text(
-        "SELECT object_type, count(DISTINCT object_id), count(*) FROM process_event_objects "
+        # F-177: distinct events. An event touching two documents is one event, not two.
+        "SELECT object_type, count(DISTINCT object_id), count(DISTINCT event_id) FROM process_event_objects "
         "WHERE workspace_id = :w AND occurred_at >= :since GROUP BY object_type"), {"w": workspace_id,
                                                                                "since": since}).all()
     links = db.execute(text(
