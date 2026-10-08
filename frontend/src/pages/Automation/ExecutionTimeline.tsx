@@ -168,6 +168,134 @@ const StatusIcon: React.FC<{ status: AutomationExecutionStatus }> = ({
   }
 };
 
+const startOf = (execution: AutomationExecution): number => Date.parse(execution.started_at ?? execution.created_at);
+
+const endOf = (execution: AutomationExecution): number =>
+  execution.completed_at
+    ? Date.parse(execution.completed_at)
+    : startOf(execution) + Math.max(0, execution.duration_ms ?? 0);
+
+/** First start to last finish across a chain's runs, or null when none has a duration yet. */
+export const chainSpanMs = (executions: readonly AutomationExecution[]): number | null => {
+  const timed = executions.filter((execution) => execution.duration_ms !== null || execution.completed_at);
+  if (timed.length === 0) {
+    return null;
+  }
+  const start = Math.min(...timed.map(startOf));
+  const end = Math.max(...timed.map(endOf));
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null;
+};
+
+const percentile = (sorted: readonly number[], p: number): number | null =>
+  sorted.length === 0 ? null : sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]!;
+
+const summarise = (items: readonly AutomationExecution[], chains: number) => {
+  const durations = items
+    .map((execution) => execution.duration_ms)
+    .filter((ms): ms is number => ms !== null)
+    .sort((a, b) => a - b);
+  const completed = items.filter((execution) => execution.status === "COMPLETED").length;
+  return {
+    chains,
+    runs: items.length,
+    completed,
+    completedPct: items.length ? Math.round((completed / items.length) * 100) : 0,
+    blocked: items.filter((execution) => execution.is_suppressed).length,
+    failed: items.filter((execution) => execution.status === "FAILED" || execution.status === "TIMED_OUT").length,
+    medianMs: percentile(durations, 0.5),
+    p95Ms: durations.length >= 5 ? percentile(durations, 0.95) : null,
+  };
+};
+
+const KPI_TONE: Record<"ok" | "warn" | "danger", string> = {
+  ok: "text-emerald-600 dark:text-emerald-400",
+  warn: "text-amber-600 dark:text-amber-400",
+  danger: "text-destructive",
+};
+
+const Kpi: React.FC<{
+  readonly label: string;
+  readonly value: React.ReactNode;
+  readonly hint?: string | undefined;
+  readonly tone?: "ok" | "warn" | "danger" | undefined;
+}> = ({ label, value, hint, tone }) => (
+  <div className="rounded-lg border border-border bg-card px-3 py-2">
+    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+    <dd className={`mt-0.5 text-xl font-semibold tabular-nums ${tone ? KPI_TONE[tone] : "text-foreground"}`}>{value}</dd>
+    {hint ? <dd className="text-[11px] text-muted-foreground">{hint}</dd> : null}
+  </div>
+);
+
+const BAR_TONE: Record<DotTone, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  danger: "bg-destructive",
+  live: "bg-primary animate-pulse",
+  muted: "bg-muted-foreground/50",
+};
+
+/**
+ * Phase 2 — a chain's runs on one time axis: where each started after the triggering event, how
+ * long it waited in the queue (the faint lead-in) and how long it ran (the bar). Runs side by side
+ * overlap; a rule set off by another starts after it. Click a run to jump to its card below.
+ */
+const ChainWaterfall: React.FC<{ readonly executions: readonly AutomationExecution[] }> = ({ executions }) => {
+  const origin = Math.min(...executions.map((execution) => Date.parse(execution.created_at)));
+  const end = Math.max(...executions.map(endOf), origin + 1);
+  const span = Math.max(1, end - origin);
+  const pct = (ms: number) => `${Math.max(0, Math.min(100, (ms / span) * 100))}%`;
+  return (
+    <div className="border-t border-border/60 px-4 py-3" role="group" aria-label="Runs on a time axis">
+      <div className="mb-1.5 flex justify-between pl-[11.5rem] pr-16 text-[10.5px] tabular-nums text-muted-foreground">
+        <span>0</span>
+        <span>{formatDuration(span / 2)}</span>
+        <span>{formatDuration(span)}</span>
+      </div>
+      <ol className="space-y-1">
+        {executions.map((execution) => {
+          const created = Date.parse(execution.created_at) - origin;
+          const started = startOf(execution) - origin;
+          const finished = endOf(execution) - origin;
+          const tone = executionTone(execution);
+          const name = execution.rule_name ?? `Rule ${execution.rule_id.slice(0, 8)}`;
+          return (
+            <li key={execution.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById(`execution-${execution.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+                }
+                className="group flex w-full items-center gap-3 rounded px-1 py-0.5 text-left hover:bg-muted/50"
+                title={`${name}: waited ${formatDuration(Math.max(0, started - created))}, ran ${formatDuration(Math.max(0, finished - started))}`}
+              >
+                <span className="flex w-44 shrink-0 items-center gap-1.5 truncate text-xs">
+                  <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">d{execution.depth}</span>
+                  <span className="truncate group-hover:underline">{name}</span>
+                </span>
+                <span className="relative h-3.5 min-w-0 flex-1 rounded-sm bg-muted/50">
+                  {started > created ? (
+                    <span
+                      className="absolute inset-y-[5px] rounded-full bg-muted-foreground/25"
+                      style={{ left: pct(created), width: pct(started - created) }}
+                    />
+                  ) : null}
+                  <span
+                    className={`absolute inset-y-0 min-w-[3px] rounded-sm ${BAR_TONE[tone]}`}
+                    style={{ left: pct(started), width: pct(Math.max(0, finished - started)) }}
+                  />
+                </span>
+                <span className="w-14 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {execution.duration_ms === null ? "–" : formatDuration(execution.duration_ms)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+};
+
 export const ExecutionTimeline: React.FC = () => {
   const workspace = useActiveWorkspace();
   const workspaceId = workspace?.workspaceId ?? "";
@@ -224,12 +352,14 @@ export const ExecutionTimeline: React.FC = () => {
         ),
         tone: chainTone(ordered),
         title: ordered[0]?.rule_name ?? (ordered[0] ? `Rule ${ordered[0].rule_id.slice(0, 8)}` : "Run"),
-        durationMs: ordered.some((execution) => execution.duration_ms !== null)
-          ? ordered.reduce((sum, execution) => sum + (execution.duration_ms ?? 0), 0)
-          : null,
+        // Phase 2: wall-clock, first start to last finish. Runs set off by one event run side by
+        // side, so adding their durations overstated how long the chain took.
+        durationMs: chainSpanMs(ordered),
       };
     });
   }, [data]);
+
+  const summary = useMemo(() => summarise(data?.items ?? [], chains.length), [data, chains.length]);
 
   if (isLoading) {
     return (
@@ -258,12 +388,11 @@ export const ExecutionTimeline: React.FC = () => {
 
   return (
     <div className="space-y-4 w-full min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium">Execution traces</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Grouped into causal chains. A chain is everything one triggering
-            event set off.
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Run history</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Execution traces, grouped into causal chains: a chain is everything one triggering event set off.
           </p>
         </div>
 
@@ -282,6 +411,22 @@ export const ExecutionTimeline: React.FC = () => {
           Blocked only
         </button>
       </div>
+
+      {summary.runs > 0 ? (
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label={`The last ${summary.runs} runs`}>
+          <Kpi label="Chains" value={summary.chains} />
+          <Kpi label="Runs" value={summary.runs} hint={data?.has_more ? `latest ${summary.runs}` : undefined} />
+          <Kpi
+            label="Completed"
+            value={`${summary.completedPct}%`}
+            hint={`${summary.completed} of ${summary.runs}`}
+            tone={summary.completedPct === 100 ? "ok" : undefined}
+          />
+          <Kpi label="Blocked" value={summary.blocked} hint="loops, depth, budget" tone={summary.blocked > 0 ? "warn" : undefined} />
+          <Kpi label="Failed" value={summary.failed} tone={summary.failed > 0 ? "danger" : undefined} />
+          <Kpi label="Median run" value={summary.medianMs === null ? "–" : formatDuration(summary.medianMs)} hint={summary.p95Ms === null ? undefined : `p95 ${formatDuration(summary.p95Ms)}`} />
+        </dl>
+      ) : null}
 
       {chains.length === 0 ? (
         <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -348,6 +493,9 @@ export const ExecutionTimeline: React.FC = () => {
                   )}
                 </button>
 
+                {isOpen && chain.executions.length > 1 && (
+                  <ChainWaterfall executions={chain.executions} />
+                )}
                 {isOpen && (
                   <ol className="border-t border-border/60 px-4 py-3 space-y-2 overflow-x-auto">
                     {chain.executions.map((execution, index) => (
@@ -406,7 +554,7 @@ const ExecutionStep: React.FC<ExecutionStepProps> = ({
       : null;
 
   return (
-    <li className="relative pl-6 min-w-0">
+    <li className="relative pl-6 min-w-0" id={`execution-${execution.id}`}>
       {!isLast && (
         <span
           aria-hidden="true"
