@@ -62,7 +62,7 @@ class ConflictDraft:
 
     @property
     def fingerprint(self) -> str:
-        ids = ",".join(sorted(str(i) for i in (self.identity or self.work_item_ids)))
+        ids = ",".join(sorted(str(i) for i in (self.identity if self.identity is not None else self.work_item_ids)))
         return hashlib.sha256(f"{self.kind}|{self.concept}|{ids}|{self.key}".encode()).hexdigest()
 
 
@@ -266,6 +266,7 @@ def _payee_conflict(first: Twin, second: Twin, link: LinkDraft, *, versions: boo
         return f"•••• {account[-4:]}"
 
     currency = second.currency or first.currency
+    vendor = (second.counterparty or first.counterparty or "").strip().lower()
     return ConflictDraft(
         kind=v.K_PAYEE_ACCOUNT_CHANGED, concept="payee_account", severity=v.SEVERITY_CRITICAL,
         title=f"{second.title} asks to be paid into a different account than {first.title}",
@@ -277,8 +278,9 @@ def _payee_conflict(first: Twin, second: Twin, link: LinkDraft, *, versions: boo
         document_values=[_value(first, masked(first.payee_account or ""), role="earlier"),
                          _value(second, masked(second.payee_account or ""), role="later")],
         details={"exposure_key": f"doc:{second.work_item_id}", "versions": versions,
-                 "dedupe": f"payee:{second.work_item_id}:{first.payee_account}:{second.payee_account}"},
-        identity=[second.work_item_id], key=f"{first.payee_account}>{second.payee_account}")
+                 "dedupe": f"payee:{vendor}:{first.payee_account}:{second.payee_account}"},
+        # One change of a vendor's account is one conflict, however many copies of either invoice exist.
+        identity=[], key=f"{vendor}|{first.payee_account}>{second.payee_account}")
 
 
 def _same_vendor(a: Twin, b: Twin) -> bool:

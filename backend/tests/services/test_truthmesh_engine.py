@@ -69,6 +69,9 @@ def test_kinds_come_from_the_label_then_the_role_then_the_file_name() -> None:
     assert F.kind_of(role=None, classification="Other", filename="AWB-123 airway bill.pdf", entities={}) == "WAYBILL"
     assert F.kind_of(role=None, classification=None, filename="scan.pdf",
                      entities={"claim_number": "C-1", "policy_number": "P-1"}) == "INSURANCE_CLAIM"
+    # A policy ABOUT purchase orders is not one: the matcher's role (from the header) says OTHER.
+    assert F.kind_of(role="OTHER", classification="Purchase Order", filename="Procurement_Policy.pdf",
+                     entities={}) == "OTHER"
 
 
 def test_terms_are_read_with_the_sentence_they_come_from() -> None:
@@ -146,6 +149,21 @@ def test_a_vendor_that_is_not_a_party_to_the_agreement() -> None:
                              "vendor_name": "Globex Corporation", "date": "2026-04-01"}, role="INVOICE")
     _, found = links_and_conflicts(m, other)
     assert ("PARTY_MISMATCH", "HIGH") in kinds(found)
+
+
+def test_one_change_of_payee_account_is_one_conflict_however_many_copies() -> None:
+    def invoice(name: str, number: str, account: str, day: str) -> F.Twin:
+        return twin(name, {"invoice_number": number, "po_number": "PO-7001", "vendor_name": ACME,
+                           "vendor_bank_account": account, "total_amount": "10.00", "currency": "USD",
+                           "date": day}, role="INVOICE")
+
+    po = twin("po.pdf", {"po_number": "PO-7001", "vendor_name": ACME, "total_amount": "100.00", "currency": "USD"},
+              role="PURCHASE_ORDER")
+    old = invoice("old.pdf", "INV-P1", "GB29 NWBK 6016 1331 9268 19", "2026-01-01")
+    new = invoice("new.pdf", "INV-P2", "GB94 BARC 1020 1530 0934 59", "2026-02-01")
+    copy = invoice("new-copy.pdf", "INV-P2", "GB94 BARC 1020 1530 0934 59", "2026-02-01")
+    _, found = links_and_conflicts(po, old, new, copy)
+    assert [c.kind for c in found].count("PAYEE_ACCOUNT_CHANGED") == 1
 
 
 def test_two_versions_of_one_invoice_disagree_on_the_amount() -> None:

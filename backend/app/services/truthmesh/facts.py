@@ -156,6 +156,10 @@ def normalize_identifier(raw: Any) -> Optional[str]:
     return value[:128]
 
 
+#: Kinds the matcher's role classifier decides from header facts.
+TRANSACTIONAL_KINDS = frozenset({"INVOICE", "PURCHASE_ORDER", "GOODS_RECEIPT", "CREDIT_NOTE"})
+
+
 def _words(text: Any) -> str:
     return " " + re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip() + " "
 
@@ -175,6 +179,10 @@ def kind_of(*, role: Optional[str], classification: Optional[str], filename: str
         if _matches(label, words):
             if kind == "CONTRACT":
                 generic_contract = True
+                break
+            # The matcher read the header and found no invoice, order or receipt: a label that says
+            # otherwise came from the text mentioning one (a procurement policy "about" purchase orders).
+            if role == "OTHER" and kind in TRANSACTIONAL_KINDS:
                 break
             return kind
     name = _words(filename)
