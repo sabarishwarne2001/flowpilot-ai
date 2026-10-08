@@ -33,6 +33,7 @@ import re
 import tempfile
 import uuid
 import zipfile
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, BinaryIO, Iterable, Optional, Sequence
@@ -505,7 +506,7 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
             manifest_bytes = archive.read(manifest_name)
             manifest = json.loads(manifest_bytes.decode("utf-8"))
             sums = _parse_sums(archive.read(sums_name).decode("utf-8"))
-        except (ValueError, UnicodeDecodeError, KeyError):
+        except (ValueError, UnicodeDecodeError, KeyError, zipfile.BadZipFile, zlib.error, EOFError, OSError):
             return {**invalid, "message": "The package's manifest or SHA256SUMS cannot be read."}
         if manifest.get("format") != v.PACKAGE_FORMAT:
             return {**invalid, "message": "This is not a FlowPilot export package (unknown format)."}
@@ -518,9 +519,14 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
                 checks.append(FileCheck(path, expected, None, "MISSING"))
                 continue
             digest = hashlib.sha256()
-            with archive.open(name) as stream:
-                for chunk in iter(lambda: stream.read(_CHUNK), b""):
-                    digest.update(chunk)
+            try:
+                with archive.open(name) as stream:
+                    for chunk in iter(lambda: stream.read(_CHUNK), b""):
+                        digest.update(chunk)
+            except (zipfile.BadZipFile, zlib.error, EOFError, OSError):
+                # A corrupted entry (its CRC fails, or its data no longer inflates) was changed.
+                checks.append(FileCheck(path, expected, None, "MODIFIED"))
+                continue
             actual = digest.hexdigest()
             checks.append(FileCheck(path, expected, actual, "OK" if actual == expected else "MODIFIED"))
         for path in sorted(set(relative) - set(sums)):

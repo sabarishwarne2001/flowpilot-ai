@@ -339,3 +339,19 @@ def test_the_engine_needs_the_capability_and_validates_its_input(engines: Engine
     denied = engines.get("/processing-batches")
     assert denied.status_code == 402, denied.text
     assert denied.json()["code"] == "CAPABILITY_REQUIRED" or "CAPABILITY_REQUIRED" in denied.text
+
+
+def test_a_corrupted_byte_is_tampering_not_a_server_error(engines: Engines, docs) -> None:
+    batch = _create(engines, docs)
+    package = engines.post("/export-packages", {"batch_id": batch["id"], "include_originals": False}).json()
+    drain(only=["batches.build_export_package"])
+    data = bytearray(_download(engines, package["id"]))
+    archive = zipfile.ZipFile(io.BytesIO(bytes(data)))
+    target = next(i for i in archive.infolist() if i.filename.endswith("data/extractions.json"))
+    # Flip one byte inside that entry's compressed data: its CRC no longer matches.
+    data[target.header_offset + 30 + len(target.filename.encode()) + len(target.extra) + target.compress_size // 2] ^= 0xFF
+
+    result = _verify(engines, bytes(data))
+
+    assert result["verdict"] == "TAMPERED", result
+    assert any(p["path"] == "data/extractions.json" for p in result["problems"]), result["problems"]
