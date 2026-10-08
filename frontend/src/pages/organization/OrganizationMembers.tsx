@@ -9,6 +9,7 @@ import {
   deactivateOrganizationMember,
   listOrganizationMembers,
 } from "@/services/api/organization";
+import { errorMessage } from "@/services/api/errors";
 import { organizationKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
@@ -86,10 +87,14 @@ export const OrganizationMembers: React.FC = () => {
       setActionError(null);
       void invalidate();
     },
-    onError: () =>
+    // The server says which rule refused it ("You cannot change your own role…"); keep it.
+    onError: (error) =>
       setActionError(
-        "That role change was refused. You may not have permission, or the " +
-          "organization must keep at least one owner.",
+        errorMessage(
+          error,
+          "That role change was refused. You may not have permission, or the " +
+            "organization must keep at least one owner.",
+        ),
       ),
   });
 
@@ -101,10 +106,13 @@ export const OrganizationMembers: React.FC = () => {
       setConfirmingRemoval(null);
       void invalidate();
     },
-    onError: () =>
+    onError: (error) =>
       setActionError(
-        "That member couldn't be removed. An organization must keep at least " +
-          "one owner, and you cannot remove someone at or above your own role.",
+        errorMessage(
+          error,
+          "That member couldn't be removed. An organization must keep at least " +
+            "one owner, and you cannot remove someone at or above your own role.",
+        ),
       ),
   });
 
