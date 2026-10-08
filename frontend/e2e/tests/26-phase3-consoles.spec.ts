@@ -64,3 +64,24 @@ test.describe("Organization notifications (F-184)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Organization console breadcrumb (F-185)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the bar above each console page names that page, and the page has one main heading", async ({ page }) => {
+    for (const [sub, label] of [
+      ["notifications", "Notifications"],
+      ["members", "Members"],
+      ["billing", "Billing"],
+      ["webhooks", "Webhooks"],
+    ] as const) {
+      await page.goto(org("C", sub));
+      const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+      // Before the fix every page said "Caretakers Global Inc › Settings", in a second <h1>.
+      await expect(crumbs).toContainText(TENANTS.C.name);
+      await expect(crumbs.locator("[aria-current=page]")).toHaveText(label);
+      await expect(page.locator("h1")).toHaveCount(1);
+    }
+    await expectHealthyPage(page);
+  });
+});
