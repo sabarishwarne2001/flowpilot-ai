@@ -351,7 +351,7 @@ export const OrganizationApiKeys: React.FC = () => {
           icon={KeyRound}
           eyebrow={organization.organization_name}
           title="API keys"
-          description="Scoped keys for server-to-server access. A key's secret is shown once, when it is created; revoking one takes effect immediately."
+          description="Scoped keys for server-to-server access. You see a key's secret only when you create it; revoking a key takes effect immediately."
           actions={
             canManage && !creating ? (
                 <button
