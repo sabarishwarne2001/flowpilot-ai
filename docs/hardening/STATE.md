@@ -26,7 +26,7 @@ into `main`).
   polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence), Phase 2 (enterprise
   processing and TruthMesh):** merged.
 - **Phase 3 — final commercial hardening** (this branch): F-182 to F-205 fixed, each proven.
-  - Backend suite (full): **<<BACKEND>>**.
+  - Backend suite (full): **3,527 passed, 0 failed, 9 skipped** (48 min; 48 more tests than Phase 2).
   - Browser suite (full, fresh database, production preview, CSP, model stand-in): **<<BROWSER>>**.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
     --dist`, encoding check, `npm audit --omit=dev` (0): clean. One Alembic head
