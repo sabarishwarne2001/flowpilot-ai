@@ -22,6 +22,8 @@ import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 
 import { ApiError } from "@/services/api/client";
+import { useOptionalTenant } from "@/routes/TenantContext";
+import { canCreateContent } from "@/permissions/workspacePermissions";
 import { formatDateTime } from "@/utils/formatters";
 
 const EVENT_BADGES = {
@@ -35,6 +37,9 @@ const EVENT_BADGES = {
 export const Dashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
+  // Viewers cannot upload (the server refuses them); the tray is not offered to them.
+  const resolvedTenant = useOptionalTenant();
+  const canUpload = resolvedTenant ? canCreateContent(resolvedTenant.workspaceRole) : false;
 
   const {
     data: metrics,
@@ -133,7 +138,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <UploadTray onUploadSuccess={handleUploadSuccess} />
+      {canUpload && <UploadTray onUploadSuccess={handleUploadSuccess} />}
 
       <section
         aria-label="Dashboard Metrics"

@@ -13,6 +13,8 @@ import {
   Trash2,
   ArrowUpDown,
   Filter,
+  Upload,
+  X,
 } from "lucide-react";
 
 import { workItemApi } from "@/services/api/workItem";
@@ -31,6 +33,7 @@ import { formatBytes } from "@/utils/formatters";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus, WorkItemSortField } from "@/types/workItem";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { UploadTray } from "@/components/common/UploadTray";
 
 const filterFormSchema = z.object({
   search: z.string().max(100, "Search query is too long.").optional(),
@@ -63,6 +66,7 @@ export const WorkItems: React.FC = () => {
   const resolvedTenant = useOptionalTenant();
   const canWrite = resolvedTenant ? canCreateContent(resolvedTenant.workspaceRole) : false;
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -262,12 +266,35 @@ export const WorkItems: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1 select-none">
-        <h2 className="text-2xl font-semibold tracking-tight">Documents Database</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Monitor ingestion pipelines, search uploaded documents, inspect AI processing status, and navigate into detailed extraction results.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1 select-none">
+          <h2 className="text-2xl font-semibold tracking-tight">Documents Database</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Monitor ingestion pipelines, search uploaded documents, inspect AI processing status, and navigate into detailed extraction results.
+          </p>
+        </div>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setUploadOpen((open) => !open)}
+            aria-expanded={uploadOpen}
+            className={`fp-btn ${uploadOpen ? "fp-btn-secondary" : "fp-btn-primary"} h-9 shrink-0 text-[13px]`}
+          >
+            {uploadOpen ? <X className="h-3.5 w-3.5" /> : <Upload className="h-3.5 w-3.5" />}
+            {uploadOpen ? "Close upload" : "Upload documents"}
+          </button>
+        )}
       </div>
+
+      {canWrite && uploadOpen && (
+        <UploadTray
+          onUploadSuccess={() => {
+            if (workspaceId) {
+              void invalidateWorkspace(queryClient, workspaceId);
+            }
+          }}
+        />
+      )}
 
       <form
         onSubmit={handleSubmit(handleApplyFiltersSubmit)}
