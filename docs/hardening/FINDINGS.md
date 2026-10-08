@@ -2680,7 +2680,10 @@ amount change rippled to sibling invoices; a document centroid came back as text
 
 ### Verification (Phase 2)
 - Backend, full suite: PENDING.
-- Browser, full suite on a fresh database (production preview, CSP enforced, model stand-in): PENDING.
+- Browser, full suite on a fresh database (production preview, CSP enforced, model stand-in):
+  **360 passed, 0 failed, 1 skipped** in 14.3 min (the skip is by design: the "provider is down"
+  test runs only without the model stand-in). No traceback, no ERROR-level line and no 5xx in the
+  API or worker logs during the run.
 - Build, both `tsc` projects, lint, self-checks, no source maps, encoding: clean. One Alembic head
   (`p9a1_truthmesh_engine`); migration up / down / up checked.
 

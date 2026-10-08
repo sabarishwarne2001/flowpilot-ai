@@ -33,7 +33,8 @@ summary). Builds on Phase 1 (merged into `main`, PR #11).
 - **Phase 2 — enterprise processing and TruthMesh** (this branch): F-171 to F-181 fixed;
   TruthMesh built.
   - Backend suite (full): PENDING.
-  - Browser suite (full, fresh database, production preview, CSP, model stand-in): PENDING.
+  - Browser suite (full, fresh database, production preview, CSP, model stand-in): **360 passed,
+    0 failed, 1 skipped** (by design: the provider-down test needs no model). Logs clean.
   - `npm run build`, both `tsc` projects, lint, `npm run check:self`, `check-no-sourcemaps
     --dist`, encoding check: clean. One Alembic head (`p9a1_truthmesh_engine`); migration up,
     down and up again checked.
