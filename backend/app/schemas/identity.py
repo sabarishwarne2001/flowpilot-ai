@@ -148,7 +148,9 @@ class SecurityPolicyUpdate(BaseModel):
     ip_prefix_v4: int | None = Field(default=None, ge=8, le=32)
     ip_prefix_v6: int | None = Field(default=None, ge=32, le=128)
     ip_allowlist: list[str] | None = None
-    max_session_age_s: int | None = Field(default=None, ge=300)
+    # F-204. Enforced at every refresh, so a value below five minutes signs members out before
+    # their first refresh. Strict: true and "3600" are not session ages. Null removes the limit.
+    max_session_age_s: int | None = Field(default=None, ge=300, le=366 * 86400, strict=True)
     idp_session_sync: bool | None = None
 
 
@@ -161,6 +163,8 @@ class SecurityPolicyRead(BaseModel):
     ip_allowlist: list[str]
     max_session_age_s: int | None = None
     idp_session_sync: bool
+    platform_max_session_age_s: int
+    idle_timeout_s: int
 
 
 class DirectoryIdentityRead(ORMModel):

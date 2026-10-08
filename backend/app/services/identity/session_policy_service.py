@@ -177,7 +177,8 @@ def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
     for field in ("require_sso", "sso_bypass_for_owners", "ip_pinning",
                   "ip_prefix_v4", "ip_prefix_v6", "ip_allowlist",
                   "max_session_age_s", "idp_session_sync"):
-        if field in changes and changes[field] is not None:
+        # F-204. A null session age removes the limit; for every other field null means "as is".
+        if field in changes and (changes[field] is not None or field == "max_session_age_s"):
             setattr(policy, field, changes[field])
 
     policy.updated_by_user_id = principal.actor_id if principal else None
@@ -185,5 +186,6 @@ def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
     write_audit(db, organization_id=policy.organization_id, action="UPDATED",
                 resource_type="TENANT_SECURITY_POLICY", resource_id=policy.id,
                 principal=principal,
-                details={k: str(v) for k, v in changes.items() if v is not None})
+                details={k: str(v) for k, v in changes.items()
+                         if v is not None or k == "max_session_age_s"})
     return commit_and_refresh(db, policy)
