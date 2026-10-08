@@ -611,3 +611,17 @@ pausing. The Developer plan sees the page with an explanation and View plans; th
 402 there. **Decide:** keep Business + Enterprise, or Enterprise only, or include it on Developer.
 Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py` (the browser test
 `23-batch-operations` "Developer plan" names the plans in its expected text). Not a price change.
+
+# Phase 2 — Enterprise processing and TruthMesh (2026-10-08): N-033 open
+
+## N-033 — Which plans include TruthMesh (Phase 2)
+TruthMesh (the cross-document digital twin: linked documents, cross-document conflicts with
+decisions that survive rebuilds, what-if ripples and the risk cockpit) is a new capability,
+`capability.truthmesh`. It is placed **provisionally on Enterprise only**, beside Process
+intelligence and the Document corroborator, because it reads across every document in a workspace
+and is the most compute-heavy view (it runs on the platform's own stack: pgvector and the local
+embedding model, no paid API). Developer and Business see the page with an explanation and View
+plans; the server answers 402 there. **Decide:** keep Enterprise only, or add Business (perhaps
+with a document limit). Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py`;
+the browser plan matrix reads the plan from `frontend/e2e/support/routes.ts` (`plan: "enterprise"`).
+Not a price change.
