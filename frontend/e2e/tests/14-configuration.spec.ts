@@ -13,7 +13,7 @@ test.use({ user: "C.owner" });
 async function openGeneral(page: import("@playwright/test").Page): Promise<void> {
   await expect(async () => {
     await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
-    await expect(page.getByRole("textbox", { name: "Workspace Name" })).toHaveValue(/\S/, { timeout: 3_000 });
+    await expect(page.getByRole("textbox", { name: "Workspace name" })).toHaveValue(/\S/, { timeout: 3_000 });
   }).toPass({ timeout: 30_000 });
 }
 
@@ -31,13 +31,13 @@ test.describe("Settings", () => {
   test("workspace general: rename, save, and rename back", async ({ page }) => {
     await page.goto(ws("C", "settings"));
     await openGeneral(page);
-    const field = page.getByRole("textbox", { name: "Workspace Name" });
+    const field = page.getByRole("textbox", { name: "Workspace name" });
     await field.fill(`Operations ${runId()}`);
-    await page.getByRole("button", { name: "Save Workspace" }).click();
+    await page.getByRole("button", { name: "Save workspace" }).click();
     await expect(page.locator("body")).toContainText(/saved|updated/i, { timeout: 10_000 });
     await field.fill("Operations");
-    await page.getByRole("button", { name: "Save Workspace" }).click();
-    await expect(page.getByRole("button", { name: "Save Workspace" })).toBeDisabled({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Save workspace" }).click();
+    await expect(page.getByRole("button", { name: "Save workspace" })).toBeDisabled({ timeout: 10_000 });
   });
 
   test("every settings section opens without errors", async ({ page }) => {
@@ -59,13 +59,13 @@ test.describe("Settings", () => {
   test("unsaved changes block navigation until confirmed", async ({ page }) => {
     await page.goto(ws("C", "settings"));
     await openGeneral(page);
-    await page.getByRole("textbox", { name: "Workspace Name" }).fill(`Unsaved ${runId()}`);
-    await expect(page.getByRole("button", { name: "Save Workspace" }), "the form knows it is dirty").toBeEnabled();
+    await page.getByRole("textbox", { name: "Workspace name" }).fill(`Unsaved ${runId()}`);
+    await expect(page.getByRole("button", { name: "Save workspace" }), "the form knows it is dirty").toBeEnabled();
     await page.getByRole("link", { name: "Documents", exact: true }).click();
     const dialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: /stay|cancel|keep editing/i }).click();
-    await expect(page.getByRole("textbox", { name: "Workspace Name" })).toHaveValue(/Unsaved/);
+    await expect(page.getByRole("textbox", { name: "Workspace name" })).toHaveValue(/Unsaved/);
     await page.getByRole("button", { name: "Reset", exact: true }).click();
   });
 });

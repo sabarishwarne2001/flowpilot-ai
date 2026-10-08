@@ -286,7 +286,7 @@ test.describe("Workspace settings for someone who is not an organization admin (
     // Before the fix: GET /organizations/<id>/invitations answered 403 (strict fixture) and the
     // page said "No active pending invitations found." whatever was pending.
     await page.goto(ws("C", "settings?section=workspace"));
-    await expect(page.getByRole("heading", { name: "Workspace Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
     await settle(page);
     await expect(page.getByText("No active pending invitations found.")).toHaveCount(0);
     await expect(page.locator("main")).toContainText(/invitations are managed by .*organization/i);

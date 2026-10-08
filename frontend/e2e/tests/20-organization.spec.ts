@@ -82,7 +82,7 @@ test.describe("Members: invite, accept, change role, remove", () => {
       await expect(page.getByPlaceholder("colleague@company.com")).toBeVisible({ timeout: 3_000 });
     }).toPass({ timeout: 30_000 });
     await page.getByPlaceholder("colleague@company.com").fill(invitee);
-    await page.getByRole("button", { name: "Send Invite" }).click();
+    await page.getByRole("button", { name: "Send invite" }).click();
     await expect(page.locator("main")).toContainText(invitee, { timeout: 15_000 });
 
     // 2. The invitee signs up, verifies and accepts through the emailed link.
