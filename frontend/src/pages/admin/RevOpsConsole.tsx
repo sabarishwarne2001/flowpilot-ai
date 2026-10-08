@@ -9,17 +9,18 @@
  */
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Banknote, BookOpen, FileSignature, Loader2, RefreshCw, TicketPercent, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  BUTTON_DESTRUCTIVE, BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, PAGE_TITLE, SCROLL_X,
+  BUTTON_DESTRUCTIVE, BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, SCROLL_X,
   SECTION_TITLE, SELECT, SURFACE, SURFACE_INSET, TABLE_HEAD, TABLE_ROW,
 } from "@/components/ui/primitives";
 import { ApiError, errorMessage } from "@/services/api/errors";
 import {
   activateContract, createContract, createPriceBook, createPromoCode, endContract, getContract, getPriceBook,
-  getRevenueMetrics, issueContractInvoices, listContracts, listPriceBooks, listPromoCodes, payInvoice,
+  getRevenueMetrics, issueContractInvoices, listContracts, listPriceBooks, listPromoCodes, listRevOpsOrganizations,
+  payInvoice,
   publishPriceBook, revopsKeys, runRevOpsSweep, setPriceEntry, setPromoActive, voidInvoice,
 } from "@/services/api/revops";
 import {
@@ -27,12 +28,26 @@ import {
   type ContractInterval, type Currency, type PlanInterval, type PromoDuration, type RevOpsCode,
 } from "@/types/revops";
 import { formatCalendarDate, formatTimestamp } from "@/utils/displayTime";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 
 type Tab = "revenue" | "books" | "promos" | "contracts";
-const TABS: readonly (readonly [Tab, string])[] = [
-  ["revenue", "Revenue"], ["books", "Price books"], ["promos", "Promo codes"], ["contracts", "Contracts"],
+const TABS: readonly TabDefinition<Tab>[] = [
+  { id: "revenue", label: "Revenue", icon: TrendingUp },
+  { id: "books", label: "Price books", icon: BookOpen },
+  { id: "promos", label: "Promo codes", icon: TicketPercent },
+  { id: "contracts", label: "Contracts", icon: FileSignature },
 ];
+const TAB_IDS = TABS.map((tab) => tab.id);
 const COUNT = new Intl.NumberFormat();
+const ACT_DONE: Readonly<Record<"activate" | "issue" | "end" | "pay" | "void", string>> = {
+  activate: "Contract activated. The organization is on the contract's plan.",
+  issue: "Every invoice that is due has been issued.",
+  end: "Contract cancelled.",
+  pay: "Invoice marked paid.",
+  void: "Invoice voided.",
+};
 const TIERS = ["free", "developer", "business", "enterprise"] as const;
 
 const failure = (error: unknown, fallback: string): string => {
@@ -288,6 +303,16 @@ const ContractsTab: React.FC = () => {
     billing_interval: "year" as ContractInterval, amount: "", tax: "1800", term_start: today, term_end: "", terms: "30",
     po: "", email: "", promo: "",
   });
+  const organizations = useQuery({ queryKey: revopsKeys.organizations(), queryFn: listRevOpsOrganizations });
+  // F-186. Paying and voiding asked through window.prompt, and "Cancel" on the prompt still sent
+  // the request (with an empty reference: a 422 and "The action failed."). Cancelling a contract
+  // asked nothing at all. Each now opens a dialog, and nothing is sent until it is confirmed.
+  const [pending, setPending] = useState<
+    | { readonly kind: "pay" | "void"; readonly id: string; readonly number: string }
+    | { readonly kind: "end"; readonly id: string; readonly number: string }
+    | null
+  >(null);
+  const [answer, setAnswer] = useState("");
   const refresh = async (): Promise<void> => { await queryClient.invalidateQueries({ queryKey: revopsKeys.all() }); };
   const onError = (fallback: string) => (error: unknown) => toast.error(failure(error, fallback));
   const create = useMutation({
@@ -302,16 +327,28 @@ const ContractsTab: React.FC = () => {
     onError: onError("The contract could not be created."),
   });
   const act = useMutation({
-    mutationFn: async (action: { readonly kind: "activate" | "issue" | "end" | "pay" | "void"; readonly id: string }) => {
+    mutationFn: async (action: { readonly kind: "activate" | "issue" | "end" | "pay" | "void"; readonly id: string; readonly text?: string }) => {
       if (action.kind === "activate") { return activateContract(action.id); }
       if (action.kind === "issue") { return issueContractInvoices(action.id); }
       if (action.kind === "end") { return endContract(action.id, "CANCELLED"); }
-      if (action.kind === "pay") { return payInvoice(action.id, window.prompt("Payment reference (bank / UTR)") ?? ""); }
-      return voidInvoice(action.id, window.prompt("Why void this invoice?") ?? "");
+      if (action.kind === "pay") { return payInvoice(action.id, action.text ?? ""); }
+      return voidInvoice(action.id, action.text ?? "");
     },
-    onSuccess: async () => { await refresh(); },
+    onSuccess: async (_contract, action) => {
+      setPending(null);
+      setAnswer("");
+      await refresh();
+      toast.success(ACT_DONE[action.kind]);
+    },
     onError: onError("The action failed."),
   });
+  const answerValid = pending?.kind === "pay" ? answer.trim().length >= 1 : answer.trim().length >= 3;
+  const confirmPending = (): void => {
+    if (!pending) { return; }
+    if (pending.kind === "end") { act.mutate({ kind: "end", id: pending.id }); return; }
+    if (answerValid) { act.mutate({ kind: pending.kind, id: pending.id, text: answer.trim() }); }
+  };
+  const closePending = (): void => { if (!act.isPending) { setPending(null); setAnswer(""); } };
   const c = contract.data;
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -343,7 +380,7 @@ const ContractsTab: React.FC = () => {
             <div className="flex gap-2">
               {c.status === "DRAFT" ? <button type="button" className={BUTTON_PRIMARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "activate", id: c.id })}>Activate</button> : null}
               {c.status === "ACTIVE" ? <button type="button" className={BUTTON_SECONDARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "issue", id: c.id })}>Issue due invoices</button> : null}
-              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => act.mutate({ kind: "end", id: c.id })}>Cancel contract</button> : null}
+              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => setPending({ kind: "end", id: c.id, number: c.contract_number })}>Cancel contract</button> : null}
             </div>
           </div>
           <p className={HINT}>{money(c.amount_per_period_micros, c.currency)} per {c.billing_interval} · tax {(c.tax_rate_bps / 100).toFixed(2)}% · net {c.payment_terms_days} days{c.po_number ? ` · PO ${c.po_number}` : ""}</p>
@@ -364,8 +401,8 @@ const ContractsTab: React.FC = () => {
                     <td className="space-x-1 text-right">
                       {inv.status === "ISSUED" ? (
                         <>
-                          <button type="button" className={BUTTON_SECONDARY} onClick={() => act.mutate({ kind: "pay", id: inv.id })}>Mark paid</button>
-                          <button type="button" className={BUTTON_DESTRUCTIVE} onClick={() => act.mutate({ kind: "void", id: inv.id })}>Void</button>
+                          <button type="button" className={BUTTON_SECONDARY} disabled={act.isPending} onClick={() => { setAnswer(""); setPending({ kind: "pay", id: inv.id, number: inv.invoice_number }); }}>Mark paid</button>
+                          <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => { setAnswer(""); setPending({ kind: "void", id: inv.id, number: inv.invoice_number }); }}>Void</button>
                         </>
                       ) : null}
                     </td>
@@ -379,7 +416,16 @@ const ContractsTab: React.FC = () => {
       ) : null}
       <form className={`${SURFACE} grid gap-3 p-4 sm:grid-cols-4 sm:items-end`} onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
         <h2 className={`${SECTION_TITLE} sm:col-span-4`}>Draft a contract</h2>
-        <label className="space-y-1 sm:col-span-2"><span className={FIELD_LABEL}>Organization id</span><input className={INPUT} value={form.organization_id} onChange={set("organization_id")} required /></label>
+        <label className="space-y-1 sm:col-span-2"><span className={FIELD_LABEL}>Organization</span>
+          <select className={SELECT} value={form.organization_id} onChange={set("organization_id")} required>
+            <option value="">{organizations.isLoading ? "Loading organizations…" : "Choose an organization…"}</option>
+            {(organizations.data ?? []).map((o) => (
+              <option key={o.id} value={o.id} disabled={o.has_active_contract}>
+                {o.name} · {o.slug}{o.tier_key ? ` · ${o.tier_key}` : ""}{o.has_active_contract ? " · has an active contract" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="space-y-1"><span className={FIELD_LABEL}>Contract number</span><input className={INPUT} value={form.contract_number} onChange={set("contract_number")} placeholder="ENT-2026-001" required /></label>
         <label className="space-y-1"><span className={FIELD_LABEL}>Plan</span><select className={SELECT} value={form.tier_key} onChange={set("tier_key")}>{TIERS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
         <label className="space-y-1"><span className={FIELD_LABEL}>Seats</span><input className={INPUT} value={form.seats} onChange={set("seats")} inputMode="numeric" /></label>
@@ -393,32 +439,61 @@ const ContractsTab: React.FC = () => {
         <label className="space-y-1"><span className={FIELD_LABEL}>PO number</span><input className={INPUT} value={form.po} onChange={set("po")} /></label>
         <label className="space-y-1"><span className={FIELD_LABEL}>Billing email</span><input className={INPUT} value={form.email} onChange={set("email")} type="email" /></label>
         <label className="space-y-1"><span className={FIELD_LABEL}>Promo code</span><input className={INPUT} value={form.promo} onChange={set("promo")} /></label>
-        <button type="submit" className={BUTTON_PRIMARY} disabled={create.isPending || !form.term_end || form.amount.trim() === ""}>Draft contract</button>
+        <button type="submit" className={BUTTON_PRIMARY} disabled={create.isPending || !form.organization_id || !form.term_end || form.amount.trim() === ""}>Draft contract</button>
       </form>
+      <ConfirmDialog
+        open={pending !== null}
+        title={
+          pending?.kind === "pay" ? "Record a payment"
+            : pending?.kind === "void" ? `Void invoice ${pending.number}?`
+              : `Cancel contract ${pending?.number ?? ""}?`
+        }
+        message={
+          pending?.kind === "pay" ? `Invoice ${pending.number} is marked paid with the reference you enter, as the record of the transfer.`
+            : pending?.kind === "void" ? "A void invoice stays on the contract as a record and is never collected. Say why."
+              : "The contract ends now: no further invoices are issued and the organization keeps its current plan until it is changed. Invoices already issued stay open."
+        }
+        tone={pending?.kind === "pay" ? "primary" : "danger"}
+        confirmText={pending?.kind === "pay" ? "Mark paid" : pending?.kind === "void" ? "Void invoice" : "Cancel contract"}
+        cancelText={pending?.kind === "end" ? "Keep the contract" : "Cancel"}
+        loading={act.isPending}
+        loadingText="Saving…"
+        input={
+          pending && pending.kind !== "end"
+            ? {
+                label: pending.kind === "pay" ? "Payment reference" : "Reason",
+                value: answer,
+                onChange: setAnswer,
+                placeholder: pending.kind === "pay" ? "Bank reference or UTR" : "At least 3 characters",
+                maxLength: pending.kind === "pay" ? 128 : 200,
+              }
+            : undefined
+        }
+        confirmDisabled={pending !== null && pending.kind !== "end" && !answerValid}
+        onConfirm={confirmPending}
+        onCancel={closePending}
+      />
     </div>
   );
 };
 
 const RevOpsConsole: React.FC = () => {
-  const [tab, setTab] = useState<Tab>("revenue");
+  const [tab, setTab] = useUrlTab<Tab>(TAB_IDS);
   return (
-    <div className="space-y-6 p-4" data-testid="revops-console">
-      <header>
-        <h1 className={PAGE_TITLE}>Revenue operations</h1>
-        <p className="text-sm text-muted-foreground">Plan prices (monthly, annual; USD, INR), promo codes, invoiced enterprise contracts and revenue.</p>
-      </header>
-      <nav className="flex flex-wrap gap-1 border-b border-border/60" aria-label="RevOps console">
-        {TABS.map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setTab(key)} aria-current={tab === key ? "page" : undefined}
-                  className={`rounded-t-md px-3 py-2 text-sm ${tab === key ? "border-b-2 border-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-            {label}
-          </button>
-        ))}
-      </nav>
-      {tab === "revenue" ? <RevenueTab /> : null}
-      {tab === "books" ? <BooksTab /> : null}
-      {tab === "promos" ? <PromosTab /> : null}
-      {tab === "contracts" ? <ContractsTab /> : null}
+    <div className="space-y-6" data-testid="revops-console">
+      <PageHeader
+        icon={Banknote}
+        eyebrow="Platform"
+        title="Revenue operations"
+        description="Plan prices (monthly, annual; USD, INR), promo codes, invoiced enterprise contracts and revenue."
+      />
+      <TabList label="RevOps console" idBase="revops" tabs={TABS} value={tab} onChange={setTab} />
+      <TabPanel idBase="revops" id={tab}>
+        {tab === "revenue" ? <RevenueTab /> : null}
+        {tab === "books" ? <BooksTab /> : null}
+        {tab === "promos" ? <PromosTab /> : null}
+        {tab === "contracts" ? <ContractsTab /> : null}
+      </TabPanel>
     </div>
   );
 };

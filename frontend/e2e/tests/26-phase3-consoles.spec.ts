@@ -3,9 +3,11 @@
  * way a person uses them. Each test named after a finding (F-1xx) failed on the code before its
  * fix (docs/hardening/FINDINGS.md, "Phase 3").
  */
+import fs from "node:fs";
+
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, resolveWorkspaceId } from "../support/api";
-import { TENANTS, org } from "../support/env";
+import { STATE_FILE, TENANTS, org, runId } from "../support/env";
 
 interface NoticePage {
   readonly items: readonly { id: string; title: string; is_read: boolean }[];
@@ -82,6 +84,75 @@ test.describe("Organization console breadcrumb (F-185)", () => {
       await expect(crumbs.locator("[aria-current=page]")).toHaveText(label);
       await expect(page.locator("h1")).toHaveCount(1);
     }
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("Revenue operations: invoiced contracts (F-186)", () => {
+  test.use({ user: "P.superadmin" });
+
+  test("mark an invoice paid and cancel the contract through dialogs, never a browser prompt", async ({ page, session }) => {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) as { seed: { tenants: Record<string, { organization_id: string }> } };
+    const orgId = state.seed.tenants.P!.organization_id;
+    // One active contract per organization: end any a previous run left active.
+    const contracts = await api<{ id: string; organization_id: string; status: string }[]>(session, "GET", "/admin/revops/contracts");
+    for (const row of contracts.body.filter((c) => c.organization_id === orgId && c.status === "ACTIVE")) {
+      expect((await api(session, "POST", `/admin/revops/contracts/${row.id}/end`, { reason: "CANCELLED" })).status).toBe(200);
+    }
+    let prompts = 0;
+    page.on("dialog", (dialog) => {
+      prompts += 1;
+      void dialog.dismiss();
+    });
+
+    await page.goto("/admin/revops");
+    await page.getByRole("tab", { name: "Contracts" }).or(page.getByRole("button", { name: "Contracts", exact: true })).click();
+    const number = `ENT-E2E-${runId()}`;
+    const form = page.locator("form", { has: page.getByRole("heading", { name: "Draft a contract" }) });
+    const organization = form.getByLabel(/^Organization/);
+    if ((await organization.evaluate((el) => el.tagName)) === "SELECT") {
+      await organization.selectOption(orgId);
+    } else {
+      await organization.fill(orgId);
+    }
+    await form.getByLabel("Contract number").fill(number);
+    await form.getByLabel("Plan").selectOption("business");
+    await form.getByLabel("Amount per period").fill("1200");
+    const end = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+    await form.getByLabel("Term end").fill(end);
+    await form.getByRole("button", { name: "Draft contract" }).click();
+
+    const detail = page.getByTestId("contract-detail");
+    await expect(detail).toContainText(new RegExp(number, "i"));
+    await detail.getByRole("button", { name: "Activate" }).click();
+    await expect(detail).toContainText("ACTIVE");
+    const invoice = detail.getByRole("row").filter({ has: page.getByRole("button", { name: "Mark paid" }) }).first();
+    await expect(invoice).toBeVisible();
+
+    // Before the fix "Mark paid" opened window.prompt; dismissing it still sent the request with an
+    // empty reference (422, "The action failed.").
+    await invoice.getByRole("button", { name: "Mark paid" }).click();
+    const pay = page.getByRole("dialog", { name: "Record a payment" });
+    await expect(pay).toBeVisible();
+    await pay.getByRole("button", { name: "Cancel" }).click();
+    await expect(pay).toHaveCount(0);
+    await invoice.getByRole("button", { name: "Mark paid" }).click();
+    await expect(pay.getByRole("button", { name: "Mark paid" })).toBeDisabled();
+    await pay.getByLabel("Payment reference").fill("UTR-E2E-0001");
+    await pay.getByRole("button", { name: "Mark paid" }).click();
+    await expect(detail).toContainText("PAID");
+
+    // Cancelling a contract asks first; Keep it changes nothing.
+    await detail.getByRole("button", { name: "Cancel contract" }).click();
+    const confirm = page.getByRole("alertdialog", { name: /Cancel contract/ });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Keep the contract" }).click();
+    await expect(detail).toContainText("ACTIVE");
+    await detail.getByRole("button", { name: "Cancel contract" }).click();
+    await confirm.getByRole("button", { name: "Cancel contract" }).click();
+    await expect(detail).toContainText("CANCELLED");
+
+    expect(prompts).toBe(0);
     await expectHealthyPage(page);
   });
 });

@@ -25,8 +25,25 @@ export interface ConfirmDialogProps {
   initialFocus?: "confirm" | "cancel";
   /** A single-button notice. */
   hideCancel?: boolean;
+  /**
+   * Phase 3. A text the action needs (a payment reference, a reason), asked for inside the
+   * dialog instead of `window.prompt`, whose Cancel still let the action run. The dialog is then
+   * a form dialog (role "dialog"), focus starts in the field and Enter confirms.
+   */
+  input?: ConfirmDialogInput | undefined;
+  /** Keeps the confirm button disabled (for example while `input` is not valid yet). */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+}
+
+export interface ConfirmDialogInput {
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly placeholder?: string;
+  readonly hint?: string;
+  readonly maxLength?: number;
 }
 
 const FOCUSABLE = "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
@@ -42,11 +59,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   tone = "danger",
   initialFocus = "cancel",
   hideCancel = false,
+  input,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }) => {
   const titleId = useId();
   const messageId = useId();
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
@@ -63,7 +84,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       return undefined;
     }
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const target = initialFocus === "confirm" || hideCancel ? confirmRef.current : cancelRef.current;
+    const target = inputRef.current
+      ?? (initialFocus === "confirm" || hideCancel ? confirmRef.current : cancelRef.current);
     target?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -125,7 +147,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     >
       <div
         ref={dialogRef}
-        role="alertdialog"
+        role={input ? "dialog" : "alertdialog"}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={messageId}
@@ -138,6 +160,33 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <p id={messageId} className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {message}
         </p>
+
+        {input ? (
+          <div className="mt-4 space-y-1.5">
+            <label htmlFor={inputId} className="text-sm font-medium text-foreground">
+              {input.label}
+            </label>
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="text"
+              autoComplete="off"
+              className="fp-input"
+              value={input.value}
+              placeholder={input.placeholder}
+              maxLength={input.maxLength}
+              disabled={loading}
+              onChange={(event) => input.onChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !confirmDisabled && !loading) {
+                  event.preventDefault();
+                  onConfirm();
+                }
+              }}
+            />
+            {input.hint ? <p className="text-xs leading-relaxed text-muted-foreground">{input.hint}</p> : null}
+          </div>
+        ) : null}
 
         <div className="mt-6 flex flex-wrap justify-end gap-2">
           {hideCancel ? null : (
@@ -156,7 +205,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             ref={confirmRef}
             type="button"
             onClick={onConfirm}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             className={`fp-btn h-9 px-4 font-semibold ${confirmClass}`}
           >
             {loading ? busyLabel : confirmText}

@@ -186,6 +186,17 @@ class ContractOut(BaseModel):
     invoices: list[ContractInvoiceOut] = []
 
 
+class OrganizationPick(BaseModel):
+    """One organization in the contract form's picker (Phase 3)."""
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: str
+    tier_key: Optional[str] = None
+    has_active_contract: bool
+
+
 class ContractSummary(BaseModel):
     id: uuid.UUID
     organization_id: uuid.UUID
