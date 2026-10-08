@@ -151,6 +151,9 @@ export const ROUTE_PATTERNS = {
   // ARCH44-S2:route-patterns
   workspaceTables: "tables",
   workspaceTable: "tables/:tableId",
+  // PHASE1:route-patterns — batch operations.
+  workspaceBatches: "batches",
+  workspaceBatch: "batches/:batchId",
   // ARCH45-S2:route-patterns
   workspaceCorroborations: "corroboration",
   workspaceCorroboration: "corroboration/:runId",
@@ -317,6 +320,11 @@ export const packetSplitPath = (orgSlug: string, workspaceSlug: string, splitId:
 export const tablesPath = (orgSlug: string, workspaceSlug: string): string => `${workspacePath(orgSlug, workspaceSlug)}/tables`;
 export const tablePath = (orgSlug: string, workspaceSlug: string, tableId: string): string =>
   `${tablesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(tableId)}`;
+// PHASE1:batch-path-helpers
+export const batchesPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/batches`;
+export const batchPath = (orgSlug: string, workspaceSlug: string, batchId: string): string =>
+  `${batchesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(batchId)}`;
 // ARCH46-S2:obligation-path-helpers
 export const obligationsPath = (orgSlug: string, workspaceSlug: string): string =>
   `${workspacePath(orgSlug, workspaceSlug)}/obligations`;

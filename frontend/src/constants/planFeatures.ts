@@ -28,6 +28,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.caseIntelligence]: "Case intelligence & packet dicer (split scanned bundles into documents)",
   // ARCH44-S2:plan-feature
   [CAPABILITY.tableIntelligence]: "Table intelligence (multi-page, rotated and ruled tables, validated, CSV/XLSX export)",
+  // PHASE1:plan-feature
+  [CAPABILITY.batchDispatch]: "Batch operations (confidence analytics, schema self-healing, dispatch lanes, SHA-256 verified export packages)",
   // ARCH45-S2:plan-feature
   [CAPABILITY.universalCorroborator]: "Document corroborator (compare 2–5 documents clause by clause, discrepancy matrix, PDF report)",
   // ARCH46-S2:plan-feature
@@ -68,6 +70,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.entityGraph,
   CAPABILITY.caseIntelligence,
   CAPABILITY.tableIntelligence,
+  // PHASE1:plan-feature-order — Business and Enterprise.
+  CAPABILITY.batchDispatch,
   // ARCH46-S2:plan-feature-order — Business and Enterprise.
   CAPABILITY.obligations,
   // ARCH47-S2:plan-feature-order — Business and Enterprise.

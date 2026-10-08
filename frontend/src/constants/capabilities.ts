@@ -49,6 +49,8 @@ export const CAPABILITY = {
   egressLockdown: "capability.egress_lockdown",
   // N-021:capability-constant — bring your own AI key, Business and Enterprise.
   byok: "capability.byok",
+  // PHASE1:capability-constant — batch operations, Business and Enterprise.
+  batchDispatch: "capability.batch_dispatch",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];

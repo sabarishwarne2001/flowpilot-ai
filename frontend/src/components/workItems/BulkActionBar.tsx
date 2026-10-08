@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
-import { Download, Loader2, RotateCcw, Tag, Trash2, X } from "lucide-react";
+import { Download, Layers, Loader2, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -8,6 +8,12 @@ import { errorMessage } from "@/services/api/errors";
 
 import { runBulkAction, type BulkActionResult } from "@/services/api/ingestion";
 import { ingestionKeys, workItemKeys } from "@/services/api/queryKeys";
+import { CAPABILITY } from "@/constants/capabilities";
+import { NewBatchDialog } from "@/components/batches/NewBatchDialog";
+import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
+import { useOptionalTenant } from "@/routes/TenantContext";
+import { batchPath } from "@/routes/tenantPaths";
 
 /**
  * ARCH-38 — the bulk action bar.
@@ -58,6 +64,11 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
+  // Phase 1: "Add to batch", where the plan includes batch operations.
+  const [batching, setBatching] = useState(false);
+  const activeWorkspace = useActiveWorkspace();
+  const tenant = useOptionalTenant();
+  const batchAccess = useCapabilityAccess(activeWorkspace?.organizationId ?? "", CAPABILITY.batchDispatch);
   const [refusals, setRefusals] = useState<BulkActionResult["results"]>([]);
   const confirmRef = React.useRef<HTMLDivElement | null>(null);
   useDialogFocus(confirmRef, () => setConfirmingDelete(false), {
@@ -141,6 +152,18 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           Reprocess
         </button>
 
+        {batchAccess.granted && tenant ? (
+          <button
+            type="button"
+            onClick={() => setBatching(true)}
+            disabled={mutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 disabled:opacity-50"
+          >
+            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+            Add to batch
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={() => setShowTagInput((value) => !value)}
@@ -186,6 +209,16 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {batching && tenant ? (
+        <NewBatchDialog
+          workspaceId={workspaceId}
+          presetIds={selectedIds}
+          detailPath={(id) => batchPath(tenant.organization.organization_slug, tenant.workspace.slug, id)}
+          onClose={() => setBatching(false)}
+          onDone={onClear}
+        />
+      ) : null}
 
       {showTagInput && (
         <div className="mt-2 flex items-center gap-2">
