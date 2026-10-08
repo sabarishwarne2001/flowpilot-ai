@@ -346,3 +346,58 @@ test.describe("Overview (Phase 1)", () => {
     await expectHealthyPage(page);
   });
 });
+
+// F-167: the Cases page offered every action to every role. Templates need a workspace admin and
+// opening a case needs a contributor (the server refuses others with 403), yet a viewer saw the
+// template editor, Save draft, Publish, Retire and Open case.
+test.describe("Cases offer only what the role can do (F-167)", () => {
+  test.describe("viewer", () => {
+    test.use({ user: "C.viewer" });
+
+    test("a viewer reads the board and the templates but is offered no action", async ({ page }) => {
+      await page.goto(ws("C", "cases"));
+      await expect(page.getByRole("list", { name: "Case board" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Templates" })).toBeVisible();
+      for (const name of ["Save draft", "Publish", "Retire", "Open case"]) {
+        await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+      }
+      await expect(page.locator("main textarea")).toHaveCount(0);
+
+      // A case: read, but no changes (the owner's runs of the Cases test open them).
+      await page.getByRole("list", { name: "Case board" }).getByRole("link").first().click();
+      await expect(page).toHaveURL(/\/cases\/[0-9a-f-]{36}/);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      for (const name of ["Close case", "Re-check", "Add document", "Remove", "Withdraw", "Request upload link"]) {
+        await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+      }
+      await expectHealthyPage(page);
+    });
+  });
+
+  test.describe("viewer, scanned packets", () => {
+    test.use({ user: "C.viewer" });
+
+    test("a viewer sees a packet's split but cannot change, approve or reject it", async ({ page }) => {
+      await page.goto(ws("C", "packet-splits"));
+      await page.getByRole("link", { name: "scanned-packet-E2E.pdf" }).first().click();
+      await expect(page.getByRole("region", { name: "Pages" })).toBeVisible();
+      for (const name of ["Save boundaries", "Approve split", "Keep as one document"]) {
+        await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+      }
+      await expect(page.getByRole("button", { name: /a document boundary before page 2/ })).toBeDisabled();
+      await expectHealthyPage(page);
+    });
+  });
+
+  test.describe("contributor", () => {
+    test.use({ user: "C.member" });
+
+    test("a contributor can open a case but not edit templates", async ({ page }) => {
+      await page.goto(ws("C", "cases"));
+      await expect(page.getByRole("button", { name: "Open case", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
+      await expect(page.locator("main textarea")).toHaveCount(0);
+      await expectHealthyPage(page);
+    });
+  });
+});
