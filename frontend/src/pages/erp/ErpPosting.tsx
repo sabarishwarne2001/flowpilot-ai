@@ -15,7 +15,7 @@ import { NewTarget } from "@/components/erp/NewTarget";
 import { PostingTable } from "@/components/erp/PostingTable";
 import { ReadyToPost } from "@/components/erp/ReadyToPost";
 import { CAPABILITY } from "@/constants/capabilities";
-import { BUTTON_GHOST, BUTTON_PRIMARY, HINT, INPUT, PAGE_TITLE, SCROLL_X, SELECT, TABLE_HEAD, TABLE_ROW } from "@/components/ui/primitives";
+import { BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, PAGE_TITLE, SCROLL_X, SELECT, TABLE_HEAD, TABLE_ROW } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { erpTargetPath, verificationPath } from "@/routes/tenantPaths";
@@ -81,12 +81,16 @@ const ErpPosting: React.FC = () => {
   const targetRows = targets.data?.items ?? [];
   return (
     <div className="space-y-4 p-4">
-      <header className="flex flex-wrap items-center gap-2">
-        <BookUp className="h-5 w-5" aria-hidden />
-        <h1 className={PAGE_TITLE}>ERP posting</h1>
-        <span className={HINT}>Approved outcomes to your system of record — exactly once, done only when the ERP says so.</span>
+      <header className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className={`${PAGE_TITLE} flex items-center gap-2`}>
+            <BookUp className="h-5 w-5" aria-hidden />
+            ERP posting
+          </h1>
+          <p className={`${HINT} mt-1`}>Approved outcomes to your system of record — exactly once, done only when the ERP says so.</p>
+        </div>
         {isAdmin && !composing ? (
-          <button type="button" className={`${BUTTON_PRIMARY} ml-auto`} disabled={!catalog.data}
+          <button type="button" className={BUTTON_PRIMARY} disabled={!catalog.data}
             onClick={() => { setTab("targets"); setComposing(true); }}>
             <Plus className="h-4 w-4" aria-hidden /> New target
           </button>
@@ -134,10 +138,32 @@ const ErpPosting: React.FC = () => {
           {postings.isLoading ? <Loader2 className="h-5 w-5 animate-spin" aria-label="Loading" /> : null}
           {postings.isError ? <p className="text-sm text-destructive">{errorMessage(postings.error, "Could not load postings.")}</p> : null}
           {postings.data ? (
-            <>
-              <PostingTable rows={postings.data.items} />
-              <p className={HINT}>{postings.data.total} posting(s)</p>
-            </>
+            postings.data.total === 0 && !state && !targetId && !objectKind && !q.trim() ? (
+              // Phase 2: say what a posting is and where one comes from, instead of "No postings." and
+              // "0 posting(s)" one under the other.
+              <div className="rounded-xl border border-dashed border-border p-6 text-sm">
+                <p className="font-semibold text-foreground">Nothing has been posted yet</p>
+                <p className="mt-1 max-w-2xl text-muted-foreground">
+                  A posting is one approved outcome (a matched invoice, a resolved review) sent to an ERP target.
+                  {targetRows.length === 0
+                    ? " Add a target first, then approved documents appear under Ready to post."
+                    : " Approved documents wait under Ready to post until someone sends them."}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className={BUTTON_SECONDARY} onClick={() => setTab("ready")}>Open Ready to post</button>
+                  {targetRows.length === 0 ? (
+                    <button type="button" className={BUTTON_SECONDARY} onClick={() => setTab("targets")}>See targets</button>
+                  ) : null}
+                </div>
+              </div>
+            ) : postings.data.total === 0 ? (
+              <p className={HINT}>No posting matches these filters.</p>
+            ) : (
+              <>
+                <PostingTable rows={postings.data.items} />
+                <p className={HINT}>{postings.data.total} posting{postings.data.total === 1 ? "" : "s"}</p>
+              </>
+            )
           ) : null}
         </div>
       ) : null}
