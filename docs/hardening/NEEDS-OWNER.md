@@ -597,3 +597,17 @@ before the first paying customer; **N-028** keep `app.flowpilot.ai` / `admin@flo
 What is left is yours to *do*, not to decide (STATE.md, "Next action"): the Stripe test-mode
 prices and webhook, the Postmark server, the DNS record, and rolling the keys pasted in chats.
 
+
+---
+
+# Phase 1 — Document intelligence (2026-10-08): N-032 open
+
+## N-032 — Which plans include Batch operations (Phase 1)
+Batch operations (batches, confidence analytics, schema self-healing, dispatch lanes and
+SHA-256-verified export packages) is a new capability, `capability.batch_dispatch`. It is placed
+**provisionally on Business and Enterprise**, beside Tables and Cases, because it builds on the
+same document-intelligence engines and the brief asked for it to be built end to end without
+pausing. The Developer plan sees the page with an explanation and View plans; the server answers
+402 there. **Decide:** keep Business + Enterprise, or Enterprise only, or include it on Developer.
+Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py` (the browser test
+`23-batch-operations` "Developer plan" names the plans in its expected text). Not a price change.
