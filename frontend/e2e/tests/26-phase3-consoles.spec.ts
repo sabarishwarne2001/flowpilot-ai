@@ -290,3 +290,46 @@ test.describe("Workspace settings for someone who is not an organization admin (
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Matching tolerances (F-198, F-199)", () => {
+  test.describe("a contributor", () => {
+    test.use({ user: "C.member" });
+
+    test("reads the tolerances in force and is not offered preview or publish (F-198)", async ({ page }) => {
+      // Before the fix: the editor with "Preview last 30 days" and "Publish version N" for anyone;
+      // the server answers 403 to a contributor or viewer.
+      await page.goto(ws("C", "procurement/policies"));
+      await expect(page.getByRole("heading", { name: "Matching tolerances" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Preview last 30 days" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Publish version/ })).toHaveCount(0);
+      await expect(page.locator("main")).toContainText(/workspace administrators/i);
+      await expectHealthyPage(page);
+    });
+  });
+
+  test.describe("an owner", () => {
+    test.use({ user: "B.owner" });
+
+    test("the next version starts from the version in force, not from zeros (F-199)", async ({ page, session }) => {
+      const { workspaceId } = await resolveWorkspaceId(session!, TENANTS.B.org, TENANTS.B.ws);
+      const bps = 100 + Math.floor(Math.random() * 400);
+      const published = await api(session, "POST", `/workspaces/${workspaceId}/procurement/policies`, {
+        price_tolerance_micros: 50_000,
+        price_tolerance_bps: bps,
+        quantity_tolerance: "2",
+        max_pair_cost: 500_000,
+        candidate_window_days: 45,
+      });
+      expect(published.status, published.text).toBeLessThan(300);
+
+      // Before the fix every field of "Next version" read 0 (or the built-in default): changing
+      // one field and publishing reset every other tolerance the workspace had agreed.
+      await page.goto(ws("B", "procurement/policies"));
+      await expect(page.getByLabel("Price slack (basis points)")).toHaveValue(String(bps));
+      await expect(page.getByLabel("Price slack (micros)")).toHaveValue("50000");
+      await expect(page.getByLabel("Quantity slack")).toHaveValue("2");
+      await expect(page.getByLabel("Candidate window (days)")).toHaveValue("45");
+      await expectHealthyPage(page);
+    });
+  });
+});
