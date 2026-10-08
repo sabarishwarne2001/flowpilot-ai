@@ -28,6 +28,7 @@ import {
   percent,
 } from "@/services/api/radar";
 import { formatTimestamp } from "@/utils/displayTime";
+import { vendorLabel } from "@/utils/formatters";
 import type {
   AnomalyEvidence,
   AnomalyFindingSummary,
@@ -245,13 +246,16 @@ const EvidenceBlock: React.FC<{ readonly item: AnomalyEvidence }> = ({ item }) =
   if (item.kind === "identifiers" || item.kind === "chunk_pair") {
     const left = side(item, "subject");
     const right = side(item, "counterpart");
+    // F-174: a vendor is evidenced by its normalised key ("name:acme industrial supplies"); show it readable.
+    const shown = (value: unknown): string =>
+      label === "Vendor" ? vendorLabel(null, asText(value)) : asText(value);
     return (
       <SideBySide
         label={label}
         leftTitle="This document"
         rightTitle="Matched document"
-        left={asText(left["text"] ?? left["value"] ?? left["work_item_id"])}
-        right={asText(right["text"] ?? right["value"] ?? right["work_item_id"])}
+        left={shown(left["text"] ?? left["value"] ?? left["work_item_id"])}
+        right={shown(right["text"] ?? right["value"] ?? right["work_item_id"])}
         note={item.note}
       />
     );
