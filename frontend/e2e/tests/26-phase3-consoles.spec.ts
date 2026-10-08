@@ -7,7 +7,7 @@ import fs from "node:fs";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, resolveWorkspaceId } from "../support/api";
-import { STATE_FILE, TENANTS, org, runId } from "../support/env";
+import { STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
 
 interface NoticePage {
   readonly items: readonly { id: string; title: string; is_read: boolean }[];
@@ -273,5 +273,20 @@ test.describe("A failing request is not retried in a loop (F-195)", () => {
     expect(calls).toBeLessThanOrEqual(6);
     await expect(page.getByText("Loading billing…")).toHaveCount(0);
     await expect(page.locator("main")).toContainText(/couldn.t be loaded|could not be loaded/i);
+  });
+});
+
+test.describe("Workspace settings for someone who is not an organization admin (F-197)", () => {
+  test.use({ user: "C.member" });
+
+  test("General opens without asking for the organization's invitations", async ({ page }) => {
+    // Before the fix: GET /organizations/<id>/invitations answered 403 (strict fixture) and the
+    // page said "No active pending invitations found." whatever was pending.
+    await page.goto(ws("C", "settings?section=workspace"));
+    await expect(page.getByRole("heading", { name: "Workspace Settings" })).toBeVisible();
+    await settle(page);
+    await expect(page.getByText("No active pending invitations found.")).toHaveCount(0);
+    await expect(page.locator("main")).toContainText(/invitations are managed by .*organization/i);
+    await expectHealthyPage(page);
   });
 });

@@ -40,6 +40,8 @@ import {
   canManageWorkspaceMembers,
   canManageWorkspaceSettings,
 } from "@/permissions/workspacePermissions";
+import { canManageMembers } from "@/permissions/organizationPermissions";
+import type { OrganizationRole } from "@/types/tenancy";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ROUTES } from "@/constants/routes";
 import GrantWorkspaceAccessModal from "@/components/workspace/GrantWorkspaceAccessModal";
@@ -84,6 +86,11 @@ export const Workspace: React.FC = () => {
   const canEditWorkspace = canManageWorkspaceSettings(workspaceRole);
   const canManageTeam = canManageWorkspaceMembers(workspaceRole);
   const canArchive = canDeleteWorkspace(organizationRole);
+  // F-197. Invitations are the organization's (GET/POST /organizations/{id}/invitations, OWNER
+  // and ADMIN). Asked for by anyone who opened workspace settings, they answered 403 and the
+  // page said "No active pending invitations found."; a workspace admin who is not an
+  // organization admin was offered an invite form the server refuses.
+  const canManageInvitations = canManageMembers(String(organizationRole).toUpperCase() as OrganizationRole);
 
   const {
     register,
@@ -116,7 +123,7 @@ export const Workspace: React.FC = () => {
   const { data: pendingInvitations, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ["organizations", "invitations", organizationId],
     queryFn: () => listPendingInvitations(organizationId),
-    enabled: Boolean(organizationId),
+    enabled: Boolean(organizationId) && canManageInvitations,
   });
 
   useEffect(() => {
@@ -818,7 +825,14 @@ export const Workspace: React.FC = () => {
           Invite new collaborators to this workspace or manage active pending invitations.
         </p>
 
-        {canManageTeam && (
+        {!canManageInvitations ? (
+          <p className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            Invitations are managed by your organization&apos;s owners and administrators. Ask one
+            of them to invite someone to this workspace.
+          </p>
+        ) : null}
+
+        {canManageInvitations && canManageTeam && (
           <form onSubmit={handleSendInvite} className="p-4 rounded-lg bg-muted/20 border border-border grid grid-cols-12 gap-4 items-end">
             <div className="col-span-12 md:col-span-6 space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -861,6 +875,7 @@ export const Workspace: React.FC = () => {
           </form>
         )}
 
+        {canManageInvitations ? (
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
 
@@ -919,6 +934,7 @@ export const Workspace: React.FC = () => {
             </div>
           )}
         </div>
+        ) : null}
       </div>
 
       <ConfirmDialog
