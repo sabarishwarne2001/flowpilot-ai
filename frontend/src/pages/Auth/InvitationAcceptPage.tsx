@@ -287,7 +287,7 @@ export const InvitationAcceptPage: React.FC = () => {
               onClick={() => navigate(ROUTES.LOGIN)}
               className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50"
             >
-              Back to Login
+              Back to sign in
             </button>
           </div>
         )}
@@ -346,7 +346,7 @@ export const InvitationAcceptPage: React.FC = () => {
               onClick={() => navigate(ROUTES.LOGIN)}
               className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50"
             >
-              Back to Login
+              Back to sign in
             </button>
           </div>
         )}
