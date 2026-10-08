@@ -395,6 +395,37 @@ test.describe("The audit log on a phone and a tablet (F-203)", () => {
   }
 });
 
+test.describe("Session lifetime on the identity console (F-204)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the page states the limit in force, and the owner can shorten it and put it back", async ({ page, session }) => {
+    const { organizationId: orgId } = await resolveWorkspaceId(session!, TENANTS.C.org, TENANTS.C.ws);
+    const reset = () => api(session, "PUT", `/organizations/${orgId}/identity/security-policy`, { max_session_age_s: null });
+    expect((await reset()).status).toBe(200);
+    try {
+      await page.goto(`${org("C", "identity")}?tab=security`);
+      const field = page.getByRole("combobox", { name: "Session lifetime" });
+      await expect(field).toBeVisible();
+      // Before the fix: "No maximum session age is set." while every session ended after 12 hours.
+      const main = page.locator("main");
+      await expect(main).not.toContainText("No maximum session age");
+      await expect(main).toContainText("Members sign in again 12 hours after signing in, or after 30 minutes without activity.");
+      await expect(field).toHaveValue("");
+
+      await field.selectOption({ label: "8 hours" });
+      await expect(main).toContainText("Members sign in again 8 hours after signing in");
+      const stored = await api<{ max_session_age_s: number | null }>(session, "GET", `/organizations/${orgId}/identity/security-policy`);
+      expect(stored.body.max_session_age_s).toBe(8 * 3600);
+
+      await field.selectOption({ label: "Platform limit (12 hours)" });
+      await expect(main).toContainText("Members sign in again 12 hours after signing in");
+      await expectHealthyPage(page);
+    } finally {
+      await reset();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Two-party ownership transfer, end to end, between two people who sign up for this test (so no
 // seeded account changes role while other tests run).

@@ -31,6 +31,7 @@ import { AccessRestricted } from "@/components/common/AccessRestricted";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { organizationMembersPath } from "@/routes/tenantPaths";
 import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
+import type { SecurityPolicyRead } from "@/types/identity";
 
 type Tab = "domains" | "sso" | "jit" | "scim" | "security" | "audit";
 
@@ -83,6 +84,74 @@ export const IdentityAdminHub: React.FC = () => {
         </TabPanel>
       </div>
     </div>
+  );
+};
+
+const duration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  const parts = [
+    hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : "",
+    minutes ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : "",
+  ].filter(Boolean);
+  return parts.join(" ") || "under a minute";
+};
+
+const SESSION_CHOICES = [8 * 3600, 4 * 3600, 2 * 3600, 3600];
+
+/**
+ * F-204. This read "No maximum session age is set." while every session ended after 12 hours,
+ * and an organization's limit set through the API was shown as in force but never applied.
+ */
+const SessionLifetime: React.FC<{
+  readonly policy: SecurityPolicyRead;
+  readonly saving: boolean;
+  readonly onChange: (seconds: number | null) => void;
+}> = ({ policy, saving, onChange }) => {
+  const platform = policy.platform_max_session_age_s;
+  const own = policy.max_session_age_s;
+  const effective = own !== null && (!platform || own < platform) ? own : platform;
+  const choices = SESSION_CHOICES.filter((seconds) => !platform || seconds < platform);
+  if (own !== null && !choices.includes(own)) {
+    choices.unshift(own);
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4">
+      <label htmlFor="identity-session-lifetime" className="block text-sm font-medium">
+        Session lifetime
+      </label>
+      <p id="identity-session-lifetime-hint" className="mt-0.5 text-xs text-muted-foreground">
+        {effective
+          ? `Members sign in again ${duration(effective)} after signing in`
+          : "Sessions have no maximum age"}
+        {policy.idle_timeout_s ? `, or after ${duration(policy.idle_timeout_s)} without activity.` : "."}
+        {own !== null && platform && own >= platform
+          ? ` Your limit of ${duration(own)} is longer than the platform's, so the platform's applies.`
+          : ""}{" "}
+        Someone in several organizations gets the shortest limit among them.
+      </p>
+      <select
+        id="identity-session-lifetime"
+        aria-describedby="identity-session-lifetime-hint"
+        value={own ?? ""}
+        disabled={saving}
+        onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
+        className="mt-2 w-full max-w-xs rounded-md border border-border bg-background px-2.5 py-1.5 text-sm disabled:opacity-50"
+      >
+        <option value="">
+          {platform ? `Platform limit (${duration(platform)})` : "No limit"}
+        </option>
+        {choices.map((seconds) => (
+          <option key={seconds} value={seconds}>
+            {duration(seconds)}
+          </option>
+        ))}
+      </select>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Identity provider session sync: {policy.idp_session_sync ? "on" : "off"}
+      </p>
+    </section>
   );
 };
 
@@ -286,18 +355,11 @@ const SecurityPolicyPanel: React.FC = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <span className="block text-sm font-medium">Session lifetime</span>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {policy.max_session_age_s
-            ? `Sessions end after ${Math.round(policy.max_session_age_s / 3600)} hours.`
-            : "No maximum session age is set."}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Identity provider session sync:{" "}
-          {policy.idp_session_sync ? "on" : "off"}
-        </p>
-      </section>
+      <SessionLifetime
+        policy={policy}
+        saving={update.isPending}
+        onChange={(seconds) => update.mutate({ max_session_age_s: seconds })}
+      />
 
       {update.isError && (
         <p role="alert" className="text-sm text-destructive">
