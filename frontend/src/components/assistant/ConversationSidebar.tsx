@@ -37,6 +37,8 @@ interface ConversationSidebarProps {
   readonly workspaceId: string;
   readonly selectedId: string | null;
   readonly onSelect: (session: ConversationSession | null) => void;
+  /** F-200. A viewer reads the workspace's conversations; starting or deleting one is a contributor's. */
+  readonly canWrite?: boolean;
 }
 
 const TABS: readonly { readonly key: ConversationKindFilter; readonly label: string }[] = [
@@ -62,6 +64,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   workspaceId,
   selectedId,
   onSelect,
+  canWrite = true,
 }) => {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<ConversationKindFilter>("all");
@@ -344,6 +347,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
                   {action.label}
                 </button>
               ))}
+{canWrite ? (
               <button
                 type="button"
                 role="menuitem"
@@ -356,6 +360,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
                 Delete
               </button>
+              ) : null}
             </div>
           </PortalMenu>
         )}
@@ -372,6 +377,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Conversations
         </p>
+{canWrite ? (
         <button
           type="button"
           onClick={() => create.mutate()}
@@ -385,6 +391,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
           )}
           New
         </button>
+        ) : null}
       </div>
 
       <label className="relative mb-2 block">

@@ -333,3 +333,19 @@ test.describe("Matching tolerances (F-198, F-199)", () => {
     });
   });
 });
+
+test.describe("The assistant for a workspace viewer (F-200)", () => {
+  test.use({ user: "C.viewer" });
+
+  test("a viewer reads conversations and is not offered to start or send one", async ({ page }) => {
+    // Before the fix "New" answered 403 (and so did sending): the server lets a viewer read
+    // the workspace's conversations, not start them or ask.
+    await page.goto(ws("C", "assistant"));
+    await expect(page.getByRole("heading", { name: "AI Assistant", level: 1 })).toBeVisible();
+    await settle(page);
+    await expect(page.getByRole("button", { name: "New", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Send message" })).toHaveCount(0);
+    await expect(page.locator("main")).toContainText(/contributor access/i);
+    await expectHealthyPage(page);
+  });
+});

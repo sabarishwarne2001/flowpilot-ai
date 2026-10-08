@@ -603,6 +603,7 @@ export const WorkItemDetails: React.FC = () => {
                       mode="document"
                       conversationId={conversationId}
                       workItemId={workItem.id}
+                      readOnly={!canEditOwnContent(role)}
                     />
                   ) : (
                     <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 p-10">

@@ -79,6 +79,7 @@ export const Assistant: React.FC = () => {
             workspaceId={workspaceId}
             selectedId={session?.id ?? null}
             onSelect={select}
+            canWrite={canWrite}
           />
         </div>
 
@@ -96,6 +97,7 @@ export const Assistant: React.FC = () => {
               mode="global"
               {...(session ? { conversationId: session.id } : {})}
               {...(draft ? { draft } : {})}
+              readOnly={!canWrite}
               className="h-full w-full shadow-sm"
             />
           </div>
