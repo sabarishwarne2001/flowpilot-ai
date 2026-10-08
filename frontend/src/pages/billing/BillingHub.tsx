@@ -35,7 +35,7 @@ export const BillingHub: React.FC = () => {
   const canManageBilling = canManageBillingFor(role);
   const canSetLimits = role === "OWNER" || role === "ADMIN";
 
-  const { data: state, isLoading } = useQuery({
+  const { data: state, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: billingKeys.subscription(organizationId),
     queryFn: () => getSubscriptionState(organizationId),
     enabled: Boolean(organizationId),
@@ -117,6 +117,24 @@ export const BillingHub: React.FC = () => {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading billing…
+          </div>
+        ) : isError && !state ? (
+          <div role="alert" className="rounded-lg border border-border bg-card p-4">
+            <p className="text-sm font-medium text-foreground">
+              Your subscription couldn&apos;t be loaded.
+            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Nothing has changed with your plan. Try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="fp-btn fp-btn-secondary mt-3"
+            >
+              {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Try again
+            </button>
           </div>
         ) : (
           <>

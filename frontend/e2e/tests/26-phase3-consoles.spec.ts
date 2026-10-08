@@ -252,3 +252,26 @@ test.describe("Billing opened by its address by a member (F-194)", () => {
   });
 });
 
+test.describe("A failing request is not retried in a loop (F-195)", () => {
+  test.use({ user: "C.owner" });
+
+  test("when the subscription cannot be read, the Billing page asks a few times, not hundreds", async ({ page, problems }) => {
+    problems.allowHttp(/\/billing\/subscription$/, [500], "an outage of this endpoint is simulated");
+    problems.allowConsole(/status of 500/, "the simulated outage");
+    let calls = 0;
+    // A server outage on one endpoint (the only way to make the real API fail on demand).
+    await page.route(/\/billing\/subscription$/, async (route) => {
+      calls += 1;
+      await route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":"simulated outage"}' });
+    });
+    await page.goto(org("C", "billing"));
+    await page.waitForTimeout(15_000);
+    console.log(`subscription calls in 15 s: ${calls}`);
+    // Before the fix the page unmounted its body for "Loading billing…" on every attempt, the
+    // seat card re-mounted and asked again, for as long as the page was open (a 403 looped ~30
+    // times a second; a 500 every few seconds, between retries), and it never said it had failed.
+    expect(calls).toBeLessThanOrEqual(6);
+    await expect(page.getByText("Loading billing…")).toHaveCount(0);
+    await expect(page.locator("main")).toContainText(/couldn.t be loaded|could not be loaded/i);
+  });
+});

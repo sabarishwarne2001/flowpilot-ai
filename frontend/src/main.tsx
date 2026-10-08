@@ -51,6 +51,15 @@ export const queryClient = new QueryClient({
 
       refetchOnMount: "always",
 
+      // F-195. A query that has failed is not fetched again just because another component
+      // that reads it mounted. With "always" above, a page that hid its body while a query was
+      // pending, beside a child reading the same query, looped: the child mounted, refetched,
+      // the refetch put the query back to pending, the page hid the child, the answer was the
+      // same error, the child mounted again… (a 403 ~30 times a second; an outage every few
+      // seconds, for as long as the page was open). A failed query is retried by its own retry
+      // policy, on window focus, on reconnect, or by "Try again".
+      retryOnMount: false,
+
       retry: (failureCount, error) => {
         if (error instanceof ApiError) {
           if (
