@@ -41,7 +41,18 @@ from app.models.payment_risk import (
 from app.models.work_item import WorkItem
 
 ROLE_INVOICE = "INVOICE"
-ACCOUNT_FIELDS = ("iban", "bank_account_number", "account_number", "bank_account")
+#: F-173. The payee account under every name models give it, most specific first. The check read
+#: only the first four, and the platform's extraction answers `vendor_bank_account`: the account on
+#: INV-E2E-1002 changed and the radar said no invoice had changed its bank account.
+ACCOUNT_FIELDS = (
+    "iban", "bank_account_number", "account_number", "bank_account",
+    "vendor_bank_account", "vendor_iban", "vendor_account_number", "vendor_bank_account_number",
+    "supplier_bank_account", "supplier_iban", "supplier_account_number",
+    "beneficiary_account", "beneficiary_iban", "beneficiary_account_number",
+    "payee_account", "payee_iban", "payee_account_number", "remit_to_account",
+)
+#: Objects a model nests the account in ({"bank_details": {"iban": ...}}).
+ACCOUNT_CONTAINERS = ("bank_details", "banking_details", "payment_details", "remit_to", "bank", "remittance")
 MIN_ACCOUNT_CHARS = 6
 PRIOR_INVOICES_EXAMINED = 20
 #: A total of at least ROUND_MINIMUM that is an exact multiple of ROUND_STEP.
@@ -50,15 +61,27 @@ ROUND_MINIMUM = Decimal("5000")
 MICROS = Decimal("1000000")
 
 
-def _account(entities: Any) -> Optional[str]:
-    if not isinstance(entities, dict):
+def _snake(key: Any) -> str:
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(key).strip())
+    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+
+
+def _account(entities: Any, *, depth: int = 0) -> Optional[str]:
+    if not isinstance(entities, dict) or depth > 1:
         return None
+    by_key = {_snake(key): value for key, value in entities.items()}
     for key in ACCOUNT_FIELDS:
-        value = entities.get(key)
-        if isinstance(value, (str, int)):
+        value = by_key.get(key)
+        if isinstance(value, dict):
+            value = value.get("value")
+        if isinstance(value, (str, int)) and not isinstance(value, bool):
             compact = re.sub(r"[^0-9A-Za-z]", "", str(value)).upper()
             if len(compact) >= MIN_ACCOUNT_CHARS:
                 return compact
+    for key in ACCOUNT_CONTAINERS:
+        nested = _account(by_key.get(key), depth=depth + 1)
+        if nested is not None:
+            return nested
     return None
 
 
