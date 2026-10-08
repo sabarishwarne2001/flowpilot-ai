@@ -58,7 +58,8 @@ class DashboardOverviewResponse(BaseModel):
 
     failed_count: int
 
-    automation_success_rate: float
+    # F-161: completed / (completed + failed) as a percentage; None until a document finishes.
+    automation_success_rate: float | None = None
 
     document_type_distribution: list[DocumentTypeDistribution]
 

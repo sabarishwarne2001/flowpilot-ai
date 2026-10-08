@@ -80,7 +80,8 @@ def get_dashboard_overview(
     completed, failed = get_completion_statistics(db, workspace_id=workspace_id)
 
     finished = completed + failed
-    success_rate = 100.0 if finished == 0 else round(completed / finished * 100, 1)
+    # F-161: with nothing finished there is no rate (it used to read 100%).
+    success_rate = None if finished == 0 else round(completed / finished * 100, 1)
 
     return DashboardOverviewResponse(
         total_work_items=total_documents,

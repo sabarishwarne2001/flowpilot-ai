@@ -92,7 +92,8 @@ export interface DashboardMetricsResponse {
    * Automation success rate expressed
    * as a percentage between 0 and 100.
    */
-  readonly automation_success_rate: number;
+  /** Null until a document has finished processing (F-161). */
+  readonly automation_success_rate: number | null;
 
   /**
    * Distribution of uploaded document types.

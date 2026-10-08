@@ -131,7 +131,8 @@ export const Dashboard: React.FC = () => {
     },
     {
       title: "Success Rate",
-      value: `${metrics.automation_success_rate}%`,
+      // F-161: nothing finished yet is not "100%".
+      value: metrics.automation_success_rate === null ? "—" : `${metrics.automation_success_rate}%`,
       icon: TrendingUp,
     },
   ];
