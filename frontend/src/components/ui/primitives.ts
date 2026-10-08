@@ -45,4 +45,5 @@ export const TABLE_HEAD =
 export const TABLE_ROW =
   "border-b border-border/50 last:border-0 transition-colors hover:bg-muted/40";
 
-export const SCROLL_X = "overflow-x-auto overscroll-x-contain";
+/** F-203: `relative` keeps absolutely positioned content (sr-only labels) inside the scroller. */
+export const SCROLL_X = "relative overflow-x-auto overscroll-x-contain";

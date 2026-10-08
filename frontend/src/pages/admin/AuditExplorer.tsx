@@ -201,7 +201,9 @@ export const AuditExplorer: React.FC = () => {
           No entries match these filters.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
+        <div className="relative overflow-x-auto rounded-md border border-border">
+          {/* F-203. `relative`: the table's sr-only labels are absolutely positioned; without a
+              positioned scroller they escaped its clipping and widened the whole page. */}
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left text-xs text-muted-foreground">

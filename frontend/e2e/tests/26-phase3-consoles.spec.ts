@@ -370,3 +370,24 @@ test.describe("Branding on a plan without custom branding (F-201)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("The audit log on a phone and a tablet (F-203)", () => {
+  test.use({ user: "C.owner" });
+
+  for (const width of [390, 768]) {
+    test(`the page does not scroll sideways at ${width}px; the table scrolls inside its card`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(org("C", "audit"));
+      await expect(page.locator("main table").first()).toBeVisible();
+      await settle(page);
+      // Before the fix the table (846px) widened the whole document: the header, sidebar
+      // toggle and page title slid off screen with it.
+      const widths = await page.evaluate(() => ({
+        doc: document.documentElement.scrollWidth,
+        view: document.documentElement.clientWidth,
+      }));
+      expect(widths.doc).toBeLessThanOrEqual(widths.view);
+      await expectHealthyPage(page);
+    });
+  }
+});
