@@ -2528,6 +2528,23 @@ tests that expect exactly the two sample invoices. Each sample is now looked up 
 `86b2941`. The copies already made in the long-lived local database are flagged duplicates
 (F-158 working as designed); a fresh database, as in CI, has none.
 
+### F-169 — Hovering the entity graph restarted its layout (P3, fixed)
+**Plain language.** Moving the pointer over a record made the whole graph start moving again
+for several seconds, so the record you were reaching for slid away. Hover was React state the
+drawing depended on; each hover rebuilt the simulation and the layout effect restarted it. Hover
+and search now only redraw. With it: labels carry a halo so edges no longer cross them, touching
+nodes keep a ring between them, the legend lists only kinds present, and "Find a record" dims
+the rest. `e3bdf90`. **Proof** browser test "Entity graph (Phase 1, F-169)" counts animation
+frames after one hover: 66 on the previous code, under 10 now.
+
+### F-170 — A page loading during sign-out sent the revoked session (P3, fixed)
+Seen in the full browser suite: the overview mounted just after Sign Out was clicked, asked for
+its data with the session the server had just ended, got 401, and the client then tried a refresh
+(401 again). Harmless to the person, but the same moment could leave any page in an error state.
+While a sign-out is in progress the API client now sends nothing but the sign-out itself.
+`25ee4b4`. **Proof** browser test "Signing out (F-170)" (holds the sign-out's answer for 1.5 s
+while the overview opens): failed before with both 401s, passes now; `30-auth` passes (13).
+
 ### Batch operations verifier: a corrupted package answered 500 (P2, fixed before release)
 Found while testing the new module below: one changed byte inside a zip entry raised a CRC
 error. It is now reported as tampering (or "not a package" for an unreadable manifest).
