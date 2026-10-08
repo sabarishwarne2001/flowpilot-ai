@@ -207,10 +207,12 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         unroutable_reason=None,
         key_prefix="gsk_",
         platform_setting="GROQ_API_KEY",
+        # F-196. Groq retired mixtral-8x7b-32768 (March 2025) and the Llama 3.x models
+        # (16 August 2026); a tenant's own key is offered the models Groq serves.
         suggested_models=(
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.6-27b",
         ),
         # Groq serves no embeddings API. Listing EMBEDDING here would let a
         # tenant save a routing policy that cannot execute.
