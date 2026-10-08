@@ -2550,6 +2550,18 @@ Found while testing the new module below: one changed byte inside a zip entry ra
 error. It is now reported as tampering (or "not a package" for an unreadable manifest).
 `74e13d7`. **Proof** `test_a_corrupted_byte_is_tampering_not_a_server_error`.
 
+### Verification (Phase 1)
+- Backend, full suite: 3,450 passed, 1 failed, 9 skipped. The one failure was the
+  storage-boundary guard flagging the export-package writer's in-memory `write_bytes` method;
+  renamed (`8b4eac7`), the guard and the batch suites pass (69). The guard is unchanged.
+- Browser, full suite (production CSP, model stand-in): 333 passed, 5 failed, 1 skipped. One
+  failure was F-170 (fixed, `30-auth` 13/13 after). Four are data only on the long-lived local
+  database (second copies of the samples from F-168; tests that expect exactly two sample
+  invoices); they pass on a fresh database. No traceback or 5xx in the API or worker logs
+  during the run.
+- Build, both `tsc` projects, lint, self-checks, no source maps, encoding: clean. One Alembic
+  head (`p8a2`); drift check: no new drift.
+
 ### Checked and not defects
 - Every verification reads "agents disagree" (a review hold) while no calibration model exists:
   the calibrated-autonomy design, not a fault.

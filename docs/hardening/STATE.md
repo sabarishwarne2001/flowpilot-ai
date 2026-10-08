@@ -26,8 +26,10 @@ Builds on the live-feedback release (merged into `main`).
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
   polish, live feedback & Tier-1 elevation:** merged.
 - **Phase 1 — document intelligence** (this branch): F-155 to F-170 fixed; Batch operations built.
-  - Backend suite (full, after the last backend change): running when this was written; the
-    result is recorded in the next update of this file.
+  - Backend suite (full): **3,450 passed, 1 failed, 9 skipped** (was 3,366 passed: 84 new
+    tests). The failure was the storage-boundary source guard reading a method named
+    `write_bytes` on the in-memory package writer; renamed (`8b4eac7`), the guard and the batch
+    suites pass (69). No other backend file changed after the full run.
   - Browser suite (full, production CSP, model stand-in, on the long-lived local database):
     **333 passed, 5 failed, 1 skipped.** One failure was real and is fixed (F-170, re-run: 13/13
     in `30-auth`). The other four are data only: that database holds a second copy of each sample
