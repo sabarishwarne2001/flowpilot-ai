@@ -19,12 +19,14 @@
  *        problems after a first save attempt).
  * F-180: a clause check listens to "document processed", yet its Workflows card said "When: No
  *        trigger (paused)" and, with no list of actions, read as a rule that does nothing.
+ * F-181: in the Redaction Studio, holding an arrow key saved a new region on every key repeat (a
+ *        smear of overlapping boxes, all burned), though the code meant to save once on key-up.
  */
 import fs from "node:fs";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "../support/api";
-import { runId, ws } from "../support/env";
+import { STATE_FILE, runId, ws } from "../support/env";
 import { DISPUTED_INVOICE_PAGE, buildPdf } from "../support/sample-docs";
 
 test.describe("Three-way matching (F-171, F-172, F-174)", () => {
@@ -230,5 +232,39 @@ test.describe("Workflows (F-179, F-180)", () => {
     await expect(card).toContainText("When: Document processed");
     await expect(card).not.toContainText("No trigger");
     await expect(card).not.toContainText("does nothing");
+  });
+});
+
+test.describe("Redaction studio keyboard (F-181)", () => {
+  test.use({ user: "C.owner" });
+
+  test("holding an arrow key places one copy of the region, not one per key repeat", async ({ page }) => {
+    test.setTimeout(180_000);
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const invoice = (state.documents.C.items as Array<{ id: string; name: string }>).find((item) =>
+      item.name.includes("INV-E2E-1001"),
+    );
+    await page.goto(ws("C", `work-items/${invoice?.id}`));
+    await page.getByRole("button", { name: "Redact" }).click();
+    await page.getByRole("menu", { name: "Redaction profile" }).getByRole("menuitem").first().click();
+    await expect(page).toHaveURL(/\/redactions\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    const region = page.getByRole("button", { name: /IBAN on page 1/ }).first();
+    await expect(region).toBeVisible({ timeout: 60_000 });
+
+    const created: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && /\/redactions\/[^/]+\/regions$/.test(new URL(request.url()).pathname)) {
+        created.push(request.url());
+      }
+    });
+    await region.click();
+    // Five keydowns without a keyup is what a held key sends (the later ones are repeats).
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.down("ArrowRight");
+    }
+    await page.keyboard.up("ArrowRight");
+    await settle(page, 1500);
+    expect(created, "one region for one held key").toHaveLength(1);
+    await expectHealthyPage(page);
   });
 });

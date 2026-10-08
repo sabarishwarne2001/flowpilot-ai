@@ -387,34 +387,73 @@ const RedactionStudio: React.FC = () => {
     [addMutation],
   );
 
+  // F-181: the edit accumulates while an arrow key is held (each auto-repeat adds one step, shown
+  // as a dashed outline) and is saved once, on key-up. Saving on every keydown placed one region
+  // per key repeat: holding Alt+Right left a smear of overlapping boxes, all of them burned.
+  const pendingNudge = useRef<{ region: RedactionRegion; dx: number; dy: number; resize: boolean } | null>(null);
+  const [nudged, setNudged] = useState<Rect | null>(null);
+
   useEffect(() => {
     if (!editable) {
       return undefined;
     }
-    const handler = (event: KeyboardEvent) => {
-      if (!selectedId) {
+    const ARROWS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, 1],
+      ArrowDown: [0, -1],
+    };
+    const shifted = (pending: NonNullable<typeof pendingNudge.current>): Rect => {
+      const { region, dx, dy, resize } = pending;
+      return resize
+        ? { x0: region.x0, y0: region.y0, x1: region.x1 + dx, y1: region.y1 + dy }
+        : { x0: region.x0 + dx, y0: region.y0 + dy, x1: region.x1 + dx, y1: region.y1 + dy };
+    };
+    const commit = () => {
+      const pending = pendingNudge.current;
+      pendingNudge.current = null;
+      setNudged(null);
+      if (pending && (pending.dx !== 0 || pending.dy !== 0)) {
+        nudge(pending.region, pending.dx, pending.dy, pending.resize);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = ARROWS[event.key];
+      if (!direction || !selectedId) {
         return;
       }
       const region = regions.find((r) => r.id === selectedId);
       if (!region) {
         return;
       }
+      event.preventDefault();
       const step = event.altKey ? NUDGE_COARSE : NUDGE;
-      const map: Record<string, [number, number]> = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, step],
-        ArrowDown: [0, -step],
-      };
-      const delta = map[event.key];
-      if (!delta) {
+      const current =
+        pendingNudge.current && pendingNudge.current.region.id === region.id
+          ? pendingNudge.current
+          : { region, dx: 0, dy: 0, resize: event.shiftKey };
+      const next = { ...current, dx: current.dx + direction[0] * step, dy: current.dy + direction[1] * step };
+      const rect = shifted(next);
+      if (rect.x1 <= rect.x0 || rect.y1 <= rect.y0) {
         return;
       }
-      event.preventDefault();
-      nudge(region, delta[0], delta[1], event.shiftKey);
+      pendingNudge.current = next;
+      setNudged(rect);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (ARROWS[event.key]) {
+        commit();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    // A key released while the window is not focused never sends key-up: save what was held.
+    window.addEventListener("blur", commit);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", commit);
+    };
   }, [editable, selectedId, regions, nudge]);
 
   // ARCH41-S3:draw-escape. Escape abandons the drag in progress; pressed with
@@ -672,6 +711,12 @@ const RedactionStudio: React.FC = () => {
               <div
                 className="pointer-events-none absolute border-2 border-dashed border-primary bg-primary/20"
                 style={toCss(draft, size)}
+              />
+            ) : null}
+            {nudged && size ? (
+              <div
+                className="pointer-events-none absolute border-2 border-dashed border-primary bg-primary/20"
+                style={toCss(nudged, size)}
               />
             ) : null}
           </div>
