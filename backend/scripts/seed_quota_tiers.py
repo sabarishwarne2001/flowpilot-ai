@@ -133,6 +133,7 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.case_intelligence"),  # ARCH43-S1:tier-enterprise
     _capability("capability.table_intelligence"),  # ARCH44-S1:tier-enterprise
     _capability("capability.batch_dispatch"),  # PHASE1:tier-enterprise
+    _capability("capability.truthmesh"),  # PHASE2:tier-enterprise (provisional, N-033)
     _capability("capability.universal_corroborator"),  # ARCH45-S1:tier-enterprise (Enterprise only)
     _capability("capability.obligations"),  # ARCH46-S1:tier-enterprise
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-enterprise

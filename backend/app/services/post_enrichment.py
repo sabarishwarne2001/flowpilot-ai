@@ -252,6 +252,23 @@ def dispatch_in_session(
         )
         enqueued.append(obligation_vocab.JOB_EXTRACT)
 
+    # PHASE2:truthmesh-dispatch. Every enriched document joins the workspace's TruthMesh (LIGHT
+    # profile): its twin, its links and its neighbourhood's conflicts, for organizations whose plan
+    # carries capability.truthmesh. A little after the role row and entity resolution land.
+    from app.services.truthmesh import gate as truthmesh_gate
+    from app.services.truthmesh import vocabulary as truthmesh_vocab
+
+    if truthmesh_gate.capability_held(db, organization_id):
+        job_service.enqueue(
+            db,
+            job_type=truthmesh_vocab.JOB_INDEX_DOCUMENT,
+            organization_id=organization_id,
+            payload={"work_item_id": str(work_item_id)},
+            idempotency_key=f"{truthmesh_vocab.JOB_INDEX_DOCUMENT}:{work_item_id}:{marker}",
+            available_at=_dt.now(_tz.utc) + _td(seconds=truthmesh_vocab.INDEX_DELAY_SECONDS),
+        )
+        enqueued.append(truthmesh_vocab.JOB_INDEX_DOCUMENT)
+
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued, "stale_comparisons": stale}
 
 

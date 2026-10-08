@@ -182,6 +182,13 @@ LIGHT = WorkerProfile(
             # model, OCR or PDF engine. Not optional bookkeeping (see above).
             "batches.build_export_package",
             "batches.sweep_export_packages",
+            # Phase 2 TruthMesh. Reading a document's twin is the corroborator's field reader and
+            # regular expressions over stored text; links and conflicts are set arithmetic; the
+            # semantic signal is a cosine over centroids pgvector averages from stored chunk
+            # embeddings (numpy for a full build). No model, OCR or PDF engine. Not optional
+            # bookkeeping (see above).
+            "truthmesh.index_document",
+            "truthmesh.rebuild_workspace",
         }
     ),
     allow_heavy=frozenset(),

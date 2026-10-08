@@ -78,6 +78,8 @@ _DISPLAY_NAMES = {
     entitlements.BYOK_CAPABILITY: "Bring your own AI key (BYOK)",
     # PHASE1:capability-display
     entitlements.BATCH_DISPATCH_CAPABILITY: "Batch operations and integrity-verified export packages",
+    # PHASE2:capability-display
+    entitlements.TRUTHMESH_CAPABILITY: "TruthMesh: the cross-document digital twin",
 }
 
 

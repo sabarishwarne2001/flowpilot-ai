@@ -166,6 +166,10 @@ api_router.include_router(tables.router)
 from app.api.v1 import batches as batches_api  # noqa: E402
 
 api_router.include_router(batches_api.router)
+# Phase 2 TruthMesh. Every route is gated on capability.truthmesh.
+from app.api.v1 import truthmesh as truthmesh_api  # noqa: E402
+
+api_router.include_router(truthmesh_api.router)
 # ARCH45-S1:corroboration-router. Every route is gated on capability.universal_corroborator.
 api_router.include_router(corroboration.router)
 # ARCH46-S1:obligations-router. Every route is gated on capability.obligations;
