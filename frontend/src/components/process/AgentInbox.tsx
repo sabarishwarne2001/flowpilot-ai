@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react";
 
 import { ProposalStatusBadge, pct } from "@/components/process/common";
 import { ProposalPanel } from "@/components/process/ProposalPanel";
-import { HINT, SCROLL_X, SURFACE, TABLE_HEAD, TABLE_ROW } from "@/components/ui/primitives";
+import { HINT, SURFACE } from "@/components/ui/primitives";
 import { casePath, processProposalPath, verificationPath } from "@/routes/tenantPaths";
 import { listProposals, processKeys, type ProposalFilters } from "@/services/api/process";
 import { errorMessage } from "@/services/api/errors";
@@ -66,48 +66,42 @@ export const AgentInbox: React.FC<{
           <p className={HINT}>Nothing here. The agent plans every open review item and incomplete or inconsistent case on each sweep.</p>
         ) : null}
         {list.data && list.data.items.length > 0 ? (
-          <div className={SCROLL_X}>
-            <table className="w-full min-w-[620px] text-sm">
-              <thead>
-                <tr className={TABLE_HEAD}>
-                  <th className="px-2 py-2">Proposal</th>
-                  <th className="px-2 py-2">Item</th>
-                  <th className="px-2 py-2">Confidence</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.data.items.map((p) => (
-                  <tr key={p.id} className={`${TABLE_ROW} ${selectedId === p.id ? "bg-primary/5" : ""}`}>
-                    <td className="px-2 py-2">
-                      <Link to={processProposalPath(orgSlug, workspaceSlug, p.id)} onClick={(e) => { e.preventDefault(); onSelect(p.id); }}
-                        className="font-semibold text-primary hover:underline">
-                        {p.label}
-                      </Link>
-                      {p.verdict ? <span className="ml-1 text-[11px] font-semibold text-muted-foreground">{p.verdict}</span> : null}
-                      {p.injection_suspected ? <span className="ml-1 text-[11px] font-semibold text-destructive">injection?</span> : null}
-                    </td>
-                    <td className="px-2 py-2 text-xs">
-                      {p.subject_type === "CASE" ? (
-                        <Link className="hover:underline" to={casePath(orgSlug, workspaceSlug, p.subject_id)}>Case</Link>
-                      ) : (
-                        <Link className="hover:underline" to={verificationPath(orgSlug, workspaceSlug)}>
-                          {KIND_LABELS[p.subject_kind as ReviewKind] ?? p.subject_kind}
-                        </Link>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 tabular-nums text-xs">
-                      {pct(p.confidence)}
-                      {p.calibrated_probability !== null ? <span className="text-muted-foreground"> (cal. {pct(p.calibrated_probability)})</span> : null}
-                    </td>
-                    <td className="px-2 py-2"><ProposalStatusBadge status={p.status} /></td>
-                    <td className="px-2 py-2 text-xs text-muted-foreground">{formatTimestamp(p.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          // Phase 2: two lines per proposal instead of five columns squeezed into half the page
+          // (the "When" column was cut off and every status pill wrapped).
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border" aria-label="Proposals">
+            {list.data.items.map((p) => (
+              <li
+                key={p.id}
+                className={`px-3 py-2 ${selectedId === p.id ? "bg-primary/5 shadow-[inset_2px_0_0_hsl(var(--primary))]" : "hover:bg-muted/30"}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <Link to={processProposalPath(orgSlug, workspaceSlug, p.id)} onClick={(e) => { e.preventDefault(); onSelect(p.id); }}
+                    className="min-w-0 text-sm font-semibold text-primary hover:underline">
+                    {p.label}
+                  </Link>
+                  <span className="shrink-0"><ProposalStatusBadge status={p.status} /></span>
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                  {p.subject_type === "CASE" ? (
+                    <Link className="font-medium text-foreground/80 hover:underline" to={casePath(orgSlug, workspaceSlug, p.subject_id)}>Case</Link>
+                  ) : (
+                    <Link className="font-medium text-foreground/80 hover:underline" to={verificationPath(orgSlug, workspaceSlug)}>
+                      {KIND_LABELS[p.subject_kind as ReviewKind] ?? p.subject_kind}
+                    </Link>
+                  )}
+                  <span aria-hidden>·</span>
+                  <span className="tabular-nums">
+                    {pct(p.confidence)} confident
+                    {p.calibrated_probability !== null ? ` (calibrated ${pct(p.calibrated_probability)})` : ""}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <span>{formatTimestamp(p.created_at)}</span>
+                  {p.verdict ? <span className="rounded bg-muted px-1 text-[10.5px] font-semibold">{p.verdict}</span> : null}
+                  {p.injection_suspected ? <span className="rounded bg-destructive/10 px-1 text-[10.5px] font-semibold text-destructive">injection?</span> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : null}
         {list.data && list.data.total > PAGE ? (
           <nav className="flex items-center justify-between text-xs text-muted-foreground" aria-label="Pages">
@@ -121,7 +115,7 @@ export const AgentInbox: React.FC<{
           </nav>
         ) : null}
       </div>
-      <div className={`${SURFACE} p-4`}>
+      <div className={`${SURFACE} self-start p-4 lg:sticky lg:top-4`}>
         {selectedId ? (
           <ProposalPanel workspaceId={workspaceId} proposalId={selectedId} canAct={canAct} onClose={() => onSelect(null)} />
         ) : (
