@@ -15,6 +15,10 @@
  * F-178: with an extraction item open in the review hub, "a" (the hub's "assign to me") also
  *        reached the embedded workbench, whose "a" is "accept all": one key assigned the item and
  *        approved every value the agents disagreed on. "e" (collapse) also switched it to editing.
+ * F-179: the rule builder's summary said "Ready to save" on an empty rule (it only heard about
+ *        problems after a first save attempt).
+ * F-180: a clause check listens to "document processed", yet its Workflows card said "When: No
+ *        trigger (paused)" and, with no list of actions, read as a rule that does nothing.
  */
 import fs from "node:fs";
 
@@ -197,5 +201,34 @@ test.describe("Review hub keyboard (F-178)", () => {
     await row.getByRole("button", { name: "Accept all" }).click();
     await expect(row).toHaveCount(0, { timeout: 15_000 });
     await expectHealthyPage(page);
+  });
+});
+
+test.describe("Workflows (F-179, F-180)", () => {
+  test.use({ user: "C.owner" });
+
+  test("the builder's summary does not call an empty rule ready to save", async ({ page }) => {
+    await page.goto(ws("C", "automation"));
+    await page.getByRole("button", { name: "Create New Rule" }).click();
+    const summary = page.getByRole("dialog", { name: /New automation/i }).getByRole("complementary", { name: "Rule summary" });
+    await expect(summary).toBeVisible();
+    await expect(summary).not.toContainText("Ready to save");
+    await expect(summary).toContainText("Give the rule a name.");
+    await expect(summary).not.toContainText("…");
+  });
+
+  test("a clause check's card names its trigger", async ({ page }) => {
+    const name = `Notice period ${runId()}`;
+    await page.goto(ws("C", "assertions"));
+    await page.getByRole("textbox", { name: "New clause check name" }).fill(name);
+    await page.getByRole("button", { name: "New check" }).click();
+    await expect(page.locator("main")).toContainText(name, { timeout: 15_000 });
+    await page.goto(ws("C", "automation"));
+    await settle(page);
+    const card = page.locator("main article").filter({ has: page.getByRole("heading", { name, exact: true }) });
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("When: Document processed");
+    await expect(card).not.toContainText("No trigger");
+    await expect(card).not.toContainText("does nothing");
   });
 });

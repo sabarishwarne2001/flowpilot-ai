@@ -391,7 +391,7 @@ const joinWords = (parts: readonly string[], word: string): string => {
 export const summarize = (draft: FlowDraft, catalog: FlowCatalog | undefined): string => {
   const when = draft.triggers.length
     ? joinWords(draft.triggers.map((key) => triggerLabel(catalog, key).toLowerCase()), "or")
-    : "…";
+    : "(pick when it runs)";
   const groups = draft.groups
     .filter((group) => group.conditions.length > 0)
     .map((group) => {
@@ -406,7 +406,7 @@ export const summarize = (draft: FlowDraft, catalog: FlowCatalog | undefined): s
     : "";
   const then = draft.actions.length
     ? joinWords(draft.actions.map((a) => actionLabel(catalog, a.action_type).toLowerCase()), "then")
-    : "…";
+    : "(add what it does)";
   const otherwise = draft.else_actions.length
     ? `; otherwise ${joinWords(draft.else_actions.map((a) => actionLabel(catalog, a.action_type).toLowerCase()), "then")}`
     : "";
