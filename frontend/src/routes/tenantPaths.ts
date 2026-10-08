@@ -151,6 +151,8 @@ export const ROUTE_PATTERNS = {
   // ARCH44-S2:route-patterns
   workspaceTables: "tables",
   workspaceTable: "tables/:tableId",
+  // PHASE2:route-patterns — TruthMesh.
+  workspaceTruthMesh: "truthmesh",
   // PHASE1:route-patterns — batch operations.
   workspaceBatches: "batches",
   workspaceBatch: "batches/:batchId",
@@ -320,6 +322,10 @@ export const packetSplitPath = (orgSlug: string, workspaceSlug: string, splitId:
 export const tablesPath = (orgSlug: string, workspaceSlug: string): string => `${workspacePath(orgSlug, workspaceSlug)}/tables`;
 export const tablePath = (orgSlug: string, workspaceSlug: string, tableId: string): string =>
   `${tablesPath(orgSlug, workspaceSlug)}/${encodeURIComponent(tableId)}`;
+// PHASE2:truthmesh-path-helpers
+export const truthMeshPath = (orgSlug: string, workspaceSlug: string): string =>
+  `${workspacePath(orgSlug, workspaceSlug)}/truthmesh`;
+
 // PHASE1:batch-path-helpers
 export const batchesPath = (orgSlug: string, workspaceSlug: string): string =>
   `${workspacePath(orgSlug, workspaceSlug)}/batches`;
