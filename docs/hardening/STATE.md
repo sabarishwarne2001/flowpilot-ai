@@ -10,6 +10,15 @@ F-207 (materiality shown as "90%" instead of "0.90"), proven red then green. Sto
 owner's usage budget; the remaining small items below are still open (the corroborator item is done).
 
 
+## Latest pass — budget-capped header polish (2026-10-09)
+Branch `claude/sweet-hopper-l4varl`. The owner had ~1% of weekly usage for this run, so the live
+stack was NOT stood up (the sandbox had no Python dependencies or pgvector build). Only change: ERP
+posting and Process intelligence now open with the shared `PageHeader` (icon tile, eyebrow, title,
+description underneath, actions on the right) instead of a description squeezed beside the title.
+Verified: `tsc -b`, eslint on both files, `npm run build`. Unverified: the browser suite and a live
+look (route titles `/ERP posting/` and `/Process intelligence/` in `e2e/support/routes.ts` still
+match the same `<h1>` text).
+
 ## Current phase
 **Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
 `hardening/phase-3-final-commercial-hardening`; PR #13
@@ -59,9 +68,8 @@ Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
 2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
    (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
    console no longer shows it; drop the column or build the feature). From Phase 2, still open:
-   the matching queue lists one case per copy of an invoice (grouping them is a product choice);
-   the ERP and process pages put their
-   description beside the title.
+   the matching queue lists one case per copy of an invoice (grouping them is a product choice).
+   (Done 2026-10-09: the ERP and process pages now use the shared `PageHeader`.)
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy
    (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.

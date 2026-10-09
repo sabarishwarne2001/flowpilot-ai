@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BookUp, Loader2, Plus } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import { ErpLocked, PostingStateBadge, canAdminister, canContribute } from "@/components/erp/common";
 import { LookupTables } from "@/components/erp/LookupTables";
@@ -15,7 +16,7 @@ import { NewTarget } from "@/components/erp/NewTarget";
 import { PostingTable } from "@/components/erp/PostingTable";
 import { ReadyToPost } from "@/components/erp/ReadyToPost";
 import { CAPABILITY } from "@/constants/capabilities";
-import { BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, PAGE_TITLE, SCROLL_X, SELECT, TABLE_HEAD, TABLE_ROW } from "@/components/ui/primitives";
+import { BUTTON_GHOST, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, SCROLL_X, SELECT, TABLE_HEAD, TABLE_ROW } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { erpTargetPath, verificationPath } from "@/routes/tenantPaths";
@@ -81,21 +82,18 @@ const ErpPosting: React.FC = () => {
   const targetRows = targets.data?.items ?? [];
   return (
     <div className="space-y-4 p-4">
-      <header className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className={`${PAGE_TITLE} flex items-center gap-2`}>
-            <BookUp className="h-5 w-5" aria-hidden />
-            ERP posting
-          </h1>
-          <p className={`${HINT} mt-1`}>Approved outcomes to your system of record — exactly once, done only when the ERP says so.</p>
-        </div>
-        {isAdmin && !composing ? (
+      <PageHeader
+        icon={BookUp}
+        eyebrow="Workspace"
+        title="ERP posting"
+        description="Approved outcomes to your system of record — exactly once, done only when the ERP says so."
+        actions={isAdmin && !composing ? (
           <button type="button" className={BUTTON_PRIMARY} disabled={!catalog.data}
             onClick={() => { setTab("targets"); setComposing(true); }}>
             <Plus className="h-4 w-4" aria-hidden /> New target
           </button>
         ) : null}
-      </header>
+      />
       {exceptions > 0 ? (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
           {exceptions} posting(s) failed, were rejected, were acknowledged differently or have an unknown outcome — a
