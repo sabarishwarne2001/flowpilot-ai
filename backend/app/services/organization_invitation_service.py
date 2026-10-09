@@ -274,10 +274,12 @@ def create_invitation(
         db, organization_id=organization.id, email=normalized
     )
     if existing_pending is not None:
-        invitation_crud.update_invitation_status(
+        # F-209. This called `update_invitation_status`, which the CRUD module
+        # never had: a second invitation to the same address was a 500.
+        invitation_crud.revoke_invitation(
             db,
             invitation_id=existing_pending.id,
-            status=InvitationStatus.REVOKED,
+            revoked_by_id=inviter.id,
             now=datetime.now(UTC),
         )
         audit_service.record(
