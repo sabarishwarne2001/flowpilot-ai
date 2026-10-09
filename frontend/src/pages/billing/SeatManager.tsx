@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RefreshCw, Users } from "lucide-react";
 
 import { getSubscriptionState, syncSeats } from "@/services/api/billing";
+import { errorMessage } from "@/services/api/errors";
 import { billingKeys } from "@/services/api/queryKeys";
 
 export interface SeatManagerProps {
@@ -185,7 +186,7 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
 
           {sync.isError && (
             <p role="alert" className="mt-2 text-xs text-destructive">
-              The change didn&apos;t go through. Your seats are unchanged.
+              {errorMessage(sync.error, "The change didn't go through. Your seats are unchanged.")}
             </p>
           )}
 

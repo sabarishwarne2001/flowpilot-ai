@@ -668,12 +668,54 @@ def sync_seats(
     context: OrganizationContext = Depends(RequireOrgOwner),
     db: Session = Depends(get_db),
 ) -> SubscriptionStateResponse:
-    result = seat_service.sync_seats(
-        db,
-        organization_id=context.organization_id,
-        reason=(payload.reason if payload else "owner_requested"),
-        force=bool(payload.force) if payload else False,
-    )
+    from app.services.billing import payment_gateway as _payment_gateway
+    from app.services.billing import stripe_gateway as _stripe
+
+    # F-213. A gateway that is not configured, unreachable or refusing raised out
+    # of this route as a 500. Checkout and the portal answer the same conditions
+    # with a reason; so does this. Nothing was changed at the gateway or here.
+    try:
+        result = seat_service.sync_seats(
+            db,
+            organization_id=context.organization_id,
+            reason=(payload.reason if payload else "owner_requested"),
+            force=bool(payload.force) if payload else False,
+        )
+    except (_stripe.StripeNotConfiguredError, GatewayNotConfiguredError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_NOT_CONFIGURED",
+                "message": "Billing is not configured in this environment, so seats cannot be changed.",
+                "details": {},
+            },
+        ) from exc
+    except (_stripe.StripeTransientError, _payment_gateway.GatewayTransientError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_UNAVAILABLE",
+                "message": "The payment provider could not be reached. Your seats are unchanged; please try again.",
+                "details": {},
+            },
+        ) from exc
+    except (
+        _stripe.StripeGatewayError,
+        _payment_gateway.PaymentGatewayError,
+        seat_service.SeatError,
+    ) as exc:
+        logger.warning(
+            "billing.seat_sync_refused",
+            extra={"organization_id": str(organization_id), "error": type(exc).__name__},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "BILLING_GATEWAY_REFUSED",
+                "message": "The payment provider refused the seat change. Your seats are unchanged.",
+                "details": {"reason": str(exc)[:300]},
+            },
+        ) from exc
 
     audit_service.record(
         db,
