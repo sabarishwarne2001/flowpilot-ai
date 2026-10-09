@@ -2956,3 +2956,14 @@ so per the Evidence Rule they are **unverified**:
 - **Two-party ownership transfer** proven end to end in the browser (`a3961a0`): two people who sign
   up for the test, the offer, the acceptance and the role swap.
 - **Organization session limit** as a real control (F-204), and signed single logout (F-205).
+
+## Final systemic polish & traceback sweep (2026-10-09)
+
+Live stack: Postgres 16 + pgvector 0.8.0, Redis, uvicorn API, the real worker (`--loop all
+--profile all`), local model stand-in, production bundle. Full browser suite: **380 passed, 0 failed,
+1 skipped** (by design). API and worker logs: **0 tracebacks, 0 5xx responses, 0 ERROR lines**;
+**400 jobs, all SUCCEEDED**. No live defect surfaced in this sweep.
+
+| ID | Severity | Area | Finding | Evidence | Status |
+|---|---|---|---|---|---|
+| F-207 | Low (polish) | Corroborator | Materiality showed as a raw 0–1 score ("0.90") in the comparisons list ("Highest" column), the run summary, the difference detail and the matrix. Now a percentage ("90%"), and the column reads "Highest materiality". | `e2e/tests/12-processing.spec.ts` "compare the PO…": failed on `main` code (`Received: "0.90"`), passes after the fix; the whole file 11/11. | Fixed |
