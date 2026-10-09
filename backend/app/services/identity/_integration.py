@@ -245,7 +245,9 @@ def decrypt_secret(ciphertext: bytes | str) -> str:
 # Outbound HTTP (SSRF-Safe Client)
 # ==========================================================================
 
-def safe_get(url: str, *, timeout: float, max_bytes: int = 1_048_576) -> bytes:
+def safe_get(
+    url: str, *, timeout: float, max_bytes: int = 1_048_576, accept: str = "application/json"
+) -> bytes:
     """GET through the SSRF-safe client; raise on any non-2xx.
 
     HARDENING-T1:D28. This called `client.get(...)`, a method
@@ -255,7 +257,7 @@ def safe_get(url: str, *, timeout: float, max_bytes: int = 1_048_576) -> bytes:
     from app.core import egress  # ARCH50-S1:egress-identity
 
     client = egress.http_client(egress.IDENTITY, total_timeout=timeout, max_response_bytes=max_bytes)
-    resp = client.request("GET", url, headers={"Accept": "application/json"})
+    resp = client.request("GET", url, headers={"Accept": accept})
     if not 200 <= resp.status_code < 300:
         raise RuntimeError(f"{url} returned HTTP {resp.status_code}")
     return resp.body

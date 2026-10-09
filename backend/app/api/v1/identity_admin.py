@@ -14,14 +14,14 @@ from app.models.identity import (
     ScimApiKey, VerifiedDomain,
 )
 from app.services.identity import (
-    domain_service, jit_service, oidc_gateway, scim_service,
+    domain_service, jit_service, oidc_gateway, saml_gateway, scim_service,
     session_policy_service,
 )
 from app.services.identity._integration import (
     IdentityPrincipal, commit_and_refresh, emit_event, encrypt_secret,
     utcnow, write_audit,
 )
-from app.services.identity.errors import IdentityError
+from app.services.identity.errors import IdentityError, IdpConfigError
 # ARCH30-T4F:security-emitters-import — A8.
 from app.services.identity import security_emitters
 from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
@@ -76,6 +76,15 @@ def _owned(db, model, raw_id: Any, organization_id: str, message: str):
     if row is None or str(row.organization_id) != str(organization_id):
         raise HTTPException(404, message)
     return row
+
+
+def _optional_text(payload: dict, field: str) -> str | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(422, f"{field} must be text.")
+    return value.strip() or None
 
 
 def _required_text(payload: dict, field: str) -> str:
@@ -247,12 +256,31 @@ def create_config(organization_id: str, payload: dict = Body(...),
         created_by_user_id=getattr(user, "id", None),
     )
 
+    imported_certificates: tuple[str, ...] = ()
     if protocol == "SAML2":
-        config.idp_entity_id = payload.get("idp_entity_id")
-        config.idp_sso_url = payload.get("idp_sso_url")
-        config.idp_slo_url = payload.get("idp_slo_url")
-        config.metadata_url = payload.get("metadata_url")
+        config.idp_entity_id = _optional_text(payload, "idp_entity_id")
+        config.idp_sso_url = _optional_text(payload, "idp_sso_url")
+        config.idp_slo_url = _optional_text(payload, "idp_slo_url")
+        config.metadata_url = _optional_text(payload, "metadata_url")
         config.allow_unsolicited = bool(payload.get("allow_unsolicited", False))
+        # F-211. The console offers the metadata URL as the easiest path ("the
+        # server fetches and parses it"); it was stored and never read, so a
+        # connection made from it had no entity ID or SSO URL and broke
+        # ck_idp_saml_fields as a 500. Fields typed by hand win.
+        if config.metadata_url:
+            try:
+                metadata = saml_gateway.fetch_idp_metadata(config.metadata_url)
+            except IdpConfigError as exc:
+                raise HTTPException(422, exc.message) from exc
+            config.idp_entity_id = config.idp_entity_id or metadata.entity_id
+            config.idp_sso_url = config.idp_sso_url or metadata.sso_url
+            config.idp_slo_url = config.idp_slo_url or metadata.slo_url
+            imported_certificates = metadata.signing_certificates
+        if not (config.idp_entity_id and config.idp_sso_url):
+            raise HTTPException(
+                422,
+                "A SAML connection needs the identity provider's entity ID and SSO "
+                "URL, or a metadata URL the server can read them from.")
     else:
         discovery_url = payload.get("oidc_discovery_url")
         if discovery_url:
@@ -265,18 +293,40 @@ def create_config(organization_id: str, payload: dict = Body(...),
             config.oidc_jwks_json = oidc_gateway.fetch_jwks(doc["jwks_uri"])
             config.oidc_jwks_cached_at = utcnow()
         else:
-            config.oidc_issuer = payload.get("oidc_issuer")
-        config.oidc_client_id = payload.get("oidc_client_id")
+            config.oidc_issuer = _optional_text(payload, "oidc_issuer")
+        config.oidc_client_id = _optional_text(payload, "oidc_client_id")
         if payload.get("oidc_client_secret"):
             config.oidc_client_secret_encrypted = encrypt_secret(
                 str(payload["oidc_client_secret"]))
+        if not (config.oidc_issuer and config.oidc_client_id):
+            raise HTTPException(
+                422,
+                "An OIDC connection needs the issuer (or a discovery URL) and the "
+                "client ID.")
 
     db.add(config)
     db.flush()
+    for index, pem in enumerate(imported_certificates):
+        db.add(IdpSigningCertificate(
+            idp_config_id=config.id, side="IDP", certificate_pem=pem,
+            fingerprint_sha256=_fingerprint(pem), is_primary=index == 0))
     write_audit(db, organization_id=organization_id, action="CREATED",
                 resource_type="ENTERPRISE_IDP_CONFIG", resource_id=config.id,
                 principal=_principal(user),
-                details={"protocol": protocol})
+                details={"protocol": protocol,
+                         "certificates_from_metadata": len(imported_certificates)})
+    for pem in imported_certificates:
+        # The same signal as a certificate added by hand (ARCH30-T4F A8): a
+        # signing certificate can vouch for any identity in the tenant.
+        security_emitters.emit_quietly(
+            security_emitters.notify_idp_certificate_added,
+            db,
+            organization_id=organization_id,
+            config_name=config.display_name,
+            side="IDP",
+            fingerprint=_fingerprint(pem),
+            actor=user,
+        )
     emit_event(db, event_type="identity.idp_config_changed",
                organization_id=organization_id,
                payload={"idp_config_id": str(config.id), "action": "created"})
