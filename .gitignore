@@ -64,3 +64,4 @@ backend/.env.production.*
 *.jks
 *.keystore
 
+docs/hardening/tools/openapi.json

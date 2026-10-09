@@ -2967,3 +2967,39 @@ Live stack: Postgres 16 + pgvector 0.8.0, Redis, uvicorn API, the real worker (`
 | ID | Severity | Area | Finding | Evidence | Status |
 |---|---|---|---|---|---|
 | F-207 | Low (polish) | Corroborator | Materiality showed as a raw 0–1 score ("0.90") in the comparisons list ("Highest" column), the run summary, the difference detail and the matrix. Now a percentage ("90%"), and the column reads "Highest materiality". | `e2e/tests/12-processing.spec.ts` "compare the PO…": failed on `main` code (`Received: "0.90"`), passes after the fix; the whole file 11/11. | Fixed |
+
+## Live bug hunt: fuzzing, double clicks and dev-mode rendering (2026-10-09)
+
+**How these were found.** Earlier sweeps clicked every page and called every parameter-free GET,
+and found nothing new. This pass attacked the live stack (API, the real worker `--loop all
+--profile all`, Postgres 16 + pgvector 0.8, Redis, the model stand-in, Vite on :5173) the ways real
+people and real networks do, while tailing the API and worker logs:
+
+1. **An API fuzzer** over all 609 operations in the OpenAPI document, as real seeded users
+   (Enterprise owner, Developer viewer, platform super-admin, and a throwaway Enterprise tenant for
+   writes): ids that are not UUIDs, random UUIDs, harvested real ids, edge query values, and for
+   every write a valid body, an edge-value body (20 000 characters, NUL, emoji, 2^63, dates in
+   year 9999), a wrong-type body, malformed JSON and an array. Every 5xx was traced to its source.
+2. **A double-click sweep**: every POST/PUT/PATCH sent 3 to 8 times at once with the same body.
+3. **Odd uploads and races**: empty, truncated, encrypted and fake PDFs, 1x1 and 6000x6000 images,
+   Unicode and 300-character names, duplicates; documents deleted 0 to 5 s after upload while
+   their jobs ran. All handled (clear 400s, clean job completion, nothing orphaned).
+4. **The full browser suite against the Vite dev server** (not the production bundle), where React
+   reports problems that production builds stay silent about.
+
+| ID | Severity | Area | Finding | Evidence | Status |
+|---|---|---|---|---|---|
+| F-208 | Medium | Enterprise identity | A domain, connection or SCIM key id that is not a UUID reached Postgres from 8 identity routes and returned a 500 with a traceback; role mappings and the mapping dry-run read their bodies unchecked (`payload["attribute_name"]`, `int(priority)`, `.items()`), and the JIT default role was stored unvalidated. Now 404 for a bad id and 422 naming the field. | `tests/api/test_identity_admin_malformed_input.py`: 29 of 30 failed before, 30 pass. Live: `POST …/scim-keys/not-a-uuid/rotate` 500 → 404. | Fixed |
+| F-209 | High | Team | Inviting an address that already had a pending invitation (to change the role, or because the email never arrived) crashed: the service called `invitation_crud.update_invitation_status`, which never existed. The new invitation now supersedes the old one (revoked, with who revoked it). | `tests/api/test_reinvite_pending_email.py` failed with the live `AttributeError`, passes. | Fixed |
+| F-210 | Low | Batch operations | The batch progress tile put a progress bar (`<div>`) inside a `<p>`; React flags invalid nesting in development. Only visible with the dev server, which is why preview runs never saw it. | `e2e/tests/23-batch-operations.spec.ts` in dev mode failed on it; 4 of 4 pass after. | Fixed |
+| F-211 | High | Enterprise identity (SSO) | The connection builder offers "Metadata URL: the server fetches and parses it" and lets the owner create a SAML connection with nothing else; the server stored the URL and never read it, so the insert broke `ck_idp_saml_fields` and returned a 500 (an OIDC connection without issuer or client ID broke `ck_idp_oidc_fields`). The server now fetches the metadata through the SSRF-safe identity client and fills the entity ID, SSO/SLO locations and signing certificates; a connection still missing what its protocol needs is a 422 with the reason, which the builder shows. | `tests/api/test_idp_connection_from_metadata.py`: 10 of 10 failed before, pass. Live in the browser: "The metadata could not be fetched: …" instead of a 500. | Fixed |
+| F-212 | **Critical** | Whole API | **Two quick clicks on "Change role" froze the entire API** (every endpoint, health check included) until a restart, with the organization row locked in Postgres. 129 routes were `async def` but did synchronous database work on the event-loop thread; the role change returned on its "unchanged" path holding the organization lock, and the next click waited for that lock *on the event loop*, so the first request could never finish: a permanent self-deadlock. A real change raced by its repeat froze the same way. Routes that never await are plain `def` again (FastAPI's thread pool), the role change ends its transaction on every early exit, and a guard test fails on any new `async def` route that does not await. | `tests/engines/test_concurrent_requests_do_not_freeze_the_api_live.py` (real uvicorn, 4 clicks at once): before, 1 of 4 and 0 of 4 answered and health timed out; after, 4 of 4 in 5 s. `tests/core/test_async_routes_must_await.py`. Live: a `py-spy` dump showed the event-loop thread blocked in `lock_organization_for_owner_change`. | Fixed |
+| F-213 | Medium | Billing | "Reconcile seats" let gateway exceptions out of the route: with no Stripe key (every environment until F-125 is done), an outage, or an unknown subscription, a 500 with a traceback. Now 503 / 409 with a code and a message the seat manager shows; nothing recorded. | `tests/services/test_seat_sync_gateway_errors.py`: 3 of 3 failed before, pass. | Fixed |
+| F-214 | High | Whole API | Once requests ran in parallel, the same request twice at once returned a 500 on 8 routes (holiday calendars, BYOK routes, tolerance policies, invitations, tags, packet splits, case rule results, automation triggers): both passed the existence check and the second INSERT met a unique constraint. A global handler now answers a unique or foreign-key conflict with 409 CONFLICT (other integrity refusals 422), the BYOK PUT is a true upsert, and 28 error handlers no longer read expired ORM attributes after a failed flush (which turned the conflict into `PendingRollbackError`). Expected refusals are logged as warnings, not ERROR tracebacks. | `tests/engines/test_concurrent_duplicates_are_not_500s_live.py` (8 concurrent): invitation race 500 on every run before; 3 of 3 runs green after. | Fixed |
+| F-215 | High | Worker (OCR) | Once an OCR job had loaded Paddle, stopping the worker (every deploy, scale-down or restart) aborted it with Paddle's "C++ Traceback … Termination signal" instead of a graceful drain: `import paddle` replaces Python's SIGTERM handler, and the lazy import ran on a supervisor thread where Python cannot restore it, so the job in progress was cut off and sat CLAIMED until its lease expired. A worker whose profile allows Paddle now loads the OCR provider on the main thread at startup, switches Paddle's handlers off, then installs graceful shutdown. | `tests/operational/test_worker_graceful_shutdown_with_paddle.py` (real `app.worker.main` in a subprocess): C++ abort before, exit 0 after. Live: with Paddle loaded, SIGTERM logged `worker.shutdown.requested` and all five loops drained. | Fixed |
+
+Not defects, recorded for the owner: the `batch.expand_archive` and `work_items.bulk` job handlers
+are registered but nothing enqueues them (bulk actions run inline; zip archives are not accepted
+by the upload path), so the ledger rows for them stay `untested`. The browser test
+"a deploy while the tab is open" (F-144) only works against the production bundle (it removes a
+hashed chunk) and fails by design under the dev server.

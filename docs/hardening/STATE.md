@@ -1,8 +1,32 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-09 (final systemic polish & traceback sweep)_
+_Last updated: 2026-10-09 (live bug hunt: fuzzing, double clicks, dev-mode rendering)_
 
-## Latest pass — final systemic polish & traceback sweep
+## Latest pass — live bug hunt: fuzzing, double clicks, dev-mode rendering (2026-10-09)
+Branch `claude/jolly-keller-d0jscd` (the session's assigned branch). Real live stack: Postgres 16 +
+pgvector 0.8.0 (built from source), Redis, uvicorn API, the real worker `--loop all --profile all`
+(full `requirements.txt`, Paddle included), model stand-in, Vite dev server on :5173. Previous
+sweeps had found nothing new, so this pass attacked the stack differently: an OpenAPI-driven fuzzer
+over all 609 operations as real users (bad ids, edge values, wrong types, malformed JSON), a
+double-click sweep (every write sent 3 to 8 times at once), odd uploads and delete-during-processing
+races, and the browser suite against the dev server. **Eight live defects, F-208 to F-215, each
+proven by a failing test and fixed** (FINDINGS.md, "Live bug hunt"). The serious ones:
+**F-212** two quick clicks on "Change role" froze the whole API until restart (129 `async def`
+routes did blocking database work on the event loop); **F-214** concurrent duplicate submits were
+500s on 8 routes; **F-215** an OCR worker could not shut down gracefully once Paddle was loaded;
+**F-209** re-inviting a pending address crashed; **F-211** an SSO connection made from a metadata
+URL was a 500. After the fixes the fuzzer and the double-click sweep return no 500s (the only 5xx
+are the intended 503 "billing not configured" answers).
+Verification on a fresh e2e database: browser suite against the production bundle with the
+production CSP **380 passed, 0 failed, 1 skipped** (by design); against the Vite dev server 379
+passed, 1 skipped, and the only failure is the F-144 test, which removes a hashed production chunk
+and so only works against the production bundle. API and worker logs over both runs: **0 tracebacks,
+0 5xx, 0 ERROR lines; 640 jobs of 38 types, all SUCCEEDED.** Backend suite (full, on the final head): **3,592 passed, 0 failed, 9 skipped** (65 more tests than Phase 3).
+Frontend: `tsc -b`, `npm run lint`, `npm run check:self` clean; encoding check clean; one Alembic
+head (no migration in this pass). The sweep scripts are kept as `docs/hardening/tools/live_api_fuzz.py`
+and `live_double_click_sweep.py`.
+
+## Earlier pass — final systemic polish & traceback sweep
 Branch `hardening/final-systemic-polish-and-traceback-sweep` (after PR #15). Real live stack
 (API + worker `--loop all` + Postgres/pgvector 0.8 + Redis + production bundle): browser suite 380
 passed, 0 failed; 0 tracebacks, 0 5xx, 0 ERROR log lines; 400 jobs all SUCCEEDED. One polish fix,
@@ -63,8 +87,14 @@ Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
 **N-030** seat price = plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge the Phase 3 PR (#13). Decide N-032 and N-033 when convenient (provisional
-   placements are in force and are not release blockers).
+1. Owner: review and merge the live bug-hunt PR (branch `claude/jolly-keller-d0jscd`, F-208 to
+   F-215). Decide N-032 and N-033 when convenient (provisional placements are in force and are not
+   release blockers).
+   Left from the bug hunt, not done: the 12 routes that really are `async def` (uploads, streams,
+   webhooks) still do their database and storage work on the event loop after their last `await`.
+   The double-click sweep did not freeze them (unverified in general, not proven safe), and a large
+   upload to object storage pauses other requests while it is written. Moving that tail to the
+   thread pool is the next performance step.
 2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
    (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
    console no longer shows it; drop the column or build the feature). From Phase 2, still open:
@@ -97,6 +127,14 @@ elevation; one full backend run and one full browser run on a fresh database; th
 The exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
+- **The worker with `--profile all` needs the full `requirements.txt`** (Paddle, torch): with only
+  `requirements-web.txt` it refuses to start (ProfileError), by design. `pip install -r
+  requirements.txt` takes ~10 minutes in the sandbox.
+- **A frozen API**: `pip install py-spy` then `py-spy dump --pid <uvicorn pid>` shows what the event
+  loop thread is blocked on, and `pg_stat_activity` / `pg_blocking_pids()` shows who holds the lock.
+  This is how F-212 was traced.
+- Concurrency defects only show under a real server: `tests/engines/test_concurrent_*_live.py`
+  start uvicorn in a thread (TestClient serialises requests differently).
 - **Two pytest processes against one Postgres server corrupt each other** (fixed database names,
   e.g. `flowpilot_svc_test`). Use the second cluster (`POSTGRES_PORT=5434`) and, for a targeted run
   next to a full one, `TEST_DB_NAME=<other>`; the services suite still shares its fixed name.
