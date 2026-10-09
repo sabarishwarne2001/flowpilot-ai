@@ -266,3 +266,59 @@ async def request_validation_exception_handler(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": jsonable_encoder(errors)},
     )
+
+
+# ---------------------------------------------------------------------------
+# F-214. Database integrity errors.
+#
+# Two identical submits at once (a double click, a retried request) both pass a
+# route's "does it exist yet?" check, and the second INSERT meets a unique
+# constraint. Left unhandled that is a 500 with a traceback, for what is simply
+# "somebody did this a moment ago". The constraint is the authority: a unique
+# or foreign-key conflict is a 409 the client can refresh after; any other
+# integrity refusal (a check or NOT NULL constraint) means the request carried
+# something the data rules do not allow, a 422. Both are logged as warnings
+# with the constraint's name, so a route that relies on this instead of its
+# own validation stays visible.
+# ---------------------------------------------------------------------------
+
+_UNIQUE_VIOLATION = "23505"
+_FOREIGN_KEY_VIOLATION = "23503"
+
+
+def _integrity_details(exc: Exception) -> tuple[Optional[str], Optional[str]]:
+    orig = getattr(exc, "orig", None)
+    pgcode = getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
+    diag = getattr(orig, "diag", None)
+    constraint = getattr(diag, "constraint_name", None)
+    return pgcode, constraint
+
+
+async def integrity_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    pgcode, constraint = _integrity_details(exc)
+    if pgcode in (_UNIQUE_VIOLATION, _FOREIGN_KEY_VIOLATION):
+        status_code, code = status.HTTP_409_CONFLICT, "CONFLICT"
+        message = (
+            "This was changed by another request at the same time. "
+            "Refresh and try again."
+        )
+    else:
+        status_code, code = status.HTTP_422_UNPROCESSABLE_ENTITY, "CONSTRAINT_VIOLATION"
+        message = "The request was refused by a data rule. Check the values and try again."
+    logger.warning(
+        "db.integrity_conflict | %s %s | sqlstate=%s constraint=%s -> %s",
+        request.method,
+        redact_path(request.url.path),
+        pgcode,
+        constraint,
+        status_code,
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content=ErrorResponse(
+            code=code,
+            message=message,
+            detail=message,
+            details={"constraint": constraint} if constraint else {},
+        ).model_dump(),
+    )

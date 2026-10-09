@@ -20,9 +20,11 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exception_handlers import (
     domain_exception_handler,
+    integrity_error_handler,
     request_validation_exception_handler,
 )
 from app.core.exceptions import FlowPilotError
+from sqlalchemy.exc import IntegrityError
 from app.core.logging_config import setup_logging
 from app.core.production_guard import HARDENED_ENVIRONMENTS
 from app.core.public_route_registry import is_public, registered_paths
@@ -241,6 +243,8 @@ app.add_middleware(DeprecationMiddleware)
 app.add_exception_handler(FlowPilotError, domain_exception_handler)
 # F-021: a 422 must not echo the submitted value (it may be a secret).
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
+# F-214: a constraint met by a concurrent duplicate is a 409, not a 500.
+app.add_exception_handler(IntegrityError, integrity_error_handler)
 
 
 async def scim_error_handler(request: Request, exc: ScimError):

@@ -17,7 +17,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import user as user_crud
 from app.models.user import User
 
@@ -93,7 +93,7 @@ def adopt_detected_timezone(
             db,
             logger,
             "Failed to adopt detected timezone for user %s: %s",
-            user.id,
+            identity_of(user),
             str(exc),
             exc=exc,
         )
@@ -158,7 +158,7 @@ def update_user_profile(
             db,
             logger,
             "Failed to update profile for user %s: %s",
-            user.id,
+            identity_of(user),
             str(exc),
             exc=exc,
         )

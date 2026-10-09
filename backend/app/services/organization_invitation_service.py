@@ -43,7 +43,7 @@ from app.core.organization_permissions import (
     can_invite_members,
 )
 from app.core.tokens import generate_secure_token, hash_token
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import organization_invitation as invitation_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
@@ -360,7 +360,7 @@ def create_invitation(
         rollback_and_log_error(
             db, logger,
             "Failed to issue invitation for organization %s: %s",
-            organization.id, str(exc), exc=exc,
+            identity_of(organization), str(exc), exc=exc,
         )
 
 
@@ -626,7 +626,7 @@ def accept_invitation(
         rollback_and_log_error(
             db, logger,
             "Failed to accept invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 
@@ -683,7 +683,7 @@ def reject_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to reject invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 
@@ -753,7 +753,7 @@ def revoke_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to revoke invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 
@@ -845,7 +845,7 @@ def resend_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to resend invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 

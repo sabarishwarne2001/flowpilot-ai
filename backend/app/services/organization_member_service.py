@@ -25,7 +25,7 @@ from app.core.organization_permissions import (
     can_modify_member_role,
     can_transfer_ownership,
 )
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import api_key as api_key_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
@@ -186,8 +186,8 @@ def change_member_role(
             db,
             logger,
             "Failed to change role for member %s in organization %s: %s",
-            target_membership.id,
-            organization.id,
+            identity_of(target_membership),
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -298,8 +298,8 @@ def deactivate_member(
             db,
             logger,
             "Failed to deactivate member %s in organization %s: %s",
-            target_membership.id,
-            organization.id,
+            identity_of(target_membership),
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -372,7 +372,7 @@ def transfer_ownership(
             db,
             logger,
             "Failed to transfer ownership of organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
