@@ -7,11 +7,11 @@ from app.schemas.ai_settings import AIProvider
 
 AI_MODELS = {
     AIProvider.GROQ: [
-        "openai/gpt-oss-20b",
+        # First entry is the primary default. groq/compound and groq/compound-mini
+        # were removed: the Groq API answers them with 404 model_not_found.
         "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
         "qwen/qwen3.8-27b",
-        "groq/compound-mini",
-        "groq/compound",
     ],
     AIProvider.GEMINI: [
         "gemini-2.5-flash",

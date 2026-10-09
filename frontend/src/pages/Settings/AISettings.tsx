@@ -59,7 +59,7 @@ import { errorMessage } from "@/services/api/errors";
 
 const DEFAULTS: AISettingsFormData = {
   provider: "GROQ",
-  model: "openai/gpt-oss-20b",
+  model: "openai/gpt-oss-120b",
   temperature: 0.7,
   max_output_tokens: 4096,
   top_p: 0.9,
