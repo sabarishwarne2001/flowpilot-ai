@@ -49,7 +49,7 @@ router = APIRouter(tags=["Me"])
     response_model=list[OrganizationResponse],
     summary="List My Organizations",
 )
-async def list_my_organizations(
+def list_my_organizations(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Any:
@@ -66,7 +66,7 @@ async def list_my_organizations(
     response_model=MeContextResponse,
     summary="Bootstrap Context",
 )
-async def get_my_context(
+def get_my_context(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Any:
@@ -156,7 +156,7 @@ async def get_my_context(
     response_model=list[WorkspaceGrantSummary],
     summary="List My Workspace Grants",
 )
-async def list_my_workspaces(
+def list_my_workspaces(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Any:
@@ -206,7 +206,7 @@ async def list_my_workspaces(
     response_model=UserProfileResponse,
     summary="Get My Profile",
 )
-async def get_my_profile(
+def get_my_profile(
     current_user: deps.CurrentUser,
 ) -> Any:
     """
@@ -220,7 +220,7 @@ async def get_my_profile(
     response_model=UserProfileResponse,
     summary="Update My Profile",
 )
-async def update_my_profile(
+def update_my_profile(
     payload: UserProfileUpdate,
     db: deps.DbSession,
     current_user: deps.CurrentUser,
@@ -243,7 +243,7 @@ async def update_my_profile(
     response_model=DetectedTimezoneResponse,
     summary="Offer The Browser's Timezone",
 )
-async def offer_detected_timezone(
+def offer_detected_timezone(
     payload: DetectedTimezoneRequest,
     db: deps.DbSession,
     current_user: deps.CurrentUser,

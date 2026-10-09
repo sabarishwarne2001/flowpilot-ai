@@ -100,7 +100,7 @@ async def upload_avatar(
     response_class=Response,
     summary="Remove your avatar",
 )
-async def delete_avatar(
+def delete_avatar(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Response:
@@ -118,7 +118,7 @@ async def delete_avatar(
     "/users/{user_id}/avatar",
     summary="Stream a user's avatar",
 )
-async def stream_avatar(
+def stream_avatar(
     user_id: uuid.UUID,
     db: deps.DbSession,
     current_user: deps.CurrentUser,

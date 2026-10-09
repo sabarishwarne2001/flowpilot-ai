@@ -65,7 +65,7 @@ def _get_scoped(
     summary="List document verifications",
     response_description="Verifications for this workspace, newest first.",
 )
-async def list_verifications(
+def list_verifications(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
     verification_status: Optional[VerificationStatus] = Query(
@@ -98,7 +98,7 @@ async def list_verifications(
     response_model=VerificationDetailResponse,
     summary="Get one verification with its per-field breakdown",
 )
-async def get_verification(
+def get_verification(
     verification_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -117,7 +117,7 @@ async def get_verification(
         "is what releases the blocked automation."
     ),
 )
-async def resolve_verification(
+def resolve_verification(
     verification_id: uuid.UUID,
     body: VerificationResolveRequest,
     db: Session = Depends(deps.get_db),

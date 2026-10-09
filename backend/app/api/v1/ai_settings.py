@@ -29,7 +29,7 @@ router = APIRouter(
     response_model=AISettingsResponse,
     summary="Get AI Settings",
 )
-async def get_ai_settings(
+def get_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> AISettingsResponse:
@@ -52,7 +52,7 @@ async def get_ai_settings(
     response_model=AISettingsResponse,
     summary="Create or Update AI Settings",
 )
-async def upsert_ai_settings(
+def upsert_ai_settings(
     settings_in: AISettingsUpdate,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
@@ -82,7 +82,7 @@ async def upsert_ai_settings(
         "from, the price-book rate in force, BYOK and spend-limit state."
     ),
 )
-async def get_resolved_ai_settings(
+def get_resolved_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> ResolvedAISettingsResponse:
@@ -118,7 +118,7 @@ async def get_resolved_ai_settings(
     "/models",
     summary="Get Supported AI Models",
 )
-async def get_supported_models(
+def get_supported_models(
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ):
     return {
@@ -132,7 +132,7 @@ async def get_supported_models(
     response_model=AvailableProvidersResponse,
     summary="Get Available AI Providers",
 )
-async def get_available_providers(
+def get_available_providers(
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ):
     return ai_settings_service.get_available_providers()

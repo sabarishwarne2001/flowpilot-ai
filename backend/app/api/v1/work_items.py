@@ -172,7 +172,7 @@ async def upload_document(
 
 
 @router.get("", response_model=WorkItemListResponse)
-async def list_work_items(
+def list_work_items(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     skip: int = Query(0, ge=0),
@@ -214,7 +214,7 @@ async def list_work_items(
 
 
 @router.get("/{work_item_id}", response_model=WorkItemResponse)
-async def get_work_item(
+def get_work_item(
     work_item_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -238,7 +238,7 @@ async def get_work_item(
         416: {"description": "Requested range not satisfiable."},
     },
 )
-async def get_work_item_content(
+def get_work_item_content(
     work_item_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -411,7 +411,7 @@ def _iter_range(driver: Any, key: str, *, start: int, end: int) -> Iterator[byte
 
 
 @router.post("/{work_item_id}/reprocess", status_code=status.HTTP_202_ACCEPTED)
-async def reprocess_work_item(
+def reprocess_work_item(
     work_item_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -637,7 +637,7 @@ def reindex_knowledge_base_status(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def delete_work_item(
+def delete_work_item(
     work_item_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),

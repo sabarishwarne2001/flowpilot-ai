@@ -60,7 +60,7 @@ def _to_response(row) -> OrganizationEmailSettingsResponse:
     response_model=OrganizationEmailSettingsResponse,
     summary="Get organization SMTP configuration",
 )
-async def read_organization_email_settings(
+def read_organization_email_settings(
     organization_id: uuid.UUID,
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
@@ -76,7 +76,7 @@ async def read_organization_email_settings(
     response_model=OrganizationEmailSettingsResponse,
     summary="Update organization SMTP configuration",
 )
-async def update_organization_email_settings(
+def update_organization_email_settings(
     organization_id: uuid.UUID,
     payload: OrganizationEmailSettingsUpdate,
     db: deps.DbSession,
@@ -103,7 +103,7 @@ async def update_organization_email_settings(
     response_model=OrganizationEmailTestResponse,
     summary="Test organization SMTP configuration",
 )
-async def test_organization_email_settings(
+def test_organization_email_settings(
     organization_id: uuid.UUID,
     payload: OrganizationEmailTestRequest,
     db: deps.DbSession,

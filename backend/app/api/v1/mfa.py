@@ -40,12 +40,12 @@ def _check_password(user: Any, password: str) -> None:
 
 
 @router.get("/me/mfa", response_model=MfaStatusResponse, summary="Two-factor sign-in status")
-async def get_mfa_status(db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
+def get_mfa_status(db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
     return mfa_service.status(db, user=current_user)
 
 
 @router.post("/me/mfa/setup", response_model=MfaSetupResponse, summary="Start turning on two-factor sign-in")
-async def start_mfa_setup(payload: MfaSetupRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
+def start_mfa_setup(payload: MfaSetupRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
     _check_password(current_user, payload.password)
     try:
         enrolment = mfa_service.start(db, user=current_user)
@@ -56,7 +56,7 @@ async def start_mfa_setup(payload: MfaSetupRequest, db: deps.DbSession, current_
 
 
 @router.post("/me/mfa/confirm", response_model=MfaRecoveryCodesResponse, summary="Turn on two-factor sign-in")
-async def confirm_mfa(payload: MfaCodeRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
+def confirm_mfa(payload: MfaCodeRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Any:
     try:
         codes = mfa_service.confirm(db, user=current_user, code=payload.code)
     except mfa_service.MfaError as exc:
@@ -71,7 +71,7 @@ async def confirm_mfa(payload: MfaCodeRequest, db: deps.DbSession, current_user:
     response_model=MfaRecoveryCodesResponse,
     summary="Replace the recovery codes",
 )
-async def regenerate_recovery_codes(
+def regenerate_recovery_codes(
     payload: MfaCodeRequest, db: deps.DbSession, current_user: deps.CurrentUser
 ) -> Any:
     try:
@@ -84,7 +84,7 @@ async def regenerate_recovery_codes(
 
 
 @router.post("/me/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, summary="Turn off two-factor sign-in")
-async def disable_mfa(payload: MfaDisableRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Response:
+def disable_mfa(payload: MfaDisableRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Response:
     _check_password(current_user, payload.password)
     try:
         mfa_service.disable(db, user=current_user, code=payload.code)

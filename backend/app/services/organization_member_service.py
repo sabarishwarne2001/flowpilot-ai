@@ -95,6 +95,7 @@ def change_member_role(
     context = audit_service.context_from_request(request)
 
     if actor_membership.id == target_membership.id:
+        db.rollback()  # F-212: never leave the organization lock to the request's end
         raise OrganizationMemberError(
             "You cannot change your own role. Ask another owner, or use "
             "ownership transfer."
@@ -120,11 +121,17 @@ def change_member_role(
             },
             **context,
         )
+        db.rollback()
         raise OrganizationPermissionDeniedError(
             "You do not have permission to assign this role."
         )
 
     if target_membership.role is new_role:
+        # F-212. Nothing to change, but the organization row is locked: end the
+        # transaction now. Returning with it open held the lock until the
+        # request's session closed after the response, which is how a double
+        # click on "Change role" froze the API.
+        db.rollback()
         return target_membership
 
     if (

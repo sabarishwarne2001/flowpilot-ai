@@ -54,7 +54,7 @@ router = APIRouter(tags=["Invitations"])
     status_code=status.HTTP_201_CREATED,
     summary="Issue Organization Invitation",
 )
-async def create_invitation(
+def create_invitation(
     payload: InvitationCreateRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -92,7 +92,7 @@ async def create_invitation(
     response_model=InvitationResponse,
     summary="Resend Organization Invitation",
 )
-async def resend_invitation(
+def resend_invitation(
     invitation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -127,7 +127,7 @@ async def resend_invitation(
     response_model=MessageResponse,
     summary="Revoke Organization Invitation",
 )
-async def revoke_invitation(
+def revoke_invitation(
     invitation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -158,7 +158,7 @@ async def revoke_invitation(
     response_model=OrganizationInvitationListResponse,
     summary="List Organization Invitations",
 )
-async def list_invitations(
+def list_invitations(
     db: deps.ReadDbSession,
     context=Depends(deps.RequireOrgAdmin),
 ) -> Any:
@@ -180,7 +180,7 @@ async def list_invitations(
     response_model=InvitationPreviewResponse,
     summary="Preview Invitation",
 )
-async def preview_invitation(
+def preview_invitation(
     payload: OrganizationInvitationTokenRequest,
     db: deps.DbSession,
 ) -> Any:
@@ -224,7 +224,7 @@ async def preview_invitation(
     response_model=OrganizationInvitationAcceptResponse,
     summary="Accept Invitation",
 )
-async def accept_invitation(
+def accept_invitation(
     payload: OrganizationInvitationTokenRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -282,7 +282,7 @@ async def accept_invitation(
     response_model=MessageResponse,
     summary="Reject Invitation",
 )
-async def reject_invitation(
+def reject_invitation(
     payload: OrganizationInvitationTokenRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -308,7 +308,7 @@ async def reject_invitation(
     response_model=MyPendingInvitationsResponse,
     summary="List My Pending Invitations",
 )
-async def list_my_invitations(
+def list_my_invitations(
     db: deps.ReadDbSession,
     current_user: deps.CurrentUser,
 ) -> Any:

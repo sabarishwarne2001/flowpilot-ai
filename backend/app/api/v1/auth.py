@@ -122,7 +122,7 @@ def _issue(response: Response, *, user_id, issued) -> dict[str, Any]:
     response_model=RegistrationAcknowledgement,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def register(
+def register(
     user_in: UserRegister,
     request: Request,
     background_tasks: BackgroundTasks,
@@ -214,7 +214,7 @@ def _send_verification_safely(
     response_model=LoginResponse,
     response_model_exclude_none=True,
 )
-async def login(
+def login(
     request: Request,
     response: Response,
     db: Session = Depends(deps.get_db),
@@ -293,7 +293,7 @@ def _second_step_refused() -> HTTPException:
 # the same POLICY_LOGIN_IP as /auth/login, by the (ip, email) backoff ladder, and by
 # a per-account cap on wrong codes (login_backoff_service.SECOND_FACTOR_MAX_FAILURES).
 @router.post("/login/mfa", response_model=TokenResponse)
-async def login_second_factor(
+def login_second_factor(
     payload: MfaLoginRequest,
     request: Request,
     response: Response,
@@ -329,7 +329,7 @@ async def login_second_factor(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(
+def refresh(
     request: Request,
     response: Response,
     db: Session = Depends(deps.get_db),
@@ -369,7 +369,7 @@ async def refresh(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(
+def logout(
     response: Response,
     db: Session = Depends(deps.get_db),
     refresh_cookie: str | None = Cookie(
@@ -398,7 +398,7 @@ async def logout(
 
 
 @router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
-async def logout_all(
+def logout_all(
     response: Response,
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_active_user),
@@ -415,7 +415,7 @@ async def logout_all(
 
 
 @router.get("/sessions", response_model=list[SessionResponse])
-async def list_sessions(
+def list_sessions(
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_active_user),
 ) -> Any:
@@ -426,7 +426,7 @@ async def list_sessions(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def revoke_one_session(
+def revoke_one_session(
     session_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_active_user),
@@ -452,7 +452,7 @@ async def revoke_one_session(
 
 
 @router.post("/verify-email", response_model=VerificationStatusResponse)
-async def verify_email(
+def verify_email(
     payload: VerifyEmailRequest,
     db: Session = Depends(deps.get_db),
 ) -> Any:
@@ -484,7 +484,7 @@ async def verify_email(
     response_model=ResendVerificationResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def resend_verification(
+def resend_verification(
     request: Request,
     db: Session = Depends(deps.get_db),
     current_user=Depends(deps.get_current_active_user),
@@ -529,7 +529,7 @@ async def resend_verification(
     response_model=PasswordActionResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def forgot_password(
+def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
     background_tasks: BackgroundTasks,
@@ -574,7 +574,7 @@ def _request_reset_safely(
 
 
 @router.post("/reset-password", response_model=PasswordActionResponse)
-async def reset_password(
+def reset_password(
     payload: ResetPasswordRequest,
     response: Response,
     background_tasks: BackgroundTasks,
@@ -615,7 +615,7 @@ async def reset_password(
 
 
 @router.post("/change-password", response_model=TokenResponse)
-async def change_password(
+def change_password(
     payload: ChangePasswordRequest,
     request: Request,
     response: Response,
@@ -662,7 +662,7 @@ async def change_password(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(
+def get_me(
     current_user=Depends(deps.get_current_active_user),
 ) -> Any:
     return current_user

@@ -261,7 +261,7 @@ async def resume_message_stream(
     summary="Citation Provenance",
     response_description="Sealed provenance envelope for one assistant message.",
 )
-async def get_message_provenance(
+def get_message_provenance(
     message_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
