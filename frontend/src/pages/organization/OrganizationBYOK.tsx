@@ -44,6 +44,7 @@ import {
   type TaskCatalogEntry,
 } from "@/types/byok";
 import { errorMessage as apiErrorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -637,7 +638,7 @@ const RoutingTable: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationBYOK: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   // N-021: storing keys and routes needs a plan that includes BYOK. Reading
   // and retiring a key stay available, so the owner of a downgraded
   // organization can still remove what it stored.
@@ -670,17 +671,16 @@ const OrganizationBYOK: React.FC = () => {
   const data = overview.data;
 
   return (
-    <div className="space-y-6 p-6">
-      <header>
-        <div className="flex items-center gap-2">
-          <KeySquare className="h-5 w-5 text-muted-foreground" aria-hidden />
-          <h1 className="text-xl font-semibold">Enterprise BYOK &amp; models</h1>
-        </div>
-        <p className={`${HINT} mt-1 max-w-3xl`}>
-          Bring your own provider API keys across Groq, Gemini, OpenAI, Anthropic, Azure OpenAI, and Mistral.
-        </p>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        icon={KeySquare}
+        eyebrow={organization.organization_name}
+        title="Enterprise BYOK & models"
+        description="Bring your own provider API keys across Groq, Gemini, OpenAI, Anthropic, Azure OpenAI and Mistral, and choose which model runs each stage of the pipeline."
+      />
+      <div>
         {/* ARCH-30 Tranche 2 (B.5). Two bills, stated once, before a key is added. */}
-        <div className="mt-3 max-w-3xl rounded-lg border border-border/60 bg-muted/40 p-3 text-sm">
+        <div className="max-w-3xl rounded-lg border border-border/60 bg-muted/40 p-3 text-sm">
           <p className="font-medium text-foreground">Seat fees still apply</p>
           <p className="mt-1 text-muted-foreground">
             Your FlowPilot subscription covers seats and platform features whether or not you
@@ -689,7 +689,7 @@ const OrganizationBYOK: React.FC = () => {
             charged twice for the same tokens.
           </p>
         </div>
-      </header>
+      </div>
 
       <PlanLockBanner capability={CAPABILITY.byok} feature="Bring your own AI key" />
 

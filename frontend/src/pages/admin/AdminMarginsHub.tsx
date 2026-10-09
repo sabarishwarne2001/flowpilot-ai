@@ -59,6 +59,7 @@ import {
   type TenantEconomicsEntry,
 } from "@/types/cogs";
 import { errorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const WINDOWS: readonly { readonly days: number; readonly label: string }[] = [
   { days: 7, label: "Last 7 days" },
@@ -143,17 +144,42 @@ const CoverageBanner: React.FC<{ readonly figures: MarginFigures }> = ({
           Gross margin is not being shown for this period.
         </div>
         <p className="mt-1 text-muted-foreground">
-          {formatRatio(figures.unknown_cost_share)} of revenue (
-          {formatMicros(figures.unknown_cost_revenue_micros)} across{" "}
-          {figures.unknown_cost_event_count.toLocaleString()} events) came from
-          usage with no recorded supplier cost. A margin computed over the
-          remainder would describe a minority of the business. Publish a price
-          book version carrying <code>cost_basis_micros</code> to close the gap
-          — cost basis cannot be backfilled into an already-published book.
+          {figures.revenue_micros === 0 ? (
+            <>
+              No revenue was billed in this period, and{" "}
+              {figures.unknown_cost_event_count.toLocaleString()} events have
+              no recorded supplier cost.
+            </>
+          ) : (
+            <>
+              {formatRatio(figures.unknown_cost_share)} of revenue (
+              {formatMicros(figures.unknown_cost_revenue_micros)} across{" "}
+              {figures.unknown_cost_event_count.toLocaleString()} events) came
+              from usage with no recorded supplier cost. A margin computed over
+              the remainder would describe a minority of the business.
+            </>
+          )}{" "}
+          Publish a price book version carrying <code>cost_basis_micros</code>{" "}
+          to close the gap — cost basis cannot be backfilled into an
+          already-published book.
         </p>
       </div>
     </div>
   );
+};
+
+/**
+ * A rate-card value is in micro-dollars per unit, which is numerically dollars per million
+ * units: "3.000000000" µ$/token is $3.00 per 1M tokens. Shown as dollars, without nine
+ * decimals; the column header said "PRICE M" because the µ was upper-cased.
+ */
+const perMillion = (value: string | number): string => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return String(value);
+  }
+  const digits = amount !== 0 && Math.abs(amount) < 0.01 ? 4 : 2;
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 };
 
 const MarginCell: React.FC<{ readonly figures: MarginFigures }> = ({
@@ -472,45 +498,40 @@ export const AdminMarginsHub: React.FC = () => {
   const busy = reconcile.isPending || accept.isPending;
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Scale className="h-5 w-5" aria-hidden />
-            Unit economics
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Revenue against supplier cost across every tenant. Figures exclude
-            usage with no recorded cost basis rather than treating it as free.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="cogs-window">
-            Reporting window
-          </label>
-          <select
-            id="cogs-window"
-            value={days}
-            onChange={(event) => setDays(Number(event.target.value))}
-            className="rounded border border-border bg-background px-2 py-1 text-sm"
-          >
-            {WINDOWS.map((option) => (
-              <option key={option.days} value={option.days}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => void invalidate()}
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-sm hover:bg-muted"
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-            Refresh
-          </button>
-        </div>
-      </header>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageHeader
+        icon={Scale}
+        eyebrow="Platform"
+        title="Unit economics"
+        description="Revenue against supplier cost across every tenant. Figures exclude usage with no recorded cost basis rather than treating it as free."
+        actions={
+            <div className="flex items-center gap-2">
+              <label className="sr-only" htmlFor="cogs-window">
+                Reporting window
+              </label>
+              <select
+                id="cogs-window"
+                value={days}
+                onChange={(event) => setDays(Number(event.target.value))}
+                className="rounded border border-border bg-background px-2 py-1 text-sm"
+              >
+                {WINDOWS.map((option) => (
+                  <option key={option.days} value={option.days}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void invalidate()}
+                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-sm hover:bg-muted"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                Refresh
+              </button>
+            </div>
+        }
+      />
 
       {error ? (
         <div
@@ -611,9 +632,9 @@ export const AdminMarginsHub: React.FC = () => {
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b border-border">
                     <th className="pb-2 pr-4 font-medium">Unit</th>
-                    <th className="pb-2 pr-4 text-right font-medium">Price µ</th>
-                    <th className="pb-2 pr-4 text-right font-medium">Cost µ</th>
-                    <th className="pb-2 pr-4 text-right font-medium">Margin µ</th>
+                    <th className="pb-2 pr-4 text-right font-medium" title="Price per million units (tokens, pages…), in dollars">Price / 1M</th>
+                    <th className="pb-2 pr-4 text-right font-medium" title="Supplier cost per million units, in dollars">Cost / 1M</th>
+                    <th className="pb-2 pr-4 text-right font-medium" title="Price less cost per million units, in dollars">Margin / 1M</th>
                     <th className="pb-2 font-medium">Source</th>
                   </tr>
                 </thead>
@@ -630,13 +651,13 @@ export const AdminMarginsHub: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-2 pr-4 text-right tabular-nums">
-                        {entry.unit_price_micros}
+                        {perMillion(entry.unit_price_micros)}
                       </td>
                       <td className="py-2 pr-4 text-right tabular-nums">
-                        {entry.cost_basis_micros ?? <Unknown />}
+                        {entry.cost_basis_micros !== null && entry.cost_basis_micros !== undefined ? perMillion(entry.cost_basis_micros) : <Unknown />}
                       </td>
                       <td className="py-2 pr-4 text-right tabular-nums">
-                        {entry.unit_margin_micros ?? <Unknown />}
+                        {entry.unit_margin_micros !== null && entry.unit_margin_micros !== undefined ? perMillion(entry.unit_margin_micros) : <Unknown />}
                       </td>
                       <td className="py-2 text-xs text-muted-foreground">
                         {entry.cost_basis_source ?? "—"}

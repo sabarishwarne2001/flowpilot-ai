@@ -165,7 +165,7 @@ import { PublicRoute } from "@/routes/PublicRoute";
 import { SessionBootstrap } from "@/routes/SessionBootstrap";
 import OrganizationGuard from "@/routes/OrganizationGuard";
 // F-008 / F-053 / F-054: role screens instead of 403 error pages.
-import { OWNERS_AND_ADMINS, RequireOrganizationRole } from "@/routes/RequireOrganizationRole";
+import { BILLING_READERS, OWNERS_AND_ADMINS, RequireOrganizationRole } from "@/routes/RequireOrganizationRole";
 import { RequireWorkspaceRole } from "@/routes/RequireWorkspaceRole";
 import SuperAdminGuard from "@/routes/SuperAdminGuard";
 import TenantGuard from "@/routes/TenantGuard";
@@ -317,13 +317,14 @@ function AppRoutes() {
                   path={ROUTE_PATTERNS.organizationNotifications}
                   element={<OrganizationNotifications />}
                 />
+                {/* F-194: a MEMBER opening Billing by its address got the page and its 403s. */}
                 <Route
                   path={ROUTE_PATTERNS.organizationBilling}
-                  element={<BillingHub />}
+                  element={<RequireOrganizationRole allowed={BILLING_READERS}><BillingHub /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationBillingReturn}
-                  element={<CheckoutReturn />}
+                  element={<RequireOrganizationRole allowed={BILLING_READERS}><CheckoutReturn /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationIdentity}
@@ -331,7 +332,7 @@ function AppRoutes() {
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationAudit}
-                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AuditExplorer /></RequireOrganizationRole>}
+                  element={<RequireOrganizationRole allowed={OWNERS_AND_ADMINS}><AuditExplorer asPage /></RequireOrganizationRole>}
                 />
                 <Route
                   path={ROUTE_PATTERNS.organizationSLOs}

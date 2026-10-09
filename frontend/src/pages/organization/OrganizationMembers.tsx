@@ -9,6 +9,7 @@ import {
   deactivateOrganizationMember,
   listOrganizationMembers,
 } from "@/services/api/organization";
+import { errorMessage } from "@/services/api/errors";
 import { organizationKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
@@ -22,6 +23,7 @@ import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
 import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
 import InviteMembersPanel from "@/components/organization/InviteMembersPanel";
 import RoleGuide from "@/components/tenancy/RoleGuide";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const ALL_ROLES: readonly OrganizationRole[] = [
   "OWNER",
@@ -29,6 +31,13 @@ const ALL_ROLES: readonly OrganizationRole[] = [
   "BILLING",
   "MEMBER",
 ] as const;
+
+const ROLE_NAME: Readonly<Record<OrganizationRole, string>> = {
+  OWNER: "Owner",
+  ADMIN: "Admin",
+  BILLING: "Billing",
+  MEMBER: "Member",
+};
 
 const ROLE_BLURB: Readonly<Record<OrganizationRole, string>> = {
   OWNER: "Full control, including billing and ownership transfer.",
@@ -78,10 +87,14 @@ export const OrganizationMembers: React.FC = () => {
       setActionError(null);
       void invalidate();
     },
-    onError: () =>
+    // The server says which rule refused it ("You cannot change your own role…"); keep it.
+    onError: (error) =>
       setActionError(
-        "That role change was refused. You may not have permission, or the " +
-          "organization must keep at least one owner.",
+        errorMessage(
+          error,
+          "That role change was refused. You may not have permission, or the " +
+            "organization must keep at least one owner.",
+        ),
       ),
   });
 
@@ -93,10 +106,13 @@ export const OrganizationMembers: React.FC = () => {
       setConfirmingRemoval(null);
       void invalidate();
     },
-    onError: () =>
+    onError: (error) =>
       setActionError(
-        "That member couldn't be removed. An organization must keep at least " +
-          "one owner, and you cannot remove someone at or above your own role.",
+        errorMessage(
+          error,
+          "That member couldn't be removed. An organization must keep at least " +
+            "one owner, and you cannot remove someone at or above your own role.",
+        ),
       ),
   });
 
@@ -157,13 +173,13 @@ export const OrganizationMembers: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-        <header>
-          <h1 className="text-xl font-semibold text-foreground">Members</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name}
-          </p>
-        </header>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <PageHeader
+          icon={Users}
+          eyebrow={organization.organization_name}
+          title="Members"
+          description="Everyone in this organization, the role each person holds, and the invitations still open."
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
@@ -273,7 +289,7 @@ export const OrganizationMembers: React.FC = () => {
                     >
                       {assignable.map((role) => (
                         <option key={role} value={role} title={ROLE_BLURB[role]}>
-                          {role}
+                          {ROLE_NAME[role]}
                         </option>
                       ))}
                     </select>
@@ -282,7 +298,7 @@ export const OrganizationMembers: React.FC = () => {
                       title={ROLE_BLURB[member.role]}
                       className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
                     >
-                      {member.role}
+                      {ROLE_NAME[member.role] ?? member.role}
                     </span>
                   )}
 

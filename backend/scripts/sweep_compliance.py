@@ -101,8 +101,15 @@ def _purge_work_items(
 
     F-108: a document under an active legal hold (its own, or one covering its
     whole workspace) is never purged, however old it is.
+
+    F-183: the document's original upload goes with it, as on the delete button
+    (F-151): its `uploaded_files` record is marked deleted in the same
+    transaction and the stored objects are removed once that commits, except a
+    file a supplier invoice keeps as its source document (a financial record).
     """
     from sqlalchemy import text
+
+    from app.services import storage_cleanup
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     select_ids = text(
@@ -150,6 +157,27 @@ def _purge_work_items(
             ]
             if not ids:
                 break
+            files = db.execute(
+                text(
+                    """
+                    SELECT uf.id, uf.file_path, wi.stored_filename
+                    FROM work_items wi
+                    JOIN uploaded_files uf ON uf.id = wi.uploaded_file_id
+                    WHERE wi.id = ANY(:ids) AND uf.deleted_at IS NULL
+                    """
+                ),
+                {"ids": ids},
+            ).fetchall()
+            released = storage_cleanup.deletable_keys(db, [row.file_path for row in files])
+            keys = set(released)
+            for row in files:
+                if row.file_path in keys and row.stored_filename:
+                    keys.add(row.stored_filename)
+            if files:
+                db.execute(
+                    text("UPDATE uploaded_files SET deleted_at = now() WHERE id = ANY(:ids)"),
+                    {"ids": [row.id for row in files]},
+                )
             db.execute(
                 text("DELETE FROM document_chunks WHERE work_item_id = ANY(:ids)"),
                 {"ids": ids},
@@ -158,6 +186,7 @@ def _purge_work_items(
                 text("DELETE FROM work_items WHERE id = ANY(:ids)"), {"ids": ids}
             )
             db.commit()
+        storage_cleanup.delete_stored_objects(keys)
         deleted += len(ids)
         if len(ids) < batch_size:
             break

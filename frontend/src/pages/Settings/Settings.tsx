@@ -27,7 +27,6 @@ import {
   Mail,
   MonitorSmartphone,
   Palette,
-  ShieldAlert,
   UserRound,
 } from "lucide-react";
 
@@ -40,6 +39,7 @@ import ProfileSettings from "./ProfileSettings";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { ADMINISTRATIVE_ROLES, canViewBilling } from "@/permissions/organizationPermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
+import { AccessRestricted } from "@/components/common/AccessRestricted";
 import {
   organizationBYOKPath,
   organizationBillingPath,
@@ -47,19 +47,14 @@ import {
   organizationEmailPath,
 } from "@/routes/tenantPaths";
 
-export const PermissionDenied: React.FC = () => {
-  return (
-    <div className="flex h-[60vh] flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
-      <div className="p-4 bg-destructive/10 text-destructive rounded-full mb-4">
-        <ShieldAlert className="h-10 w-10" />
-      </div>
-      <h2 className="text-lg font-semibold tracking-tight">Permission Denied</h2>
-      <p className="text-xs text-muted-foreground font-semibold leading-relaxed mt-2 max-w-sm">
-        You do not possess sufficient privilege levels to inspect or modify workspace settings in this role.
-      </p>
-    </div>
-  );
-};
+/** The workspace sections, for a VIEWER: the shared Access restricted screen (was a red
+ * "Permission Denied" that spoke of "privilege levels"). */
+export const PermissionDenied: React.FC = () => (
+  <AccessRestricted
+    allowedFor="workspace contributors and administrators"
+    askWho="a workspace administrator"
+  />
+);
 
 type SettingsSection = "profile" | "sessions" | "workspace" | "ai" | "email" | "document";
 type SettingsScope = "account" | "workspace";

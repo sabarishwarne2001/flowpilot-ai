@@ -203,7 +203,14 @@ _SOFT_REVENUE = func.coalesce(
     0,
 )
 
-_IS_ZERO_BYOK = UsageEvent.cost_basis_source == SOURCE_ZERO_BYOK
+# F-202. ZERO_BYOK is a cost basis, not a credential: the self-hosted model is priced at a
+# declared zero with it too (N-031). BYOK traffic is the calls the metering zeroed for a
+# tenant's own key (llm_metering._byok_applies); the self-hosted calls stay known, zero-cost
+# usage in the margin, as before.
+_IS_ZERO_BYOK = and_(
+    UsageEvent.cost_basis_source == SOURCE_ZERO_BYOK,
+    UsageEvent.details["cost_basis_zeroed_by"].astext == "byok_tenant_key",
+)
 
 _ZERO_BYOK_REVENUE = func.coalesce(
     func.sum(case((_IS_ZERO_BYOK, UsageEvent.cost_micros), else_=0)), 0

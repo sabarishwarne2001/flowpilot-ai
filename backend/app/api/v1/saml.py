@@ -3,6 +3,7 @@
 from __future__ import annotations
 from fastapi import Request
 
+import base64
 import logging
 import secrets
 from datetime import timedelta
@@ -523,12 +524,43 @@ def single_logout(SAMLRequest: str = Form(...), db=Depends(deps.get_db)):
     if not (name_id or session_index):
         return JSONResponse(status_code=400, content={"detail": "Malformed request."})
 
+    # F-205. Nothing checked who sent the request: anyone holding a session index (it travels
+    # in the assertion through the browser) could sign that person out. The request must now be
+    # signed by an active identity provider named in its Issuer, and only that provider's
+    # sessions are ended.
+    try:
+        issuer = saml_gateway._text(saml_gateway._parse(base64.b64decode(SAMLRequest)),
+                                    "./saml:Issuer") or ""
+    except Exception:
+        issuer = ""
+    verified_configs: list = []
+    for config in (
+        db.query(EnterpriseIdpConfig)
+        .filter(EnterpriseIdpConfig.idp_entity_id == issuer,
+                EnterpriseIdpConfig.is_active.is_(True))
+        .all() if issuer else []
+    ):
+        try:
+            _, session_index = saml_gateway.verify_logout_request(
+                saml_request_b64=SAMLRequest,
+                idp_certificates=_live_idp_certs(db, config.id),
+                expected_issuer=issuer,
+            )
+        except AssertionRejected as exc:
+            logger.warning("F-205 SLO: refused for config %s: %s", config.id, exc.outcome)
+            continue
+        verified_configs.append(config.id)
+    if not verified_configs:
+        return JSONResponse(status_code=403,
+                            content={"detail": "The logout request is not signed by a known identity provider."})
+
     families = db.execute(
         sql_text(
             f"SELECT DISTINCT family_id FROM {TBL_SESSIONS} "
-            f"WHERE idp_session_index = :si AND revoked_at IS NULL"
+            f"WHERE idp_session_index = :si AND revoked_at IS NULL "
+            f"AND idp_config_id = ANY(CAST(:configs AS uuid[]))"
         ),
-        {"si": session_index},
+        {"si": session_index, "configs": [str(c) for c in verified_configs]},
     ).fetchall() if session_index else []
 
     revoked = 0

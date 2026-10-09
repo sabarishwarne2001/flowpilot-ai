@@ -369,9 +369,47 @@ def seed(db) -> dict[str, Any]:
             "billing": billing,
         }
 
+    _seed_organization_notices(db)
     db.commit()
     quota_service.clear_cache()
     return summary
+
+
+#: Phase 3 (F-184): enough organization notifications for two pages of the organization
+#: feed (25 a page), so the browser suite can page through it. BizCo's owner only: no other
+#: test reads that feed. The test sets the read state it needs itself.
+ORG_NOTICE_COUNT = 30
+ORG_NOTICE_PREFIX = "E2E notice"
+
+
+def _seed_organization_notices(db) -> None:
+    from app.models.notification import Notification, NotificationPriority, NotificationType
+    from app.models.organization import Organization
+    from app.models.user import User
+    from app.services import organization_notification_service
+    from sqlalchemy import func, select
+
+    tenant = next(t for t in TENANTS if t.key == "B")
+    owner_spec = next(u for u in tenant.users if u.org_role == "OWNER")
+    organization = db.execute(select(Organization).where(Organization.slug == tenant.slug)).scalar_one()
+    owner = db.execute(select(User).where(User.email == owner_spec.email)).scalar_one()
+    existing = db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.organization_id == organization.id)
+        .where(Notification.user_id == owner.id)
+        .where(Notification.title.like(f"{ORG_NOTICE_PREFIX} %"))
+    ).scalar_one()
+    for number in range(existing + 1, ORG_NOTICE_COUNT + 1):
+        organization_notification_service.emit(
+            db,
+            organization_id=organization.id,
+            user_id=owner.id,
+            title=f"{ORG_NOTICE_PREFIX} {number:02d}",
+            message="A seeded organization notification for the browser tests.",
+            notification_type=NotificationType.SYSTEM,
+            priority=NotificationPriority.INFO,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

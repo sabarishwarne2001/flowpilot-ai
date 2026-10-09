@@ -447,6 +447,47 @@ def sweep_replay_guard(db, *, grace_hours: int = 24) -> int:
     return result.rowcount or 0
 
 
+def verify_logout_request(*, saml_request_b64: str, idp_certificates: list[str],
+                          expected_issuer: str) -> tuple[str | None, str | None]:
+    """F-205. The NameID and SessionIndex of a LogoutRequest the identity provider signed.
+
+    Single logout is a public endpoint; reading the SessionIndex from an unsigned request let
+    anyone who knew one sign that person out. Only the POST binding's enveloped signature is
+    accepted, under the same algorithm allowlist and certificate windows as sign-in.
+    """
+    try:
+        raw = base64.b64decode(saml_request_b64, validate=True)
+    except Exception as exc:
+        raise AssertionRejected("REJECTED_UNKNOWN",
+                                f"SAMLRequest is not valid base64: {exc}") from exc
+    envelope = _parse(raw)
+
+    for sig_method in envelope.iter(f"{{{NS['ds']}}}SignatureMethod"):
+        if sig_method.get("Algorithm", "") not in ALLOWED_SIGNATURE_ALGORITHMS:
+            raise AssertionRejected("REJECTED_SIGNATURE", "signature algorithm is not permitted")
+    for dig_method in envelope.iter(f"{{{NS['ds']}}}DigestMethod"):
+        if dig_method.get("Algorithm", "") not in ALLOWED_DIGEST_ALGORITHMS:
+            raise AssertionRejected("REJECTED_SIGNATURE", "digest algorithm is not permitted")
+
+    settings = get_settings()
+    now = utcnow()
+    policy = saml_security.hardening_policy_from_settings(settings)
+    certificates = saml_security.verify_certificate_validity(
+        idp_certificates, now=now, policy=policy)
+    verified = get_backend().verify(raw, certificates)
+    if not str(verified.tag).endswith("}LogoutRequest"):
+        raise AssertionRejected("REJECTED_SIGNATURE",
+                                "the signature did not cover the LogoutRequest")
+    if (_text(verified, "./saml:Issuer") or "") != expected_issuer:
+        raise AssertionRejected("REJECTED_SIGNATURE",
+                                "the signed Issuer is not this identity provider")
+    not_on_or_after = _parse_instant(verified.get("NotOnOrAfter"))
+    skew = timedelta(seconds=int(getattr(settings, "SAML_CLOCK_SKEW_S", 120)))
+    if not_on_or_after is not None and now > not_on_or_after + skew:
+        raise AssertionRejected("REJECTED_EXPIRED", "the LogoutRequest has expired")
+    return _text(verified, "./saml:NameID"), _text(verified, "./samlp:SessionIndex")
+
+
 def parse_logout_request(saml_request_b64: str) -> tuple[str | None, str | None]:
     try:
         raw = base64.b64decode(saml_request_b64, validate=True)

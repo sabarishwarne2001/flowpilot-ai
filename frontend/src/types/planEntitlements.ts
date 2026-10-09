@@ -135,6 +135,9 @@ const PERIOD_LABELS: Record<string, string> = {
  * count is exact — the customer is buying that many, not about that many.
  */
 function formatTokenCount(value: number): string {
+  if (value >= 1_000_000_000 && value % 1_000_000_000 === 0) {
+    return `${value / 1_000_000_000}B`;
+  }
   if (value >= 1_000_000 && value % 1_000_000 === 0) {
     return `${value / 1_000_000}M`;
   }
@@ -156,6 +159,71 @@ function formatQuantity(unit: MeterDisplay["unit"], value: number): string {
       return value.toLocaleString();
     case "none":
       return "";
+  }
+}
+
+/**
+ * Phase 3 (F-187). A meter's label inside a sentence: "Document pages processed" becomes
+ * "document pages processed", but "AI tokens in" stays "AI tokens in" (it printed "ai tokens in").
+ */
+function inSentence(label: string): string {
+  const first = label.split(" ")[0] ?? "";
+  if (first.length > 1 && first === first.toUpperCase()) {
+    return label;
+  }
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+/** Usage events that are billed but are not plan meters, in the customer's words. */
+const BILLED_EVENT_LABELS: Readonly<Record<string, string>> = {
+  "procurement.case": "Invoice matching cases",
+  "radar.sweep": "Audit radar scans",
+  "redaction.page": "Pages redacted",
+  "embedding.backfill_token": "Search re-indexing",
+  "document.processed": "Documents processed",
+};
+
+/**
+ * Phase 3 (F-187). The name of a meter or billed event, never its internal key. The billing
+ * page printed "*", "llm.input_token" and "ocr.page" as the names of a customer's limits.
+ * `"*"` is the total-spend limit. An event this build does not know is spelled out from its
+ * key ("radar.sweep" → "Radar sweep") rather than shown raw.
+ */
+export function meterLabel(key: string): string {
+  if (key === "*") {
+    return "Total spend (all usage)";
+  }
+  const known = (KNOWN_METERS as Record<string, MeterDisplay | undefined>)[key];
+  if (known) {
+    return known.label;
+  }
+  const billed = BILLED_EVENT_LABELS[key];
+  if (billed) {
+    return billed;
+  }
+  const words = key.replace(/[._]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** "1 token", "1,321 tokens": the unit the server names, in the right number. */
+export function unitFor(unit: string, quantity: number): string {
+  if (!unit) {
+    return "";
+  }
+  return quantity === 1 || unit.endsWith("s") ? unit : `${unit}s`;
+}
+
+/** What happens past a plan's included amount, in words (ALLOW_AND_BILL, ALLOW_AND_WARN, REFUSE). */
+export function overageLabel(policy: string): string {
+  switch (policy.toUpperCase()) {
+    case "ALLOW_AND_BILL":
+      return "Beyond this, usage is billed as overage";
+    case "ALLOW_AND_WARN":
+      return "Beyond this, usage continues and you are warned";
+    case "REFUSE":
+      return "Beyond this, requests are refused";
+    default:
+      return `Overage: ${policy.toLowerCase().replace(/_/g, " ")}`;
   }
 }
 
@@ -203,12 +271,12 @@ export function describeEntitlement(
   }
 
   if (limitQuantity === null) {
-    return { key: eventType, text: `Unlimited ${known.label.toLowerCase()}` };
+    return { key: eventType, text: `Unlimited ${inSentence(known.label)}` };
   }
 
   const quantity = formatQuantity(known.unit, limitQuantity);
   return {
     key: eventType,
-    text: `${quantity} ${known.label.toLowerCase()} / ${periodLabel}`,
+    text: `${quantity} ${inSentence(known.label)} / ${periodLabel}`,
   };
 }

@@ -82,7 +82,7 @@ test.describe("Members: invite, accept, change role, remove", () => {
       await expect(page.getByPlaceholder("colleague@company.com")).toBeVisible({ timeout: 3_000 });
     }).toPass({ timeout: 30_000 });
     await page.getByPlaceholder("colleague@company.com").fill(invitee);
-    await page.getByRole("button", { name: "Send Invite" }).click();
+    await page.getByRole("button", { name: "Send invite" }).click();
     await expect(page.locator("main")).toContainText(invitee, { timeout: 15_000 });
 
     // 2. The invitee signs up, verifies and accepts through the emailed link.
@@ -296,7 +296,7 @@ test.describe("Analytics and BI egress", () => {
     await page.getByRole("button", { name: "Add destination" }).last().click();
     await expect(page.locator("main")).toContainText(/E2E S3|added|saved|could not|unreachable|failed/i, { timeout: 20_000 });
     for (const tab of ["Sync schedules", "Run history", "Usage analytics", "Warehouse destinations"]) {
-      await page.getByRole("button", { name: tab, exact: true }).click();
+      await page.getByRole("tab", { name: tab, exact: true }).click();
       await settle(page, 300);
     }
   });
@@ -356,7 +356,7 @@ test.describe("Billing", () => {
   test("seats and the current subscription are shown", async ({ page }) => {
     await page.goto(org("C", "billing"));
     await expect(page.locator("main")).toContainText("Seats");
-    await expect(page.locator("main")).toContainText(/Plan: enterprise · active/);
+    await expect(page.locator("main")).toContainText(/Enterprise plan · active/);
   });
 
   test("a spend limit can be saved", async ({ page }) => {

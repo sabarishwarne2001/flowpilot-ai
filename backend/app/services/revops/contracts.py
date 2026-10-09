@@ -80,6 +80,26 @@ def list_contracts(db: Session, *, organization_id: Optional[uuid.UUID] = None) 
     return [dict(r) for r in rows]
 
 
+def organizations(db: Session, *, query: Optional[str] = None, limit: int = 200) -> list[dict[str, Any]]:
+    """Organizations a contract can be drafted for, by name (the console's picker).
+
+    Phase 3: the contract form asked for a pasted organization UUID. Archived organizations are
+    left out (a contract cannot be activated for one); `has_active_contract` marks the ones that
+    already carry a contract, which activation would refuse.
+    """
+    needle = (query or "").strip()[:120]
+    pattern = "%" + needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    rows = db.execute(text(
+        "SELECT o.id, o.name, o.slug, o.status, qt.key AS tier_key, "
+        "EXISTS (SELECT 1 FROM enterprise_contracts c WHERE c.organization_id = o.id AND c.status = 'ACTIVE') "
+        "AS has_active_contract "
+        "FROM organizations o LEFT JOIN quota_tiers qt ON qt.id = o.quota_tier_id "
+        "WHERE o.status <> 'ARCHIVED' AND (:all OR o.name ILIKE :p ESCAPE '\\' OR o.slug ILIKE :p ESCAPE '\\') "
+        "ORDER BY lower(o.name), o.slug LIMIT :limit"),
+        {"all": needle == "", "p": pattern, "limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
+
+
 def create(db: Session, *, spec: dict[str, Any], actor_id: Optional[uuid.UUID]) -> dict[str, Any]:
     number = str(spec["contract_number"]).strip().upper()
     if db.execute(text("SELECT 1 FROM enterprise_contracts WHERE contract_number = :n"), {"n": number}).first():

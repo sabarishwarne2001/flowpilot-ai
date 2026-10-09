@@ -4,7 +4,8 @@ Issues that could not be fixed after 3 attempts (loop guard in CLAUDE.md).
 Each entry lists what was tried and what is needed to unblock.
 
 _None so far._ Phase 0 made no fix attempts; in Phase 1 no fix needed more than two
-attempts (the OCR stub took two); in Phases 2 to 5 and the final release no fix needed three.
+attempts (the OCR stub took two); in Phases 2 to 5, the final release and the later phases
+(through Phase 3, final commercial hardening) no fix needed three.
 
 Not blockers, but deliberately not done, each with its reason in `FINDINGS.md`:
 

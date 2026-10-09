@@ -27,6 +27,7 @@ import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { ScimKeyIssued, ScimKeyRead } from "@/types/identity";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { toast } from "sonner";
 
 export const ScimTokenManager: React.FC = () => {
   const { organizationId, organizationRole } = useResolvedOrganization();
@@ -77,6 +78,7 @@ export const ScimTokenManager: React.FC = () => {
       setCreatingFor(null);
       await invalidate();
     },
+    onError: (error) => toast.error(errorMessage(error, "The SCIM token could not be created.")),
   });
 
   const rotate = useMutation({
@@ -85,6 +87,7 @@ export const ScimTokenManager: React.FC = () => {
       setIssued(result);
       await invalidate();
     },
+    onError: (error) => toast.error(errorMessage(error, "The SCIM token could not be rotated.")),
   });
 
   const revoke = useMutation({
@@ -92,7 +95,9 @@ export const ScimTokenManager: React.FC = () => {
     onSuccess: async () => {
       setConfirmRevoke(null);
       await invalidate();
+      toast.success("SCIM token revoked. Your identity provider can no longer use it.");
     },
+    onError: (error) => toast.error(errorMessage(error, "The SCIM token could not be revoked.")),
   });
 
   const revokeRef = useRef<HTMLDivElement | null>(null);

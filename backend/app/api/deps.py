@@ -694,6 +694,12 @@ RequireOrgAdmin = RequireOrgRole(
     [OrganizationRole.OWNER, OrganizationRole.ADMIN]
 )
 RequireOrgOwner = RequireOrgRole([OrganizationRole.OWNER])
+#: F-192. The roles that read the organization's money: plan, invoices, usage and the
+#: spend limits in force. BILLING exists for exactly this (a finance contact who never
+#: sees documents); changing any of it stays with OWNER (plan, seats) or ADMIN (limits).
+RequireOrgUsageReader = RequireOrgRole(
+    [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.BILLING]
+)
 #: Every organization role, BILLING included: for reads of the caller's own
 #: data (their notifications, the plan's entitlements), where no role is less
 #: entitled than another.

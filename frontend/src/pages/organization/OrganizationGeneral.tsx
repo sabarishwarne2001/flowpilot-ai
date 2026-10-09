@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import OrganizationDetailPanel from "@/components/organization/OrganizationDetailPanel";
 import {
@@ -194,19 +195,14 @@ export const OrganizationGeneral: React.FC = () => {
   /* --- Render ----------------------------------------------------------- */
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            General
-          </h1>
-          <StatusPill status={status} />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Organization profile and lifecycle. These settings apply to every
-          workspace and every member.
-        </p>
-      </header>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        icon={Building2}
+        eyebrow={organization.organization_name}
+        title="General"
+        badge={<StatusPill status={status} />}
+        description="Organization profile and lifecycle. These settings apply to every workspace and every member."
+      />
 
       {/* --- Profile ------------------------------------------------------ */}
 
@@ -331,8 +327,9 @@ export const OrganizationGeneral: React.FC = () => {
                 Every API key is deactivated immediately. Integrations stop.
               </li>
               <li className="flex gap-2">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                Reactivation is a support request, not a button.
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                An owner can restore it later from All organizations &amp;
+                workspaces. API keys stay deactivated after a restore.
               </li>
             </ul>
 
@@ -379,7 +376,7 @@ export const OrganizationGeneral: React.FC = () => {
                     ) : (
                       <Archive className="h-4 w-4" />
                     )}
-                    {isArchiving ? "Archiving…" : "Archive permanently"}
+                    {isArchiving ? "Archiving…" : "Archive organization"}
                   </button>
                   <button
                     type="button"
@@ -405,8 +402,8 @@ export const OrganizationGeneral: React.FC = () => {
         <section className="rounded-xl border border-border/60 bg-muted/20 p-6">
           <p className="text-sm leading-relaxed text-muted-foreground">
             This organization is {status.toLowerCase()}. Its records are
-            retained and readable, but it cannot be modified. Reactivation is
-            handled through support.
+            retained, but nothing in it can be changed until an owner restores
+            it from All organizations &amp; workspaces.
           </p>
         </section>
       )}

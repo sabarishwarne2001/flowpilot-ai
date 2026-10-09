@@ -39,6 +39,7 @@ import { useImageFallback } from "@/hooks/useImageFallback";
 import { BRANDING_ENDPOINTS } from "@/services/api/endpoints";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { AddOnGraceNotice, AddOnLockCard } from "@/components/billing/AddOnLockCard";
 import { useAddonAccess } from "@/hooks/useAddonAccess";
 import { errorMessage as apiErrorMessage } from "@/services/api/errors";
@@ -55,6 +56,7 @@ import {
   type TenantBrandingResponse,
   type TenantBrandingUpdate,
 } from "@/types/branding";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -403,9 +405,16 @@ const ThemePreview: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationBranding: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   const queryClient = useQueryClient();
   const isOwner = String(organizationRole).toUpperCase() === "OWNER";
+  // F-201. Saving the brand needs custom branding, the sender domain needs custom email (the
+  // server's gates). On a plan without them every control was live and each click was a save
+  // refused with 402. They stay visible and read-only; removing a logo stays possible.
+  const brandingAccess = useCapabilityAccess(organizationId, CAPABILITY.customBranding);
+  const senderAccess = useCapabilityAccess(organizationId, CAPABILITY.customEmail);
+  const canBrand = brandingAccess.isLoading || brandingAccess.granted;
+  const canSender = senderAccess.isLoading || senderAccess.granted;
 
   const [hostname, setHostname] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -671,18 +680,14 @@ const OrganizationBranding: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PlanLockBanner capability={CAPABILITY.customBranding} feature="Custom branding" />
-      <header>
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Palette className="h-5 w-5 text-muted-foreground" aria-hidden />
-          Branding &amp; custom domains
-        </h1>
-        <p className={`${HINT} mt-1`}>
-          Reach FlowPilot at your own hostname, show your own brand, and send
-          notifications from your own domain.
-        </p>
-      </header>
+      <PageHeader
+        icon={Palette}
+        eyebrow={organization.organization_name}
+        title="Branding & custom domains"
+        description="Reach FlowPilot at your own hostname, show your own brand, and send notifications from your own domain."
+      />
 
       {notice ? (
         <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -812,6 +817,7 @@ const OrganizationBranding: React.FC = () => {
               maxLength={120}
               onChange={(event) => setBrandDraft(event.target.value)}
               placeholder="Acme Inc."
+              disabled={!canBrand}
             />
             <p className={`${HINT} mt-1`}>
               Ampersands and apostrophes are fine. Angle brackets, double
@@ -833,6 +839,7 @@ const OrganizationBranding: React.FC = () => {
                         className={`${INPUT} mt-0 font-mono`}
                         value={value}
                         placeholder="#1a73e8"
+                        disabled={!canBrand}
                         onChange={(event) =>
                           setColorDraft((current) => ({
                             ...current,
@@ -868,6 +875,7 @@ const OrganizationBranding: React.FC = () => {
                     className={
                       branding?.color_scheme === scheme ? PRIMARY : SECONDARY
                     }
+                    disabled={!canBrand || saveTokens.isPending}
                     onClick={() => saveTokens.mutate({ color_scheme: scheme })}
                   >
                     {scheme.charAt(0) + scheme.slice(1).toLowerCase()}
@@ -881,6 +889,7 @@ const OrganizationBranding: React.FC = () => {
                 type="button"
                 className={PRIMARY}
                 disabled={
+                  !canBrand ||
                   saveTokens.isPending ||
                   invalidColors.length > 0 ||
                   (brandDraft === null && dirtyColors.length === 0)
@@ -895,6 +904,7 @@ const OrganizationBranding: React.FC = () => {
               <button
                 type="button"
                 className={SECONDARY}
+                disabled={!canBrand || saveTokens.isPending}
                 onClick={() =>
                   saveTokens.mutate({ is_enabled: !branding?.is_enabled })
                 }
@@ -905,9 +915,11 @@ const OrganizationBranding: React.FC = () => {
               </button>
             </div>
             <p className={`${HINT} mt-2`}>
-              {branding?.is_enabled
-                ? "Custom branding is live on your verified domains."
-                : "Saved but not applied. Nothing a visitor sees changes until you enable it."}
+              {!canBrand
+                ? "Custom branding is included on higher plans. What is on file stays; you can still remove a logo or favicon."
+                : branding?.is_enabled
+                  ? "Custom branding is live on your verified domains."
+                  : "Saved but not applied. Nothing a visitor sees changes until you enable it."}
             </p>
           </div>
 
@@ -924,10 +936,14 @@ const OrganizationBranding: React.FC = () => {
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>
                 <span className={LABEL}>Logo</span>
-                <label className={`${SECONDARY} mt-1 cursor-pointer`}>
+                <label
+                  className={`${SECONDARY} mt-1 ${canBrand ? "cursor-pointer" : "pointer-events-none opacity-50"}`}
+                  aria-disabled={!canBrand}
+                >
                   <Upload className="h-3.5 w-3.5" aria-hidden />
                   Upload
                   <input
+                    disabled={!canBrand}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     className="hidden"
@@ -953,10 +969,14 @@ const OrganizationBranding: React.FC = () => {
               </div>
               <div>
                 <span className={LABEL}>Favicon</span>
-                <label className={`${SECONDARY} mt-1 cursor-pointer`}>
+                <label
+                  className={`${SECONDARY} mt-1 ${canBrand ? "cursor-pointer" : "pointer-events-none opacity-50"}`}
+                  aria-disabled={!canBrand}
+                >
                   <Upload className="h-3.5 w-3.5" aria-hidden />
                   Upload
                   <input
+                    disabled={!canBrand}
                     type="file"
                     accept="image/png,image/x-icon,image/webp"
                     className="hidden"
@@ -1017,12 +1037,13 @@ const OrganizationBranding: React.FC = () => {
               placeholder="mail.acme.com"
               value={senderDraft ?? branding?.sender.sender_domain ?? ""}
               onChange={(event) => setSenderDraft(event.target.value)}
+              disabled={!canSender}
             />
           </div>
           <button
             type="button"
             className={PRIMARY}
-            disabled={saveSender.isPending}
+            disabled={!canSender || saveSender.isPending}
             onClick={() =>
               saveSender.mutate(
                 (senderDraft ?? "").trim() === ""
@@ -1037,7 +1058,7 @@ const OrganizationBranding: React.FC = () => {
             type="button"
             className={SECONDARY}
             disabled={
-              checkSender.isPending || !branding?.sender.sender_domain
+              !canSender || checkSender.isPending || !branding?.sender.sender_domain
             }
             onClick={() => checkSender.mutate()}
           >

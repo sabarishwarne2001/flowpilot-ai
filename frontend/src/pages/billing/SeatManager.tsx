@@ -6,12 +6,13 @@ import { AlertTriangle, Loader2, RefreshCw, Users } from "lucide-react";
 
 import { getSubscriptionState, syncSeats } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
-import { formatMicros } from "@/types/billing";
 
 export interface SeatManagerProps {
   readonly organizationId: string;
   readonly canManageBilling?: boolean;
 }
+
+const planName = (key: string): string => (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Current");
 
 export const SeatManager: React.FC<SeatManagerProps> = ({
   organizationId,
@@ -231,11 +232,11 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
 
       {state.subscription && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Plan: {state.subscription.quota_tier_key} ·{" "}
-          {state.subscription.status}
-          {state.subscription.cancel_at_period_end && " · cancels at period end"}
-          {" · "}
-          {formatMicros(0, currency).replace(/[\d.,\s]/g, "")} billing
+          {/* F-187: this read "Plan: enterprise · active · $ billing". */}
+          {planName(state.subscription.quota_tier_key)} plan · {state.subscription.status.toLowerCase()}
+          {state.subscription.cancel_at_period_end && " · cancels at the end of the period"}
+          {" · billed in "}
+          {currency.toUpperCase()}
         </p>
       )}
     </section>

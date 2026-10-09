@@ -625,3 +625,11 @@ plans; the server answers 402 there. **Decide:** keep Enterprise only, or add Bu
 with a document limit). Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py`;
 the browser plan matrix reads the plan from `frontend/e2e/support/routes.ts` (`plan: "enterprise"`).
 Not a price change.
+
+# Phase 3 — Final commercial hardening (2026-10-08): nothing new to decide
+
+Every Phase 3 finding (F-182 to F-206) was an engineering defect and is fixed. The new owner control
+(an organization's maximum session age, F-204) offers shorter limits than the platform's 12 hours
+(8, 4, 2 or 1 hour); that is a security setting each customer chooses, not a product or pricing
+question. **N-032** and **N-033** remain open with their provisional placements in force; neither
+blocks release.

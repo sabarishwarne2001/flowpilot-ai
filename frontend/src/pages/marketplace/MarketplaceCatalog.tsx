@@ -36,6 +36,7 @@ import {
   Package,
   ShieldCheck,
   ShieldX,
+  Store,
   Trash2,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ import { marketplaceKeys } from "@/services/api/queryKeys";
 import type { ManifestNode, MarketplaceItem } from "@/types/partner";
 import { errorMessage } from "@/services/api/errors";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const NODE_TONE: Record<ManifestNode["node_type"], string> = {
   trigger: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -127,16 +129,13 @@ export default function MarketplaceCatalog() {
   });
 
   return (
-    <div className="space-y-6 p-6">
-      <header>
-        <h1 className="text-xl font-semibold text-foreground">
-          Partner marketplace
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Signed automation workflows published by FlowPilot partners. Every
-          manifest is cryptographically verified before it can be installed.
-        </p>
-      </header>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        icon={Store}
+        eyebrow={state.status === "ready" ? state.organization.organization_name : undefined}
+        title="Partner marketplace"
+        description="Signed automation workflows published by FlowPilot partners. Every manifest is cryptographically verified before it can be installed."
+      />
 
       {installationsQuery.data && installationsQuery.data.length > 0 ? (
         <section className="space-y-2">

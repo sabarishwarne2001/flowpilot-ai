@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Menu, X } from "lucide-react";
 
 import OrganizationSidebarNavigation from "@/components/layout/OrganizationSidebarNavigation";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { organizationSettingsPath } from "@/routes/tenantPaths";
 import { buildOrganizationNavigationItems } from "@/components/layout/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import DunningBanner from "@/components/billing/DunningBanner";
@@ -54,10 +55,12 @@ export const OrganizationLayout: React.FC = () => {
       await authApi.logoutRequest();
     } finally {
       // `finally`, because a network failure on the way out must still end the
-      // session locally. It also lowers `isSigningOut`: left raised by a failed
-      // request, the flag would make the NEXT involuntary expiry discard its
-      // destination, which is the bug inverted rather than fixed.
-      clearAuth();
+      // session locally. F-206: `leaving` keeps `isSigningOut` raised until the
+      // sign-in screen mounts and lowers it (AuthLayout), so the page being left
+      // sends nothing and the guard does not read the exit as an expiry. It is
+      // never left raised: the sign-in screen, or any new session, lowers it,
+      // so the NEXT involuntary expiry still keeps its destination.
+      clearAuth({ leaving: true });
       navigate(ROUTES.LOGIN, { replace: true });
     }
   }, [beginSignOut, clearAuth, navigate]);
@@ -101,13 +104,34 @@ export const OrganizationLayout: React.FC = () => {
               )}
             </button>
 
-            <h1 className="flex min-w-0 items-center gap-1 truncate text-[13px] font-normal">
-              <span className="truncate text-muted-foreground">
-                {organization.organization_name}
-              </span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
-              <span className="font-medium text-foreground">Settings</span>
-            </h1>
+            {/* F-185. This said "Settings" on every console page, inside a second <h1>; the
+                page's own heading is the one <h1>, and this names where you are. */}
+            <nav aria-label="Breadcrumb" className="min-w-0">
+              <ol className="flex min-w-0 items-center gap-1 text-[13px]">
+                <li className="min-w-0 truncate">
+                  {consolePage ? (
+                    <Link
+                      to={organizationSettingsPath(organization.organization_slug)}
+                      className="rounded text-muted-foreground hover:text-foreground"
+                    >
+                      {organization.organization_name}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">{organization.organization_name}</span>
+                  )}
+                </li>
+                {consolePage ? (
+                  <>
+                    <li aria-hidden="true">
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                    </li>
+                    <li className="min-w-0 truncate font-medium text-foreground" aria-current="page">
+                      {consolePage}
+                    </li>
+                  </>
+                ) : null}
+              </ol>
+            </nav>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -124,7 +148,10 @@ export const OrganizationLayout: React.FC = () => {
             with the portal button, everybody else gets the summary
             with no amounts and no actions they cannot take. */}
         {canSeeBilling ? (
-          <DunningBanner organizationId={organizationId} canManageBilling />
+          <DunningBanner
+            organizationId={organizationId}
+            canManageBilling={String(organizationRole).toUpperCase() === "OWNER"}
+          />
         ) : (
           <MemberAccessNotice organizationId={organizationId} />
         )}

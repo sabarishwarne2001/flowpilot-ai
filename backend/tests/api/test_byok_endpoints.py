@@ -678,3 +678,42 @@ class TestAuditTrail:
         )
         for entry in entries:
             assert GROQ_KEY not in str(entry.details or {})
+
+
+class TestSavingsCountsOnlyTenantKeys:
+    """F-190. The self-hosted model's calls are priced at a declared zero (N-031) and so carry
+    the ZERO_BYOK cost basis too. The BYOK card counted every ZERO_BYOK event as "on your own
+    keys": an organization with no key stored read "86% on your own keys, 80 your-key events".
+    A call is the tenant's only when the metering zeroed it for the tenant's key."""
+
+    def test_the_self_hosted_model_is_not_the_tenants_key(
+        self, client: TestClient, db_session: Session, tenant: Fixture
+    ) -> None:
+        from app.services import usage_service
+
+        org = tenant.organization.id
+        for provider, source, basis, extra in (
+            ("local", "ZERO_BYOK", 0, {"model": "self-hosted"}),
+            ("local", "ZERO_BYOK", 0, {"model": "self-hosted"}),
+            ("groq", "ZERO_BYOK", 0, {"cost_basis_zeroed_by": "byok_tenant_key"}),
+            ("groq", "SUPPLIER_RATE_CARD", 120, {}),
+        ):
+            usage_service.record_usage(
+                db_session,
+                organization_id=org,
+                event_type="llm.input_token",
+                quantity=1000,
+                cost_micros=0 if source == "ZERO_BYOK" else 200,
+                cost_basis_micros=basis,
+                cost_basis_source=source,
+                provider=provider,
+                details=extra,
+                require_active_transaction=False,
+            )
+        db_session.commit()
+
+        body = client.get(f"{base(org)}/savings", headers=tenant.org_admin.headers).json()
+
+        assert body["byok_events"] == 1, body
+        assert body["platform_events"] == 3, body
+        assert body["byok_share_percent"] == 25.0, body

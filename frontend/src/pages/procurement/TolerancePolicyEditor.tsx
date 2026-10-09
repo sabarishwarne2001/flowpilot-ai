@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import CapabilityLockCard from "@/components/procurement/CapabilityLockCard";
@@ -55,7 +55,12 @@ export const TolerancePolicyEditor: React.FC = () => {
 
   const capability = useCapabilityAccess(organizationId, RECONCILIATION_CAPABILITY);
   const [draft, setDraft] = useState<PolicyDraft>(EMPTY_DRAFT);
+  const [touched, setTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idBase = useId();
+  // F-198. Preview and publish are workspace-admin actions on the server; a contributor or
+  // viewer was offered both and refused (403). They read the tolerances in force instead.
+  const canPublish = workspace?.role === "ADMIN";
 
   const policiesQuery = useQuery({
     queryKey: procurementKeys.policies(workspaceId),
@@ -69,6 +74,22 @@ export const TolerancePolicyEditor: React.FC = () => {
     [policiesQuery.data],
   );
 
+  // F-199. The next version started from zeros, whatever was in force: changing one field and
+  // publishing reset every other tolerance the workspace had agreed. It now starts from the
+  // version in force (until the reader edits it), and again after each publish.
+  useEffect(() => {
+    if (!current || touched) {
+      return;
+    }
+    setDraft({
+      price_tolerance_micros: Number(current.price_tolerance_micros),
+      price_tolerance_bps: Number(current.price_tolerance_bps),
+      quantity_tolerance: String(Number(current.quantity_tolerance)),
+      max_pair_cost: Number(current.max_pair_cost),
+      candidate_window_days: Number(current.candidate_window_days),
+    });
+  }, [current, touched]);
+
   const describe = (err: unknown): string =>
     err instanceof ApiError ? err.message : "Something went wrong. Try again.";
 
@@ -81,6 +102,7 @@ export const TolerancePolicyEditor: React.FC = () => {
     mutationFn: () => publishPolicy(workspaceId, draft),
     onSuccess: async () => {
       setError(null);
+      setTouched(false);
       await queryClient.invalidateQueries({
         queryKey: procurementKeys.all(workspaceId),
       });
@@ -102,21 +124,29 @@ export const TolerancePolicyEditor: React.FC = () => {
     hint: string,
     numeric = true,
   ) => (
-    <label className="block space-y-1">
-      <span className={FIELD_LABEL}>{label}</span>
+    <div className="space-y-1">
+      <label htmlFor={`${idBase}-${key}`} className={FIELD_LABEL}>
+        {label}
+      </label>
       <input
+        id={`${idBase}-${key}`}
+        aria-describedby={`${idBase}-${key}-hint`}
         className={INPUT}
         type={numeric ? "number" : "text"}
         value={String(draft[key])}
-        onChange={(event) =>
+        disabled={!canPublish}
+        onChange={(event) => {
+          setTouched(true);
           setDraft((value) => ({
             ...value,
             [key]: numeric ? Number(event.target.value) : event.target.value,
-          }))
-        }
+          }));
+        }}
       />
-      <span className={HINT}>{hint}</span>
-    </label>
+      <span id={`${idBase}-${key}-hint`} className={`${HINT} block`}>
+        {hint}
+      </span>
+    </div>
   );
 
   // HARDENING-T1:D26. A failed request rendered as a blank or permanent spinner.
@@ -149,7 +179,9 @@ export const TolerancePolicyEditor: React.FC = () => {
       )}
 
       <section className={`${SURFACE} grid gap-4 p-6 sm:grid-cols-2`}>
-        <h2 className={`${SECTION_TITLE} sm:col-span-2`}>Next version</h2>
+        <h2 className={`${SECTION_TITLE} sm:col-span-2`}>
+          {canPublish ? "Next version" : current ? `Version ${current.version} in force` : "No tolerances published"}
+        </h2>
         {field(
           "Price slack (micros)",
           "price_tolerance_micros",
@@ -184,6 +216,14 @@ export const TolerancePolicyEditor: React.FC = () => {
         </p>
       ) : null}
 
+      {!canPublish ? (
+        <p className={HINT}>
+          Only workspace administrators change tolerances. Ask one if a difference keeps
+          being flagged that your team has agreed to accept.
+        </p>
+      ) : null}
+
+      {canPublish ? (
       <div className="flex gap-2">
         <button
           type="button"
@@ -202,6 +242,7 @@ export const TolerancePolicyEditor: React.FC = () => {
           Publish version {(current?.version ?? 0) + 1}
         </button>
       </div>
+      ) : null}
 
       {preview.data ? (
         <section className={`${SURFACE} space-y-2 p-6`}>

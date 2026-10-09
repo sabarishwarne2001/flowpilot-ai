@@ -9,6 +9,7 @@ import {
   Globe,
   Loader2,
   ShieldAlert,
+  ShieldCheck,
   Timer,
   UserX,
 } from "lucide-react";
@@ -42,6 +43,7 @@ import {
   type RetentionPolicy,
 } from "@/types/compliance";
 import { errorMessage as apiErrorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -745,7 +747,7 @@ const ErasureCard: React.FC<{
 // ---------------------------------------------------------------------------
 
 const OrganizationCompliance: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   const queryClient = useQueryClient();
 
   const isOwner = String(organizationRole).toUpperCase() === "OWNER";
@@ -799,16 +801,13 @@ const OrganizationCompliance: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <header>
-        <h1 className="text-xl font-semibold">
-          Data governance &amp; compliance
-        </h1>
-        <p className={HINT}>
-          Residency, retention, subject erasure and DPA exports for this
-          organization.
-        </p>
-      </header>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        icon={ShieldCheck}
+        eyebrow={organization.organization_name}
+        title="Data governance & compliance"
+        description="Where your data is stored, how long it is kept, erasing a person under GDPR, and the DPA export bundle."
+      />
 
       <ResidencyCard
         organizationId={organizationId}

@@ -40,6 +40,8 @@ import {
   canManageWorkspaceMembers,
   canManageWorkspaceSettings,
 } from "@/permissions/workspacePermissions";
+import { canManageMembers } from "@/permissions/organizationPermissions";
+import type { OrganizationRole } from "@/types/tenancy";
 import { useResolvedTenant } from "@/routes/TenantContext";
 import { ROUTES } from "@/constants/routes";
 import GrantWorkspaceAccessModal from "@/components/workspace/GrantWorkspaceAccessModal";
@@ -84,6 +86,11 @@ export const Workspace: React.FC = () => {
   const canEditWorkspace = canManageWorkspaceSettings(workspaceRole);
   const canManageTeam = canManageWorkspaceMembers(workspaceRole);
   const canArchive = canDeleteWorkspace(organizationRole);
+  // F-197. Invitations are the organization's (GET/POST /organizations/{id}/invitations, OWNER
+  // and ADMIN). Asked for by anyone who opened workspace settings, they answered 403 and the
+  // page said "No active pending invitations found."; a workspace admin who is not an
+  // organization admin was offered an invite form the server refuses.
+  const canManageInvitations = canManageMembers(String(organizationRole).toUpperCase() as OrganizationRole);
 
   const {
     register,
@@ -116,7 +123,7 @@ export const Workspace: React.FC = () => {
   const { data: pendingInvitations, isLoading: isLoadingInvitations } = useQuery({
     queryKey: ["organizations", "invitations", organizationId],
     queryFn: () => listPendingInvitations(organizationId),
-    enabled: Boolean(organizationId),
+    enabled: Boolean(organizationId) && canManageInvitations,
   });
 
   useEffect(() => {
@@ -466,7 +473,7 @@ export const Workspace: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="fp-card p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Workspace Settings</h1>
+        <h1 className="text-2xl font-semibold">Workspace settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Configure your organization's workspace profile and regional preferences.
         </p>
@@ -474,7 +481,7 @@ export const Workspace: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
           <div className="space-y-2">
             <label htmlFor="workspace_name" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Workspace Name
+              Workspace name
             </label>
             <input
               id="workspace_name"
@@ -525,7 +532,7 @@ export const Workspace: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted/50 transition disabled:opacity-50"
                 >
-                  Upload Logo
+                  Upload logo
                 </button>
 
                 {logoPreview && (
@@ -535,7 +542,7 @@ export const Workspace: React.FC = () => {
                     onClick={() => removeLogo()}
                     className="rounded-lg border border-transparent px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
                   >
-                    {isRemovingLogo ? "Removing…" : "Remove Logo"}
+                    {isRemovingLogo ? "Removing…" : "Remove logo"}
                   </button>
                 )}
               </div>
@@ -624,9 +631,9 @@ export const Workspace: React.FC = () => {
 
             <div className="space-y-2">
               <span className="flex items-center gap-1.5">
-                <label htmlFor="date_format" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date Format</label>
+                <label htmlFor="date_format" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date format</label>
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
-                <InfoTooltip label="Date Format">Tells three-way matching how to read ambiguous dates on your documents (is 03/04/2026 March or April?). It does not change how dates are displayed.</InfoTooltip>
+                <InfoTooltip label="Date format">Tells three-way matching how to read ambiguous dates on your documents (is 03/04/2026 March or April?). It does not change how dates are displayed.</InfoTooltip>
               </span>
               <select
                 id="date_format"
@@ -646,7 +653,7 @@ export const Workspace: React.FC = () => {
 
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
-              <h3 className="font-medium">Workspace Status</h3>
+              <h3 className="font-medium">Workspace status</h3>
               <p className="text-sm text-muted-foreground">
                 {isArchived
                   ? "This workspace is archived. Its data is retained and can be restored."
@@ -663,7 +670,7 @@ export const Workspace: React.FC = () => {
                   : "border-transparent text-destructive hover:bg-destructive/10"
               }`}
             >
-              {isArchived ? "Restore Workspace" : "Archive Workspace"}
+              {isArchived ? "Restore workspace" : "Archive workspace"}
             </button>
           </div>
 
@@ -681,7 +688,7 @@ export const Workspace: React.FC = () => {
               disabled={!isDirty || isSaving || !canEditWorkspace}
               className="fp-btn-primary rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
             >
-              {isSaving ? "Saving..." : "Save Workspace"}
+              {isSaving ? "Saving…" : "Save workspace"}
             </button>
           </div>
         </form>
@@ -690,7 +697,7 @@ export const Workspace: React.FC = () => {
       <div className="fp-card p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold">Team Members</h2>
+            <h2 className="text-xl font-semibold">Team members</h2>
             <p className="text-sm text-muted-foreground">
               Who can open this workspace, and what they can do with its documents.
             </p>
@@ -712,8 +719,8 @@ export const Workspace: React.FC = () => {
           <table className="w-full text-left text-sm border-collapse border-b border-border">
             <thead>
               <tr className="border-b border-border bg-muted/20 text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="py-2.5 px-4 font-semibold">Email Address</th>
-                <th className="py-2.5 px-4 font-semibold">Access Role</th>
+                <th className="py-2.5 px-4 font-semibold">Email</th>
+                <th className="py-2.5 px-4 font-semibold">Role</th>
                 <th className="py-2.5 px-4 font-semibold">Status</th>
                 <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
               </tr>
@@ -800,7 +807,7 @@ export const Workspace: React.FC = () => {
                           onClick={() => setMemberToRemove(mem)}
                           className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
                         >
-                          {isSelf ? "Leave Workspace" : "Remove Member"}
+                          {isSelf ? "Leave workspace" : "Remove member"}
                         </button>
                       )}
                     </td>
@@ -813,18 +820,26 @@ export const Workspace: React.FC = () => {
       </div>
 
       <div className="fp-card p-6 shadow-sm space-y-6">
-        <h2 className="text-xl font-semibold">Invitations Directory</h2>
+        <h2 className="text-xl font-semibold">Invitations</h2>
         <p className="text-sm text-muted-foreground">
           Invite new collaborators to this workspace or manage active pending invitations.
         </p>
 
-        {canManageTeam && (
+        {!canManageInvitations ? (
+          <p className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            Invitations are managed by your organization&apos;s owners and administrators. Ask one
+            of them to invite someone to this workspace.
+          </p>
+        ) : null}
+
+        {canManageInvitations && canManageTeam && (
           <form onSubmit={handleSendInvite} className="p-4 rounded-lg bg-muted/20 border border-border grid grid-cols-12 gap-4 items-end">
             <div className="col-span-12 md:col-span-6 space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Recipient Email
+              <label htmlFor="workspace-invite-email" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Email address
               </label>
               <input
+                id="workspace-invite-email"
                 type="email"
                 required
                 placeholder="colleague@company.com"
@@ -834,10 +849,11 @@ export const Workspace: React.FC = () => {
               />
             </div>
             <div className="col-span-12 md:col-span-3 space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Membership Role
+              <label htmlFor="workspace-invite-role" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Role
               </label>
               <select
+                id="workspace-invite-role"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -855,18 +871,19 @@ export const Workspace: React.FC = () => {
                 disabled={isInviting || !inviteEmail.trim()}
                 className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               >
-                {isInviting ? "Sending..." : "Send Invite"}
+                {isInviting ? "Sending…" : "Send invite"}
               </button>
             </div>
           </form>
         )}
 
+        {canManageInvitations ? (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Pending Invites</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Pending invitations</h3>
 
           {invitations.length === 0 ? (
             <p className="text-sm text-muted-foreground bg-muted/10 p-4 rounded-lg border border-border/50 text-center">
-              No active pending invitations found.
+              No pending invitations.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -874,8 +891,8 @@ export const Workspace: React.FC = () => {
                 <thead>
                   <tr className="border-b border-border bg-muted/20 text-muted-foreground text-xs uppercase tracking-wider">
                     <th className="py-2.5 px-4 font-semibold">Email</th>
-                    <th className="py-2.5 px-4 font-semibold">Target Role</th>
-                    <th className="py-2.5 px-4 font-semibold">Expiration Date</th>
+                    <th className="py-2.5 px-4 font-semibold">Role</th>
+                    <th className="py-2.5 px-4 font-semibold">Expires</th>
                     {canManageTeam && <th className="py-2.5 px-4 font-semibold text-right">Actions</th>}
                   </tr>
                 </thead>
@@ -919,11 +936,12 @@ export const Workspace: React.FC = () => {
             </div>
           )}
         </div>
+        ) : null}
       </div>
 
       <ConfirmDialog
         open={memberToRemove !== null}
-        title={memberToRemove?.user.id === user.id ? "Leave Workspace" : "Remove Workspace Member"}
+        title={memberToRemove?.user.id === user.id ? "Leave workspace" : "Remove workspace member"}
         message={
           memberToRemove?.user.id === user.id
             ? "Are you sure you want to leave this workspace? You will no longer have access to its resources."
@@ -942,7 +960,7 @@ export const Workspace: React.FC = () => {
 
       <ConfirmDialog
         open={confirmArchive}
-        title={isArchived ? "Restore Workspace" : "Archive Workspace"}
+        title={isArchived ? "Restore workspace" : "Archive workspace"}
         message={
           isArchived
             ? "Restore this workspace and make it accessible again?"

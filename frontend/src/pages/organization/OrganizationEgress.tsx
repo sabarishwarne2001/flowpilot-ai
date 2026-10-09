@@ -9,12 +9,12 @@
  */
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
+import { Loader2, Lock, Network, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { CAPABILITY } from "@/constants/capabilities";
 import {
-  BUTTON_DESTRUCTIVE, BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, PAGE_TITLE, SCROLL_X,
+  BUTTON_DESTRUCTIVE, BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD_LABEL, HINT, INPUT, SCROLL_X,
   SECTION_TITLE, SELECT, SURFACE, SURFACE_INSET, TABLE_HEAD, TABLE_ROW,
 } from "@/components/ui/primitives";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
@@ -30,6 +30,7 @@ import {
 } from "@/types/sovereign";
 import { formatTimestamp } from "@/utils/displayTime";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const COUNT = new Intl.NumberFormat();
 
@@ -59,7 +60,7 @@ const EgressLocked: React.FC = () => {
 };
 
 const OrganizationEgress: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   const role = String(organizationRole).toUpperCase();
   const isOwner = role === "OWNER";
   const queryClient = useQueryClient();
@@ -130,14 +131,13 @@ const OrganizationEgress: React.FC = () => {
   const portValid = port.trim() === "" || (/^\d+$/.test(port.trim()) && Number(port) >= 1 && Number(port) <= 65535);
 
   return (
-    <div className="space-y-6" data-testid="egress-page">
-      <header className="space-y-1">
-        <h1 className={PAGE_TITLE}>Egress lockdown</h1>
-        <p className="text-sm text-muted-foreground">
-          Where the platform may connect on your organization&apos;s behalf. Refusals happen before any connection
-          opens and are never retried.
-        </p>
-      </header>
+    <div className="mx-auto max-w-5xl space-y-6" data-testid="egress-page">
+      <PageHeader
+        icon={Network}
+        eyebrow={organization.organization_name}
+        title="Egress lockdown"
+        description={<>Where the platform may connect on your organization&apos;s behalf. Refusals happen before any connection opens and are never retried.</>}
+      />
 
       {policy.isError ? (
         <p role="alert" className="text-sm text-destructive">{errorMessage(policy.error, "The policy could not be loaded.")}</p>

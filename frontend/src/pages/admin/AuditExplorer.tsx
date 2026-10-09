@@ -2,7 +2,7 @@ import { formatTimestamp } from "@/utils/displayTime";
 import React, { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Download, Filter, Loader2, User } from "lucide-react";
+import { Bot, Download, Filter, Loader2, User, ScrollText } from "lucide-react";
 
 import {
   downloadBlob,
@@ -15,11 +15,17 @@ import { auditKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PAGE_SIZE = 50;
 
-export const AuditExplorer: React.FC = () => {
-  const { organizationId } = useResolvedOrganization();
+interface AuditExplorerProps {
+  /** Its own page (Organization → Audit log): the console header, with the page's one <h1>. */
+  readonly asPage?: boolean;
+}
+
+export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) => {
+  const { organization, organizationId } = useResolvedOrganization();
 
   const [filters, setFilters] = useState<AuditLogQuery>({});
   const [cursor, setCursor] = useState<string | null>(null);
@@ -90,41 +96,54 @@ export const AuditExplorer: React.FC = () => {
 
   const rows = query.data?.items ?? [];
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Audit log</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Every privileged action, append-only.
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void runExport("CSV")}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
-          >
-            {exporting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5" />
-            )}
-            CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => void runExport("NDJSON")}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
-          >
+  const exportButtons = (
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void runExport("CSV")}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+        >
+          {exporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
             <Download className="h-3.5 w-3.5" />
-            NDJSON
-          </button>
-        </div>
+          )}
+          CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => void runExport("NDJSON")}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          NDJSON
+        </button>
       </div>
+  );
+
+  return (
+    <div className={asPage ? "mx-auto max-w-6xl space-y-5" : "space-y-4"}>
+      {asPage ? (
+        <PageHeader
+          icon={ScrollText}
+          eyebrow={organization.organization_name}
+          title="Audit log"
+          description="Every privileged action in this organization, append-only. Filter by action, actor or resource, inspect an entry, or export the trail."
+          actions={exportButtons}
+        />
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium">Audit log</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Every privileged action, append-only.
+            </p>
+          </div>
+          {exportButtons}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2.5">
         <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -201,7 +220,9 @@ export const AuditExplorer: React.FC = () => {
           No entries match these filters.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
+        <div className="relative overflow-x-auto rounded-md border border-border">
+          {/* F-203. `relative`: the table's sr-only labels are absolutely positioned; without a
+              positioned scroller they escaped its clipping and widened the whole page. */}
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left text-xs text-muted-foreground">

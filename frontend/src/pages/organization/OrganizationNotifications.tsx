@@ -1,6 +1,6 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Loader2, Mail, MailOpen } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ import {
   type Notification,
   type NotificationCategory,
 } from "@/types/notification";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PAGE_SIZE = 25;
 
@@ -43,6 +44,9 @@ export const OrganizationNotifications: React.FC = () => {
       }),
     enabled: Boolean(organizationId),
     staleTime: 30_000,
+    // F-184. A new filter or page is a new query key: without the previous page kept on
+    // screen, the whole page (filters included) was swapped for a spinner while it loaded.
+    placeholderData: keepPreviousData,
   });
 
   const toggleRead = useMutation({
@@ -57,6 +61,15 @@ export const OrganizationNotifications: React.FC = () => {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  // F-184. Reading the last unread notice on the last page shrinks the list under the page
+  // being shown: "25 total", an empty page and no pager to go back with. Step back to the
+  // last page that still has notices.
+  useEffect(() => {
+    if (data && data.items.length === 0 && offset > 0 && data.total > 0) {
+      setOffset(Math.floor((data.total - 1) / PAGE_SIZE) * PAGE_SIZE);
+    }
+  }, [data, offset]);
 
   if (isLoading) {
     return (
@@ -88,16 +101,13 @@ export const OrganizationNotifications: React.FC = () => {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-        <header>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-            <Bell className="h-5 w-5" />
-            Organization notifications
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {organization.organization_name} · Events that concern the whole organization.
-          </p>
-        </header>
+      <div className="mx-auto max-w-4xl space-y-5">
+        <PageHeader
+          icon={Bell}
+          eyebrow={organization.organization_name}
+          title="Organization notifications"
+          description="Events that concern the whole organization: billing, security, membership and identity."
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <span className="text-sm text-foreground">
@@ -154,7 +164,7 @@ export const OrganizationNotifications: React.FC = () => {
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+          <ul aria-label="Organization notifications" className="divide-y divide-border rounded-lg border border-border bg-card">
             {items.map((notification: Notification) => (
               <li
                 key={notification.id}

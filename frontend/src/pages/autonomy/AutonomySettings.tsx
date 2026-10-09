@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CirclePause, Info, Loader2, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CirclePause, Gauge, Info, Loader2, RotateCcw, ShieldCheck } from "lucide-react";
 
 import AutonomyLockCard from "@/components/autonomy/AutonomyLockCard";
 import { CoverageChart, ReliabilityDiagram } from "@/components/autonomy/AutonomyCharts";
@@ -9,7 +9,6 @@ import {
   BUTTON_SECONDARY,
   FIELD_LABEL,
   HINT,
-  PAGE_TITLE,
   SECTION_TITLE,
   SURFACE,
   SURFACE_INSET,
@@ -36,6 +35,7 @@ import {
   toNumber,
 } from "@/types/autonomy";
 import { formatTimestamp } from "@/utils/displayTime";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 /**
  * ARCH-35 §6.7 — Autonomy settings.
@@ -93,7 +93,7 @@ const Stat: React.FC<{ readonly label: string; readonly value: string; readonly 
 );
 
 export const AutonomySettings: React.FC = () => {
-  const { organizationId, organizationRole } = useResolvedOrganization();
+  const { organization, organizationId, organizationRole } = useResolvedOrganization();
   const role = String(organizationRole).toUpperCase();
   const isOwner = role === "OWNER";
   const queryClient = useQueryClient();
@@ -193,16 +193,13 @@ export const AutonomySettings: React.FC = () => {
   const coldStart = entry !== null && entry.label_count < minLabels;
 
   return (
-    <div className="space-y-4">
-      <header className="space-y-1">
-        <h1 className={PAGE_TITLE}>Calibrated autonomy</h1>
-        <p className="text-sm text-muted-foreground">
-          Choose how often an automatic approval may be wrong. The platform lets
-          documents through without review only as far as your own reviewed
-          documents show that limit holds, and pauses itself when they stop
-          showing it.
-        </p>
-      </header>
+    <div className="mx-auto max-w-5xl space-y-5">
+      <PageHeader
+        icon={Gauge}
+        eyebrow={organization.organization_name}
+        title="Calibrated autonomy"
+        description="Choose how often an automatic approval may be wrong. The platform lets documents through without review only as far as your own reviewed documents show that limit holds, and pauses itself when they stop showing it."
+      />
 
       {overview.isPending ? (
         <p className={HINT}>Loading&hellip;</p>

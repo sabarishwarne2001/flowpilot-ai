@@ -25,6 +25,10 @@ from app.services.identity import security_emitters
 from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
 from app.models.identity import JitProvisioningMode  # HM-S1:idp-jit-default
 from app.core import entitlements as _ent
+from app.core.config import settings
+from app.schemas.identity import SecurityPolicyUpdate
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -504,6 +508,9 @@ def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
         "ip_allowlist": [str(c) for c in (policy.ip_allowlist or [])],
         "max_session_age_s": policy.max_session_age_s,
         "idp_session_sync": policy.idp_session_sync,
+        # F-204. What applies when the organization sets nothing, or something longer.
+        "platform_max_session_age_s": settings.SESSION_ABSOLUTE_LIFETIME_HOURS * 3600,
+        "idle_timeout_s": settings.SESSION_IDLE_TIMEOUT_MINUTES * 60,
     }
 
 
@@ -515,11 +522,16 @@ def update_policy(organization_id: str, payload: dict = Body(...),
     # F-004. The session and IP policy is the Enterprise identity feature; it
     # was writable from any plan.
     _cap_gate.require_capability(db, context=membership, capability_key=_ent.ENTERPRISE_IDENTITY_CAPABILITY, operation="identity.security_policy.update")
+    # F-204. The body was applied unchecked; the session age is enforced now, so it is validated.
+    try:
+        changes = SecurityPolicyUpdate.model_validate(payload).model_dump(exclude_unset=True)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors(include_url=False, include_context=False)) from exc
     policy = session_policy_service.get_or_create_policy(
         db, organization_id=organization_id)
     try:
         policy = session_policy_service.update_policy(
-            db, policy=policy, changes=payload, principal=_principal(user))
+            db, policy=policy, changes=changes, principal=_principal(user))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     # ARCH30-T4F:emit-security-policy — A8. Field names, never values:
@@ -531,8 +543,8 @@ def update_policy(organization_id: str, payload: dict = Body(...),
         db,
         organization_id=organization_id,
         changed_fields=[
-            key for key, value in (payload or {}).items()
-            if value is not None
+            key for key, value in changes.items()
+            if value is not None or key == "max_session_age_s"
         ],
         actor=user,
     )

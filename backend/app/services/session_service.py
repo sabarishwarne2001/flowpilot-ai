@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -363,7 +363,39 @@ def _enforce_ip_pin(session: UserSession, *, trusted_ip: str | None) -> None:
         ) from exc
 
 
-def _lapsed_reason(session: UserSession, *, now: datetime) -> str | None:
+def _organization_session_limit(db: Session, user_id: uuid.UUID) -> timedelta | None:
+    """F-204. The strictest maximum session age among the organizations this person can enter.
+
+    A session belongs to the person, not to one organization, so an organization that asks for
+    shorter sessions shortens all of its members' sessions; one they have left, been deactivated
+    in, or that is archived no longer does.
+    """
+    from app.models.identity import TenantSecurityPolicy
+    from app.models.organization import (
+        MembershipStatus,
+        Organization,
+        OrganizationMember,
+        OrganizationStatus,
+    )
+
+    seconds = db.execute(
+        select(func.min(TenantSecurityPolicy.max_session_age_s))
+        .join(
+            OrganizationMember,
+            OrganizationMember.organization_id == TenantSecurityPolicy.organization_id,
+        )
+        .join(Organization, Organization.id == TenantSecurityPolicy.organization_id)
+        .where(
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == MembershipStatus.ACTIVE,
+            Organization.status == OrganizationStatus.ACTIVE,
+            TenantSecurityPolicy.max_session_age_s.is_not(None),
+        )
+    ).scalar_one_or_none()
+    return timedelta(seconds=seconds) if seconds else None
+
+
+def _lapsed_reason(db: Session, session: UserSession, *, now: datetime) -> str | None:
     """ASVS V3.3.2. `authenticated_at` is the sign-in itself, carried unchanged through every
     rotation; `created_at` is this token's issue, i.e. the last refresh. Idle is measured from
     it plus one access-token lifetime, because a user working without a refresh is still
@@ -372,6 +404,10 @@ def _lapsed_reason(session: UserSession, *, now: datetime) -> str | None:
     if absolute and session.authenticated_at is not None:
         if now - session.authenticated_at > timedelta(hours=absolute):
             return "absolute_lifetime"
+    if session.authenticated_at is not None:
+        limit = _organization_session_limit(db, session.user_id)
+        if limit is not None and now - session.authenticated_at > limit:
+            return "organization_session_limit"
     idle = settings.SESSION_IDLE_TIMEOUT_MINUTES
     if idle and session.created_at is not None:
         allowance = timedelta(minutes=idle + settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -399,7 +435,7 @@ def rotate_session(
         revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)
         raise ExpiredRefreshTokenError("This session has expired.")
 
-    lapsed = _lapsed_reason(session, now=now)
+    lapsed = _lapsed_reason(db, session, now=now)
     if lapsed is not None:
         logger.info("SESSION_REFRESH_REJECTED | session=%s | reason=%s", session.id, lapsed)
         revoke_session(db, session=session, reason=SessionRevokedReason.EXPIRED)

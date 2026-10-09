@@ -171,6 +171,12 @@ export const getUsageLimits = async (
   return response.data;
 };
 
+/** F-193. The spend limits this organization set (its own, not the plan's), newest first. */
+export const listSpendLimits = async (organizationId: string): Promise<SpendLimit[]> => {
+  const response = await apiClient.get<SpendLimit[]>(BILLING_ENDPOINTS.spendLimits(organizationId));
+  return response.data;
+};
+
 export const setSpendLimit = async (
   organizationId: string,
   data: SpendLimitUpdateRequest,

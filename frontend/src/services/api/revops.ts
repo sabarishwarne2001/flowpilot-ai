@@ -5,7 +5,7 @@
 import { apiClient } from "@/services/api/client";
 import type {
   Contract, ContractEndReason, ContractInput, ContractSummary, PriceBook, PriceBookSummary, PriceEntryInput,
-  PromoCode, PromoCodeInput, PromoQuote, RevenueMetrics, SweepResult, TenantContract,
+  PromoCode, PromoCodeInput, PromoQuote, RevenueMetrics, RevOpsOrganization, SweepResult, TenantContract,
 } from "@/types/revops";
 
 const ADMIN = "/admin/revops";
@@ -17,6 +17,7 @@ export const revopsKeys = {
   books: () => ["revops", "books"] as const,
   book: (id: string) => ["revops", "books", id] as const,
   promos: () => ["revops", "promos"] as const,
+  organizations: () => ["revops", "organizations"] as const,
   contracts: () => ["revops", "contracts"] as const,
   contract: (id: string) => ["revops", "contracts", id] as const,
   tenantContract: (organizationId: string) => ["billing", organizationId, "contract"] as const,
@@ -47,6 +48,8 @@ export const createPromoCode = async (input: PromoCodeInput): Promise<PromoCode>
 export const setPromoActive = async (id: string, isActive: boolean): Promise<PromoCode> =>
   (await apiClient.put<PromoCode>(`${ADMIN}/promo-codes/${seg(id)}/active`, { is_active: isActive })).data;
 
+export const listRevOpsOrganizations = async (): Promise<readonly RevOpsOrganization[]> =>
+  (await apiClient.get<RevOpsOrganization[]>(`${ADMIN}/organizations`)).data;
 export const listContracts = async (): Promise<readonly ContractSummary[]> =>
   (await apiClient.get<ContractSummary[]>(`${ADMIN}/contracts`)).data;
 export const createContract = async (input: ContractInput): Promise<Contract> =>

@@ -150,6 +150,16 @@ export interface Contract {
   readonly invoices: readonly ContractInvoice[];
 }
 
+/** An organization a contract can be drafted for (GET /admin/revops/organizations). */
+export interface RevOpsOrganization {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly status: string;
+  readonly tier_key: string | null;
+  readonly has_active_contract: boolean;
+}
+
 export interface ContractSummary {
   readonly id: string;
   readonly organization_id: string;

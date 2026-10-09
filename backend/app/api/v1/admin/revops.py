@@ -11,6 +11,7 @@
     GET  /admin/revops/promo-codes                     codes with their redemptions
     POST /admin/revops/promo-codes                     create one
     PUT  /admin/revops/promo-codes/{id}/active         switch it on or off
+    GET  /admin/revops/organizations?q=                organizations a contract can be drafted for (the picker)
     GET  /admin/revops/contracts                       invoiced contracts (open and overdue invoice counts)
     POST /admin/revops/contracts                       draft one
     GET  /admin/revops/contracts/{id}                  one, with its invoices
@@ -28,13 +29,16 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_superadmin
 from app.models.user import User
 from app.schemas.revops import (ContractEndIn, ContractIn, ContractOut, ContractSummary, InvoicePayIn,
-                                InvoiceVoidIn, PriceBookIn, PriceBookOut, PriceBookSummary, PriceEntryIn,
+                                InvoiceVoidIn, OrganizationPick, PriceBookIn, PriceBookOut, PriceBookSummary,
+                                PriceEntryIn,
                                 PromoActiveIn, PromoCodeIn, PromoCodeOut, RevenueMetricsOut, SweepOut)
 from app.services.revops import contracts, metrics, price_books, promos
 
@@ -113,6 +117,12 @@ def set_promo_active(promo_id: uuid.UUID, payload: PromoActiveIn, db: Session = 
     promo = promos.set_active(db, promo_id=promo_id, active=payload.is_active)
     db.commit()
     return PromoCodeOut(**promo)
+
+
+@router.get("/organizations", response_model=list[OrganizationPick])
+def list_organizations(q: Optional[str] = Query(None, max_length=120),
+                       db: Session = Depends(get_db)) -> list[OrganizationPick]:
+    return [OrganizationPick(**row) for row in contracts.organizations(db, query=q)]
 
 
 @router.get("/contracts", response_model=list[ContractSummary])

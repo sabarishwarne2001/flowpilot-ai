@@ -28,6 +28,11 @@ interface ChatPanelProps {
   readonly className?: string;
   /** ARCH39-S1:panel-draft — text to place in the composer; nonce re-applies it. */
   readonly draft?: { readonly text: string; readonly nonce: number };
+  /**
+   * F-200. A workspace viewer may read a conversation but not ask (the server refuses the
+   * message with 403): the composer is replaced by a line saying so.
+   */
+  readonly readOnly?: boolean;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -36,6 +41,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   workItemId: _workItemId,
   className = "",
   draft,
+  readOnly = false,
 }) => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
@@ -261,9 +267,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
         <h2 className="mb-1 text-base sm:text-lg font-semibold">AI Assistant</h2>
         <p className="max-w-md text-xs sm:text-sm leading-relaxed text-muted-foreground">
-          {mode === "global"
-            ? "Create or select a conversation to start chatting with your knowledge base."
-            : "Create a conversation to ask questions about this document."}
+          {readOnly
+            ? "Select a conversation to read it. Asking the assistant needs contributor access: ask a workspace administrator."
+            : mode === "global"
+              ? "Create or select a conversation to start chatting with your knowledge base."
+              : "Create a conversation to ask questions about this document."}
         </p>
       </div>
     );
@@ -314,7 +322,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={scrollAnchorRef} />
       </div>
 
-      <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-2.5 sm:p-3.5">
+{readOnly ? (
+        <p className="border-t border-border/40 bg-card px-3.5 py-3 text-xs text-muted-foreground sm:text-sm">
+          You can read this workspace&apos;s conversations. Asking the assistant needs contributor
+          access: ask a workspace administrator.
+        </p>
+      ) : (
+            <form onSubmit={handleSubmit(handleQuerySubmit)} noValidate className="border-t border-border/40 bg-card p-2.5 sm:p-3.5">
         {sendFailure ? (
           <div
             role="alert"
@@ -370,6 +384,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </button>
         </div>
       </form>
+      )}
 
       <CitationDrawer
         isOpen={isDrawerOpen}

@@ -15,6 +15,7 @@ import {
   parseQuantity,
 } from "@/types/billing";
 import type { UsageGranularity, UsageLimit } from "@/types/billing";
+import { meterLabel, overageLabel, unitFor } from "@/types/planEntitlements";
 
 const GRANULARITIES: readonly UsageGranularity[] = ["HOUR", "DAY", "MONTH"];
 
@@ -260,11 +261,11 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({
               <tbody>
                 {summary.lines.map((line) => (
                   <tr key={line.event_type} className="border-b border-border/50">
-                    <td className="py-2 pr-4">{line.event_type}</td>
+                    <td className="py-2 pr-4">{meterLabel(line.event_type)}</td>
                     <td className="py-2 pr-4 tabular-nums">
                       {parseQuantity(line.quantity).toLocaleString()}{" "}
                       <span className="text-xs text-muted-foreground">
-                        {line.unit}
+                        {unitFor(line.unit, parseQuantity(line.quantity))}
                       </span>
                     </td>
                     <td className="py-2 pr-4 tabular-nums text-muted-foreground">
@@ -298,7 +299,7 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
   return (
     <li className="rounded-md border border-border bg-card p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-medium">{limit.limit_key}</span>
+        <span className="text-sm font-medium">{meterLabel(limit.limit_key)}</span>
         <span className="text-xs tabular-nums text-muted-foreground">
           {limit.max_cost_micros !== null
             ? `${formatMicros(limit.current_cost_micros, currency)} of ${formatMicros(limit.max_cost_micros, currency)}`
@@ -332,7 +333,7 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
             Hard stop — requests are refused past this
           </span>
         ) : (
-          <span>Overage: {limit.overage_policy.toLowerCase()}</span>
+          <span>{overageLabel(limit.overage_policy)}</span>
         )}
       </div>
 

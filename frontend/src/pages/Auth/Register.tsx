@@ -124,14 +124,14 @@ export const Register: React.FC = () => {
   return (
     <div className="flex w-full flex-col">
       <div className="mb-6 space-y-1.5 select-none">
-        <h1 className={AUTH_TITLE}>Create an Account</h1>
-        <p className={AUTH_SUBTITLE}>Sign up to begin automating your business documents.</p>
+        <h1 className={AUTH_TITLE}>Create your account</h1>
+        <p className={AUTH_SUBTITLE}>Start turning your documents into structured, auditable data.</p>
       </div>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
           <label htmlFor="email" className={`${AUTH_LABEL} select-none`}>
-            Email Address
+            Work email
           </label>
           <div className="relative">
             <Mail className={AUTH_INPUT_ICON} aria-hidden="true" />
@@ -176,7 +176,7 @@ export const Register: React.FC = () => {
               onClick={togglePassword}
               disabled={isSubmitting}
               tabIndex={-1}
-              aria-label={showPassword ? "Hide Password" : "Show Password"}
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className={AUTH_TRAILING_BUTTON}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -192,7 +192,7 @@ export const Register: React.FC = () => {
 
         <div className="space-y-1.5">
           <label htmlFor="confirmPassword" className={`${AUTH_LABEL} select-none`}>
-            Confirm Password
+            Confirm password
           </label>
           <div className="relative">
             <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
@@ -212,7 +212,7 @@ export const Register: React.FC = () => {
               onClick={toggleConfirmPassword}
               disabled={isSubmitting}
               tabIndex={-1}
-              aria-label={showConfirmPassword ? "Hide Confirm Password" : "Show Confirm Password"}
+              aria-label={showConfirmPassword ? "Hide confirmation" : "Show confirmation"}
               className={AUTH_TRAILING_BUTTON}
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -233,7 +233,7 @@ export const Register: React.FC = () => {
             </>
           ) : (
             <>
-              Create Account
+              Create account
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </>
           )}
@@ -250,7 +250,7 @@ export const Register: React.FC = () => {
           }
           className={AUTH_LINK}
         >
-          Sign in instead
+          Sign in
         </Link>
       </p>
     </div>

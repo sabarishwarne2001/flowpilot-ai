@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
     LLM_PROVIDER: str = "groq"
-    GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-20b"
     GEMINI_MODEL_NAME: str = "gemini-3.5-flash"
 
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"

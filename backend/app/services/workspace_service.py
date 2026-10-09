@@ -36,6 +36,7 @@ from app.services import audit_service
 
 from app.crud.ai_settings import upsert_ai_settings
 from app.crud.document_settings import upsert_document_settings
+from app.core.ai_models import AI_MODELS
 from app.schemas.ai_settings import AISettingsUpdate, AIProvider
 from app.schemas.document_settings import DocumentSettingsCreate
 
@@ -185,7 +186,9 @@ def create_workspace_in_organization(
             updated_by_user_id=actor_id,
             settings_in=AISettingsUpdate(
                 provider=AIProvider.GROQ,
-                model="mixtral-8x7b-32768",
+                # F-196. Was "mixtral-8x7b-32768": retired by Groq (March 2025), absent from
+                # AI_MODELS and from the price book. The platform's listed default instead.
+                model=AI_MODELS[AIProvider.GROQ][0],
                 temperature=0.7,
                 max_output_tokens=2048,
                 top_p=1.0,
