@@ -177,6 +177,19 @@ export const developerKeys = {
       "explorer",
       workspaceId ?? "none",
     ] as const,
+  requests: (
+    organizationId: string,
+    apiKeyId: string | undefined,
+    outcome: string,
+    days: number,
+  ) =>
+    [
+      ...developerKeys.all(organizationId),
+      "requests",
+      apiKeyId ?? "all-keys",
+      outcome,
+      days,
+    ] as const,
 };
 
 export const byokKeys = {

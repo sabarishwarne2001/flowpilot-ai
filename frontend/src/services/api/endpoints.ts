@@ -330,6 +330,8 @@ export const DEVELOPER_ENDPOINTS = {
     `/organizations/${org(organizationId)}/developer/keys/${seg(keyId)}/metrics`,
   explorer: (organizationId: string): string =>
     `/organizations/${org(organizationId)}/developer/explorer`,
+  requests: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/developer/requests`,
 } as const;
 
 /**

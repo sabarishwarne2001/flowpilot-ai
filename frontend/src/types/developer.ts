@@ -218,3 +218,46 @@ export const isTierAssignable = (
   tier: ApiRateTier,
 ): boolean =>
   catalogue?.tiers.find((entry) => entry.key === tier)?.assignable ?? false;
+
+/* ---- Request log ------------------------------------------------------- */
+
+export type RequestLogOutcome = "all" | "success" | "error" | "throttled";
+
+export const REQUEST_LOG_OUTCOMES: readonly {
+  readonly id: RequestLogOutcome;
+  readonly label: string;
+}[] = [
+  { id: "all", label: "All" },
+  { id: "success", label: "Succeeded" },
+  { id: "error", label: "Failed" },
+  { id: "throttled", label: "Throttled" },
+] as const;
+
+export interface ApiRequestLogEntry {
+  id: string;
+  occurred_at: string;
+  api_key_id: string | null;
+  api_key_name: string | null;
+  method: string | null;
+  route: string | null;
+  status_code: number | null;
+  /** null for a throttled request or an unreported latency — never zero. */
+  latency_ms: number | null;
+  throttled: boolean;
+  workspace_id: string | null;
+}
+
+export interface ApiRequestLogPage {
+  window_days: number;
+  outcome: RequestLogOutcome;
+  items: ApiRequestLogEntry[];
+  next_cursor: string | null;
+}
+
+export interface ApiRequestLogParams {
+  apiKeyId?: string | undefined;
+  outcome: RequestLogOutcome;
+  days: number;
+  cursor?: string | undefined;
+  limit?: number;
+}

@@ -1,6 +1,11 @@
-import { formatTimestampDate } from "@/utils/displayTime";
+import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
@@ -9,7 +14,9 @@ import {
   Info,
   KeyRound,
   Loader2,
+  ListTree,
   Lock,
+  RefreshCw,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -18,6 +25,7 @@ import {
   getApiExplorer,
   getDeveloperOverview,
   getKeyMetrics,
+  getRequestLog,
   issueDeveloperKey,
   updateKeyTier,
 } from "@/services/api/developer";
@@ -26,6 +34,7 @@ import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import {
   API_RATE_TIERS,
   PUBLIC_API_SCOPES,
+  REQUEST_LOG_OUTCOMES,
   SNIPPET_LANGUAGES,
   formatCount,
   formatMeasurement,
@@ -36,6 +45,7 @@ import {
   type DeveloperKeySummary,
   type DeveloperUsagePoint,
   type PublicApiScope,
+  type RequestLogOutcome,
   type SnippetLanguage,
   type TierCatalogue,
 } from "@/types/developer";
@@ -652,6 +662,185 @@ const IssueKeyModal: React.FC<{
 
 /* ------------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------------ */
+
+const REQUEST_LOG_WINDOWS: readonly { readonly value: number; readonly label: string }[] = [
+  { value: 1, label: "24 hours" },
+  { value: 7, label: "7 days" },
+  { value: 30, label: "30 days" },
+];
+
+const statusTone = (statusCode: number | null, throttled: boolean): string => {
+  if (throttled) {return "border-warning/40 text-warning";}
+  if (statusCode === null) {return "border-border text-muted-foreground";}
+  if (statusCode >= 500) {return "border-destructive/40 text-destructive";}
+  if (statusCode >= 400) {return "border-warning/40 text-warning";}
+  return "border-success/40 text-success";
+};
+
+/**
+ * Per-request log of public API calls. The rollups above say how much and
+ * how fast; this says which call failed, when, and with what status — the
+ * first thing a developer debugging an integration needs.
+ */
+const RequestLog: React.FC<{
+  organizationId: string;
+  keys: readonly DeveloperKeySummary[];
+}> = ({ organizationId, keys }) => {
+  const [apiKeyId, setApiKeyId] = useState<string>("");
+  const [outcome, setOutcome] = useState<RequestLogOutcome>("all");
+  const [days, setDays] = useState(7);
+
+  const log = useInfiniteQuery({
+    queryKey: developerKeys.requests(organizationId, apiKeyId || undefined, outcome, days),
+    queryFn: ({ pageParam }) =>
+      getRequestLog(organizationId, {
+        apiKeyId: apiKeyId || undefined,
+        outcome,
+        days,
+        cursor: pageParam,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    staleTime: 15_000,
+  });
+
+  const rows = log.data?.pages.flatMap((page) => page.items) ?? [];
+
+  return (
+    <div className="space-y-3" data-testid="developer-request-log">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1" role="group" aria-label="Filter by outcome">
+          {REQUEST_LOG_OUTCOMES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={outcome === option.id}
+              onClick={() => setOutcome(option.id)}
+              className={`rounded-md border px-2 py-1 text-xs ${
+                outcome === option.id
+                  ? "border-foreground/40 bg-muted text-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <label className="sr-only" htmlFor="request-log-key">
+          API key
+        </label>
+        <select
+          id="request-log-key"
+          value={apiKeyId}
+          onChange={(event) => setApiKeyId(event.target.value)}
+          className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+        >
+          <option value="">All keys</option>
+          {keys.map((apiKey) => (
+            <option key={apiKey.id} value={apiKey.id}>
+              {apiKey.name}
+            </option>
+          ))}
+        </select>
+        <label className="sr-only" htmlFor="request-log-window">
+          Time window
+        </label>
+        <select
+          id="request-log-window"
+          value={days}
+          onChange={(event) => setDays(Number(event.target.value))}
+          className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+        >
+          {REQUEST_LOG_WINDOWS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => void log.refetch()}
+          disabled={log.isFetching}
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3 w-3 ${log.isFetching ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+
+      {log.isLoading ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading requests…
+        </p>
+      ) : log.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          The request log could not be loaded.
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+          No API requests match these filters in this window.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-border text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-medium">Time</th>
+                <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                <th scope="col" className="px-3 py-2 font-medium">Request</th>
+                <th scope="col" className="px-3 py-2 font-medium">Key</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b border-border last:border-0">
+                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                    {formatTimestamp(row.occurred_at)}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded border px-1.5 py-0.5 font-mono ${statusTone(
+                        row.status_code,
+                        row.throttled,
+                      )}`}
+                    >
+                      {row.throttled ? "429" : (row.status_code ?? "—")}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-foreground">
+                    <span className="mr-2 text-muted-foreground">{row.method ?? "—"}</span>
+                    {row.route ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {row.api_key_name ?? "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-muted-foreground">
+                    {formatMeasurement(row.latency_ms, "ms")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {log.hasNextPage && (
+        <button
+          type="button"
+          onClick={() => void log.fetchNextPage()}
+          disabled={log.isFetchingNextPage}
+          className="w-full rounded-md border border-border py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+        >
+          {log.isFetchingNextPage ? "Loading…" : "Load older requests"}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const ApiExplorer: React.FC<{ organizationId: string }> = ({
   organizationId,
 }) => {
@@ -907,6 +1096,18 @@ export const OrganizationDeveloperPortal: React.FC = () => {
               />
             ))}
           </ul>
+        </section>
+
+        <section className="rounded-lg border border-border p-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <ListTree className="h-4 w-4 text-muted-foreground" />
+            Request log
+          </h2>
+          <p className="mb-3 mt-1 text-xs text-muted-foreground">
+            Every call your API keys made to the public gateway, newest first.
+            Filter to failures to see exactly which request broke and when.
+          </p>
+          <RequestLog organizationId={organizationId} keys={data.keys} />
         </section>
 
         <section className="rounded-lg border border-border p-4">

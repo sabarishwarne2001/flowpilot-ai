@@ -191,3 +191,29 @@ __all__ = [
     "DeveloperUsagePoint",
     "TierCataloguePayload",
 ]
+
+
+class ApiRequestLogEntry(BaseModel):
+    """One gateway request, read back from the immutable usage ledger.
+
+    `latency_ms` is None for a throttled request and for any request whose
+    latency was not reported; it never defaults to zero.
+    """
+
+    id: str
+    occurred_at: datetime
+    api_key_id: Optional[str] = None
+    api_key_name: Optional[str] = None
+    method: Optional[str] = None
+    route: Optional[str] = None
+    status_code: Optional[int] = None
+    latency_ms: Optional[float] = None
+    throttled: bool = False
+    workspace_id: Optional[str] = None
+
+
+class ApiRequestLogResponse(BaseModel):
+    window_days: int
+    outcome: str
+    items: list[ApiRequestLogEntry]
+    next_cursor: Optional[str] = None
