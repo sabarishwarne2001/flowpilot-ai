@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Activity, Loader2, RefreshCw } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import { AgentInbox } from "@/components/process/AgentInbox";
 import { AgentPolicyPanel } from "@/components/process/AgentPolicyPanel";
@@ -31,7 +32,7 @@ import { ObjectTimeline } from "@/components/process/ObjectTimeline";
 import { ModelRunCard, SlaPanel } from "@/components/process/SlaPanel";
 import { CAPABILITY } from "@/constants/capabilities";
 import {
-  BUTTON_SECONDARY, HINT, PAGE_TITLE, SCROLL_X, SECTION_TITLE, SELECT, SURFACE, TABLE_HEAD, TABLE_ROW,
+  BUTTON_SECONDARY, HINT, SCROLL_X, SECTION_TITLE, SELECT, SURFACE, TABLE_HEAD, TABLE_ROW,
 } from "@/components/ui/primitives";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
@@ -96,16 +97,17 @@ const ProcessIntelligence: React.FC = () => {
 
   return (
     <div className="space-y-4 p-4">
-      <header className="flex flex-wrap items-center gap-2">
-        <Activity className="h-5 w-5" aria-hidden />
-        <h1 className={PAGE_TITLE}>Process intelligence</h1>
-        <span className={HINT}>How work really flows, where it waits, what it costs — and an agent that proposes how to clear it.</span>
-        {isAdmin ? (
-          <button type="button" className={`${BUTTON_SECONDARY} ml-auto`} disabled={sweep.isPending} onClick={() => sweep.mutate()}>
+      <PageHeader
+        icon={Activity}
+        eyebrow="Workspace"
+        title="Process intelligence"
+        description="How work really flows, where it waits, what it costs — and an agent that proposes how to clear it."
+        actions={isAdmin ? (
+          <button type="button" className={BUTTON_SECONDARY} disabled={sweep.isPending} onClick={() => sweep.mutate()}>
             {sweep.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Sweep now
           </button>
         ) : null}
-      </header>
+      />
       {overview.data && (overview.data.at_risk > 0 || waiting > 0) ? (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
           {overview.data.at_risk > 0 ? `${overview.data.at_risk} open object(s) are predicted to miss their service level. ` : ""}
