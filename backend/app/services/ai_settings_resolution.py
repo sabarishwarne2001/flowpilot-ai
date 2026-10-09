@@ -169,7 +169,7 @@ def _pricing(
     try:
         price = pricing_service.resolve(
             db,
-            event_type="llm.tokens_in",
+            event_type="llm.input_token",
             provider=provider,
             model=model_name,
             at=datetime.now(timezone.utc),
