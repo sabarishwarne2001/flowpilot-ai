@@ -2,6 +2,8 @@ import apiClient from "@/services/api/client";
 import { DEVELOPER_ENDPOINTS } from "@/services/api/endpoints";
 import type {
   ApiExplorerCatalogue,
+  ApiRequestLogPage,
+  ApiRequestLogParams,
   DeveloperKeyCreateRequest,
   DeveloperKeyIssued,
   DeveloperKeyMetrics,
@@ -113,6 +115,26 @@ export const updateKeyTier = async (
     DEVELOPER_ENDPOINTS.keyTier(organizationId, keyId),
     payload,
     { headers: { Accept: "application/json" } },
+  );
+  return response.data;
+};
+
+export const getRequestLog = async (
+  organizationId: string,
+  { apiKeyId, outcome, days, cursor, limit = 50 }: ApiRequestLogParams,
+): Promise<ApiRequestLogPage> => {
+  const response = await apiClient.get<ApiRequestLogPage>(
+    DEVELOPER_ENDPOINTS.requests(organizationId),
+    {
+      params: {
+        outcome,
+        days,
+        limit,
+        ...(apiKeyId ? { api_key_id: apiKeyId } : {}),
+        ...(cursor ? { cursor } : {}),
+      },
+      headers: { Accept: "application/json" },
+    },
   );
   return response.data;
 };
