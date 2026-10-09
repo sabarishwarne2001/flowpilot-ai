@@ -1,6 +1,14 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-08 (Phase 3 — final commercial hardening)_
+_Last updated: 2026-10-09 (final systemic polish & traceback sweep)_
+
+## Latest pass — final systemic polish & traceback sweep
+Branch `hardening/final-systemic-polish-and-traceback-sweep` (after PR #15). Real live stack
+(API + worker `--loop all` + Postgres/pgvector 0.8 + Redis + production bundle): browser suite 380
+passed, 0 failed; 0 tracebacks, 0 5xx, 0 ERROR log lines; 400 jobs all SUCCEEDED. One polish fix,
+F-207 (materiality shown as "90%" instead of "0.90"), proven red then green. Stopped early on the
+owner's usage budget; the remaining small items below are still open (the corroborator item is done).
+
 
 ## Current phase
 **Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
@@ -52,7 +60,7 @@ Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
    (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
    console no longer shows it; drop the column or build the feature). From Phase 2, still open:
    the matching queue lists one case per copy of an invoice (grouping them is a product choice);
-   the corroborator's "Highest" column is a raw score (0.90); the ERP and process pages put their
+   the ERP and process pages put their
    description beside the title.
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy

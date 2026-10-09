@@ -38,6 +38,7 @@ import { reviewKeys } from "@/services/api/queryKeys";
 import {
   KIND_LABELS, LAYERS, LAYER_LABELS, STATUS_LABELS, STATUS_TONE, isPending,
   type Decision, type DiscrepancyRow, type ExportFormat, type Layer, type RunDetail, type RunDocument, type RunVerdict,
+  formatMateriality,
 } from "@/types/corroboration";
 import { formatDateTime } from "@/utils/formatters";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
@@ -351,7 +352,7 @@ const CorroborationRun: React.FC = () => {
                   <p className={HINT}>material still open</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold tabular-nums">{run.max_materiality.toFixed(2)}</p>
+                  <p className="text-2xl font-semibold tabular-nums">{formatMateriality(run.max_materiality)}</p>
                   <p className={HINT}>highest materiality</p>
                 </div>
               </div>
@@ -421,7 +422,7 @@ const CorroborationRun: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="difference-title" className={SECTION_TITLE}>{selected.label}</h2>
                 <span className="text-xs text-muted-foreground">
-                  {LAYER_LABELS[selected.layer]} · {KIND_LABELS[selected.kind]} · materiality {selected.materiality.toFixed(2)}
+                  {LAYER_LABELS[selected.layer]} · {KIND_LABELS[selected.kind]} · materiality {formatMateriality(selected.materiality)}
                 </span>
                 <label className="ml-auto flex items-center gap-1 text-xs">
                   Diff against

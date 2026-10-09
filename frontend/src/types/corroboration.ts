@@ -232,3 +232,6 @@ export interface DocumentComparisons {
 
 /** Whether the run is still being computed (the page polls while it is). */
 export const isPending = (status: RunStatus): boolean => status === "QUEUED" || status === "RUNNING";
+
+/** Materiality is a 0–1 score; people read it as a percentage ("90%"), not "0.90". */
+export const formatMateriality = (score: number): string => `${Math.round(score * 100)}%`;
