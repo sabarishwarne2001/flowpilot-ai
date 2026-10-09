@@ -124,24 +124,6 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Groq Qwen 3.8 27B output rate.",
     },
-    {
-        "event_type": "llm.input_token",
-        "provider": "groq",
-        "model": "groq/compound-mini",
-        "unit_price_micros": "0.250000000",
-        "cost_basis_micros": "0.060000000",
-        "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Groq Compound Mini input rate.",
-    },
-    {
-        "event_type": "llm.output_token",
-        "provider": "groq",
-        "model": "groq/compound-mini",
-        "unit_price_micros": "0.500000000",
-        "cost_basis_micros": "0.120000000",
-        "cost_basis_source": "SUPPLIER_RATE_CARD",
-        "notes": "Groq Compound Mini output rate.",
-    },
     # --- Google Gemini ---
     {
         "event_type": "llm.input_token",
