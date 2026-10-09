@@ -18,7 +18,7 @@ import { corroborationPath } from "@/routes/tenantPaths";
 import { corroborationKeys, listRuns } from "@/services/api/corroboration";
 import { errorMessage } from "@/services/api/errors";
 import { getWorkItemDetails } from "@/services/api/workItem";
-import { STATUS_LABELS, STATUS_TONE, isPending, type RequestResult, type RunStatus } from "@/types/corroboration";
+import { STATUS_LABELS, STATUS_TONE, formatMateriality, isPending, type RequestResult, type RunStatus } from "@/types/corroboration";
 import { formatDateTime } from "@/utils/formatters";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
@@ -132,7 +132,7 @@ const Corroborations: React.FC = () => {
                 <th className="p-2 text-left">Documents</th>
                 <th className="p-2">Differences</th>
                 <th className="p-2">Material</th>
-                <th className="p-2">Highest</th>
+                <th className="p-2">Highest materiality</th>
                 <th className="p-2">Compared</th>
                 <th className="p-2">Status</th>
               </tr>
@@ -150,7 +150,7 @@ const Corroborations: React.FC = () => {
                     {isPending(run.status) ? "—" : run.material_count}
                     {run.open_material_count > 0 ? <span className="block text-[10px] text-muted-foreground">{run.open_material_count} open</span> : null}
                   </td>
-                  <td className="p-2 text-center tabular-nums">{isPending(run.status) ? "—" : run.max_materiality.toFixed(2)}</td>
+                  <td className="p-2 text-center tabular-nums">{isPending(run.status) ? "—" : formatMateriality(run.max_materiality)}</td>
                   <td className="p-2 text-center text-xs text-muted-foreground">{formatDateTime(run.completed_at ?? run.created_at)}</td>
                   <td className="p-2 text-center">
                     <span className={`rounded px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[run.status]}`}>{STATUS_LABELS[run.status]}</span>

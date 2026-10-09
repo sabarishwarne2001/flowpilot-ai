@@ -152,6 +152,8 @@ test.describe("Document corroborator", () => {
     // The comparison lists each document with its share of the differences.
     await expect(page.getByRole("row", { name: /purchase-order-PO-E2E/ }).first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator("main")).toContainText(/\d+%/);
+    // Materiality reads as a percentage ("90%"), not a raw 0–1 score ("0.90").
+    await expect(page.getByText("highest materiality", { exact: true }).locator("xpath=preceding-sibling::p")).toHaveText(/^\d{1,3}%$/);
     await expectHealthyPage(page);
   });
 });

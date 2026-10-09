@@ -10,6 +10,7 @@ import React, { useMemo } from "react";
 import {
   DECISION_LABELS, KIND_LABELS, LAYER_LABELS, SEVERITY_TONE,
   type DiscrepancyRow, type DocValue, type RunDocument,
+  formatMateriality,
 } from "@/types/corroboration";
 
 const clip = (text: string, max = 220): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
@@ -92,11 +93,11 @@ export const DiscrepancyMatrix: React.FC<MatrixProps> = ({ rows, documents, sele
                   <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[row.severity]}`}>
                     {row.severity}
                   </span>
-                  <div className="mt-1 h-1.5 w-16 rounded bg-muted" aria-label={`materiality ${row.materiality.toFixed(2)}`}>
+                  <div className="mt-1 h-1.5 w-16 rounded bg-muted" aria-label={`materiality ${formatMateriality(row.materiality)}`}>
                     <div className="h-1.5 rounded bg-primary" style={{ width: `${Math.round(row.materiality * 100)}%` }} />
                   </div>
                   <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {row.materiality.toFixed(2)}{row.is_material ? " · material" : ""}
+                    {formatMateriality(row.materiality)}{row.is_material ? " · material" : ""}
                   </span>
                 </td>
                 <td className="p-2">
