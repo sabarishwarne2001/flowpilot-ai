@@ -6,6 +6,7 @@
     PATCH /organizations/{id}/developer/keys/{key_id}/tier    reassign tier
     GET   /organizations/{id}/developer/keys/{key_id}/metrics consumption
     GET   /organizations/{id}/developer/explorer              code snippets
+    GET   /organizations/{id}/developer/requests              request log
 
 WHY EVERY HANDLER CALLS `_assert_scope` AND `_assert_human_admin`
 =================================================================
@@ -45,6 +46,7 @@ from app.crud import api_key as api_key_crud
 from app.schemas.developer import (
     ApiExplorerOperation,
     ApiExplorerResponse,
+    ApiRequestLogResponse,
     CodeSnippetSet,
     DeveloperKeyCreateRequest,
     DeveloperKeyIssuedResponse,
@@ -54,7 +56,11 @@ from app.schemas.developer import (
     DeveloperTierUpdateRequest,
     TierCataloguePayload,
 )
-from app.services import api_key_service, developer_portal_service
+from app.services import (
+    api_key_service,
+    developer_portal_service,
+    developer_request_log_service as _request_log,
+)
 
 logger = logging.getLogger("app.api.v1.developer")
 
@@ -287,6 +293,55 @@ def get_explorer(
             for op_id, method, path, summary, scope, body in operations
         ],
     )
+
+
+@router.get(
+    f"{BASE}/requests",
+    response_model=ApiRequestLogResponse,
+    summary="Per-request log of public API calls",
+)
+def get_request_log(
+    organization_id: uuid.UUID,
+    db: deps.DbSession,
+    request: Request,
+    api_key_id: Optional[uuid.UUID] = Query(None),
+    outcome: str = Query("all", pattern="^(all|success|error|throttled)$"),
+    days: int = Query(
+        _request_log.DEFAULT_WINDOW_DAYS, ge=1, le=_request_log.MAX_WINDOW_DAYS
+    ),
+    limit: int = Query(_request_log.DEFAULT_LIMIT, ge=1, le=_request_log.MAX_LIMIT),
+    cursor: Optional[str] = Query(None, max_length=80),
+    context: deps.OrganizationContext = Depends(deps.RequireOrgAdmin),
+) -> Any:
+    """Which call failed, when, and with what status.
+
+    Gated on the developer API capability: the log is a Developer-tier
+    feature, and an organization that lost the capability on downgrade loses
+    the log with its keys. Reads the primary: the capability check must see
+    a plan change the moment it commits, not after replica lag.
+    """
+    _assert_scope(context, organization_id)
+    _assert_human_admin(request)
+    _cap_gate.require_capability(
+        db,
+        context=context,
+        capability_key=_ent.DEVELOPER_API_CAPABILITY,
+        operation="developer.request_log.read",
+    )
+    try:
+        return _request_log.list_requests(
+            db,
+            organization_id=organization_id,
+            api_key_id=api_key_id,
+            outcome=outcome,
+            days=days,
+            limit=limit,
+            cursor=cursor,
+        )
+    except _request_log.InvalidCursorError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cursor."
+        )
 
 
 # ===========================================================================
