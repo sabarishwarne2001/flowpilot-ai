@@ -194,13 +194,28 @@ export interface WorkspaceInvitation {
   updated_at: string;
 }
 
+/**
+ * The public preview of an invitation (POST /invitations/preview).
+ * Mirrors OrganizationInvitationPreviewResponse in app/schemas/organization_invitation.py.
+ * F-222: this described a single workspace and role the server never sent;
+ * `has_account` says whether the invited address can sign in already.
+ */
 export interface WorkspaceInvitationPreview {
   organization_name: string;
-  workspace_name: string;
   inviter_email: string;
   invited_email: string;
-  role: WorkspaceRole;
+  organization_role: OrganizationRole;
+  workspaces: { name: string; role: WorkspaceRole }[];
   expires_at: string;
+  has_account: boolean;
+}
+
+/** POST /auth/register/invitation: the new account's session, and where the invitation leads. */
+export interface InvitationSignupResponse {
+  access_token: string;
+  token_type: string;
+  organization_slug: string;
+  workspace_slug: string | null;
 }
 
 /**

@@ -245,20 +245,7 @@ def accept_invitation(
         accepted = organization_invitation_service.accept_invitation(
             db, token=payload.token, actor=current_user
         )
-        members_url = build_organization_members_link(accepted.organization_slug)
-        background_tasks.add_task(
-            invitation_mail.send_invitation_accepted,
-            organization_id=accepted.organization_id,
-            inviter_email=accepted.inviter_email,
-            invited_email=accepted.invited_email,
-            invited_display=accepted.invited_display,
-            organization_name=accepted.organization_name,
-            organization_role_display=accepted.organization_role.value,
-            provisioned_grants=accepted.provisioned_grants,
-            skipped_grant_count=accepted.skipped_grant_count,
-            members_url=members_url,
-            invitation_id=accepted.invitation_id,
-        )
+        queue_accepted_mail(background_tasks, accepted)
         return OrganizationInvitationAcceptResponse(
             invitation_id=accepted.invitation_id,
             organization_id=accepted.organization_id,
@@ -275,17 +262,38 @@ def accept_invitation(
             workspace_slug=accepted.first_workspace_slug,
         )
     except SeatLimitExceededError:
-        blocked = organization_invitation_service.describe_seat_blocked(db, token=payload.token)
-        members_url = build_organization_members_link(blocked["organization_slug"])
-        invitation_mail.send_invitation_seat_blocked(
-            inviter_email=blocked["inviter_email"],
-            invited_email=blocked["invited_email"],
-            organization_name=blocked["organization_name"],
-            seat_limit=blocked["seat_limit"],
-            members_url=members_url,
-            invitation_id=blocked["invitation_id"],
-        )
+        queue_seat_blocked_mail(db, token=payload.token)
         raise
+
+
+def queue_accepted_mail(background_tasks: BackgroundTasks, accepted: Any) -> None:
+    """Tell the inviter their invitation was accepted (after the response)."""
+    background_tasks.add_task(
+        invitation_mail.send_invitation_accepted,
+        organization_id=accepted.organization_id,
+        inviter_email=accepted.inviter_email,
+        invited_email=accepted.invited_email,
+        invited_display=accepted.invited_display,
+        organization_name=accepted.organization_name,
+        organization_role_display=accepted.organization_role.value,
+        provisioned_grants=accepted.provisioned_grants,
+        skipped_grant_count=accepted.skipped_grant_count,
+        members_url=build_organization_members_link(accepted.organization_slug),
+        invitation_id=accepted.invitation_id,
+    )
+
+
+def queue_seat_blocked_mail(db: Any, *, token: str) -> None:
+    """Tell the inviter an acceptance was blocked for want of a seat."""
+    blocked = organization_invitation_service.describe_seat_blocked(db, token=token)
+    invitation_mail.send_invitation_seat_blocked(
+        inviter_email=blocked["inviter_email"],
+        invited_email=blocked["invited_email"],
+        organization_name=blocked["organization_name"],
+        seat_limit=blocked["seat_limit"],
+        members_url=build_organization_members_link(blocked["organization_slug"]),
+        invitation_id=blocked["invitation_id"],
+    )
 
 
 @router.post(

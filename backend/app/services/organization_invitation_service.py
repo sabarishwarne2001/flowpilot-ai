@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import (
     InvalidInvitationTokenError,
+    InvitationAccountExistsError,
     LastOwnerError,
     InvitationAlreadyExistsError,
     InvitationAlreadyMemberError,
@@ -435,6 +436,7 @@ def preview_invitation(db: Session, *, token: str) -> dict:
             if g.workspace is not None
         ],
         "expires_at": invitation.expires_at,
+        "has_account": user_crud.get_user_by_email(db, email=invitation.email) is not None,
     }
 
 
@@ -641,6 +643,64 @@ def accept_invitation(
             "Failed to accept invitation %s: %s",
             identity_of(invitation), str(exc), exc=exc,
         )
+
+
+def register_and_accept(
+    db: Session,
+    *,
+    token: str,
+    password: str,
+    request: Any = None,
+) -> tuple[User, AcceptedInvitation]:
+    """F-222. Create the invited person's account and accept the invitation, in one transaction.
+
+    The invitation decides the address; the token, which was emailed to it,
+    proves the caller controls it, so the account starts verified. Nothing is
+    created unless the acceptance succeeds: an expired or used invitation, a
+    weak password, an address that already has an account (its owner signs in
+    and accepts instead) or a full organization leaves no user behind.
+    """
+    from app.core import password_policy, security
+
+    invitation = _load_by_token(db, token=token)
+    if invitation.status is not InvitationStatus.PENDING:
+        raise InvitationAlreadyProcessedError(
+            f"This invitation was already {invitation.status.value.lower()}."
+        )
+    if invitation.expires_at <= datetime.now(UTC):
+        raise InvitationExpiredError("This invitation has expired. Ask for a new one.")
+
+    email = invitation.email.strip().lower()
+    password_policy.check_new_password(password, email=email)
+    if user_crud.get_user_by_email(db, email=email) is not None:
+        raise InvitationAccountExistsError(
+            f"An account already exists for {email}. Sign in to accept the invitation."
+        )
+
+    user = User(
+        email=email,
+        hashed_password=security.get_password_hash(password),
+        is_active=True,
+        email_verified_at=datetime.now(UTC),
+    )
+    db.add(user)
+    try:
+        try:
+            db.flush()
+        except sa.exc.IntegrityError as exc:
+            # The same link submitted twice at once: the other request created the
+            # account first (users.email is unique).
+            raise InvitationAccountExistsError(
+                f"An account already exists for {email}. Sign in to accept the invitation."
+            ) from exc
+        accepted = accept_invitation(db, token=token, actor=user, request=request)
+    except Exception:
+        # accept_invitation rolls back what it started; a refusal before that
+        # (no free seat) must not leave the new account behind either.
+        db.rollback()
+        raise
+    logger.info("INVITATION_SIGNUP | user=%s | invitation=%s", user.id, accepted.invitation_id)
+    return user, accepted
 
 
 # ===========================================================================

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ArrowRight, Building2, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ROUTES } from "@/constants/routes";
@@ -11,10 +12,26 @@ import { ApiError } from "@/services/api/client";
 import {
   acceptInvitation,
   previewInvitation,
+  registerWithInvitation,
   rejectInvitation,
 } from "@/services/api/invitations";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AuthShell } from "@/components/auth/AuthShell";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
+import {
+  AUTH_FIELD_ERROR,
+  AUTH_INPUT,
+  AUTH_INPUT_ICON,
+  AUTH_LABEL,
+  AUTH_LINK,
+  AUTH_PRIMARY,
+  AUTH_SECONDARY,
+  AUTH_SUBTITLE,
+  AUTH_TITLE,
+  AUTH_TRAILING_BUTTON,
+} from "@/components/auth/authStyles";
+import { formatTimestamp } from "@/utils/displayTime";
+import type { WorkspaceInvitationPreview } from "@/types/tenancy";
 
 type Phase =
   | "preview"
@@ -22,8 +39,54 @@ type Phase =
   | "rejected"
   | "expired"
   | "invalid"
+  | "signup"
   | "auth_required"
   | "email_mismatch";
+
+/** The server's minimum (app/core/password_policy.MIN_LENGTH); it checks strength too. */
+const MIN_PASSWORD_LENGTH = 12;
+
+const titleCase = (value: string): string =>
+  value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+
+/**
+ * F-222. What the invitation is for, the same on every screen of the page:
+ * the organization, who invited, the organization role and each workspace
+ * with its role, and when the invitation runs out.
+ */
+const InvitationSummary: React.FC<{ readonly preview: WorkspaceInvitationPreview }> = ({ preview }) => (
+  <div className="rounded-xl border border-border/80 bg-muted/30 p-4 text-left">
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Building2 className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 space-y-0.5">
+        <p className="truncate text-sm font-semibold text-foreground">{preview.organization_name}</p>
+        <p className="truncate text-xs text-muted-foreground" title={preview.inviter_email}>
+          Invited by <span className="font-medium text-foreground">{preview.inviter_email}</span>
+        </p>
+      </div>
+      <span className="ml-auto shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+        {titleCase(preview.organization_role)}
+      </span>
+    </div>
+    {preview.workspaces.length > 0 && (
+      <ul aria-label="Workspaces" className="mt-3 space-y-1.5 border-t border-border/70 pt-3">
+        {preview.workspaces.map((workspace) => (
+          <li key={workspace.name} className="flex items-center justify-between gap-3 text-sm">
+            <span className="truncate text-foreground">{workspace.name}</span>
+            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              {titleCase(workspace.role)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+    <p className="mt-3 text-[11px] text-muted-foreground">
+      This invitation expires {formatTimestamp(preview.expires_at)}.
+    </p>
+  </div>
+);
 
 const TOKEN_STASH_KEY = "flowpilot.invitation.token";
 const TOKEN_STASH_TTL_MS = 30 * 60 * 1000;
@@ -117,7 +180,9 @@ export const InvitationAcceptPage: React.FC = () => {
 
     if (previewError) { return "invalid"; }
 
-    if (preview && !isAuthenticated) { return "auth_required"; }
+    // F-222. Signed out: someone with no account signs up right here; someone
+    // with an account signs in and comes back.
+    if (preview && !isAuthenticated) { return preview.has_account ? "auth_required" : "signup"; }
 
     if (
       preview &&
@@ -210,11 +275,72 @@ export const InvitationAcceptPage: React.FC = () => {
     },
   });
 
-  const handleAuthRedirect = (targetRoute: string): void => {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const setToken = useAuthStore((state) => state.setToken);
+  const setAuth = useAuthStore((state) => state.setAuth);
+
+  const { mutate: signUp, isPending: isSigningUp } = useMutation({
+    mutationFn: () => registerWithInvitation(token as string, password),
+    onSuccess: async (result) => {
+      // The same steps as a sign-in (Login.finishSignIn): the token, then the profile.
+      setToken(result.access_token);
+      const me = await authApi.getMeRequest();
+      setAuth(me, result.access_token);
+      setPhase("accepted");
+      clearStashedToken();
+      setPassword("");
+      setConfirmPassword("");
+      toast.success("Your account is ready. Welcome aboard.");
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      navigate(
+        result.workspace_slug
+          ? workspacePath(result.organization_slug, result.workspace_slug)
+          : ROUTES.WORKSPACES,
+        { replace: true },
+      );
+    },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        if (error.code === API_ERROR_CODES.INVITATION_ACCOUNT_EXISTS) {
+          setPhase("auth_required");
+          setErrorMsg(error.message);
+          return;
+        }
+        if (error.code === API_ERROR_CODES.INVITATION_EXPIRED) {
+          setPhase("expired");
+          setErrorMsg(error.message);
+          return;
+        }
+        setSignupError(error.message);
+        return;
+      }
+      setSignupError("We could not create your account. Please try again.");
+    },
+  });
+
+  const handleSignup = (event: React.FormEvent): void => {
+    event.preventDefault();
+    if (isSigningUp) { return; }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setSignupError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSignupError("The two passwords do not match.");
+      return;
+    }
+    setSignupError(null);
+    signUp();
+  };
+
+  const handleAuthRedirect = (targetRoute: string, email?: string): void => {
     if (token) { stashToken(token); }
-    navigate(
-      `${targetRoute}?redirect=${encodeURIComponent(ROUTES.INVITATION_ACCEPT)}`,
-    );
+    const params = new URLSearchParams({ redirect: ROUTES.INVITATION_ACCEPT });
+    if (email) { params.set("email", email); }
+    navigate(`${targetRoute}?${params.toString()}`);
   };
 
   // F-224. Signing out here only cleared this tab: the server session, and the
@@ -225,7 +351,7 @@ export const InvitationAcceptPage: React.FC = () => {
     if (token) { stashToken(token); }
     await authApi.logoutRequest();
     useAuthStore.getState().clearAuth();
-    handleAuthRedirect(ROUTES.LOGIN);
+    handleAuthRedirect(ROUTES.LOGIN, preview?.invited_email);
   };
 
   if (isLoadingPreview && !phase) {
@@ -242,118 +368,216 @@ export const InvitationAcceptPage: React.FC = () => {
     );
   }
 
-  // Safe fallback for role display to prevent undefined.toLowerCase() crash
-  const roleDisplay = (preview?.role || (preview as any)?.organization_role || "member").toString().toLowerCase();
-
   return (
     <AuthShell>
-      <div className="w-full text-center space-y-6">
+      <div className="w-full space-y-6">
         {resolvedPhase === "preview" && preview && (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-[22px] font-semibold tracking-tight">You've been invited!</h2>
-              <p className="text-sm text-muted-foreground">
-                <strong>{preview.inviter_email}</strong> has invited you to join the{" "}
-                <strong>{preview.organization_name}</strong> organization as a{" "}
-                <strong>{roleDisplay}</strong>.
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
+              <p className={AUTH_SUBTITLE}>
+                You were invited as <strong className="text-foreground">{preview.invited_email}</strong>.
               </p>
             </div>
-            <div className="flex flex-col gap-2 pt-4">
+            <InvitationSummary preview={preview} />
+            <div className="flex flex-col gap-2">
               <button
+                type="button"
                 onClick={() => void acceptMutation()}
                 disabled={isAccepting}
-                className="fp-btn fp-btn-primary h-10 w-full font-semibold"
+                className={AUTH_PRIMARY}
               >
-                {isAccepting ? "Joining..." : "Accept & Join Organization"}
+                {isAccepting ? "Joining..." : "Accept and join"}
               </button>
               <button
+                type="button"
                 onClick={() => void rejectMutation()}
                 disabled={isRejecting}
-                className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50 disabled:opacity-50"
+                className={AUTH_SECONDARY}
               >
-                {isRejecting ? "Declining..." : "Decline Invitation"}
+                {isRejecting ? "Declining..." : "Decline invitation"}
               </button>
             </div>
           </div>
         )}
 
-        {resolvedPhase === "accepted" && (
-          <div className="space-y-2">
-            <h2 className="text-[22px] font-semibold tracking-tight">Joined Organization!</h2>
-            <p className="text-sm text-muted-foreground">Taking you to your workspace...</p>
-          </div>
-        )}
-
-        {resolvedPhase === "rejected" && (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-[22px] font-semibold tracking-tight">Invitation Declined</h2>
-              <p className="text-sm text-muted-foreground">You have declined this invitation. You may safely close this page.</p>
+        {resolvedPhase === "signup" && preview && (
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
+              <p className={AUTH_SUBTITLE}>
+                Create your FlowPilot account to accept. The invitation confirms your
+                address, so there is no separate verification email.
+              </p>
             </div>
-            <button
-              onClick={() => navigate(ROUTES.LOGIN)}
-              className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50"
-            >
-              Back to sign in
-            </button>
+            <InvitationSummary preview={preview} />
+            <form noValidate onSubmit={handleSignup} className="space-y-4 text-left">
+              {signupError && (
+                <p role="alert" className={AUTH_FIELD_ERROR}>
+                  {signupError}
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <label htmlFor="invitation-email" className={AUTH_LABEL}>
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className={AUTH_INPUT_ICON} aria-hidden="true" />
+                  <input
+                    id="invitation-email"
+                    type="email"
+                    value={preview.invited_email}
+                    readOnly
+                    aria-readonly="true"
+                    aria-describedby="invitation-email-note"
+                    className={`${AUTH_INPUT} cursor-not-allowed bg-muted/50 pl-9 pr-9 text-muted-foreground`}
+                  />
+                  <Lock
+                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/80"
+                    aria-hidden="true"
+                  />
+                </div>
+                <p id="invitation-email-note" className="text-[11px] text-muted-foreground">
+                  The address this invitation was sent to. It cannot be changed here.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="invitation-password" className={AUTH_LABEL}>
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
+                  <input
+                    id="invitation-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    disabled={isSigningUp}
+                    className={`${AUTH_INPUT} pl-9 pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className={AUTH_TRAILING_BUTTON}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <PasswordStrengthMeter password={password} userInputs={[preview.invited_email]} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="invitation-confirm-password" className={AUTH_LABEL}>
+                  Confirm password
+                </label>
+                <div className="relative">
+                  <Lock className={AUTH_INPUT_ICON} aria-hidden="true" />
+                  <input
+                    id="invitation-confirm-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    disabled={isSigningUp}
+                    className={`${AUTH_INPUT} pl-9`}
+                  />
+                </div>
+              </div>
+              <button type="submit" disabled={isSigningUp} className={AUTH_PRIMARY}>
+                {isSigningUp ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Creating your account...
+                  </>
+                ) : (
+                  <>
+                    Create account and join
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         )}
 
         {resolvedPhase === "auth_required" && (
-          <div className="space-y-3 pt-4">
-            <div className="space-y-1">
-              <h2 className="text-[22px] font-semibold tracking-tight">Sign in to continue</h2>
-              <p className="text-sm text-muted-foreground text-left">
-                Accepting an invitation requires a signed-in account matching{" "}
-                <strong>{preview?.invited_email}</strong>.
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>
+                {preview ? `Sign in to join ${preview.organization_name}` : "Sign in to continue"}
+              </h1>
+              <p className={AUTH_SUBTITLE}>
+                {errorMsg ||
+                  `${preview?.invited_email ?? "The invited address"} already has a FlowPilot account. Sign in with it to accept.`}
               </p>
             </div>
-            <button
-              onClick={() => handleAuthRedirect(ROUTES.LOGIN)}
-              className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              Log In with Matching Account
-            </button>
-            <button
-              onClick={() => handleAuthRedirect(ROUTES.REGISTER)}
-              className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50"
-            >
-              Sign Up with Matching Email
-            </button>
+            {preview && <InvitationSummary preview={preview} />}
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => handleAuthRedirect(ROUTES.LOGIN, preview?.invited_email)}
+                className={AUTH_PRIMARY}
+              >
+                {preview ? `Sign in as ${preview.invited_email}` : "Sign in"}
+              </button>
+              <Link to={ROUTES.FORGOT_PASSWORD} className={`text-center text-[13px] ${AUTH_LINK}`}>
+                Forgot your password?
+              </Link>
+            </div>
           </div>
         )}
 
         {resolvedPhase === "email_mismatch" && (
-          <div className="space-y-3 pt-4">
-            <div className="space-y-1">
-              <h2 className="text-[22px] font-semibold tracking-tight">Wrong account</h2>
-              <p className="text-sm text-muted-foreground text-left">
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Wrong account</h1>
+              <p className={AUTH_SUBTITLE}>
                 {errorMsg ||
                   `This invitation was sent to ${preview?.invited_email ?? "another address"}, but you are signed in as ${currentEmail ?? "a different account"}.`}
               </p>
             </div>
+            {preview && <InvitationSummary preview={preview} />}
             <button
+              type="button"
               onClick={() => void handleSwitchAccount()}
               disabled={isSwitching}
-              className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              className={AUTH_PRIMARY}
             >
               {isSwitching ? "Signing out..." : "Sign out and switch account"}
             </button>
           </div>
         )}
 
-        {(resolvedPhase === "expired" || resolvedPhase === "invalid") && (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-[22px] font-semibold tracking-tight">
-                {resolvedPhase === "expired" ? "Invitation Expired" : "Invalid Link"}
-              </h2>
-              <p className="text-sm text-muted-foreground">{errorMsg || previewMessage}</p>
+        {resolvedPhase === "accepted" && (
+          <div className="space-y-1.5 text-center">
+            <h1 className={AUTH_TITLE}>You&apos;re in</h1>
+            <p className={AUTH_SUBTITLE}>Taking you to your workspace...</p>
+          </div>
+        )}
+
+        {resolvedPhase === "rejected" && (
+          <div className="space-y-5 text-center">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Invitation declined</h1>
+              <p className={AUTH_SUBTITLE}>You declined this invitation. You can close this page.</p>
             </div>
-            <button
-              onClick={() => navigate(ROUTES.LOGIN)}
-              className="w-full rounded-lg border border-border bg-background py-2 text-sm font-semibold text-foreground transition hover:bg-muted/50"
-            >
+            <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={AUTH_SECONDARY}>
+              Back to sign in
+            </button>
+          </div>
+        )}
+
+        {(resolvedPhase === "expired" || resolvedPhase === "invalid") && (
+          <div className="space-y-5 text-center">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>
+                {resolvedPhase === "expired" ? "Invitation expired" : "Invalid link"}
+              </h1>
+              <p className={AUTH_SUBTITLE}>{errorMsg || previewMessage}</p>
+            </div>
+            <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={AUTH_SECONDARY}>
               Back to sign in
             </button>
           </div>

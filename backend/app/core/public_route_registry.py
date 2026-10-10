@@ -83,6 +83,15 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="none",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
+    # F-222. Sign-up from an invitation: the emailed token is the credential, and
+    # the call opens a session, so it is limited like sign-in.
+    PublicRoute(
+        path="/api/v1/auth/register/invitation",
+        methods=("POST",),
+        phase="F-222",
+        credential="invitation token (request body)",
+        rate_limit_policy="POLICY_LOGIN_IP",
+    ),
     PublicRoute(
         path="/api/v1/auth/forgot-password",
         methods=("POST",),

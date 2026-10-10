@@ -131,7 +131,11 @@ export const Login: React.FC = () => {
   })();
 
   const [mode, setMode] = useState<SignInMode>("identify");
-  const [email, setEmail] = useState("");
+  // F-222. An invitation sends its invitee here with their address (?email=), so
+  // they only type the password.
+  const [email, setEmail] = useState(
+    () => new URLSearchParams(location.search).get("email")?.trim() ?? "",
+  );
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

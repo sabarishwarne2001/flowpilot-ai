@@ -272,6 +272,14 @@ class InvalidInvitationTokenError(InvitationError):
     pass
 
 
+class InvitationAccountExistsError(InvitationError):
+    """
+    Raised when signing up from an invitation for an address that already has an
+    account: its owner signs in and accepts instead (F-222).
+    """
+    pass
+
+
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.

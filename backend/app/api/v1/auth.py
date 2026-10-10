@@ -53,6 +53,10 @@ from app.schemas.auth import (
     VerificationStatusResponse,
     VerifyEmailRequest,
 )
+from app.schemas.organization_invitation import (
+    InvitationSignupRequest,
+    InvitationSignupResponse,
+)
 from app.services import (
     auth_token_service,
     mfa_service,
@@ -149,6 +153,46 @@ def register(
             "Check your email. If we could create an account for that "
             "address, a verification link is on its way."
         )
+    )
+
+
+@router.post(
+    "/register/invitation",
+    response_model=InvitationSignupResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_from_invitation(
+    payload: InvitationSignupRequest,
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """F-222. Sign up from an invitation: the account, the acceptance and a session, in one step.
+
+    The address is the invitation's (the request cannot name one) and the token,
+    emailed to it, proves the caller controls it, so the account starts verified
+    and no verification round trip stands between the invitee and the workspace.
+    An address that already has an account answers 409 INVITATION_ACCOUNT_EXISTS:
+    its owner signs in and accepts. A plain /auth/register is unchanged.
+    """
+    from app.api.v1.organization_invitations import queue_accepted_mail, queue_seat_blocked_mail
+    from app.core.exceptions import SeatLimitExceededError
+    from app.services import organization_invitation_service
+
+    try:
+        user, accepted = organization_invitation_service.register_and_accept(
+            db, token=payload.token, password=payload.password, request=request
+        )
+    except SeatLimitExceededError:
+        queue_seat_blocked_mail(db, token=payload.token)
+        raise
+    queue_accepted_mail(background_tasks, accepted)
+    session = _open_session(db, request, response, user=user, ip=_client_ip(request) or "unknown")
+    return InvitationSignupResponse(
+        **session,
+        organization_slug=accepted.organization_slug,
+        workspace_slug=accepted.first_workspace_slug,
     )
 
 

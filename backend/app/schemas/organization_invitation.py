@@ -19,6 +19,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.core.config import settings
+from app.core.password_policy import MIN_LENGTH as MIN_PASSWORD_LENGTH
 from app.models.organization import OrganizationRole
 from app.models.organization_invitation import (
     InvitationStatus,
@@ -212,6 +213,32 @@ class OrganizationInvitationPreviewResponse(BaseModel):
     organization_role: OrganizationRole
     workspaces: list[WorkspacePreviewEntry]
     expires_at: datetime
+    # F-222. Whether the invited address already has an account, so the page offers
+    # sign-in to its owner and a one-step sign-up to anyone else. Only the holder of
+    # the emailed token can ask, and the token is bound to this one address.
+    has_account: bool = False
+
+
+class InvitationSignupRequest(BaseModel):
+    """
+    F-222. Create an account from an invitation and accept it, in one step.
+
+    No email field: the address is the invitation's, and the token proves the
+    caller controls it. `extra="forbid"` makes a request that tries to name a
+    different address fail instead of silently ignoring it.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(..., min_length=1, max_length=512)
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+
+class InvitationSignupResponse(BaseModel):
+    """A signed-in session for the new account, and where the invitation leads."""
+    access_token: str
+    token_type: str = "bearer"
+    organization_slug: str
+    workspace_slug: str | None = None
 
 
 class OrganizationInvitationAcceptResponse(BaseModel):
