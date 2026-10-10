@@ -27,7 +27,7 @@ the event loop"), plus the owner's N-032/N-033 decision applied and backend CI m
   (switch account sent a newcomer to sign-in), F-228 (sign-up dead ends), F-229 (presence order).
 - **CI:** backend CI was red on main since the platform relay became mandatory (24 tests); the
   backend steps now declare a relay. `pip-audit (advisory)` stays red on main (N-038).
-Verification: see "What is done" (this pass) below.
+Verification: see "What is done" below (CI green on the final code).
 
 ## Earlier pass — live bug hunt: fuzzing, double clicks, dev-mode rendering (2026-10-09)
 Branch `claude/jolly-keller-d0jscd` (the session's assigned branch). Real live stack: Postgres 16 +
@@ -91,6 +91,20 @@ into `main`).
   admin consoles; sentence case and labelled fields on the remaining settings and auth screens.
 
 ## What is done
+- **Invitations, the workspace team and the event loop (2026-10-10)** (PR #18): F-216 to F-229
+  fixed, each proven by a failing test first.
+  - **GitHub CI on the final code (`bfe1836`): green**: the full pytest job (Phase 2 security
+    proofs, Phase 4 engine proofs, the whole suite), browser tests, frontend, migration head and
+    drift. Only `pip-audit (advisory)` is red, as on `main` (N-038).
+  - Browser suite on a fresh e2e database, production bundle with the production CSP: **393
+    passed, 0 failed, 1 skipped** (by design; 13.2 min). API and worker logs: 0 tracebacks, 0 5xx,
+    0 ERROR lines; 410 jobs of 38 types, all SUCCEEDED.
+  - Backend, full suite locally in CI's environment: **3,631 passed, 9 skipped, 8 failed**. The 8
+    are sandbox-only and pass in CI (the embedding model cannot be downloaded here, plus one
+    readiness check).
+  - `tsc -b`, the browser-test typecheck, `npm run lint`, `npm run check:self`, `npm run build`
+    (no source maps) and the encoding check are clean. One Alembic head
+    (`r1a1_invitation_delivery`); up, down and up again; no new drift (283 known).
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
   polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence), Phase 2 (enterprise
   processing and TruthMesh):** merged.
