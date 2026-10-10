@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -79,16 +80,54 @@ def get_read_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@dataclass(frozen=True)
+class _Authenticated:
+    user: User
+    principal: Principal
+    key: Any = None
+    membership: Optional[OrganizationMember] = None
+    session_id: Optional[uuid.UUID] = None
+
+
 async def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    # F-218. Every authenticated request runs this, and it queries the database (the
+    # user, the session row, an API key and its plan). As an `async def` doing that
+    # work inline, it held the event loop for every query: one slow lookup (a lock
+    # wait, a cold connection) stalled every other request in the process. The
+    # lookups run in the threadpool; the principal is set HERE, on the request's own
+    # context, because a context variable set inside a pool thread is lost when the
+    # thread returns. Dependencies resolve one after another, so the request's
+    # session is never used from two threads at once.
+    authenticated = await run_in_threadpool(_authenticate, db, token)
+    set_current_principal(authenticated.principal)
+
+    if request is not None:
+        request.state.user_id = authenticated.user.id
+        request.state.principal = authenticated.principal
+        if authenticated.key is not None:
+            request.state.api_key_id = authenticated.key.id
+            request.state.api_key_obj = authenticated.key
+            request.state.api_key_membership = authenticated.membership
+        if authenticated.session_id is not None:
+            request.state.session_id = authenticated.session_id
+
+    return authenticated.user
+
+
+def _authenticate(db: Session, token: str) -> _Authenticated:
+    credentials_exception = _credentials_exception()
 
     if token and token.startswith(("fp_live_", "fp_test_")):
         res = api_key_service.authenticate_api_key_token(db, token=token)
@@ -111,17 +150,12 @@ async def get_current_user(
             audit=False,
         )
 
-        principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=user.id)
-        set_current_principal(principal)
-
-        if request is not None:
-            request.state.user_id = user.id
-            request.state.api_key_id = key.id
-            request.state.api_key_obj = key
-            request.state.api_key_membership = membership
-            request.state.principal = principal
-
-        return user
+        return _Authenticated(
+            user=user,
+            principal=Principal.for_api_key(api_key_id=key.id, issuer_user_id=user.id),
+            key=key,
+            membership=membership,
+        )
 
     claims = security.decode_access_token_claims(token)
     if claims is None:
@@ -147,16 +181,11 @@ async def get_current_user(
         )
         raise credentials_exception
 
-    principal = Principal.for_user(user.id)
-    set_current_principal(principal)
-
-    if request is not None:
-        request.state.user_id = user.id
-        request.state.principal = principal
-        if claims.session_id is not None:
-            request.state.session_id = claims.session_id
-
-    return user
+    return _Authenticated(
+        user=user,
+        principal=Principal.for_user(user.id),
+        session_id=claims.session_id,
+    )
 
 
 def _token_predates_revocation(
@@ -367,7 +396,10 @@ def _assert_sso_compliance(
         )
 
 
-async def get_organization_context(
+# F-218. The context dependencies below query the database and hold no context
+# variable, so they are plain `def`: FastAPI runs them in the threadpool instead
+# of on the event loop.
+def get_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
@@ -401,7 +433,7 @@ async def get_organization_context(
     )
 
 
-async def get_sso_compliant_organization_context(
+def get_sso_compliant_organization_context(
     request: Request,
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
@@ -447,7 +479,7 @@ async def get_sso_compliant_organization_context(
     )
 
 
-async def get_billing_organization_context(
+def get_billing_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
@@ -472,7 +504,7 @@ async def get_billing_organization_context(
     )
 
 
-async def get_workspace_context(
+def get_workspace_context(
     workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
@@ -510,7 +542,7 @@ async def get_workspace_context(
     )
 
 
-async def get_archived_workspace_context(
+def get_archived_workspace_context(
     workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
@@ -543,7 +575,7 @@ async def get_archived_workspace_context(
     )
 
 
-async def get_archived_organization_owner_context(
+def get_archived_organization_owner_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
@@ -758,19 +790,8 @@ def _gateway_unauthorized(detail: str) -> HTTPException:
     )
 
 
-async def require_api_key(
-    request: Request,
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme),
-) -> PublicApiPrincipal:
-    from app.core.api_tiers import ef_search_for, parse_tier
-    from app.core.rate_limit.backend import RateLimitDecision
-    from app.core.rate_limit.limiter import consume_rate_limit
-    from app.core.rate_limit.policy import FailureMode, RateLimitPolicy, RateLimitScope
-
-    if not token or not token.startswith(("fp_live_", "fp_test_")):
-        raise _gateway_unauthorized("A FlowPilot API key is required for the public API.")
-
+def _authenticate_public_api_key(db: Session, token: str) -> tuple[Any, OrganizationMember, Organization]:
+    """The public API key, its membership and organization, refusing a key that may not call it."""
     result = api_key_service.authenticate_api_key_token(db, token=token)
     if result is None:
         raise _gateway_unauthorized("Could not validate credentials")
@@ -800,6 +821,28 @@ async def require_api_key(
         audit=False,
     )
 
+    return key, membership, organization
+
+
+async def require_api_key(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+) -> PublicApiPrincipal:
+    from app.core.api_tiers import ef_search_for, parse_tier
+    from app.core.rate_limit.backend import RateLimitDecision
+    from app.core.rate_limit.limiter import consume_rate_limit
+    from app.core.rate_limit.policy import FailureMode, RateLimitPolicy, RateLimitScope
+
+    if not token or not token.startswith(("fp_live_", "fp_test_")):
+        raise _gateway_unauthorized("A FlowPilot API key is required for the public API.")
+
+    # F-218. The key, organization and plan lookups, the Redis rate limit and the
+    # billing gate are blocking I/O: they run in the threadpool, so one slow
+    # lookup no longer stalls the event loop. The principal is set here, on the
+    # request's own context (a context variable set in a pool thread is lost).
+    key, membership, organization = await run_in_threadpool(_authenticate_public_api_key, db, token)
+
     principal = Principal.for_api_key(api_key_id=key.id, issuer_user_id=membership.user_id)
     set_current_principal(principal)
 
@@ -817,7 +860,7 @@ async def require_api_key(
         window_seconds=60,
         failure_mode=FailureMode.FAIL_CLOSED,
     )
-    decision: RateLimitDecision = consume_rate_limit(request, policy)
+    decision: RateLimitDecision = await run_in_threadpool(consume_rate_limit, request, policy)
 
     if not decision.allowed:
         # ARCH50-S1:rate-limit-429-headers (GA-2, verify_arch21 G16). This 429 short-circuits
@@ -871,8 +914,8 @@ async def require_api_key(
     # resolves without passing through this dependency.
     from app.api.billing_write_gate import assert_billing_writes_allowed
 
-    assert_billing_writes_allowed(
-        request, db, organization_id=organization.id
+    await run_in_threadpool(
+        assert_billing_writes_allowed, request, db, organization_id=organization.id
     )
 
     return PublicApiPrincipal(

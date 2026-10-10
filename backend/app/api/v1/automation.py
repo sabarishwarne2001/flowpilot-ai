@@ -2,6 +2,7 @@
 Automation Rules API router endpoints for FlowPilot AI.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -691,7 +692,7 @@ def delete_rule(
     summary="Test an Automation Rule against a Work Item",
     response_description="Detailed results of the test match evaluation."
 )
-async def test_rule(
+def test_rule(
     rule_id: uuid.UUID,
     payload: AutomationRuleTestRequest,
     db: Session = Depends(deps.get_db),
@@ -716,7 +717,11 @@ async def test_rule(
             detail="Work item not found or you do not have permission to access it."
         )
 
-    result = await automation_service.test_rule_for_work_item(
-        db, rule=rule, work_item=work_item
+    # F-218. A plain `def`, so the lookups, the dry run and the email settings
+    # (all blocking database work) run in the threadpool, not on the event loop.
+    # The test itself is a coroutine (it may send a labelled test email, through
+    # a provider that already sends from a thread); it runs to completion on
+    # this worker thread's own loop.
+    return asyncio.run(
+        automation_service.test_rule_for_work_item(db, rule=rule, work_item=work_item)
     )
-    return result

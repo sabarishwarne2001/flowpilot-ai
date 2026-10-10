@@ -35,6 +35,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api import deps
 from app.core.config import settings
@@ -167,6 +168,13 @@ async def put_part(
             f"A part may not exceed {MAX_PART_BYTES} bytes.",
         )
 
+    # F-218. The route stays async to receive the body, and does no blocking work
+    # on the event loop: the transaction the access checks opened ends before the
+    # (possibly slow) body arrives, so no pooled connection sits idle in a
+    # transaction meanwhile, and storing the part runs in the threadpool.
+    workspace_id = context.workspace_id
+    await run_in_threadpool(db.commit)
+
     data = await request.body()
     if len(data) > MAX_PART_BYTES:
         raise HTTPException(
@@ -174,10 +182,28 @@ async def put_part(
             f"A part may not exceed {MAX_PART_BYTES} bytes.",
         )
 
+    return await run_in_threadpool(
+        _store_part,
+        db,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        part_number=part_number,
+        data=data,
+    )
+
+
+def _store_part(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    session_id: uuid.UUID,
+    part_number: int,
+    data: bytes,
+) -> UploadSessionResponse:
     try:
         session = upload_session_service.receive_part(
             db,
-            workspace_id=context.workspace_id,
+            workspace_id=workspace_id,
             session_id=session_id,
             part_number=part_number,
             data=data,

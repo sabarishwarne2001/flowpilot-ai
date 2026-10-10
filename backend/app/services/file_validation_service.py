@@ -224,32 +224,14 @@ def spool_stream(
     return spool, total
 
 
-async def spool_upload_file(upload: Any, *, max_bytes: int) -> tuple[BinaryIO, int]:
-    spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_MAX_MEMORY_BYTES)
-    total = 0
-    try:
-        while True:
-            chunk = await upload.read(READ_CHUNK_BYTES)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > max_bytes:
-                raise FileValidationError(
-                    RejectionReason.TOO_LARGE,
-                    f"Upload exceeds the {max_bytes}-byte limit.",
-                    detail={"limit_bytes": max_bytes, "read_bytes": total},
-                )
-            spool.write(chunk)
-    except Exception:
-        spool.close()
-        raise
+def spool_upload_file(upload: Any, *, max_bytes: int) -> tuple[BinaryIO, int]:
+    """Spool a multipart upload, refusing it past `max_bytes`.
 
-    if total == 0:
-        spool.close()
-        raise FileValidationError(RejectionReason.EMPTY, "Uploaded file is empty.")
-
-    spool.seek(0)
-    return spool, total
+    F-218. Synchronous on purpose: it reads the upload's own file object, so the
+    route that calls it runs in the threadpool rather than reading (and later
+    validating and storing) on the event loop.
+    """
+    return spool_stream(iter(lambda: upload.file.read(READ_CHUNK_BYTES), b""), max_bytes=max_bytes)
 
 
 def _probe_pdf(handle: BinaryIO, *, max_pages: int) -> tuple[int, list[str]]:

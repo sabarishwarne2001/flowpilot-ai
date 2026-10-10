@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import threading
@@ -11,6 +12,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from typing import Any, AsyncIterator, Optional
 
+import anyio
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -449,7 +451,11 @@ class AssistantStreamService:
                         if too_large is None:
                             raise
                         attempt += 1
-                        plan = self._shrink_plan(plan, too_large)
+                        # F-218. Resealing writes the audit record: blocking
+                        # database work, so it runs off the event loop.
+                        plan = await anyio.to_thread.run_sync(
+                            self._shrink_plan, plan, too_large
+                        )
                         yield emit(
                             "notice",
                             {
@@ -524,20 +530,29 @@ class AssistantStreamService:
                         )
                     )
 
-                outcome = stream_session.settle_and_persist(
-                    reservation=plan.reservation,
-                    message_id=plan.message_id,
-                    conversation_id=plan.conversation.id,
-                    emitted_text=emitted,
-                    token_usage=usage,
-                    finish_reason=finish,
-                    truncated=truncated,
-                    sources=sources or None,
-                    context_hash=plan.context_hash,
-                    audit_log_id=plan.audit_log_id,
-                    provider=provider,
-                    model=model,
-                )
+                # F-218. Billing and persisting the answer is blocking database
+                # work (lock waits included): it runs off the event loop. The
+                # scope is shielded because this `finally` also runs when the
+                # client disconnected, and a cancelled await here would leave
+                # the reservation unsettled and the answer unsaved.
+                with anyio.CancelScope(shield=True):
+                    outcome = await anyio.to_thread.run_sync(
+                        functools.partial(
+                            stream_session.settle_and_persist,
+                            reservation=plan.reservation,
+                            message_id=plan.message_id,
+                            conversation_id=plan.conversation.id,
+                            emitted_text=emitted,
+                            token_usage=usage,
+                            finish_reason=finish,
+                            truncated=truncated,
+                            sources=sources or None,
+                            context_hash=plan.context_hash,
+                            audit_log_id=plan.audit_log_id,
+                            provider=provider,
+                            model=model,
+                        )
+                    )
                 redactor.log_summary(message_id=str(plan.message_id))
                 logger.info(
                     "stream.finished",

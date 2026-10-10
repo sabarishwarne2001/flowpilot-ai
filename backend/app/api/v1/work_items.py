@@ -94,8 +94,11 @@ class ReindexStatusResponse(BaseModel):
     last_completed_at: Optional[datetime]
 
 
+# F-218. A plain `def`: spooling, validation (PDF probe, EXIF scrub), the
+# object-storage write and the commit all block, so the route runs in the
+# threadpool instead of holding the event loop for the whole upload.
 @router.post("", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(
+def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -107,7 +110,7 @@ async def upload_document(
 
     # 2. Bounded chunked spooling
     try:
-        spool, total_size = await file_validation_service.spool_upload_file(
+        spool, total_size = file_validation_service.spool_upload_file(
             file, max_bytes=limit_bytes
         )
     except file_validation_service.FileValidationError as exc:

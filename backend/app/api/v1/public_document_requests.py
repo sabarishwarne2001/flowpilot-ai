@@ -36,13 +36,15 @@ def preview_document_request(token: str, db: Session = Depends(get_db)) -> Publi
                              expires_at=request.expires_at)
 
 
+# F-218. A plain `def`, so the spool, validation, storage write and commit run in
+# the threadpool rather than on the event loop.
 @router.post("/public/document-requests/{token}", response_model=PublicUploadResult)
-async def upload_requested_document(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> PublicUploadResult:
+def upload_requested_document(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> PublicUploadResult:
     try:
         requests.peek(db, token)
     except requests.RequestError as exc:
         raise _refuse(exc) from exc
-    handle, size = await file_validation_service.spool_upload_file(file, max_bytes=settings.MAX_UPLOAD_SIZE)
+    handle, size = file_validation_service.spool_upload_file(file, max_bytes=settings.MAX_UPLOAD_SIZE)
     try:
         result = requests.fulfil_upload(db, token=token, handle=handle, size=size, filename=file.filename or "document",
                                         declared_mime=file.content_type)

@@ -42,7 +42,10 @@ class AssistantService:
     Coordinates conversational AI workflows scoped strictly to a workspace.
     """
 
-    async def send_chat_message(
+    # F-218. Synchronous: retrieval, the history load and the model call all block,
+    # and nothing here awaits. As a coroutine it ran all of that on the event loop
+    # of the route that awaited it, up to 25 s per model attempt.
+    def send_chat_message(
         self,
         db: Session,
         *,

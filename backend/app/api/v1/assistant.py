@@ -315,7 +315,7 @@ def delete_chat_session(
     summary="Send Message",
     response_description="AI-generated response with structured source citations.",
 )
-async def post_chat_query(
+def post_chat_query(
     conversation_id: uuid.UUID,
     query_in: ChatQuery,
     db: Session = Depends(deps.get_db),
@@ -329,7 +329,7 @@ async def post_chat_query(
             user_id=context.user_id,
         )
 
-        response = await assistant_service.send_chat_message(
+        response = assistant_service.send_chat_message(
             db=db,
             conversation_id=conversation_id,
             user_id=context.user_id,

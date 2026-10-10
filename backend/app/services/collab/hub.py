@@ -156,7 +156,8 @@ class Hub:
 
     async def announce_presence(self, workspace_id: str) -> None:
         viewers = await self.presence_snapshot(workspace_id)
-        self.broker.publish(workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
+        # F-218. A Redis publish blocks for up to its 2 s socket timeout: off the loop.
+        await in_thread(self.broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
         self._presence_digest[workspace_id] = json.dumps(viewers, sort_keys=True, default=str)
 
     # ------------------------------------------------------------------- serve
@@ -497,18 +498,20 @@ class Hub:
         if not await broker.lead(workspace_id, self.owner, v.WATERMARK_SECONDS * 3):
             return {"leader": False}
         expired, digest = await in_thread(self._leader_db, uuid.UUID(workspace_id))
+        # F-218. Every publish below runs off the loop (a Redis publish blocks for up to 2 s).
         for lock in expired:
-            broker.publish(workspace_id, {"type": v.EVENT_LOCK_RELEASED, "kind": lock.kind, "item_id": str(lock.item_id),
-                                          "holder_user_id": str(lock.holder_user_id), "reason": v.RELEASE_EXPIRED})
+            await in_thread(broker.publish, workspace_id,
+                            {"type": v.EVENT_LOCK_RELEASED, "kind": lock.kind, "item_id": str(lock.item_id),
+                             "holder_user_id": str(lock.holder_user_id), "reason": v.RELEASE_EXPIRED})
         changed = await broker.swap_digest(workspace_id, digest)
         if changed:
-            broker.publish(workspace_id, {"type": v.EVENT_QUEUE_CHANGED, "reason": "watermark"})
+            await in_thread(broker.publish, workspace_id, {"type": v.EVENT_QUEUE_CHANGED, "reason": "watermark"})
         _, pruned = await broker.presence_all(workspace_id, service.now().timestamp())
         viewers = await self.presence_snapshot(workspace_id)
         snapshot = json.dumps(viewers, sort_keys=True, default=str)
         healed = pruned > 0 or self._presence_digest.get(workspace_id) != snapshot
         if healed:
-            broker.publish(workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
+            await in_thread(broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
             self._presence_digest[workspace_id] = snapshot
         return {"leader": True, "expired": len(expired), "queue_changed": changed, "presence": healed}
 
