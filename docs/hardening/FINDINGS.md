@@ -3012,10 +3012,9 @@ and the invitation email. Each item was driven live (API, worker, Vite dev serve
 and, where it was a defect, proven by a failing test first. Two more defects turned up on the way
 (F-220 while converting the uploads, F-221 while tracing the accept path, F-225 while
 following a sign-up through verification). An independent adversarial review of the session's diff
-then found F-226 to F-229, each proven and fixed. Its fifth point is not fixed: while an
-organization is full, each refused invitation sign-up or acceptance sends the inviter a "no seats"
-email, so a token holder can repeat it; the per-IP sign-in rate limit bounds it, and the accept
-route always behaved the same way.
+then found F-226 to F-229, each proven and fixed. Its fifth point (each refused sign-up while an
+organization is full emailed the inviter again) is F-234, fixed with the owner decisions N-034 to
+N-039 (F-230 to F-235) on 2026-10-10.
 
 | ID | Severity | Area | Finding | Evidence | Status |
 |---|---|---|---|---|---|
@@ -3033,6 +3032,12 @@ route always behaved the same way.
 | F-227 | Medium | Invitations | After "Sign out and switch account" (F-224), a newcomer whose address had no account was sent to a sign-in page for an account that does not exist, losing the one-step sign-up. The page now stays, signed out, and shows the sign-up (sign-in only when the address has an account). | e2e "to an address without an account" failed before (sign-in page), passes; the with-account case passes before and after; both still check the old session no longer refreshes. | Fixed |
 | F-228 | Low | Invitations | A sign-up refused because the invitation was revoked, used or unknown meanwhile left an error under a form that could never succeed; a failed profile read right after a successful sign-up reported a failed sign-up. Now "Invitation not available" with the reason; the profile case loads the destination (the session exists). | e2e "withdrawn while its sign-up form is open" failed before, passes. | Fixed |
 | F-229 | Low | Live collaboration | F-218 moved the presence publish to worker threads, so two announcements for one workspace could publish out of order (an older snapshot last, with the digest holding the newer one, so the self-healing tick did not correct it). Announcements for a workspace now run one at a time. | `tests/services/test_collab_presence_order.py`: published [2, 1] viewers before, [1, 2] after. | Fixed |
+| F-230 | Low | Invitations | N-037 decided: invitation links lasted 72 hours; they last 7 days (`INVITATION_TTL_HOURS` 168). | `tests/api/test_invitation_owner_decisions.py::test_an_invitation_link_lasts_seven_days` (3 days before). | Fixed |
+| F-231 | Medium | Invitations | N-036 decided: accepting an older invitation moved an admin back down to the invitation's role. Accepting now only raises an active member's role; a deactivated member rejoins with the invitation's role. | `test_accepting_never_lowers_an_existing_role` (MEMBER before, ADMIN now); the raise and rejoin tests pass. | Fixed |
+| F-232 | Medium | Invitations | N-034 decided: an invited address with an account nobody verified was sent to sign in to an account its owner never created. A platform-delivered invitation's sign-up takes it over: new password, verified, every old session ended. Verified accounts still sign in; off-platform invitations (F-226) unchanged. | `test_the_sign_up_takes_over_an_account_whose_address_was_never_verified` (`has_account` true and 409 before); `test_a_verified_account_is_still_sent_to_sign_in`. | Fixed |
+| F-233 | Medium | Invitations, SSO | N-035 decided: an organization that requires SSO could be joined with a password account, which its policy then refused. The preview says `sso_required`, the password sign-up is refused (409 `INVITATION_SSO_REQUIRED`) and the page offers "Sign in with single sign-on". | `test_an_organization_that_requires_sso_is_joined_through_sso` (no `sso_required`, 201 before); browser 28-invitation-acceptance "sends the invitee to single sign-on". | Fixed |
+| F-234 | Low | Invitations, mail | While an organization was full, every refused sign-up or acceptance sent the inviter another "no seats" email (only the rate limit bounded it). One notice per invitation per 24 h (Redis `SET NX`; without Redis, as before). | `test_a_full_organization_tells_the_inviter_once_not_on_every_attempt` (3 emails before, 1 now). | Fixed |
+| F-235 | Medium | SSO | N-039 decided: the first SSO sign-in linked to an existing account by email even if its address was never verified, so whoever registered it kept its password and sessions. The link now takes the unverified account over (verified, password unusable, sessions ended, audited); verified accounts are linked untouched. | `tests/services/test_jit_unverified_account.py` (unverified and old password still valid before). | Fixed |
 
 **CI.** Backend CI had been red on `main` and on every pull request since the platform mail relay
 became mandatory: the backend steps declared no `PLATFORM_SMTP_*`, so 24 tests failed and the run

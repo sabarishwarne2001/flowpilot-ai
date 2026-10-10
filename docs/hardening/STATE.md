@@ -1,8 +1,29 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-10 (invitations, the workspace team and the event loop)_
+_Last updated: 2026-10-10 (owner decisions N-034 to N-039 applied; F-230 to F-235)_
 
-## Latest pass — invitations, the workspace team and the event loop (2026-10-10)
+## Latest pass — owner decisions N-034 to N-039 applied (2026-10-10)
+The owner delegated founder authority for the six open questions; engineering decided and built
+them on the same branch and PR (#18), each proven by a failing test first (FINDINGS.md F-230 to
+F-235, NEEDS-OWNER.md for the reasoning):
+- **N-037 / F-230:** invitation links last 7 days (`INVITATION_TTL_HOURS` 168).
+- **N-036 / F-231:** accepting never lowers an active member's role, only raises it.
+- **N-034 / F-232:** a platform-delivered invitation's sign-up takes over an account nobody
+  verified (new password, verified, old sessions ended); verified accounts still sign in.
+- **N-035 / F-233:** organizations that require SSO are joined through SSO: the preview says so, the
+  page offers "Sign in with single sign-on", the password sign-up is refused (409).
+- **N-039 / F-235:** the first SSO sign-in takes over an unverified account (verified, password
+  unusable, sessions ended, audited).
+- **N-038:** torch 2.13.0, setuptools 83.0.0, paramiko 5.0.0 (pip-audit clean on these).
+- **F-234:** the "no seats" email to the inviter goes once per invitation per day, not on every
+  refused attempt.
+Verification: the new tests (11) and the invitation, SSO and SFTP suites (613) pass; the torch and
+embedding suites pass apart from the 4 sandbox-only vector tests; browser specs touching
+invitations, the team and auth: 143 passed, the new SSO screen test included (one dev-mode-only
+miss in 21-live-feedback, which needs the production bundle's hashed chunks and passes there);
+`tsc -b`, the browser-test typecheck and lint clean. Full CI runs on the push.
+
+## Earlier pass — invitations, the workspace team and the event loop (2026-10-10)
 Same branch and PR as the bug hunt below (`claude/jolly-keller-d0jscd`, PR #18), continued after
 a usage-limit pause, on the owner's list (required.txt). **Fourteen defects and builds, F-216 to
 F-229, each proven by a failing test first** (FINDINGS.md, "Invitations, the workspace team and
@@ -121,25 +142,25 @@ into `main`).
 
 ## Owner decisions in force (do not re-ask)
 **N-032 and N-033 decided 2026-10-10:** Batch operations and TruthMesh are on Business and
-Enterprise. Open, each with a safe default in force (none blocks a release): **N-034** an invited
-address whose account was never verified, **N-035** invitations into SSO-required organizations,
-**N-036** whether accepting can lower a role, **N-037** invitation lifetime (72 h vs 7 days),
-**N-038** Python dependency advisories, **N-039** single sign-on linking to an unverified account.
+Enterprise. **N-034 to N-039 decided 2026-10-10** under delegated founder authority: unverified
+accounts are taken over by a platform-delivered invitation or an SSO sign-in, SSO-required
+organizations are joined through SSO, accepting never lowers a role, invitations last 7 days, the
+flagged dependencies are upgraded.
 Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe (test mode) for
 launch, Dodo selectable; **N-027** Postmark before the first paying customer; **N-028**
 `app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims; **N-030** seat price =
 plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-229, the CI
-   relay, N-032/N-033). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
+1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-235, the CI
+   relay, N-032 to N-039). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
    Business subscriptions get TruthMesh (RUNBOOK 9.3). The release adds one migration
-   (`r1a1_invitation_delivery`). Answer N-034 to N-039 when convenient.
+   (`r1a1_invitation_delivery`); rebuild the CPU image for the torch 2.13 upgrade (N-038).
 2. Engineering, small and left for a later pass: the stream's Redis frame buffer still writes on
    the event loop (each call bounded by the 250 ms Redis timeout; moving it needs a per-stream
    writer); the main JavaScript chunk is 412 KB
    gzipped; `idp_session_sync` is stored but unread; the matching queue lists one case per copy of
-   an invoice (product choice); the dependency upgrades of N-038.
+   an invoice (product choice).
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy
    (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.

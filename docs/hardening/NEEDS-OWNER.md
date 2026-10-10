@@ -650,10 +650,11 @@ Every Phase 3 finding (F-182 to F-206) was an engineering defect and is fixed. T
 question. **N-032** and **N-033** were decided on 2026-10-10 (both on Business and Enterprise); see
 their entries.
 
-# Invitations and the workspace team (2026-10-10): five questions
+# Invitations and the workspace team (2026-10-10): six questions, all decided
 
 Everything in this pass (F-216 to F-224) was an engineering defect or a requested build and is done.
-These came up on the way; each has a safe default in force, so none blocks a release.
+These came up on the way. **All six were decided on 2026-10-10** by engineering under the founder
+authority the owner delegated for them, and implemented with tests (F-230 to F-235, FINDINGS.md).
 
 ## N-034 — An invited address that has an account nobody ever verified
 Someone could register an address they do not own and never verify it. If that address is later
@@ -666,6 +667,12 @@ Related design note: the invitation preview says whether the invited address has
 the page can offer sign-in or sign-up. Only the holder of the emailed token can ask, and the token
 is bound to that one address; for an invitation sent through the organization's own mail server
 (whose operator also holds the token) the preview does not say (F-226).
+**DECIDED 2026-10-10 (F-232): take over.** A link FlowPilot's own relay delivered proves the
+mailbox just as a password reset does, so the one-step invitation sign-up takes over an account
+whose address was never verified: the new password replaces the old one, the address is marked
+verified and every session of whoever registered it ends. A verified account is still sent to sign
+in, and an invitation sent through the organization's own mail server (F-226) takes over nothing.
+The preview's `has_account` now means "has a verified account".
 
 ## N-035 — Invitations into an organization that requires single sign-on
 An invitee can create a password account from the invitation and join an organization whose
@@ -674,6 +681,10 @@ organization, so they cannot use it until they sign in through the identity prov
 force:** as described (nothing is exposed; it is a confusing first step). **Decide:** keep it, or
 have the invitation page send invitees of SSO-required organizations straight to SSO and refuse
 the password sign-up there.
+**DECIDED 2026-10-10 (F-233): straight to SSO.** The preview says `sso_required` (from the
+organization's security policy and the invited role), the page shows "Sign in with single sign-on"
+instead of a password form, and the server refuses the password sign-up with 409
+`INVITATION_SSO_REQUIRED`.
 
 ## N-036 — Can accepting an invitation lower someone's role?
 Accepting sets the organization role to the invitation's (only an owner is kept as owner). A
@@ -681,11 +692,15 @@ member promoted to admin after an older invitation was sent, who then accepts th
 moved back to the invitation's role. F-209 already replaces an old pending invitation when the
 same address is invited again. **Decide:** keep "the invitation's role wins", or never lower an
 existing member's role on acceptance (only raise it).
+**DECIDED 2026-10-10 (F-231): never lower.** Accepting raises an active member's role and never
+lowers it (an owner stays owner, an admin stays admin; BILLING and MEMBER do not replace each
+other). A deactivated member rejoins with the invitation's role, as before.
 
 ## N-037 — How long an invitation link lasts
 The server's links last `INVITATION_TTL_HOURS`, 72 hours by default; the invite panel used to say
 7 days (now it points at the expiry shown per invitation, and the email states the real date).
 **Decide:** 72 hours, or 7 days (one setting, `INVITATION_TTL_HOURS=168`; nothing else changes).
+**DECIDED 2026-10-10 (F-230): 7 days.** `INVITATION_TTL_HOURS` defaults to 168.
 
 ## N-038 — Python dependency advisories (`pip-audit (advisory)` is red on main)
 `pip-audit` reports torch 2.12.1 (fixed in 2.13.0), setuptools 81.0.0 (fixed in 83.0.0) and
@@ -693,6 +708,9 @@ paramiko 3.5.1 (no fixed release yet). The job is advisory and outside the CI ga
 torch needs the CPU image rebuilt and the OCR and embedding paths retested (F-045); setuptools is
 a build tool and low risk. **Decide:** when to schedule the upgrade (engineering can do it in a
 pass of its own).
+**DECIDED 2026-10-10: upgraded now.** torch 2.13.0, setuptools 83.0.0 and paramiko 5.0.0 (the first
+paramiko release `pip-audit` reports clean). The OCR, embedding and SFTP suites pass; rebuild the
+CPU image on the next deploy.
 
 ## N-039 — Single sign-on attaches to an existing account by email, verified or not
 When someone signs in through an organization's identity provider for the first time, the
@@ -706,3 +724,8 @@ invitation; it is still worth deciding. **In force:** link by email (today's beh
 with "an unverified account already uses this address; reset its password first"), or take the
 unverified account over (clear its password and sessions) when the identity provider vouches for
 the address.
+**DECIDED 2026-10-10 (F-235): take over.** The identity provider vouches for the address, so the
+first SSO sign-in to an unverified account marks it verified, replaces its password with an
+unusable one (the owner signs in through SSO, or sets a password with "Forgot your password?"),
+ends every session and writes an audit record. Verified accounts are linked as before.
+

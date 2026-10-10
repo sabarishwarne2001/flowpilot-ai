@@ -993,7 +993,7 @@ config_var,EMAIL_VERIFICATION_TTL_HOURS,backend Settings.EMAIL_VERIFICATION_TTL_
 config_var,PASSWORD_RESET_TTL_MINUTES,[CRITICAL:auth] backend Settings.PASSWORD_RESET_TTL_MINUTES: int default=60; in .env.example=Y; in .env.production.template=N,,,,untested,,F-011
 config_var,IDENTITY_TOKEN_MAX_PER_WINDOW,backend Settings.IDENTITY_TOKEN_MAX_PER_WINDOW: int default=5; in .env.example=Y; in .env.production.template=N,,,,untested,,F-011
 config_var,IDENTITY_TOKEN_WINDOW_MINUTES,backend Settings.IDENTITY_TOKEN_WINDOW_MINUTES: int default=60; in .env.example=Y; in .env.production.template=N,,,,untested,,F-011
-config_var,INVITATION_TTL_HOURS,backend Settings.INVITATION_TTL_HOURS: int default=72; in .env.example=N; in .env.production.template=N,,,,untested,,F-011
+config_var,INVITATION_TTL_HOURS,backend Settings.INVITATION_TTL_HOURS: int default=168 (N-037); in .env.example=N; in .env.production.template=N,,,,untested,,F-011
 config_var,INVITATION_RESEND_COOLDOWN_MINUTES,backend Settings.INVITATION_RESEND_COOLDOWN_MINUTES: int default=5; in .env.example=N; in .env.production.template=N,,,,untested,,F-011
 config_var,INVITATION_MAX_GRANTS,backend Settings.INVITATION_MAX_GRANTS: int default=50; in .env.example=N; in .env.production.template=N,,,,untested,,F-011
 config_var,INVITATION_RETENTION_DAYS,backend Settings.INVITATION_RETENTION_DAYS: int default=180; in .env.example=N; in .env.production.template=N,,,,untested,,F-011
