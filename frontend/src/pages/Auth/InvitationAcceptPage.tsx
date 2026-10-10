@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ROUTES } from "@/constants/routes";
 import { workspacePath } from "@/routes/tenantPaths";
+import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import {
   acceptInvitation,
@@ -216,7 +217,13 @@ export const InvitationAcceptPage: React.FC = () => {
     );
   };
 
-  const handleSwitchAccount = (): void => {
+  // F-224. Signing out here only cleared this tab: the server session, and the
+  // refresh cookie, outlived it, so the "other" account was still signed in.
+  const [isSwitching, setIsSwitching] = useState(false);
+  const handleSwitchAccount = async (): Promise<void> => {
+    setIsSwitching(true);
+    if (token) { stashToken(token); }
+    await authApi.logoutRequest();
     useAuthStore.getState().clearAuth();
     handleAuthRedirect(ROUTES.LOGIN);
   };
@@ -326,10 +333,11 @@ export const InvitationAcceptPage: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={handleSwitchAccount}
+              onClick={() => void handleSwitchAccount()}
+              disabled={isSwitching}
               className="fp-btn-primary w-full rounded-lg bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
             >
-              Sign out and switch account
+              {isSwitching ? "Signing out..." : "Sign out and switch account"}
             </button>
           </div>
         )}
