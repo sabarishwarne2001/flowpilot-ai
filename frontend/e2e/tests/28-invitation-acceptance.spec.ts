@@ -111,6 +111,36 @@ test.describe("Accepting an invitation (F-222)", () => {
   });
 });
 
+test.describe("An invitation sent through the organization's own mail server (F-226)", () => {
+  test.setTimeout(120_000);
+
+  test("offers sign-in or a normal sign-up, never the one-step sign-up", async ({ page }) => {
+    const email = `relayed-${runId()}@e2e.example.com`;
+    const path = await invite(email);
+    // The server cannot vouch for an address whose link left through a server it does
+    // not run (backend: tests/engines/test_invitation_token_trust.py); it answers
+    // has_account: null. The e2e stack sends through the platform, so the answer is
+    // shaped here.
+    await page.route("**/invitations/preview", async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), has_account: null } });
+    });
+    try {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: "Join Caretakers Global Inc" })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: `Sign in as ${email}` })).toBeVisible();
+      await page.getByRole("button", { name: "Create an account" }).click();
+
+      await expect(page).toHaveURL(/\/register\?/);
+      expect(new URL(page.url()).searchParams.get("redirect")).toBe("/invitations/accept");
+      await expect(page.locator("#email")).toHaveValue(email);
+    } finally {
+      await removeFromOrganization(email);
+    }
+  });
+});
+
 test.describe("Switching account from an invitation (F-224)", () => {
   test.use({ user: "C.viewer" });
   test.setTimeout(120_000);

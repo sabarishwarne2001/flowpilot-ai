@@ -36,6 +36,7 @@ from app.core.exceptions import (
     InvitationNotFoundError,
     InvitationPermissionDeniedError,
     InvitationResendTooSoonError,
+    InvitationSignupUnavailableError,
     SeatLimitExceededError,
 )
 from app.core.links import build_invitation_accept_link
@@ -436,7 +437,14 @@ def preview_invitation(db: Session, *, token: str) -> dict:
             if g.workspace is not None
         ],
         "expires_at": invitation.expires_at,
-        "has_account": user_crud.get_user_by_email(db, email=invitation.email) is not None,
+        # F-226. Unknown (None) when the token left through the organization's own
+        # mail server: its operator holds the token and must not learn from it
+        # whether an address has an account.
+        "has_account": (
+            None
+            if invitation.delivered_off_platform
+            else user_crud.get_user_by_email(db, email=invitation.email) is not None
+        ),
     }
 
 
@@ -592,7 +600,10 @@ def accept_invitation(
                     f"without an active owner."
                 )
 
-        if actor.email_verified_at is None:
+        # F-226. Accepting proves the address only when FlowPilot's own relay
+        # delivered the token; through the organization's mail server, whoever
+        # runs that server holds it too.
+        if actor.email_verified_at is None and not invitation.delivered_off_platform:
             actor.email_verified_at = now
             db.add(actor)
             
@@ -654,8 +665,10 @@ def register_and_accept(
 ) -> tuple[User, AcceptedInvitation]:
     """F-222. Create the invited person's account and accept the invitation, in one transaction.
 
-    The invitation decides the address; the token, which was emailed to it,
-    proves the caller controls it, so the account starts verified. Nothing is
+    The invitation decides the address; the token, which FlowPilot's relay
+    emailed to it, proves the caller controls it, so the account starts
+    verified (F-226: a token sent through the organization's own mail server
+    proves nothing and is refused here). Nothing is
     created unless the acceptance succeeds: an expired or used invitation, a
     weak password, an address that already has an account (its owner signs in
     and accepts instead) or a full organization leaves no user behind.
@@ -669,6 +682,13 @@ def register_and_accept(
         )
     if invitation.expires_at <= datetime.now(UTC):
         raise InvitationExpiredError("This invitation has expired. Ask for a new one.")
+    # F-226. Checked before anything about the address, so the answer says nothing about it.
+    if invitation.delivered_off_platform:
+        raise InvitationSignupUnavailableError(
+            "This invitation was sent through your organization's own mail server, so it cannot "
+            "confirm your address by itself. Create your account on the sign-up page, verify the "
+            "email we send you, then open this invitation again."
+        )
 
     email = invitation.email.strip().lower()
     password_policy.check_new_password(password, email=email)

@@ -40,6 +40,7 @@ type Phase =
   | "expired"
   | "invalid"
   | "signup"
+  | "choose_account"
   | "auth_required"
   | "email_mismatch";
 
@@ -182,7 +183,13 @@ export const InvitationAcceptPage: React.FC = () => {
 
     // F-222. Signed out: someone with no account signs up right here; someone
     // with an account signs in and comes back.
-    if (preview && !isAuthenticated) { return preview.has_account ? "auth_required" : "signup"; }
+    // F-226: whether the address has an account is unknown (null) when the
+    // invitation went through the organization's own mail server; both ways in.
+    if (preview && !isAuthenticated) {
+      if (preview.has_account === true) { return "auth_required"; }
+      if (preview.has_account === false) { return "signup"; }
+      return "choose_account";
+    }
 
     if (
       preview &&
@@ -311,6 +318,11 @@ export const InvitationAcceptPage: React.FC = () => {
         }
         if (error.code === API_ERROR_CODES.INVITATION_EXPIRED) {
           setPhase("expired");
+          setErrorMsg(error.message);
+          return;
+        }
+        if (error.code === API_ERROR_CODES.INVITATION_SIGNUP_UNAVAILABLE) {
+          setPhase("choose_account");
           setErrorMsg(error.message);
           return;
         }
@@ -525,6 +537,35 @@ export const InvitationAcceptPage: React.FC = () => {
               <Link to={ROUTES.FORGOT_PASSWORD} className={`text-center text-[13px] ${AUTH_LINK}`}>
                 Forgot your password?
               </Link>
+            </div>
+          </div>
+        )}
+
+        {resolvedPhase === "choose_account" && preview && (
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
+              <p className={AUTH_SUBTITLE}>
+                {errorMsg ||
+                  `Sign in with ${preview.invited_email}, or create a FlowPilot account for it. A new account confirms the address with a verification email first.`}
+              </p>
+            </div>
+            <InvitationSummary preview={preview} />
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => handleAuthRedirect(ROUTES.LOGIN, preview.invited_email)}
+                className={AUTH_PRIMARY}
+              >
+                {`Sign in as ${preview.invited_email}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAuthRedirect(ROUTES.REGISTER, preview.invited_email)}
+                className={AUTH_SECONDARY}
+              >
+                Create an account
+              </button>
             </div>
           </div>
         )}

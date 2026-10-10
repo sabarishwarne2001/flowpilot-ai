@@ -280,6 +280,15 @@ class InvitationAccountExistsError(InvitationError):
     pass
 
 
+class InvitationSignupUnavailableError(InvitationError):
+    """
+    F-226. The invitation was delivered through a mail server FlowPilot does not
+    run, so its token cannot prove the address: the one-step sign-up is closed
+    and the invitee signs up (and verifies) the ordinary way.
+    """
+    pass
+
+
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.

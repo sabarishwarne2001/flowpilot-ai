@@ -364,6 +364,8 @@ def rotate_token(
     invitation.token_hash = token_hash
     invitation.expires_at = expires_at
     invitation.last_sent_at = now
+    # F-226. The new token has not left yet; its own send records how it does.
+    invitation.delivered_off_platform = False
     invitation.send_count = OrganizationInvitation.send_count + 1
     db.add(invitation)
     db.flush()

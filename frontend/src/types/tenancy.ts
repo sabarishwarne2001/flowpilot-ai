@@ -207,7 +207,8 @@ export interface WorkspaceInvitationPreview {
   organization_role: OrganizationRole;
   workspaces: { name: string; role: WorkspaceRole }[];
   expires_at: string;
-  has_account: boolean;
+  /** Null when the invitation went through the organization's own mail server (F-226). */
+  has_account: boolean | null;
 }
 
 /** POST /auth/register/invitation: the new account's session, and where the invitation leads. */

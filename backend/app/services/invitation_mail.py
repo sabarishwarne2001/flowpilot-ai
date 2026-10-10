@@ -84,6 +84,26 @@ RenderedMessage = tuple[str, str, str]
 
 
 
+def _mark_delivered_off_platform(invitation_id: uuid.UUID) -> None:
+    """F-226. Record that this invitation's token is leaving through a server FlowPilot does not run.
+
+    Committed BEFORE the send, so there is no moment when the token is out and
+    not yet marked: whoever runs that server could otherwise use it at once.
+    """
+    from sqlalchemy import update
+
+    from app.db.session import SessionLocal
+    from app.models.organization_invitation import OrganizationInvitation
+
+    with SessionLocal() as db:
+        db.execute(
+            update(OrganizationInvitation)
+            .where(OrganizationInvitation.id == invitation_id)
+            .values(delivered_off_platform=True)
+        )
+        db.commit()
+
+
 def _send_as_organization(
     *,
     organization_id: uuid.UUID,
@@ -92,6 +112,7 @@ def _send_as_organization(
     html_body: str,
     text_body: str,
     reply_to: str | None,
+    token_of_invitation: uuid.UUID | None = None,
 ) -> tuple[bool, str]:
     """HARDENING-T2:D22. Invitations climb the TRANSACTIONAL ladder.
 
@@ -121,6 +142,11 @@ def _send_as_organization(
         identity.transport_layer,
         identity.identity_layer,
     )
+    from app.services.email_resolution import LAYER_PLATFORM
+
+    if token_of_invitation is not None and identity.transport_layer != LAYER_PLATFORM:
+        # Fails closed: if this cannot be recorded, nothing is sent.
+        _mark_delivered_off_platform(token_of_invitation)
     return email_service.send_html_email(
         settings=config,
         recipient=recipient,
@@ -158,6 +184,8 @@ def _send(
                 html_body=html_body,
                 text_body=text_body,
                 reply_to=reply_to,
+                # Only the invitation itself carries the accept token.
+                token_of_invitation=invitation_id if event == "INVITATION_ISSUED" else None,
             )
         else:
             delivered, detail = send_platform_email(
