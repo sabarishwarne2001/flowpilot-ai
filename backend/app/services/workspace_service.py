@@ -24,7 +24,7 @@ from app.core.organization_permissions import (
     can_delete_workspace,
 )
 from app.core.slugs import generate_unique_slug, validate_slug
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.core.workspace_permissions import can_manage_workspace_settings
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
@@ -235,7 +235,7 @@ def create_workspace_in_organization(
             db,
             logger,
             "Failed to create workspace in organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -333,7 +333,7 @@ def update_workspace_settings(
             db,
             logger,
             "Failed to update workspace %s: %s",
-            workspace.id,
+            identity_of(workspace),
             str(exc),
             exc=exc,
         )
@@ -373,7 +373,7 @@ def remove_workspace_logo(
             db,
             logger,
             "Failed to remove logo for workspace %s: %s",
-            workspace.id,
+            identity_of(workspace),
             str(exc),
             exc=exc,
         )
@@ -425,7 +425,7 @@ def archive_workspace(
             db,
             logger,
             "Failed to archive workspace %s: %s",
-            workspace.id,
+            identity_of(workspace),
             str(exc),
             exc=exc,
         )
@@ -483,7 +483,7 @@ def restore_workspace(
             db,
             logger,
             "Failed to restore workspace %s: %s",
-            workspace.id,
+            identity_of(workspace),
             str(exc),
             exc=exc,
         )

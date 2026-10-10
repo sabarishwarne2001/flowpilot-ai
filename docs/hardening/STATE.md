@@ -1,8 +1,80 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-09 (final systemic polish & traceback sweep)_
+_Last updated: 2026-10-10 (owner decisions N-034 to N-039 applied; F-230 to F-235)_
 
-## Latest pass — final systemic polish & traceback sweep
+## Latest pass — owner decisions N-034 to N-039 applied (2026-10-10)
+The owner delegated founder authority for the six open questions; engineering decided and built
+them on the same branch and PR (#18), each proven by a failing test first (FINDINGS.md F-230 to
+F-235, NEEDS-OWNER.md for the reasoning):
+- **N-037 / F-230:** invitation links last 7 days (`INVITATION_TTL_HOURS` 168).
+- **N-036 / F-231:** accepting never lowers an active member's role, only raises it.
+- **N-034 / F-232:** a platform-delivered invitation's sign-up takes over an account nobody
+  verified (new password, verified, old sessions ended); verified accounts still sign in.
+- **N-035 / F-233:** organizations that require SSO are joined through SSO: the preview says so, the
+  page offers "Sign in with single sign-on", the password sign-up is refused (409).
+- **N-039 / F-235:** the first SSO sign-in takes over an unverified account (verified, password
+  unusable, sessions ended, audited).
+- **N-038:** torch 2.13.0, setuptools 83.0.0, paramiko 5.0.0 (pip-audit clean on these).
+- **F-234:** the "no seats" email to the inviter goes once per invitation per day, not on every
+  refused attempt.
+Verification: the new tests (11) and the invitation, SSO and SFTP suites (613) pass; the torch and
+embedding suites pass apart from the 4 sandbox-only vector tests; browser specs touching
+invitations, the team and auth: 143 passed, the new SSO screen test included (one dev-mode-only
+miss in 21-live-feedback, which needs the production bundle's hashed chunks and passes there);
+`tsc -b`, the browser-test typecheck and lint clean. Full CI runs on the push.
+
+## Earlier pass — invitations, the workspace team and the event loop (2026-10-10)
+Same branch and PR as the bug hunt below (`claude/jolly-keller-d0jscd`, PR #18), continued after
+a usage-limit pause, on the owner's list (required.txt). **Fourteen defects and builds, F-216 to
+F-229, each proven by a failing test first** (FINDINGS.md, "Invitations, the workspace team and
+the event loop"), plus the owner's N-032/N-033 decision applied and backend CI made green again.
+- **F-218 (High):** the routes that await (uploads, the assistant stream, upload parts, webhooks)
+  and the sign-in dependency every request runs did blocking work on the event loop; a slow step
+  in any of them stalled the whole API. All of it runs in the threadpool now; a live-server test
+  slows each step to 3 s and requires `/health` under 1 s (10 of 10 failed before).
+- **Invitations:** F-216 the pending list showed accepted and revoked invitations (the "zombie");
+  F-217 removing a member left their pending invitation, whose link let them back in; F-221 the
+  last seat could never be filled by an invitation; F-222 a newcomer now signs up from the
+  invitation in one step (address locked, account verified by the token) and an existing user is
+  sent to sign in and back; F-224 "switch account" now signs out on the server; F-223 the email is
+  rebuilt for Outlook, Gmail and Apple Mail (card, bulletproof button, security footer).
+- **F-219:** Workspace Settings → Team members has role controls and Remove, or a badge, in every
+  Actions cell. **F-220:** an empty or oversized public document-request upload was a 500.
+- **N-032 / N-033 decided:** Batch operations and TruthMesh on Business and Enterprise (deploy step:
+  `seed_quota_tiers.py --carry-forward`).
+- **Review:** an independent adversarial review of the diff found **F-226 (High)**: an
+  organization sending mail through its own SMTP could turn an invitation into a verified account
+  for any address; now only a link FlowPilot's relay delivered proves an address. Also F-227
+  (switch account sent a newcomer to sign-in), F-228 (sign-up dead ends), F-229 (presence order).
+- **CI:** backend CI was red on main since the platform relay became mandatory (24 tests); the
+  backend steps now declare a relay. `pip-audit (advisory)` stays red on main (N-038).
+Verification: see "What is done" below (CI green on the final code).
+
+## Earlier pass — live bug hunt: fuzzing, double clicks, dev-mode rendering (2026-10-09)
+Branch `claude/jolly-keller-d0jscd` (the session's assigned branch). Real live stack: Postgres 16 +
+pgvector 0.8.0 (built from source), Redis, uvicorn API, the real worker `--loop all --profile all`
+(full `requirements.txt`, Paddle included), model stand-in, Vite dev server on :5173. Previous
+sweeps had found nothing new, so this pass attacked the stack differently: an OpenAPI-driven fuzzer
+over all 609 operations as real users (bad ids, edge values, wrong types, malformed JSON), a
+double-click sweep (every write sent 3 to 8 times at once), odd uploads and delete-during-processing
+races, and the browser suite against the dev server. **Eight live defects, F-208 to F-215, each
+proven by a failing test and fixed** (FINDINGS.md, "Live bug hunt"). The serious ones:
+**F-212** two quick clicks on "Change role" froze the whole API until restart (129 `async def`
+routes did blocking database work on the event loop); **F-214** concurrent duplicate submits were
+500s on 8 routes; **F-215** an OCR worker could not shut down gracefully once Paddle was loaded;
+**F-209** re-inviting a pending address crashed; **F-211** an SSO connection made from a metadata
+URL was a 500. After the fixes the fuzzer and the double-click sweep return no 500s (the only 5xx
+are the intended 503 "billing not configured" answers).
+Verification on a fresh e2e database: browser suite against the production bundle with the
+production CSP **380 passed, 0 failed, 1 skipped** (by design); against the Vite dev server 379
+passed, 1 skipped, and the only failure is the F-144 test, which removes a hashed production chunk
+and so only works against the production bundle. API and worker logs over both runs: **0 tracebacks,
+0 5xx, 0 ERROR lines; 640 jobs of 38 types, all SUCCEEDED.** Backend suite (full, on the final head): **3,592 passed, 0 failed, 9 skipped** (65 more tests than Phase 3).
+Frontend: `tsc -b`, `npm run lint`, `npm run check:self` clean; encoding check clean; one Alembic
+head (no migration in this pass). The sweep scripts are kept as `docs/hardening/tools/live_api_fuzz.py`
+and `live_double_click_sweep.py`.
+
+## Earlier pass — final systemic polish & traceback sweep
 Branch `hardening/final-systemic-polish-and-traceback-sweep` (after PR #15). Real live stack
 (API + worker `--loop all` + Postgres/pgvector 0.8 + Redis + production bundle): browser suite 380
 passed, 0 failed; 0 tracebacks, 0 5xx, 0 ERROR log lines; 400 jobs all SUCCEEDED. One polish fix,
@@ -10,7 +82,7 @@ F-207 (materiality shown as "90%" instead of "0.90"), proven red then green. Sto
 owner's usage budget; the remaining small items below are still open (the corroborator item is done).
 
 
-## Latest pass — budget-capped header polish (2026-10-09)
+## Earlier pass — budget-capped header polish (2026-10-09)
 Branch `claude/sweet-hopper-l4varl`. The owner had ~1% of weekly usage for this run, so the live
 stack was NOT stood up (the sandbox had no Python dependencies or pgvector build). Only change: ERP
 posting and Process intelligence now open with the shared `PageHeader` (icon tile, eyebrow, title,
@@ -40,6 +112,20 @@ into `main`).
   admin consoles; sentence case and labelled fields on the remaining settings and auth screens.
 
 ## What is done
+- **Invitations, the workspace team and the event loop (2026-10-10)** (PR #18): F-216 to F-229
+  fixed, each proven by a failing test first.
+  - **GitHub CI on the final code (`bfe1836`): green**: the full pytest job (Phase 2 security
+    proofs, Phase 4 engine proofs, the whole suite), browser tests, frontend, migration head and
+    drift. Only `pip-audit (advisory)` is red, as on `main` (N-038).
+  - Browser suite on a fresh e2e database, production bundle with the production CSP: **393
+    passed, 0 failed, 1 skipped** (by design; 13.2 min). API and worker logs: 0 tracebacks, 0 5xx,
+    0 ERROR lines; 410 jobs of 38 types, all SUCCEEDED.
+  - Backend, full suite locally in CI's environment: **3,631 passed, 9 skipped, 8 failed**. The 8
+    are sandbox-only and pass in CI (the embedding model cannot be downloaded here, plus one
+    readiness check).
+  - `tsc -b`, the browser-test typecheck, `npm run lint`, `npm run check:self`, `npm run build`
+    (no source maps) and the encoding check are clean. One Alembic head
+    (`r1a1_invitation_delivery`); up, down and up again; no new drift (283 known).
 - **Phases 0 to 5, final release, production configuration & UI elevation, final systemic
   polish, live feedback & Tier-1 elevation, Phase 1 (document intelligence), Phase 2 (enterprise
   processing and TruthMesh):** merged.
@@ -55,21 +141,26 @@ into `main`).
   - Release certification: `05-release-readiness.md` (Phase 3), verdict **GO**.
 
 ## Owner decisions in force (do not re-ask)
-Open: **N-033** (which plans include TruthMesh; provisionally Enterprise only) and **N-032**
-(which plans include Batch operations; provisionally Business + Enterprise), if not yet decided.
-Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
-(test mode) for launch, Dodo selectable; **N-027** Postmark before the first paying customer;
-**N-028** `app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims;
-**N-030** seat price = plan card price; **N-031** local model at a declared zero.
+**N-032 and N-033 decided 2026-10-10:** Batch operations and TruthMesh are on Business and
+Enterprise. **N-034 to N-039 decided 2026-10-10** under delegated founder authority: unverified
+accounts are taken over by a platform-delivered invitation or an SSO sign-in, SSO-required
+organizations are joined through SSO, accepting never lowers a role, invitations last 7 days, the
+flagged dependencies are upgraded.
+Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe (test mode) for
+launch, Dodo selectable; **N-027** Postmark before the first paying customer; **N-028**
+`app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims; **N-030** seat price =
+plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge the Phase 3 PR (#13). Decide N-032 and N-033 when convenient (provisional
-   placements are in force and are not release blockers).
-2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
-   (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
-   console no longer shows it; drop the column or build the feature). From Phase 2, still open:
-   the matching queue lists one case per copy of an invoice (grouping them is a product choice).
-   (Done 2026-10-09: the ERP and process pages now use the shared `PageHeader`.)
+1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-235, the CI
+   relay, N-032 to N-039). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
+   Business subscriptions get TruthMesh (RUNBOOK 9.3). The release adds one migration
+   (`r1a1_invitation_delivery`); rebuild the CPU image for the torch 2.13 upgrade (N-038).
+2. Engineering, small and left for a later pass: the stream's Redis frame buffer still writes on
+   the event loop (each call bounded by the 250 ms Redis timeout; moving it needs a per-stream
+   writer); the main JavaScript chunk is 412 KB
+   gzipped; `idp_session_sync` is stored but unread; the matching queue lists one case per copy of
+   an invoice (product choice).
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy
    (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.
@@ -97,6 +188,21 @@ elevation; one full backend run and one full browser run on a fresh database; th
 The exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
+- **Event-loop freezes**: `tests/engines/test_blocking_io_does_not_freeze_the_api_live.py` is the
+  pattern: slow one blocking call to 3 s inside a route on a real uvicorn and time `/health`. The
+  guard `tests/core/test_async_routes_must_await.py` now also checks async dependencies and the
+  app coroutines a route awaits.
+- **Context variables and the threadpool**: a value set with `set_current_principal` inside a
+  `run_in_threadpool` call is lost when the thread returns; set it on the loop (see
+  `deps.get_current_user`).
+- **The worker with `--profile all` needs the full `requirements.txt`** (Paddle, torch): with only
+  `requirements-web.txt` it refuses to start (ProfileError), by design. `pip install -r
+  requirements.txt` takes ~10 minutes in the sandbox.
+- **A frozen API**: `pip install py-spy` then `py-spy dump --pid <uvicorn pid>` shows what the event
+  loop thread is blocked on, and `pg_stat_activity` / `pg_blocking_pids()` shows who holds the lock.
+  This is how F-212 was traced.
+- Concurrency defects only show under a real server: `tests/engines/test_concurrent_*_live.py`
+  start uvicorn in a thread (TestClient serialises requests differently).
 - **Two pytest processes against one Postgres server corrupt each other** (fixed database names,
   e.g. `flowpilot_svc_test`). Use the second cluster (`POSTGRES_PORT=5434`) and, for a targeted run
   next to a full one, `TEST_DB_NAME=<other>`; the services suite still shares its fixed name.

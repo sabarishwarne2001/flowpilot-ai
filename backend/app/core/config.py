@@ -130,7 +130,8 @@ class Settings(BaseSettings):
     IDENTITY_TOKEN_MAX_PER_WINDOW: int = 5
     IDENTITY_TOKEN_WINDOW_MINUTES: int = 60
 
-    INVITATION_TTL_HOURS: int = 72
+    # N-037 (owner decision 2026-10-10): an invitation link lasts 7 days.
+    INVITATION_TTL_HOURS: int = 168
     INVITATION_RESEND_COOLDOWN_MINUTES: int = 5
     INVITATION_MAX_GRANTS: int = 50
     INVITATION_RETENTION_DAYS: int = 180

@@ -105,7 +105,7 @@ def _reread(db, *, organization_id: uuid.UUID, transfer_id: uuid.UUID):
     status_code=status.HTTP_201_CREATED,
     summary="Propose Ownership Transfer",
 )
-async def initiate_ownership_transfer(
+def initiate_ownership_transfer(
     payload: OwnershipTransferInitiateRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -151,7 +151,7 @@ async def initiate_ownership_transfer(
     response_model=OwnershipTransferResponse,
     summary="Accept Ownership Transfer",
 )
-async def accept_ownership_transfer(
+def accept_ownership_transfer(
     transfer_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -200,7 +200,7 @@ async def accept_ownership_transfer(
     response_model=OwnershipTransferResponse,
     summary="Decline Ownership Transfer",
 )
-async def decline_ownership_transfer(
+def decline_ownership_transfer(
     transfer_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -242,7 +242,7 @@ async def decline_ownership_transfer(
     response_model=OwnershipTransferResponse,
     summary="Cancel Ownership Transfer",
 )
-async def cancel_ownership_transfer(
+def cancel_ownership_transfer(
     transfer_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -288,7 +288,7 @@ async def cancel_ownership_transfer(
     response_model=PendingOwnershipTransferResponse,
     summary="List My Pending Ownership Transfers",
 )
-async def list_my_ownership_transfers(
+def list_my_ownership_transfers(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Any:

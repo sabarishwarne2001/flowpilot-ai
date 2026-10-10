@@ -81,7 +81,7 @@ def _load(db: Session, *, workspace_id) -> WorkspaceEmailOverride | None:
     response_model=Optional[WorkspaceEmailOverrideResponse],
     summary="Get the workspace email override (null when none is set)",
 )
-async def get_email_settings(
+def get_email_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> Optional[WorkspaceEmailOverrideResponse]:
@@ -99,7 +99,7 @@ async def get_email_settings(
     response_model=WorkspaceEmailOverrideResponse,
     summary="Create or update the workspace email override",
 )
-async def upsert_email_settings(
+def upsert_email_settings(
     settings_in: WorkspaceEmailOverrideUpdate,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
@@ -160,7 +160,7 @@ async def upsert_email_settings(
     response_model=EmailResolutionResponse,
     summary="What sender this workspace's mail uses, and what it inherited from",
 )
-async def get_email_resolution(
+def get_email_resolution(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> EmailResolutionResponse:
@@ -205,7 +205,7 @@ async def get_email_resolution(
     response_model=TestEmailResponse,
     summary="Send a test message through the resolved sender",
 )
-async def test_email_settings(
+def test_email_settings(
     request: TestEmailRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),

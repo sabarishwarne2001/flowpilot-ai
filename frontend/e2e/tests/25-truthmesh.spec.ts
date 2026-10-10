@@ -1,5 +1,6 @@
 /**
- * PHASE 2 — TruthMesh, the cross-document digital twin (Enterprise, capability.truthmesh).
+ * PHASE 2 — TruthMesh, the cross-document digital twin (Business and Enterprise, capability.truthmesh;
+ * owner decision N-033).
  *
  * Built from the sample documents every run uploads for Tenant C: the master agreement
  * (MSA-E2E-2026), the purchase order (PO-E2E-5001), the goods receipt (GR-E2E-7001) and two invoices
@@ -154,5 +155,35 @@ test.describe("TruthMesh", () => {
       await expect(page.getByRole("button", { name: "Run simulation" })).toBeDisabled();
       await expectHealthyPage(page);
     });
+  });
+});
+
+test.describe("TruthMesh — Business plan (N-033)", () => {
+  test.use({ user: "B.owner" });
+
+  test("the page is open and the server answers", async ({ page }) => {
+    await page.goto(ws("B", "truthmesh"));
+    await expect(page.getByRole("heading", { name: /TruthMesh/ }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("main")).not.toContainText("is included on the");
+    const session = await loginAs("B.owner");
+    const { workspaceId } = await resolveWorkspaceId(session, TENANTS.B.org, TENANTS.B.ws);
+    const overview = await api(session, "GET", `/workspaces/${workspaceId}/truthmesh/overview`);
+    expect(overview.status, overview.text.slice(0, 200)).toBe(200);
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("TruthMesh — Developer plan", () => {
+  test.use({ user: "A.owner" });
+
+  test("the page shows the lock and the server refuses", async ({ page, problems }) => {
+    problems.allowHttp(/\/truthmesh/, [402], "the Developer plan does not include TruthMesh");
+    await page.goto(ws("A", "truthmesh"));
+    await expect(page.locator("main")).toContainText("TruthMesh is included on the Business and Enterprise plans.");
+    const session = await loginAs("A.owner");
+    const { workspaceId } = await resolveWorkspaceId(session, TENANTS.A.org, TENANTS.A.ws);
+    const refused = await api(session, "GET", `/workspaces/${workspaceId}/truthmesh/overview`);
+    expect(refused.status).toBe(402);
+    await settle(page, 200);
   });
 });

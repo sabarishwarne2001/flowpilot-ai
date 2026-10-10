@@ -46,6 +46,31 @@ class GracefulShutdown:
         logger.info("worker.shutdown.requested", extra={"signal": signum})
 
 
+def _load_signal_hijacking_libraries(profile) -> None:
+    """Import Paddle now, on the main thread, before GracefulShutdown installs.
+
+    F-215. `import paddle` replaces the process's SIGTERM/SIGINT handlers with
+    its own C++ ones, which print a "C++ Traceback" and abort. Imported lazily by
+    the first OCR job on a supervisor thread (where Python cannot restore its
+    handlers), it made every later SIGTERM (a deploy, a scale-down, a restart)
+    kill the job in progress instead of letting it finish. Loaded here, Paddle's
+    handlers are switched off and GracefulShutdown.install() runs after it.
+    """
+    if "paddle" not in getattr(profile, "allow_heavy", ()):
+        return
+    try:
+        # The provider module, not bare `paddle`: it sets Paddle's FLAGS_*
+        # environment and the torch shim before Paddle initialises.
+        import app.services.ocr.paddle  # noqa: F401, PLC0415
+    except Exception:  # noqa: BLE001 - an OCR job reports the import failure itself
+        logger.warning("worker.paddle_preload_failed", exc_info=True)
+        return
+    paddle = sys.modules.get("paddle")
+    disable = getattr(paddle, "disable_signal_handler", None)
+    if callable(disable):
+        disable()
+
+
 def _idle_sleep(seconds: float) -> None:
     time.sleep(seconds * random.uniform(0.5, 1.5))
 
@@ -524,6 +549,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             lease = 60
 
+    _load_signal_hijacking_libraries(profile)
     shutdown = GracefulShutdown().install()
     kwargs = dict(
         shutdown=shutdown,

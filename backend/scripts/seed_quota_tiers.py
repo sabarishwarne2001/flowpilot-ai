@@ -85,6 +85,8 @@ ADDON_WAREHOUSE_SYNC = {
 #                 the entity graph (ARCH42-S1:tier-business),
 #                 case intelligence & the packet dicer (ARCH43-S1:tier-business),
 #                 table intelligence (ARCH44-S1:tier-business),
+#                 batch operations (PHASE1:tier-business, owner decision N-032),
+#                 TruthMesh (PHASE2:tier-business, owner decision N-033),
 #                 obligations & calendar feeds (ARCH46-S1:tier-business),
 #                 ERP posting (ARCH47-S1:tier-business),
 #                 bring-your-own AI key (N-021:tier-business)
@@ -113,7 +115,8 @@ BUSINESS_CAPABILITIES = [
     _capability("capability.entity_graph"),  # ARCH42-S1:tier-business
     _capability("capability.case_intelligence"),  # ARCH43-S1:tier-business
     _capability("capability.table_intelligence"),  # ARCH44-S1:tier-business
-    _capability("capability.batch_dispatch"),  # PHASE1:tier-business
+    _capability("capability.batch_dispatch"),  # PHASE1:tier-business (owner decision N-032)
+    _capability("capability.truthmesh"),  # PHASE2:tier-business (owner decision N-033)
     _capability("capability.obligations"),  # ARCH46-S1:tier-business
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-business
     _capability("capability.byok"),  # N-021:tier-business
@@ -132,8 +135,8 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.entity_graph"),  # ARCH42-S1:tier-enterprise
     _capability("capability.case_intelligence"),  # ARCH43-S1:tier-enterprise
     _capability("capability.table_intelligence"),  # ARCH44-S1:tier-enterprise
-    _capability("capability.batch_dispatch"),  # PHASE1:tier-enterprise
-    _capability("capability.truthmesh"),  # PHASE2:tier-enterprise (provisional, N-033)
+    _capability("capability.batch_dispatch"),  # PHASE1:tier-enterprise (owner decision N-032)
+    _capability("capability.truthmesh"),  # PHASE2:tier-enterprise (owner decision N-033)
     _capability("capability.universal_corroborator"),  # ARCH45-S1:tier-enterprise (Enterprise only)
     _capability("capability.obligations"),  # ARCH46-S1:tier-enterprise
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-enterprise

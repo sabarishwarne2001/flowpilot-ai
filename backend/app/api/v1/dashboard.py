@@ -16,7 +16,7 @@ router = APIRouter(tags=["Dashboard"])
     "/overview",
     response_model=DashboardOverviewResponse,
 )
-async def dashboard_overview(
+def dashboard_overview(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> Any:

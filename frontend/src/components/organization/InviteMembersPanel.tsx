@@ -138,7 +138,9 @@ export const InviteMembersPanel: React.FC<{
           Invite people
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          They get an email with a link that expires in 7 days. A pending invitation holds a seat.
+          {/* F-223, N-037. Links last INVITATION_TTL_HOURS (168, 7 days, by default); each invitation shows its expiry. */}
+          They get an email with a personal link; when it expires is shown under each pending
+          invitation. A pending invitation holds a seat.
         </p>
       </header>
 

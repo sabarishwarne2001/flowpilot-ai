@@ -93,7 +93,7 @@ router = APIRouter(tags=["Internal"])
     summary="On-demand TLS issuance check (Caddy `ask`)",
     include_in_schema=False,
 )
-async def authorize_tls_issuance(
+def authorize_tls_issuance(
     db: deps.DbSession,
     domain: str = Query(
         ...,

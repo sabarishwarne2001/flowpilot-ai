@@ -13,8 +13,8 @@ from typing import Protocol
 from urllib.parse import urlencode
 
 from app.services.auth import saml_security
-from app.services.identity._integration import get_settings, utcnow
-from app.services.identity.errors import AssertionRejected
+from app.services.identity._integration import get_settings, safe_get, utcnow
+from app.services.identity.errors import AssertionRejected, IdpConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +139,93 @@ class SamlAssertionData:
             if tail in lowered:
                 return lowered[tail]
         return []
+
+
+# ==========================================================================
+# Identity provider metadata (F-211)
+# ==========================================================================
+
+_BINDING_REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+_BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+
+
+@dataclass(frozen=True)
+class IdpMetadata:
+    entity_id: str
+    sso_url: str
+    slo_url: str | None
+    signing_certificates: tuple[str, ...]
+
+
+def _service_location(descriptor, tag: str) -> str | None:
+    """The redirect binding first (what `build_authn_request` sends), then POST."""
+    services = descriptor.findall(f"md:{tag}", NS)
+    for binding in (_BINDING_REDIRECT, _BINDING_POST):
+        for service in services:
+            location = (service.get("Location") or "").strip()
+            if service.get("Binding") == binding and location:
+                return location
+    return None
+
+
+def parse_idp_metadata(xml_bytes: bytes) -> IdpMetadata:
+    """Read what a connection needs from an identity provider's SAML metadata.
+
+    The entity ID, the single sign-on and logout locations and the signing
+    certificates (a KeyDescriptor without `use` signs too). Anything that is not
+    an IdP EntityDescriptor is an IdpConfigError the console can show.
+    """
+    try:
+        root = _parse(xml_bytes)
+    except AssertionRejected as exc:
+        raise IdpConfigError("The metadata is not readable XML.") from exc
+    if root.tag == f"{{{NS['md']}}}EntitiesDescriptor":
+        root = next(
+            (e for e in root.iter(f"{{{NS['md']}}}EntityDescriptor")
+             if e.find("md:IDPSSODescriptor", NS) is not None),
+            root,
+        )
+    descriptor = root.find("md:IDPSSODescriptor", NS)
+    entity_id = (root.get("entityID") or "").strip()
+    if root.tag != f"{{{NS['md']}}}EntityDescriptor" or descriptor is None or not entity_id:
+        raise IdpConfigError(
+            "The metadata does not describe a SAML identity provider "
+            "(no EntityDescriptor with an IDPSSODescriptor).")
+    sso_url = _service_location(descriptor, "SingleSignOnService")
+    if not sso_url:
+        raise IdpConfigError("The metadata names no single sign-on location.")
+
+    certificates: list[str] = []
+    for key in descriptor.findall("md:KeyDescriptor", NS):
+        if key.get("use") not in (None, "", "signing"):
+            continue
+        for node in key.iter(f"{{{NS['ds']}}}X509Certificate"):
+            body = "".join((node.text or "").split())
+            if not body:
+                continue
+            lines = "\n".join(body[i:i + 64] for i in range(0, len(body), 64))
+            pem = f"-----BEGIN CERTIFICATE-----\n{lines}\n-----END CERTIFICATE-----"
+            if pem not in certificates:
+                certificates.append(pem)
+    return IdpMetadata(
+        entity_id=entity_id,
+        sso_url=sso_url,
+        slo_url=_service_location(descriptor, "SingleLogoutService"),
+        signing_certificates=tuple(certificates),
+    )
+
+
+def fetch_idp_metadata(metadata_url: str) -> IdpMetadata:
+    """Fetch through the SSRF-safe identity client (https, public addresses only)."""
+    timeout = float(getattr(get_settings(), "OIDC_DISCOVERY_TIMEOUT_S", 10))
+    try:
+        body = safe_get(
+            metadata_url, timeout=timeout, max_bytes=1_048_576,
+            accept="application/samlmetadata+xml, application/xml, text/xml",
+        )
+    except Exception as exc:
+        raise IdpConfigError(f"The metadata could not be fetched: {exc}") from exc
+    return parse_idp_metadata(body)
 
 
 def build_sp_metadata(*, entity_id: str, acs_url: str, slo_url: str,

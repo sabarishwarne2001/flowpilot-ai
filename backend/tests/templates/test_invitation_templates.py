@@ -148,7 +148,11 @@ def test_zero_grant_invitation_explains_itself():
     _, html_body, text_body = _invitation(grants=[])
     assert "does not include access to any workspaces" in text_body
     assert "does not include access to any workspaces" in html_body
-    assert "<table" not in html_body
+    # F-223. The email is laid out in tables now (what Outlook renders), so "no
+    # <table> at all" no longer means "no workspace list". The point stands: no
+    # empty workspace list, and no "Workspaces: (none)".
+    assert 'class="grants"' not in html_body
+    assert "also gives you access to these workspaces" not in html_body
     assert "(none)" not in text_body
 
 
@@ -157,6 +161,55 @@ def test_grants_are_listed_when_present():
         grants=[GrantLine("Ops", "EDITOR"), GrantLine("Finance", "VIEWER")]
     )
     assert "<table" in html_body
+    grants_table = html_body.split('class="grants"', 1)[1].split("</table>", 1)[0]
+    assert "Ops" in grants_table and "Finance" in grants_table
+    assert "Editor" in grants_table and "Viewer" in grants_table
+
+
+# ---------------------------------------------------------------------------
+# The invitation email's layout -- F-223
+# ---------------------------------------------------------------------------
+
+def test_the_invitation_is_laid_out_for_outlook_gmail_and_apple_mail():
+    _, html_body, _ = _invitation()
+    # Layout tables, a fixed 600px shell that narrows on phones, and the viewport meta.
+    assert 'role="presentation"' in html_body
+    assert 'width="600"' in html_body and "max-width:600px" in html_body
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html_body
+    assert "@media screen and (max-width: 620px)" in html_body
+    # A bulletproof button: a VML shape for Outlook, a styled link for everyone else,
+    # both pointing at the accept link.
+    assert "<v:roundrect" in html_body and f'href="{LINK}"' in html_body.split("<v:roundrect", 1)[1]
+    assert "<!--[if !mso]><!-->" in html_body
+    assert html_body.count("Accept Invitation") >= 2
+    # Inbox preview text, hidden in the body.
+    assert "display:none" in html_body.split("<body", 1)[1].split("<table", 1)[0]
+
+
+def test_the_card_names_the_organization_the_workspace_and_the_role():
+    _, html_body, text_body = _invitation(organization_role_display="ADMIN",
+                                          grants=[GrantLine("Operations", "VIEWER")])
+    assert "Organization" in html_body and "Your role" in html_body and "Workspaces" in html_body
+    assert ">Admin</span>" in html_body and ">Viewer</span>" in html_body
+    assert "Organization: Acme Ltd" in text_body and "Your role: Admin" in text_body
+
+
+def test_the_header_is_the_product_and_the_footer_covers_expiry_and_support():
+    _, html_body, text_body = _invitation()
+    assert f">{BRAND}</td>" in html_body
+    expiry = EXPIRES.strftime("%Y-%m-%d %H:%M UTC")
+    for body in (html_body, text_body):
+        assert expiry in body
+        assert "in 3 days" in body
+        assert "Reply to this email" in body
+        assert "do not forward this email" in body
+        assert "nothing happens until the link is used" in body.lower()
+
+
+def test_a_newcomer_is_told_the_link_creates_their_account():
+    _, html_body, text_body = _invitation()
+    assert "create your account in one step" in text_body
+    assert "create your account in one step" in html_body
 
 
 # ---------------------------------------------------------------------------

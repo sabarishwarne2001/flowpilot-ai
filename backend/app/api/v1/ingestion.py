@@ -35,6 +35,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api import deps
 from app.core.config import settings
@@ -100,7 +101,7 @@ def _fail(exc: Any, default_status: int = status.HTTP_400_BAD_REQUEST) -> HTTPEx
 @session_router.post(
     "", response_model=UploadSessionResponse, status_code=status.HTTP_201_CREATED
 )
-async def create_upload_session(
+def create_upload_session(
     payload: UploadSessionCreateRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -132,7 +133,7 @@ async def create_upload_session(
 
 
 @session_router.get("/{session_id}", response_model=UploadSessionResponse)
-async def get_upload_session(
+def get_upload_session(
     session_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -167,6 +168,13 @@ async def put_part(
             f"A part may not exceed {MAX_PART_BYTES} bytes.",
         )
 
+    # F-218. The route stays async to receive the body, and does no blocking work
+    # on the event loop: the transaction the access checks opened ends before the
+    # (possibly slow) body arrives, so no pooled connection sits idle in a
+    # transaction meanwhile, and storing the part runs in the threadpool.
+    workspace_id = context.workspace_id
+    await run_in_threadpool(db.commit)
+
     data = await request.body()
     if len(data) > MAX_PART_BYTES:
         raise HTTPException(
@@ -174,10 +182,28 @@ async def put_part(
             f"A part may not exceed {MAX_PART_BYTES} bytes.",
         )
 
+    return await run_in_threadpool(
+        _store_part,
+        db,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        part_number=part_number,
+        data=data,
+    )
+
+
+def _store_part(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    session_id: uuid.UUID,
+    part_number: int,
+    data: bytes,
+) -> UploadSessionResponse:
     try:
         session = upload_session_service.receive_part(
             db,
-            workspace_id=context.workspace_id,
+            workspace_id=workspace_id,
             session_id=session_id,
             part_number=part_number,
             data=data,
@@ -194,7 +220,7 @@ async def put_part(
 @session_router.post(
     "/{session_id}/complete", response_model=UploadSessionCompleteResponse
 )
-async def complete_upload_session(
+def complete_upload_session(
     session_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -288,7 +314,7 @@ async def complete_upload_session(
 
 
 @session_router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def abort_upload_session(
+def abort_upload_session(
     session_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -318,7 +344,7 @@ def _batch_response(db: Session, batch: IngestionBatch) -> BatchResponse:
 
 
 @batch_router.post("", response_model=BatchResponse, status_code=status.HTTP_201_CREATED)
-async def create_batch(
+def create_batch(
     payload: BatchCreateRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -352,7 +378,7 @@ async def create_batch(
 
 
 @batch_router.get("/{batch_id}", response_model=BatchResponse)
-async def get_batch(
+def get_batch(
     batch_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -367,7 +393,7 @@ async def get_batch(
 
 
 @batch_router.get("", response_model=list[BatchResponse])
-async def list_batches(
+def list_batches(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     limit: int = 20,
@@ -389,7 +415,7 @@ async def list_batches(
 
 
 @work_item_router.post("/bulk", response_model=BulkActionResponse)
-async def bulk_action(
+def bulk_action(
     payload: BulkActionRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -451,7 +477,7 @@ async def bulk_action(
 
 
 @work_item_router.get("/tags", response_model=TagListResponse)
-async def list_tags(
+def list_tags(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> TagListResponse:
@@ -492,7 +518,7 @@ def _preset_response(
 
 
 @preset_router.get("", response_model=list[PresetResponse])
-async def list_presets(
+def list_presets(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> list[PresetResponse]:
@@ -509,7 +535,7 @@ async def list_presets(
 
 
 @preset_router.post("/apply", response_model=PresetResponse)
-async def apply_preset(
+def apply_preset(
     payload: PresetApplyRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
@@ -545,7 +571,7 @@ async def apply_preset(
 
 
 @preset_router.post("/{preset_id}/enabled", response_model=PresetResponse)
-async def set_preset_enabled(
+def set_preset_enabled(
     preset_id: uuid.UUID,
     payload: PresetEnableRequest,
     db: Session = Depends(deps.get_db),
@@ -586,7 +612,7 @@ async def set_preset_enabled(
 
 
 @work_item_router.get("/retention-holds", response_model=list[RetentionHoldResponse])
-async def list_holds(
+def list_holds(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> list[RetentionHoldResponse]:
@@ -606,7 +632,7 @@ async def list_holds(
     response_model=RetentionHoldResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def place_hold(
+def place_hold(
     payload: RetentionHoldRequest,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
@@ -659,7 +685,7 @@ async def place_hold(
 @work_item_router.delete(
     "/retention-holds/{hold_id}", response_model=RetentionHoldResponse
 )
-async def release_hold(
+def release_hold(
     hold_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),

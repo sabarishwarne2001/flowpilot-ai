@@ -174,6 +174,7 @@ export const INVITATION_ENDPOINTS = {
   preview: "/invitations/preview",
   accept: "/invitations/accept",
   reject: "/invitations/reject",
+  signup: "/auth/register/invitation",
 } as const;
 
 export const SETTINGS_ENDPOINTS = {

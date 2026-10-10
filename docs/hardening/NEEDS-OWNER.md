@@ -612,6 +612,11 @@ pausing. The Developer plan sees the page with an explanation and View plans; th
 Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py` (the browser test
 `23-batch-operations` "Developer plan" names the plans in its expected text). Not a price change.
 
+**Owner decision 2026-10-10: DECIDED and CLOSED. Batch operations is on Business and
+Enterprise.** That was already the placement in force everywhere (tier seed, lock copy, server
+gate, browser and engine tests), so nothing in the product changed. Regression locks added:
+`backend/tests/api/test_truthmesh_and_batch_plan_placement.py` pins the tier table.
+
 # Phase 2 — Enterprise processing and TruthMesh (2026-10-08): N-033 open
 
 ## N-033 — Which plans include TruthMesh (Phase 2)
@@ -626,10 +631,101 @@ with a document limit). Changing it is one line per tier in `backend/scripts/see
 the browser plan matrix reads the plan from `frontend/e2e/support/routes.ts` (`plan: "enterprise"`).
 Not a price change.
 
+**Owner decision 2026-10-10: DECIDED and CLOSED. TruthMesh is on Business and Enterprise**, with
+no document limit. Done: `capability.truthmesh` is in the Business tier
+(`seed_quota_tiers.py`); the lock copy reads "included on the Business and Enterprise plans"; the
+plan cards list it beside Batch operations; the browser plan matrix and the engine tests follow
+(the "plan without TruthMesh" case is now Developer, same assertions). Proof: the tier, API and
+browser tests failed on the old placement and pass now. **Deploy step:** a database seeded
+before this release keeps Business subscriptions pinned to the old tier version; run
+`python scripts/seed_quota_tiers.py --carry-forward` (RUNBOOK section 9.3). Every Business
+tenant's documents are now indexed into the mesh on the light worker; existing documents are
+indexed when someone first opens TruthMesh (it rebuilds an empty mesh).
+
 # Phase 3 — Final commercial hardening (2026-10-08): nothing new to decide
 
 Every Phase 3 finding (F-182 to F-206) was an engineering defect and is fixed. The new owner control
 (an organization's maximum session age, F-204) offers shorter limits than the platform's 12 hours
 (8, 4, 2 or 1 hour); that is a security setting each customer chooses, not a product or pricing
-question. **N-032** and **N-033** remain open with their provisional placements in force; neither
-blocks release.
+question. **N-032** and **N-033** were decided on 2026-10-10 (both on Business and Enterprise); see
+their entries.
+
+# Invitations and the workspace team (2026-10-10): six questions, all decided
+
+Everything in this pass (F-216 to F-224) was an engineering defect or a requested build and is done.
+These came up on the way. **All six were decided on 2026-10-10** by engineering under the founder
+authority the owner delegated for them, and implemented with tests (F-230 to F-235, FINDINGS.md).
+
+## N-034 — An invited address that has an account nobody ever verified
+Someone could register an address they do not own and never verify it. If that address is later
+invited, the invitee (who does own the mailbox) is told "an account already exists, sign in" and
+must use "Forgot your password?" to take it back (that email proves the mailbox, so this works).
+**In force:** the conservative path above; the invitation sign-up never replaces an existing
+account's password. **Decide:** keep it, or let the invitation sign-up take over an account whose
+address was never verified (the emailed token proves the mailbox just as a reset link does).
+Related design note: the invitation preview says whether the invited address has an account, so
+the page can offer sign-in or sign-up. Only the holder of the emailed token can ask, and the token
+is bound to that one address; for an invitation sent through the organization's own mail server
+(whose operator also holds the token) the preview does not say (F-226).
+**DECIDED 2026-10-10 (F-232): take over.** A link FlowPilot's own relay delivered proves the
+mailbox just as a password reset does, so the one-step invitation sign-up takes over an account
+whose address was never verified: the new password replaces the old one, the address is marked
+verified and every session of whoever registered it ends. A verified account is still sent to sign
+in, and an invitation sent through the organization's own mail server (F-226) takes over nothing.
+The preview's `has_account` now means "has a verified account".
+
+## N-035 — Invitations into an organization that requires single sign-on
+An invitee can create a password account from the invitation and join an organization whose
+policy requires SSO; the existing SSO check then refuses their password sessions for that
+organization, so they cannot use it until they sign in through the identity provider. **In
+force:** as described (nothing is exposed; it is a confusing first step). **Decide:** keep it, or
+have the invitation page send invitees of SSO-required organizations straight to SSO and refuse
+the password sign-up there.
+**DECIDED 2026-10-10 (F-233): straight to SSO.** The preview says `sso_required` (from the
+organization's security policy and the invited role), the page shows "Sign in with single sign-on"
+instead of a password form, and the server refuses the password sign-up with 409
+`INVITATION_SSO_REQUIRED`.
+
+## N-036 — Can accepting an invitation lower someone's role?
+Accepting sets the organization role to the invitation's (only an owner is kept as owner). A
+member promoted to admin after an older invitation was sent, who then accepts that invitation, is
+moved back to the invitation's role. F-209 already replaces an old pending invitation when the
+same address is invited again. **Decide:** keep "the invitation's role wins", or never lower an
+existing member's role on acceptance (only raise it).
+**DECIDED 2026-10-10 (F-231): never lower.** Accepting raises an active member's role and never
+lowers it (an owner stays owner, an admin stays admin; BILLING and MEMBER do not replace each
+other). A deactivated member rejoins with the invitation's role, as before.
+
+## N-037 — How long an invitation link lasts
+The server's links last `INVITATION_TTL_HOURS`, 72 hours by default; the invite panel used to say
+7 days (now it points at the expiry shown per invitation, and the email states the real date).
+**Decide:** 72 hours, or 7 days (one setting, `INVITATION_TTL_HOURS=168`; nothing else changes).
+**DECIDED 2026-10-10 (F-230): 7 days.** `INVITATION_TTL_HOURS` defaults to 168.
+
+## N-038 — Python dependency advisories (`pip-audit (advisory)` is red on main)
+`pip-audit` reports torch 2.12.1 (fixed in 2.13.0), setuptools 81.0.0 (fixed in 83.0.0) and
+paramiko 3.5.1 (no fixed release yet). The job is advisory and outside the CI gate. Upgrading
+torch needs the CPU image rebuilt and the OCR and embedding paths retested (F-045); setuptools is
+a build tool and low risk. **Decide:** when to schedule the upgrade (engineering can do it in a
+pass of its own).
+**DECIDED 2026-10-10: upgraded now.** torch 2.13.0, setuptools 83.0.0 and paramiko 5.0.0 (the first
+paramiko release `pip-audit` reports clean). The OCR, embedding and SFTP suites pass; rebuild the
+CPU image on the next deploy.
+
+## N-039 — Single sign-on attaches to an existing account by email, verified or not
+When someone signs in through an organization's identity provider for the first time, the
+just-in-time provisioning links the sign-in to an existing FlowPilot account with the same email
+(`identity/jit_service.py`), without looking at whether that account's address was ever verified.
+Someone who registered the address earlier (without owning the mailbox) keeps the password to the
+account the real owner now uses through SSO. Unverified accounts cannot open any organization, so
+the window is narrow, and F-226 closed the way such an account could be verified through an
+invitation; it is still worth deciding. **In force:** link by email (today's behaviour).
+**Decide:** link only to an account whose address was verified (and otherwise refuse the SSO sign-in
+with "an unverified account already uses this address; reset its password first"), or take the
+unverified account over (clear its password and sessions) when the identity provider vouches for
+the address.
+**DECIDED 2026-10-10 (F-235): take over.** The identity provider vouches for the address, so the
+first SSO sign-in to an unverified account marks it verified, replaces its password with an
+unusable one (the owner signs in through SSO, or sets a password with "Forgot your password?"),
+ends every session and writes an audit record. Verified accounts are linked as before.
+

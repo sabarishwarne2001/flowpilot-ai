@@ -77,7 +77,7 @@ def _get_user_conversation(
     status_code=status.HTTP_201_CREATED,
     summary="Create Conversation",
 )
-async def create_chat_session(
+def create_chat_session(
     conversation_in: ConversationCreate,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -126,7 +126,7 @@ async def create_chat_session(
     response_model_exclude_none=True,
     summary="List Conversations",
 )
-async def list_conversations(
+def list_conversations(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     skip: int = Query(default=0, ge=0, description="Number of conversations to skip."),
@@ -156,7 +156,7 @@ async def list_conversations(
     response_model_exclude_none=True,
     summary="Get Document Conversation",
 )
-async def get_document_conversation(
+def get_document_conversation(
     work_item_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -214,7 +214,7 @@ async def get_document_conversation(
     response_model_exclude_none=True,
     summary="Get Conversation",
 )
-async def get_conversation(
+def get_conversation(
     conversation_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -247,7 +247,7 @@ async def get_conversation(
     response_model_exclude_none=True,
     summary="Rename Conversation",
 )
-async def rename_conversation(
+def rename_conversation(
     conversation_id: uuid.UUID,
     conversation_in: ConversationUpdate,
     db: Session = Depends(deps.get_db),
@@ -282,7 +282,7 @@ async def rename_conversation(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete Conversation",
 )
-async def delete_chat_session(
+def delete_chat_session(
     conversation_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -315,7 +315,7 @@ async def delete_chat_session(
     summary="Send Message",
     response_description="AI-generated response with structured source citations.",
 )
-async def post_chat_query(
+def post_chat_query(
     conversation_id: uuid.UUID,
     query_in: ChatQuery,
     db: Session = Depends(deps.get_db),
@@ -329,7 +329,7 @@ async def post_chat_query(
             user_id=context.user_id,
         )
 
-        response = await assistant_service.send_chat_message(
+        response = assistant_service.send_chat_message(
             db=db,
             conversation_id=conversation_id,
             user_id=context.user_id,

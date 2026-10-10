@@ -53,7 +53,7 @@ class EmailChangeConfirmResponse(BaseModel):
     status_code=status.HTTP_202_ACCEPTED,
     summary="Request an email address change",
 )
-async def request_email_change(
+def request_email_change(
     payload: EmailChangeRequestPayload,
     db: deps.DbSession,
     current_user: deps.CurrentUser,
@@ -91,7 +91,7 @@ async def request_email_change(
     response_model=PendingEmailChangeResponse,
     summary="Get the caller's pending email address change",
 )
-async def get_pending_email_change(
+def get_pending_email_change(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Any:
@@ -117,7 +117,7 @@ async def get_pending_email_change(
     response_class=Response,
     summary="Cancel a pending email address change",
 )
-async def cancel_email_change(
+def cancel_email_change(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Response:
@@ -136,7 +136,7 @@ async def cancel_email_change(
     response_model=EmailChangeConfirmResponse,
     summary="Confirm an email address change",
 )
-async def confirm_email_change(
+def confirm_email_change(
     payload: EmailChangeConfirmPayload,
     db: deps.DbSession,
     background_tasks: BackgroundTasks,

@@ -21,7 +21,7 @@ import {
 } from "@/permissions/organizationPermissions";
 import type { OrganizationMember, OrganizationRole } from "@/types/tenancy";
 import OwnershipTransferPanel from "@/components/organization/OwnershipTransferPanel";
-import InviteMembersPanel from "@/components/organization/InviteMembersPanel";
+import InviteMembersPanel, { invitationKeys } from "@/components/organization/InviteMembersPanel";
 import RoleGuide from "@/components/tenancy/RoleGuide";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -105,6 +105,8 @@ export const OrganizationMembers: React.FC = () => {
       setActionError(null);
       setConfirmingRemoval(null);
       void invalidate();
+      // F-217. Removal also withdraws an invitation still pending for the address.
+      void queryClient.invalidateQueries({ queryKey: invitationKeys.pending(organizationId) });
     },
     onError: (error) =>
       setActionError(

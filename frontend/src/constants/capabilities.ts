@@ -51,7 +51,7 @@ export const CAPABILITY = {
   byok: "capability.byok",
   // PHASE1:capability-constant — batch operations, Business and Enterprise.
   batchDispatch: "capability.batch_dispatch",
-  // PHASE2:capability-constant — TruthMesh, the cross-document digital twin, Enterprise (provisional, N-033).
+  // PHASE2:capability-constant — TruthMesh, the cross-document digital twin, Business and Enterprise (N-033).
   truthmesh: "capability.truthmesh",
 } as const;
 

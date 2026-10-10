@@ -17,7 +17,7 @@ router = APIRouter(tags=["Document Settings"])
     "/",
     response_model=DocumentSettingsResponse,
 )
-async def get_document_processing_settings(
+def get_document_processing_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
 ) -> Any:
@@ -41,7 +41,7 @@ async def get_document_processing_settings(
     "/",
     response_model=DocumentSettingsResponse,
 )
-async def update_document_processing_settings(
+def update_document_processing_settings(
     settings_in: DocumentSettingsCreate,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)

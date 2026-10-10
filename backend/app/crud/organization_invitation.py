@@ -315,6 +315,38 @@ def revoke_invitation(
     ).scalar_one_or_none()
 
 
+def revoke_pending_invitations_for_email(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    email: str,
+    revoked_by_id: uuid.UUID | None,
+    now: datetime,
+) -> list[uuid.UUID]:
+    """
+    Withdraws every PENDING invitation to `email` in one organization.
+
+    F-216. Used when that person is removed: a link sent before the removal
+    must not let them straight back in. Accepted and revoked invitations are
+    history and are left as they are.
+    """
+    rows = db.execute(
+        update(OrganizationInvitation)
+        .where(
+            OrganizationInvitation.organization_id == organization_id,
+            func.lower(OrganizationInvitation.email) == email.strip().lower(),
+            OrganizationInvitation.status == InvitationStatus.PENDING,
+        )
+        .values(
+            status=InvitationStatus.REVOKED,
+            revoked_at=now,
+            revoked_by_id=revoked_by_id,
+        )
+        .returning(OrganizationInvitation.id)
+    ).scalars().all()
+    return list(rows)
+
+
 def rotate_token(
     db: Session,
     *,
@@ -332,6 +364,8 @@ def rotate_token(
     invitation.token_hash = token_hash
     invitation.expires_at = expires_at
     invitation.last_sent_at = now
+    # F-226. The new token has not left yet; its own send records how it does.
+    invitation.delivered_off_platform = False
     invitation.send_count = OrganizationInvitation.send_count + 1
     db.add(invitation)
     db.flush()

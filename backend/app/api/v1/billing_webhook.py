@@ -39,6 +39,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_db
 from app.core.config import settings
@@ -98,6 +99,13 @@ async def receive_stripe_webhook(
             detail="Missing Stripe-Signature header.",
         )
 
+    # F-218. Verifying, resolving the organization and the INSERT block (the
+    # INSERT can wait on a row lock), so they run in the threadpool: a slow
+    # delivery no longer stalls every other request on the event loop.
+    return await run_in_threadpool(_verify_and_record, db, raw_body, stripe_signature)
+
+
+def _verify_and_record(db: Session, raw_body: bytes, stripe_signature: str) -> StripeWebhookAck:
     try:
         event = stripe_gateway.get_gateway().verify_event(
             payload=raw_body,

@@ -57,7 +57,7 @@ router = APIRouter(tags=["Organizations"])
     status_code=status.HTTP_201_CREATED,
     summary="Provision Organization",
 )
-async def create_organization(
+def create_organization(
     payload: OrganizationCreate,
     db: deps.DbSession,
     current_user: deps.CurrentUser,
@@ -90,7 +90,7 @@ async def create_organization(
     response_model=SlugAvailabilityResponse,
     summary="Check Organization Slug Availability",
 )
-async def check_organization_slug(
+def check_organization_slug(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
     slug: str = Query(..., description="Candidate organization identifier."),
@@ -124,7 +124,7 @@ async def check_organization_slug(
     response_model=OrganizationResponse,
     summary="Get Organization",
 )
-async def get_organization(context: deps.OrgContext) -> Any:
+def get_organization(context: deps.OrgContext) -> Any:
     """
     Returns the addressed organization.
 
@@ -139,7 +139,7 @@ async def get_organization(context: deps.OrgContext) -> Any:
     response_model=OrganizationResponse,
     summary="Update Organization Settings",
 )
-async def update_organization(
+def update_organization(
     payload: OrganizationUpdate,
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
@@ -171,7 +171,7 @@ class OrganizationArchiveRequest(BaseModel):
     response_model=OrganizationResponse,
     summary="Archive Organization",
 )
-async def archive_organization(
+def archive_organization(
     db: deps.DbSession,
     payload: OrganizationArchiveRequest,
     context=Depends(deps.RequireOrgOwner),
@@ -207,7 +207,7 @@ async def archive_organization(
     response_model=OrganizationResponse,
     summary="Restore Organization",
 )
-async def restore_organization(
+def restore_organization(
     db: deps.DbSession,
     payload: OrganizationArchiveRequest,
     context=Depends(deps.get_archived_organization_owner_context),
@@ -240,7 +240,7 @@ async def restore_organization(
     response_model=list[WorkspaceResponse],
     summary="List Accessible Workspaces",
 )
-async def list_organization_workspaces(
+def list_organization_workspaces(
     db: deps.ReadDbSession,
     context: deps.OrgContext,
     include_archived: bool = Query(
@@ -271,7 +271,7 @@ async def list_organization_workspaces(
     status_code=status.HTTP_201_CREATED,
     summary="Create Workspace",
 )
-async def create_workspace(
+def create_workspace(
     payload: WorkspaceCreate,
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
@@ -305,7 +305,7 @@ async def create_workspace(
     response_model=OrganizationMemberListResponse,
     summary="List Organization Members",
 )
-async def list_organization_members(
+def list_organization_members(
     db: deps.ReadDbSession,
     context: deps.OrgContext,
     include_inactive: bool = Query(
@@ -341,7 +341,7 @@ async def list_organization_members(
     response_model=OrganizationMemberResponse,
     summary="Change Member Role",
 )
-async def change_member_role(
+def change_member_role(
     membership_id: uuid.UUID,
     payload: OrganizationMemberRoleUpdate,
     db: deps.DbSession,
@@ -366,7 +366,7 @@ async def change_member_role(
     response_model=OrganizationMemberResponse,
     summary="Deactivate Organization Member",
 )
-async def deactivate_member(
+def deactivate_member(
     membership_id: uuid.UUID,
     db: deps.DbSession,
     context=Depends(deps.RequireOrgAdmin),
@@ -389,7 +389,7 @@ async def deactivate_member(
     response_model=MessageResponse,
     summary="Leave Organization",
 )
-async def leave_organization(
+def leave_organization(
     db: deps.DbSession,
     context: deps.OrgContext,
 ) -> Any:

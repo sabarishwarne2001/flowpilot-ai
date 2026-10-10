@@ -72,8 +72,10 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.entityGraph,
   CAPABILITY.caseIntelligence,
   CAPABILITY.tableIntelligence,
-  // PHASE1:plan-feature-order — Business and Enterprise.
+  // PHASE1:plan-feature-order — Business and Enterprise (owner decision N-032).
   CAPABILITY.batchDispatch,
+  // PHASE2:plan-feature-order — Business and Enterprise (owner decision N-033).
+  CAPABILITY.truthmesh,
   // ARCH46-S2:plan-feature-order — Business and Enterprise.
   CAPABILITY.obligations,
   // ARCH47-S2:plan-feature-order — Business and Enterprise.
@@ -84,8 +86,6 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.redaction,
   CAPABILITY.semanticAssertions,
   CAPABILITY.universalCorroborator,
-  // PHASE2:plan-feature-order — Enterprise only (provisional, N-033).
-  CAPABILITY.truthmesh,
   // ARCH48-S2:plan-feature-order — Enterprise only.
   CAPABILITY.collaborativeReview,
   CAPABILITY.enterpriseIdentity,

@@ -45,7 +45,7 @@ guard), and the comment written above it in the code.
 | `PASSWORD_RESET_TTL_MINUTES` | `int` | `60` | example |  |
 | `IDENTITY_TOKEN_MAX_PER_WINDOW` | `int` | `5` | example |  |
 | `IDENTITY_TOKEN_WINDOW_MINUTES` | `int` | `60` | example |  |
-| `INVITATION_TTL_HOURS` | `int` | `72` | — |  |
+| `INVITATION_TTL_HOURS` | `int` | `168` | — |  |
 | `INVITATION_RESEND_COOLDOWN_MINUTES` | `int` | `5` | — |  |
 | `INVITATION_MAX_GRANTS` | `int` | `50` | — |  |
 | `INVITATION_RETENTION_DAYS` | `int` | `180` | — |  |

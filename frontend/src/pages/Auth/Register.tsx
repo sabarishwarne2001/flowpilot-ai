@@ -51,7 +51,8 @@ export const Register: React.FC = () => {
     resolver: zodResolver(registerSchema),
     shouldFocusError: true,
     defaultValues: {
-      email: "",
+      // F-226. An invitation sends its invitee here with the invited address.
+      email: new URLSearchParams(location.search).get("email")?.trim() ?? "",
       password: "",
       confirmPassword: "",
     },

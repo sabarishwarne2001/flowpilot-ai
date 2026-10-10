@@ -23,7 +23,7 @@ from app.core.organization_permissions import (
     can_manage_organization_settings,
 )
 from app.core.slugs import generate_unique_slug, validate_slug
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import api_key as api_key_crud
 from app.crud import organization as organization_crud
 from app.crud import organization_members as organization_members_crud
@@ -248,7 +248,7 @@ def restore_organization(
             db,
             logger,
             "Failed to restore organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -328,7 +328,7 @@ def update_organization_settings(
             db,
             logger,
             "Failed to update organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -385,7 +385,7 @@ def archive_organization(
             db,
             logger,
             "Failed to archive organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )

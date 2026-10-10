@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -26,6 +28,24 @@ def commit_and_refresh(db: Session, obj: Any = None) -> Any:
     if obj is not None:
         db.refresh(obj)
     return obj
+
+
+def identity_of(obj: Any) -> Any:
+    """An ORM object's primary key, read from the identity map without a load.
+
+    F-214. Error handlers passed `organization.id` to `rollback_and_log_error`.
+    The arguments are evaluated before the rollback, and after a failed flush
+    (a unique constraint met by a concurrent duplicate) reading an expired
+    attribute raises PendingRollbackError, which replaced the real error and
+    turned an expected conflict into a 500.
+    """
+    try:
+        identity = sa_inspect(obj).identity
+    except Exception:  # noqa: BLE001 - not a mapped object
+        return getattr(obj, "id", None)
+    if identity is None:
+        return None
+    return identity[0] if len(identity) == 1 else identity
 
 
 def rollback_and_log_error(
@@ -59,5 +79,13 @@ def rollback_and_log_error(
         The exception passed as `exc`.
     """
     db.rollback()
-    logger.exception(message_fmt, *args)
+    from app.core.exceptions import FlowPilotError
+
+    if isinstance(exc, (IntegrityError, FlowPilotError)):
+        # An expected refusal (a domain rule, or a constraint met by a
+        # concurrent duplicate, answered 409 by the global handler): a warning,
+        # not an error with a traceback.
+        logger.warning(message_fmt, *args)
+    else:
+        logger.exception(message_fmt, *args)
     raise exc

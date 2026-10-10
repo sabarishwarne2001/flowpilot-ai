@@ -9,6 +9,7 @@ import {
 } from "@/services/api/endpoints";
 
 import type {
+  InvitationSignupResponse,
   InvitationTokenRequest,
   WorkspaceInvitation,
   OrganizationInvitationAccepted,
@@ -36,9 +37,11 @@ export const createInvitation = async (
 export const listPendingInvitations = async (
   organizationId: string,
 ): Promise<WorkspaceInvitation[]> => {
+  // F-216. Without the filter the server returns the whole history (accepted,
+  // revoked), which the workspace page listed as pending with Resend and Revoke.
   const response = await apiClient.get<WorkspaceInvitation[]>(
     INVITATION_ENDPOINTS.list(organizationId),
-    { headers: { Accept: "application/json" } },
+    { params: { status: "PENDING" }, headers: { Accept: "application/json" } },
   );
   return response.data;
 };
@@ -78,6 +81,23 @@ export const previewInvitation = async (
   const response = await apiClient.post<WorkspaceInvitationPreview>(
     INVITATION_ENDPOINTS.preview,
     { token } satisfies InvitationTokenRequest,
+    { headers: { Accept: "application/json" } },
+  );
+  return response.data;
+};
+
+/**
+ * Public. F-222: someone invited who has no account creates it from the
+ * invitation, joins and is signed in, in one request. The address is the
+ * invitation's: the request carries none.
+ */
+export const registerWithInvitation = async (
+  token: string,
+  password: string,
+): Promise<InvitationSignupResponse> => {
+  const response = await apiClient.post<InvitationSignupResponse>(
+    INVITATION_ENDPOINTS.signup,
+    { token, password },
     { headers: { Accept: "application/json" } },
   );
   return response.data;

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.api import deps
 from app.core.exceptions import SeatLimitExceededError
@@ -24,6 +24,7 @@ from app.core.links import (
     build_organization_members_link,
 )
 from app.crud import user as user_crud
+from app.models.organization_invitation import InvitationStatus
 from app.schemas.common import MessageResponse
 from app.schemas.organization_invitation import (
     AcceptedGrantSummary,
@@ -54,7 +55,7 @@ router = APIRouter(tags=["Invitations"])
     status_code=status.HTTP_201_CREATED,
     summary="Issue Organization Invitation",
 )
-async def create_invitation(
+def create_invitation(
     payload: InvitationCreateRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -92,7 +93,7 @@ async def create_invitation(
     response_model=InvitationResponse,
     summary="Resend Organization Invitation",
 )
-async def resend_invitation(
+def resend_invitation(
     invitation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -127,7 +128,7 @@ async def resend_invitation(
     response_model=MessageResponse,
     summary="Revoke Organization Invitation",
 )
-async def revoke_invitation(
+def revoke_invitation(
     invitation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -158,12 +159,22 @@ async def revoke_invitation(
     response_model=OrganizationInvitationListResponse,
     summary="List Organization Invitations",
 )
-async def list_invitations(
+def list_invitations(
     db: deps.ReadDbSession,
     context=Depends(deps.RequireOrgAdmin),
+    statuses: Optional[list[InvitationStatus]] = Query(
+        default=None,
+        alias="status",
+        description=(
+            "Only invitations in these states (repeatable). The members and "
+            "workspace screens ask for PENDING; without it the full history is listed."
+        ),
+    ),
 ) -> Any:
+    # F-216. Without a filter every invitation came back, and the workspace page
+    # rendered accepted and revoked ones as pending, with Resend and Revoke.
     invitations = organization_invitation_service.list_invitations(
-        db, organization_id=context.organization_id
+        db, organization_id=context.organization_id, statuses=statuses or None
     )
     return OrganizationInvitationListResponse(
         items=[InvitationResponse.model_validate(i) for m in invitations for i in [m]],
@@ -180,7 +191,7 @@ async def list_invitations(
     response_model=InvitationPreviewResponse,
     summary="Preview Invitation",
 )
-async def preview_invitation(
+def preview_invitation(
     payload: OrganizationInvitationTokenRequest,
     db: deps.DbSession,
 ) -> Any:
@@ -224,7 +235,7 @@ async def preview_invitation(
     response_model=OrganizationInvitationAcceptResponse,
     summary="Accept Invitation",
 )
-async def accept_invitation(
+def accept_invitation(
     payload: OrganizationInvitationTokenRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -234,20 +245,7 @@ async def accept_invitation(
         accepted = organization_invitation_service.accept_invitation(
             db, token=payload.token, actor=current_user
         )
-        members_url = build_organization_members_link(accepted.organization_slug)
-        background_tasks.add_task(
-            invitation_mail.send_invitation_accepted,
-            organization_id=accepted.organization_id,
-            inviter_email=accepted.inviter_email,
-            invited_email=accepted.invited_email,
-            invited_display=accepted.invited_display,
-            organization_name=accepted.organization_name,
-            organization_role_display=accepted.organization_role.value,
-            provisioned_grants=accepted.provisioned_grants,
-            skipped_grant_count=accepted.skipped_grant_count,
-            members_url=members_url,
-            invitation_id=accepted.invitation_id,
-        )
+        queue_accepted_mail(background_tasks, accepted)
         return OrganizationInvitationAcceptResponse(
             invitation_id=accepted.invitation_id,
             organization_id=accepted.organization_id,
@@ -264,17 +262,65 @@ async def accept_invitation(
             workspace_slug=accepted.first_workspace_slug,
         )
     except SeatLimitExceededError:
-        blocked = organization_invitation_service.describe_seat_blocked(db, token=payload.token)
-        members_url = build_organization_members_link(blocked["organization_slug"])
-        invitation_mail.send_invitation_seat_blocked(
-            inviter_email=blocked["inviter_email"],
-            invited_email=blocked["invited_email"],
-            organization_name=blocked["organization_name"],
-            seat_limit=blocked["seat_limit"],
-            members_url=members_url,
-            invitation_id=blocked["invitation_id"],
-        )
+        queue_seat_blocked_mail(db, token=payload.token)
         raise
+
+
+def queue_accepted_mail(background_tasks: BackgroundTasks, accepted: Any) -> None:
+    """Tell the inviter their invitation was accepted (after the response)."""
+    background_tasks.add_task(
+        invitation_mail.send_invitation_accepted,
+        organization_id=accepted.organization_id,
+        inviter_email=accepted.inviter_email,
+        invited_email=accepted.invited_email,
+        invited_display=accepted.invited_display,
+        organization_name=accepted.organization_name,
+        organization_role_display=accepted.organization_role.value,
+        provisioned_grants=accepted.provisioned_grants,
+        skipped_grant_count=accepted.skipped_grant_count,
+        members_url=build_organization_members_link(accepted.organization_slug),
+        invitation_id=accepted.invitation_id,
+    )
+
+
+#: F-234. How long one "no seats" notice covers repeated attempts on one invitation.
+SEAT_BLOCKED_NOTICE_WINDOW_SECONDS = 24 * 60 * 60
+
+
+def _first_seat_blocked_notice(invitation_id: Any) -> bool:
+    """True once per invitation per window. Without Redis, every attempt notifies (as before)."""
+    from app.core.redis_client import get_redis_client
+
+    client = get_redis_client()
+    if client is None:
+        return True
+    try:
+        return bool(client.set(
+            f"invitation:seat_blocked_notice:{invitation_id}", "1",
+            nx=True, ex=SEAT_BLOCKED_NOTICE_WINDOW_SECONDS,
+        ))
+    except Exception:  # noqa: BLE001 - a notice is not worth failing the request over
+        logger.warning("SEAT_BLOCKED_NOTICE_DEDUPE_UNAVAILABLE | invitation=%s", invitation_id)
+        return True
+
+
+def queue_seat_blocked_mail(db: Any, *, token: str) -> None:
+    """Tell the inviter an acceptance was blocked for want of a seat.
+
+    F-234. Once a day per invitation: the sign-up is public, so its holder could
+    otherwise send the inviter a notice on every refused attempt.
+    """
+    blocked = organization_invitation_service.describe_seat_blocked(db, token=token)
+    if not _first_seat_blocked_notice(blocked["invitation_id"]):
+        return
+    invitation_mail.send_invitation_seat_blocked(
+        inviter_email=blocked["inviter_email"],
+        invited_email=blocked["invited_email"],
+        organization_name=blocked["organization_name"],
+        seat_limit=blocked["seat_limit"],
+        members_url=build_organization_members_link(blocked["organization_slug"]),
+        invitation_id=blocked["invitation_id"],
+    )
 
 
 @router.post(
@@ -282,7 +328,7 @@ async def accept_invitation(
     response_model=MessageResponse,
     summary="Reject Invitation",
 )
-async def reject_invitation(
+def reject_invitation(
     payload: OrganizationInvitationTokenRequest,
     background_tasks: BackgroundTasks,
     db: deps.DbSession,
@@ -308,7 +354,7 @@ async def reject_invitation(
     response_model=MyPendingInvitationsResponse,
     summary="List My Pending Invitations",
 )
-async def list_my_invitations(
+def list_my_invitations(
     db: deps.ReadDbSession,
     current_user: deps.CurrentUser,
 ) -> Any:

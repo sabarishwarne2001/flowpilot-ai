@@ -5,11 +5,12 @@ from fastapi import Request
 
 import logging
 import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api import deps
 from app.core.exceptions import RateLimitExceededError, SpendLimitExceededError
@@ -17,6 +18,7 @@ from app.schemas.assistant import ChatQuery
 from app.services.assistant_stream import (
     ReplayIncompleteError,
     ReplayUnavailableError,
+    StreamPlan,
     assistant_stream_service,
     sse,
 )
@@ -34,40 +36,32 @@ SSE_HEADERS = {
 }
 
 
-@router.post(
-    "/conversations/{conversation_id}/messages/stream",
-    summary="Send Message (streaming)",
-    response_description=(
-        "text/event-stream. Frames: start, token, citations, done, error. "
-        "Every frame carries a monotonic `seq` for A13 resumption."
-    ),
-    responses={
-        402: {"description": "Workspace AI usage limit reached."},
-        429: {"description": "Too many concurrent or rapid generations."},
-    },
-)
-async def stream_chat_query(
+def _prepare_plan(
+    db: Session,
+    *,
     conversation_id: uuid.UUID,
-    query_in: ChatQuery,
-    request: Request,
-    db: Session = Depends(deps.get_db),
-    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
-) -> StreamingResponse:
-    from app.services.audit_service import context_from_request
-
-    audit_context = context_from_request(request)
-
+    user_id: uuid.UUID,
+    organization_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    query_text: str,
+    ip_address: Optional[str],
+    user_agent: Optional[str],
+) -> StreamPlan:
     try:
         plan = assistant_stream_service.prepare(
             db,
             conversation_id=conversation_id,
-            user_id=context.user_id,
-            organization_id=context.organization_id,
-            workspace_id=context.workspace_id,
-            query_text=query_in.content,
-            ip_address=audit_context.get("ip_address"),
-            user_agent=audit_context.get("user_agent"),
+            user_id=user_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            query_text=query_text,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
+        # The plan outlives this transaction. What it loaded (the conversation,
+        # the AI settings) stays loaded after the commit, so the stream never
+        # reloads it through this session on the event loop.
+        db.expire_on_commit = False
         db.commit()
 
     except SpendLimitExceededError as exc:
@@ -108,13 +102,57 @@ async def stream_chat_query(
             detail="Internal server error.",
         )
 
+    return plan
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages/stream",
+    summary="Send Message (streaming)",
+    response_description=(
+        "text/event-stream. Frames: start, token, citations, done, error. "
+        "Every frame carries a monotonic `seq` for A13 resumption."
+    ),
+    responses={
+        402: {"description": "Workspace AI usage limit reached."},
+        429: {"description": "Too many concurrent or rapid generations."},
+    },
+)
+async def stream_chat_query(
+    conversation_id: uuid.UUID,
+    query_in: ChatQuery,
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> StreamingResponse:
+    from app.services.audit_service import context_from_request
+
+    audit_context = context_from_request(request)
+    user_id = context.user_id
+    organization_id = context.organization_id
+
+    # F-218. Preparing the turn (retrieval, the history, the context budget, the
+    # metering reservation, the provenance seal) is blocking database work: it
+    # ran on the event loop and froze every other request while it did. It runs
+    # in the threadpool; only the stream itself stays on the loop.
+    plan = await run_in_threadpool(
+        _prepare_plan,
+        db,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        organization_id=organization_id,
+        workspace_id=context.workspace_id,
+        query_text=query_in.content,
+        ip_address=audit_context.get("ip_address"),
+        user_agent=audit_context.get("user_agent"),
+    )
+
     request_id = getattr(request.state, "request_id", None)
 
     async def guarded() -> AsyncIterator[bytes]:
         try:
             with generation_slot(
-                user_id=context.user_id,
-                organization_id=context.organization_id,
+                user_id=user_id,
+                organization_id=organization_id,
                 conversation_id=conversation_id,
             ):
                 async for frame in assistant_stream_service.stream_answer(
@@ -154,6 +192,26 @@ async def stream_chat_query(
     )
 
 
+def _owns_message(
+    db: Session, *, message_id: uuid.UUID, workspace_id: uuid.UUID, user_id: uuid.UUID
+) -> bool:
+    from sqlalchemy import select
+
+    from app.models.assistant import Conversation, ConversationMessage
+
+    row = db.execute(
+        select(ConversationMessage.id)
+        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        .where(
+            ConversationMessage.id == message_id,
+            Conversation.workspace_id == workspace_id,
+            Conversation.user_id == user_id,
+        )
+    ).scalar_one_or_none()
+    db.commit()
+    return row is not None
+
+
 @router.get(
     "/messages/{message_id}/stream",
     summary="Resume Message Stream (A13)",
@@ -187,21 +245,18 @@ async def resume_message_stream(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> StreamingResponse:
-    from sqlalchemy import select
-
-    from app.models.assistant import Conversation, ConversationMessage
-
-    row = db.execute(
-        select(ConversationMessage.id)
-        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
-        .where(
-            ConversationMessage.id == message_id,
-            Conversation.workspace_id == context.workspace_id,
-            Conversation.user_id == context.user_id,
-        )
-    ).scalar_one_or_none()
-
-    if row is None:
+    # F-218. The ownership check is a database query: it runs in the threadpool,
+    # and ends its transaction there, so a replay that waits on a live stream
+    # holds no pooled connection meanwhile. The replay buffer is Redis, whose
+    # every call is bounded by REDIS_SOCKET_TIMEOUT_SECONDS.
+    owned = await run_in_threadpool(
+        _owns_message,
+        db,
+        message_id=message_id,
+        workspace_id=context.workspace_id,
+        user_id=context.user_id,
+    )
+    if not owned:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Message not found."
         )
@@ -261,7 +316,7 @@ async def resume_message_stream(
     summary="Citation Provenance",
     response_description="Sealed provenance envelope for one assistant message.",
 )
-async def get_message_provenance(
+def get_message_provenance(
     message_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),

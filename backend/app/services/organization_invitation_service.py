@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import (
     InvalidInvitationTokenError,
+    InvitationAccountExistsError,
     LastOwnerError,
     InvitationAlreadyExistsError,
     InvitationAlreadyMemberError,
@@ -35,6 +36,8 @@ from app.core.exceptions import (
     InvitationNotFoundError,
     InvitationPermissionDeniedError,
     InvitationResendTooSoonError,
+    InvitationSignupUnavailableError,
+    InvitationSsoRequiredError,
     SeatLimitExceededError,
 )
 from app.core.links import build_invitation_accept_link
@@ -43,7 +46,7 @@ from app.core.organization_permissions import (
     can_invite_members,
 )
 from app.core.tokens import generate_secure_token, hash_token
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import organization_invitation as invitation_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
@@ -158,12 +161,24 @@ def _assert_seat_available(
     *,
     organization: Organization,
     message: str,
+    already_reserved: bool = False,
 ) -> None:
+    """Refuse when the operation would need a seat the organization does not have.
+
+    F-221. `already_reserved` is for an operation on a pending invitation, whose
+    seat the count already includes: accepting turns that reserved seat into a
+    member's, and resending reserves nothing new. Checking those with ">=" counted
+    the invitation twice, so the last seat could never be filled: the invitee was
+    told there were no seats, and the invitation could not be resent. They are
+    refused only when the count is already past the limit (a member added
+    directly meanwhile, or a lowered limit).
+    """
     if organization.seat_limit is None:
         return
 
     reserved = count_reserved_seats(db, organization_id=organization.id)
-    if reserved >= organization.seat_limit:
+    over = reserved > organization.seat_limit if already_reserved else reserved >= organization.seat_limit
+    if over:
         raise SeatLimitExceededError(message)
 
 
@@ -274,10 +289,12 @@ def create_invitation(
         db, organization_id=organization.id, email=normalized
     )
     if existing_pending is not None:
-        invitation_crud.update_invitation_status(
+        # F-209. This called `update_invitation_status`, which the CRUD module
+        # never had: a second invitation to the same address was a 500.
+        invitation_crud.revoke_invitation(
             db,
             invitation_id=existing_pending.id,
-            status=InvitationStatus.REVOKED,
+            revoked_by_id=inviter.id,
             now=datetime.now(UTC),
         )
         audit_service.record(
@@ -358,7 +375,7 @@ def create_invitation(
         rollback_and_log_error(
             db, logger,
             "Failed to issue invitation for organization %s: %s",
-            organization.id, str(exc), exc=exc,
+            identity_of(organization), str(exc), exc=exc,
         )
 
 
@@ -421,7 +438,50 @@ def preview_invitation(db: Session, *, token: str) -> dict:
             if g.workspace is not None
         ],
         "expires_at": invitation.expires_at,
+        # F-226. Unknown (None) when the token left through the organization's own
+        # mail server: its operator holds the token and must not learn from it
+        # whether an address has an account.
+        "has_account": (
+            None
+            if invitation.delivered_off_platform
+            else _has_verified_account(db, email=invitation.email)
+        ),
+        "sso_required": _sso_required(db, invitation=invitation),
     }
+
+
+def _has_verified_account(db: Session, *, email: str) -> bool:
+    """N-034. An account nobody ever verified is not one to sign in to: the
+    invitation sign-up takes it over."""
+    user = user_crud.get_user_by_email(db, email=email)
+    return user is not None and user.email_verified_at is not None
+
+
+def _sso_required(db: Session, *, invitation: OrganizationInvitation) -> bool:
+    """N-035. Read-only: whether the organization requires SSO for the invited role."""
+    from app.models.identity import TenantSecurityPolicy
+    from app.services.identity import session_policy_service
+
+    policy = db.execute(
+        select(TenantSecurityPolicy).where(
+            TenantSecurityPolicy.organization_id == invitation.organization_id
+        )
+    ).scalar_one_or_none()
+    if policy is None:
+        return False
+    return session_policy_service.sso_required_for(
+        policy, org_role=invitation.organization_role.value
+    )
+
+
+#: N-036. Accepting never lowers a role. BILLING and MEMBER differ in kind, not
+#: rank: neither replaces the other on acceptance.
+_ROLE_RANK = {
+    OrganizationRole.OWNER: 3,
+    OrganizationRole.ADMIN: 2,
+    OrganizationRole.MEMBER: 1,
+    OrganizationRole.BILLING: 1,
+}
 
 
 def describe_seat_blocked(db: Session, *, token: str) -> dict:
@@ -471,6 +531,7 @@ def accept_invitation(
             f"added. Your invitation is still valid — ask an administrator to "
             f"free a seat, then open your link again."
         ),
+        already_reserved=True,
     )
 
     try:
@@ -502,11 +563,15 @@ def accept_invitation(
         else:
             db.refresh(membership)
 
+            # N-036 (owner decision 2026-10-10): accepting raises an active
+            # member's role, never lowers it (an owner stays owner, an admin
+            # promoted after the invitation was sent stays admin). A
+            # deactivated member rejoins with the invitation's role.
             if (
-                membership.role is OrganizationRole.OWNER
-                and membership.status is MembershipStatus.ACTIVE
+                membership.status is MembershipStatus.ACTIVE
+                and _ROLE_RANK[membership.role] >= _ROLE_RANK[applied_role]
             ):
-                applied_role = OrganizationRole.OWNER
+                applied_role = membership.role
                 role_preserved = True
             else:
                 organization_members_crud.update_organization_member_role(
@@ -575,7 +640,10 @@ def accept_invitation(
                     f"without an active owner."
                 )
 
-        if actor.email_verified_at is None:
+        # F-226. Accepting proves the address only when FlowPilot's own relay
+        # delivered the token; through the organization's mail server, whoever
+        # runs that server holds it too.
+        if actor.email_verified_at is None and not invitation.delivered_off_platform:
             actor.email_verified_at = now
             db.add(actor)
             
@@ -624,8 +692,103 @@ def accept_invitation(
         rollback_and_log_error(
             db, logger,
             "Failed to accept invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
+
+
+def register_and_accept(
+    db: Session,
+    *,
+    token: str,
+    password: str,
+    request: Any = None,
+) -> tuple[User, AcceptedInvitation]:
+    """F-222. Create the invited person's account and accept the invitation, in one transaction.
+
+    The invitation decides the address; the token, which FlowPilot's relay
+    emailed to it, proves the caller controls it, so the account starts
+    verified (F-226: a token sent through the organization's own mail server
+    proves nothing and is refused here). Nothing is
+    created unless the acceptance succeeds: an expired or used invitation, a
+    weak password, an address that already has an account (its owner signs in
+    and accepts instead) or a full organization leaves no user behind.
+    """
+    from app.core import password_policy, security
+
+    invitation = _load_by_token(db, token=token)
+    if invitation.status is not InvitationStatus.PENDING:
+        raise InvitationAlreadyProcessedError(
+            f"This invitation was already {invitation.status.value.lower()}."
+        )
+    if invitation.expires_at <= datetime.now(UTC):
+        raise InvitationExpiredError("This invitation has expired. Ask for a new one.")
+    # F-226. Checked before anything about the address, so the answer says nothing about it.
+    if invitation.delivered_off_platform:
+        raise InvitationSignupUnavailableError(
+            "This invitation was sent through your organization's own mail server, so it cannot "
+            "confirm your address by itself. Create your account on the sign-up page, verify the "
+            "email we send you, then open this invitation again."
+        )
+
+    # N-035. Joined through single sign-on, never with a password account.
+    if _sso_required(db, invitation=invitation):
+        raise InvitationSsoRequiredError(
+            f"{invitation.organization.name} requires single sign-on. Sign in with your "
+            f"company account to accept this invitation."
+        )
+
+    email = invitation.email.strip().lower()
+    password_policy.check_new_password(password, email=email)
+    existing = user_crud.get_user_by_email(db, email=email)
+    if existing is not None and existing.email_verified_at is not None:
+        raise InvitationAccountExistsError(
+            f"An account already exists for {email}. Sign in to accept the invitation."
+        )
+
+    if existing is not None:
+        # N-034 (owner decision 2026-10-10). Nobody ever proved this address, and
+        # the token FlowPilot's relay delivered to it does: the invitee takes the
+        # account over. A new password, the address verified, and every session
+        # of whoever registered it ended.
+        from app.models.user_session import SessionRevokedReason
+        from app.services import session_service
+
+        existing.hashed_password = security.get_password_hash(password)
+        existing.email_verified_at = datetime.now(UTC)
+        existing.is_active = True
+        session_service.revoke_all_user_sessions(
+            db, user=existing, reason=SessionRevokedReason.PASSWORD_CHANGE
+        )
+        user = existing
+        logger.warning(
+            "INVITATION_SIGNUP_TOOK_OVER_UNVERIFIED | user=%s | invitation=%s",
+            existing.id, invitation.id,
+        )
+    else:
+        user = User(
+            email=email,
+            hashed_password=security.get_password_hash(password),
+            is_active=True,
+            email_verified_at=datetime.now(UTC),
+        )
+    db.add(user)
+    try:
+        try:
+            db.flush()
+        except sa.exc.IntegrityError as exc:
+            # The same link submitted twice at once: the other request created the
+            # account first (users.email is unique).
+            raise InvitationAccountExistsError(
+                f"An account already exists for {email}. Sign in to accept the invitation."
+            ) from exc
+        accepted = accept_invitation(db, token=token, actor=user, request=request)
+    except Exception:
+        # accept_invitation rolls back what it started; a refusal before that
+        # (no free seat) must not leave the new account behind either.
+        db.rollback()
+        raise
+    logger.info("INVITATION_SIGNUP | user=%s | invitation=%s", user.id, accepted.invitation_id)
+    return user, accepted
 
 
 # ===========================================================================
@@ -681,7 +844,7 @@ def reject_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to reject invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 
@@ -751,7 +914,7 @@ def revoke_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to revoke invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 
@@ -795,6 +958,7 @@ def resend_invitation(
             f"{organization.name} has no seats available. Free a seat before "
             f"resending this invitation."
         ),
+        already_reserved=True,
     )
 
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
@@ -843,7 +1007,7 @@ def resend_invitation(
     except Exception as exc:
         rollback_and_log_error(
             db, logger, "Failed to resend invitation %s: %s",
-            invitation.id, str(exc), exc=exc,
+            identity_of(invitation), str(exc), exc=exc,
         )
 
 

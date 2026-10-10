@@ -183,6 +183,8 @@ export interface WorkspaceInvitation {
   inviter_id: string;
   email: string;
   role: WorkspaceRole;
+  /** The organization role the invitation grants (what the pending lists show). */
+  organization_role?: OrganizationRole;
   status: InvitationStatus;
   expires_at: string;
   accepted_at: string | null;
@@ -192,13 +194,31 @@ export interface WorkspaceInvitation {
   updated_at: string;
 }
 
+/**
+ * The public preview of an invitation (POST /invitations/preview).
+ * Mirrors OrganizationInvitationPreviewResponse in app/schemas/organization_invitation.py.
+ * F-222: this described a single workspace and role the server never sent;
+ * `has_account` says whether the invited address can sign in already.
+ */
 export interface WorkspaceInvitationPreview {
   organization_name: string;
-  workspace_name: string;
   inviter_email: string;
   invited_email: string;
-  role: WorkspaceRole;
+  organization_role: OrganizationRole;
+  workspaces: { name: string; role: WorkspaceRole }[];
   expires_at: string;
+  /** Null when the invitation went through the organization's own mail server (F-226). */
+  has_account: boolean | null;
+  /** N-035. The organization requires single sign-on: the invitee joins through it, never with a password. */
+  sso_required: boolean;
+}
+
+/** POST /auth/register/invitation: the new account's session, and where the invitation leads. */
+export interface InvitationSignupResponse {
+  access_token: string;
+  token_type: string;
+  organization_slug: string;
+  workspace_slug: string | null;
 }
 
 /**

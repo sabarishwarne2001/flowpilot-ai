@@ -17,14 +17,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
-from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
 from app.templates.emails.common import (
     GrantLine,
     esc,
     esc_attr,
     format_timestamp,
     render_grant_lines_text,
-    render_grant_table,
     single_line,
 )
 
@@ -75,6 +73,8 @@ def render_organization_invitation(
     display = inviter_display if inviter_display is not None else inviter_email
     subject = single_line(f"You have been invited to join {organization_name}")
     expiry_str = format_timestamp(expires_at)
+    expires_in = _time_left(expires_at)
+    role_label = _label(organization_role_display)
 
     # ---- plain text -----------------------------------------------------
     if grants:
@@ -93,66 +93,183 @@ def render_organization_invitation(
         f"Hello,\n\n"
         f"{display} has invited you to join {organization_name} on "
         f"{brand_name}.\n\n"
-        f"Your role in the organization will be "
-        f"{organization_role_display}.\n\n"
+        f"Organization: {organization_name}\n"
+        f"Your role: {role_label}\n\n"
         f"{grants_text}"
-        f"Open the link below to accept:\n"
+        f"Accept the invitation:\n"
         f"{accept_link}\n\n"
-        f"This invitation was sent to {invited_email}. Sign in with that "
-        f"address to accept it -- signing in with a different address will "
-        f"not work.\n\n"
-        f"This link expires on {expiry_str}.\n\n"
-        f"If you were not expecting this, ignore this email. Nothing happens "
-        f"until the link is used."
+        f"This invitation was sent to {invited_email}. New to {brand_name}? "
+        f"The link lets you create your account in one step. Already have an "
+        f"account? Sign in with that address to accept it -- signing in with a "
+        f"different address will not work.\n\n"
+        f"This link expires on {expiry_str} ({expires_in}).\n\n"
+        f"The link is personal to {invited_email}: do not forward this "
+        f"email. If you were not expecting it, ignore it. Nothing happens "
+        f"until the link is used.\n\n"
+        f"Questions about this invitation? Reply to this email to reach "
+        f"{display}."
     )
 
     # ---- html -----------------------------------------------------------
     safe_link = esc_attr(accept_link)
 
     if grants:
-        grants_html = (
-            "<p>This invitation also gives you access to these workspaces:</p>"
-            f"{render_grant_table(grants)}"
+        rows = "".join(
+            f"""<tr>
+                <td class="fp-strong fp-rule" style="padding:8px 0;border-top:1px solid #e5e7eb;font-size:14px;line-height:20px;color:#111827;">{esc(grant.workspace_name)}</td>
+                <td class="fp-rule" align="right" style="padding:8px 0;border-top:1px solid #e5e7eb;">{_badge(grant.role_display)}</td>
+              </tr>"""
+            for grant in grants
         )
+        workspaces_html = f"""<p style="margin:0 0 4px 0;font-size:12px;line-height:18px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Workspaces</p>
+              <p class="fp-text" style="margin:0 0 4px 0;font-size:13px;line-height:20px;color:#4b5563;">This invitation also gives you access to these workspaces:</p>
+              <table role="presentation" class="grants" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                {rows}
+              </table>"""
     else:
-        grants_html = (
-            "<p>This invitation does not include access to any workspaces. An "
-            "administrator can add you to workspaces at any time after you "
-            "join.</p>"
-        )
+        workspaces_html = """<p class="fp-text" style="margin:0;font-size:13px;line-height:20px;color:#4b5563;">This invitation does not include access to any workspaces. An
+                administrator can add you to workspaces at any time after you join.</p>"""
 
-    content_html = f"""<p>Hello,</p>
-            <p><strong>{esc(display)}</strong> has invited you to join
-               <strong>{esc(organization_name)}</strong> on {esc(brand_name)}.</p>
-            <p>Your role in the organization will be
-               <strong>{esc(organization_role_display)}</strong>.</p>
-            {grants_html}
-            <div class="button-container">
-                <a href="{safe_link}" class="button">Accept Invitation</a>
-            </div>
-            <p>If the button does not work, copy this URL into your browser:</p>
-            <p><a href="{safe_link}">{esc(accept_link)}</a></p>
-            <p>This invitation was sent to <strong>{esc(invited_email)}</strong>.
-               Sign in with that address to accept it &mdash; signing in with a
-               different address will not work.</p>
-            <p>This link expires on <strong>{esc(expiry_str)}</strong>.</p>"""
+    html_body = f"""<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>{esc(subject)}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+  <style>
+    body, table, td, a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
+    table, td {{ mso-table-lspace:0pt; mso-table-rspace:0pt; }}
+    a[x-apple-data-detectors] {{ color:inherit !important; text-decoration:none !important; }}
+    @media screen and (max-width: 620px) {{
+      .fp-shell {{ width:100% !important; }}
+      .fp-pad {{ padding-left:20px !important; padding-right:20px !important; }}
+      .fp-button a {{ width:100% !important; }}
+    }}
+    @media (prefers-color-scheme: dark) {{
+      .fp-page {{ background-color:#0b1120 !important; }}
+      .fp-panel {{ background-color:#111827 !important; border-color:#1f2937 !important; }}
+      .fp-card {{ background-color:#0f172a !important; border-color:#1f2937 !important; }}
+      .fp-strong {{ color:#f9fafb !important; }}
+      .fp-text {{ color:#d1d5db !important; }}
+      .fp-rule {{ border-color:#1f2937 !important; }}
+    }}
+  </style>
+</head>
+<body class="fp-page" style="margin:0;padding:0;background-color:#f3f4f6;">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f3f4f6;">{esc(display)} invited you to join {esc(organization_name)} on {esc(brand_name)}. The invitation expires {esc(expires_in)}.</div>
+  <table role="presentation" class="fp-page" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 12px;">
+        <!--[if mso]><table role="presentation" width="600" border="0" cellspacing="0" cellpadding="0" align="center"><tr><td><![endif]-->
+        <table role="presentation" class="fp-shell" width="600" border="0" cellspacing="0" cellpadding="0" style="width:600px;max-width:600px;">
+          <tr>
+            <td class="fp-pad" style="padding:0 32px 20px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td width="32" height="32" align="center" bgcolor="#2563eb" style="width:32px;height:32px;border-radius:8px;background-color:#2563eb;color:#ffffff;font-size:16px;font-weight:700;line-height:32px;">F</td>
+                  <td class="fp-strong" style="padding-left:10px;font-size:18px;font-weight:700;line-height:32px;color:#111827;">{esc(brand_name)}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="fp-panel fp-pad" style="padding:36px 32px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <h1 class="fp-strong" style="margin:0 0 12px 0;font-size:24px;line-height:32px;font-weight:700;color:#111827;">You're invited to join {esc(organization_name)}</h1>
+              <p class="fp-text" style="margin:0 0 24px 0;font-size:15px;line-height:24px;color:#374151;">Hello, <strong>{esc(display)}</strong> has invited you to join <strong>{esc(organization_name)}</strong> on {esc(brand_name)}.</p>
 
-    footer_text = (
-        f"This invitation was sent by {brand_name} on behalf of "
-        f"{organization_name}. If you were not expecting it you can ignore "
-        f"it -- nothing happens until the link is used."
-    )
+              <table role="presentation" class="fp-card" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                <tr>
+                  <td style="padding:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="padding:0 0 4px 0;font-size:12px;line-height:18px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Organization</td>
+                        <td align="right" style="padding:0 0 4px 0;font-size:12px;line-height:18px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Your role</td>
+                      </tr>
+                      <tr>
+                        <td class="fp-strong" style="padding:0 0 16px 0;font-size:16px;line-height:24px;font-weight:700;color:#111827;">{esc(organization_name)}</td>
+                        <td align="right" style="padding:0 0 16px 0;">{_badge(organization_role_display)}</td>
+                      </tr>
+                    </table>
+                    {workspaces_html}
+                  </td>
+                </tr>
+              </table>
 
-    html_body = BASE_EMAIL_HTML_LAYOUT.format(
-        title=esc(subject),
-        # ARCH-05 Step 8 (§0.b, extended). BASE_EMAIL_HTML_LAYOUT interpolates
-        # brand_name into <span class="logo">{brand_name}</span> and footer_text
-        # into <p>{footer_text}</p> — both raw HTML contexts, neither escaped by
-        # the layout. content_html is the ONLY slot that legitimately carries
-        # markup; every other slot is escaped here.
-        brand_name=esc(brand_name),
-        content_html=content_html,
-        footer_text=esc(footer_text),
-    )
+              <table role="presentation" class="fp-button" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin:28px 0 8px 0;">
+                <tr>
+                  <td align="center">
+                    <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{safe_link}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="17%" stroke="f" fillcolor="#2563eb">
+                      <w:anchorlock/>
+                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Accept Invitation</center>
+                    </v:roundrect>
+                    <![endif]-->
+                    <!--[if !mso]><!-->
+                    <a href="{safe_link}" style="display:inline-block;width:260px;background-color:#2563eb;border-radius:8px;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;line-height:48px;text-align:center;text-decoration:none;-webkit-text-size-adjust:none;">Accept Invitation</a>
+                    <!--<![endif]-->
+                  </td>
+                </tr>
+              </table>
+
+              <p class="fp-text" style="margin:16px 0 4px 0;font-size:13px;line-height:20px;color:#6b7280;">Button not working? Copy this link into your browser:</p>
+              <p style="margin:0 0 24px 0;font-size:13px;line-height:20px;word-break:break-all;"><a href="{safe_link}" style="color:#2563eb;text-decoration:underline;">{esc(accept_link)}</a></p>
+
+              <p class="fp-text" style="margin:0;font-size:14px;line-height:22px;color:#374151;">This invitation was sent to <strong>{esc(invited_email)}</strong>. New to {esc(brand_name)}? The link lets you create your account in one step. Already have an account? Sign in with that address to accept it &mdash; signing in with a different address will not work.</p>
+            </td>
+          </tr>
+          <tr>
+            <td class="fp-pad" style="padding:20px 32px 0 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <table role="presentation" class="fp-rule" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top:1px solid #e5e7eb;">
+                <tr>
+                  <td class="fp-text" style="padding-top:16px;font-size:12px;line-height:19px;color:#6b7280;">
+                    <p style="margin:0 0 8px 0;"><strong>Security:</strong> this link expires on <strong>{esc(expiry_str)}</strong> ({esc(expires_in)}). It is personal to {esc(invited_email)}, so please do not forward this email. If you were not expecting it, ignore it: nothing happens until the link is used.</p>
+                    <p style="margin:0 0 8px 0;"><strong>Questions?</strong> Reply to this email to reach {esc(display)}, who sent the invitation.</p>
+                    <p style="margin:0;">Sent by {esc(brand_name)} on behalf of {esc(organization_name)}.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
 
     return subject, html_body, text_body
+
+
+def _label(value: str) -> str:
+    """ADMIN -> Admin, for a badge."""
+    text = (value or "").replace("_", " ").strip()
+    return text[:1].upper() + text[1:].lower()
+
+
+def _badge(value: str) -> str:
+    """A role as a small pill. Outlook drops the rounding and keeps the colour."""
+    return (
+        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
+        "background-color:#eef2ff;color:#3730a3;font-size:12px;line-height:20px;"
+        f'font-weight:600;white-space:nowrap;">{esc(_label(value))}</span>'
+    )
+
+
+def _time_left(expires_at: datetime) -> str:
+    """How long the link stays valid, from now, in plain words ("in 3 days")."""
+    hours = max(0, round((expires_at - datetime.now(expires_at.tzinfo)).total_seconds() / 3600))
+    if hours >= 48:
+        days = round(hours / 24)
+        return f"in {days} days"
+    if hours >= 1:
+        return f"in {hours} hour{'s' if hours != 1 else ''}"
+    return "within the hour"

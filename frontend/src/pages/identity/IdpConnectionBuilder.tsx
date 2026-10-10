@@ -452,8 +452,10 @@ const ConnectionForm: React.FC<ConnectionFormProps> = ({
 
       {create.isError && (
         <p role="alert" className="text-sm text-destructive">
-          The connection couldn&apos;t be created. Check the metadata URL or
-          issuer.
+          {errorMessage(
+            create.error,
+            "The connection couldn't be created. Check the metadata URL or issuer.",
+          )}
         </p>
       )}
 

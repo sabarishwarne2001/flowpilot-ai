@@ -43,6 +43,7 @@ from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -50,6 +51,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    false as sa_false,
     text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
@@ -242,6 +244,17 @@ class OrganizationInvitation(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=1,
         doc="Counts send attempts. Starts at 1.",
+    )
+    delivered_off_platform: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa_false(),
+        doc=(
+            "F-226. The current token was sent through a mail server FlowPilot does not run "
+            "(the organization's own SMTP), whose operator can read it, so it proves nothing "
+            "about who reads the invited mailbox."
+        ),
     )
 
     # ------------------------------------------------------------------

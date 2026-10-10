@@ -74,8 +74,10 @@ export const StatTile: React.FC<{
         </span>
       ) : null}
     </div>
-    <p className="fp-num mt-2 text-2xl font-semibold leading-none tracking-tight text-foreground">{value}</p>
-    {hint ? <p className="mt-2 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
+    {/* F-210: a <div>, not a <p>: the value and the hint take any node, and the batch
+        progress tile passes a bar (a <div>), which a <p> may not contain. */}
+    <div className="fp-num mt-2 text-2xl font-semibold leading-none tracking-tight text-foreground">{value}</div>
+    {hint ? <div className="mt-2 text-xs leading-snug text-muted-foreground">{hint}</div> : null}
   </div>
 );
 

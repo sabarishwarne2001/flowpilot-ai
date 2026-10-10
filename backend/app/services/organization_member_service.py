@@ -25,8 +25,9 @@ from app.core.organization_permissions import (
     can_modify_member_role,
     can_transfer_ownership,
 )
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import api_key as api_key_crud
+from app.crud import organization_invitation as invitation_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import DIRECTORY_STATUSES
@@ -95,6 +96,7 @@ def change_member_role(
     context = audit_service.context_from_request(request)
 
     if actor_membership.id == target_membership.id:
+        db.rollback()  # F-212: never leave the organization lock to the request's end
         raise OrganizationMemberError(
             "You cannot change your own role. Ask another owner, or use "
             "ownership transfer."
@@ -120,11 +122,17 @@ def change_member_role(
             },
             **context,
         )
+        db.rollback()
         raise OrganizationPermissionDeniedError(
             "You do not have permission to assign this role."
         )
 
     if target_membership.role is new_role:
+        # F-212. Nothing to change, but the organization row is locked: end the
+        # transaction now. Returning with it open held the lock until the
+        # request's session closed after the response, which is how a double
+        # click on "Change role" froze the API.
+        db.rollback()
         return target_membership
 
     if (
@@ -179,8 +187,8 @@ def change_member_role(
             db,
             logger,
             "Failed to change role for member %s in organization %s: %s",
-            target_membership.id,
-            organization.id,
+            identity_of(target_membership),
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -245,6 +253,37 @@ def deactivate_member(
                 details={"reason": "OFFBOARDED", "key_name": key.name},
             )
 
+        # F-216. An invitation still pending for this address (sent before the
+        # removal) would let the person straight back in; withdraw it.
+        target_email = target_membership.user.email if target_membership.user else None
+        withdrawn_invitations = (
+            invitation_crud.revoke_pending_invitations_for_email(
+                db,
+                organization_id=organization.id,
+                email=target_email,
+                revoked_by_id=actor_membership.user_id,
+                now=datetime.now(UTC),
+            )
+            if target_email
+            else []
+        )
+
+        for invitation_id in withdrawn_invitations:
+            audit_service.record(
+                db,
+                organization_id=organization.id,
+                actor_id=actor.id if actor else None,
+                resource_type=AuditResourceType.INVITATION,
+                resource_id=invitation_id,
+                action=AuditAction.REVOKED,
+                details={
+                    **audit_service.actor_snapshot(actor),
+                    "reason": "MEMBER_REMOVED",
+                    "recipient_email": target_email,
+                },
+                **context,
+            )
+
         deactivated = organization_members_crud.deactivate_organization_member(
             db,
             membership=target_membership,
@@ -267,6 +306,7 @@ def deactivate_member(
                 "role_at_deactivation": target_membership.role.value,
                 "workspace_grants_revoked": revoked_grants,
                 "api_keys_revoked": len(revoked_keys),
+                "pending_invitations_withdrawn": len(withdrawn_invitations),
             },
             **context,
         )
@@ -291,8 +331,8 @@ def deactivate_member(
             db,
             logger,
             "Failed to deactivate member %s in organization %s: %s",
-            target_membership.id,
-            organization.id,
+            identity_of(target_membership),
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -365,7 +405,7 @@ def transfer_ownership(
             db,
             logger,
             "Failed to transfer ownership of organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )

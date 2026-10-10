@@ -2,6 +2,7 @@
 Automation Rules API router endpoints for FlowPilot AI.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -118,7 +119,7 @@ def _view(db: Session, rule: AutomationRule) -> dict[str, Any]:
         "this and holds no trigger or action list of its own."
     ),
 )
-async def get_catalog(
+def get_catalog(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> dict[str, Any]:
@@ -132,7 +133,7 @@ async def get_catalog(
     response_model=list[AutomationNodeRunResponse],
     summary="Node runs of one execution",
 )
-async def list_execution_nodes(
+def list_execution_nodes(
     execution_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -282,7 +283,7 @@ def _execution_view(
         "SUPPRESSED_DEPTH refusals that never appear in /logs."
     ),
 )
-async def list_executions(
+def list_executions(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
     correlation_id: Optional[uuid.UUID] = Query(
@@ -358,7 +359,7 @@ async def list_executions(
     summary="Get one Automation Execution",
     response_description="A single execution including its suppression detail.",
 )
-async def get_execution(
+def get_execution(
     execution_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
@@ -386,7 +387,7 @@ async def get_execution(
     summary="Create a new Automation Rule",
     response_description="The registered Automation Rule with generated UUID."
 )
-async def create_rule(
+def create_rule(
     rule_in: AutomationRuleCreate,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
@@ -434,7 +435,7 @@ async def create_rule(
     summary="List all Automation Rules",
     response_description="A paginated list of active and inactive Automation Rules."
 )
-async def list_rules(
+def list_rules(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
     skip: int = Query(0, ge=0, description="The number of rules to skip for pagination."),
@@ -502,7 +503,7 @@ def _action_summary(execution: AutomationExecution) -> str:
     summary="List Automation Execution Logs",
     response_description="Execution history for all automation rules.",
 )
-async def list_rule_logs(
+def list_rule_logs(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
     skip: int = Query(default=0, ge=0),
@@ -568,7 +569,7 @@ async def list_rule_logs(
     summary="Get an Automation Rule by ID",
     response_description="The details of the requested Automation Rule."
 )
-async def get_rule(
+def get_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor)
@@ -588,7 +589,7 @@ async def get_rule(
     summary="Update an Automation Rule",
     response_description="The updated Automation Rule."
 )
-async def update_rule(
+def update_rule(
     rule_id: uuid.UUID,
     rule_in: AutomationRuleUpdate,
     db: Session = Depends(deps.get_db),
@@ -665,7 +666,7 @@ async def update_rule(
     summary="Delete an Automation Rule",
     response_description="Empty response indicating successful deletion."
 )
-async def delete_rule(
+def delete_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin)
@@ -691,7 +692,7 @@ async def delete_rule(
     summary="Test an Automation Rule against a Work Item",
     response_description="Detailed results of the test match evaluation."
 )
-async def test_rule(
+def test_rule(
     rule_id: uuid.UUID,
     payload: AutomationRuleTestRequest,
     db: Session = Depends(deps.get_db),
@@ -716,7 +717,11 @@ async def test_rule(
             detail="Work item not found or you do not have permission to access it."
         )
 
-    result = await automation_service.test_rule_for_work_item(
-        db, rule=rule, work_item=work_item
+    # F-218. A plain `def`, so the lookups, the dry run and the email settings
+    # (all blocking database work) run in the threadpool, not on the event loop.
+    # The test itself is a coroutine (it may send a labelled test email, through
+    # a provider that already sends from a thread); it runs to completion on
+    # this worker thread's own loop.
+    return asyncio.run(
+        automation_service.test_rule_for_work_item(db, rule=rule, work_item=work_item)
     )
-    return result

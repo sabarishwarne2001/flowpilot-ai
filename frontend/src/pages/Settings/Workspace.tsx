@@ -39,6 +39,7 @@ import {
   canAssignWorkspaceRole,
   canManageWorkspaceMembers,
   canManageWorkspaceSettings,
+  canModifyWorkspaceMember,
 } from "@/permissions/workspacePermissions";
 import { canManageMembers } from "@/permissions/organizationPermissions";
 import type { OrganizationRole } from "@/types/tenancy";
@@ -47,6 +48,7 @@ import { ROUTES } from "@/constants/routes";
 import GrantWorkspaceAccessModal from "@/components/workspace/GrantWorkspaceAccessModal";
 
 import type {
+  WorkspaceInvitation,
   WorkspaceInvitationCreateRequest,
   WorkspaceMember,
   WorkspaceRole,
@@ -440,9 +442,112 @@ export const Workspace: React.FC = () => {
   }, [organizationRole, workspaceRole]);
 
   const members = memberList?.items ?? [];
-  const invitations = Array.isArray(pendingInvitations)
-    ? pendingInvitations
-    : (pendingInvitations as any)?.items ?? [];
+  const ownMembership = members.find((mem) => mem.user.id === user.id);
+  // F-216. Only invitations still waiting for an answer; an accepted or revoked one
+  // is history (the server is asked for PENDING; this guards a stale cache).
+  const invitations = (
+    Array.isArray(pendingInvitations)
+      ? pendingInvitations
+      : (pendingInvitations as { items?: WorkspaceInvitation[] } | undefined)?.items ?? []
+  ).filter((invitation: WorkspaceInvitation) => invitation.status === "PENDING");
+
+  /**
+   * F-219. The Actions cell of one team row, for someone who manages the team.
+   *
+   * Every row says something: the role control and Remove for a member whose
+   * workspace grant this admin may change, and a muted badge for everyone else
+   * (themself, the organization's owners and admins, whose access comes from
+   * their organization role, and an admin only the organization may change).
+   * A derived member has no workspace grant to patch or revoke.
+   */
+  const memberActions = (mem: WorkspaceMember, isSelf: boolean): React.ReactNode => {
+    const badges: string[] = [];
+    if (mem.is_derived && mem.organization_role === "OWNER") {
+      badges.push("Owner");
+    } else if (mem.is_derived && mem.organization_role === "ADMIN") {
+      badges.push("Org admin");
+    }
+    if (isSelf) {
+      badges.push("You");
+    }
+
+    const editable =
+      !isSelf &&
+      !mem.is_derived &&
+      Boolean(mem.id) &&
+      canModifyWorkspaceMember(organizationRole, workspaceRole, mem.role);
+    if (!editable && !isSelf && !mem.is_derived) {
+      badges.push("Org admins only");
+    }
+
+    const badge =
+      badges.length > 0 ? (
+        <span
+          className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground"
+          title={
+            mem.is_derived
+              ? "Access through their organization role. Change it in organization settings."
+              : undefined
+          }
+        >
+          {badges.join(" · ")}
+        </span>
+      ) : null;
+
+    if (!editable) {
+      return (
+        <>
+          {badge}
+          {isSelf && !mem.is_derived && (
+            <button
+              type="button"
+              onClick={() => setMemberToRemove(mem)}
+              className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
+            >
+              Leave workspace
+            </button>
+          )}
+        </>
+      );
+    }
+
+    // The member's current role is always offered (a select without it would
+    // render blank); otherwise only roles this admin may grant, which is the
+    // same rule the server enforces. Fixed order: Admin, Contributor, Viewer.
+    const roleChoices = (["ADMIN", "CONTRIBUTOR", "VIEWER"] as WorkspaceRole[]).filter(
+      (role) => role === mem.role || assignableRoles.includes(role),
+    );
+    return (
+      <>
+        <select
+          value={mem.role}
+          disabled={isChangingRole}
+          onChange={(event) =>
+            changeRole({
+              membershipId: mem.id as string,
+              role: event.target.value as WorkspaceRole,
+            })
+          }
+          className="rounded-lg border border-border bg-background px-2 py-1 text-xs font-semibold text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+          aria-label={`Workspace role for ${mem.user.email}`}
+        >
+          {roleChoices.map((role) => (
+            <option key={role} value={role}>
+              {role.charAt(0) + role.slice(1).toLowerCase()}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setMemberToRemove(mem)}
+          aria-label={`Remove ${mem.user.email} from this workspace`}
+          className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
+        >
+          Remove
+        </button>
+      </>
+    );
+  };
 
   const isPageLoading =
     isLoadingWorkspace || isLoadingMembers || isLoadingInvitations;
@@ -697,7 +802,9 @@ export const Workspace: React.FC = () => {
       <div className="fp-card p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold">Team members</h2>
+            <h2 id="workspace-team-heading" className="text-xl font-semibold">
+              Team members
+            </h2>
             <p className="text-sm text-muted-foreground">
               Who can open this workspace, and what they can do with its documents.
             </p>
@@ -716,13 +823,20 @@ export const Workspace: React.FC = () => {
         <RoleGuide scope="workspace" />
 
         <div className="overflow-x-auto mt-4">
-          <table className="w-full text-left text-sm border-collapse border-b border-border">
+          <table
+            aria-labelledby="workspace-team-heading"
+            className="w-full text-left text-sm border-collapse border-b border-border"
+          >
             <thead>
               <tr className="border-b border-border bg-muted/20 text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="py-2.5 px-4 font-semibold">Email</th>
-                <th className="py-2.5 px-4 font-semibold">Role</th>
-                <th className="py-2.5 px-4 font-semibold">Status</th>
-                <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
+                <th scope="col" className="py-2.5 px-4 font-semibold">Email</th>
+                <th scope="col" className="py-2.5 px-4 font-semibold">Role</th>
+                <th scope="col" className="py-2.5 px-4 font-semibold">Status</th>
+                {canManageTeam && (
+                  <th scope="col" className="py-2.5 px-4 font-semibold text-right">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -739,54 +853,11 @@ export const Workspace: React.FC = () => {
                       {mem.user.email} {isSelf && "(You)"}
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">
-                      {/*
-                        Editable only for a real membership row the actor may
-                        assign. A derived member has no row to patch, and
-                        assignableRoles is already filtered by
-                        canAssignWorkspaceRole -- the same predicate the server
-                        enforces -- so the dropdown cannot offer a role the
-                        request would be refused for.
-                      */}
-                      {canManageTeam && !mem.is_derived && mem.id ? (
-                        <select
-                          value={mem.role}
-                          disabled={isChangingRole}
-                          onChange={(event) =>
-                            changeRole({
-                              membershipId: mem.id as string,
-                              role: event.target.value as WorkspaceRole,
-                            })
-                          }
-                          className="rounded-lg border border-border bg-background px-2 py-1 text-xs font-semibold uppercase text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
-                          aria-label={`Workspace role for ${mem.user.email}`}
-                        >
-                          {/*
-                            The member's CURRENT role is always present, even
-                            when it is outside assignableRoles. Omitting it
-                            would make the select render blank for anyone
-                            holding a role this actor cannot grant, which reads
-                            as data loss.
-                          */}
-                          {Array.from(
-                            new Set<WorkspaceRole>([
-                              mem.role as WorkspaceRole,
-                              ...assignableRoles,
-                            ]),
-                          ).map((role) => (
-                            <option key={role} value={role}>
-                              {role.charAt(0) + role.slice(1).toLowerCase()}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <>
-                          {mem.role}
-                          {mem.is_derived && (
-                            <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground/70">
-                              via {mem.organization_role?.toLowerCase()} role
-                            </span>
-                          )}
-                        </>
+                      {mem.role}
+                      {mem.is_derived && (
+                        <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground/70">
+                          via {mem.organization_role?.toLowerCase()} role
+                        </span>
                       )}
                     </td>
                     <td className="py-3.5 px-4">
@@ -800,23 +871,39 @@ export const Workspace: React.FC = () => {
                         {isActive ? "Active" : mem.status.toLowerCase()}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      {!mem.is_derived && (canManageTeam || isSelf) && (
-                        <button
-                          type="button"
-                          onClick={() => setMemberToRemove(mem)}
-                          className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
-                        >
-                          {isSelf ? "Leave workspace" : "Remove member"}
-                        </button>
-                      )}
-                    </td>
+                    {canManageTeam && (
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {memberActions(mem, isSelf)}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+
+        {/*
+          Someone who cannot manage the team has no Actions column; leaving is
+          the one thing they can do here, and only from a workspace grant of
+          their own (access through an organization role is changed there).
+        */}
+        {!canManageTeam && ownMembership && !ownMembership.is_derived && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              You are a {ownMembership.role.toLowerCase()} in this workspace.
+            </p>
+            <button
+              type="button"
+              onClick={() => setMemberToRemove(ownMembership)}
+              className="rounded-lg border border-transparent text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition"
+            >
+              Leave workspace
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="fp-card p-6 shadow-sm space-y-6">
@@ -893,11 +980,11 @@ export const Workspace: React.FC = () => {
                     <th className="py-2.5 px-4 font-semibold">Email</th>
                     <th className="py-2.5 px-4 font-semibold">Role</th>
                     <th className="py-2.5 px-4 font-semibold">Expires</th>
-                    {canManageTeam && <th className="py-2.5 px-4 font-semibold text-right">Actions</th>}
+                    <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invitations.map((inv: any) => {
+                  {invitations.map((inv: WorkspaceInvitation) => {
                     const expired = new Date(inv.expires_at) <= new Date();
 
                     return (
@@ -907,27 +994,29 @@ export const Workspace: React.FC = () => {
                         <td className="py-3.5 px-4 text-muted-foreground text-xs">
                           {formatTimestamp(inv.expires_at)}
                           {expired && (
-                            <span className="ml-2 font-semibold text-destructive">Expired</span>
+                            <span className="ml-2 font-semibold text-destructive">Expired; resend to renew it</span>
                           )}
                         </td>
-                        {canManageTeam && (
-                          <td className="py-3.5 px-4 text-right space-x-2">
-                            <button
-                              type="button"
-                              onClick={() => resendInviteMutation(inv.id)}
-                              className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium hover:bg-muted/50 transition"
-                            >
-                              Resend
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => revokeInviteMutation(inv.id)}
-                              className="rounded-lg border border-transparent text-destructive px-3 py-1 text-xs font-medium hover:bg-destructive/10 transition"
-                            >
-                              Revoke
-                            </button>
-                          </td>
-                        )}
+                        {/* The section is only shown to people who manage invitations
+                            (organization owners and admins), so the actions always apply. */}
+                        <td className="py-3.5 px-4 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => resendInviteMutation(inv.id)}
+                            aria-label={`Resend the invitation to ${inv.email}`}
+                            className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium hover:bg-muted/50 transition"
+                          >
+                            Resend
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => revokeInviteMutation(inv.id)}
+                            aria-label={`Revoke the invitation to ${inv.email}`}
+                            className="rounded-lg border border-transparent text-destructive px-3 py-1 text-xs font-medium hover:bg-destructive/10 transition"
+                          >
+                            Revoke
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

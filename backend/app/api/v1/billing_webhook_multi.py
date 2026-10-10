@@ -54,6 +54,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_db
 from app.services.billing import inbound_service
@@ -143,12 +144,22 @@ async def receive_gateway_webhook(
         )
         return Response(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
 
+    # F-218. Verifying and persisting block (the INSERT can wait on a row lock),
+    # so steps 3 to 5 run in the threadpool, not on the event loop.
+    return await run_in_threadpool(
+        _verify_and_persist, db, resolved, payload, dict(request.headers)
+    )
+
+
+def _verify_and_persist(
+    db: Session, resolved: str, payload: bytes, headers: dict[str, str]
+) -> Response:
     # -- 3. Verify -------------------------------------------------------
     try:
         adapter = get_payment_gateway(resolved)
         event = adapter.verify_webhook_signature(
             payload=payload,
-            headers=dict(request.headers),
+            headers=headers,
         )
     except GatewaySignatureError:
         # Deliberately no detail, in the log or the response. Distinguishing a
@@ -194,7 +205,7 @@ async def receive_gateway_webhook(
         inbound_service.persist_gateway_event(
             db,
             event=event,
-            signature_header=request.headers.get("webhook-signature", ""),
+            signature_header=headers.get("webhook-signature", ""),
         )
         db.commit()
     except Exception:  # noqa: BLE001

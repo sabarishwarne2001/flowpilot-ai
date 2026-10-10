@@ -71,7 +71,7 @@ def _serialize_grant(membership) -> WorkspaceMemberResponse:
     response_model=WorkspaceResponse,
     summary="Get Workspace",
 )
-async def get_workspace(context: deps.WorkspaceCtx) -> Any:
+def get_workspace(context: deps.WorkspaceCtx) -> Any:
     """
     Returns the addressed workspace.
     """
@@ -83,7 +83,7 @@ async def get_workspace(context: deps.WorkspaceCtx) -> Any:
     response_model=WorkspaceResponse,
     summary="Update Workspace Settings",
 )
-async def update_workspace(
+def update_workspace(
     payload: WorkspaceUpdate,
     db: deps.DbSession,
     context=Depends(deps.RequireWorkspaceAdmin),
@@ -110,7 +110,7 @@ async def update_workspace(
     response_model=WorkspaceResponse,
     summary="Remove Workspace Logo",
 )
-async def remove_workspace_logo(
+def remove_workspace_logo(
     db: deps.DbSession,
     context=Depends(deps.RequireWorkspaceAdmin),
 ) -> Any:
@@ -130,7 +130,7 @@ async def remove_workspace_logo(
     response_model=WorkspaceSlugAvailabilityResponse,
     summary="Check Workspace Slug Availability",
 )
-async def check_workspace_slug(
+def check_workspace_slug(
     db: deps.DbSession,
     context=Depends(deps.RequireWorkspaceAdmin),
     slug: str = Query(..., description="Candidate workspace identifier."),
@@ -160,7 +160,7 @@ async def check_workspace_slug(
     response_model=WorkspaceResponse,
     summary="Archive Workspace",
 )
-async def archive_workspace(
+def archive_workspace(
     db: deps.DbSession,
     context: deps.WorkspaceCtx,
 ) -> Any:
@@ -180,7 +180,7 @@ async def archive_workspace(
     response_model=WorkspaceResponse,
     summary="Restore Workspace",
 )
-async def restore_workspace(
+def restore_workspace(
     db: deps.DbSession,
     context: deps.TenantContext = Depends(deps.get_archived_workspace_context),
 ) -> Any:
@@ -204,7 +204,7 @@ async def restore_workspace(
     response_model=WorkspaceMemberListResponse,
     summary="List Workspace Members",
 )
-async def list_workspace_members(
+def list_workspace_members(
     db: deps.DbSession,
     context: deps.WorkspaceCtx,
 ) -> Any:
@@ -272,7 +272,7 @@ async def list_workspace_members(
     response_model=WorkspaceMemberResponse,
     summary="Grant Workspace Access",
 )
-async def grant_workspace_access(
+def grant_workspace_access(
     payload: WorkspaceMemberGrant,
     db: deps.DbSession,
     context=Depends(deps.RequireWorkspaceAdmin),
@@ -298,7 +298,7 @@ async def grant_workspace_access(
     response_model=WorkspaceMemberResponse,
     summary="Change Workspace Member Role",
 )
-async def change_workspace_member_role(
+def change_workspace_member_role(
     membership_id: UUID,
     payload: WorkspaceMemberRoleUpdate,
     db: deps.DbSession,
@@ -331,7 +331,7 @@ async def change_workspace_member_role(
     response_model=WorkspaceMemberResponse,
     summary="Revoke Workspace Access",
 )
-async def revoke_workspace_access(
+def revoke_workspace_access(
     membership_id: UUID,
     db: deps.DbSession,
     context=Depends(deps.RequireWorkspaceAdmin),
@@ -362,7 +362,7 @@ async def revoke_workspace_access(
     response_model=MessageResponse,
     summary="Leave Workspace",
 )
-async def leave_workspace(
+def leave_workspace(
     db: deps.DbSession,
     context: deps.WorkspaceCtx,
 ) -> Any:

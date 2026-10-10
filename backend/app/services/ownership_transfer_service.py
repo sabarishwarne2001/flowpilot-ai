@@ -32,7 +32,7 @@ from app.core.exceptions import (
 from app.core.links import build_ownership_transfer_link
 from app.core.organization_permissions import can_transfer_ownership
 from app.core.security import verify_password
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.services import audit_service, organization_notification_service
 from app.crud import ownership_transfer as transfer_crud
 from app.crud import organization_members as organization_members_crud
@@ -264,7 +264,7 @@ def initiate_transfer(
             db,
             logger,
             "Failed to initiate ownership transfer for organization %s: %s",
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -413,7 +413,7 @@ def accept_transfer(
             logger,
             "Failed to accept ownership transfer %s for organization %s: %s",
             transfer_id,
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -501,7 +501,7 @@ def decline_transfer(
             logger,
             "Failed to decline ownership transfer %s for organization %s: %s",
             transfer_id,
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )
@@ -584,7 +584,7 @@ def cancel_transfer(
             logger,
             "Failed to cancel ownership transfer %s for organization %s: %s",
             transfer_id,
-            organization.id,
+            identity_of(organization),
             str(exc),
             exc=exc,
         )

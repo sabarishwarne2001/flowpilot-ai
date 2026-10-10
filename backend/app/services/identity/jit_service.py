@@ -137,6 +137,29 @@ def _find_user_by_email(db, email: str):
     ).first()
 
 
+def _take_over_unverified_account(db, *, config: EnterpriseIdpConfig, user_id, principal) -> None:
+    """N-039 (owner decision 2026-10-10). The identity provider vouches for an address
+    nobody ever verified here: whoever registered it must not keep a way in. The
+    address is verified, the password replaced by an unusable one (the owner signs
+    in through SSO, or sets one with "forgot password"), and every session ends.
+    """
+    unusable = security.get_password_hash("!sso_takeover_" + uuid.uuid4().hex)
+    db.execute(
+        sql_text(f"UPDATE {TBL_USERS} SET email_verified_at = now(), hashed_password = :hp, "
+                 f"sessions_revoked_at = now(), updated_at = now() WHERE id = :uid"),
+        {"hp": unusable, "uid": str(user_id)},
+    )
+    db.execute(
+        sql_text("UPDATE sessions SET revoked_at = now(), revoked_reason = 'PASSWORD_CHANGE' "
+                 "WHERE user_id = :uid AND revoked_at IS NULL"),
+        {"uid": str(user_id)},
+    )
+    write_audit(db, organization_id=config.organization_id, action="UPDATED",
+                resource_type="DIRECTORY_IDENTITY", resource_id=None, principal=principal,
+                details={"reason": "sso_took_over_unverified_account", "user_id": str(user_id)})
+    logger.warning("SSO_TOOK_OVER_UNVERIFIED_ACCOUNT | user=%s | idp=%s", user_id, config.id)
+
+
 def _membership_row(db, *, organization_id, user_id):
     return db.execute(
         sql_text(f"SELECT id, status, role FROM {TBL_ORG_MEMBERS} "
@@ -214,6 +237,8 @@ def provision_or_link(
 
     # 2. Existing user, existing membership
     user_row = _find_user_by_email(db, email)
+    if user_row is not None and user_row[1] is None:
+        _take_over_unverified_account(db, config=config, user_id=user_row[0], principal=principal)
     role = resolve_org_role(db, config=config, attributes=attributes)
 
     if user_row is not None:

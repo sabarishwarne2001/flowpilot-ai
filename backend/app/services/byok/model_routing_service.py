@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.byok_providers import (
@@ -382,8 +383,18 @@ def upsert_route(
             use_tenant_key=bool(use_tenant_key),
             is_enabled=bool(is_enabled),
         )
-        db.add(route)
-        db.flush()
+        # F-214. Two saves at once both found no rule; the second INSERT met
+        # uq_tenant_model_routes_org_task and the PUT answered a 500. An upsert
+        # must not care who was first: on that conflict, update the winner's row.
+        try:
+            with db.begin_nested():
+                db.add(route)
+                db.flush()
+        except IntegrityError:
+            existing = get_route(db, organization_id=organization_id, task_type=task)
+            if existing is None:
+                raise
+    if existing is None:
         logger.info(
             "byok.route_created",
             extra={

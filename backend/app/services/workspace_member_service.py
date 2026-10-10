@@ -22,7 +22,7 @@ from app.core.exceptions import (
     WorkspaceMemberError,
     WorkspacePermissionDeniedError,
 )
-from app.core.transactions import commit_and_refresh, rollback_and_log_error
+from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.core.workspace_permissions import (
     can_assign_workspace_role,
     can_modify_workspace_member,
@@ -189,7 +189,7 @@ def grant_workspace_access(
             db,
             logger,
             "Failed to grant workspace %s access to user %s: %s",
-            workspace.id,
+            identity_of(workspace),
             target_user_id,
             str(exc),
             exc=exc,
@@ -255,7 +255,7 @@ def change_workspace_member_role(
             db,
             logger,
             "Failed to change workspace role for member %s: %s",
-            target_membership.id,
+            identity_of(target_membership),
             str(exc),
             exc=exc,
         )
@@ -311,7 +311,7 @@ def revoke_workspace_access(
             db,
             logger,
             "Failed to revoke workspace access for member %s: %s",
-            target_membership.id,
+            identity_of(target_membership),
             str(exc),
             exc=exc,
         )
@@ -357,7 +357,7 @@ def leave_workspace(
             db,
             logger,
             "Failed to leave workspace %s: %s",
-            workspace.id,
+            identity_of(workspace),
             str(exc),
             exc=exc,
         )

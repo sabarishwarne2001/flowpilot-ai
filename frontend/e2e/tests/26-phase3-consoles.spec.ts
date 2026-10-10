@@ -5,12 +5,11 @@
  */
 import fs from "node:fs";
 
-import type { Browser, BrowserContext, Page } from "@playwright/test";
-
 import { ProblemTracker, attachProblemListeners, test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { api, apiLogin, resolveWorkspaceId, type ApiSession } from "../support/api";
-import { API_BASE, BROWSER_API_ORIGIN, PASSWORD, STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
+import { api, resolveWorkspaceId } from "../support/api";
+import { PASSWORD, STATE_FILE, TENANTS, org, runId, ws } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
+import { openAs, signUpVerified, tokenOf } from "../support/accounts";
 
 interface NoticePage {
   readonly items: readonly { id: string; title: string; is_read: boolean }[];
@@ -432,56 +431,6 @@ test.describe("Session lifetime on the identity console (F-204)", () => {
 // ---------------------------------------------------------------------------------------------
 
 /** The token of an emailed link: in the fragment (#token=…) so it never reaches server logs. */
-function tokenOf(link: string): string | null {
-  const url = new URL(link, "http://x");
-  return new URLSearchParams(url.hash.replace(/^#/, "")).get("token") ?? url.searchParams.get("token");
-}
-
-async function signUpVerified(email: string): Promise<ApiSession> {
-  const since = Date.now() - 1_000;
-  const registered = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password: PASSWORD }),
-  });
-  expect(registered.status, await registered.text()).toBeLessThan(300);
-  const mail = await waitForMail(email, /verify-email/, since);
-  const token = tokenOf(linkFrom(mail, /\/verify-email/));
-  const verified = await fetch(`${API_BASE}/auth/verify-email`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  expect(verified.status, await verified.text()).toBe(200);
-  return apiLogin(email);
-}
-
-async function openAs(browser: Browser, session: ApiSession): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext();
-  await context.addCookies([
-    {
-      name: "flowpilot_refresh",
-      value: session.refreshToken,
-      domain: new URL(BROWSER_API_ORIGIN).hostname,
-      path: "/api/v1/auth",
-      httpOnly: true,
-      secure: false,
-      sameSite: "Lax",
-    },
-  ]);
-  const persisted = JSON.stringify({ state: { user: session.me, isAuthenticated: true }, version: 0 });
-  await context.addInitScript(
-    ({ value }) => {
-      if (!window.sessionStorage.getItem("__e2e_auth_seeded")) {
-        window.localStorage.setItem("flowpilot_auth_session", value);
-        window.sessionStorage.setItem("__e2e_auth_seeded", "1");
-      }
-    },
-    { value: persisted },
-  );
-  return { context, page: await context.newPage() };
-}
-
 test.describe("Ownership transfer, two parties", () => {
   test.setTimeout(240_000);
 

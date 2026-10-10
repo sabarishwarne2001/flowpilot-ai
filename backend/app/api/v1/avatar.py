@@ -61,12 +61,16 @@ def _shares_a_tenant(db, *, viewer: User, target_id: uuid.UUID) -> bool:
     response_model=AvatarResponse,
     summary="Upload or replace your avatar",
 )
-async def upload_avatar(
+def upload_avatar(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
     file: UploadFile = File(...),
 ) -> Any:
-    raw = await file.read()
+    # F-218. A plain `def`: decoding and resizing the image, the storage write and
+    # the commit block, so they run in the threadpool, not on the event loop. One
+    # byte past the limit is enough for set_avatar to refuse an oversized file, so
+    # the read is bounded rather than taking whatever was sent into memory.
+    raw = file.file.read(avatar_service.MAX_AVATAR_BYTES + 1)
 
     try:
         uploaded = avatar_service.set_avatar(
@@ -100,7 +104,7 @@ async def upload_avatar(
     response_class=Response,
     summary="Remove your avatar",
 )
-async def delete_avatar(
+def delete_avatar(
     db: deps.DbSession,
     current_user: deps.CurrentUser,
 ) -> Response:
@@ -118,7 +122,7 @@ async def delete_avatar(
     "/users/{user_id}/avatar",
     summary="Stream a user's avatar",
 )
-async def stream_avatar(
+def stream_avatar(
     user_id: uuid.UUID,
     db: deps.DbSession,
     current_user: deps.CurrentUser,

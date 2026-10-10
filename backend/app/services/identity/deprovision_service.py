@@ -132,6 +132,30 @@ def deprovision_member(
     if membership == 0:
         result.already_deprovisioned = True
 
+    # 1b. F-216. An invitation still pending for this person's address would let
+    # them straight back in after the directory removed them; withdraw it.
+    from app.crud import organization_invitation as invitation_crud
+
+    email = db.execute(
+        sql_text("SELECT email FROM users WHERE id = :uid"), {"uid": str(user_id)}
+    ).scalar()
+    withdrawn = (
+        invitation_crud.revoke_pending_invitations_for_email(
+            db,
+            organization_id=organization_id,
+            email=email,
+            revoked_by_id=getattr(principal, "user_id", None),
+            now=now,
+        )
+        if email
+        else []
+    )
+    for invitation_id in withdrawn:
+        write_audit(db, organization_id=organization_id, action="REVOKED",
+                    resource_type="INVITATION", resource_id=invitation_id,
+                    principal=principal,
+                    details={"reason": "MEMBER_REMOVED", "via": reason})
+
     # 2. Sessions — immediate, not TTL-bounded
     try:
         result.sessions_revoked = revoke_all_user_sessions(

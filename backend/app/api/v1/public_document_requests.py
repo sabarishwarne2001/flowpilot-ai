@@ -36,13 +36,26 @@ def preview_document_request(token: str, db: Session = Depends(get_db)) -> Publi
                              expires_at=request.expires_at)
 
 
+def _rejected(exc: file_validation_service.FileValidationError) -> HTTPException:
+    if exc.reason is file_validation_service.RejectionReason.TOO_LARGE:
+        return HTTPException(status_code=413, detail={"code": "FILE_TOO_LARGE", "message": str(exc)})
+    return HTTPException(status_code=422, detail={"code": "FILE_REJECTED", "message": str(exc)})
+
+
+# F-218. A plain `def`, so the spool, validation, storage write and commit run in
+# the threadpool rather than on the event loop.
 @router.post("/public/document-requests/{token}", response_model=PublicUploadResult)
-async def upload_requested_document(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> PublicUploadResult:
+def upload_requested_document(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> PublicUploadResult:
     try:
         requests.peek(db, token)
     except requests.RequestError as exc:
         raise _refuse(exc) from exc
-    handle, size = await file_validation_service.spool_upload_file(file, max_bytes=settings.MAX_UPLOAD_SIZE)
+    # F-220. The spooler's own refusals (empty, over the limit) were raised outside
+    # any handler: a 500 to the recipient. The link stays open for a corrected file.
+    try:
+        handle, size = file_validation_service.spool_upload_file(file, max_bytes=settings.MAX_UPLOAD_SIZE)
+    except file_validation_service.FileValidationError as exc:
+        raise _rejected(exc) from exc
     try:
         result = requests.fulfil_upload(db, token=token, handle=handle, size=size, filename=file.filename or "document",
                                         declared_mime=file.content_type)
@@ -51,7 +64,7 @@ async def upload_requested_document(token: str, file: UploadFile = File(...), db
         raise _refuse(exc) from exc
     except file_validation_service.FileValidationError as exc:
         db.rollback()
-        raise HTTPException(status_code=422, detail={"code": "FILE_REJECTED", "message": str(exc)}) from exc
+        raise _rejected(exc) from exc
     db.commit()
     return PublicUploadResult(received=True, document_type=result["document_type"])
 

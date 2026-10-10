@@ -480,6 +480,10 @@ $COMPOSE run --rm web python scripts/seed_quota_tiers.py --carry-forward
 The seed publishes only the tiers that changed; `--carry-forward` moves a live subscription only
 when the new version costs the same and takes nothing away.
 
+The 2026-10-10 release is another: Business now includes `capability.truthmesh` (owner decision
+N-033). Until the carry-forward runs, live Business subscribers are refused TruthMesh (402);
+organizations without a live subscription pick up the new version on their own.
+
 ### 9.4 Backups
 
 | What | How | Where it ends up |

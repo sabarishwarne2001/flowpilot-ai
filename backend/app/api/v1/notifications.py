@@ -67,7 +67,7 @@ def _get_user_notification(
     response_model_exclude_none=True,
     summary="List Notifications",
 )
-async def list_notifications(
+def list_notifications(
     db: Session = Depends(deps.get_read_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
     is_read: bool | None = Query(default=None, description="Filter by read status."),
@@ -103,7 +103,7 @@ async def list_notifications(
     response_model_exclude_none=True,
     summary="Get Notification",
 )
-async def get_notification(
+def get_notification(
     notification_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
@@ -131,7 +131,7 @@ async def get_notification(
     response_model_exclude_none=True,
     summary="Update Notification",
 )
-async def update_notification(
+def update_notification(
     notification_id: uuid.UUID,
     notification_in: NotificationUpdate,
     db: Session = Depends(deps.get_db),
@@ -165,7 +165,7 @@ async def update_notification(
     "/mark-all-read",
     summary="Mark All Notifications as Read",
 )
-async def mark_all_read(
+def mark_all_read(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),
 ) -> dict[str, int]:
@@ -192,7 +192,7 @@ async def mark_all_read(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete Notification",
 )
-async def delete_notification(
+def delete_notification(
     notification_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceViewer),

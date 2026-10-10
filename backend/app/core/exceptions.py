@@ -272,6 +272,31 @@ class InvalidInvitationTokenError(InvitationError):
     pass
 
 
+class InvitationAccountExistsError(InvitationError):
+    """
+    Raised when signing up from an invitation for an address that already has an
+    account: its owner signs in and accepts instead (F-222).
+    """
+    pass
+
+
+class InvitationSignupUnavailableError(InvitationError):
+    """
+    F-226. The invitation was delivered through a mail server FlowPilot does not
+    run, so its token cannot prove the address: the one-step sign-up is closed
+    and the invitee signs up (and verifies) the ordinary way.
+    """
+    pass
+
+
+class InvitationSsoRequiredError(InvitationError):
+    """
+    N-035. The organization requires single sign-on for the invited role, so the
+    invitee joins by signing in through it, not with a password account.
+    """
+    pass
+
+
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.
