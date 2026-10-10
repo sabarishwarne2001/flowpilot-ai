@@ -1,6 +1,41 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-10 (owner decisions N-034 to N-039 applied; F-230 to F-235)_
+_Last updated: 2026-10-10 (pre-launch campaign, session 1 of 4 started)_
+
+## Current phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
+Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
+sessions run one after another; the hand-over notes between them are in `docs/hardening/HANDOFF.md`.
+Owner delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 1)`.
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. P0 money/access, found by reading before the stack was up (to be proven):
+   - a new organization is put on no plan at all (no Free tier assigned): AI is refused and the
+     platform-wide defaults (20x Free) apply instead of Free's allowance;
+   - seat changes on paid organizations never reach the payment gateway (the internal outbox
+     queue that carries `billing.seat_added/removed` has no consumer), so members are not billed;
+   - `organizations.seat_limit` is never written, so every organization, Free included, can add
+     unlimited members.
+2. One seat model, enforced at every entry path (invitation, direct add, reactivation, SCIM, SSO
+   JIT, ownership transfer, partner tenancy): Free capped by the plan; paid organizations hold a
+   purchased seat quantity; adding past it buys a seat after the price is shown and confirmed, or
+   is refused with the way to buy; Owner and Billing can buy seats.
+3. Free made deliberately small: new meters `document.upload` and `assistant.message`, per-plan
+   file size, pages per document, workspaces and seats; enforced on every path (browser, multipart,
+   API key, batch, public link, re-processing, the assistant) and in the worker; charged at upload
+   (reserve) so nothing is left half-processed; one Free organization per account; atomic.
+4. The paid ladder: same counts on Developer/Business/Enterprise, a monotonic test over the seed,
+   unit economics against the margin service, overage policies doing what they say.
+5. `docs/hardening/TENANCY-AND-PLANS.md` generated from the code, with a drift test.
+6. Role matrix on the server; removal revokes every kind of access; restricted screens name who
+   to ask.
+7. Subscription lifecycle through the webhook paths (Stripe test signatures, Dodo), downgrade
+   handling (N-003), archive/delete with an active subscription.
+8. Live concurrency tests (seats, quota units, webhooks), the worker's tenant gate, revenue truth,
+   the admin area refusing tenants, plan cards from the source of truth.
+
+**Progress:** start-up done (stack being stood up). Nothing fixed yet.
+
 
 ## Latest pass — owner decisions N-034 to N-039 applied (2026-10-10)
 The owner delegated founder authority for the six open questions; engineering decided and built
@@ -91,8 +126,8 @@ Verified: `tsc -b`, eslint on both files, `npm run build`. Unverified: the brows
 look (route titles `/ERP posting/` and `/Process intelligence/` in `e2e/support/routes.ts` still
 match the same `<h1>` text).
 
-## Current phase
-**Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
+## Earlier phase — Phase 3 (complete)
+**Phase 3 — Final commercial hardening: COMPLETE, merged.** Branch
 `hardening/phase-3-final-commercial-hardening`; PR #13
 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/13). Builds on Phase 2 (merged
 into `main`).
