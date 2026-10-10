@@ -105,6 +105,7 @@ class Hub:
         self.leaders: dict[str, asyncio.Task] = {}
         self._broker: Optional[broker_module.Broker] = None
         self._presence_digest: dict[str, str] = {}
+        self._presence_locks: dict[tuple[int, str], asyncio.Lock] = {}
         self._mutex = threading.Lock()
 
     # ------------------------------------------------------------------ wiring
@@ -154,11 +155,25 @@ class Hub:
         return [{k: e.get(k) for k in ("connection_id", "user_id", "name", "email", "kind", "item_id", "since")}
                 for e in viewers]
 
+    def _presence_lock(self, workspace_id: str) -> asyncio.Lock:
+        """F-229. One presence announcement per workspace at a time (per event loop).
+
+        The publish runs in a worker thread (F-218), so two announcements could
+        otherwise land out of order: an older snapshot last, with the digest
+        holding the newer one, so the self-healing tick would not correct it.
+        """
+        key = (id(asyncio.get_running_loop()), workspace_id)
+        lock = self._presence_locks.get(key)
+        if lock is None:
+            lock = self._presence_locks[key] = asyncio.Lock()
+        return lock
+
     async def announce_presence(self, workspace_id: str) -> None:
-        viewers = await self.presence_snapshot(workspace_id)
-        # F-218. A Redis publish blocks for up to its 2 s socket timeout: off the loop.
-        await in_thread(self.broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
-        self._presence_digest[workspace_id] = json.dumps(viewers, sort_keys=True, default=str)
+        async with self._presence_lock(workspace_id):
+            viewers = await self.presence_snapshot(workspace_id)
+            # F-218. A Redis publish blocks for up to its 2 s socket timeout: off the loop.
+            await in_thread(self.broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
+            self._presence_digest[workspace_id] = json.dumps(viewers, sort_keys=True, default=str)
 
     # ------------------------------------------------------------------- serve
     async def serve(self, websocket: Any, principal: gate.LivePrincipal, subprotocol: Optional[str]) -> None:
@@ -506,13 +521,14 @@ class Hub:
         changed = await broker.swap_digest(workspace_id, digest)
         if changed:
             await in_thread(broker.publish, workspace_id, {"type": v.EVENT_QUEUE_CHANGED, "reason": "watermark"})
-        _, pruned = await broker.presence_all(workspace_id, service.now().timestamp())
-        viewers = await self.presence_snapshot(workspace_id)
-        snapshot = json.dumps(viewers, sort_keys=True, default=str)
-        healed = pruned > 0 or self._presence_digest.get(workspace_id) != snapshot
-        if healed:
-            await in_thread(broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
-            self._presence_digest[workspace_id] = snapshot
+        async with self._presence_lock(workspace_id):
+            _, pruned = await broker.presence_all(workspace_id, service.now().timestamp())
+            viewers = await self.presence_snapshot(workspace_id)
+            snapshot = json.dumps(viewers, sort_keys=True, default=str)
+            healed = pruned > 0 or self._presence_digest.get(workspace_id) != snapshot
+            if healed:
+                await in_thread(broker.publish, workspace_id, {"type": v.EVENT_PRESENCE, "viewers": viewers})
+                self._presence_digest[workspace_id] = snapshot
         return {"leader": True, "expired": len(expired), "queue_changed": changed, "presence": healed}
 
     def _leader_db(self, workspace_id: uuid.UUID) -> tuple[list[service.LockState], str]:
