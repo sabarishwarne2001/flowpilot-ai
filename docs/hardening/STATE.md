@@ -1,8 +1,31 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-09 (live bug hunt: fuzzing, double clicks, dev-mode rendering)_
+_Last updated: 2026-10-10 (invitations, the workspace team and the event loop)_
 
-## Latest pass — live bug hunt: fuzzing, double clicks, dev-mode rendering (2026-10-09)
+## Latest pass — invitations, the workspace team and the event loop (2026-10-10)
+Same branch and PR as the bug hunt below (`claude/jolly-keller-d0jscd`, PR #18), continued after
+a usage-limit pause, on the owner's list (required.txt). **Ten defects and builds, F-216 to
+F-225, each proven by a failing test first** (FINDINGS.md, "Invitations, the workspace team and
+the event loop"), plus the owner's N-032/N-033 decision applied and backend CI made green again.
+- **F-218 (High):** the routes that await (uploads, the assistant stream, upload parts, webhooks)
+  and the sign-in dependency every request runs did blocking work on the event loop; a slow step
+  in any of them stalled the whole API. All of it runs in the threadpool now; a live-server test
+  slows each step to 3 s and requires `/health` under 1 s (10 of 10 failed before).
+- **Invitations:** F-216 the pending list showed accepted and revoked invitations (the "zombie");
+  F-217 removing a member left their pending invitation, whose link let them back in; F-221 the
+  last seat could never be filled by an invitation; F-222 a newcomer now signs up from the
+  invitation in one step (address locked, account verified by the token) and an existing user is
+  sent to sign in and back; F-224 "switch account" now signs out on the server; F-223 the email is
+  rebuilt for Outlook, Gmail and Apple Mail (card, bulletproof button, security footer).
+- **F-219:** Workspace Settings → Team members has role controls and Remove, or a badge, in every
+  Actions cell. **F-220:** an empty or oversized public document-request upload was a 500.
+- **N-032 / N-033 decided:** Batch operations and TruthMesh on Business and Enterprise (deploy step:
+  `seed_quota_tiers.py --carry-forward`).
+- **CI:** backend CI was red on main since the platform relay became mandatory (24 tests); the
+  backend steps now declare a relay. `pip-audit (advisory)` stays red on main (N-038).
+Verification: see "What is done" (this pass) below.
+
+## Earlier pass — live bug hunt: fuzzing, double clicks, dev-mode rendering (2026-10-09)
 Branch `claude/jolly-keller-d0jscd` (the session's assigned branch). Real live stack: Postgres 16 +
 pgvector 0.8.0 (built from source), Redis, uvicorn API, the real worker `--loop all --profile all`
 (full `requirements.txt`, Paddle included), model stand-in, Vite dev server on :5173. Previous
@@ -34,7 +57,7 @@ F-207 (materiality shown as "90%" instead of "0.90"), proven red then green. Sto
 owner's usage budget; the remaining small items below are still open (the corroborator item is done).
 
 
-## Latest pass — budget-capped header polish (2026-10-09)
+## Earlier pass — budget-capped header polish (2026-10-09)
 Branch `claude/sweet-hopper-l4varl`. The owner had ~1% of weekly usage for this run, so the live
 stack was NOT stood up (the sandbox had no Python dependencies or pgvector build). Only change: ERP
 posting and Process intelligence now open with the shared `PageHeader` (icon tile, eyebrow, title,
@@ -79,27 +102,24 @@ into `main`).
   - Release certification: `05-release-readiness.md` (Phase 3), verdict **GO**.
 
 ## Owner decisions in force (do not re-ask)
-Open: **N-033** (which plans include TruthMesh; provisionally Enterprise only) and **N-032**
-(which plans include Batch operations; provisionally Business + Enterprise), if not yet decided.
-Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
+**N-032 and N-033 decided 2026-10-10:** Batch operations and TruthMesh are on Business and
+Enterprise. Open, each with a safe default in force (none blocks a release): **N-034** an invited
+address whose account was never verified, **N-035** invitations into SSO-required organizations,
+**N-036** whether accepting can lower a role, **N-037** invitation lifetime (72 h vs 7 days),
+**N-038** Python dependency advisories. Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
 (test mode) for launch, Dodo selectable; **N-027** Postmark before the first paying customer;
 **N-028** `app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims;
 **N-030** seat price = plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge the live bug-hunt PR (branch `claude/jolly-keller-d0jscd`, F-208 to
-   F-215). Decide N-032 and N-033 when convenient (provisional placements are in force and are not
-   release blockers).
-   Left from the bug hunt, not done: the 12 routes that really are `async def` (uploads, streams,
-   webhooks) still do their database and storage work on the event loop after their last `await`.
-   The double-click sweep did not freeze them (unverified in general, not proven safe), and a large
-   upload to object storage pauses other requests while it is written. Moving that tail to the
-   thread pool is the next performance step.
-2. Small items noticed and left for a later pass: the main JavaScript chunk is 412 KB gzipped
-   (split the largest vendor libraries); `idp_session_sync` is stored but nothing reads it (the
-   console no longer shows it; drop the column or build the feature). From Phase 2, still open:
-   the matching queue lists one case per copy of an invoice (grouping them is a product choice).
-   (Done 2026-10-09: the ERP and process pages now use the shared `PageHeader`.)
+1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-225, the CI
+   relay, N-032/N-033). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
+   Business subscriptions get TruthMesh (RUNBOOK 9.3). Answer N-034 to N-038 when convenient.
+2. Engineering, small and left for a later pass: the stream's Redis frame buffer still writes on
+   the event loop (each call bounded by the 250 ms Redis timeout; moving it needs a per-stream
+   writer); the main JavaScript chunk is 412 KB
+   gzipped; `idp_session_sync` is stored but unread; the matching queue lists one case per copy of
+   an invoice (product choice); the dependency upgrades of N-038.
 3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
    Postmark server (N-027), roll the keys pasted into chats, the first deploy
    (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.
@@ -127,6 +147,13 @@ elevation; one full backend run and one full browser run on a fresh database; th
 The exact spend is not visible from inside the session; check your usage page.
 
 ## Environment notes (for the next session)
+- **Event-loop freezes**: `tests/engines/test_blocking_io_does_not_freeze_the_api_live.py` is the
+  pattern: slow one blocking call to 3 s inside a route on a real uvicorn and time `/health`. The
+  guard `tests/core/test_async_routes_must_await.py` now also checks async dependencies and the
+  app coroutines a route awaits.
+- **Context variables and the threadpool**: a value set with `set_current_principal` inside a
+  `run_in_threadpool` call is lost when the thread returns; set it on the loop (see
+  `deps.get_current_user`).
 - **The worker with `--profile all` needs the full `requirements.txt`** (Paddle, torch): with only
   `requirements-web.txt` it refuses to start (ProfileError), by design. `pip install -r
   requirements.txt` takes ~10 minutes in the sandbox.

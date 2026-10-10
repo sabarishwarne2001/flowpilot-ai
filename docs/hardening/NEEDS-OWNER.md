@@ -649,3 +649,46 @@ Every Phase 3 finding (F-182 to F-206) was an engineering defect and is fixed. T
 (8, 4, 2 or 1 hour); that is a security setting each customer chooses, not a product or pricing
 question. **N-032** and **N-033** were decided on 2026-10-10 (both on Business and Enterprise); see
 their entries.
+
+# Invitations and the workspace team (2026-10-10): five questions
+
+Everything in this pass (F-216 to F-224) was an engineering defect or a requested build and is done.
+These came up on the way; each has a safe default in force, so none blocks a release.
+
+## N-034 — An invited address that has an account nobody ever verified
+Someone could register an address they do not own and never verify it. If that address is later
+invited, the invitee (who does own the mailbox) is told "an account already exists, sign in" and
+must use "Forgot your password?" to take it back (that email proves the mailbox, so this works).
+**In force:** the conservative path above; the invitation sign-up never replaces an existing
+account's password. **Decide:** keep it, or let the invitation sign-up take over an account whose
+address was never verified (the emailed token proves the mailbox just as a reset link does).
+Related design note: the invitation preview now says whether the invited address has an account,
+so the page can offer sign-in or sign-up. Only the holder of the emailed token can ask, and the
+token is bound to that one address.
+
+## N-035 — Invitations into an organization that requires single sign-on
+An invitee can create a password account from the invitation and join an organization whose
+policy requires SSO; the existing SSO check then refuses their password sessions for that
+organization, so they cannot use it until they sign in through the identity provider. **In
+force:** as described (nothing is exposed; it is a confusing first step). **Decide:** keep it, or
+have the invitation page send invitees of SSO-required organizations straight to SSO and refuse
+the password sign-up there.
+
+## N-036 — Can accepting an invitation lower someone's role?
+Accepting sets the organization role to the invitation's (only an owner is kept as owner). A
+member promoted to admin after an older invitation was sent, who then accepts that invitation, is
+moved back to the invitation's role. F-209 already replaces an old pending invitation when the
+same address is invited again. **Decide:** keep "the invitation's role wins", or never lower an
+existing member's role on acceptance (only raise it).
+
+## N-037 — How long an invitation link lasts
+The server's links last `INVITATION_TTL_HOURS`, 72 hours by default; the invite panel used to say
+7 days (now it points at the expiry shown per invitation, and the email states the real date).
+**Decide:** 72 hours, or 7 days (one setting, `INVITATION_TTL_HOURS=168`; nothing else changes).
+
+## N-038 — Python dependency advisories (`pip-audit (advisory)` is red on main)
+`pip-audit` reports torch 2.12.1 (fixed in 2.13.0), setuptools 81.0.0 (fixed in 83.0.0) and
+paramiko 3.5.1 (no fixed release yet). The job is advisory and outside the CI gate. Upgrading
+torch needs the CPU image rebuilt and the OCR and embedding paths retested (F-045); setuptools is
+a build tool and low risk. **Decide:** when to schedule the upgrade (engineering can do it in a
+pass of its own).
