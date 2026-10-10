@@ -27,6 +27,7 @@ from app.core.organization_permissions import (
 )
 from app.core.transactions import commit_and_refresh, identity_of, rollback_and_log_error
 from app.crud import api_key as api_key_crud
+from app.crud import organization_invitation as invitation_crud
 from app.crud import organization_members as organization_members_crud
 from app.crud import workspace_members as workspace_members_crud
 from app.crud.membership_filters import DIRECTORY_STATUSES
@@ -252,6 +253,37 @@ def deactivate_member(
                 details={"reason": "OFFBOARDED", "key_name": key.name},
             )
 
+        # F-216. An invitation still pending for this address (sent before the
+        # removal) would let the person straight back in; withdraw it.
+        target_email = target_membership.user.email if target_membership.user else None
+        withdrawn_invitations = (
+            invitation_crud.revoke_pending_invitations_for_email(
+                db,
+                organization_id=organization.id,
+                email=target_email,
+                revoked_by_id=actor_membership.user_id,
+                now=datetime.now(UTC),
+            )
+            if target_email
+            else []
+        )
+
+        for invitation_id in withdrawn_invitations:
+            audit_service.record(
+                db,
+                organization_id=organization.id,
+                actor_id=actor.id if actor else None,
+                resource_type=AuditResourceType.INVITATION,
+                resource_id=invitation_id,
+                action=AuditAction.REVOKED,
+                details={
+                    **audit_service.actor_snapshot(actor),
+                    "reason": "MEMBER_REMOVED",
+                    "recipient_email": target_email,
+                },
+                **context,
+            )
+
         deactivated = organization_members_crud.deactivate_organization_member(
             db,
             membership=target_membership,
@@ -274,6 +306,7 @@ def deactivate_member(
                 "role_at_deactivation": target_membership.role.value,
                 "workspace_grants_revoked": revoked_grants,
                 "api_keys_revoked": len(revoked_keys),
+                "pending_invitations_withdrawn": len(withdrawn_invitations),
             },
             **context,
         )
