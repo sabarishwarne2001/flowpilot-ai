@@ -111,6 +111,35 @@ test.describe("Accepting an invitation (F-222)", () => {
   });
 });
 
+test.describe("An invitation withdrawn while its sign-up form is open (F-228)", () => {
+  test.setTimeout(120_000);
+
+  test("says the invitation is gone instead of leaving an error under the form", async ({ page, problems }) => {
+    problems.allowHttp(/\/auth\/register\/invitation$/, [409], "the invitation was revoked meanwhile");
+    const email = `withdrawn-${runId()}@e2e.example.com`;
+    const path = await invite(email);
+    await page.goto(path);
+    await expect(page.getByRole("button", { name: "Create account and join" })).toBeVisible({ timeout: 20_000 });
+
+    const { orgId } = await operations();
+    const owner = await loginAs("C.owner");
+    const pending = await api<{ id: string; email: string }[]>(owner, "GET", `/organizations/${orgId}/invitations?status=PENDING`);
+    const items = Array.isArray(pending.body) ? pending.body : (pending.body as unknown as { items: { id: string; email: string }[] }).items;
+    const row = items.find((invitation) => invitation.email === email);
+    expect(row, "the invitation is pending").toBeTruthy();
+    const revoked = await api(owner, "POST", `/organizations/${orgId}/invitations/${row!.id}/revoke`);
+    expect(revoked.status, revoked.text).toBeLessThan(300);
+
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Confirm password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Create account and join" }).click();
+
+    await expect(page.getByRole("heading", { name: "Invitation not available" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/already revoked/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
+  });
+});
+
 test.describe("An invitation sent through the organization's own mail server (F-226)", () => {
   test.setTimeout(120_000);
 

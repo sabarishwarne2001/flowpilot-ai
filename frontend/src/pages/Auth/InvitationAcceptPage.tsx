@@ -292,22 +292,28 @@ export const InvitationAcceptPage: React.FC = () => {
   const { mutate: signUp, isPending: isSigningUp } = useMutation({
     mutationFn: () => registerWithInvitation(token as string, password),
     onSuccess: async (result) => {
-      // The same steps as a sign-in (Login.finishSignIn): the token, then the profile.
-      setToken(result.access_token);
-      const me = await authApi.getMeRequest();
-      setAuth(me, result.access_token);
+      const destination = result.workspace_slug
+        ? workspacePath(result.organization_slug, result.workspace_slug)
+        : ROUTES.WORKSPACES;
       setPhase("accepted");
       clearStashedToken();
       setPassword("");
       setConfirmPassword("");
+      // The same steps as a sign-in (Login.finishSignIn): the token, then the profile.
+      setToken(result.access_token);
+      try {
+        const me = await authApi.getMeRequest();
+        setAuth(me, result.access_token);
+      } catch {
+        // F-228. The account, the membership and the session already exist; a
+        // failed profile read must not report a failed sign-up. A full load
+        // starts the session from its refresh cookie.
+        window.location.assign(destination);
+        return;
+      }
       toast.success("Your account is ready. Welcome aboard.");
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      navigate(
-        result.workspace_slug
-          ? workspacePath(result.organization_slug, result.workspace_slug)
-          : ROUTES.WORKSPACES,
-        { replace: true },
-      );
+      navigate(destination, { replace: true });
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError) {
@@ -323,6 +329,15 @@ export const InvitationAcceptPage: React.FC = () => {
         }
         if (error.code === API_ERROR_CODES.INVITATION_SIGNUP_UNAVAILABLE) {
           setPhase("choose_account");
+          setErrorMsg(error.message);
+          return;
+        }
+        // F-228. Revoked, already used or unknown meanwhile: nothing to retry here.
+        if (
+          error.code === API_ERROR_CODES.INVITATION_ALREADY_PROCESSED ||
+          error.code === API_ERROR_CODES.INVALID_INVITATION_TOKEN
+        ) {
+          setPhase("invalid");
           setErrorMsg(error.message);
           return;
         }
@@ -622,7 +637,7 @@ export const InvitationAcceptPage: React.FC = () => {
           <div className="space-y-5 text-center">
             <div className="space-y-1.5">
               <h1 className={AUTH_TITLE}>
-                {resolvedPhase === "expired" ? "Invitation expired" : "Invalid link"}
+                {resolvedPhase === "expired" ? "Invitation expired" : "Invitation not available"}
               </h1>
               <p className={AUTH_SUBTITLE}>{errorMsg || previewMessage}</p>
             </div>
