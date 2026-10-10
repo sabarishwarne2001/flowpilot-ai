@@ -363,6 +363,14 @@ export const InvitationAcceptPage: React.FC = () => {
     if (token) { stashToken(token); }
     await authApi.logoutRequest();
     useAuthStore.getState().clearAuth();
+    // F-227. Sign-in only when the invited address has an account; otherwise stay
+    // here, signed out, where the page offers the sign-up (or both ways in).
+    if (preview && preview.has_account !== true) {
+      setErrorMsg("");
+      setPhase(null);
+      setIsSwitching(false);
+      return;
+    }
     handleAuthRedirect(ROUTES.LOGIN, preview?.invited_email);
   };
 

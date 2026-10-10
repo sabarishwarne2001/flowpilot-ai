@@ -141,21 +141,53 @@ test.describe("An invitation sent through the organization's own mail server (F-
   });
 });
 
-test.describe("Switching account from an invitation (F-224)", () => {
+test.describe("Switching account from an invitation (F-224, F-227)", () => {
   test.use({ user: "C.viewer" });
   test.setTimeout(120_000);
 
-  test("signs the other account out on the server, not only in this tab", async ({ page, problems }) => {
+  test("to an address with an account: signed out on the server, then sign-in with the address", async ({
+    page,
+    problems,
+  }) => {
     problems.allowHttp(/\/auth\/refresh/, [401], "the session that was signed out must not refresh");
     const email = `someone-else-${runId()}@e2e.example.com`;
+    await signUpVerified(email);
     const path = await invite(email);
+    try {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: "Wrong account" })).toBeVisible({ timeout: 20_000 });
+      await page.getByRole("button", { name: "Sign out and switch account" }).click();
+      await expect(page).toHaveURL(/\/login/);
+      await expect(page.getByRole("textbox", { name: "Email" })).toHaveValue(email);
 
-    await page.goto(path);
-    await expect(page.getByRole("heading", { name: "Wrong account" })).toBeVisible({ timeout: 20_000 });
-    await page.getByRole("button", { name: "Sign out and switch account" }).click();
-    await expect(page).toHaveURL(/\/login/);
+      const refreshed = await page.request.post(`${BROWSER_API_ORIGIN}/api/v1/auth/refresh`);
+      expect(refreshed.status(), "the signed-out session still refreshes").toBe(401);
+    } finally {
+      await removeFromOrganization(email);
+    }
+  });
 
-    const refreshed = await page.request.post(`${BROWSER_API_ORIGIN}/api/v1/auth/refresh`);
-    expect(refreshed.status(), "the signed-out session still refreshes").toBe(401);
+  test("to an address without an account: signed out, and the one-step sign-up is right there (F-227)", async ({
+    page,
+    problems,
+  }) => {
+    problems.allowHttp(/\/auth\/refresh/, [401], "the session that was signed out must not refresh");
+    const email = `newcomer-switch-${runId()}@e2e.example.com`;
+    const path = await invite(email);
+    try {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: "Wrong account" })).toBeVisible({ timeout: 20_000 });
+      await page.getByRole("button", { name: "Sign out and switch account" }).click();
+
+      // Not a sign-in page for an account that does not exist.
+      await expect(page.getByRole("button", { name: "Create account and join" })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByLabel("Email")).toHaveValue(email);
+      await expect(page).toHaveURL(/\/invitations\/accept/);
+
+      const refreshed = await page.request.post(`${BROWSER_API_ORIGIN}/api/v1/auth/refresh`);
+      expect(refreshed.status(), "the signed-out session still refreshes").toBe(401);
+    } finally {
+      await removeFromOrganization(email);
+    }
   });
 });
