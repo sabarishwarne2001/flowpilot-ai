@@ -8,6 +8,7 @@
  *    in), comes back to the invitation and joins (F-222).
  *  - Someone signed in as another account who switches account is really signed
  *    out: the old session no longer refreshes (F-224).
+ *  - An organization that requires single sign-on is joined through it (N-035).
  */
 import { test, expect } from "../support/fixtures";
 import { api, apiLogin, loginAs } from "../support/api";
@@ -164,6 +165,35 @@ test.describe("An invitation sent through the organization's own mail server (F-
       await expect(page).toHaveURL(/\/register\?/);
       expect(new URL(page.url()).searchParams.get("redirect")).toBe("/invitations/accept");
       await expect(page.locator("#email")).toHaveValue(email);
+    } finally {
+      await removeFromOrganization(email);
+    }
+  });
+});
+
+test.describe("An invitation into an organization that requires single sign-on (N-035)", () => {
+  test.setTimeout(120_000);
+
+  test("sends the invitee to single sign-on, never to a password sign-up", async ({ page }) => {
+    const email = `sso-${runId()}@e2e.example.com`;
+    const path = await invite(email);
+    // The server refuses the password sign-up for such an organization
+    // (backend: tests/api/test_invitation_owner_decisions.py); the e2e tenants
+    // do not require SSO, so the preview's answer is shaped here.
+    await page.route("**/invitations/preview", async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), sso_required: true } });
+    });
+    try {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: "Join Caretakers Global Inc" })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
+      await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "Sign in with single sign-on" }).click();
+
+      await expect(page).toHaveURL(/\/login\?/);
+      expect(new URL(page.url()).searchParams.get("redirect")).toBe("/invitations/accept");
+      await expect(page.getByRole("textbox", { name: "Email" })).toHaveValue(email);
     } finally {
       await removeFromOrganization(email);
     }

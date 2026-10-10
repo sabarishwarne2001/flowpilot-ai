@@ -209,6 +209,8 @@ export interface WorkspaceInvitationPreview {
   expires_at: string;
   /** Null when the invitation went through the organization's own mail server (F-226). */
   has_account: boolean | null;
+  /** N-035. The organization requires single sign-on: the invitee joins through it, never with a password. */
+  sso_required: boolean;
 }
 
 /** POST /auth/register/invitation: the new account's session, and where the invitation leads. */

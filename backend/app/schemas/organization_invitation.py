@@ -213,11 +213,14 @@ class OrganizationInvitationPreviewResponse(BaseModel):
     organization_role: OrganizationRole
     workspaces: list[WorkspacePreviewEntry]
     expires_at: datetime
-    # F-222. Whether the invited address already has an account, so the page offers
+    # F-222. Whether the invited address has a (verified, N-034) account, so the page offers
     # sign-in to its owner and a one-step sign-up to anyone else. Only the holder of
     # the emailed token can ask, and the token is bound to this one address. F-226:
     # null when the token went through the organization's own mail server.
     has_account: bool | None = None
+    # N-035. The organization requires single sign-on for the invited role: the
+    # invitee joins by signing in through it (no password sign-up).
+    sso_required: bool = False
 
 
 class InvitationSignupRequest(BaseModel):

@@ -37,6 +37,7 @@ from app.core.exceptions import (
     InvitationPermissionDeniedError,
     InvitationResendTooSoonError,
     InvitationSignupUnavailableError,
+    InvitationSsoRequiredError,
     SeatLimitExceededError,
 )
 from app.core.links import build_invitation_accept_link
@@ -443,9 +444,44 @@ def preview_invitation(db: Session, *, token: str) -> dict:
         "has_account": (
             None
             if invitation.delivered_off_platform
-            else user_crud.get_user_by_email(db, email=invitation.email) is not None
+            else _has_verified_account(db, email=invitation.email)
         ),
+        "sso_required": _sso_required(db, invitation=invitation),
     }
+
+
+def _has_verified_account(db: Session, *, email: str) -> bool:
+    """N-034. An account nobody ever verified is not one to sign in to: the
+    invitation sign-up takes it over."""
+    user = user_crud.get_user_by_email(db, email=email)
+    return user is not None and user.email_verified_at is not None
+
+
+def _sso_required(db: Session, *, invitation: OrganizationInvitation) -> bool:
+    """N-035. Read-only: whether the organization requires SSO for the invited role."""
+    from app.models.identity import TenantSecurityPolicy
+    from app.services.identity import session_policy_service
+
+    policy = db.execute(
+        select(TenantSecurityPolicy).where(
+            TenantSecurityPolicy.organization_id == invitation.organization_id
+        )
+    ).scalar_one_or_none()
+    if policy is None:
+        return False
+    return session_policy_service.sso_required_for(
+        policy, org_role=invitation.organization_role.value
+    )
+
+
+#: N-036. Accepting never lowers a role. BILLING and MEMBER differ in kind, not
+#: rank: neither replaces the other on acceptance.
+_ROLE_RANK = {
+    OrganizationRole.OWNER: 3,
+    OrganizationRole.ADMIN: 2,
+    OrganizationRole.MEMBER: 1,
+    OrganizationRole.BILLING: 1,
+}
 
 
 def describe_seat_blocked(db: Session, *, token: str) -> dict:
@@ -527,11 +563,15 @@ def accept_invitation(
         else:
             db.refresh(membership)
 
+            # N-036 (owner decision 2026-10-10): accepting raises an active
+            # member's role, never lowers it (an owner stays owner, an admin
+            # promoted after the invitation was sent stays admin). A
+            # deactivated member rejoins with the invitation's role.
             if (
-                membership.role is OrganizationRole.OWNER
-                and membership.status is MembershipStatus.ACTIVE
+                membership.status is MembershipStatus.ACTIVE
+                and _ROLE_RANK[membership.role] >= _ROLE_RANK[applied_role]
             ):
-                applied_role = OrganizationRole.OWNER
+                applied_role = membership.role
                 role_preserved = True
             else:
                 organization_members_crud.update_organization_member_role(
@@ -690,19 +730,47 @@ def register_and_accept(
             "email we send you, then open this invitation again."
         )
 
+    # N-035. Joined through single sign-on, never with a password account.
+    if _sso_required(db, invitation=invitation):
+        raise InvitationSsoRequiredError(
+            f"{invitation.organization.name} requires single sign-on. Sign in with your "
+            f"company account to accept this invitation."
+        )
+
     email = invitation.email.strip().lower()
     password_policy.check_new_password(password, email=email)
-    if user_crud.get_user_by_email(db, email=email) is not None:
+    existing = user_crud.get_user_by_email(db, email=email)
+    if existing is not None and existing.email_verified_at is not None:
         raise InvitationAccountExistsError(
             f"An account already exists for {email}. Sign in to accept the invitation."
         )
 
-    user = User(
-        email=email,
-        hashed_password=security.get_password_hash(password),
-        is_active=True,
-        email_verified_at=datetime.now(UTC),
-    )
+    if existing is not None:
+        # N-034 (owner decision 2026-10-10). Nobody ever proved this address, and
+        # the token FlowPilot's relay delivered to it does: the invitee takes the
+        # account over. A new password, the address verified, and every session
+        # of whoever registered it ended.
+        from app.models.user_session import SessionRevokedReason
+        from app.services import session_service
+
+        existing.hashed_password = security.get_password_hash(password)
+        existing.email_verified_at = datetime.now(UTC)
+        existing.is_active = True
+        session_service.revoke_all_user_sessions(
+            db, user=existing, reason=SessionRevokedReason.PASSWORD_CHANGE
+        )
+        user = existing
+        logger.warning(
+            "INVITATION_SIGNUP_TOOK_OVER_UNVERIFIED | user=%s | invitation=%s",
+            existing.id, invitation.id,
+        )
+    else:
+        user = User(
+            email=email,
+            hashed_password=security.get_password_hash(password),
+            is_active=True,
+            email_verified_at=datetime.now(UTC),
+        )
     db.add(user)
     try:
         try:

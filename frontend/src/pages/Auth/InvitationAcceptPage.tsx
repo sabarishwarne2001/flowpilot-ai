@@ -42,6 +42,7 @@ type Phase =
   | "signup"
   | "choose_account"
   | "auth_required"
+  | "sso_required"
   | "email_mismatch";
 
 /** The server's minimum (app/core/password_policy.MIN_LENGTH); it checks strength too. */
@@ -185,7 +186,9 @@ export const InvitationAcceptPage: React.FC = () => {
     // with an account signs in and comes back.
     // F-226: whether the address has an account is unknown (null) when the
     // invitation went through the organization's own mail server; both ways in.
+    // N-035. An organization that requires single sign-on is joined through it.
     if (preview && !isAuthenticated) {
+      if (preview.sso_required) { return "sso_required"; }
       if (preview.has_account === true) { return "auth_required"; }
       if (preview.has_account === false) { return "signup"; }
       return "choose_account";
@@ -327,6 +330,11 @@ export const InvitationAcceptPage: React.FC = () => {
           setErrorMsg(error.message);
           return;
         }
+        if (error.code === API_ERROR_CODES.INVITATION_SSO_REQUIRED) {
+          setPhase("sso_required");
+          setErrorMsg("");
+          return;
+        }
         if (error.code === API_ERROR_CODES.INVITATION_SIGNUP_UNAVAILABLE) {
           setPhase("choose_account");
           setErrorMsg(error.message);
@@ -380,7 +388,7 @@ export const InvitationAcceptPage: React.FC = () => {
     useAuthStore.getState().clearAuth();
     // F-227. Sign-in only when the invited address has an account; otherwise stay
     // here, signed out, where the page offers the sign-up (or both ways in).
-    if (preview && preview.has_account !== true) {
+    if (preview && !preview.sso_required && preview.has_account !== true) {
       setErrorMsg("");
       setPhase(null);
       setIsSwitching(false);
@@ -560,6 +568,33 @@ export const InvitationAcceptPage: React.FC = () => {
               <Link to={ROUTES.FORGOT_PASSWORD} className={`text-center text-[13px] ${AUTH_LINK}`}>
                 Forgot your password?
               </Link>
+            </div>
+          </div>
+        )}
+
+        {resolvedPhase === "sso_required" && preview && (
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
+              <p className={AUTH_SUBTITLE}>
+                {preview.organization_name} signs in through your company&apos;s single sign-on. Continue
+                as <strong className="text-foreground">{preview.invited_email}</strong> and you come back here to
+                accept.
+              </p>
+            </div>
+            <InvitationSummary preview={preview} />
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => handleAuthRedirect(ROUTES.LOGIN, preview.invited_email)}
+                className={AUTH_PRIMARY}
+              >
+                Sign in with single sign-on
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <p className="text-center text-[13px] text-muted-foreground">
+                Trouble signing in? Ask {preview.inviter_email}.
+              </p>
             </div>
           </div>
         )}

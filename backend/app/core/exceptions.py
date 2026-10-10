@@ -289,6 +289,14 @@ class InvitationSignupUnavailableError(InvitationError):
     pass
 
 
+class InvitationSsoRequiredError(InvitationError):
+    """
+    N-035. The organization requires single sign-on for the invited role, so the
+    invitee joins by signing in through it, not with a password account.
+    """
+    pass
+
+
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.
