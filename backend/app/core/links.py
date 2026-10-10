@@ -17,7 +17,7 @@ its job: removing this was a grep, not a memory.
 
 The one-release window it protected has elapsed. Invitations issued before
 the ARCH-04 Step 7 cutover carried `?token=` links and have long since
-expired -- INVITATION_TTL_HOURS is 72, so nothing issued under the old form
+expired -- INVITATION_TTL_HOURS was 72 (7 days since N-037), so nothing issued under the old form
 can still be pending. Anyone holding a genuinely ancient link now gets the
 "invalid or expired" page, which is the correct answer for a link that no
 longer corresponds to a live invitation.
