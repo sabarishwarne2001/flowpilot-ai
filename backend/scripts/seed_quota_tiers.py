@@ -583,6 +583,28 @@ def carry_forward(db) -> list[dict[str, Any]]:
     return report
 
 
+def assign_free_to_planless(db) -> int:
+    """Put every organization that has no plan on Free (campaign session 1).
+
+    Until session 1, `POST /organizations` never assigned a plan, so every
+    organization created through the product has `quota_tier_id` NULL: no AI on the
+    platform account and the platform-wide default limits instead of Free's. New
+    organizations now start on Free; this repairs the ones created before, on the
+    next deploy. Idempotent: an organization with a plan is never touched.
+    """
+    from app.models.organization import Organization
+
+    free = _latest_published(db, "free")
+    if free is None:
+        return 0
+    planless = db.execute(select(Organization).where(Organization.quota_tier_id.is_(None))).scalars().all()
+    for organization in planless:
+        organization.quota_tier_id = free.id
+    db.flush()
+    quota_service.clear_cache()
+    return len(planless)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -724,6 +746,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         moved: list[dict[str, Any]] = []
         if args.carry_forward:
             moved = carry_forward(db)
+        put_on_free = assign_free_to_planless(db)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -733,9 +756,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         db.close()
 
     if args.as_json:
-        print(json.dumps({"status": "ok", "tiers": published, "carried_forward": moved}, indent=2))
+        print(json.dumps({"status": "ok", "tiers": published, "carried_forward": moved, "put_on_free": put_on_free}, indent=2))
     else:
         print(f"Quota tiers: {', '.join(published)}")
+        if put_on_free:
+            print(f"Organizations with no plan put on Free: {put_on_free}")
         if args.carry_forward:
             done = [m for m in moved if m["action"] == "moved"]
             skipped = [m for m in moved if m["action"] == "skipped"]

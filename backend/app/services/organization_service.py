@@ -45,6 +45,7 @@ logger = logging.getLogger("app.services.organization_service")
 
 MAX_ORGANIZATIONS_PER_USER: int = 3
 DEFAULT_WORKSPACE_NAME: str = "General"
+FREE_PLAN_KEY: str = "free"
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,8 @@ def provision_organization(
             )
         )
 
+        _start_on_free_plan(db, organization_id=organization.id)
+
         audit_service.record(
             db,
             organization_id=organization.id,
@@ -193,6 +196,25 @@ def provision_organization(
             user_id,
             str(exc),
             exc=exc,
+        )
+
+
+def _start_on_free_plan(db: Session, *, organization_id: uuid.UUID) -> None:
+    """Every new organization starts on the Free plan (campaign session 1).
+
+    Without a plan an organization resolves no tier: AI is refused (no platform-key
+    entitlement) and the metered limits fall back to the platform defaults instead of
+    Free's allowance. A deployment whose seed never published Free cannot do better
+    than say so loudly; the organization is still created.
+    """
+    from app.services import quota_service
+
+    try:
+        quota_service.assign_tier(db, organization_id=organization_id, tier_key=FREE_PLAN_KEY)
+    except quota_service.QuotaTierValidationError:
+        logger.error(
+            "organization.free_plan_unpublished",
+            extra={"organization_id": str(organization_id)},
         )
 
 
