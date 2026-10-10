@@ -13,7 +13,8 @@ test that failed first; both full suites pass with no failures on the final code
 covers every backend commit; the final browser run came after the last fix); the API and worker logs
 stayed clean through the whole browser run; the database has exactly one migration head and no new
 drift; the frontend builds, lints and type-checks clean with no source maps; no new dependency
-advisory. No owner decision blocks release (N-032 and N-033 have provisional placements in force).
+advisory. No owner decision blocks release (N-032 and N-033 were decided on 2026-10-10: Batch
+operations and TruthMesh are on Business and Enterprise).
 
 In plain words: the product is ready to sell. Deploy it by following the runbook step by step, set
 up Stripe test-mode prices and Postmark before taking the first payment, and you are live.
@@ -153,7 +154,7 @@ connects to configured ERP hosts with pinned host keys).
 |---|---|---|
 | F-006 production stack never started here | No Docker daemon in this environment | RUNBOOK §9 on the VPS |
 | F-125 Stripe test-mode prices and webhook secret; N-027 Postmark | Configuration the owner holds | Before the first paying customer |
-| N-032, N-033 plan placement of Batch operations and TruthMesh | Provisional placements are in force and enforced server-side | Owner decision, one line per tier |
+| N-032, N-033 plan placement of Batch operations and TruthMesh | Decided 2026-10-10: Business and Enterprise for both, enforced server-side | Done; run `seed_quota_tiers.py --carry-forward` on deploy |
 | F-045 images carry the CUDA build of torch | Size, not safety | CPU-only torch on a machine that reaches download.pytorch.org |
 | Main JavaScript chunk 412 KB gzipped | Loads once, cached; pages already split | Split the largest vendor libraries |
 | `idp_session_sync` stored, read by nothing | The console no longer shows it; signed single logout always applies | Drop the column or build the feature |

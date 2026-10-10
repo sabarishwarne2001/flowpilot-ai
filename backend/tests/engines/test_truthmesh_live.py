@@ -215,10 +215,23 @@ def test_what_if_ripples_through_dependent_documents(engines: Engines) -> None:
 
 
 def test_a_plan_without_truthmesh_is_refused_and_not_indexed(engines: Engines) -> None:
-    engines.plan("business")
+    # Owner decision N-033 (2026-10-10): TruthMesh is on Business and Enterprise, so the plan
+    # without it is now Developer. Same assertions: refused (402) and nothing indexed.
+    engines.plan("developer")
     engines.process("invoice-INV-TM-9001.pdf", [["INVOICE", "Invoice Number: INV-TM-9001"]], marker="INV-TM-9001",
                     classification="Invoice", entities={"vendor_name": VENDOR, "invoice_number": "INV-TM-9001"})
     engines.refresh()
     assert engines.db.execute(select(MeshNode).where(MeshNode.workspace_id == engines.ws)).first() is None
     refused = engines.get("/truthmesh/overview")
     assert refused.status_code == 402, refused.text
+
+
+def test_the_business_plan_builds_the_mesh(engines: Engines) -> None:
+    """N-033: a Business organization's documents are indexed and its mesh answers."""
+    engines.plan("business")
+    engines.process("invoice-INV-TM-9101.pdf", [["INVOICE", "Invoice Number: INV-TM-9101"]], marker="INV-TM-9101",
+                    classification="Invoice", entities={"vendor_name": VENDOR, "invoice_number": "INV-TM-9101"})
+    engines.refresh()
+    assert engines.db.execute(select(MeshNode).where(MeshNode.workspace_id == engines.ws)).first() is not None
+    overview = engines.get("/truthmesh/overview")
+    assert overview.status_code == 200, overview.text

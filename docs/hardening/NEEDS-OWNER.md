@@ -612,6 +612,11 @@ pausing. The Developer plan sees the page with an explanation and View plans; th
 Changing it is one line per tier in `backend/scripts/seed_quota_tiers.py` (the browser test
 `23-batch-operations` "Developer plan" names the plans in its expected text). Not a price change.
 
+**Owner decision 2026-10-10: DECIDED and CLOSED. Batch operations is on Business and
+Enterprise.** That was already the placement in force everywhere (tier seed, lock copy, server
+gate, browser and engine tests), so nothing in the product changed. Regression locks added:
+`backend/tests/api/test_truthmesh_and_batch_plan_placement.py` pins the tier table.
+
 # Phase 2 — Enterprise processing and TruthMesh (2026-10-08): N-033 open
 
 ## N-033 — Which plans include TruthMesh (Phase 2)
@@ -626,10 +631,21 @@ with a document limit). Changing it is one line per tier in `backend/scripts/see
 the browser plan matrix reads the plan from `frontend/e2e/support/routes.ts` (`plan: "enterprise"`).
 Not a price change.
 
+**Owner decision 2026-10-10: DECIDED and CLOSED. TruthMesh is on Business and Enterprise**, with
+no document limit. Done: `capability.truthmesh` is in the Business tier
+(`seed_quota_tiers.py`); the lock copy reads "included on the Business and Enterprise plans"; the
+plan cards list it beside Batch operations; the browser plan matrix and the engine tests follow
+(the "plan without TruthMesh" case is now Developer, same assertions). Proof: the tier, API and
+browser tests failed on the old placement and pass now. **Deploy step:** a database seeded
+before this release keeps Business subscriptions pinned to the old tier version; run
+`python scripts/seed_quota_tiers.py --carry-forward` (RUNBOOK section 9.3). Every Business
+tenant's documents are now indexed into the mesh on the light worker; existing documents are
+indexed when someone first opens TruthMesh (it rebuilds an empty mesh).
+
 # Phase 3 — Final commercial hardening (2026-10-08): nothing new to decide
 
 Every Phase 3 finding (F-182 to F-206) was an engineering defect and is fixed. The new owner control
 (an organization's maximum session age, F-204) offers shorter limits than the platform's 12 hours
 (8, 4, 2 or 1 hour); that is a security setting each customer chooses, not a product or pricing
-question. **N-032** and **N-033** remain open with their provisional placements in force; neither
-blocks release.
+question. **N-032** and **N-033** were decided on 2026-10-10 (both on Business and Enterprise); see
+their entries.

@@ -288,7 +288,7 @@ BATCH_DISPATCH_CAPABILITY: str = "capability.batch_dispatch"
 #: tenant's documents (identifiers, parties, semantic similarity), relation-aware conflicts across
 #: them, what-if ripple simulation and the executive cockpit. ONE key. Not metered: it reads stored
 #: extractions and chunk embeddings and runs deterministic rules on the LIGHT worker; no model is
-#: called. Plan placement is provisional (N-033, NEEDS-OWNER.md): Enterprise.
+#: called. Business and Enterprise (owner decision N-033, NEEDS-OWNER.md).
 TRUTHMESH_CAPABILITY: str = "capability.truthmesh"
 
 #: ARCH45-S1:capability-universal-corroborator. The Universal Document

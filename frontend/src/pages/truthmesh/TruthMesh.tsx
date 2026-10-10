@@ -97,7 +97,7 @@ const LockedView: React.FC = () => (
       contradict each other (amounts beyond authority, duplicate billing, changed payee accounts, conflicting terms),
       and what a delay or a terminated contract would set off.
     </p>
-    <p className="text-xs text-muted-foreground">TruthMesh is included on the Enterprise plan.</p>
+    <p className="text-xs text-muted-foreground">TruthMesh is included on the Business and Enterprise plans.</p>
     <ViewPlansAction />
   </section>
 );
