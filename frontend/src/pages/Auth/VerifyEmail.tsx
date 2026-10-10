@@ -19,6 +19,7 @@ import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
 import { ROUTES } from "@/constants/routes";
+import { isSafeRedirectPath } from "@/routes/tenantPaths";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AuthShell } from "@/components/auth/AuthShell";
 
@@ -32,13 +33,19 @@ type Phase = "working" | "verified" | "failed" | "missing";
  * readers, and anything the user copies out of the address bar to paste into a
  * support ticket.
  */
-const takeTokenFromFragment = (): string | null => {
+const takeTokenFromFragment = (): { token: string | null; redirect: string | null } => {
   const fragment = window.location.hash.replace(/^#/, "");
   if (!fragment) {
-    return null;
+    return { token: null, redirect: null };
   }
 
-  const token = new URLSearchParams(fragment).get("token");
+  const params = new URLSearchParams(fragment);
+  const token = params.get("token");
+  // F-225. The server puts where sign-up began beside the token
+  // (/verify-email#token=…&redirect=…, validated there); it is read before the
+  // fragment is cleared and validated again here, so sign-in can return to it.
+  const requested = params.get("redirect");
+  const redirect = requested && isSafeRedirectPath(requested) ? requested : null;
   if (token) {
     window.history.replaceState(
       null,
@@ -46,13 +53,15 @@ const takeTokenFromFragment = (): string | null => {
       window.location.pathname + window.location.search,
     );
   }
-  return token;
+  return { token, redirect };
 };
 
 export function VerifyEmail() {
   const navigate = useNavigate();
   const [phase, setPhase] = React.useState<Phase>("working");
   const [message, setMessage] = React.useState<string>("");
+  const [redirect, setRedirect] = React.useState<string | null>(null);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   // A ref, not state. React 18 StrictMode mounts effects twice in
   // development, and the token is single-use — the second call would consume
@@ -65,7 +74,8 @@ export function VerifyEmail() {
     }
     attempted.current = true;
 
-    const token = takeTokenFromFragment();
+    const { token, redirect: destination } = takeTokenFromFragment();
+    setRedirect(destination);
     if (!token) {
       setPhase("missing");
       return;
@@ -108,7 +118,15 @@ export function VerifyEmail() {
         </p>
         <button
           type="button"
-          onClick={() => navigate(ROUTES.LOGIN, { replace: true })}
+          onClick={() => {
+            if (redirect && isAuthenticated) {
+              navigate(redirect, { replace: true });
+            } else if (redirect) {
+              navigate(`${ROUTES.LOGIN}?redirect=${encodeURIComponent(redirect)}`, { replace: true });
+            } else {
+              navigate(ROUTES.LOGIN, { replace: true });
+            }
+          }}
           className="fp-btn fp-btn-primary h-10 px-5"
         >
           Continue

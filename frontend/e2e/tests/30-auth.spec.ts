@@ -53,6 +53,32 @@ test.describe("sign-up, verification and first organization", () => {
     await expectHealthyPage(page);
   });
 
+  test("a sign-up that began somewhere returns there after verifying the email (F-225)", async ({ page }) => {
+    // The server puts the destination in the verification link's fragment
+    // (/verify-email#token=…&redirect=…); the page must carry it to sign-in.
+    const email = `return-${runId()}@e2e.example.com`;
+    const since = Date.now() - 1_000;
+    await page.goto("/register?redirect=%2Finvitations%2Faccept");
+    await page.locator("#email").fill(email);
+    await page.locator("#password").fill(PASSWORD);
+    await page.locator("#confirmPassword").fill(PASSWORD);
+    await page.locator("form").getByRole("button", { name: /create|sign up|register/i }).click();
+    await expect(page.locator("body")).toContainText(/check your (email|inbox)|verification|sent/i);
+
+    const link = linkFrom(await waitForMail(email, /verify-email/, since), /\/verify-email/);
+    expect(link, "the verification link carries the destination").toContain("redirect=%2Finvitations%2Faccept");
+    await page.goto(link);
+    await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/login\?redirect=%2Finvitations%2Faccept/);
+
+    await page.getByRole("textbox", { name: "Email" }).fill(email);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#password").fill(PASSWORD);
+    await page.locator("#password").press("Enter");
+    await expect(page).toHaveURL(/\/invitations\/accept/, { timeout: 20_000 });
+  });
+
   test("a common password is refused at sign-up with a plain reason (ASVS V2.1)", async ({ page, problems }) => {
     problems.allowHttp(/\/auth\/register$/, [422], "a too-easy password is refused");
     await page.goto("/register");
