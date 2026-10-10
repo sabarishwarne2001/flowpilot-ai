@@ -4,8 +4,8 @@ _Last updated: 2026-10-10 (invitations, the workspace team and the event loop)_
 
 ## Latest pass — invitations, the workspace team and the event loop (2026-10-10)
 Same branch and PR as the bug hunt below (`claude/jolly-keller-d0jscd`, PR #18), continued after
-a usage-limit pause, on the owner's list (required.txt). **Ten defects and builds, F-216 to
-F-225, each proven by a failing test first** (FINDINGS.md, "Invitations, the workspace team and
+a usage-limit pause, on the owner's list (required.txt). **Fourteen defects and builds, F-216 to
+F-229, each proven by a failing test first** (FINDINGS.md, "Invitations, the workspace team and
 the event loop"), plus the owner's N-032/N-033 decision applied and backend CI made green again.
 - **F-218 (High):** the routes that await (uploads, the assistant stream, upload parts, webhooks)
   and the sign-in dependency every request runs did blocking work on the event loop; a slow step
@@ -21,6 +21,10 @@ the event loop"), plus the owner's N-032/N-033 decision applied and backend CI m
   Actions cell. **F-220:** an empty or oversized public document-request upload was a 500.
 - **N-032 / N-033 decided:** Batch operations and TruthMesh on Business and Enterprise (deploy step:
   `seed_quota_tiers.py --carry-forward`).
+- **Review:** an independent adversarial review of the diff found **F-226 (High)**: an
+  organization sending mail through its own SMTP could turn an invitation into a verified account
+  for any address; now only a link FlowPilot's relay delivered proves an address. Also F-227
+  (switch account sent a newcomer to sign-in), F-228 (sign-up dead ends), F-229 (presence order).
 - **CI:** backend CI was red on main since the platform relay became mandatory (24 tests); the
   backend steps now declare a relay. `pip-audit (advisory)` stays red on main (N-038).
 Verification: see "What is done" (this pass) below.
@@ -106,15 +110,17 @@ into `main`).
 Enterprise. Open, each with a safe default in force (none blocks a release): **N-034** an invited
 address whose account was never verified, **N-035** invitations into SSO-required organizations,
 **N-036** whether accepting can lower a role, **N-037** invitation lifetime (72 h vs 7 days),
-**N-038** Python dependency advisories. Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe
-(test mode) for launch, Dodo selectable; **N-027** Postmark before the first paying customer;
-**N-028** `app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims;
-**N-030** seat price = plan card price; **N-031** local model at a declared zero.
+**N-038** Python dependency advisories, **N-039** single sign-on linking to an unverified account.
+Everything else in NEEDS-OWNER.md is decided. Previous release: **N-026** Stripe (test mode) for
+launch, Dodo selectable; **N-027** Postmark before the first paying customer; **N-028**
+`app.flowpilot.ai` / `admin@flowpilot.ai`; **N-029** no unbacked trust claims; **N-030** seat price =
+plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-225, the CI
+1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-229, the CI
    relay, N-032/N-033). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
-   Business subscriptions get TruthMesh (RUNBOOK 9.3). Answer N-034 to N-038 when convenient.
+   Business subscriptions get TruthMesh (RUNBOOK 9.3). The release adds one migration
+   (`r1a1_invitation_delivery`). Answer N-034 to N-039 when convenient.
 2. Engineering, small and left for a later pass: the stream's Redis frame buffer still writes on
    the event loop (each call bounded by the 250 ms Redis timeout; moving it needs a per-stream
    writer); the main JavaScript chunk is 412 KB

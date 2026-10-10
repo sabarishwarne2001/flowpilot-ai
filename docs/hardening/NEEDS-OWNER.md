@@ -662,9 +662,10 @@ must use "Forgot your password?" to take it back (that email proves the mailbox,
 **In force:** the conservative path above; the invitation sign-up never replaces an existing
 account's password. **Decide:** keep it, or let the invitation sign-up take over an account whose
 address was never verified (the emailed token proves the mailbox just as a reset link does).
-Related design note: the invitation preview now says whether the invited address has an account,
-so the page can offer sign-in or sign-up. Only the holder of the emailed token can ask, and the
-token is bound to that one address.
+Related design note: the invitation preview says whether the invited address has an account, so
+the page can offer sign-in or sign-up. Only the holder of the emailed token can ask, and the token
+is bound to that one address; for an invitation sent through the organization's own mail server
+(whose operator also holds the token) the preview does not say (F-226).
 
 ## N-035 — Invitations into an organization that requires single sign-on
 An invitee can create a password account from the invitation and join an organization whose
@@ -692,3 +693,16 @@ paramiko 3.5.1 (no fixed release yet). The job is advisory and outside the CI ga
 torch needs the CPU image rebuilt and the OCR and embedding paths retested (F-045); setuptools is
 a build tool and low risk. **Decide:** when to schedule the upgrade (engineering can do it in a
 pass of its own).
+
+## N-039 — Single sign-on attaches to an existing account by email, verified or not
+When someone signs in through an organization's identity provider for the first time, the
+just-in-time provisioning links the sign-in to an existing FlowPilot account with the same email
+(`identity/jit_service.py`), without looking at whether that account's address was ever verified.
+Someone who registered the address earlier (without owning the mailbox) keeps the password to the
+account the real owner now uses through SSO. Unverified accounts cannot open any organization, so
+the window is narrow, and F-226 closed the way such an account could be verified through an
+invitation; it is still worth deciding. **In force:** link by email (today's behaviour).
+**Decide:** link only to an account whose address was verified (and otherwise refuse the SSO sign-in
+with "an unverified account already uses this address; reset its password first"), or take the
+unverified account over (clear its password and sessions) when the identity provider vouches for
+the address.
