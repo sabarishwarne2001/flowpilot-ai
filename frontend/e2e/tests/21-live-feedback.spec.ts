@@ -373,7 +373,7 @@ test.describe("Organization invitations (F-148)", () => {
   test("an invitation past its expiry is marked expired, not pending", async ({ page }) => {
     const past = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
     const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
-    await page.route(/\/organizations\/[^/]+\/invitations$/, (route) => {
+    await page.route(/\/organizations\/[^/]+\/invitations(\?[^/]*)?$/, (route) => {
       if (route.request().method() !== "GET") {return route.continue();}
       return route.fulfill({
         status: 200,

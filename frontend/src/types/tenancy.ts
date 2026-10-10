@@ -183,6 +183,8 @@ export interface WorkspaceInvitation {
   inviter_id: string;
   email: string;
   role: WorkspaceRole;
+  /** The organization role the invitation grants (what the pending lists show). */
+  organization_role?: OrganizationRole;
   status: InvitationStatus;
   expires_at: string;
   accepted_at: string | null;

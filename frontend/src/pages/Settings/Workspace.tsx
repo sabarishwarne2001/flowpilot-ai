@@ -47,6 +47,7 @@ import { ROUTES } from "@/constants/routes";
 import GrantWorkspaceAccessModal from "@/components/workspace/GrantWorkspaceAccessModal";
 
 import type {
+  WorkspaceInvitation,
   WorkspaceInvitationCreateRequest,
   WorkspaceMember,
   WorkspaceRole,
@@ -440,9 +441,13 @@ export const Workspace: React.FC = () => {
   }, [organizationRole, workspaceRole]);
 
   const members = memberList?.items ?? [];
-  const invitations = Array.isArray(pendingInvitations)
-    ? pendingInvitations
-    : (pendingInvitations as any)?.items ?? [];
+  // F-216. Only invitations still waiting for an answer; an accepted or revoked one
+  // is history (the server is asked for PENDING; this guards a stale cache).
+  const invitations = (
+    Array.isArray(pendingInvitations)
+      ? pendingInvitations
+      : (pendingInvitations as { items?: WorkspaceInvitation[] } | undefined)?.items ?? []
+  ).filter((invitation: WorkspaceInvitation) => invitation.status === "PENDING");
 
   const isPageLoading =
     isLoadingWorkspace || isLoadingMembers || isLoadingInvitations;
@@ -893,11 +898,11 @@ export const Workspace: React.FC = () => {
                     <th className="py-2.5 px-4 font-semibold">Email</th>
                     <th className="py-2.5 px-4 font-semibold">Role</th>
                     <th className="py-2.5 px-4 font-semibold">Expires</th>
-                    {canManageTeam && <th className="py-2.5 px-4 font-semibold text-right">Actions</th>}
+                    <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invitations.map((inv: any) => {
+                  {invitations.map((inv: WorkspaceInvitation) => {
                     const expired = new Date(inv.expires_at) <= new Date();
 
                     return (
@@ -907,27 +912,29 @@ export const Workspace: React.FC = () => {
                         <td className="py-3.5 px-4 text-muted-foreground text-xs">
                           {formatTimestamp(inv.expires_at)}
                           {expired && (
-                            <span className="ml-2 font-semibold text-destructive">Expired</span>
+                            <span className="ml-2 font-semibold text-destructive">Expired; resend to renew it</span>
                           )}
                         </td>
-                        {canManageTeam && (
-                          <td className="py-3.5 px-4 text-right space-x-2">
-                            <button
-                              type="button"
-                              onClick={() => resendInviteMutation(inv.id)}
-                              className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium hover:bg-muted/50 transition"
-                            >
-                              Resend
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => revokeInviteMutation(inv.id)}
-                              className="rounded-lg border border-transparent text-destructive px-3 py-1 text-xs font-medium hover:bg-destructive/10 transition"
-                            >
-                              Revoke
-                            </button>
-                          </td>
-                        )}
+                        {/* The section is only shown to people who manage invitations
+                            (organization owners and admins), so the actions always apply. */}
+                        <td className="py-3.5 px-4 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => resendInviteMutation(inv.id)}
+                            aria-label={`Resend the invitation to ${inv.email}`}
+                            className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-medium hover:bg-muted/50 transition"
+                          >
+                            Resend
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => revokeInviteMutation(inv.id)}
+                            aria-label={`Revoke the invitation to ${inv.email}`}
+                            className="rounded-lg border border-transparent text-destructive px-3 py-1 text-xs font-medium hover:bg-destructive/10 transition"
+                          >
+                            Revoke
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.api import deps
 from app.core.exceptions import SeatLimitExceededError
@@ -24,6 +24,7 @@ from app.core.links import (
     build_organization_members_link,
 )
 from app.crud import user as user_crud
+from app.models.organization_invitation import InvitationStatus
 from app.schemas.common import MessageResponse
 from app.schemas.organization_invitation import (
     AcceptedGrantSummary,
@@ -161,9 +162,19 @@ def revoke_invitation(
 def list_invitations(
     db: deps.ReadDbSession,
     context=Depends(deps.RequireOrgAdmin),
+    statuses: Optional[list[InvitationStatus]] = Query(
+        default=None,
+        alias="status",
+        description=(
+            "Only invitations in these states (repeatable). The members and "
+            "workspace screens ask for PENDING; without it the full history is listed."
+        ),
+    ),
 ) -> Any:
+    # F-216. Without a filter every invitation came back, and the workspace page
+    # rendered accepted and revoked ones as pending, with Resend and Revoke.
     invitations = organization_invitation_service.list_invitations(
-        db, organization_id=context.organization_id
+        db, organization_id=context.organization_id, statuses=statuses or None
     )
     return OrganizationInvitationListResponse(
         items=[InvitationResponse.model_validate(i) for m in invitations for i in [m]],

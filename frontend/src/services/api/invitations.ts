@@ -36,9 +36,11 @@ export const createInvitation = async (
 export const listPendingInvitations = async (
   organizationId: string,
 ): Promise<WorkspaceInvitation[]> => {
+  // F-216. Without the filter the server returns the whole history (accepted,
+  // revoked), which the workspace page listed as pending with Resend and Revoke.
   const response = await apiClient.get<WorkspaceInvitation[]>(
     INVITATION_ENDPOINTS.list(organizationId),
-    { headers: { Accept: "application/json" } },
+    { params: { status: "PENDING" }, headers: { Accept: "application/json" } },
   );
   return response.data;
 };
