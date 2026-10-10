@@ -150,6 +150,15 @@ jobs:
           EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
           SERVICE_ROLE: web
           AUTH_LOGIN_MIN_DURATION_MS: "250"
+          # A platform mail relay is part of a working deployment (identity mail and the
+          # resolution every sender goes through need one); without it the email-resolution
+          # tests and the engines' isolation sweep fail. Nothing is sent in these steps: the
+          # address only has to be declared, so it points at a port nothing listens on.
+          PLATFORM_SMTP_HOST: 127.0.0.1
+          PLATFORM_SMTP_PORT: "1"
+          PLATFORM_SMTP_USERNAME: ci-relay
+          PLATFORM_SMTP_PASSWORD: ci-relay-password
+          PLATFORM_SMTP_ENCRYPTION: NONE
         run: |
           pytest -q -p no:cacheprovider \
             tests/security \
@@ -187,6 +196,15 @@ jobs:
           EMAIL_ENCRYPTION_KEYS: 4pQZ8kLmN2vX7bR1sT5wY9cA3dF6gH0jK4nP8qU2eI0=
           SERVICE_ROLE: web
           AUTH_LOGIN_MIN_DURATION_MS: "250"
+          # A platform mail relay is part of a working deployment (identity mail and the
+          # resolution every sender goes through need one); without it the email-resolution
+          # tests and the engines' isolation sweep fail. Nothing is sent in these steps: the
+          # address only has to be declared, so it points at a port nothing listens on.
+          PLATFORM_SMTP_HOST: 127.0.0.1
+          PLATFORM_SMTP_PORT: "1"
+          PLATFORM_SMTP_USERNAME: ci-relay
+          PLATFORM_SMTP_PASSWORD: ci-relay-password
+          PLATFORM_SMTP_ENCRYPTION: NONE
         run: |
           pytest -q -p no:cacheprovider \
             tests/engines \
@@ -248,6 +266,12 @@ jobs:
           SERVICE_ROLE: web
           # Non-zero so the ARCH-0V timing-floor tests exercise the real path.
           AUTH_LOGIN_MIN_DURATION_MS: "250"
+          # See the Phase 2 step: a declared (never contacted) platform mail relay.
+          PLATFORM_SMTP_HOST: 127.0.0.1
+          PLATFORM_SMTP_PORT: "1"
+          PLATFORM_SMTP_USERNAME: ci-relay
+          PLATFORM_SMTP_PASSWORD: ci-relay-password
+          PLATFORM_SMTP_ENCRYPTION: NONE
         run: pytest -q --maxfail=5
 
   # ---------------------------------------------------------------------
