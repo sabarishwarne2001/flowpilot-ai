@@ -158,12 +158,24 @@ def _assert_seat_available(
     *,
     organization: Organization,
     message: str,
+    already_reserved: bool = False,
 ) -> None:
+    """Refuse when the operation would need a seat the organization does not have.
+
+    F-221. `already_reserved` is for an operation on a pending invitation, whose
+    seat the count already includes: accepting turns that reserved seat into a
+    member's, and resending reserves nothing new. Checking those with ">=" counted
+    the invitation twice, so the last seat could never be filled: the invitee was
+    told there were no seats, and the invitation could not be resent. They are
+    refused only when the count is already past the limit (a member added
+    directly meanwhile, or a lowered limit).
+    """
     if organization.seat_limit is None:
         return
 
     reserved = count_reserved_seats(db, organization_id=organization.id)
-    if reserved >= organization.seat_limit:
+    over = reserved > organization.seat_limit if already_reserved else reserved >= organization.seat_limit
+    if over:
         raise SeatLimitExceededError(message)
 
 
@@ -473,6 +485,7 @@ def accept_invitation(
             f"added. Your invitation is still valid — ask an administrator to "
             f"free a seat, then open your link again."
         ),
+        already_reserved=True,
     )
 
     try:
@@ -797,6 +810,7 @@ def resend_invitation(
             f"{organization.name} has no seats available. Free a seat before "
             f"resending this invitation."
         ),
+        already_reserved=True,
     )
 
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
