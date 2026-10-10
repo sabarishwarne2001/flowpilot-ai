@@ -283,9 +283,36 @@ def queue_accepted_mail(background_tasks: BackgroundTasks, accepted: Any) -> Non
     )
 
 
+#: F-234. How long one "no seats" notice covers repeated attempts on one invitation.
+SEAT_BLOCKED_NOTICE_WINDOW_SECONDS = 24 * 60 * 60
+
+
+def _first_seat_blocked_notice(invitation_id: Any) -> bool:
+    """True once per invitation per window. Without Redis, every attempt notifies (as before)."""
+    from app.core.redis_client import get_redis_client
+
+    client = get_redis_client()
+    if client is None:
+        return True
+    try:
+        return bool(client.set(
+            f"invitation:seat_blocked_notice:{invitation_id}", "1",
+            nx=True, ex=SEAT_BLOCKED_NOTICE_WINDOW_SECONDS,
+        ))
+    except Exception:  # noqa: BLE001 - a notice is not worth failing the request over
+        logger.warning("SEAT_BLOCKED_NOTICE_DEDUPE_UNAVAILABLE | invitation=%s", invitation_id)
+        return True
+
+
 def queue_seat_blocked_mail(db: Any, *, token: str) -> None:
-    """Tell the inviter an acceptance was blocked for want of a seat."""
+    """Tell the inviter an acceptance was blocked for want of a seat.
+
+    F-234. Once a day per invitation: the sign-up is public, so its holder could
+    otherwise send the inviter a notice on every refused attempt.
+    """
     blocked = organization_invitation_service.describe_seat_blocked(db, token=token)
+    if not _first_seat_blocked_notice(blocked["invitation_id"]):
+        return
     invitation_mail.send_invitation_seat_blocked(
         inviter_email=blocked["inviter_email"],
         invited_email=blocked["invited_email"],
