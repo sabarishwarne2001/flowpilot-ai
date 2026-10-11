@@ -83,6 +83,14 @@ test.describe("Knowledge base reindex (F-141)", () => {
     await expect(card).toContainText("Last completed on");
     await expect(card).toContainText(/\d+ of \d+ documents? re-embedded/);
     await expect(page.getByRole("button", { name: "Reindex knowledge base…" })).toBeEnabled();
+
+    // Once the run has settled the card stops asking (it polls every 2.5 s only while running).
+    let polls = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("/knowledge-base/reindex/status")) {polls += 1;}
+    });
+    await page.waitForTimeout(7_000);
+    expect(polls, "the idle card kept polling the status route").toBe(0);
     await expectHealthyPage(page);
   });
 
