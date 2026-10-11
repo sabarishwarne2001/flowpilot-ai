@@ -272,11 +272,17 @@ test.describe("session expiry", () => {
     problems.allowHttp(/\/auth\/refresh$|\/api\/v1\//, [401], "the session was revoked on the server");
     await page.goto(ws("C"));
     await expect(page.locator("main")).toContainText("Recent Activity");
-    // "Sign out everywhere" from another device.
-    const other = await loginAs("C.admin");
-    const revoke = await api(other, "POST", "/auth/logout-all");
-    expect([200, 204]).toContain(revoke.status);
+    // From another device, end THIS browser's sign-in (Settings → Sessions → Sign out).
+    // Not "sign out everywhere": C.admin is signed in by tests running in parallel, and
+    // revoking all of its sessions made them fail at random (known-issues F-049 did).
     expect(session).not.toBeNull();
+    const payload = JSON.parse(Buffer.from(session!.accessToken.split(".")[1], "base64url").toString("utf8")) as {
+      sid?: string;
+    };
+    expect(payload.sid, "the access token names its sign-in").toBeTruthy();
+    const other = await loginAs("C.admin");
+    const revoke = await api(other, "DELETE", `/auth/sessions/${payload.sid}`);
+    expect([200, 204]).toContain(revoke.status);
     await page.reload();
     await settle(page);
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
