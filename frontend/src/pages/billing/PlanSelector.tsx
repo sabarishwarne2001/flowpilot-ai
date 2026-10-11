@@ -385,7 +385,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <button
                       type="button"
                       data-testid={`plan-cta-${plan.key}`}
-                      disabled={hasSubscription ? !canManageBilling || portal.isPending : !checkoutAvailable}
+                      disabled={!checkoutAvailable || (hasSubscription && (!canManageBilling || portal.isPending))}
                       onClick={(event) => {
                         event.preventDefault();
                         if (hasSubscription) {
