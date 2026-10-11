@@ -922,3 +922,32 @@ one-week trial").** Engineering defaults below follow from the decision; anythin
   may prefer a different period.
 - **Existing Free organizations at launch** (*proposed*): their trial starts on the day this ships.
 
+
+# Pre-launch campaign, session 2 (2026-10-11): documents, AI and every engine
+
+The owner delegated founder authority for the campaign. Each item below is **DECIDED (campaign
+session 2)**, built and tested on branch `claude/trusting-ptolemy-yiz005` (PR #20).
+
+## N-053 — Building the one-week trial (N-052): the parts left open
+**N-052 is BUILT (campaign session 2).** The owner decided the trial itself; these are the details
+N-052 marked *proposed*, decided the way a Tier-1 SaaS (Claude, Linear, Vercel) does it:
+- **Banner from day 5: kept.** The days left show in the last three days of the seven, to every
+  member; owners get "Choose a plan", everyone else "Ask <owner> to choose a plan".
+- **After the end: read-only, plus managing people.** As N-052 said, plus inviting, removing and
+  changing the role of members, and archiving the organization stay open. Why: the person who will
+  pay is often not the one who started the trial; an owner must be able to invite them.
+- **The full-page notice is dismissible ("Continue read-only").** It shows once per browser session;
+  a strip stays on every page. Why: N-052 promises reading, search and export after the end; a
+  wall that cannot be closed would break that promise.
+- **Data after a trial that never converts: kept, not deleted (changed from the proposed 90
+  days).** Why: a Free organization stores at most 250 MB (about half a US cent a month), deleting
+  customer data automatically is irreversible and is the most common source of angry support
+  tickets, and the people who come back months later are the cheapest customers to win. The owner
+  can still delete an organization; retention policies and erasure requests work as before. If
+  storage cost ever matters, add a sweep that deletes after N days with a 30-day warning email.
+- **Existing Free organizations at launch: seven days from the day this ships (kept).** The
+  migration `s2a1_free_trial_clock` sets it. A paid organization that later lapses to Free is asked
+  to subscribe (its trial is long over), not given a new one.
+- **The two emails: kept** (two days before, and on the day it ends), each sent once per account;
+  an email the relay did not accept is retried hourly inside its window. Session 3 owns the wording.
+- **Setting:** `FREE_TRIAL_DAYS` (default 7) changes the length without a code change.

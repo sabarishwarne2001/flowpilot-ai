@@ -1,8 +1,38 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-11 (pre-launch campaign, session 1 of 4 finished)_
+_Last updated: 2026-10-11 (pre-launch campaign, session 2 of 4 in progress)_
 
-## Current phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
+## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
+Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
+Based on `main` at `340a8c4` (session 1's PR #19 is merged; HANDOFF.md has its section). Owner
+delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 2)`. **If this session is cut off, re-run the same prompt: continue from
+the checklist below; do not restart.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. [done] Build the owner's one-week trial (N-052, HANDOFF spec): clock per owner account, 402
+   `TRIAL_ENDED` on every write/intake path and in the worker, subscribing lifts it, banner and
+   full-page notice, two emails, e2e tenants S and T, tenancy doc regenerated.
+2. Test corpus under `backend/tests/fixtures/corpus/` (generated, no copyrighted material).
+3. P0 sweep of AI safety and isolation: prompt injection through documents (assistant,
+   automations, exception agent, assertions), canary isolation across organizations and
+   ungranted workspaces (search, assistant, citations, embeddings, caches, suggestions), metering
+   exactly once (retries, cancelled streams, fallbacks, BYOK), model list hygiene.
+4. Known leftovers: the assistant stream's Redis frame buffer off the event loop (live /health
+   proof); the matching queue lists one case per invoice copy (one case, duplicates flagged).
+5. Every engine control does something real (AI defaults, presets, legal hold, autonomy
+   thresholds, re-index status) and every engine is checked against the new plan matrix.
+6. Document life: every intake path, every state, hostile timing (delete/archive/downgrade during
+   processing), stuck-job sweeper, idempotent re-runs, provenance.
+7. The worker: every handler and sweep by hand and on schedule, two workers never run one job,
+   DLQ visible, graceful shutdown, 1,000+ jobs RSS, timeouts, shared models serialized, pool.
+8. Automations: action catalog live, loops and budgets; review, collaborative review,
+   verifications and assertions agree.
+9. COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
+
+**Progress:** item 1 done and pushed (commits `0ff335c`, `bef2e09`).
+
+## Previous phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
 sessions run one after another; the hand-over notes between them are in `docs/hardening/HANDOFF.md`.
 Owner delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
