@@ -134,6 +134,43 @@ def _bounded_text(
     return ""
 
 
+#: Two runs share a line when their vertical extents overlap by at least this share of the
+#: shorter one.
+SAME_LINE_OVERLAP = 0.5
+#: A horizontal gap wider than this share of the line height is a column gap (two spaces).
+COLUMN_GAP_SHARE = 0.6
+
+
+def _lines_of(
+    runs: Sequence[tuple[str, float, float, float, float]],
+) -> list[tuple[str, float, float, float, float]]:
+    """Group consecutive text runs that sit on one visual line into one line.
+
+    Campaign session 2 (F-265). pdfium returns one rectangle per text run, and a table
+    drawn cell by cell is one run per cell; emitted one per line, a row of an invoice
+    reached the model as five separate lines. Runs are joined in the order the file
+    draws them, only while each next run is on the same line and to the right of the
+    last, so nothing is reordered: a single space for a word gap, two for a column gap.
+    Each line's box is the union of its runs' boxes.
+    """
+    lines: list[tuple[str, float, float, float, float]] = []
+    for text, left, bottom, right, top in runs:
+        if lines:
+            line_text, l_left, l_bottom, l_right, l_top = lines[-1]
+            overlap = min(top, l_top) - max(bottom, l_bottom)
+            shorter = max(min(top - bottom, l_top - l_bottom), 1e-6)
+            if overlap >= SAME_LINE_OVERLAP * shorter and left >= l_right - 1.0:
+                gap = left - l_right
+                separator = "  " if gap > COLUMN_GAP_SHARE * shorter else " "
+                lines[-1] = (
+                    f"{line_text}{separator}{text}",
+                    min(left, l_left), min(bottom, l_bottom), max(right, l_right), max(top, l_top),
+                )
+                continue
+        lines.append((text, left, bottom, right, top))
+    return lines
+
+
 def extract_page(
     page: Any, *, raster_dpi: int = DEFAULT_RASTER_DPI
 ) -> Optional[TextLayerPage]:
@@ -158,7 +195,7 @@ def extract_page(
         logger.warning("ocr.text_layer_unavailable", exc_info=True)
         return None
 
-    blocks: list[OCRBlock] = []
+    runs: list[tuple[str, float, float, float, float]] = []
     try:
         total = _rect_count(textpage)
         for index in range(total):
@@ -176,26 +213,7 @@ def extract_page(
             text = (raw or "").replace("\r\n", " ").replace("\n", " ").strip()
             if not text:
                 continue
-
-            box = BoundingBox(
-                x0=left * scale,
-                y0=(page_height_pt - top) * scale,
-                x1=right * scale,
-                y1=(page_height_pt - bottom) * scale,
-            )
-            blocks.append(
-                OCRBlock(
-                    text=text,
-                    confidence=1.0,
-                    box=box,
-                    polygon=[
-                        [box.x0, box.y0],
-                        [box.x1, box.y0],
-                        [box.x1, box.y1],
-                        [box.x0, box.y1],
-                    ],
-                )
-            )
+            runs.append((text, left, bottom, right, top))
     finally:
         close = getattr(textpage, "close", None)
         if callable(close):
@@ -203,6 +221,28 @@ def extract_page(
                 close()
             except Exception:  # noqa: BLE001
                 pass
+
+    blocks: list[OCRBlock] = []
+    for text, left, bottom, right, top in _lines_of(runs):
+        box = BoundingBox(
+            x0=left * scale,
+            y0=(page_height_pt - top) * scale,
+            x1=right * scale,
+            y1=(page_height_pt - bottom) * scale,
+        )
+        blocks.append(
+            OCRBlock(
+                text=text,
+                confidence=1.0,
+                box=box,
+                polygon=[
+                    [box.x0, box.y0],
+                    [box.x1, box.y0],
+                    [box.x1, box.y1],
+                    [box.x0, box.y1],
+                ],
+            )
+        )
 
     if not blocks:
         return None
