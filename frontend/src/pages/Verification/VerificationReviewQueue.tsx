@@ -13,6 +13,7 @@ import { DocumentEvidence } from "@/components/review/DocumentEvidence";
 import {
   documentLabel,
   formatFieldValue,
+  isScalarFieldValue,
   parseScore,
 } from "@/types/verification";
 import type {
@@ -36,6 +37,27 @@ export interface VerificationReviewQueueProps {
   readonly focusVerificationId?: string;
   readonly onResolved?: () => void;
 }
+
+
+/**
+ * When the only disagreement is in a list (line items), no single value is left to decide, and
+ * the API refuses an empty decision; the person's approval then covers the single values shown.
+ */
+const withApprovedValues = (
+  values: Record<string, unknown>,
+  fields: readonly VerificationFieldResponse[],
+): Record<string, unknown> => {
+  if (Object.keys(values).length > 0) {
+    return values;
+  }
+  const approved: Record<string, unknown> = {};
+  fields.forEach((field) => {
+    if (!field.field_path.startsWith("assertion:") && isScalarFieldValue(field.consensus_value)) {
+      approved[field.field_path] = field.consensus_value;
+    }
+  });
+  return approved;
+};
 
 export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = ({
   focusVerificationId,
@@ -113,7 +135,9 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
   const isAudit = Boolean(calibrationDetails?.audit_sample);
   const isReviewable = useCallback(
     (field: VerificationFieldResponse): boolean =>
-      !field.field_path.startsWith("assertion:") && (reviewAll || !field.agreed),
+      !field.field_path.startsWith("assertion:") &&
+      isScalarFieldValue(field.consensus_value) &&
+      (reviewAll || !field.agreed),
     [reviewAll],
   );
 
@@ -141,7 +165,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
         values[field.field_path] = field.consensus_value;
       }
     });
-    resolve.mutate(values);
+    resolve.mutate(withApprovedValues(values, detail.fields));
   }, [detail, resolve, isReviewable]);
 
   const submitEdits = useCallback(() => {
@@ -158,7 +182,7 @@ export const VerificationReviewQueue: React.FC<VerificationReviewQueueProps> = (
           ? edits[field.field_path]
           : field.consensus_value;
     });
-    resolve.mutate(values);
+    resolve.mutate(withApprovedValues(values, detail.fields));
   }, [detail, edits, resolve, isReviewable]);
 
   useEffect(() => {
@@ -596,7 +620,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, agents, active, onSelect, ed
         );
       })}
       <td className="px-3 py-2">
-        {editing ? (
+        {editing && isScalarFieldValue(field.consensus_value) ? (
           <input
             value={value ?? formatFieldValue(field.consensus_value)}
             onChange={(e) => onChange(e.target.value)}

@@ -108,6 +108,8 @@ export const ROUTE_PATTERNS = {
   // ARCH50-S2:route-patterns. The operator's Sovereign and RevOps consoles.
   platformSovereign: "sovereign",
   platformRevops: "revops",
+  // Campaign session 2: background jobs and the dead-letter queue.
+  platformJobs: "jobs",
 
   // ARCH-27 partner portal. A sibling of the organization shell, never a child
   // of it — the same decision ARCH-18 made for /admin. A partner principal
@@ -244,6 +246,7 @@ export const platformMarginsPath = (): string => "/admin/margins";
 // ARCH50-S2:route-paths
 export const platformSovereignPath = (): string => "/admin/sovereign";
 export const platformRevopsPath = (): string => "/admin/revops";
+export const platformJobsPath = (): string => "/admin/jobs";
 export const organizationEgressPath = (orgSlug: string): string => `${organizationPath(orgSlug)}/egress`;
 
 export const createWorkspacePath = (orgSlug: string): string =>

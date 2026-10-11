@@ -198,6 +198,12 @@ api_router.include_router(egress_api.router)
 api_router.include_router(admin_sovereign.router)
 api_router.include_router(admin_revops.router)
 
+# Campaign session 2: the operator's Background jobs console and the dead-letter
+# queue (require_superadmin on the router; 404 for anyone else).
+from app.api.v1.admin import jobs as admin_jobs  # noqa: E402
+
+api_router.include_router(admin_jobs.router)
+
 # Global & Identity Federation
 api_router.include_router(health_router, prefix="/health", tags=["Health"])
 api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])

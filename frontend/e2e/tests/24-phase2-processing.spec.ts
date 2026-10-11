@@ -26,7 +26,7 @@ import fs from "node:fs";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "../support/api";
-import { STATE_FILE, runId, ws } from "../support/env";
+import { STATE_FILE, TENANTS, runId, ws } from "../support/env";
 import { DISPUTED_INVOICE_PAGE, buildPdf } from "../support/sample-docs";
 
 test.describe("Three-way matching (F-171, F-172, F-174)", () => {
@@ -48,13 +48,42 @@ test.describe("Three-way matching (F-171, F-172, F-174)", () => {
     await expectHealthyPage(page);
   });
 
-  test("a case that compared no line asks for a reason before it can be approved", async ({ page }) => {
+  test("a case that compared no line asks for a reason before it can be approved", async ({ page }, testInfo) => {
+    // Campaign session 2: since F-265 the seeded invoice's table reaches the model as rows, so its
+    // case compares lines. This one has no line table on either side, so nothing can be compared.
+    test.setTimeout(150_000);
+    const session = await loginAs("C.owner");
+    const { workspaceId } = await resolveWorkspaceId(session, TENANTS.C.org, TENANTS.C.ws);
+    const stamp = Date.now();
+    const po = `PO-E2E-NL${stamp}`;
+    const invoice = `INV-E2E-NL${stamp}`;
+    const pages: Record<string, string[]> = {
+      [`po-${stamp}.pdf`]: ["PURCHASE ORDER", "Buyer: Caretakers Global Inc", "Vendor: Acme Industrial Supplies Ltd",
+        `PO Number: ${po}`, "PO Date: 2026-09-01", "Currency: USD", "PO Total: 300.00 USD"],
+      [`invoice-${stamp}.pdf`]: ["INVOICE", "Vendor: Acme Industrial Supplies Ltd", "Bill To: Caretakers Global Inc",
+        `Invoice Number: ${invoice}`, "Invoice Date: 2026-09-20", `PO Number: ${po}`, "Currency: USD",
+        "Total Amount Due: 300.00 USD"],
+    };
+    for (const [name, lines] of Object.entries(pages)) {
+      const file = testInfo.outputPath(name);
+      fs.writeFileSync(file, buildPdf([lines]));
+      const upload = await uploadFile(session, workspaceId, file);
+      expect(upload.status, upload.text).toBe(201);
+      await expect
+        .poll(async () => {
+          const items = await listWorkItems(session, workspaceId, `search=${encodeURIComponent(name)}&limit=10`);
+          return String(items[0]?.status ?? "");
+        }, { timeout: 90_000 })
+        .toMatch(/COMPLETED|NEEDS_REVIEW/);
+    }
+
     await page.goto(ws("C", "procurement"));
     await settle(page);
-    const row = page.locator("main tbody tr").filter({ hasText: "INV-E2E-1001" }).first();
+    const row = page.locator("main tbody tr").filter({ hasText: invoice }).first();
+    await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole("link", { name: "Review" }).click();
     await expect(page.getByRole("heading", { name: /Three-way match/ })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Documents in this case" })).toContainText("PO-E2E-5001");
+    await expect(page.getByRole("region", { name: "Documents in this case" })).toContainText(po);
     await page.getByRole("button", { name: "Approve match" }).click();
     // No approval happens on the click: the reason dialog opens instead.
     await expect(page.getByRole("heading", { name: "Approve without a line-by-line comparison" })).toBeVisible();

@@ -180,6 +180,8 @@ export const INVITATION_ENDPOINTS = {
 export const SETTINGS_ENDPOINTS = {
   aiSettings: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings`,
   aiSettingsModels: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/models`,
+  aiSettingsModelAvailability: (workspaceId: string): string =>
+    `${scoped(workspaceId)}/ai-settings/models/availability`,
   aiSettingsProviders: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/providers`,
   aiSettingsTest: (workspaceId: string): string => `${scoped(workspaceId)}/ai-settings/test`,
   emailSettings: (workspaceId: string): string => `${scoped(workspaceId)}/email-settings`,

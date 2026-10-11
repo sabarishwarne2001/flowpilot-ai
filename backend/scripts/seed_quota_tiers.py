@@ -312,8 +312,11 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "grace_quantity": "10000",
             },
             {
+                # Campaign session 2 (N-054): 100M (was 150M) per seat. At GPT-OSS 120B's
+                # real price (the default model, $0.15 / $0.60 per million) a seat used to
+                # every ceiling kept 56%; past this, tokens bill overage at over six times cost.
                 "limit_key": "llm.input_token",
-                "max_quantity": "150000000",
+                "max_quantity": "100000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
                 "grace_quantity": "10000",
@@ -325,8 +328,11 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
             {
+                # Campaign session 2 (N-054): 40,000 (was 50,000), with the input tokens
+                # above: together a seat used to every ceiling keeps 62% at the suppliers'
+                # real prices. Pages past this bill overage at ten times their cost.
                 "limit_key": "ocr.page",
-                "max_quantity": "50000",
+                "max_quantity": "40000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
@@ -349,16 +355,18 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             },
             # Per seat. 1B in / 250M out a seat, all on the dearest model the platform
             # pays for, took a seat to a 44% margin (N-046); past these, tokens are
-            # billed at the overage rate.
+            # billed at the overage rate. Campaign session 2 (N-054): 300M in / 75M out
+            # (were 500M / 125M); at GPT-OSS 120B's real price a seat at every ceiling
+            # kept 53%, now 61%.
             {
                 "limit_key": "llm.input_token",
-                "max_quantity": "500000000",
+                "max_quantity": "300000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
             {
                 "limit_key": "llm.output_token",
-                "max_quantity": "125000000",
+                "max_quantity": "75000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },

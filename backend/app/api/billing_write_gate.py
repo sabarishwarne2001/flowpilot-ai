@@ -38,6 +38,15 @@ guesses. Each entry is something a delinquent tenant must still be able to do:
 DELETE is never refused: removing data or access reduces what the tenant uses
 and is sometimes legally required. GET, HEAD and OPTIONS are reads.
 
+THE FREE TRIAL (N-052, campaign session 2)
+==========================================
+
+A Free organization whose one-week trial has ended is refused the same way, with
+a 402 `TRIAL_ENDED` (remedy `SUBSCRIBE`) from `trial_service`. Everything above
+stays writable, and so does managing people (`TRIAL_ENDED_ALSO_PERMITTED`:
+members, invitations, workspace members, archiving), because inviting the
+colleague who will pay is part of subscribing.
+
 The access state is computed once per request and cached on `request.state`.
 """
 
@@ -69,6 +78,20 @@ ALWAYS_PERMITTED: tuple[re.Pattern[str], ...] = tuple(
 )
 
 _CACHE_ATTR = "billing_access_state"
+_TRIAL_CACHE_ATTR = "billing_trial_status"
+
+#: N-052 (campaign session 2). After a free trial ends the organization is read-only like an
+#: unpaid one, and also keeps managing its people: inviting the colleague who will pay,
+#: changing roles, removing someone. Archiving (the owner's delete) stays open too.
+TRIAL_ENDED_ALSO_PERMITTED: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"/organizations/[^/]+/members(/|$)",
+        r"/organizations/[^/]+/invitations(/|$)",
+        r"/workspaces/[^/]+/members(/|$)",
+        r"/organizations/[^/]+/archive$",
+    )
+)
 
 
 def is_permitted_path(path: str) -> bool:
@@ -101,6 +124,7 @@ def assert_billing_writes_allowed(
             setattr(state_holder, _CACHE_ATTR, state)
 
     if state.writes_allowed:
+        _assert_trial_not_ended(state_holder, db, organization_id=organization_id, path=path)
         return
 
     raise BillingReadOnlyError(
@@ -116,8 +140,24 @@ def assert_billing_writes_allowed(
     )
 
 
+def _assert_trial_not_ended(state_holder: Any, db: Session, *, organization_id: uuid.UUID, path: str) -> None:
+    """N-052: a Free organization whose trial is over refuses new work (402 TRIAL_ENDED)."""
+    if any(pattern.search(path) for pattern in TRIAL_ENDED_ALSO_PERMITTED):
+        return
+    from app.services import trial_service
+
+    trial = getattr(state_holder, _TRIAL_CACHE_ATTR, None) if state_holder is not None else None
+    if trial is None:
+        trial = trial_service.status(db, organization_id=organization_id)
+        if state_holder is not None:
+            setattr(state_holder, _TRIAL_CACHE_ATTR, trial)
+    if trial.ended:
+        raise trial_service.ended_error(trial, organization_id=organization_id)
+
+
 __all__ = [
     "ALWAYS_PERMITTED",
+    "TRIAL_ENDED_ALSO_PERMITTED",
     "MUTATING_METHODS",
     "assert_billing_writes_allowed",
     "is_permitted_path",

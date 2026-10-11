@@ -148,6 +148,8 @@ LIGHT = WorkerProfile(
             "ingestion.sweep_sessions",
             # HARDENING-T1:D25. Queries only; no heavy imports.
             "pipeline.sweep_stuck",
+            # Campaign session 2 (N-052): the free-trial emails. Queries and SMTP only.
+            "trial.reminders",
             # ARCH42-S1:entity-light-profile. Entity resolution: string
             # similarity, indexed lookups and EM arithmetic. Nothing under
             # app/services/entities/ imports a model, OCR or a PDF engine.

@@ -1,8 +1,69 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-11 (pre-launch campaign, session 1 of 4 finished)_
+_Last updated: 2026-10-11 (pre-launch campaign, session 2 of 4 complete; next: merge PR #20, then session 3)_
 
-## Current phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
+## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
+Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
+Based on `main` at `340a8c4` (session 1's PR #19 is merged; HANDOFF.md has its section). Owner
+delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 2)`. **If this session is cut off, re-run the same prompt: continue from
+the checklist below; do not restart.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. [done] Build the owner's one-week trial (N-052, HANDOFF spec): clock per owner account, 402
+   `TRIAL_ENDED` on every write/intake path and in the worker, subscribing lifts it, banner and
+   full-page notice, two emails, e2e tenants S and T, tenancy doc regenerated.
+2. [done] Test corpus under `backend/tests/fixtures/corpus/` (generated, no copyrighted material).
+3. [done] P0 sweep of AI safety and isolation: prompt injection through documents (assistant,
+   automations, exception agent, assertions), canary isolation across organizations and
+   ungranted workspaces (search, assistant, citations, embeddings, caches, suggestions), metering
+   exactly once (retries, cancelled streams, fallbacks, BYOK), model list hygiene.
+4. [done] Known leftovers: the assistant stream's Redis frame buffer off the event loop (live /health
+   proof); the matching queue lists one case per invoice copy (one case, duplicates flagged).
+5. [done] Every engine control does something real (AI defaults, presets, legal hold, autonomy
+   thresholds, re-index status) and every engine is checked against the new plan matrix.
+6. [done] Document life: every intake path, every state, hostile timing (delete/archive/downgrade during
+   processing), stuck-job sweeper, idempotent re-runs, provenance.
+7. [done] The worker: every handler and sweep by hand and on schedule, two workers never run one job,
+   DLQ visible, graceful shutdown, 1,000+ jobs RSS, timeouts, shared models serialized, pool.
+8. [done] Automations: action catalog live, loops and budgets; review, collaborative review,
+   verifications and assertions agree.
+9. [done] COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
+
+**Progress (checkpoint 1, 2026-10-11):** items 1 to 5 done and pushed. Fixed and proven:
+F-257 to F-266 (FINDINGS.md, session 2 section), decisions N-053 to N-055. Live proofs with no
+defect: retrieval isolation (55 checks), prompt injection, metering exactly once. Engine controls
+proven real by new live tests: presets reach the extraction prompt (and stop when disabled), the
+autonomy error limit moves the cut-off, the re-index card stops polling, Streaming responses
+(F-266), AI defaults on a new organization (F-260); legal hold was already covered
+(`tests/api/test_legal_hold_enforcement.py`).
+
+**Progress (checkpoint 2, 2026-10-11):** items 6 to 8 done and pushed. Fixed and proven: F-267
+(Reprocess did nothing and left documents Queued; AI never re-ran), F-268 (Reprocess twice ran and
+charged twice), F-269 (two workers ran one job; a stopping worker ran its whole batch), F-270 (the
+dead-letter queue made visible: /admin/jobs), F-271 (API keys acted with their issuer's full rights
+whatever their scopes; N-056). Proven sound with new live tests: deletes mid-pipeline, duplicate
+job delivery, every scheduled sweep, 1,200-job memory soak, the rest of the automation action
+catalog, API-key uploads. The sandbox restarted once mid-session (databases on the RAM disk were
+lost; `frontend/e2e/scripts/start-db.sh` then `start-stack.sh` bring everything back). **Next:**
+item 9 (ledger, full suites, PR ready).
+
+**Finished (2026-10-11).** Fixed and proven this session: F-257 to F-274 (18), plus the owner's
+trial (N-052). Decisions N-053 to N-056. Finish checks, all on the final code:
+- backend: full suite **3,915 passed, 9 skipped, 0 failed** (`POSTGRES_DB=flowpilot_test`);
+- browser: full suite on a fresh e2e database, production bundle, CSP enforced, model stand-in on
+  (`E2E_LLM=1`, as CI): **409 passed, 1 skipped** (the provider-down test, which only runs without
+  a model), 0 failed;
+- frontend: `tsc -b`, the browser tests' typecheck, `npm run lint`, `npm run check:self`,
+  `npm run build`: all clean (the build's large-chunk notice is pre-existing);
+- Alembic: one head (`s2a1_free_trial_clock`), upgrade, downgrade, upgrade on a scratch database;
+- audits: `pip-audit -r requirements.txt` and `npm audit --omit=dev`: no known vulnerabilities;
+- live logs of the browser run: 0 tracebacks, 0 ERROR lines (API and worker); the one 5xx is the
+  expected 503 for a seat purchase with no gateway key in the sandbox; all 468 jobs SUCCEEDED.
+Ledger, session 2's slice: 362 `deep`, 9 `blocked`, 83 `smoke`, 18 `untested`; what is left is
+listed in HANDOFF.md for session 4. **Next:** the owner merges PR #20; then session 3.
+
+## Previous phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
 sessions run one after another; the hand-over notes between them are in `docs/hardening/HANDOFF.md`.
 Owner delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as

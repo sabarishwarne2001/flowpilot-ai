@@ -384,6 +384,128 @@ def _live_case_for(
     ).scalar_one_or_none()
 
 
+# ---------------------------------------------------------------------------
+# Copies of one invoice (campaign session 2, F-264, N-055)
+# ---------------------------------------------------------------------------
+#
+# The same invoice often arrives twice (emailed then posted, rescanned, re-sent by
+# a supplier chasing payment). An invoice is the same invoice when it is the same
+# bytes (`work_items.duplicate_of_work_item_id`) or has the same vendor and invoice
+# number in the same workspace. The first copy to arrive holds the case; later
+# copies open none and are listed on it, so a reviewer sees the duplicate-payment
+# risk where the decision is made, and cannot approve the same bill twice.
+
+
+def _norm(value: Optional[str]) -> Optional[str]:
+    cleaned = " ".join((value or "").split()).lower()
+    return cleaned or None
+
+
+def _invoice_group(db: Session, *, workspace_id: uuid.UUID, work_item_id: uuid.UUID) -> list[tuple[uuid.UUID, Any]]:
+    """Every invoice copy of this one, oldest first, as (work_item_id, created_at)."""
+    from sqlalchemy import or_
+
+    from app.models.document_role import DocumentRole
+    from app.models.work_item import WorkItem
+    from app.services.procurement_matching.role_classifier import ROLE_INVOICE
+
+    me = db.execute(
+        select(DocumentRole.vendor_key, DocumentRole.document_number, WorkItem.duplicate_of_work_item_id)
+        .join(WorkItem, WorkItem.id == DocumentRole.work_item_id)
+        .where(DocumentRole.work_item_id == work_item_id, DocumentRole.role == ROLE_INVOICE)
+    ).first()
+    if me is None:
+        return []
+    vendor, number, byte_original = _norm(me[0]), _norm(me[1]), me[2]
+    same_bytes = [WorkItem.id == work_item_id, WorkItem.duplicate_of_work_item_id == work_item_id]
+    if byte_original is not None:
+        same_bytes += [WorkItem.id == byte_original, WorkItem.duplicate_of_work_item_id == byte_original]
+    clauses = list(same_bytes)
+    from sqlalchemy import and_, func
+
+    if vendor and number:
+        clauses.append(and_(
+            func.lower(DocumentRole.vendor_key) == vendor,
+            func.lower(func.trim(DocumentRole.document_number)) == number,
+        ))
+    rows = db.execute(
+        select(WorkItem.id, WorkItem.created_at)
+        .join(DocumentRole, DocumentRole.work_item_id == WorkItem.id)
+        .where(
+            DocumentRole.workspace_id == workspace_id,
+            DocumentRole.role == ROLE_INVOICE,
+            or_(*clauses),
+        )
+        .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
+    ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+def first_copy_of(db: Session, *, workspace_id: uuid.UUID, invoice_work_item_id: uuid.UUID) -> Optional[uuid.UUID]:
+    """The invoice that holds the case when this one is a later copy of it; None when it is the first."""
+    group = _invoice_group(db, workspace_id=workspace_id, work_item_id=invoice_work_item_id)
+    if not group or group[0][0] == invoice_work_item_id:
+        return None
+    return group[0][0]
+
+
+def copies_of(db: Session, *, workspace_id: uuid.UUID, invoice_work_item_id: Optional[uuid.UUID]) -> list[dict[str, Any]]:
+    """The later copies of the invoice a case holds: id, file name and when each arrived."""
+    from app.models.work_item import WorkItem
+
+    if invoice_work_item_id is None:
+        return []
+    group = _invoice_group(db, workspace_id=workspace_id, work_item_id=invoice_work_item_id)
+    if not group or group[0][0] != invoice_work_item_id:
+        return []
+    later = [work_item_id for work_item_id, _ in group[1:]]
+    if not later:
+        return []
+    rows = db.execute(
+        select(WorkItem.id, WorkItem.original_filename, WorkItem.created_at)
+        .where(WorkItem.id.in_(later))
+        .order_by(WorkItem.created_at.asc(), WorkItem.id.asc())
+    ).all()
+    return [{"work_item_id": row[0], "original_filename": row[1], "received_at": row[2]} for row in rows]
+
+
+def retire_later_copy_cases(db: Session, *, workspace_id: uuid.UUID, invoice_work_item_id: uuid.UUID) -> list[uuid.UUID]:
+    """Retire the unresolved cases of every later copy in this invoice's group (any member may be named)."""
+    group = _invoice_group(db, workspace_id=workspace_id, work_item_id=invoice_work_item_id)
+    if len(group) < 2:
+        return []
+    first = group[0][0]
+    retired = []
+    for work_item_id, _ in group[1:]:
+        case_id = retire_copy_case(db, workspace_id=workspace_id, invoice_work_item_id=work_item_id, first_copy=first)
+        if case_id is not None:
+            retired.append(case_id)
+    return retired
+
+
+def retire_copy_case(
+    db: Session, *, workspace_id: uuid.UUID, invoice_work_item_id: uuid.UUID, first_copy: uuid.UUID
+) -> Optional[uuid.UUID]:
+    """A later copy's unresolved case leaves the queue (SUPERSEDED); a decided one is left as decided."""
+    live = _live_case_for(db, workspace_id=workspace_id, invoice_work_item_id=invoice_work_item_id)
+    if live is None or live.status in RESOLVED_CASE_STATUSES:
+        return None
+    live.status = CASE_STATUS_SUPERSEDED
+    live.resolution_reason = f"A later copy of invoice {first_copy}; that invoice's case is the case."
+    db.flush([live])
+    audit_service.record(
+        db,
+        organization_id=live.organization_id,
+        workspace_id=workspace_id,
+        actor_id=None,
+        resource_type=AuditResourceType.PROCUREMENT_CASE,
+        resource_id=live.id,
+        action=AuditAction.MATCH_RESCORED,
+        details={"previous_status": "LIVE", "reason": "duplicate_copy", "first_copy_work_item_id": str(first_copy)},
+    )
+    return live.id
+
+
 def _persist(
     db: Session,
     *,

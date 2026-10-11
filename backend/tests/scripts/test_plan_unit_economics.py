@@ -7,8 +7,8 @@ priced at the price book's own cost bases (`scripts/seed_price_book.py`, the fig
 the margin service reports COGS from), against the plan's price per seat:
 
   * OCR pages at the self-hosted OCR cost basis;
-  * input and output tokens at the platform default model's cost basis
-    (`openai/gpt-oss-20b` on Groq);
+  * input and output tokens at the cost basis of the model a new workspace runs
+    (`AI_MODELS[GROQ][0]`, `openai/gpt-oss-120b`; campaign session 2);
   * storage at the object storage cost basis per GB-month;
   * embedding: every OCR page indexed at ~500 tokens.
 
@@ -17,9 +17,9 @@ below them), and Free must cost less than $0.25 a month per account: it is an
 acquisition cost, not a product. Changing a limit or a cost basis so that this no
 longer holds needs a decision, not a quiet edit.
 
-The platform also serves dearer models on its own keys (Groq's larger models, Gemini),
-so a seat whose tokens all go to the dearest of them must still keep at least 50%
-(N-046).
+The platform also serves a dearer model on its own keys (GPT-OSS 120B), so a seat whose
+tokens all go to the dearest model it serves must still keep at least 50% (N-046). Premium
+models (Gemini, Groq's Preview models) run on the organization's own key (N-054).
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ from decimal import Decimal
 import pytest
 
 from app.core import byok_providers
+from app.core.ai_models import AI_MODELS, PLATFORM_SERVED_MODELS
+from app.schemas.ai_settings import AIProvider
 from tests.security.plans import _price_book_seed, _seed
 
 #: Tokens written to the embedding index per OCR page (a page of text).
@@ -57,22 +59,23 @@ def _quantity(entries: dict, key: str) -> Decimal:
 
 
 def _dearest_platform_cost(event_type: str) -> Decimal:
-    """The highest cost basis among the models the platform pays for (it holds the key)."""
+    """The highest cost basis among the models the platform pays for.
 
-    def platform_pays(provider: str) -> bool:
-        try:
-            return byok_providers.platform_key_for(provider) is not None
-        except (KeyError, ValueError):
-            return False
-
-    return max(
-        Decimal(str(row["cost_basis_micros"]))
-        for row in _price_book_seed().PLACEHOLDER_ENTRIES
-        if row["event_type"] == event_type
-        and row.get("tier_key") is None
-        and row.get("cost_basis_micros") is not None
-        and platform_pays(row["provider"])
-    )
+    Campaign session 2 (N-054): the platform's own keys serve only PLATFORM_SERVED_MODELS (a
+    call with any other model runs on the organization's key or is answered by the platform
+    default, `tests/services/test_platform_served_models.py`). Before, every model of a
+    provider whose key the platform holds counted, and at the suppliers' real prices
+    (`test_price_book_matches_supplier_rates.py`) Gemini 2.5 Pro made an Enterprise seat cost
+    $2,223 a month: exactly why those models moved to the customer's key.
+    """
+    served = [
+        (provider, model)
+        for provider, models in PLATFORM_SERVED_MODELS.items()
+        for model in models
+        if byok_providers.platform_key_for(provider) is not None
+    ]
+    assert served, "the platform serves no model on its own keys"
+    return max(_cost_basis(event_type, provider, model) for provider, model in served)
 
 
 def cost_at_ceilings_usd(plan: str, *, dearest_model: bool = False) -> Decimal:
@@ -82,8 +85,12 @@ def cost_at_ceilings_usd(plan: str, *, dearest_model: bool = False) -> Decimal:
         input_cost = _dearest_platform_cost("llm.input_token")
         output_cost = _dearest_platform_cost("llm.output_token")
     else:
-        input_cost = _cost_basis("llm.input_token", "groq", "openai/gpt-oss-20b")
-        output_cost = _cost_basis("llm.output_token", "groq", "openai/gpt-oss-20b")
+        # Campaign session 2: the model a new workspace actually runs (the primary default,
+        # `AI_MODELS[GROQ][0]`, GPT-OSS 120B since commit 233a3c0), not the cheaper 20B
+        # this test assumed.
+        default_model = AI_MODELS[AIProvider.GROQ][0]
+        input_cost = _cost_basis("llm.input_token", "groq", default_model)
+        output_cost = _cost_basis("llm.output_token", "groq", default_model)
     micros = (
         pages * _cost_basis("ocr.page", "paddleocr")
         + _quantity(entries, "llm.input_token") * input_cost

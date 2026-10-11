@@ -416,6 +416,17 @@ def _line_from(
     )
 
 
+def po_reference_of(entities: Mapping[str, Any]) -> Optional[str]:
+    """The normalised purchase order number a document prints, or None (campaign session 2)."""
+    raw_po = _as_text(_first(entities, _PO_REFERENCE_KEYS))
+    if not raw_po:
+        return None
+    try:
+        return nz.document_number(raw_po)
+    except nz.NormalizationError:
+        return None
+
+
 def document_number_for_role(entities: Mapping[str, Any], role: str, fallback: Optional[str]) -> Optional[str]:
     """The document's own number for its role (F-115); `fallback` (the generic pick) for other roles."""
     keys = ROLE_NUMBER_KEYS.get(str(role or "").upper())

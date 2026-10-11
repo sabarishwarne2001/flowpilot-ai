@@ -335,3 +335,78 @@ def test_a_public_document_request_upload(live_server, db_session, tenant: Fixtu
         reached,
     )
     _assert_responsive(health, elapsed, outcome, expect=(200, 422))
+
+
+def test_a_streamed_answers_replay_buffer(live_server, db_session, tenant: Fixture, monkeypatch) -> None:
+    """Campaign session 2. The stream's Redis replay buffer wrote every frame on the event loop.
+
+    Each token of a streamed answer was appended to Redis with a blocking round trip on the
+    loop (bounded only by the 250 ms Redis timeout): a slow Redis slowed every request on the
+    API. The buffer now has its own writer thread per stream.
+    """
+    from app.services import assistant_stream as stream_module
+    from app.services import llm_stream
+    from app.services.byok.provider_clients import SOURCE_PLATFORM, CredentialUse
+    from app.services.workspace_service import add_default_settings
+    from app.schemas.assistant import TokenUsage
+
+    put_on_plan(db_session, tenant.organization, "enterprise")  # AI on the platform's key
+    add_default_settings(db_session, workspace_id=tenant.workspace.id, actor_id=tenant.owner.user.id)
+    db_session.commit()
+    reached = threading.Event()
+    real = stream_module.get_redis_client()
+    assert real is not None, "the test needs REDIS_URL"
+
+    class SlowPipeline:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def execute(self):
+            reached.set()
+            time.sleep(SLOW_SECONDS)
+            return self._inner.execute()
+
+    class SlowRedis:
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+        def pipeline(self, *args, **kwargs):
+            return SlowPipeline(real.pipeline(*args, **kwargs))
+
+    monkeypatch.setattr(stream_module, "get_redis_client", lambda: SlowRedis())
+
+    def opened(*args, **kwargs):
+        def chunks():
+            yield llm_stream.StreamChunk(text="The total is 10.")
+            yield llm_stream.StreamChunk(
+                usage=TokenUsage(provider="groq", model="openai/gpt-oss-120b", prompt_tokens=50,
+                                 completion_tokens=5, total_tokens=55, estimated_cost=0.0),
+                finish_reason="stop",
+            )
+
+        return llm_stream.StreamSession(
+            chunks=chunks(),
+            credential_use=CredentialUse(source=SOURCE_PLATFORM, provider="GROQ", organization_id=tenant.organization.id),
+        )
+
+    monkeypatch.setattr(llm_stream, "open_stream", opened)
+    with httpx.Client(base_url=live_server, timeout=30) as http:
+        conversation = http.post(
+            f"{API}/workspaces/{tenant.workspace.id}/assistant/conversations",
+            json={"title": "buffer probe"}, headers=tenant.owner.headers,
+        )
+        assert conversation.status_code in (200, 201), conversation.text
+    cid = conversation.json()["id"]
+    health, elapsed, outcome = _fire_and_time_health(
+        live_server,
+        lambda http: http.post(
+            f"{API}/workspaces/{tenant.workspace.id}/assistant/conversations/{cid}/messages/stream",
+            json={"content": "What is the total?"}, headers=tenant.owner.headers,
+        ),
+        reached,
+    )
+    _assert_responsive(health, elapsed, outcome, expect=(200,))
+    assert "The total is 10." in outcome["response"].text

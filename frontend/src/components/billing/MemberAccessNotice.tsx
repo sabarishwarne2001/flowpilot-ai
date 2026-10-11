@@ -56,7 +56,8 @@ export const MemberAccessNotice: React.FC<MemberAccessNoticeProps> = ({
     retry: false,
   });
 
-  if (!summary || summary.state === "ACTIVE") {
+  // Campaign session 2: a trial that ended is explained by `TrialBanner`, for every role.
+  if (!summary || summary.state === "ACTIVE" || summary.state === "TRIAL_ENDED") {
     return null;
   }
 

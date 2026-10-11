@@ -14,6 +14,10 @@ A document is charged when it is ACCEPTED, never midway through processing:
     so two uploads cannot both count on the last pages); and the stored bytes plus
     this file must fit a plan whose storage is a hard ceiling.
 
+Every admission also refuses an organization whose free trial is over (N-052,
+`trial_service`: 402 TRIAL_ENDED), so intake that is not a signed-in request (a public
+request link, a connector) is covered as well as the API's write gate.
+
 So a document the plan cannot process is refused at the door with a 402 and a
 machine-readable reason, and an accepted one is never stranded in "processing" by
 a count limit. The OCR worker still checks its own meter (the safety net), and the
@@ -249,7 +253,9 @@ def precheck_document(
     from app.services import quota_service
     from app.services import spend_control_service as spend
     from app.core.exceptions import SpendLimitExceededError
+    from app.services import trial_service
 
+    trial_service.assert_trial_active(db, organization_id=organization_id)
     assert_file_fits_plan(db, organization_id=organization_id, size_bytes=size_bytes, page_count=page_count)
     pool = quota_service.usage_pool(db, organization_id=organization_id)
     for limit in spend.effective_limits(db, organization_id=organization_id, limit_key=DOCUMENT_UPLOAD, lock=False):
@@ -290,7 +296,9 @@ def admit_document(
     """
     from app.services import quota_service
     from app.services import spend_control_service as spend
+    from app.services import trial_service
 
+    trial_service.assert_trial_active(db, organization_id=organization_id)
     assert_file_fits_plan(db, organization_id=organization_id, size_bytes=size_bytes, page_count=page_count)
     with spend.guard_usage(
         db,
@@ -318,7 +326,9 @@ def assert_reprocess_admitted(
     """
     from app.services import quota_service
     from app.services import spend_control_service as spend
+    from app.services import trial_service
 
+    trial_service.assert_trial_active(db, organization_id=organization_id)
     spend._lock_organization(db, organization_id)  # noqa: SLF001 - the pool's lock
     pool = quota_service.usage_pool(db, organization_id=organization_id)
     _assert_ocr_room(
@@ -335,8 +345,9 @@ def assert_reprocess_admitted(
 def assert_workspace_available(db: Session, *, organization_id: uuid.UUID) -> None:
     """Refuse a new (or restored) workspace past the plan's `limit.workspaces` (402)."""
     from app.models.workspace import Workspace, WorkspaceStatus
-    from app.services import quota_service
+    from app.services import quota_service, trial_service
 
+    trial_service.assert_trial_active(db, organization_id=organization_id)
     limit = quota_service.plan_limit(db, organization_id=organization_id, limit_key=WORKSPACES_LIMIT)
     if limit is None:
         return
@@ -378,6 +389,9 @@ def admit_assistant_message(
 ) -> None:
     """Charge one assistant message, or refuse (402 QUOTA_EXCEEDED) before the model runs."""
     from app.services import spend_control_service as spend
+    from app.services import trial_service
+
+    trial_service.assert_trial_active(db, organization_id=organization_id)
 
     with spend.guard_usage(
         db,
@@ -454,7 +468,10 @@ def allowance(db: Session, *, organization_id: uuid.UUID) -> dict[str, Any]:
                 }
             )
             break
+    from app.services import trial_service
+
     return {
+        "trial": trial_service.status(db, organization_id=organization_id).as_dict(),
         "plan_key": tier.key if tier is not None else None,
         "plan_name": tier.display_name if tier is not None else None,
         "max_file_mb": max_upload_bytes(db, organization_id=organization_id) // MIB,

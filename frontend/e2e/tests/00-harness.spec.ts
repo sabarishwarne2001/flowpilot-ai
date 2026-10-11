@@ -5,14 +5,15 @@
 import fs from "node:fs";
 
 import { test, expect, ProblemTracker, attachProblemListeners } from "../support/fixtures";
-import { API_BASE, STATE_FILE } from "../support/env";
+import { API_BASE, STATE_FILE, USERS } from "../support/env";
 
 test.describe("harness", () => {
   test("the API is healthy and the seed state exists", async () => {
     const response = await fetch(`${API_BASE}/health`);
     expect(response.status).toBe(200);
     const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-    expect(Object.keys(state.seed.users)).toHaveLength(11);
+    // Every persona the specs sign in as was seeded (14 since the trial tenants S and T).
+    expect(Object.keys(state.seed.users).sort()).toEqual(Object.keys(USERS).sort());
     for (const tenant of ["A", "B", "C"]) {
       const items = state.documents[tenant].items as Array<{ status: string }>;
       expect(items.length, `tenant ${tenant} has sample documents`).toBeGreaterThan(0);

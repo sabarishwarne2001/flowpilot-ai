@@ -245,6 +245,16 @@ def reserve(
     )
 
 
+def enrichment_scope(work_item_id: Any, operation: str, run: Optional[str] = None) -> str:
+    """One document's enrichment, charged once per run.
+
+    The first run (the upload) keeps the original scope; a reprocess is a new run with its
+    own marker, so it is read and charged again, while a retried job of the same run is not.
+    """
+    scope = f"llm:{work_item_id}:enrich:{operation}"
+    return f"{scope}:{run}" if run else scope
+
+
 def reserve_for_enrichment(
     db: Session,
     *,
@@ -254,6 +264,7 @@ def reserve_for_enrichment(
     operation: str,
     prompt: str,
     ai_settings: Any,
+    run: Optional[str] = None,
 ) -> LLMReservation:
     if operation not in ENRICH_OPERATIONS:
         raise LLMMeteringError(
@@ -263,7 +274,7 @@ def reserve_for_enrichment(
         db,
         organization_id=organization_id,
         workspace_id=workspace_id,
-        scope=f"llm:{work_item_id}:enrich:{operation}",
+        scope=enrichment_scope(work_item_id, operation, run),
         resource_type=WORK_ITEM_RESOURCE,
         resource_id=work_item_id,
         prompt=prompt,
@@ -482,6 +493,13 @@ def _record(
     from app.services import usage_service
 
     key = reservation.key(suffix)
+
+    if quantity <= 0:
+        # Campaign session 2 (F-257). Nothing was consumed: no row. A zero-token row
+        # carries a zero cost basis, which the usage ledger rightly refuses unless it
+        # is declared BYOK, and the refusal used to roll back the whole settlement (the
+        # input row with it) and strand the answer in STREAMING.
+        return False
 
     if price is not None:
         cost = price.cost_micros(quantity)
@@ -726,6 +744,7 @@ __all__ = [
     "recorded_for_message",
     "ORGANIZATION_RESOURCE",
     "reserve",
+    "enrichment_scope",
     "reserve_for_enrichment",
     "reserve_for_node",
     "reserve_for_summary",

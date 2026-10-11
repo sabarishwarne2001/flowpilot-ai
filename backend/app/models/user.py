@@ -79,6 +79,25 @@ class User(Base, UUIDMixin, TimestampMixin):
         ),
     )
 
+    trial_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc=(
+            "N-052 (owner decision). When this account's one free trial ends: "
+            "set when the person creates their first organization, never "
+            "restarted. Each organization they create copies it. NULL means the "
+            "account has never started a trial (it has only joined others)."
+        ),
+    )
+
+    # N-052: the two trial emails are sent once per account (`trial.reminders`).
+    trial_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    trial_ended_notice_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     sessions_revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

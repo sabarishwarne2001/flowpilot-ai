@@ -64,7 +64,7 @@ export const AI_FIELD_HELP = {
   enable_streaming: {
     title: "Streaming Responses",
     description:
-      "Displays AI responses as they are generated instead of waiting for the full response.",
+      "Displays AI responses as they are generated. When off, each answer appears in one piece once it is complete and has passed the output filter.",
     recommended: "Keep enabled for the best user experience.",
   },
 };

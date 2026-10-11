@@ -106,6 +106,10 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
     staleTime: 30_000,
     retry: false,
   });
+  // Campaign session 2 (N-052): after the free trial the server refuses every upload, so the
+  // drop area says so instead of inviting one.
+  const trialEnded = allowance.data?.trial?.state === "ENDED";
+  const blocked = isUploading || trialEnded;
   const workspaceMb = settings.data?.max_upload_size ?? DEFAULT_MAX_MB;
   const planMb = allowance.data?.max_file_mb;
   const maxMb = planMb !== undefined ? Math.min(workspaceMb, planMb) : workspaceMb;
@@ -160,7 +164,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
-    if (!isUploading) {
+    if (!blocked) {
       setIsDragActive(true);
     }
   };
@@ -173,19 +177,19 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
   const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
     setIsDragActive(false);
-    if (!isUploading && event.dataTransfer.files.length > 0) {
+    if (!blocked && event.dataTransfer.files.length > 0) {
       processFiles(event.dataTransfer.files);
     }
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    if (event.target.files) {
+    if (event.target.files && !trialEnded) {
       processFiles(event.target.files);
     }
   };
 
   const triggerFileSelect = (): void => {
-    if (!isUploading) {
+    if (!blocked) {
       fileInputRef.current?.click();
     }
   };
@@ -255,9 +259,9 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
       {workspaceId && <PlanAllowance workspaceId={workspaceId} meters={["document.upload", "ocr.page"]} />}
       <div
         role="button"
-        tabIndex={isUploading ? -1 : 0}
+        tabIndex={blocked ? -1 : 0}
         aria-label="Upload documents"
-        aria-disabled={isUploading}
+        aria-disabled={blocked}
         onClick={triggerFileSelect}
         onKeyDown={handleKeyDown}
         onDragOver={handleDragOver}
@@ -268,7 +272,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
             ? "flex-row items-center gap-3 px-4 py-3 text-left"
             : "flex-col items-center justify-center space-y-3 px-8 py-9 text-center"
         } ${
-          isUploading
+          blocked
             ? "cursor-not-allowed opacity-60"
             : isDragActive
             ? "border-primary bg-primary/[0.06] shadow-glow"
@@ -291,10 +295,14 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
 
         <div className={`select-none ${compact ? "min-w-0 space-y-0.5" : "space-y-1"}`}>
           <p className="text-sm font-medium tracking-tight text-foreground">
-            Click to upload or drag & drop files
+            {trialEnded
+              ? "Uploads are paused: the free trial has ended"
+              : "Click to upload or drag & drop files"}
           </p>
           <p className="text-xs text-muted-foreground" data-testid="upload-limits">
-            {typesLabel} • Maximum {maxMb} MB per file
+            {trialEnded
+              ? "Everything already here can still be read, searched and exported."
+              : `${typesLabel} • Maximum ${maxMb} MB per file`}
           </p>
         </div>
       </div>

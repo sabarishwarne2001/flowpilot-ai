@@ -85,6 +85,7 @@ import {
   // ARCH50-S2:nav-imports
   platformSovereignPath,
   platformRevopsPath,
+  platformJobsPath,
   organizationEgressPath,
   procurementPath,
   procurementPoliciesPath,
@@ -721,6 +722,11 @@ export const buildPlatformNavigationItems = (
       name: "Revenue operations",
       path: platformRevopsPath(),
       icon: CreditCard,
+    },
+    {
+      name: "Background jobs",
+      path: platformJobsPath(),
+      icon: Activity,
     },
   ];
 };

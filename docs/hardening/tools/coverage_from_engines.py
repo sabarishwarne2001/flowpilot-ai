@@ -2,7 +2,11 @@
 
 Usage (from backend/):
     ENGINE_ROUTE_LOG=/tmp/engine_routes.tsv pytest -q tests/engines
-    python ../docs/hardening/tools/coverage_from_engines.py /tmp/engine_routes.tsv
+    python ../docs/hardening/tools/coverage_from_engines.py /tmp/engine_routes.tsv ["campaign session 2"]
+
+The optional second argument labels the evidence (default "Phase 4"); a third and fourth name
+the tests and the suite when the log came from somewhere else (the API tests' client logs to
+API_ROUTE_LOG the same way, see backend/tests/conftest.py).
 
 The engine harness (tests/engines/conftest.py) appends one line per API call
 ("HTTP\\t<METHOD> <path> <status>") and per drained job ("JOB\\t<job_type>").
@@ -27,7 +31,9 @@ REFUSAL = "refusal proven (engines, Phase 4)"
 RANK = {"untested": 0, "": 0, "smoke": 1, "deep": 2}
 
 
-def main(log_path: str) -> None:
+def main(log_path: str, label: str = "Phase 4", test_ref: str = TEST_REF, suite: str = "engines") -> None:
+    result_text = f"pass ({suite}, {label})"
+    refusal_text = f"refusal proven ({suite}, {label})"
     sys.path.insert(0, str(Path.cwd()))
     from fastapi.routing import APIRoute
     from starlette.routing import Match
@@ -63,18 +69,18 @@ def main(log_path: str) -> None:
     for row in body:
         kind, ident = row[col["type"]], row[col["id"]]
         if kind == "background_job" and ident in jobs or kind == "endpoint" and ident in succeeded:
-            status, result = "deep", RESULT
+            status, result = "deep", result_text
         elif kind == "endpoint" and ident in endpoints:
-            status, result = "smoke", REFUSAL
+            status, result = "smoke", refusal_text
         else:
             continue
         if RANK.get(row[col["status"]], 0) > RANK[status]:
             continue
         files = [f for f in row[col["test_file"]].split(";") if f]
-        if TEST_REF not in files:
-            files.append(TEST_REF)
+        if test_ref not in files:
+            files.append(test_ref)
         row[col["test_file"]] = ";".join(files)
-        if RANK.get(row[col["status"]], 0) < RANK[status] or not row[col["last_result"]]:
+        if RANK.get(row[col["status"]], 0) < RANK[status] or not row[col["last_result"]] or label != "Phase 4":
             row[col["last_result"]] = result
         row[col["status"]] = status
         marked[status] += 1
@@ -87,4 +93,4 @@ def main(log_path: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], *sys.argv[2:5])

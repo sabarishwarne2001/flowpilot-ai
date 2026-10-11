@@ -559,7 +559,12 @@ apiClient.interceptors.response.use(
       // ARCH-30 Tranche 3. Two 402s are about what the organization pays for,
       // not a usage ceiling. They carry their own message and details for the
       // page that asked, and must not raise the global quota banner.
-      if (parsed.code === "ADDON_REQUIRED" || parsed.code === "BILLING_READ_ONLY") {
+      if (
+        parsed.code === "ADDON_REQUIRED" ||
+        parsed.code === "BILLING_READ_ONLY" ||
+        // Campaign session 2 (N-052): the trial banner and dialog explain it.
+        parsed.code === "TRIAL_ENDED"
+      ) {
         return reject();
       }
 

@@ -393,6 +393,23 @@ class LLMService:
             return ai_settings, None, None
 
         if decision.origin != "route_rule":
+            # Campaign session 2 (N-054). A model the platform does not serve runs on the
+            # organization's own key when it has one for that provider, with or without a
+            # routing rule; without one, `_execute_query` serves the platform default.
+            from app.core.ai_models import requires_own_key
+
+            if requires_own_key(getattr(ai_settings, "provider", None), getattr(ai_settings, "model", None)):
+                try:
+                    client, credential_use = ProviderClientFactory.build(
+                        db,
+                        organization_id=organization_id,
+                        provider=self._validate_provider(ai_settings=ai_settings),
+                        prefer_tenant_key=True,
+                    )
+                except (ProviderUnavailableError, ValueError):
+                    return ai_settings, None, None
+                if getattr(credential_use, "is_zero_cogs", False):
+                    return ai_settings, client, credential_use
             return ai_settings, None, None
 
         effective = _RoutedAISettings.wrap(base=ai_settings, decision=decision)
@@ -645,6 +662,23 @@ class LLMService:
                 raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                                     detail="The local AI model is temporarily unavailable. Please try again.") from exc
 
+        # Campaign session 2 (N-054, F-261). Without the organization's own client this
+        # call runs on the platform's key, which serves only the models the plans are
+        # priced for: anything else (a premium or retired model) is answered by the
+        # platform default.
+        if byok_client is None:
+            from app.core.ai_models import platform_safe
+
+            safe = platform_safe(ai_settings)
+            if safe is not ai_settings:
+                logger.warning(
+                    "llm.model_needs_own_key_served_by_default",
+                    extra={"organization_id": str(organization_id) if organization_id else None,
+                           "selected": safe.substituted_from,
+                           "served_by": f"{safe.provider.value.lower()}/{safe.model}"},
+                )
+                ai_settings = safe
+
         # HARDENING-T1:D1. `allow_failover=False` exists for the AI settings
         # connection test: a test that silently failed over would report the
         # fallback provider's success as the configured provider's. Every
@@ -740,6 +774,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> tuple[str, TokenUsage | None]:
         from app.core.request_context import stage
         from app.services import llm_metering
@@ -772,6 +807,7 @@ class LLMService:
                 operation=operation,
                 prompt=prompt,
                 ai_settings=effective_settings,
+                run=enrichment_run,
             )
 
         with stage(
@@ -962,6 +998,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> dict[str, Any]:
         response, _ = self._enrichment_call(
             operation="classify",
@@ -972,6 +1009,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return self._extract_json(response)
 
@@ -987,6 +1025,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> dict[str, Any]:
         response, _ = self._enrichment_call(
             operation="entities",
@@ -1002,6 +1041,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return self._extract_json(response)
 
@@ -1014,6 +1054,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> str:
         response, _ = self._enrichment_call(
             operation="summary",
@@ -1024,6 +1065,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return response.strip()
 

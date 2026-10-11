@@ -132,15 +132,21 @@ def _organization_of(
 
 
 def unpaid_reason(db: Any, *, organization_id: Optional[uuid.UUID]) -> Optional[str]:
-    """Why an organization that has not paid may not run this work, or None (F-255)."""
+    """Why an organization that has not paid may not run this work, or None (F-255, N-052)."""
     from app.services.billing import dunning_service
 
     if organization_id is None:
         return None
     state = dunning_service.access_state(db, organization_id=organization_id)
-    if state.writes_allowed:
-        return None
-    return f"billing {state.value.lower()}: a payment is overdue"
+    if not state.writes_allowed:
+        return f"billing {state.value.lower()}: a payment is overdue"
+    # N-052 (campaign session 2): a free trial that ended without a subscription stops
+    # the same work an unpaid organization's does.
+    from app.services import trial_service
+
+    if trial_service.status(db, organization_id=organization_id).ended:
+        return "trial ended: the organization has not subscribed"
+    return None
 
 
 def _reason_for(payload: dict[str, Any], job_type: str = "") -> Optional[str]:

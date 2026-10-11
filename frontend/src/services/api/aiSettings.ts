@@ -62,6 +62,22 @@ export async function getSupportedModels(
     return response.data;
 }
 
+/**
+ * Campaign session 2 (N-054): which models run inside the plan (on FlowPilot's keys) and which
+ * need the organization's own provider key, and whether that key has been added.
+ */
+export type ModelAvailability = "PLATFORM" | "OWN_KEY_READY" | "OWN_KEY_NEEDED";
+
+export async function getModelAvailability(
+    workspaceId: string,
+): Promise<Record<string, Record<string, ModelAvailability>>> {
+    const response = await api.get<Record<string, Record<string, ModelAvailability>>>(
+        SETTINGS_ENDPOINTS.aiSettingsModelAvailability(workspaceId),
+    );
+
+    return response.data;
+}
+
 export async function testAIConnection(
     workspaceId: string,
     data: AISettingsFormData,

@@ -67,3 +67,25 @@ def test_a_public_upload_past_the_allowance_is_refused_neutrally_and_the_link_st
     engines.db.expire_all()
     assert engines.db.execute(select(func.count()).select_from(WorkItem)).scalar_one() == before
     assert engines.client.get(f"/api/v1/public/document-requests/{token}").status_code == 200
+
+
+def test_a_public_upload_after_the_free_trial_is_refused_neutrally(engines: Engines) -> None:
+    """N-052 (campaign session 2): the link cannot be used to get past a trial that has ended."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.organization import Organization
+    from tests.security.plans import put_on_plan
+
+    token = _request_token(engines)
+    organization = engines.db.get(Organization, engines.org)
+    put_on_plan(engines.db, organization, "free")
+    organization.trial_ends_at = datetime.now(timezone.utc) - timedelta(days=1)
+    engines.db.commit()
+
+    response = _upload(engines, token, _pdf())
+
+    assert response.status_code == 402, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "RECIPIENT_CANNOT_ACCEPT"
+    assert "trial" not in detail["message"].lower()
+    assert engines.client.get(f"/api/v1/public/document-requests/{token}").status_code == 200

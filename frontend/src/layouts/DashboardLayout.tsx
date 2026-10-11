@@ -13,6 +13,7 @@ import PendingInvitationsBanner from "@/components/invitations/PendingInvitation
 import DunningBanner from "@/components/billing/DunningBanner";
 // ARCH30-T4F:ts-member-notice-import-dash — A5.
 import MemberAccessNotice from "@/components/billing/MemberAccessNotice";
+import TrialBanner from "@/components/billing/TrialBanner";
 import { DisplayPreferencesBoundary } from "@/components/common/DisplayPreferencesBoundary";
 import { RouteErrorBoundary } from "@/components/common/RouteErrorBoundary";
 import { useTenant } from "@/hooks/useTenant";
@@ -102,6 +103,13 @@ export const DashboardLayout: React.FC = () => {
           <DunningBanner organizationId={billingOrganizationId} canManageBilling />
         ) : tenantState.status === "ready" ? (
           <MemberAccessNotice organizationId={tenantState.organization.organization_id} />
+        ) : null}
+        {tenantState.status === "ready" ? (
+          <TrialBanner
+            organizationId={tenantState.organization.organization_id}
+            organizationSlug={tenantState.organization.organization_slug}
+            canChoosePlan={String(tenantState.organizationRole).toUpperCase() === "OWNER"}
+          />
         ) : null}
 
         <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">

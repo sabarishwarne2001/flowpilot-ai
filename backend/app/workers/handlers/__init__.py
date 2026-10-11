@@ -88,6 +88,8 @@ BATCH_ENGINE_JOB_TYPES: frozenset[str] = frozenset(
 )
 #: Phase 2 TruthMesh: a document's twin and links, and a workspace rebuild, on LIGHT.
 TRUTHMESH_JOB_TYPES: frozenset[str] = frozenset({"truthmesh.index_document", "truthmesh.rebuild_workspace"})
+#: Campaign session 2 (N-052): the free-trial emails.
+TRIAL_JOB_TYPES: frozenset[str] = frozenset({"trial.reminders"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -127,6 +129,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | HARDENING_JOB_TYPES
     | BATCH_ENGINE_JOB_TYPES
     | TRUTHMESH_JOB_TYPES
+    | TRIAL_JOB_TYPES
 )
 
 
@@ -418,6 +421,11 @@ def _truthmesh_rebuild_workspace(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_rebuild_workspace(payload)
 
 
+def _trial_reminders(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.trial import handle_reminders
+    return handle_reminders(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -526,6 +534,8 @@ _HANDLERS = {
     # Phase 2 TruthMesh. On the LIGHT profile (app/workers/profiles.py).
     "truthmesh.index_document": _truthmesh_index_document,
     "truthmesh.rebuild_workspace": _truthmesh_rebuild_workspace,
+    # Campaign session 2 (N-052). On the LIGHT profile; hourly in DEFAULT_SCHEDULE.
+    "trial.reminders": _trial_reminders,
 }
 
 

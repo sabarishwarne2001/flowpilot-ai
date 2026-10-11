@@ -34,13 +34,49 @@ from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.services import audit_service
 
-from app.crud.ai_settings import upsert_ai_settings
-from app.crud.document_settings import upsert_document_settings
-from app.core.ai_models import AI_MODELS
+from app.core.ai_models import PLATFORM_DEFAULT_MODEL
 from app.schemas.ai_settings import AISettingsUpdate, AIProvider
 from app.schemas.document_settings import DocumentSettingsCreate
 
 logger = logging.getLogger("app.services.workspace_service")
+
+
+def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+    """A new workspace's AI and document settings, inside the caller's transaction.
+
+    Every workspace needs both before its first question or upload: the assistant,
+    Settings → AI and Settings → Documents read them. Campaign session 2 (F-260): the
+    first workspace of a new organization is created by `organization_service`, which
+    never added them, so they appeared only once the worker enriched a first document.
+    """
+    from app.models.ai_settings import AISettings
+    from app.models.document_settings import DocumentSettings
+
+    db.add(
+        AISettings(
+            workspace_id=workspace_id,
+            updated_by_user_id=actor_id,
+            **AISettingsUpdate(
+                provider=AIProvider.GROQ,
+                # F-196. Was "mixtral-8x7b-32768": retired by Groq (March 2025), absent from
+                # AI_MODELS and from the price book. The platform's listed default instead.
+                model=PLATFORM_DEFAULT_MODEL,
+                temperature=0.7,
+                max_output_tokens=2048,
+                top_p=1.0,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                # ARCH40-S1:workspace-defaults. The three dead columns are no
+                # longer written; arch40_step3 drops them.
+                enable_streaming=True,
+            ).model_dump(),
+        )
+    )
+    document_defaults = DocumentSettingsCreate().model_dump()
+    if document_defaults.get("intent_config") is None:
+        document_defaults["intent_config"] = {}
+    db.add(DocumentSettings(workspace_id=workspace_id, updated_by_user_id=actor_id, **document_defaults))
+    db.flush()
 
 MAX_WORKSPACES_PER_ORGANIZATION: int = 10
 
@@ -185,32 +221,7 @@ def create_workspace_in_organization(
             role=WorkspaceRole.ADMIN,
         )
 
-        upsert_ai_settings(
-            db,
-            workspace_id=workspace.id,
-            updated_by_user_id=actor_id,
-            settings_in=AISettingsUpdate(
-                provider=AIProvider.GROQ,
-                # F-196. Was "mixtral-8x7b-32768": retired by Groq (March 2025), absent from
-                # AI_MODELS and from the price book. The platform's listed default instead.
-                model=AI_MODELS[AIProvider.GROQ][0],
-                temperature=0.7,
-                max_output_tokens=2048,
-                top_p=1.0,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                # ARCH40-S1:workspace-defaults. The three dead columns are no
-                # longer written; arch40_step3 drops them.
-                enable_streaming=True,
-            )
-        )
-
-        upsert_document_settings(
-            db,
-            workspace_id=workspace.id,
-            updated_by_user_id=actor_id,
-            settings_in=DocumentSettingsCreate()
-        )
+        add_default_settings(db, workspace_id=workspace.id, actor_id=actor_id)
 
         audit_service.record(
             db,

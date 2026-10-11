@@ -6,6 +6,7 @@ import argparse
 import logging
 import random
 import signal
+import threading
 import sys
 import time
 from datetime import datetime, timezone
@@ -295,6 +296,8 @@ def run_jobs_loop(
         mark_job_failed,
         mark_job_succeeded,
         reap_expired_job_leases,
+        release_unstarted_jobs,
+        start_job,
         worker_identity,
     )
 
@@ -334,10 +337,24 @@ def run_jobs_loop(
             _idle_sleep(idle_sleep_seconds)
             continue
 
-        if shutdown.requested:
-            logger.info("jobs.draining", extra={"remaining": len(snapshot)})
-
-        for job_id, job_type, payload, attempts, max_attempts, org_id, enqueued_at in snapshot:
+        for index, (job_id, job_type, payload, attempts, max_attempts, org_id, enqueued_at) in enumerate(snapshot):
+            # Campaign session 2. A stopping worker finishes the job it is running and hands
+            # back the rest at once, rather than run them past the stop grace period.
+            if shutdown.requested:
+                unstarted = [row[0] for row in snapshot[index:]]
+                with SessionLocal() as db:
+                    released = release_unstarted_jobs(db, unstarted, worker_id=worker)
+                    db.commit()
+                logger.info("jobs.released_on_shutdown", extra={"count": released})
+                break
+            # The batch shares one lease: a job reaped and claimed by another worker while it
+            # waited here is theirs now.
+            with SessionLocal() as db:
+                ours = start_job(db, job_id, worker_id=worker, lease_seconds=lease_seconds)
+                db.commit()
+            if not ours:
+                logger.info("jobs.claimed_elsewhere", extra={"job_id": str(job_id), "job_type": job_type})
+                continue
             with job_scope(
                 job_id=job_id,
                 job_type=job_type,
@@ -362,7 +379,7 @@ def run_jobs_loop(
                     # behalf, so that organization's egress lockdown applies.
                     from app.core import egress
 
-                    with egress.attributed(org_id):
+                    with egress.attributed(org_id), _LeaseKeeper(job_id, worker, lease_seconds):
                         result = handler(payload_dict)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(
@@ -372,13 +389,16 @@ def run_jobs_loop(
                     died = attempts >= max_attempts
                     with SessionLocal() as db:
                         if died:
-                            mark_job_dead(db, job_id, error=f"{type(exc).__name__}: {exc}")
+                            died = mark_job_dead(
+                                db, job_id, error=f"{type(exc).__name__}: {exc}", worker_id=worker
+                            )
                         else:
                             mark_job_failed(
                                 db,
                                 job_id,
                                 attempts=attempts,
                                 error=f"{type(exc).__name__}: {exc}",
+                                worker_id=worker,
                             )
                         db.commit()
                     if died:
@@ -395,11 +415,58 @@ def run_jobs_loop(
                     continue
 
                 with SessionLocal() as db:
-                    mark_job_succeeded(db, job_id, result=result)
+                    settled = mark_job_succeeded(db, job_id, result=result, worker_id=worker)
                     db.commit()
-                _observe_job_outcome(org_id, enqueued_at, succeeded=True)
+                if settled:
+                    _observe_job_outcome(org_id, enqueued_at, succeeded=True)
 
     logger.info("worker.stopped", extra={"worker": worker, "loop": "jobs", "passes": passes})
+
+
+class _LeaseKeeper:
+    """Renews a running job's lease every third of it (campaign session 2).
+
+    Reading a long scanned document or a slow model call can outlast the lease; without a
+    heartbeat another worker's reaper would hand the job on while it still runs here. If the
+    job stops being this worker's (it was reaped and claimed elsewhere), renewal stops and the
+    settle fence ignores this run's outcome.
+    """
+
+    def __init__(self, job_id: Any, worker: str, lease_seconds: int) -> None:
+        self._job_id = job_id
+        self._worker = worker
+        self._lease_seconds = lease_seconds
+        self._interval = max(0.2, lease_seconds / 3.0)
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def __enter__(self) -> "_LeaseKeeper":
+        self._thread = threading.Thread(target=self._run, name="job-lease", daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self._interval + 5)
+
+    def _run(self) -> None:
+        from app.db.session import SessionLocal
+        from app.workers.claim import renew_job_lease
+
+        while not self._stop.wait(self._interval):
+            try:
+                with SessionLocal() as db:
+                    held = renew_job_lease(
+                        db, self._job_id, worker_id=self._worker, lease_seconds=self._lease_seconds
+                    )
+                    db.commit()
+            except Exception:  # noqa: BLE001 - a missed beat is retried on the next one
+                logger.warning("jobs.lease_renewal_failed", extra={"job_id": str(self._job_id)})
+                continue
+            if not held:
+                logger.warning("jobs.lease_lost", extra={"job_id": str(self._job_id)})
+                return
 
 
 def _observe_job_outcome(organization_id: Any, enqueued_at: Optional[datetime], *, succeeded: bool) -> None:

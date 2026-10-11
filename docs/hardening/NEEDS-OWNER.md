@@ -922,3 +922,84 @@ one-week trial").** Engineering defaults below follow from the decision; anythin
   may prefer a different period.
 - **Existing Free organizations at launch** (*proposed*): their trial starts on the day this ships.
 
+
+# Pre-launch campaign, session 2 (2026-10-11): documents, AI and every engine
+
+The owner delegated founder authority for the campaign. Each item below is **DECIDED (campaign
+session 2)**, built and tested on branch `claude/trusting-ptolemy-yiz005` (PR #20).
+
+## N-053 — Building the one-week trial (N-052): the parts left open
+**N-052 is BUILT (campaign session 2).** The owner decided the trial itself; these are the details
+N-052 marked *proposed*, decided the way a Tier-1 SaaS (Claude, Linear, Vercel) does it:
+- **Banner from day 5: kept.** The days left show in the last three days of the seven, to every
+  member; owners get "Choose a plan", everyone else "Ask <owner> to choose a plan".
+- **After the end: read-only, plus managing people.** As N-052 said, plus inviting, removing and
+  changing the role of members, and archiving the organization stay open. Why: the person who will
+  pay is often not the one who started the trial; an owner must be able to invite them.
+- **The full-page notice is dismissible ("Continue read-only").** It shows once per browser session;
+  a strip stays on every page. Why: N-052 promises reading, search and export after the end; a
+  wall that cannot be closed would break that promise.
+- **Data after a trial that never converts: kept, not deleted (changed from the proposed 90
+  days).** Why: a Free organization stores at most 250 MB (about half a US cent a month), deleting
+  customer data automatically is irreversible and is the most common source of angry support
+  tickets, and the people who come back months later are the cheapest customers to win. The owner
+  can still delete an organization; retention policies and erasure requests work as before. If
+  storage cost ever matters, add a sweep that deletes after N days with a 30-day warning email.
+- **Existing Free organizations at launch: seven days from the day this ships (kept).** The
+  migration `s2a1_free_trial_clock` sets it. A paid organization that later lapses to Free is asked
+  to subscribe (its trial is long over), not given a new one.
+- **The two emails: kept** (two days before, and on the day it ends), each sent once per account;
+  an email the relay did not accept is retried hourly inside its window. Session 3 owns the wording.
+- **Setting:** `FREE_TRIAL_DAYS` (default 7) changes the length without a code change.
+
+## N-054 — Which models the plans include, and what they cost
+**DECIDED (campaign session 2).** Found while checking the model list against the providers'
+pages (F-261, F-262).
+- **The plans include the models FlowPilot serves on its own keys: GPT-OSS 120B (the default)
+  and GPT-OSS 20B, on Groq.** A plan's token allowance is counted in tokens, and a token on Gemini
+  2.5 Pro costs FlowPilot 33 times one on GPT-OSS 20B; one allowance cannot cover both at the
+  same price. Gemini 2.5 Flash, 2.5 Pro, 3.5 Flash and Groq's Qwen 3.8 27B (a Preview model Groq
+  may withdraw at short notice) **run on the organization's own provider key** (BYOK, where the
+  customer pays the provider and FlowPilot charges no overage, N-048). This is how Tier-1 tools
+  offer premium models without pricing every plan for the dearest one. If the platform's key
+  would ever be asked for one of them (an old setting, a removed key), the default model answers
+  instead; nothing fails.
+- **The price book costs every model at its supplier's list price** (checked 2026-10-11), and
+  prices it at least twice that. `tests/scripts/test_price_book_matches_supplier_rates.py` holds
+  the supplier prices: when a provider changes one, change it there first.
+- **Allowances resized to keep every paid plan at 60% or more at its ceilings, on the real
+  default model:** Business 40,000 OCR pages and 100M input tokens a seat (were 50,000 and 150M);
+  Enterprise 300M input and 75M output tokens a seat (were 500M and 125M). Everything past them
+  bills overage at several times cost, as before. Developer and Free are unchanged. Existing
+  subscribers keep the version they bought (`--carry-forward` moves only to no-worse versions).
+- **Reversible later:** model-weighted credits (counting a premium model's token as several) would
+  let the plans include premium models; it needs a credit unit on every usage screen and was not
+  worth the risk before launch.
+- **Owner action:** none in code. On deploy re-run `seed_price_book.py --version auto` and
+  `seed_quota_tiers.py` (RUNBOOK 9.3). Spot-check the Groq and Google prices on their pricing pages
+  before launch; this environment could only read them through third-party trackers.
+
+## N-055 — The matching queue and copies of one invoice
+**DECIDED (campaign session 2), the known leftover "one case per copy of an invoice".** The same
+invoice often arrives twice: emailed and then posted, rescanned, re-sent by a supplier chasing
+payment, or split out of a scanned packet. **One case per invoice, the first copy to arrive;
+later copies open no case and are listed on it** ("This invoice arrived 3 times", with each
+copy's file and date, and a "2 more copies" badge in the queue). An invoice is the same invoice
+when it has the same supplier and invoice number in the same workspace, or is the same file.
+Why: two cases for one bill invite paying it twice, the exact loss three-way matching exists to
+stop; and flagging the copies where the reviewer decides is more useful than a separate list.
+A case a copy opened before this change leaves the queue (superseded) the next time any copy of
+that invoice is scored; a case someone already approved or disputed is left as decided. The
+forensic radar still reports duplicates as findings, as before.
+
+## N-056 — What an API key may call
+**DECIDED (campaign session 2), with F-271.** An API key may call only a route that one of its
+scopes covers, and nothing else (default deny), which is what the key screen and the code always
+promised; until now only the webhook routes checked, so any key acted with the full rights of the
+admin who issued it. `work_items:read` covers listing documents, one document and its extracted
+content; `work_items:write` covers uploading, reprocessing and deleting documents ("upload and
+modify documents", as the key screen says). Organization management (members, invitations,
+settings, keys, billing changes) and the assistant stay human-only: no scope covers them. The full
+list is `ROUTE_SCOPE_MAP` in `backend/app/core/scopes.py`. Why: a key is a long-lived secret
+pasted into other systems; a leaked read key must not be able to delete records or read who works
+here. A customer who needs more from the API asks for a scope to be added, deliberately.

@@ -259,6 +259,15 @@ export const CaseQueue: React.FC = () => {
                     <td className="px-4 py-3 align-top">
                       <div className="font-medium text-foreground">
                         {row.invoice_number ?? row.invoice_filename ?? "Invoice"}
+                        {row.duplicate_count ? (
+                          <span
+                            className="ml-2 inline-flex rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300"
+                            data-testid="duplicate-copies-badge"
+                            title="The same invoice arrived more than once. Pay it once."
+                          >
+                            {row.duplicate_count === 1 ? "1 more copy" : `${row.duplicate_count} more copies`}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="text-xs text-muted-foreground">{vendorLabel(row.vendor_name, row.vendor_key)}</div>
                     </td>

@@ -65,6 +65,12 @@ ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
     ("GET", "/organizations/{organization_id}/audit-logs/export"): ApiKeyScope.AUDIT_LOGS_READ,
     ("GET", "/workspaces/{workspace_id}/work-items"): ApiKeyScope.WORK_ITEMS_READ,
     ("POST", "/workspaces/{workspace_id}/work-items"): ApiKeyScope.WORK_ITEMS_WRITE,
+    # Campaign session 2 (N-056): what the key screen promises. read = "read documents and their
+    # extracted content"; write = "upload and modify documents".
+    ("GET", "/workspaces/{workspace_id}/work-items/{work_item_id}"): ApiKeyScope.WORK_ITEMS_READ,
+    ("GET", "/workspaces/{workspace_id}/work-items/{work_item_id}/content"): ApiKeyScope.WORK_ITEMS_READ,
+    ("POST", "/workspaces/{workspace_id}/work-items/{work_item_id}/reprocess"): ApiKeyScope.WORK_ITEMS_WRITE,
+    ("DELETE", "/workspaces/{workspace_id}/work-items/{work_item_id}"): ApiKeyScope.WORK_ITEMS_WRITE,
     ("GET", "/workspaces/{workspace_id}/logo"): ApiKeyScope.FILES_READ,
     ("POST", "/logo"): ApiKeyScope.FILES_WRITE,
     ("DELETE", "/logo"): ApiKeyScope.FILES_WRITE,

@@ -119,8 +119,18 @@ export const getBillingAccess = async (
  * OWNER / ADMIN / BILLING, which is why an ordinary member saw no
  * explanation at all when the organization went read-only.
  */
+/**
+ * Campaign session 2 (N-052): where the organization stands in its one-week free
+ * trial. `NONE` for a paying organization (or one with no trial clock).
+ */
+export interface TrialStatus {
+  readonly state: "NONE" | "ACTIVE" | "ENDED";
+  readonly ends_at: string | null;
+  readonly days_left: number | null;
+}
+
 export interface BillingAccessSummary {
-  readonly state: "ACTIVE" | "GRACE" | "RESTRICTED";
+  readonly state: "ACTIVE" | "GRACE" | "RESTRICTED" | "TRIAL_ENDED";
   readonly is_read_only: boolean;
   readonly grace_ends_at: string | null;
   /**
@@ -128,6 +138,8 @@ export interface BillingAccessSummary {
    * "ask someone" screen names them.
    */
   readonly plan_contacts?: readonly string[];
+  /** Campaign session 2 (N-052). */
+  readonly trial?: TrialStatus;
 }
 
 export const getBillingAccessSummary = async (

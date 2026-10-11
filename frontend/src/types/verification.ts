@@ -66,6 +66,13 @@ export const parseScore = (value: string | null | undefined): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+/**
+ * Campaign session 2. A list or an object (line items, a table) is a document fragment: the
+ * review screen shows it but never sends it as a decision, because the resolve API accepts
+ * single values only. Sent, it refused the whole correction with 422.
+ */
+export const isScalarFieldValue = (value: unknown): boolean => value === null || typeof value !== "object";
+
 export const formatFieldValue = (value: unknown): string => {
   if (value === null || value === undefined) {
     return "—";

@@ -121,6 +121,15 @@ class CaseSummaryResponse(BaseModel):
     receipt_filename: Optional[str] = None
     invoice_total_micros: Optional[int] = None
     po_total_micros: Optional[int] = None
+    #: Campaign session 2 (F-264): later copies of this invoice (same vendor and number, or
+    #: the same bytes). They open no case of their own; a reviewer must not pay twice.
+    duplicate_count: int = 0
+
+
+class DuplicateCopyResponse(BaseModel):
+    work_item_id: uuid.UUID
+    original_filename: Optional[str] = None
+    received_at: Optional[datetime] = None
 
 
 class CaseDetailResponse(CaseSummaryResponse):
@@ -129,6 +138,7 @@ class CaseDetailResponse(CaseSummaryResponse):
     resolution_reason: Optional[str] = None
     resolved_by_user_id: Optional[uuid.UUID] = None
     lines: list[CaseLineResponse] = Field(default_factory=list)
+    duplicate_copies: list[DuplicateCopyResponse] = Field(default_factory=list)
 
 
 class CaseApproveRequest(BaseModel):

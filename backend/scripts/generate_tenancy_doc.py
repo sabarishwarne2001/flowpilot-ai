@@ -262,6 +262,18 @@ def _addon_table(seed: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _served_models() -> list[str]:
+    from app.core.ai_models import PLATFORM_SERVED_MODELS
+
+    return [f"`{model}` on {provider.capitalize()}" for provider, models in PLATFORM_SERVED_MODELS.items() for model in models]
+
+
+def _trial_days() -> int:
+    from app.core.config import settings
+
+    return int(settings.FREE_TRIAL_DAYS)
+
+
 def render() -> str:
     seed = _seed()
     parts = [
@@ -359,19 +371,39 @@ def render() -> str:
         " Documents, OCR pages, assistant messages and storage are what a customer plans by; the token and"
         " cost ceilings are the platform's safety net above them. Overage: *refuse* stops at the ceiling,"
         " *bill overage* continues and bills each unit above it at the price book's overage price, *warn*"
-        " continues free of charge and the usage screens show the overrun.",
+        " continues free of charge and the usage screens show the overrun. Token allowances cover the models"
+        " the platform serves on its own keys (" + ", ".join(_served_models()) + "); every other listed"
+        " model runs on the organization's own provider key, and a call that would put one on the platform's"
+        " key is answered by the platform default (N-054, " + _ref("app.core.ai_models.platform_safe") + ").",
         "",
         _allowance_table(seed),
         "",
-        "### 4.3 Per-organization limits",
+        "### 4.3 The free trial",
+        "",
+        "Free is a **trial of " + str(_trial_days()) + " days per owner account** (owner decision N-052)."
+        " The account's clock (`users.trial_ends_at`) starts when the person creates their first"
+        " organization; every organization they create copies it (`organizations.trial_ends_at`), so a"
+        " second organization, a new workspace or an ownership transfer never restarts it. While an"
+        " organization is on Free the allowances above apply. When the trial ends without a live paid"
+        " subscription the organization is **read-only**: every write route, upload path, re-processing,"
+        " the assistant, new workspaces and the worker's engine and automation jobs refuse with a 402"
+        " `TRIAL_ENDED` (remedy `SUBSCRIBE`) (" + _ref("app.services.trial_service.assert_trial_active")
+        + ", " + _ref("app.api.billing_write_gate.assert_billing_writes_allowed") + ", "
+        + _ref("app.workers.tenant_gate.unpaid_reason") + "). Reading, search, export, deleting,"
+        " member management, archiving, checkout and the billing portal stay open. Subscribing lifts it"
+        " at once; a paid plan that lapses to Free afterwards is asked to subscribe again. Owners are"
+        " emailed two days before the end and when it ends (`trial.reminders`). Nothing is deleted when"
+        " a trial ends.",
+        "",
+        "### 4.4 Per-organization limits",
         "",
         _limit_table(seed),
         "",
-        "### 4.4 Capabilities",
+        "### 4.5 Capabilities",
         "",
         _capability_table(seed),
         "",
-        "### 4.5 Add-ons",
+        "### 4.6 Add-ons",
         "",
         _addon_table(seed),
         "",

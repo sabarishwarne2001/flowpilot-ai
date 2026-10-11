@@ -69,6 +69,7 @@ from app.schemas.procurement import (
     CaseDisputeRequest,
     CaseRematchRequest,
     CaseSummaryResponse,
+    DuplicateCopyResponse,
     DocumentRoleOverrideRequest,
     ImpactPreviewRequest,
     ImpactPreviewResponse,
@@ -184,6 +185,11 @@ def _annotated(db: Session, workspace_id: uuid.UUID, cases: list[Any], schema: A
             "invoice_total_micros": invoice.total_micros if invoice else None,
             "po_total_micros": po.total_micros if po else None,
         }
+        # Campaign session 2 (F-264): the later copies of this invoice, which open no case.
+        copies = case_service.copies_of(db, workspace_id=workspace_id, invoice_work_item_id=case.invoice_work_item_id)
+        extra["duplicate_count"] = len(copies)
+        if "duplicate_copies" in schema.model_fields:
+            extra["duplicate_copies"] = [DuplicateCopyResponse(**copy) for copy in copies]
         out.append(item.model_copy(update=extra))
     return out
 
