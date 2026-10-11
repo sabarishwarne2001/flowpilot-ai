@@ -253,7 +253,7 @@ def bulk_reprocess(
     Each document also re-fires `trigger.work_item.reprocessed`, so tenant rules
     behave identically whether one document or two hundred were reprocessed.
     """
-    from app.services import job_service, outbox_service
+    from app.services import document_intake_service, outbox_service
 
     items = _scoped_items(db, workspace_id=workspace_id, ids=ids)
     results: list[ItemResult] = _missing(ids, items)
@@ -284,21 +284,13 @@ def bulk_reprocess(
         except SpendLimitExceededError as exc:
             results.append(ItemResult(str(item.id), "refused", "QUOTA_EXCEEDED", str(exc)[:500]))
             continue
+        try:
+            document_intake_service.queue_reprocess(db, work_item=item, organization_id=organization_id)
+        except document_intake_service.ReprocessInFlightError as exc:
+            results.append(ItemResult(str(item.id), "refused", exc.code, str(exc)))
+            continue
         admitted_pages += max(1, int(item.page_count or 1))
         try:
-            job_service.enqueue(
-                db,
-                job_type="document.extract",
-                payload={
-                    "work_item_id": str(item.id),
-                    "uploaded_file_id": str(item.uploaded_file_id),
-                    "storage_key": item.stored_filename,
-                    "mime_type": item.file_type,
-                    "page_count": item.page_count,
-                },
-                organization_id=organization_id,
-                idempotency_key=f"document.extract:{item.id}:{uuid.uuid4()}",
-            )
             outbox_service.emit_trigger(
                 db,
                 organization_id=organization_id,

@@ -42,6 +42,8 @@ class _Target:
     stage: str
     job_id: Optional[uuid.UUID] = None
     uploaded_file_id: Optional[uuid.UUID] = None
+    #: A reprocess's marker (None for the upload's own run): see llm_metering.enrichment_scope.
+    run_id: Optional[str] = None
 
 
 def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
@@ -69,6 +71,7 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         stage=work_item.pipeline_stage,
         job_id=uuid.UUID(str(raw_job_id)) if raw_job_id else None,
         uploaded_file_id=work_item.uploaded_file_id,
+        run_id=str(payload["run_id"]) if payload.get("run_id") else None,
     )
 
 
@@ -91,7 +94,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
     )
     from app.services.embedding_metering import embed_texts_with_metering
     from app.services.embedding_service import embedding_service
-    from app.services.llm_metering import already_recorded, estimate_enrichment_tokens, INPUT_EVENT
+    from app.services.llm_metering import already_recorded, enrichment_scope, estimate_enrichment_tokens, INPUT_EVENT
     from app.services.llm_resilience import LLMPermanentError, LLMUnavailable
     from app.services.llm_service import llm_service
     from app.services.vocabulary_service import workspace_vocabulary_service
@@ -170,7 +173,7 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         if enrichment[operation] and already_recorded(
             db,
             organization_id=target.organization_id,
-            scope=f"llm:{work_item.id}:enrich:{operation}",
+            scope=enrichment_scope(work_item.id, operation, target.run_id),
         ):
             enrichment[operation] = False
             skipped[operation] = "already_recorded"
@@ -209,6 +212,8 @@ def _enrich(db: Session, target: _Target) -> dict[str, Any]:
         "workspace_id": target.workspace_id,
         "work_item_id": work_item.id,
     }
+    if target.run_id:
+        metering_kwargs["enrichment_run"] = target.run_id
 
     def _guarded(operation: str, call):
         try:

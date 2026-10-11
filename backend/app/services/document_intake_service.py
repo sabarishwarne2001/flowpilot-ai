@@ -355,3 +355,47 @@ def ingest_validated(
         page_count=validated.page_count,
         scrubbed=validated.scrubbed,
     )
+
+
+class ReprocessInFlightError(RuntimeError):
+    """The document is already being read; a second run would read and charge it twice."""
+
+    code = "ALREADY_PROCESSING"
+
+
+def queue_reprocess(db: Session, *, work_item: WorkItem, organization_id: uuid.UUID) -> Job:
+    """Send a document back to the start of the pipeline as a new run (campaign session 2).
+
+    The single Reprocess button and the bulk action both come here. The document's row is
+    locked so two simultaneous requests see each other; while a read or enrichment job for it
+    is still live the request is refused. The pipeline stage goes back to QUEUED (the reader
+    skips a document whose stage says it has been read), and the read carries a run marker so
+    enrichment runs, and is charged, again for this run only. The caller commits.
+    """
+    from sqlalchemy import select
+
+    from app.services.pipeline_state import PipelineStage, transition
+    from app.workers.dead_letter import has_live_document_job
+
+    db.execute(select(WorkItem.id).where(WorkItem.id == work_item.id).with_for_update())
+    if has_live_document_job(db, work_item_id=work_item.id):
+        raise ReprocessInFlightError(
+            "This document is already being processed. Reprocess it once that run has finished."
+        )
+    transition(db, work_item=work_item, to_stage=PipelineStage.QUEUED, organization_id=organization_id)
+    run_id = uuid.uuid4().hex
+    return job_service.enqueue(
+        db,
+        job_type=OCR_JOB_TYPE,
+        payload={
+            "work_item_id": str(work_item.id),
+            "uploaded_file_id": str(work_item.uploaded_file_id) if work_item.uploaded_file_id else None,
+            "storage_key": work_item.stored_filename,
+            "mime_type": work_item.file_type,
+            "page_count": work_item.page_count,
+            "run_id": run_id,
+        },
+        organization_id=organization_id,
+        idempotency_key=f"{OCR_JOB_TYPE}:{work_item.id}:{run_id}",
+        max_attempts=settings.OCR_JOB_MAX_ATTEMPTS,
+    )

@@ -135,12 +135,28 @@ def on_job_dead(*, job_type: str, payload: Optional[dict[str, Any]], error: str)
         )
 
 
+def has_live_document_job(db: Any, *, work_item_id: uuid.UUID) -> bool:
+    """True while a read or enrichment job for this document is queued, running or retrying."""
+    from app.models.job import Job, JobStatus
+
+    return db.execute(
+        select(Job.id)
+        .where(
+            and_(
+                Job.job_type.in_(tuple(DOCUMENT_JOB_TYPES)),
+                Job.status.in_((JobStatus.PENDING, JobStatus.CLAIMED, JobStatus.FAILED)),
+                Job.payload["work_item_id"].astext == str(work_item_id),
+            )
+        )
+        .limit(1)
+    ).scalar_one_or_none() is not None
+
+
 def sweep_stuck_documents(
     db: Any, *, now: Optional[datetime] = None, stuck_after: Optional[timedelta] = None
 ) -> dict[str, Any]:
     """Fail documents stranded in a working stage with no live job."""
     from app.core.config import settings
-    from app.models.job import Job, JobStatus
     from app.models.work_item import WorkItem
 
     now = now or datetime.now(timezone.utc)
@@ -164,20 +180,7 @@ def sweep_stuck_documents(
     failed: list[str] = []
     skipped_live: list[str] = []
     for work_item_id in candidates:
-        live = db.execute(
-            select(Job.id)
-            .where(
-                and_(
-                    Job.job_type.in_(tuple(DOCUMENT_JOB_TYPES)),
-                    Job.status.in_(
-                        (JobStatus.PENDING, JobStatus.CLAIMED, JobStatus.FAILED)
-                    ),
-                    Job.payload["work_item_id"].astext == str(work_item_id),
-                )
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        if live is not None:
+        if has_live_document_job(db, work_item_id=work_item_id):
             skipped_live.append(str(work_item_id))
             continue
         if fail_document(

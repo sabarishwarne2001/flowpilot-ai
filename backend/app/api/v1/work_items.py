@@ -42,7 +42,6 @@ from app.schemas.work_item import (
     WorkItemListResponse,
     WorkItemResponse,
     WorkItemStatus,
-    WorkItemUpdate,
 )
 from app.services import document_intake_service, file_validation_service, job_service, plan_admission
 
@@ -444,24 +443,14 @@ def reprocess_work_item(
         db, organization_id=context.organization_id, page_count=work_item.page_count
     )
 
-    crud.update_work_item_state(
-        db, db_obj=work_item, obj_in=WorkItemUpdate(status=WorkItemStatus.QUEUED)
-    )
-
-    job = job_service.enqueue(
-        db,
-        job_type=document_intake_service.OCR_JOB_TYPE,
-        payload={
-            "work_item_id": str(work_item.id),
-            "uploaded_file_id": str(work_item.uploaded_file_id) if work_item.uploaded_file_id else None,
-            "storage_key": work_item.stored_filename,
-            "mime_type": work_item.file_type,
-            "page_count": work_item.page_count,
-        },
-        organization_id=context.organization_id,
-        idempotency_key=f"{document_intake_service.OCR_JOB_TYPE}:{work_item.id}:{uuid.uuid4().hex[:8]}",
-        max_attempts=settings.OCR_JOB_MAX_ATTEMPTS,
-    )
+    # Campaign session 2: a real new run, one at a time (document_intake_service.queue_reprocess).
+    try:
+        job = document_intake_service.queue_reprocess(
+            db, work_item=work_item, organization_id=context.organization_id
+        )
+    except document_intake_service.ReprocessInFlightError as exc:
+        db.rollback()  # release the row lock now, not when the session is closed
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     # ARCH37-S1:work-item-reprocessed
     from app.services import outbox_service
 

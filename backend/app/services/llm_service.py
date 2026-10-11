@@ -774,6 +774,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> tuple[str, TokenUsage | None]:
         from app.core.request_context import stage
         from app.services import llm_metering
@@ -806,6 +807,7 @@ class LLMService:
                 operation=operation,
                 prompt=prompt,
                 ai_settings=effective_settings,
+                run=enrichment_run,
             )
 
         with stage(
@@ -996,6 +998,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> dict[str, Any]:
         response, _ = self._enrichment_call(
             operation="classify",
@@ -1006,6 +1009,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return self._extract_json(response)
 
@@ -1021,6 +1025,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> dict[str, Any]:
         response, _ = self._enrichment_call(
             operation="entities",
@@ -1036,6 +1041,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return self._extract_json(response)
 
@@ -1048,6 +1054,7 @@ class LLMService:
         organization_id: uuid.UUID | None = None,
         workspace_id: uuid.UUID | None = None,
         work_item_id: uuid.UUID | None = None,
+        enrichment_run: str | None = None,
     ) -> str:
         response, _ = self._enrichment_call(
             operation="summary",
@@ -1058,6 +1065,7 @@ class LLMService:
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
+            enrichment_run=enrichment_run,
         )
         return response.strip()
 

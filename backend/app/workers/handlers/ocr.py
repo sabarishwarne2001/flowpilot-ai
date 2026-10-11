@@ -56,6 +56,8 @@ class _Target:
     mime_type: str
     estimated_pages: int
     already_done: bool
+    #: A reprocess's marker, handed on to enrichment (None for the upload's own run).
+    run_id: Optional[str] = None
 
 
 def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
@@ -91,6 +93,7 @@ def _resolve(db: Session, payload: dict[str, Any]) -> Optional[_Target]:
         mime_type=payload.get("mime_type") or work_item.file_type,
         estimated_pages=max(1, estimated),
         already_done=work_item.pipeline_stage in {PipelineStage.EXTRACTED.value, PipelineStage.ENRICHING.value, PipelineStage.COMPLETED.value},
+        run_id=str(payload["run_id"]) if payload.get("run_id") else None,
     )
 
 
@@ -196,17 +199,22 @@ def _persist(db: Session, target: _Target, result: OCRResult, job_id: Optional[u
         organization_id=target.organization_id,
     )
 
-    # Chain downstream document.enrich job
+    # Chain downstream document.enrich job: one per run (a reprocess is a new run).
+    enrich_payload = {
+        "work_item_id": str(target.work_item_id),
+        "organization_id": str(target.organization_id),
+        "workspace_id": str(target.workspace_id),
+    }
+    enrich_key = f"{ENRICH_JOB_TYPE}:{target.work_item_id}"
+    if target.run_id:
+        enrich_payload["run_id"] = target.run_id
+        enrich_key = f"{enrich_key}:{target.run_id}"
     job_service.enqueue(
         db,
         job_type=ENRICH_JOB_TYPE,
-        payload={
-            "work_item_id": str(target.work_item_id),
-            "organization_id": str(target.organization_id),
-            "workspace_id": str(target.workspace_id),
-        },
+        payload=enrich_payload,
         organization_id=target.organization_id,
-        idempotency_key=f"{ENRICH_JOB_TYPE}:{target.work_item_id}",
+        idempotency_key=enrich_key,
     )
 
     audit_service.record(
