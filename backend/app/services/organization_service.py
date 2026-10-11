@@ -153,6 +153,10 @@ def provision_organization(
         )
 
         _start_on_free_plan(db, organization_id=organization.id)
+        # N-052: the creator's one-week trial (started now if this is their first organization).
+        from app.services import trial_service
+
+        trial_service.start_for_new_organization(db, organization=organization, owner_user_id=user_id)
 
         audit_service.record(
             db,

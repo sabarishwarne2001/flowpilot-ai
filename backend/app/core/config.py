@@ -808,6 +808,10 @@ class Settings(BaseSettings):
     BILLING_ON_HOLD_GRACE_DAYS: int = 13
     # The tier an organization falls back to when its subscription ends.
     BILLING_LAPSED_TIER_KEY: str = "free"
+    # N-052 (owner decision). Free is a trial of this many days per owner account,
+    # counted from the account's first organization; after it, new work needs a
+    # paid plan (app/services/trial_service.py).
+    FREE_TRIAL_DAYS: int = 7
     # ARCH-30 Tranche 3. How Dodo bills a mid-cycle seat change. Dodo documents
     # that the three "_immediately" modes charge now and move the renewal date;
     # do_not_bill keeps the date and bills the new quantity at renewal.

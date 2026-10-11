@@ -15,7 +15,7 @@ from app.api.deps import get_db
 from app.core.exceptions import SpendLimitExceededError
 from app.models.cases import Case
 from app.schemas.cases import PublicRequestInfo, PublicUploadResult
-from app.services import file_validation_service, plan_admission
+from app.services import file_validation_service, plan_admission, trial_service
 from app.services.cases import requests
 
 logger = logging.getLogger("app.api.v1.public_document_requests")
@@ -71,7 +71,7 @@ def upload_requested_document(token: str, file: UploadFile = File(...), db: Sess
     except file_validation_service.FileValidationError as exc:
         db.rollback()
         raise _rejected(exc) from exc
-    except (SpendLimitExceededError, plan_admission.PlanLimitExceededError) as exc:
+    except (SpendLimitExceededError, plan_admission.PlanLimitExceededError, trial_service.TrialEndedError) as exc:
         # Campaign session 1. The upload is charged like any other, so the
         # organization's allowance applies. The person here has no account and no
         # say over the plan: they are told what they can act on, nothing about the

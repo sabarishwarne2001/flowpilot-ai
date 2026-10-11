@@ -169,6 +169,11 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Fail documents stuck in processing with no live job (hardening D25).",
     ),
     ScheduledJob(
+        job_type="trial.reminders",
+        interval_seconds=3_600,
+        description="Email owners two days before their free trial ends, and when it ends (N-052).",
+    ),
+    ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,
         description="Prune expired SAML replay-guard entries (ARCH-16).",

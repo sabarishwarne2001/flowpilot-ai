@@ -262,6 +262,12 @@ def _addon_table(seed: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _trial_days() -> int:
+    from app.core.config import settings
+
+    return int(settings.FREE_TRIAL_DAYS)
+
+
 def render() -> str:
     seed = _seed()
     parts = [
@@ -363,15 +369,32 @@ def render() -> str:
         "",
         _allowance_table(seed),
         "",
-        "### 4.3 Per-organization limits",
+        "### 4.3 The free trial",
+        "",
+        "Free is a **trial of " + str(_trial_days()) + " days per owner account** (owner decision N-052)."
+        " The account's clock (`users.trial_ends_at`) starts when the person creates their first"
+        " organization; every organization they create copies it (`organizations.trial_ends_at`), so a"
+        " second organization, a new workspace or an ownership transfer never restarts it. While an"
+        " organization is on Free the allowances above apply. When the trial ends without a live paid"
+        " subscription the organization is **read-only**: every write route, upload path, re-processing,"
+        " the assistant, new workspaces and the worker's engine and automation jobs refuse with a 402"
+        " `TRIAL_ENDED` (remedy `SUBSCRIBE`) (" + _ref("app.services.trial_service.assert_trial_active")
+        + ", " + _ref("app.api.billing_write_gate.assert_billing_writes_allowed") + ", "
+        + _ref("app.workers.tenant_gate.unpaid_reason") + "). Reading, search, export, deleting,"
+        " member management, archiving, checkout and the billing portal stay open. Subscribing lifts it"
+        " at once; a paid plan that lapses to Free afterwards is asked to subscribe again. Owners are"
+        " emailed two days before the end and when it ends (`trial.reminders`). Nothing is deleted when"
+        " a trial ends.",
+        "",
+        "### 4.4 Per-organization limits",
         "",
         _limit_table(seed),
         "",
-        "### 4.4 Capabilities",
+        "### 4.5 Capabilities",
         "",
         _capability_table(seed),
         "",
-        "### 4.5 Add-ons",
+        "### 4.6 Add-ons",
         "",
         _addon_table(seed),
         "",

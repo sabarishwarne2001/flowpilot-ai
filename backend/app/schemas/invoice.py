@@ -205,6 +205,14 @@ class SeatChangeRequest(BaseModel):
     )
 
 
+class TrialStatusResponse(BaseModel):
+    """Campaign session 2 (N-052): the organization's place in its one-week free trial."""
+
+    state: Literal["NONE", "ACTIVE", "ENDED"] = "NONE"
+    ends_at: Optional[datetime] = None
+    days_left: Optional[int] = None
+
+
 class BillingAccessResponse(BaseModel):
     organization_id: uuid.UUID
     access_state: str
@@ -224,6 +232,7 @@ class BillingAccessResponse(BaseModel):
     # until ..." instead of saying nothing until the day writes stop.
     subscription_status: Optional[str] = None
     grace_ends_at: Optional[datetime] = None
+    trial: Optional[TrialStatusResponse] = None
 
 
 # ARCH30-T4F:access-summary-schema — A5.
@@ -243,7 +252,7 @@ class BillingAccessSummaryResponse(BaseModel):
     their names alone; RESTRICTED says what a member experiences.
     """
 
-    state: Literal["ACTIVE", "GRACE", "RESTRICTED"]
+    state: Literal["ACTIVE", "GRACE", "RESTRICTED", "TRIAL_ENDED"]
     is_read_only: bool = Field(
         description="True when writes are refused. Reads and export "
         "always continue."
@@ -259,6 +268,7 @@ class BillingAccessSummaryResponse(BaseModel):
         default_factory=list,
         description="Who can change the plan, by name: the organization owners (at most three).",
     )
+    trial: TrialStatusResponse = Field(default_factory=TrialStatusResponse)
 
 
 class CheckoutSessionRequest(BaseModel):

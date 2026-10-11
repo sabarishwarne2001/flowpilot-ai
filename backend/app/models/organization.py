@@ -110,6 +110,16 @@ class Organization(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
 
+    # N-052 (owner decision): when this organization's free trial ends. Copied from
+    # the creating owner's account clock (`users.trial_ends_at`) at creation, so a
+    # second organization, or an ownership transfer, never restarts it. Only read
+    # while the organization is on the Free plan (`trial_service`). NULL means no
+    # trial clock (organizations created outside the product).
+    trial_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     quota_tier: Mapped["QuotaTier | None"] = relationship("QuotaTier")
     members: Mapped[list["OrganizationMember"]] = relationship(
         "OrganizationMember",

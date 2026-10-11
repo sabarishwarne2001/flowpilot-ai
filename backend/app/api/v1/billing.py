@@ -312,7 +312,14 @@ def get_billing_access(
             else None
         ),
         grace_ends_at=live.grace_ends_at if live else None,
+        trial=_trial_service().status(db, organization_id=context.organization_id).as_dict(),
     )
+
+
+def _trial_service():
+    from app.services import trial_service
+
+    return trial_service
 
 
 # ARCH30-T4F:access-summary-route — A5.
@@ -357,11 +364,19 @@ def get_billing_access_summary(
     )
     grace_ends_at = live.grace_ends_at if live else None
 
+    from app.services import trial_service
+
+    trial = trial_service.status(db, organization_id=context.organization_id)
+
     if not state.writes_allowed:
         # Already closed. Returning the expired date here would read as
         # "you have until <date in the past>", which is worse than no
         # date at all.
         summary_state = "RESTRICTED"
+        exposed_grace = None
+    elif trial.ended:
+        # N-052: the free trial is over and nothing is paid; read-only until someone subscribes.
+        summary_state = "TRIAL_ENDED"
         exposed_grace = None
     elif status_value == "past_due" and grace_ends_at is not None:
         summary_state = "GRACE"
@@ -374,9 +389,10 @@ def get_billing_access_summary(
 
     return BillingAccessSummaryResponse(
         state=summary_state,  # type: ignore[arg-type]
-        is_read_only=not state.writes_allowed,
+        is_read_only=(not state.writes_allowed) or trial.ended,
         grace_ends_at=exposed_grace,
         plan_contacts=plan_admission.plan_contacts(db, organization_id=context.organization_id),
+        trial=trial.as_dict(),
     )
 
 

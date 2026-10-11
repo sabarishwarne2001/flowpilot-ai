@@ -288,3 +288,5 @@ class PlanAllowanceResponse(BaseModel):
     meters: list[AllowanceMeterResponse]
     can_upgrade: bool
     ask: list[str]
+    #: Campaign session 2 (N-052): the free trial, from the same source as the write gate.
+    trial: Optional[dict] = None
