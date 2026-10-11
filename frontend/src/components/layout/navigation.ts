@@ -391,6 +391,8 @@ export const buildWorkspaceNavigationGroups = (
         icon: Sliders,
         description: "Rules that run when documents change",
         end: true,
+        // N-049: Developer and up; after a downgrade the page still lists, switches off and deletes rules.
+        capability: CAPABILITY.automations,
         // N-019 (decided): a VIEWER does not see it (the page shows Access restricted by URL).
         minimumRole: "CONTRIBUTOR",
         keywords: ["automation", "rules", "triggers"],

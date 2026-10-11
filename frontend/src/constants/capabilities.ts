@@ -49,6 +49,8 @@ export const CAPABILITY = {
   egressLockdown: "capability.egress_lockdown",
   // N-021:capability-constant — bring your own AI key, Business and Enterprise.
   byok: "capability.byok",
+  // Campaign session 1 (N-049) — automation rules and marketplace workflows, Developer and up.
+  automations: "capability.automations",
   // PHASE1:capability-constant — batch operations, Business and Enterprise.
   batchDispatch: "capability.batch_dispatch",
   // PHASE2:capability-constant — TruthMesh, the cross-document digital twin, Business and Enterprise (N-033).

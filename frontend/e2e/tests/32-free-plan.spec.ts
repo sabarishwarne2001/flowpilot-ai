@@ -69,3 +69,13 @@ test.describe("Free: plan cards", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Free: automations", () => {
+  test("automations are not on Free: the page says so and offers no new rule", async ({ page }) => {
+    await page.goto(ws("P", "automation"));
+    const banner = page.getByTestId("plan-lock-banner");
+    await expect(banner).toContainText("Automations isn't included in your plan", { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Create New Rule" })).toBeDisabled();
+    await expectHealthyPage(page);
+  });
+});
