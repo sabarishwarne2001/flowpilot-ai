@@ -44,7 +44,7 @@ from app.schemas.work_item import (
     WorkItemStatus,
     WorkItemUpdate,
 )
-from app.services import document_intake_service, file_validation_service, job_service
+from app.services import document_intake_service, file_validation_service, job_service, plan_admission
 
 logger = logging.getLogger("app.api.v1.work_items")
 
@@ -107,13 +107,19 @@ def upload_document(
     doc_settings = crud.get_document_settings(db, workspace_id=context.workspace_id)
     limit_mb = doc_settings.max_upload_size if doc_settings else (settings.MAX_UPLOAD_SIZE // (1024 * 1024))
     limit_bytes = limit_mb * 1024 * 1024
+    # Campaign session 1: never more than the plan's file size, read no further than it.
+    plan_bytes = plan_admission.max_upload_bytes(db, organization_id=context.organization_id)
 
     # 2. Bounded chunked spooling
     try:
         spool, total_size = file_validation_service.spool_upload_file(
-            file, max_bytes=limit_bytes
+            file, max_bytes=min(limit_bytes, plan_bytes)
         )
     except file_validation_service.FileValidationError as exc:
+        if exc.reason is file_validation_service.RejectionReason.TOO_LARGE and plan_bytes < limit_bytes:
+            plan_admission.assert_file_fits_plan(
+                db, organization_id=context.organization_id, size_bytes=plan_bytes + 1, page_count=None
+            )
         raise HTTPException(
             status_code=(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
@@ -431,6 +437,12 @@ def reprocess_work_item(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Reprocessing unavailable. Stored document object missing from storage.",
         )
+
+    # Campaign session 1: OCR runs (and is charged) again; refuse now, with the
+    # reason, rather than leave the document blocked in the worker.
+    plan_admission.assert_reprocess_admitted(
+        db, organization_id=context.organization_id, page_count=work_item.page_count
+    )
 
     crud.update_work_item_state(
         db, db_obj=work_item, obj_in=WorkItemUpdate(status=WorkItemStatus.QUEUED)

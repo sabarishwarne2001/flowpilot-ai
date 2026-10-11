@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 # ARCH30-T4F:access-summary-deps-import — A5.
 from app.api.deps import (
     OrganizationContext,
+    RequireAnyOrgRole,
     RequireOrgMember,
     RequireOrgOwner,
     RequireOrgRole,
@@ -323,7 +324,9 @@ def get_billing_access(
 )
 def get_billing_access_summary(
     organization_id: uuid.UUID,
-    context: OrganizationContext = Depends(RequireOrgMember),
+    # F-247: every role, BILLING included. The "ask <name> to change the plan" line
+    # reads this on any page with a plan lock, whoever is looking at it.
+    context: OrganizationContext = Depends(RequireAnyOrgRole),
     db: Session = Depends(get_db),
 ) -> BillingAccessSummaryResponse:
     """The member-readable half of `/billing/access`.
@@ -368,10 +371,13 @@ def get_billing_access_summary(
         summary_state = "ACTIVE"
         exposed_grace = None
 
+    from app.services import plan_admission
+
     return BillingAccessSummaryResponse(
         state=summary_state,  # type: ignore[arg-type]
         is_read_only=not state.writes_allowed,
         grace_ends_at=exposed_grace,
+        plan_contacts=plan_admission.plan_contacts(db, organization_id=context.organization_id),
     )
 
 

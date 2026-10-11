@@ -191,6 +191,30 @@ COMMERCIALS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Campaign session 1 — the plan table, decided under delegated founder authority
+# (NEEDS-OWNER.md, "DECIDED (campaign session 1)"). Read with:
+#
+#   * Free is per organization, and its metered allowance is ONE POOL per owner
+#     account: every Free organization an account owns (archived ones included)
+#     draws on the same documents, pages, messages, tokens and storage
+#     (`quota_service.usage_pool`). Several Free organizations do not multiply it.
+#   * A paid plan is priced per seat, so its metered allowances are PER SEAT and
+#     pooled across the organization: the numbers below are multiplied by the
+#     seats the subscription holds (`quota_service.tier_limits`). Gross margin is
+#     then the same for a 1-seat and a 50-seat organization.
+#   * The counts a person plans in (`document.upload`, `assistant.message`,
+#     `ocr.page`, storage) are the user-facing allowance; the token and `*` cost
+#     ceilings sit above them as the platform's safety net, sized so normal use of
+#     the counts never reaches them.
+#   * `limit.*` rows are static per organization (seats on Free, workspaces, file
+#     size, pages per document). An absent `limit.*` row means the plan sets none
+#     of its own; the platform maximum still applies.
+#   * Overage: REFUSE stops at the ceiling; ALLOW_AND_BILL continues and bills
+#     each unit above it at the price book's overage price; ALLOW_AND_WARN
+#     continues free of charge and the usage screens show the overrun.
+#
+# Every row on a higher plan is at least as generous as the same row below it
+# (tests/scripts/test_plan_ladder_is_monotonic.py).
 PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
     "free": {
         "display_name": "Free",
@@ -200,29 +224,35 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "max_cost_micros": 1_000_000,
                 "overage_policy": "REFUSE",
             },
+            # Safety net above the counts: 25 documents of up to 10 pages (only 50
+            # of them OCR'd) and 30 assistant questions need ~250k input tokens.
             {
                 "limit_key": "llm.input_token",
-                "max_quantity": "100000",
+                "max_quantity": "300000",
                 "overage_policy": "REFUSE",
                 "grace_quantity": "500",
             },
             {
                 "limit_key": "llm.output_token",
-                "max_quantity": "25000",
+                "max_quantity": "60000",
                 "overage_policy": "REFUSE",
                 "grace_quantity": "250",
             },
-            {"limit_key": "ocr.page", "max_quantity": "100", "overage_policy": "REFUSE"},
-            # ARCH-29. Free previously declared no storage ceiling at all, so
-            # the plan card listed tokens and OCR and was silent on documents.
+            {"limit_key": "ocr.page", "max_quantity": "50", "overage_policy": "REFUSE"},
+            {"limit_key": "document.upload", "max_quantity": "25", "overage_policy": "REFUSE"},
+            {"limit_key": "assistant.message", "max_quantity": "30", "overage_policy": "REFUSE"},
+            # 250 MB stored at any time (checked at upload; sampled monthly).
             {
                 "limit_key": "storage.gb_month",
-                "max_quantity": "1",
+                "max_quantity": "0.25",
                 "overage_policy": "REFUSE",
             },
             PLATFORM_KEY,
             # Campaign session 1. Free sells no seats: the owner and one more person.
             _plan_limit("limit.seats", 2),
+            _plan_limit("limit.workspaces", 1),
+            _plan_limit("limit.file_size_mb", 10),
+            _plan_limit("limit.pages_per_document", 10),
         ],
     },
     "developer": {
@@ -235,13 +265,13 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             },
             {
                 "limit_key": "llm.input_token",
-                "max_quantity": "2000000",
-                "overage_policy": "ALLOW_AND_WARN",
+                "max_quantity": "15000000",
+                "overage_policy": "REFUSE",
                 "grace_quantity": "5000",
             },
             {
                 "limit_key": "llm.output_token",
-                "max_quantity": "500000",
+                "max_quantity": "2000000",
                 "overage_policy": "REFUSE",
                 "grace_quantity": "2000",
             },
@@ -251,17 +281,18 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
-            # ARCH-29. Developer sat between Free and Business, both of which
-            # declared an OCR ceiling, and declared none itself — so the tier
-            # the screenshots showed offered storage but appeared to offer no
-            # document processing at all.
             {
                 "limit_key": "ocr.page",
                 "max_quantity": "5000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            {"limit_key": "document.upload", "max_quantity": "500", "overage_policy": "REFUSE"},
+            {"limit_key": "assistant.message", "max_quantity": "1000", "overage_policy": "REFUSE"},
             PLATFORM_KEY,
+            _plan_limit("limit.workspaces", 3),
+            _plan_limit("limit.file_size_mb", 50),
+            _plan_limit("limit.pages_per_document", 100),
             *DEVELOPER_FEATURES,
         ],
     },
@@ -275,13 +306,13 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             },
             {
                 "limit_key": "llm.output_token",
-                "max_quantity": "10000000",
+                "max_quantity": "20000000",
                 "overage_policy": "REFUSE",
                 "grace_quantity": "10000",
             },
             {
                 "limit_key": "llm.input_token",
-                "max_quantity": "50000000",
+                "max_quantity": "150000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
                 "grace_quantity": "10000",
@@ -298,7 +329,12 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            {"limit_key": "document.upload", "max_quantity": "5000", "overage_policy": "ALLOW_AND_WARN"},
+            {"limit_key": "assistant.message", "max_quantity": "10000", "overage_policy": "ALLOW_AND_WARN"},
             PLATFORM_KEY,
+            _plan_limit("limit.workspaces", 20),
+            _plan_limit("limit.file_size_mb", 100),
+            _plan_limit("limit.pages_per_document", 500),
             *BUSINESS_FEATURES,
         ],
     },
@@ -322,21 +358,26 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            # Per seat. 10,000 GB a seat cost $230 a month at the storage cost basis
+            # and took a seat used to its limits to a 37% margin (NEEDS-OWNER N-046).
             {
                 "limit_key": "storage.gb_month",
-                "max_quantity": "10000",
+                "max_quantity": "1000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
-            # ARCH-29. Enterprise declared no OCR ceiling while Business
-            # declared 50,000 — reading the two cards side by side, the more
-            # expensive plan appeared to remove a capability.
+            # Per seat: ten seats hold the 1,000,000 pages a month the card used
+            # to promise per organization, at a margin that holds for one seat.
             {
                 "limit_key": "ocr.page",
-                "max_quantity": "1000000",
+                "max_quantity": "100000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
+            {"limit_key": "document.upload", "max_quantity": "10000", "overage_policy": "ALLOW_AND_WARN"},
+            # No assistant.message row: fair use under the token ceilings.
+            # No limit.* rows: unlimited workspaces; file size and pages per
+            # document up to the platform maximum.
             PLATFORM_KEY,
             *ENTERPRISE_FEATURES,
         ],

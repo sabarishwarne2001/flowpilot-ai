@@ -227,6 +227,28 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "ZERO_BYOK",
         "notes": "Non-billable document counter.",
     },
+    # --- Plan allowances counted in documents and messages (campaign session 1) ---
+    # Counts a plan card promises ("25 documents a month"). Their compute is priced
+    # on its own meters (OCR pages, tokens, storage), so the count itself is a
+    # declared zero, never an unknown.
+    {
+        "event_type": "document.upload",
+        "provider": "internal",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Document allowance counter; its OCR, tokens and storage are priced separately.",
+    },
+    {
+        "event_type": "assistant.message",
+        "provider": "internal",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Assistant message allowance counter; its tokens are priced separately.",
+    },
     # --- Overage Pricing Entries ---
     {
         "event_type": "storage.gb_month.overage",

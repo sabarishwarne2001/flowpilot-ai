@@ -254,6 +254,11 @@ class BillingAccessSummaryResponse(BaseModel):
         "Null in ACTIVE and in RESTRICTED, where it has already "
         "closed.",
     )
+    # Campaign session 1 (E.4): every "ask someone" screen names who to ask.
+    plan_contacts: list[str] = Field(
+        default_factory=list,
+        description="Who can change the plan or buy seats, by name: owners, then billing managers.",
+    )
 
 
 class CheckoutSessionRequest(BaseModel):

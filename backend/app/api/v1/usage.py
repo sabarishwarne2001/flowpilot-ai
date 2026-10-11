@@ -21,6 +21,7 @@ from app.api.deps import (
 )
 from app.core.principal import Principal, get_current_principal
 from app.schemas.usage import (
+    PlanAllowanceResponse,
     SpendLimitResponse,
     SpendLimitUpdate,
     UsageGranularity,
@@ -310,3 +311,31 @@ def get_workspace_usage_series(
 
 
 __all__ = ["router", "workspace_router"]
+
+
+
+@workspace_router.get(
+    "/plan-allowance",
+    response_model=PlanAllowanceResponse,
+    summary="The plan's documents, pages and messages left, for any member",
+)
+def get_plan_allowance(
+    db: Session = Depends(get_read_db),
+    context=Depends(RequireWorkspaceViewer),
+) -> PlanAllowanceResponse:
+    """Campaign session 1. The numbers an upload or a question is checked against.
+
+    Readable by every member of the workspace, so the person about to upload sees
+    where the organization stands before a 402 tells them. Counts only: no money,
+    no invoices. `can_upgrade` says whether this person may change the plan; `ask`
+    names who can otherwise.
+    """
+    from app.core.organization_permissions import can_manage_billing
+    from app.services import plan_admission
+
+    body = plan_admission.allowance(db, organization_id=context.organization_id)
+    return PlanAllowanceResponse(
+        **body,
+        can_upgrade=can_manage_billing(context.organization_role),
+        ask=plan_admission.plan_contacts(db, organization_id=context.organization_id),
+    )
