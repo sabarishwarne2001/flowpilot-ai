@@ -866,3 +866,16 @@ supersedes the part of N-002 that said "the automation engine, which every plan 
 - Deploy note: `seed_quota_tiers.py` publishes the paid tiers with the new capability; existing Free
   organizations with active rules stop running them from the deploy. Clause checks (Enterprise)
   run through the same engine and are covered by the Enterprise plan.
+
+## N-050 — How a paying customer changes plans
+**DECIDED (campaign session 1): in the billing portal, on the subscription they already have.**
+A checkout always creates a new subscription at the gateway, and an organization holds one live
+subscription, so a paying customer who checked out again was charged twice and the second
+subscription could never be recorded (F-253). While a paid subscription is live, checkout now answers
+409 PAID_SUBSCRIPTION_ACTIVE and the plan page sends the owner to the billing portal, which moves the
+subscription and prorates the difference.
+- **Owner action (one-time, in the Stripe Dashboard, test mode first):** Settings → Billing →
+  Customer portal → "Customers can switch plans": on, with the Developer, Business and Enterprise
+  prices as the products a customer may switch between, proration "Prorate charges and credits".
+  On Dodo Payments, enable plan changes for the same products. Until this is on, the portal shows
+  no plan switch, and a customer upgrades by contacting you.
