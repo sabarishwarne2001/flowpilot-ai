@@ -257,7 +257,7 @@ class BillingAccessSummaryResponse(BaseModel):
     # Campaign session 1 (E.4): every "ask someone" screen names who to ask.
     plan_contacts: list[str] = Field(
         default_factory=list,
-        description="Who can change the plan or buy seats, by name: owners, then billing managers.",
+        description="Who can change the plan, by name: the organization owners (at most three).",
     )
 
 

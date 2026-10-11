@@ -124,8 +124,8 @@ export interface BillingAccessSummary {
   readonly is_read_only: boolean;
   readonly grace_ends_at: string | null;
   /**
-   * Campaign session 1: who can change the plan or buy seats, by name, so an
-   * "ask someone" screen names them (owners first, then billing managers).
+   * Campaign session 1: who can change the plan (the owners), by name, so an
+   * "ask someone" screen names them.
    */
   readonly plan_contacts?: readonly string[];
 }

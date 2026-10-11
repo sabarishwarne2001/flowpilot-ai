@@ -343,3 +343,21 @@ def test_every_organization_role_can_read_who_to_ask(client, db_session: Session
         f"/api/v1/organizations/{free.organization.id}/billing/access-summary", headers=free.viewer.headers
     )
     assert response.status_code == 200, response.text
+
+
+def test_only_people_who_can_change_the_plan_are_named(client, db_session: Session, free) -> None:
+    """Changing the plan is the owner's alone (`can_manage_billing`): a billing manager
+    is not someone a member can ask to upgrade (F-247)."""
+    membership = db_session.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == free.organization.id,
+            OrganizationMember.user_id == free.org_admin.user.id,
+        )
+    ).scalar_one()
+    membership.role = OrganizationRole.BILLING
+    db_session.commit()
+    response = client.get(
+        f"/api/v1/organizations/{free.organization.id}/billing/access-summary", headers=free.contributor.headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["plan_contacts"] == [free.owner.user.email]

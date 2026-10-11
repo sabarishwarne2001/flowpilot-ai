@@ -17,7 +17,7 @@ export interface AskPlanOwnersProps {
  *
  * "Ask an organization owner" left a member to work out who that is. The
  * member-readable billing summary carries the names of the people who can change
- * the plan (owners, then billing managers); this line reads them, and falls back
+ * the plan (the owners: only they can); this line reads them, and falls back
  * to the generic wording only while they load or if the organization has none.
  */
 export const AskPlanOwners: React.FC<AskPlanOwnersProps> = ({

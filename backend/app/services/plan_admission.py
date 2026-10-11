@@ -402,21 +402,25 @@ NEAR_SHARE = Decimal("0.8")
 
 
 def plan_contacts(db: Session, *, organization_id: uuid.UUID) -> list[str]:
-    """Who can change the plan or buy seats, by name: owners first, then billing managers."""
+    """Who can change the plan, by name: the owners (`can_manage_billing`), at most three.
+
+    Billing managers buy seats but cannot change the plan, so naming them would send a
+    member to someone who cannot do what is asked.
+    """
     from app.models.organization import MembershipStatus, OrganizationMember, OrganizationRole
     from app.models.user import User
 
     rows = db.execute(
-        select(OrganizationMember.role, User.display_name, User.email)
+        select(User.display_name, User.email)
+        .select_from(OrganizationMember)
         .join(User, User.id == OrganizationMember.user_id)
         .where(
             OrganizationMember.organization_id == organization_id,
             OrganizationMember.status == MembershipStatus.ACTIVE,
-            OrganizationMember.role.in_((OrganizationRole.OWNER, OrganizationRole.BILLING)),
+            OrganizationMember.role == OrganizationRole.OWNER,
         )
     ).all()
-    ordered = sorted(rows, key=lambda row: (row[0] is not OrganizationRole.OWNER, (row[1] or row[2]).lower()))
-    return [(display or email) for _, display, email in ordered][:3]
+    return sorted((display or email) for display, email in rows)[:3]
 
 
 def allowance(db: Session, *, organization_id: uuid.UUID) -> dict[str, Any]:
