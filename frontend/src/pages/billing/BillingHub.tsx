@@ -179,8 +179,9 @@ export const BillingHub: React.FC = () => {
 
         {!canManageBilling && (
           <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-            You can see the plan, usage, limits and invoices. Changing the plan,
-            seats or payment method needs an organization owner.
+            You can see the plan, usage, limits and invoices. Changing the plan or
+            payment method needs an organization owner; owners, admins and billing
+            managers can add or remove seats.
           </p>
         )}
       </div>

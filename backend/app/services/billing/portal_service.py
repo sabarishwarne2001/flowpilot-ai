@@ -278,6 +278,18 @@ def create_checkout_session(
     cancel_url: Optional[str] = None,
     discount_code: Optional[str] = None,  # ARCH50-S1:checkout-discount (a promo code's gateway coupon)
 ) -> EphemeralSession:
+    # Campaign session 1. A paid plan holds the seats it buys, and the seat check
+    # refuses anyone past them: a checkout for fewer seats than the people already
+    # in the organization (members and pending invitations) would leave it unable
+    # to add anyone, or to accept the invitations it has sent.
+    from app.services import seat_capacity_service
+
+    in_use = seat_capacity_service.seat_capacity(db, organization_id=organization_id).used
+    if seats < in_use:
+        raise CheckoutConfigurationError(
+            f"{in_use} seats are in use (members and pending invitations); buy at least {in_use}."
+        )
+
     # ARCH-29 Tranche 2 (F-2). The price is a property of the tier being
     # sold, resolved here from the tier key the caller named.
     #

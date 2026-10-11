@@ -182,6 +182,23 @@ export interface SubscriptionStateResponse {
   readonly seats_purchased: number;
   readonly seat_drift_delta: number;
   readonly access_state: string;
+  /** Campaign session 1: what the server's seat check enforces. */
+  readonly plan_key: string | null;
+  /** The plan's seats on Free, the purchased quantity on a paid plan; null = no limit. */
+  readonly seat_capacity: number | null;
+  readonly seat_capacity_source: "PURCHASED" | "PLAN" | "OVERRIDE" | "UNLIMITED";
+  readonly seats_pending_invitations: number;
+  /** Active members plus pending invitations. */
+  readonly seats_used: number;
+  readonly seats_available: number | null;
+  /** The caller may buy or release seats (owner, admin, billing on a paid plan). */
+  readonly can_manage_seats: boolean;
+}
+
+export interface SeatChangeRequest {
+  readonly seats: number;
+  /** The per-seat price that was shown; any other price is refused (SEAT_PRICE_CHANGED). */
+  readonly confirmed_unit_price_micros?: number | null;
 }
 
 export interface BillingAccessResponse {

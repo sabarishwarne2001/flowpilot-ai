@@ -47,6 +47,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.exceptions import FlowPilotError
 from app.models.billable_seat import BillableSeat
 from app.models.billing_account import BillingAccount
 from app.models.organization import (
@@ -593,8 +594,20 @@ def detect_all_drift(db: Session, *, limit: int = 1000) -> list[SeatDrift]:
 
 
 def report_drift(db: Session, *, limit: int = 1000) -> list[SeatDrift]:
-    """Detect, log at a level that gets noticed, and request a re-assert."""
-    drifts = detect_all_drift(db, limit=limit)
+    """Detect members past the purchased seats, log loudly, and queue the sync.
+
+    Campaign session 1. A paid organization holds the seats it bought, so seats
+    nobody uses yet (OVER_BILLED in the drift vocabulary) are a normal state the
+    customer releases on purpose in Billing -> Seats; they are not reported. More
+    active members than purchased seats (UNDER_BILLED) is a billing fault (the seat
+    check refuses it, so it means a path went around the check or data from before
+    it): it is logged at error level and a `billing.seat_sync` job is queued. Before,
+    the sweep only emitted an internal event, and nothing consumes internal events,
+    so detected drift was never corrected.
+    """
+    from app.workers.handlers.billing import enqueue_seat_sync
+
+    drifts = [d for d in detect_all_drift(db, limit=limit) if d.direction == "UNDER_BILLED"]
     for drift in drifts:
         logger.error("billing.seat_drift", extra=drift.as_dict())
         request_seat_sync(
@@ -603,12 +616,165 @@ def report_drift(db: Session, *, limit: int = 1000) -> list[SeatDrift]:
             reason="drift_detected",
             drift=drift,
         )
+        enqueue_seat_sync(db, organization_id=drift.organization_id, reason="drift_detected")
     return drifts
 
 
 # ============================================================================
 # Sync
 # ============================================================================
+
+
+def _write_seats_at_gateway(
+    db: Session, *, subscription: Subscription, seats: int, reason: str
+) -> tuple[int, bool]:
+    """Set the subscription's seat quantity at its gateway (which prorates), then here."""
+    if subscription.gateway == "STRIPE":
+        snapshot = stripe_gateway.get_gateway().set_subscription_seats(
+            subscription_id=subscription.stripe_subscription_id,
+            seats=seats,
+            reason=reason,
+        )
+        synced_seats, state_version = snapshot.seats, snapshot.state_version
+    else:
+        # ARCH-30 Tranche 3 (D-10). Seats on the live gateway. Previously every
+        # Dodo-billed organization reached the Stripe call above with a NULL
+        # subscription id: the job failed and added seats were never billed.
+        from app.models.quota_tier import QuotaTier
+        from app.services.billing.payment_gateway import get_payment_gateway
+
+        tier = db.get(QuotaTier, subscription.quota_tier_id)
+        if tier is None or not tier.gateway_price_id:
+            raise SeatError(
+                f"Subscription {subscription.id} is pinned to a tier with no gateway "
+                "price id; the seat count cannot be changed at the gateway."
+            )
+        dodo_snapshot = get_payment_gateway(subscription.gateway).set_subscription_seats(
+            subscription_id=subscription.gateway_subscription_id,
+            product_id=tier.gateway_price_id,
+            seats=seats,
+            proration_mode=str(settings.BILLING_DODO_SEAT_PRORATION_MODE),
+        )
+        synced_seats, state_version = dodo_snapshot.quantity, dodo_snapshot.state_version
+
+    applied = subscription_service.record_seat_count(
+        db,
+        subscription=subscription,
+        seats=synced_seats,
+        state_version=state_version,
+    )
+    return int(synced_seats), bool(applied)
+
+
+class SeatsInUseError(SeatError, FlowPilotError):
+    """Fewer seats than members plus pending invitations were asked for."""
+
+    status_code = 409
+    code = "SEATS_IN_USE"
+
+    def __init__(self, message: str, *, seats_used: int) -> None:
+        super().__init__(message)
+        self.seats_used = seats_used
+        self.details = {"seats_used": seats_used}
+
+
+class NoPaidSubscriptionError(SeatError, FlowPilotError):
+    """Seats are bought on a paid subscription; this organization has none."""
+
+    status_code = 409
+    code = "NO_PAID_SUBSCRIPTION"
+
+
+class SeatPriceChangedError(SeatError, FlowPilotError):
+    """The seat price changed between the quote the person saw and the purchase."""
+
+    status_code = 409
+    code = "SEAT_PRICE_CHANGED"
+
+
+def set_purchased_seats(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    seats: int,
+    confirmed_unit_price_micros: Optional[int] = None,
+) -> dict[str, Any]:
+    """Campaign session 1. Buy or release seats on the live paid subscription.
+
+    The purchased quantity is the organization's seat capacity
+    (`seat_capacity_service`): adding a member past it is refused until a seat is
+    bought. This is how seats are bought (and unused ones released), by an owner,
+    admin or billing manager, after the price was shown: `confirmed_unit_price_micros`
+    is the unit price the quote displayed, and a purchase at a different price is
+    refused rather than charged. Never below members plus pending invitations: a
+    release cannot strand someone already invited. The gateway prorates.
+    """
+    from app.services import seat_capacity_service
+
+    if seats < 1:
+        raise SeatError("A subscription holds at least one seat.")
+
+    subscription = subscription_service.live_subscription_for_organization(
+        db, organization_id=organization_id
+    )
+    if subscription is None:
+        raise NoPaidSubscriptionError(
+            "Seats are bought on a paid plan. Choose a plan first; Free includes its own seats."
+        )
+
+    seat_capacity_service.lock_seats(db, organization_id=organization_id)
+    capacity = seat_capacity_service.seat_capacity(db, organization_id=organization_id)
+    if seats < capacity.used:
+        raise SeatsInUseError(
+            f"{capacity.used} seats are in use ({capacity.members} members and "
+            f"{capacity.pending_invitations} pending invitations). Remove people or "
+            "revoke invitations before going below that.",
+            seats_used=capacity.used,
+        )
+
+    current = int(subscription.seats_purchased)
+    if seats > current and confirmed_unit_price_micros is not None:
+        entry = invoice_service.seat_price_entry(
+            db, price_book_id=subscription.price_book_id, tier_key=subscription.quota_tier_key
+        )
+        if entry is not None:
+            unit = int(Decimal(str(entry.unit_price_micros)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if unit != int(confirmed_unit_price_micros):
+                raise SeatPriceChangedError(
+                    "The seat price changed since it was shown. Review the new price and confirm again."
+                )
+
+    if seats == current:
+        return {
+            "organization_id": str(organization_id),
+            "subscription_id": str(subscription.id),
+            "outcome": "UNCHANGED",
+            "seats_purchased": current,
+        }
+
+    synced, applied = _write_seats_at_gateway(
+        db,
+        subscription=subscription,
+        seats=seats,
+        reason="seats_purchased" if seats > current else "seats_released",
+    )
+    logger.info(
+        "billing.seats_changed",
+        extra={
+            "organization_id": str(organization_id),
+            "subscription_id": str(subscription.id),
+            "from": current,
+            "to": synced,
+        },
+    )
+    return {
+        "organization_id": str(organization_id),
+        "subscription_id": str(subscription.id),
+        "outcome": "CHANGED" if applied else "SUPERSEDED",
+        "seats_previously_purchased": current,
+        "seats_now_purchased": synced,
+        "gateway": subscription.gateway,
+    }
 
 
 def sync_seats(
@@ -633,7 +799,17 @@ def sync_seats(
             "outcome": "NO_LIVE_SUBSCRIPTION",
         }
 
-    seats = billable_seats(db, organization_id=organization_id)
+    # Campaign session 1. The seats in use are the active members plus the pending
+    # invitations (each holds the seat its acceptance takes). Reconciling to the
+    # members alone released the seat a pending invitation held, and the invitee
+    # was then refused for want of a seat.
+    from app.crud import organization_invitation as invitation_crud
+
+    seats = max(
+        1,
+        billable_seats(db, organization_id=organization_id)
+        + invitation_crud.count_pending_invitations(db, organization_id=organization_id),
+    )
     purchased = int(subscription.seats_purchased)
 
     if seats == purchased and not force:
@@ -677,39 +853,8 @@ def sync_seats(
             },
         )
 
-    if subscription.gateway == "STRIPE":
-        snapshot = stripe_gateway.get_gateway().set_subscription_seats(
-            subscription_id=subscription.stripe_subscription_id,
-            seats=seats,
-            reason=reason,
-        )
-        synced_seats, state_version = snapshot.seats, snapshot.state_version
-    else:
-        # ARCH-30 Tranche 3 (D-10). Seats on the live gateway. Previously every
-        # Dodo-billed organization reached the Stripe call above with a NULL
-        # subscription id: the job failed and added seats were never billed.
-        from app.models.quota_tier import QuotaTier
-        from app.services.billing.payment_gateway import get_payment_gateway
-
-        tier = db.get(QuotaTier, subscription.quota_tier_id)
-        if tier is None or not tier.gateway_price_id:
-            raise SeatError(
-                f"Subscription {subscription.id} is pinned to a tier with no gateway "
-                "price id; the seat count cannot be changed at the gateway."
-            )
-        dodo_snapshot = get_payment_gateway(subscription.gateway).set_subscription_seats(
-            subscription_id=subscription.gateway_subscription_id,
-            product_id=tier.gateway_price_id,
-            seats=seats,
-            proration_mode=str(settings.BILLING_DODO_SEAT_PRORATION_MODE),
-        )
-        synced_seats, state_version = dodo_snapshot.quantity, dodo_snapshot.state_version
-
-    applied = subscription_service.record_seat_count(
-        db,
-        subscription=subscription,
-        seats=synced_seats,
-        state_version=state_version,
+    synced_seats, applied = _write_seats_at_gateway(
+        db, subscription=subscription, seats=seats, reason=reason
     )
 
     return {

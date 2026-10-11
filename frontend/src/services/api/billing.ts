@@ -9,6 +9,7 @@ import type {
   InvoiceReproductionResponse,
   PlanListResponse,
   PortalSessionRequest,
+  SeatChangeRequest,
   SeatSyncRequest,
   SubscriptionStateResponse,
   UsageGranularity,
@@ -272,6 +273,21 @@ export const syncSeats = async (
   payload: SeatSyncRequest = {},
 ): Promise<SubscriptionStateResponse> => {
   const response = await apiClient.post<SubscriptionStateResponse>(
+    BILLING_ENDPOINTS.seats(organizationId),
+    payload,
+  );
+  return response.data;
+};
+
+/**
+ * Campaign session 1 — buy or release seats on the paid subscription. The caller
+ * shows the price first (`fetchSeatPriceBook`) and sends the unit price it showed.
+ */
+export const changeSeats = async (
+  organizationId: string,
+  payload: SeatChangeRequest,
+): Promise<SubscriptionStateResponse> => {
+  const response = await apiClient.put<SubscriptionStateResponse>(
     BILLING_ENDPOINTS.seats(organizationId),
     payload,
   );

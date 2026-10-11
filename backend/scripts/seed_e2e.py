@@ -183,6 +183,22 @@ def _tier(db, plan_key: str):
     return tier
 
 
+#: Campaign session 1: a paid organization holds the seats it bought, and the seat
+#: check refuses an invitation past them. The test companies buy room for the people
+#: the browser tests invite, on top of everyone a previous run left in the organization.
+E2E_SPARE_SEATS = 20
+
+
+def _seats_to_buy(db, organization, tenant) -> int:
+    from app.crud import organization_invitation as invitation_crud
+    from app.crud import organization_members as organization_members_crud
+
+    in_use = organization_members_crud.count_consumed_seats(
+        db, organization_id=organization.id
+    ) + invitation_crud.count_pending_invitations(db, organization_id=organization.id)
+    return max(len(tenant.users), in_use) + E2E_SPARE_SEATS
+
+
 def _seed_billing(db, organization, tier, seats: int, owner_email: str) -> dict[str, str]:
     """A test-mode billing account and one live subscription on `tier`."""
     from app.models.billing_account import BillingAccount
@@ -356,7 +372,7 @@ def seed(db) -> dict[str, Any]:
         billing: dict[str, str] | None = None
         if tenant.plan != "free":
             owner = next(u for u in tenant.users if u.org_role == "OWNER")
-            billing = _seed_billing(db, organization, tier, len(tenant.users), owner.email)
+            billing = _seed_billing(db, organization, tier, _seats_to_buy(db, organization, tenant), owner.email)
 
         summary["tenants"][tenant.key] = {
             "slug": tenant.slug,
