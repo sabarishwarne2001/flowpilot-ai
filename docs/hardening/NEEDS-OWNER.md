@@ -951,3 +951,30 @@ N-052 marked *proposed*, decided the way a Tier-1 SaaS (Claude, Linear, Vercel) 
 - **The two emails: kept** (two days before, and on the day it ends), each sent once per account;
   an email the relay did not accept is retried hourly inside its window. Session 3 owns the wording.
 - **Setting:** `FREE_TRIAL_DAYS` (default 7) changes the length without a code change.
+
+## N-054 — Which models the plans include, and what they cost
+**DECIDED (campaign session 2).** Found while checking the model list against the providers'
+pages (F-261, F-262).
+- **The plans include the models FlowPilot serves on its own keys: GPT-OSS 120B (the default)
+  and GPT-OSS 20B, on Groq.** A plan's token allowance is counted in tokens, and a token on Gemini
+  2.5 Pro costs FlowPilot 33 times one on GPT-OSS 20B; one allowance cannot cover both at the
+  same price. Gemini 2.5 Flash, 2.5 Pro, 3.5 Flash and Groq's Qwen 3.8 27B (a Preview model Groq
+  may withdraw at short notice) **run on the organization's own provider key** (BYOK, where the
+  customer pays the provider and FlowPilot charges no overage, N-048). This is how Tier-1 tools
+  offer premium models without pricing every plan for the dearest one. If the platform's key
+  would ever be asked for one of them (an old setting, a removed key), the default model answers
+  instead; nothing fails.
+- **The price book costs every model at its supplier's list price** (checked 2026-10-11), and
+  prices it at least twice that. `tests/scripts/test_price_book_matches_supplier_rates.py` holds
+  the supplier prices: when a provider changes one, change it there first.
+- **Allowances resized to keep every paid plan at 60% or more at its ceilings, on the real
+  default model:** Business 40,000 OCR pages and 100M input tokens a seat (were 50,000 and 150M);
+  Enterprise 300M input and 75M output tokens a seat (were 500M and 125M). Everything past them
+  bills overage at several times cost, as before. Developer and Free are unchanged. Existing
+  subscribers keep the version they bought (`--carry-forward` moves only to no-worse versions).
+- **Reversible later:** model-weighted credits (counting a premium model's token as several) would
+  let the plans include premium models; it needs a credit unit on every usage screen and was not
+  worth the risk before launch.
+- **Owner action:** none in code. On deploy re-run `seed_price_book.py --version auto` and
+  `seed_quota_tiers.py` (RUNBOOK 9.3). Spot-check the Groq and Google prices on their pricing pages
+  before launch; this environment could only read them through third-party trackers.
