@@ -152,6 +152,11 @@ def provision_organization(
             )
         )
 
+        # F-260 (campaign session 2): ready for AI before the first upload, like any workspace.
+        from app.services.workspace_service import add_default_settings
+
+        add_default_settings(db, workspace_id=workspace.id, actor_id=user_id)
+
         _start_on_free_plan(db, organization_id=organization.id)
         # N-052: the creator's one-week trial (started now if this is their first organization).
         from app.services import trial_service
