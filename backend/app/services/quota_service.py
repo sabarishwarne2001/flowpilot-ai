@@ -23,7 +23,7 @@ from app.core.usage_events import (
     overage_type_for,
     is_overage_type,
 )
-from app.core import entitlements
+from app.core import entitlements, plan_limits
 from app.models.organization import Organization
 from app.models.quota_tier import (
     POLICIES_REQUIRING_PRICE,
@@ -365,6 +365,29 @@ def tier_limit_for(
     return None
 
 
+def plan_limit(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    limit_key: str,
+    at: Optional[datetime] = None,
+) -> Optional[int]:
+    """The organization's plan limit `limit_key` (`limit.*`), or None when its plan sets none.
+
+    None also when the organization resolves no plan at all (an organization created
+    before every organization started on Free; the plan seed repairs those).
+    """
+    if not plan_limits.is_plan_limit_key(limit_key):
+        raise ValueError(f"{limit_key!r} is not a registered plan limit.")
+    tier = resolve_tier(db, organization_id=organization_id, at=at)
+    if tier is None:
+        return None
+    for entry in tier.entries:
+        if entry.limit_key == limit_key and entry.max_quantity is not None:
+            return int(entry.max_quantity)
+    return None
+
+
 @dataclass(frozen=True)
 class OverageOutcome:
     billed: bool
@@ -686,6 +709,27 @@ def _validate(
             validated.append(spec)
             continue
 
+        # Campaign session 1. Static plan limits (`limit.*`): a ceiling on a size, not
+        # consumption, validated by their own shape rule like entitlements are.
+        if plan_limits.is_plan_limit_key(spec.limit_key):
+            violation = plan_limits.shape_violation(
+                limit_key=spec.limit_key,
+                period=spec.period,
+                max_quantity=spec.max_quantity,
+                max_cost_micros=spec.max_cost_micros,
+                overage_policy=spec.overage_policy,
+                overage_price_tier_key=spec.overage_price_tier_key,
+                grace_quantity=spec.grace_quantity,
+            )
+            if violation is not None:
+                raise QuotaTierValidationError(violation)
+            limit_scope = (spec.limit_key, spec.period.value)
+            if limit_scope in seen:
+                raise QuotaTierValidationError(f"Duplicate entry {limit_scope!r}.")
+            seen.add(limit_scope)
+            validated.append(spec)
+            continue
+
         if not is_limit_key(spec.limit_key):
             raise QuotaTierValidationError(
                 f"'{spec.limit_key}' is neither the wildcard '{TOTAL_COST_KEY}', "
@@ -956,6 +1000,7 @@ def published_tier_by_key(
 
 __all__ = [
     "OverageOutcome",
+    "plan_limit",
     "published_tier_by_key",
     "OveragePolicy",
     "QuotaError",

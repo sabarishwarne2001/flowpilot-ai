@@ -101,6 +101,11 @@ def _capability(key: str) -> dict:
     return {"limit_key": key, "max_cost_micros": 0, "overage_policy": "REFUSE"}
 
 
+def _plan_limit(key: str, value: int) -> dict:
+    """A static plan limit (`app/core/plan_limits.py`): the ceiling is the quantity."""
+    return {"limit_key": key, "max_quantity": str(value), "overage_policy": "REFUSE"}
+
+
 DEVELOPER_FEATURES = [
     _capability("capability.developer_api"),
     _capability("capability.outgoing_webhooks"),
@@ -216,6 +221,8 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "REFUSE",
             },
             PLATFORM_KEY,
+            # Campaign session 1. Free sells no seats: the owner and one more person.
+            _plan_limit("limit.seats", 2),
         ],
     },
     "developer": {

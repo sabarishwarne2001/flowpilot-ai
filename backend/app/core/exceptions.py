@@ -300,8 +300,14 @@ class InvitationSsoRequiredError(InvitationError):
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.
+
+    `details` (campaign session 1) says why and what to do next, machine-readably:
+    capacity, seats used, the plan, and whether seats can be bought on it.
     """
-    pass
+
+    def __init__(self, message: str = "No seat is available.", details: dict | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
 
 
 class InvitationGrantError(InvitationError):
