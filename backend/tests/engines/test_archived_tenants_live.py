@@ -157,3 +157,30 @@ def test_scheduled_warehouse_exports_skip_an_archived_organization(engines: Engi
     _archive_organization(engines)
     engines.refresh()
     assert schedule.id not in {row.id for row in sync_service.due_schedules(engines.db)}
+
+
+def test_a_queued_job_for_an_organization_that_has_not_paid_is_skipped(engines: Engines, monkeypatch) -> None:
+    """Campaign session 1 (F-255). An organization read-only for non-payment (dunning RESTRICTED or
+    SUSPENDED) gets no automations or engine work, as the API already refuses its writes; paying
+    restores it on the next job."""
+    from app.services.billing import dunning_service
+    from app.services.billing.dunning_service import BillingAccessState
+
+    work_item_id = engines.process("refunds.pdf", [PAGE])
+    unpaid = {engines.org}
+    monkeypatch.setattr(
+        dunning_service, "access_state",
+        lambda db, *, organization_id: BillingAccessState.RESTRICTED if organization_id in unpaid
+        else BillingAccessState.ACTIVE,
+    )
+    _enqueue_reindex(engines, work_item_id, with_workspace=True)
+    runs = drain(only=["knowledge.reindex"])
+    assert [run.ok for run in runs] == [True]
+    assert runs[0].result["outcome"] == "SKIPPED", runs[0].result
+    assert "payment" in runs[0].result["reason"]
+
+    unpaid.clear()  # the invoice is paid
+    _enqueue_reindex(engines, work_item_id, with_workspace=True)
+    runs = drain(only=["knowledge.reindex"])
+    assert [run.ok for run in runs] == [True]
+    assert (runs[0].result or {}).get("outcome") != "SKIPPED", runs[0].result
