@@ -169,6 +169,19 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides[deps.get_db] = override_get_db
     app.dependency_overrides[deps.get_read_db] = override_get_read_db
     with TestClient(app) as test_client:
+        target = os.environ.get("API_ROUTE_LOG")
+        if target:
+            # Coverage ledger support (docs/hardening/tools/coverage_from_engines.py): with
+            # API_ROUTE_LOG set, every call these tests make is appended to that file.
+            original_request = test_client.request
+
+            def recording_request(method, url, *args, **kwargs):
+                response = original_request(method, url, *args, **kwargs)
+                with open(target, "a", encoding="utf-8") as handle:
+                    handle.write(f"HTTP\t{method.upper()} {str(url).split('?')[0]} {response.status_code}\n")
+                return response
+
+            test_client.request = recording_request  # type: ignore[method-assign]
         yield test_client
     app.dependency_overrides.clear()
 

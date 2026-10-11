@@ -3138,4 +3138,7 @@ profile production runs; every outbound call a job makes carries a timeout. Auto
 of the action catalog (webhook, redaction, autonomy, email without mail settings) runs live; loop,
 depth and budget guards are covered by the ARCH-13 gate suites. An API key upload goes through
 the same admission and pipeline as the browser, and revoking the key mid-way stops further uploads
-without failing the accepted document.
+without failing the accepted document. Every item action on obligations, assistant conversations,
+collaborative review, matching cases, tables, entities, ERP targets and postings, anomalies, legal
+holds, resumable uploads and the public API was used for real by new live tests
+(`backend/tests/engines/test_item_actions_*.py`); that push found F-272 to F-274.

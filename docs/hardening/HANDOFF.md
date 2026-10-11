@@ -193,3 +193,21 @@ N-053 to N-056 (NEEDS-OWNER.md, each `DECIDED (campaign session 2)`).
   the existing `work_items.bulk` job.
 - The production build warns that the main chunk is over 1,000 kB (pre-existing); worth a
   code-split pass for first-load time.
+- **Late fixes from the ledger push (F-272 to F-274).** Using every item action for real found
+  three more: replaying a finished answer ended in a traceback (F-272); a document with line
+  items could not be reviewed at all (F-273: lists are never part of a review decision now);
+  a goods receipt naming one order was attached to another order's invoice (F-274). The review
+  and matching specs (13, 24, 34) pass on the production bundle.
+- **Ledger, session 2's slice:** 362 rows `deep`, 9 `blocked` (dormant handlers and the jobs that
+  need gateway, warehouse, ERP or supplier credentials), 83 `smoke`, 18 `untested`. What is left:
+  the pages and navigation items are proven to render live with the CSP but their journeys are
+  yours; the ops crons (backups, PITR drills, watchdog, DR heartbeat) are yours; and these item
+  actions still have only their refusals proven: assertions (rule detail, simulate, resolve,
+  delete a clause check), case files (detail, remove a document, close, revoke a request),
+  corroboration (refresh, review, page image, delete), extraction memory (edit a template or
+  rule), packet splits (start, edit boundaries, reject), process proposals (detail, approve,
+  reject, undo), redactions (page image, edit a region), an ERP target credential and a failed
+  posting's retry, the public workflow trigger, analytics schedules. The pattern to copy is
+  `backend/tests/engines/test_item_actions_*.py`; `docs/hardening/tools/coverage_from_engines.py`
+  turns a test run's route log into ledger rows (engine tests: `ENGINE_ROUTE_LOG`; API tests:
+  `API_ROUTE_LOG`).
