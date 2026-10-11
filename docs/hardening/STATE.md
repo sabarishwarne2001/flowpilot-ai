@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-11 (pre-launch campaign, session 2 of 4 in progress)_
+_Last updated: 2026-10-11 (pre-launch campaign, session 2 of 4 complete; next: merge PR #20, then session 3)_
 
 ## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
 Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
@@ -28,7 +28,7 @@ the checklist below; do not restart.**
    DLQ visible, graceful shutdown, 1,000+ jobs RSS, timeouts, shared models serialized, pool.
 8. [done] Automations: action catalog live, loops and budgets; review, collaborative review,
    verifications and assertions agree.
-9. COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
+9. [done] COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
 
 **Progress (checkpoint 1, 2026-10-11):** items 1 to 5 done and pushed. Fixed and proven:
 F-257 to F-266 (FINDINGS.md, session 2 section), decisions N-053 to N-055. Live proofs with no
@@ -47,6 +47,21 @@ job delivery, every scheduled sweep, 1,200-job memory soak, the rest of the auto
 catalog, API-key uploads. The sandbox restarted once mid-session (databases on the RAM disk were
 lost; `frontend/e2e/scripts/start-db.sh` then `start-stack.sh` bring everything back). **Next:**
 item 9 (ledger, full suites, PR ready).
+
+**Finished (2026-10-11).** Fixed and proven this session: F-257 to F-274 (18), plus the owner's
+trial (N-052). Decisions N-053 to N-056. Finish checks, all on the final code:
+- backend: full suite **3,915 passed, 9 skipped, 0 failed** (`POSTGRES_DB=flowpilot_test`);
+- browser: full suite on a fresh e2e database, production bundle, CSP enforced, model stand-in on
+  (`E2E_LLM=1`, as CI): **409 passed, 1 skipped** (the provider-down test, which only runs without
+  a model), 0 failed;
+- frontend: `tsc -b`, the browser tests' typecheck, `npm run lint`, `npm run check:self`,
+  `npm run build`: all clean (the build's large-chunk notice is pre-existing);
+- Alembic: one head (`s2a1_free_trial_clock`), upgrade, downgrade, upgrade on a scratch database;
+- audits: `pip-audit -r requirements.txt` and `npm audit --omit=dev`: no known vulnerabilities;
+- live logs of the browser run: 0 tracebacks, 0 ERROR lines (API and worker); the one 5xx is the
+  expected 503 for a seat purchase with no gateway key in the sandbox; all 468 jobs SUCCEEDED.
+Ledger, session 2's slice: 362 `deep`, 9 `blocked`, 83 `smoke`, 18 `untested`; what is left is
+listed in HANDOFF.md for session 4. **Next:** the owner merges PR #20; then session 3.
 
 ## Previous phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
