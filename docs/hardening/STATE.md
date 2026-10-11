@@ -22,11 +22,11 @@ the checklist below; do not restart.**
    proof); the matching queue lists one case per invoice copy (one case, duplicates flagged).
 5. [done] Every engine control does something real (AI defaults, presets, legal hold, autonomy
    thresholds, re-index status) and every engine is checked against the new plan matrix.
-6. Document life: every intake path, every state, hostile timing (delete/archive/downgrade during
+6. [done] Document life: every intake path, every state, hostile timing (delete/archive/downgrade during
    processing), stuck-job sweeper, idempotent re-runs, provenance.
-7. The worker: every handler and sweep by hand and on schedule, two workers never run one job,
+7. [done] The worker: every handler and sweep by hand and on schedule, two workers never run one job,
    DLQ visible, graceful shutdown, 1,000+ jobs RSS, timeouts, shared models serialized, pool.
-8. Automations: action catalog live, loops and budgets; review, collaborative review,
+8. [done] Automations: action catalog live, loops and budgets; review, collaborative review,
    verifications and assertions agree.
 9. COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
 
@@ -36,7 +36,17 @@ defect: retrieval isolation (55 checks), prompt injection, metering exactly once
 proven real by new live tests: presets reach the extraction prompt (and stop when disabled), the
 autonomy error limit moves the cut-off, the re-index card stops polling, Streaming responses
 (F-266), AI defaults on a new organization (F-260); legal hold was already covered
-(`tests/api/test_legal_hold_enforcement.py`). **Next:** item 6 (document life), then 7, 8, 9.
+(`tests/api/test_legal_hold_enforcement.py`).
+
+**Progress (checkpoint 2, 2026-10-11):** items 6 to 8 done and pushed. Fixed and proven: F-267
+(Reprocess did nothing and left documents Queued; AI never re-ran), F-268 (Reprocess twice ran and
+charged twice), F-269 (two workers ran one job; a stopping worker ran its whole batch), F-270 (the
+dead-letter queue made visible: /admin/jobs), F-271 (API keys acted with their issuer's full rights
+whatever their scopes; N-056). Proven sound with new live tests: deletes mid-pipeline, duplicate
+job delivery, every scheduled sweep, 1,200-job memory soak, the rest of the automation action
+catalog, API-key uploads. The sandbox restarted once mid-session (databases on the RAM disk were
+lost; `frontend/e2e/scripts/start-db.sh` then `start-stack.sh` bring everything back). **Next:**
+item 9 (ledger, full suites, PR ready).
 
 ## Previous phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four

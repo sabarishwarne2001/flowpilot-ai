@@ -135,3 +135,61 @@ request resolves its organization and plan is `docs/hardening/TENANCY-AND-PLANS.
   tab opened before the first) still fails to record (one live subscription per account) and
   dead-letters; it is not refunded automatically. Rare after F-253; an alert and refund playbook
   would close it.
+
+## Session 2 → later sessions
+
+Session 2 (documents, AI, every engine, every background job) built the owner's one-week trial
+(N-052, details N-053), fixed F-257 to F-271 (FINDINGS.md, session 2 section) and took decisions
+N-053 to N-056 (NEEDS-OWNER.md, each `DECIDED (campaign session 2)`).
+
+**Build on these (all sessions):**
+- **The trial.** Free is a seven-day trial per owner account (`organizations.trial_ends_at`,
+  migration `s2a1_free_trial_clock`, now the one head; `FREE_TRIAL_DAYS`). After it a Free
+  organization is read-only: 402 `TRIAL_ENDED` (remedy `SUBSCRIBE`) from
+  `app/services/trial_service.py`, enforced in `billing_write_gate`, `plan_admission` (every
+  intake path, public links included) and the worker gate (`tenant_gate.unpaid_reason`).
+  A new write path or intake path inherits it by going through those, as before. New hourly job
+  `trial.reminders` (two emails). e2e tenants S (two days left) and T (ended).
+- **Models and money (N-054).** The platform's own keys serve only GPT-OSS 20B and 120B; any other
+  model runs on the organization's own key, and a platform call naming one is answered by the
+  default (`app/core/ai_models.py`: `platform_safe`, `requires_own_key`). Costs are the suppliers'
+  list prices. **Re-run `seed_price_book.py --version auto` and `seed_quota_tiers.py` on deploy**
+  (supplier costs; Business 40,000 OCR pages and 100M input tokens a seat; Enterprise 300M/75M).
+- **API keys (N-056, F-271).** Default deny: an API key may call only a route in
+  `ROUTE_SCOPE_MAP` (`app/core/scopes.py`) or one declaring `RequireScope(...)`, checked centrally
+  in `get_current_user`. **A new route meant for integrations must be added to the map**, or keys
+  get 403.
+- **Reprocess** (single and bulk) goes through `document_intake_service.queue_reprocess`: it locks
+  the document, refuses while a read or enrichment job is live, resets the pipeline stage and
+  queues a new run whose `run_id` gives enrichment its own metering scope
+  (`llm_metering.enrichment_scope`). Anything else that re-runs a document should call it.
+- **Worker.** A job's lease now starts when it starts (`claim.start_job`), a running job's lease is
+  renewed by a heartbeat (`worker._LeaseKeeper`), settling is fenced to the worker holding the job,
+  and a stopping worker hands back unstarted jobs. A new loop that runs jobs must use the same.
+  Platform staff see the queue and the dead-letter queue at **/admin/jobs** and can retry a dead job.
+- **Matching (N-055).** One case per invoice; later copies are listed on it.
+- **Running the backend tests locally:** point the app at the test database too
+  (`POSTGRES_DB=flowpilot_test pytest …`); otherwise code that opens its own `SessionLocal` (the
+  worker gate) reads the development database and the trial worker tests fail.
+
+**For session 3 (consoles, identity, security):**
+- F-271 was found from the document side: scopes had been checked only where a route opted in.
+  Worth the same look at the other non-human principals (partner portal tokens, SCIM tokens, the
+  public gateway's own key check) to confirm each is limited to its routes.
+- `GET /organizations/{id}/members` and invitations are now refused to API keys (no scope covers
+  invitations; `members:read` covers the list). If an enterprise asks for user provisioning by
+  key, that is SCIM's job, not a new scope.
+
+**For session 4 (journeys, operations, performance, certification):**
+- **Real-model spot-checks** (this sandbox has no Groq/Gemini key and cannot reach the Hugging Face
+  hub, so the model stand-in and a local embedding model were used): with a real key, check
+  prompt-injection resistance on the corpus's injection documents, line-item extraction on the
+  invoices, and the GST invoice; with real PaddleOCR weights, the photographed and handwritten
+  corpus pages; confirm Groq's and Google's current prices against `seed_price_book.py`.
+- New browser spec `35-platform-jobs.spec.ts` (the e2e seed puts one dead job back on every run).
+- Dormant handlers, not defects: `batch.expand_archive` (zip intake is not offered in the
+  product) and `work_items.bulk` (the bulk API runs inline, up to 500 documents). Time a 500-document
+  bulk delete behind the production proxy; if it nears the gateway timeout, move bulk delete onto
+  the existing `work_items.bulk` job.
+- The production build warns that the main chunk is over 1,000 kB (pre-existing); worth a
+  code-split pass for first-load time.
