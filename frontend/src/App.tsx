@@ -76,6 +76,7 @@ const AdminMarginsHub = lazy(() => import("@/pages/admin/AdminMarginsHub"));
 // ARCH50-S2:lazy-pages
 const SovereignConsole = lazy(() => import("@/pages/admin/SovereignConsole"));
 const RevOpsConsole = lazy(() => import("@/pages/admin/RevOpsConsole"));
+const JobsConsole = lazy(() => import("@/pages/admin/JobsConsole"));
 const OrganizationEgress = lazy(() => import("@/pages/organization/OrganizationEgress"));
 const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
 const ExecutionTimeline = lazy(
@@ -407,6 +408,10 @@ function AppRoutes() {
                 <Route
                   path={ROUTE_PATTERNS.platformRevops}
                   element={<RevOpsConsole />}
+                />
+                <Route
+                  path={ROUTE_PATTERNS.platformJobs}
+                  element={<JobsConsole />}
                 />
               </Route>
             </Route>

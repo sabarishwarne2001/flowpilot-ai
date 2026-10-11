@@ -422,6 +422,7 @@ def seed(db) -> dict[str, Any]:
         }
 
     _seed_organization_notices(db)
+    _seed_dead_job(db)
     db.commit()
     quota_service.clear_cache()
     return summary
@@ -462,6 +463,38 @@ def _seed_organization_notices(db) -> None:
             notification_type=NotificationType.SYSTEM,
             priority=NotificationPriority.INFO,
         )
+
+
+#: Campaign session 2: one dead job for the Background jobs console (e2e/tests/35-platform-jobs).
+#: Put back to DEAD on every seed, so the retry the browser test makes can be made again. Its
+#: document does not exist, so a retry runs and ends quietly.
+DEAD_JOB_KEY = "e2e:dead-job:document.extract"
+DEAD_JOB_ERROR = "OCRUnavailableError: e2e seeded failure"
+
+
+def _seed_dead_job(db) -> None:
+    import uuid
+
+    from app.models.job import Job, JobStatus
+    from app.models.organization import Organization
+    from sqlalchemy import select
+
+    tenant = next(t for t in TENANTS if t.key == "C")
+    organization = db.execute(select(Organization).where(Organization.slug == tenant.slug)).scalar_one()
+    job = db.execute(select(Job).where(Job.idempotency_key == DEAD_JOB_KEY)).scalar_one_or_none()
+    if job is None:
+        job = Job(job_type="document.extract", organization_id=organization.id, idempotency_key=DEAD_JOB_KEY,
+                  payload={"work_item_id": str(uuid.uuid4())}, max_attempts=3)
+        db.add(job)
+    job.status = JobStatus.DEAD
+    job.attempts = 3
+    job.claimed_at = None
+    job.claimed_by = None
+    job.claim_expires_at = None
+    job.succeeded_at = None
+    job.result = None
+    job.last_error = DEAD_JOB_ERROR
+    db.flush()
 
 
 def main(argv: list[str] | None = None) -> int:
