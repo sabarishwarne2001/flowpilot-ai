@@ -14,7 +14,9 @@ What it creates
 - Tenant B  "BizCo Holdings"        Business plan    owner
 - Tenant C  "Caretakers Global Inc" Enterprise plan  owner, admin, member, viewer (two workspaces;
             the member and viewer let role checks run on Enterprise-only features)
-- A platform super-admin (with a small Free organization of its own)
+- A platform super-admin (with a small Free organization of its own, inside its trial)
+- Tenant S  "Soon Ending Trial Co"  Free, trial ends in two days      owner (the trial banner)
+- Tenant T  "Trial Ended Co"        Free, trial ended a day ago       owner, member (N-052)
 - A test-mode billing account and an `active` subscription for each paid tenant
   (ids start `cus_e2e_` / `sub_e2e_`; nothing is sent to Stripe or Dodo)
 
@@ -62,6 +64,9 @@ class SeedTenant:
     plan: str
     workspaces: tuple[tuple[str, str], ...]  # (slug, name)
     users: tuple[SeedUser, ...] = field(default_factory=tuple)
+    #: N-052: days until the Free trial ends, counted from each seed run (negative: ended).
+    #: None leaves the organization without a trial clock (the paid tenants).
+    trial_days: float | None = None
 
 
 def _user(tenant: str, role: str, org_role: str, ws_role: str, name: str) -> SeedUser:
@@ -117,6 +122,31 @@ TENANTS: tuple[SeedTenant, ...] = (
         plan="free",
         workspaces=(("ops", "Platform Ops"),),
         users=(_user("P", "superadmin", "OWNER", "ADMIN", "Sam Superadmin"),),
+        # Inside its trial with more than three days left: the Free specs see no trial banner.
+        trial_days=6,
+    ),
+    # Campaign session 2 (N-052): a Free organization whose trial ends in two days (the banner)...
+    SeedTenant(
+        key="S",
+        slug="e2e-trial-ending",
+        name="Soon Ending Trial Co",
+        plan="free",
+        workspaces=(("main", "Soon Main"),),
+        users=(_user("S", "owner", "OWNER", "ADMIN", "Sid Owner"),),
+        trial_days=2,
+    ),
+    # ...and one whose trial has ended without a subscription (read-only, asked to subscribe).
+    SeedTenant(
+        key="T",
+        slug="e2e-trial-ended",
+        name="Trial Ended Co",
+        plan="free",
+        workspaces=(("main", "Trial Main"),),
+        users=(
+            _user("T", "owner", "OWNER", "ADMIN", "Tess Owner"),
+            _user("T", "member", "MEMBER", "CONTRIBUTOR", "Theo Member"),
+        ),
+        trial_days=-1,
     ),
 )
 
@@ -296,6 +326,10 @@ def seed(db) -> dict[str, Any]:
         organization.name = tenant.name
         organization.status = OrganizationStatus.ACTIVE
         organization.quota_tier_id = tier.id
+        trial_ends_at = (
+            _now() + timedelta(days=tenant.trial_days) if tenant.trial_days is not None else None
+        )
+        organization.trial_ends_at = trial_ends_at
         db.add(organization)
         db.flush()
         # A test may point the organization at its own SMTP server; converge back
@@ -331,6 +365,8 @@ def seed(db) -> dict[str, Any]:
             user.is_superuser = spec.key in SUPERADMIN_KEYS
             user.email_verified_at = user.email_verified_at or _now()
             user.display_name = spec.display_name
+            if spec.org_role == "OWNER" and trial_ends_at is not None:
+                user.trial_ends_at = trial_ends_at  # the account's clock (N-052)
             db.flush()
 
             membership = db.execute(

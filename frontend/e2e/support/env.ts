@@ -35,7 +35,10 @@ export type UserKey =
   | "C.admin"
   | "C.member"
   | "C.viewer"
-  | "P.superadmin";
+  | "P.superadmin"
+  | "S.owner"
+  | "T.owner"
+  | "T.member";
 
 export const USERS: Record<UserKey, { email: string; tenant: TenantKey }> = {
   "A.owner": { email: "a-owner@e2e.example.com", tenant: "A" },
@@ -49,15 +52,21 @@ export const USERS: Record<UserKey, { email: string; tenant: TenantKey }> = {
   "C.member": { email: "c-member@e2e.example.com", tenant: "C" },
   "C.viewer": { email: "c-viewer@e2e.example.com", tenant: "C" },
   "P.superadmin": { email: "p-superadmin@e2e.example.com", tenant: "P" },
+  // Campaign session 2 (N-052): a Free trial ending in two days, and one that has ended.
+  "S.owner": { email: "s-owner@e2e.example.com", tenant: "S" },
+  "T.owner": { email: "t-owner@e2e.example.com", tenant: "T" },
+  "T.member": { email: "t-member@e2e.example.com", tenant: "T" },
 };
 
-export type TenantKey = "A" | "B" | "C" | "P";
+export type TenantKey = "A" | "B" | "C" | "P" | "S" | "T";
 
 export const TENANTS: Record<TenantKey, { org: string; ws: string; name: string; plan: string }> = {
   A: { org: "e2e-devco", ws: "main", name: "DevCo Labs", plan: "developer" },
   B: { org: "e2e-bizco", ws: "main", name: "BizCo Holdings", plan: "business" },
   C: { org: "caretakers-global", ws: "operations", name: "Caretakers Global Inc", plan: "enterprise" },
   P: { org: "e2e-platform-ops", ws: "ops", name: "FlowPilot Platform Ops", plan: "free" },
+  S: { org: "e2e-trial-ending", ws: "main", name: "Soon Ending Trial Co", plan: "free" },
+  T: { org: "e2e-trial-ended", ws: "main", name: "Trial Ended Co", plan: "free" },
 };
 
 /** Second Enterprise workspace, for the workspace switcher. */

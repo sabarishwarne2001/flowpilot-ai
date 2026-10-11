@@ -392,4 +392,10 @@ export interface PlanAllowanceResponse {
   readonly can_upgrade: boolean;
   /** Owners and billing managers, by name: who to ask for more. */
   readonly ask: readonly string[];
+  /** Campaign session 2 (N-052): the free trial, read from the same source as the banner. */
+  readonly trial?: {
+    readonly state: "NONE" | "ACTIVE" | "ENDED";
+    readonly ends_at: string | null;
+    readonly days_left: number | null;
+  };
 }
