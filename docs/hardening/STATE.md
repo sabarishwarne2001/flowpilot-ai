@@ -13,14 +13,14 @@ the checklist below; do not restart.**
 1. [done] Build the owner's one-week trial (N-052, HANDOFF spec): clock per owner account, 402
    `TRIAL_ENDED` on every write/intake path and in the worker, subscribing lifts it, banner and
    full-page notice, two emails, e2e tenants S and T, tenancy doc regenerated.
-2. Test corpus under `backend/tests/fixtures/corpus/` (generated, no copyrighted material).
-3. P0 sweep of AI safety and isolation: prompt injection through documents (assistant,
+2. [done] Test corpus under `backend/tests/fixtures/corpus/` (generated, no copyrighted material).
+3. [done] P0 sweep of AI safety and isolation: prompt injection through documents (assistant,
    automations, exception agent, assertions), canary isolation across organizations and
    ungranted workspaces (search, assistant, citations, embeddings, caches, suggestions), metering
    exactly once (retries, cancelled streams, fallbacks, BYOK), model list hygiene.
-4. Known leftovers: the assistant stream's Redis frame buffer off the event loop (live /health
+4. [done] Known leftovers: the assistant stream's Redis frame buffer off the event loop (live /health
    proof); the matching queue lists one case per invoice copy (one case, duplicates flagged).
-5. Every engine control does something real (AI defaults, presets, legal hold, autonomy
+5. [done] Every engine control does something real (AI defaults, presets, legal hold, autonomy
    thresholds, re-index status) and every engine is checked against the new plan matrix.
 6. Document life: every intake path, every state, hostile timing (delete/archive/downgrade during
    processing), stuck-job sweeper, idempotent re-runs, provenance.
@@ -30,7 +30,13 @@ the checklist below; do not restart.**
    verifications and assertions agree.
 9. COVERAGE.csv rows in the slice to `deep` or `blocked`; finish checks; HANDOFF; PR ready.
 
-**Progress:** item 1 done and pushed (commits `0ff335c`, `bef2e09`).
+**Progress (checkpoint 1, 2026-10-11):** items 1 to 5 done and pushed. Fixed and proven:
+F-257 to F-266 (FINDINGS.md, session 2 section), decisions N-053 to N-055. Live proofs with no
+defect: retrieval isolation (55 checks), prompt injection, metering exactly once. Engine controls
+proven real by new live tests: presets reach the extraction prompt (and stop when disabled), the
+autonomy error limit moves the cut-off, the re-index card stops polling, Streaming responses
+(F-266), AI defaults on a new organization (F-260); legal hold was already covered
+(`tests/api/test_legal_hold_enforcement.py`). **Next:** item 6 (document life), then 7, 8, 9.
 
 ## Previous phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
