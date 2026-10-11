@@ -882,7 +882,8 @@ subscription and prorates the difference.
 
 ## N-051 — Annual billing and trials
 **DECIDED (campaign session 1).**
-- **Trial: none on paid plans; Free is the trial.** Free never expires, so nobody needs a clock to
+- ~~**Trial: none on paid plans; Free is the trial.**~~ **Superseded by the owner's decision N-052
+  below (a one-week time-limited trial).** The original reasoning, kept for the record: Free never expires, so nobody needs a clock to
   evaluate the product, and a time-limited paid trial adds a card-capture flow, a conversion email
   sequence and a "trial ended" state that nothing in the product needs today. For a prospect who
   needs more than Free to evaluate, sales issues a first-subscription promo code (a percentage off
@@ -893,3 +894,31 @@ subscription and prorates the difference.
   books, publish a plan price book with the yearly prices (Developer $490, Business $2,990 per seat
   per year) and create the matching yearly prices in Stripe test mode first; the plan page then
   shows the Monthly / Yearly switch.
+
+## N-052 — A one-week trial, then subscribe (OWNER DECISION, 2026-10-11)
+**DECIDED BY THE OWNER: Free is a time-limited trial of one week. When it ends, the organization is
+asked to subscribe to a paid plan, the way Claude does.** Supersedes the trial part of N-051.
+**Not built in session 1; it must be built in a later session (see HANDOFF.md, "Owner request: the
+one-week trial").** Engineering defaults below follow from the decision; anything marked
+*proposed* can be changed by the owner before it is built.
+- **Who gets a trial, and when it starts.** One trial per owner account, starting when that
+  person creates their first organization (the same rule as the Free allowance pool, N-041, so a
+  second organization or a new workspace does not restart the clock). Trial length: 7 days,
+  a setting (`FREE_TRIAL_DAYS = 7`), not a code change.
+- **During the trial.** The Free plan's allowances and limits apply unchanged (25 documents, 50 OCR
+  pages, 30 assistant messages, 10 MB, 10 pages, 250 MB, one workspace, two seats). The product
+  shows the days left (a banner from day 5, *proposed*), and the owner can subscribe at any time.
+- **When the trial ends without a subscription.** The organization becomes read-only, like an
+  unpaid one (F-255): people can still sign in, read, search, export and delete their data, but
+  uploads, the assistant, automations and engine work are refused with a 402 `TRIAL_ENDED` and
+  remedy `SUBSCRIBE`. Owners see a full-page "Your trial has ended; choose a plan" with the plan
+  cards; everyone else sees "Ask <owner's name> to subscribe" (`useAskPlanOwners`).
+- **Subscribing** at any point (during or after the trial) lifts every restriction at once and
+  keeps all data.
+- **Reminders** (*proposed*): an in-app banner and an email two days before the end, and an email
+  when it ends.
+- **Data after a trial that never converts** (*proposed*): kept for 90 days, with a reminder
+  email at 60 days, then deleted through the existing erasure path, with a final notice. The owner
+  may prefer a different period.
+- **Existing Free organizations at launch** (*proposed*): their trial starts on the day this ships.
+

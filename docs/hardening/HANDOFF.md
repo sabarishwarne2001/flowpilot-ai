@@ -13,6 +13,40 @@ what it changed that later sessions must build on (limits, capability keys, mete
 migrations, renamed routes, shared components), defects it saw in their slices, and what in its
 own slice is unfinished, with why.
 
+## Owner request: the one-week trial (must be built in a later session)
+
+The owner decided on 2026-10-11 (NEEDS-OWNER.md **N-052**, superseding the trial part of N-051) that
+**Free is a one-week trial; when it ends the organization is asked to subscribe to a paid plan**, as
+Claude does. Session 1 recorded it but did not build it. **Session 2 builds it** (ending a trial
+stops uploads, the assistant, automations and engine work, which session 2 owns); **session 3**
+checks the consoles, emails and settings it adds; **session 4** proves the whole journey (sign up →
+trial → reminder → trial ends → subscribe → everything back) in the browser and certifies it. The
+spec, with what already exists to build on:
+1. **Clock.** One trial per owner account, starting when the person creates their first
+   organization (`organization_service._start_on_free_plan` is the moment; the Free pool,
+   `quota_service.usage_pool`, already groups an owner's organizations). Store when it ends
+   (for example `users.trial_ends_at`, or on the pool's anchor organization) in a migration after
+   `s1b1_calendar_feed_org_member`; length from a setting `FREE_TRIAL_DAYS = 7`.
+2. **Gate, server side, every path.** After the end, without a live paid subscription: refuse new
+   work with a 402 `TRIAL_ENDED` (`remedy: SUBSCRIBE`, `trial_ended_at`) in `plan_admission`
+   (documents, re-processing, assistant, workspaces), in `app/api/billing_write_gate.py` (the
+   read-only write gate, so every write route refuses the same way), and in
+   `app/workers/tenant_gate.unpaid_reason` (so queued jobs skip, like F-255). Reading, search,
+   export, member management, deletion, checkout and the billing portal stay open.
+3. **Subscribing lifts it.** A live paid subscription (`subscription_service.live_subscription_for_organization`)
+   overrides the trial at once; the checkout already works for a Free organization.
+4. **Screens.** A trial banner with the days left (from day 5); after the end, owners get a
+   full-page "Your trial has ended; choose a plan" with `PlanSelector`, others "Ask <owner> to
+   subscribe" (`useAskPlanOwners`). The plan-allowance read (`GET /workspaces/{id}/usage/plan-allowance`)
+   should carry `trial_ends_at` so every screen reads one source.
+5. **Emails.** Two days before the end and on the day it ends (session 3 owns the templates).
+6. **Tests.** Proven by failing tests first: the clock per owner account (a second organization does
+   not restart it), each refused path after the end, the worker skip, subscribing lifting it, and
+   a browser journey. The e2e Free tenant P must be seeded inside its trial (or with a fixed clock)
+   so the existing Free-plan specs keep testing the Free limits.
+7. **Docs.** Regenerate `docs/hardening/TENANCY-AND-PLANS.md` once the trial is in the code
+   (`backend/scripts/generate_tenancy_doc.py`), and mark N-052 built.
+
 ## For session 2 (documents, AI, engines, background jobs)
 
 _Nothing yet._
@@ -79,6 +113,11 @@ request resolves its organization and plan is `docs/hardening/TENANCY-AND-PLANS.
 **For session 4 (journeys, operations, certification):**
 - **Owner actions before launch:** enable plan switching in the Stripe customer portal (N-050);
   publish yearly plan prices (N-051); re-run the seeds on deploy.
+- F-256 (open, P3): late usage into an hour that had no earlier usage is not disclosed as late, so
+  `test_late_usage_is_disclosed_rather_than_hidden` fails when it runs at minute 59. Reproduce by
+  pinning that test's `now` to `datetime.now(timezone.utc).replace(minute=59, second=30) - timedelta(hours=1)`.
+  The fix is in how rollup windows are sealed (a late event into an hour with no window should be
+  disclosed too).
 - Refunds are not modelled: a Stripe `charge.refunded` is recorded as "credit note not modelled",
   so invoices stay "paid" and RevOps revenue does not subtract refunds (Dodo, as merchant of
   record, owns refunds). Unverified how far this skews the revenue dashboard; needs a decision.
