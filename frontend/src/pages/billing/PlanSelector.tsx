@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createCheckoutSession, getPlans } from "@/services/api/billing";
+import { createCheckoutSession, createPortalSession, getPlans } from "@/services/api/billing";
 // ARCH50-S2:plan-selector-interval — annual billing, INR and promo codes.
 import { quotePromoCode } from "@/services/api/revops";
 import { REVOPS_MESSAGES, money, type PromoQuote, type RevOpsCode } from "@/types/revops";
@@ -105,6 +105,15 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
       setPromoQuote(null);
       const code = error instanceof ApiError ? error.code : undefined;
       setPromoError((code && REVOPS_MESSAGES[code as RevOpsCode]) || "That promo code can't be used.");
+    },
+  });
+
+  // Campaign session 1 (F-253): a subscriber changes plans on the live subscription, in
+  // the portal; a second checkout would create (and charge) a second subscription.
+  const portal = useMutation({
+    mutationFn: () => createPortalSession(organizationId, { return_url: window.location.href }),
+    onSuccess: (session) => {
+      window.location.assign(session.url);
     },
   });
 
@@ -218,7 +227,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {hasSubscription
-            ? "Switching to a paid plan starts a new checkout; your current plan stays active until it completes. To move to Free, cancel in the billing portal."
+            ? "Plans are changed in the billing portal: it moves this subscription and prorates the difference, so nothing is charged twice. To move to Free, cancel there."
             : "Free starts immediately. Paid plans open a secure checkout."}
         </p>
         {hasPriceBooks && (
@@ -371,9 +380,13 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <button
                       type="button"
                       data-testid={`plan-cta-${plan.key}`}
-                      disabled={!checkoutAvailable}
+                      disabled={hasSubscription ? !canManageBilling || portal.isPending : !checkoutAvailable}
                       onClick={(event) => {
                         event.preventDefault();
+                        if (hasSubscription) {
+                          portal.mutate();
+                          return;
+                        }
                         if (plan.key !== selectedKey) {
                           setPromoQuote(null);
                           setPromoError(null);
@@ -387,6 +400,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       {(TIER_RANK[plan.key] ?? 0) > (TIER_RANK[currentKey ?? "free"] ?? 0)
                         ? `Upgrade to ${plan.display_name}`
                         : `Switch to ${plan.display_name}`}
+                      {hasSubscription ? " in the billing portal" : null}
                     </button>
                   ) : null}
                 </div>

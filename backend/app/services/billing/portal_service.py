@@ -284,6 +284,30 @@ def create_checkout_session(
     # to add anyone, or to accept the invitations it has sent.
     from app.services import seat_capacity_service
 
+    from sqlalchemy import select
+
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+
+    # Campaign session 1 (F-253). A checkout creates a NEW subscription at the gateway,
+    # which charges for it, and an organization holds one live subscription: a
+    # second would be charged and could never be recorded, while the first kept
+    # charging. Plans are changed on the live subscription, in the billing portal.
+    live = db.execute(
+        select(Subscription.quota_tier_key)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(
+            BillingAccount.organization_id == organization_id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+        )
+        .limit(1)
+    ).first()
+    if live is not None:
+        raise PaidSubscriptionActiveError(
+            f"This organization already has a paid subscription ({live[0] or 'current plan'}). "
+            "Change plans in the billing portal, so you are not charged twice; the portal "
+            "prorates the difference."
+        )
+
     in_use = seat_capacity_service.seat_capacity(db, organization_id=organization_id).used
     if seats < in_use:
         raise CheckoutConfigurationError(

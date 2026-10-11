@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     OrganizationContext,
     RequireAnyOrgRole,
-    RequireOrgMember,
     RequireOrgOwner,
     RequireOrgRole,
     get_db,
@@ -547,6 +546,11 @@ def create_checkout_session(
             cancel_url=payload.cancel_url,
             **({"discount_code": prepared.discount_code} if prepared is not None and prepared.discount_code else {}),
         )
+    except portal_service.PaidSubscriptionActiveError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "PAID_SUBSCRIPTION_ACTIVE", "message": str(exc), "details": {}},
+        ) from exc
     except CheckoutConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
