@@ -7,6 +7,7 @@ import type {
   InvoiceDetailResponse,
   InvoiceListResponse,
   InvoiceReproductionResponse,
+  PlanAllowanceResponse,
   PlanListResponse,
   PortalSessionRequest,
   SeatChangeRequest,
@@ -79,6 +80,8 @@ export const BILLING_ENDPOINTS = {
     `/workspaces/${ws(workspaceId)}/usage/summary`,
   workspaceUsageSeries: (workspaceId: string) =>
     `/workspaces/${ws(workspaceId)}/usage/series`,
+  planAllowance: (workspaceId: string) =>
+    `/workspaces/${ws(workspaceId)}/usage/plan-allowance`,
 } as const;
 
 export const getPlans = async (
@@ -120,6 +123,11 @@ export interface BillingAccessSummary {
   readonly state: "ACTIVE" | "GRACE" | "RESTRICTED";
   readonly is_read_only: boolean;
   readonly grace_ends_at: string | null;
+  /**
+   * Campaign session 1: who can change the plan or buy seats, by name, so an
+   * "ask someone" screen names them (owners first, then billing managers).
+   */
+  readonly plan_contacts?: readonly string[];
 }
 
 export const getBillingAccessSummary = async (
@@ -277,6 +285,12 @@ export const syncSeats = async (
     payload,
   );
   return response.data;
+};
+
+/** Campaign session 1 — the plan's allowance, for any member of the workspace. */
+export const getPlanAllowance = async (workspaceId: string): Promise<PlanAllowanceResponse> => {
+  const { data } = await apiClient.get<PlanAllowanceResponse>(BILLING_ENDPOINTS.planAllowance(workspaceId));
+  return data;
 };
 
 /**

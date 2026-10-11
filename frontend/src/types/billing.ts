@@ -363,3 +363,33 @@ export interface SeatPriceBookResponse {
   readonly period_start: string | null;
   readonly period_end: string | null;
 }
+
+
+/**
+ * Campaign session 1 — what the organization's plan admits, readable by every
+ * member of a workspace (GET /workspaces/{id}/plan-allowance): the counts a
+ * person plans by, the per-file limits, whether the caller may upgrade, and
+ * whom to ask otherwise. No money, no invoices.
+ */
+export type AllowanceState = "OK" | "NEAR" | "REACHED" | "OVER";
+
+export interface AllowanceMeter {
+  readonly key: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly hard_stop: boolean;
+  readonly overage_policy: string;
+  readonly resets_at: string;
+  readonly state: AllowanceState;
+}
+
+export interface PlanAllowanceResponse {
+  readonly plan_key: string | null;
+  readonly plan_name: string | null;
+  readonly max_file_mb: number;
+  readonly max_pages_per_document: number;
+  readonly meters: readonly AllowanceMeter[];
+  readonly can_upgrade: boolean;
+  /** Owners and billing managers, by name: who to ask for more. */
+  readonly ask: readonly string[];
+}

@@ -146,6 +146,7 @@ export const BillingHub: React.FC = () => {
                 canManageBilling={canManageBilling}
                 hasSubscription={false}
                 currentSeats={state?.seats_purchased ?? 1}
+                minimumSeats={state?.seats_used ?? 1}
               />
             )}
 
@@ -172,6 +173,7 @@ export const BillingHub: React.FC = () => {
                 canManageBilling={canManageBilling}
                 hasSubscription
                 currentSeats={state.seats_purchased}
+                minimumSeats={state.seats_used}
               />
             )}
           </>

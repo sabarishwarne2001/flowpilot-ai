@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { useTenant } from "@/hooks/useTenant";
 import { organizationBillingPath } from "@/routes/tenantPaths";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 interface ViewPlansActionProps {
   /** Given on organization pages; read from the workspace context otherwise. */
@@ -50,7 +51,7 @@ export const ViewPlansAction: React.FC<ViewPlansActionProps> = ({
   }
   return (
     <p className={`mt-2 text-xs text-muted-foreground ${className}`}>
-      Ask an organization owner to upgrade the plan.
+      <AskPlanOwners toDo="upgrade the plan" />
     </p>
   );
 };

@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { useAskPlanOwners } from "@/components/billing/AskPlanOwners";
 
 /** "Business and Enterprise", "Developer, Business and Enterprise". */
 export const joinPlanNames = (names: readonly string[]): string => {
@@ -41,6 +42,7 @@ export const UpgradePlanDialog: React.FC<UpgradePlanDialogProps> = ({
 }) => {
   const navigate = useNavigate();
   const plans = joinPlanNames(includedIn);
+  const askOwners = useAskPlanOwners("upgrade");
   return (
     <ConfirmDialog
       open={open}
@@ -48,7 +50,7 @@ export const UpgradePlanDialog: React.FC<UpgradePlanDialogProps> = ({
       message={
         canChangePlan
           ? `${featureName} is included on ${plans}. Upgrade to turn it on for your whole organization.`
-          : `${featureName} is included on ${plans}. Ask an organization owner to upgrade.`
+          : `${featureName} is included on ${plans}. ${askOwners}`
       }
       confirmText={canChangePlan ? "View plans" : "Got it"}
       cancelText="Not now"

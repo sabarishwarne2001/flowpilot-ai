@@ -313,6 +313,8 @@ export const usageKeys = {
     [...usageKeys.all(organizationId), "series", from, granularity] as const,
   limits: (organizationId: string) =>
     [...usageKeys.all(organizationId), "limits"] as const,
+  /** Campaign session 1: the member-readable allowance, per workspace. */
+  allowance: (workspaceId: string) => ["workspaces", workspaceId, "plan-allowance"] as const,
   spendLimits: (organizationId: string) =>
     [...usageKeys.all(organizationId), "spend-limits"] as const,
 };
