@@ -449,7 +449,33 @@ class AssistantStreamService:
                             else rag_guard.classify_request_too_large(exc)
                         )
                         if too_large is None:
-                            raise
+                            # F-258 (campaign session 2). One transient provider error
+                            # (503, 502, a timeout, a rate limit) before the first token
+                            # is retried once, as the plain answer path retries it.
+                            # Nothing was shown or served yet, so a retry is invisible
+                            # and charged once.
+                            from app.services import llm_resilience
+
+                            kind = llm_resilience.classify(exc)
+                            retryable = kind in (
+                                llm_resilience.FailureClass.TRANSIENT,
+                                llm_resilience.FailureClass.RATE_LIMITED,
+                            )
+                            if saw_any_chunk or attempt or not retryable:
+                                raise
+                            attempt += 1
+                            logger.warning(
+                                "stream.provider_retry",
+                                extra={"message_id": str(plan.message_id), "failure_class": kind.value,
+                                       "error_type": type(exc).__name__},
+                            )
+                            await asyncio.sleep(
+                                llm_resilience.backoff_delay(
+                                    1, base=0.5, cap=2.0,
+                                    rate_limited=kind is llm_resilience.FailureClass.RATE_LIMITED,
+                                )
+                            )
+                            continue
                         attempt += 1
                         # F-218. Resealing writes the audit record: blocking
                         # database work, so it runs off the event loop.

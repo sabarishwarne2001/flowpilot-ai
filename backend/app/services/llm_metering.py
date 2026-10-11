@@ -483,6 +483,13 @@ def _record(
 
     key = reservation.key(suffix)
 
+    if quantity <= 0:
+        # Campaign session 2 (F-257). Nothing was consumed: no row. A zero-token row
+        # carries a zero cost basis, which the usage ledger rightly refuses unless it
+        # is declared BYOK, and the refusal used to roll back the whole settlement (the
+        # input row with it) and strand the answer in STREAMING.
+        return False
+
     if price is not None:
         cost = price.cost_micros(quantity)
         price_details = price.as_details()

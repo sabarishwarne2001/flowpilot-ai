@@ -173,15 +173,33 @@ async def stream_chat_query(
                 },
             )
         except Exception as exc:  # noqa: BLE001
-            logger.exception(
-                "assistant.stream_failed",
-                extra={"conversation_id": str(conversation_id)},
+            # Campaign session 2. The provider failing is an expected outside event (it
+            # is retried once already): a warning without a traceback, and a message that
+            # says what to do. Anything else is ours, and keeps the traceback.
+            provider_status = getattr(exc, "status_code", None) or getattr(
+                getattr(exc, "response", None), "status_code", None
             )
+            from_provider = isinstance(provider_status, int) or type(exc).__module__.split(".")[0] in (
+                "openai", "httpx", "httpcore", "groq", "anthropic", "google",
+            )
+            if from_provider:
+                logger.warning(
+                    "assistant.stream_provider_failed",
+                    extra={"conversation_id": str(conversation_id), "error_type": type(exc).__name__,
+                           "provider_status": provider_status},
+                )
+                message = "The AI provider is not answering right now. Try again in a moment."
+            else:
+                logger.exception(
+                    "assistant.stream_failed",
+                    extra={"conversation_id": str(conversation_id)},
+                )
+                message = "The answer could not be completed."
             yield sse(
                 "error",
                 {
                     "code": "GENERATION_FAILED",
-                    "message": "The answer could not be completed.",
+                    "message": message,
                     "detail": type(exc).__name__,
                 },
             )

@@ -217,6 +217,16 @@ def handle_pipeline_sweep_stuck(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.notify import sweep_due_deliveries
 
     result["notification_deliveries_requeued"] = sweep_due_deliveries()
+    # F-259 (campaign session 2). An assistant answer whose settlement failed or whose
+    # process died stays STREAMING ("still answering") forever; `sweep_in_flight` found
+    # them and nothing closed them. Past twice the stream deadline it is closed.
+    from app.core.config import settings
+    from app.services.stream_session import close_stranded
+
+    with SessionLocal() as db:
+        result["assistant_answers_closed"] = len(
+            close_stranded(db, older_than_seconds=max(300.0, 2 * float(settings.STREAM_DEADLINE_SECONDS)))
+        )
     return result
 
 

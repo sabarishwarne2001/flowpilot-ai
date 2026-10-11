@@ -331,8 +331,28 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+/*
+ * Campaign session 2: test-only counters and fault injection, so a probe can prove every model
+ * call is metered exactly once (brief E.3). GET /__stats returns how many completions were asked
+ * for (streamed or not) and how many were refused on purpose; POST /__fail?count=N&status=S makes
+ * the next N completions answer HTTP S (a provider error, which the platform retries or fails over).
+ */
+const stats = { completions: 0, streamed: 0, failed_on_purpose: 0 };
+let failNext = 0;
+let failStatus = 503;
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
+  if (url.pathname === "/__stats") {
+    send(res, 200, { ...stats, fail_pending: failNext });
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/__fail") {
+    failNext = Math.max(0, Number(url.searchParams.get("count") ?? 1));
+    failStatus = Number(url.searchParams.get("status") ?? 503);
+    send(res, 200, { fail_pending: failNext, status: failStatus });
+    return;
+  }
   if (req.method === "GET" && /\/models$/.test(url.pathname)) {
     send(res, 200, { object: "list", data: [{ id: MODEL, object: "model", owned_by: "flowpilot-e2e" }] });
     return;
@@ -353,6 +373,14 @@ const server = http.createServer((req, res) => {
       send(res, 400, { error: { message: "invalid JSON" } });
       return;
     }
+    if (failNext > 0) {
+      failNext -= 1;
+      stats.failed_on_purpose += 1;
+      send(res, failStatus, { error: { message: "injected provider error", type: "server_error" } });
+      return;
+    }
+    stats.completions += 1;
+    if (body.stream) stats.streamed += 1;
     const prompt = promptOf(body);
     const text = respond(prompt);
     const id = `chatcmpl-e2e-${Date.now().toString(36)}`;

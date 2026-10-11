@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterator, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -216,14 +216,21 @@ def settle_and_persist(
         message_id=message_id,
     )
 
-    resolved_usage = token_usage or estimate_usage_from_emitted(
-        emitted_text=emitted_text,
-        reservation=reservation,
-        provider=provider,
-        model=model,
-        input_cost_per_1k=reservation.input_cost_per_1k,
-        output_cost_per_1k=reservation.output_cost_per_1k,
-    )
+    if token_usage is None and not emitted_text and finish_reason == "provider_error":
+        # Campaign session 2 (F-257). The provider failed before producing anything (it
+        # refused the request, or the call never reached it): it did not serve the
+        # prompt, so the customer is not charged an estimate for it.
+        resolved_usage = TokenUsage(provider=provider, model=model, prompt_tokens=0,
+                                    completion_tokens=0, total_tokens=0, estimated_cost=0.0)
+    else:
+        resolved_usage = token_usage or estimate_usage_from_emitted(
+            emitted_text=emitted_text,
+            reservation=reservation,
+            provider=provider,
+            model=model,
+            input_cost_per_1k=reservation.input_cost_per_1k,
+            output_cost_per_1k=reservation.output_cost_per_1k,
+        )
 
     try:
         with settlement_session() as db:
@@ -329,8 +336,32 @@ def sweep_in_flight(db: Session, *, older_than_seconds: float) -> list[uuid.UUID
     return stranded
 
 
+def close_stranded(db: Session, *, older_than_seconds: float) -> list[uuid.UUID]:
+    """Close assistant answers stranded in STREAMING (campaign session 2, F-259).
+
+    A row is stranded when its settlement failed or its process died mid-stream: it
+    would show as "still answering" forever. It is marked ABORTED with finish reason
+    `deadline_exceeded`, keeping whatever text was saved. Nothing is billed here: what the
+    provider served is unknown, and an estimate would charge for a crash.
+    """
+    stranded = sweep_in_flight(db, older_than_seconds=older_than_seconds)
+    if stranded:
+        db.execute(
+            update(ConversationMessage)
+            .where(
+                ConversationMessage.id.in_(stranded),
+                ConversationMessage.stream_state == StreamState.STREAMING,
+            )
+            .values(stream_state=StreamState.ABORTED, finish_reason=FinishReason.DEADLINE_EXCEEDED.value, truncated=True)
+        )
+        db.commit()
+        logger.warning("stream.stranded_closed", extra={"count": len(stranded)})
+    return stranded
+
+
 __all__ = [
     "StreamOutcome",
+    "close_stranded",
     "estimate_usage_from_emitted",
     "open_assistant_message",
     "settle_and_persist",
