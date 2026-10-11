@@ -52,7 +52,7 @@ from app.crud import organization_members as organization_members_crud
 from app.crud import user as user_crud
 from app.crud import workspace as workspace_crud
 from app.crud import workspace_members as workspace_members_crud
-from app.services import audit_service, verification_service
+from app.services import audit_service, seat_capacity_service, verification_service
 from app.services.billing import seat_service as billing_seat_service
 from app.services.organization_member_service import (
     lock_organization_for_owner_change,
@@ -160,26 +160,28 @@ def _assert_seat_available(
     db: Session,
     *,
     organization: Organization,
-    message: str,
+    message: str | None = None,
     already_reserved: bool = False,
 ) -> None:
     """Refuse when the operation would need a seat the organization does not have.
 
+    Campaign session 1: the one seat check every entry path shares
+    (`seat_capacity_service`), which reads the plan's seats on Free and the purchased
+    seats on a paid plan. Before, the only ceiling was `organizations.seat_limit`,
+    which nothing writes, so every organization had unlimited seats.
+
     F-221. `already_reserved` is for an operation on a pending invitation, whose
     seat the count already includes: accepting turns that reserved seat into a
-    member's, and resending reserves nothing new. Checking those with ">=" counted
-    the invitation twice, so the last seat could never be filled: the invitee was
-    told there were no seats, and the invitation could not be resent. They are
-    refused only when the count is already past the limit (a member added
-    directly meanwhile, or a lowered limit).
+    member's, and resending reserves nothing new. They are refused only when the
+    count is already past the capacity (a member added another way meanwhile, or
+    fewer seats after a plan change).
     """
-    if organization.seat_limit is None:
-        return
-
-    reserved = count_reserved_seats(db, organization_id=organization.id)
-    over = reserved > organization.seat_limit if already_reserved else reserved >= organization.seat_limit
-    if over:
-        raise SeatLimitExceededError(message)
+    seat_capacity_service.assert_seat_available(
+        db,
+        organization_id=organization.id,
+        message=message,
+        already_reserved=already_reserved,
+    )
 
 
 # ===========================================================================
@@ -285,6 +287,13 @@ def create_invitation(
                 "That person is already a member of this organization."
             )
 
+    # Campaign session 1. The seat lock comes first, before any invitation row is
+    # touched: superseding a pending invitation locks its row, and taking the seat
+    # lock only afterwards deadlocked against a concurrent invitation to the same
+    # address that held the seat lock and waited on that row through the
+    # one-pending-invitation-per-address index.
+    seat_capacity_service.lock_seats(db, organization_id=organization.id)
+
     existing_pending = invitation_crud.get_pending_invitation_for_email(
         db, organization_id=organization.id, email=normalized
     )
@@ -316,14 +325,9 @@ def create_invitation(
         db, organization=organization, requested=grants
     )
 
-    _assert_seat_available(
-        db,
-        organization=organization,
-        message=(
-            f"{organization.name} has no seats available. Free a seat or "
-            f"raise the limit before inviting."
-        ),
-    )
+    # The refusal explains itself: the plan's seats on Free, the purchased seats
+    # (and how to add one) on a paid plan.
+    _assert_seat_available(db, organization=organization)
 
     plaintext = generate_secure_token()
     now = datetime.now(UTC)
@@ -951,15 +955,7 @@ def resend_invitation(
             f"This invitation was sent recently. Try again in a few minutes."
         )
 
-    _assert_seat_available(
-        db,
-        organization=organization,
-        message=(
-            f"{organization.name} has no seats available. Free a seat before "
-            f"resending this invitation."
-        ),
-        already_reserved=True,
-    )
+    _assert_seat_available(db, organization=organization, already_reserved=True)
 
     inviter = user_crud.get_user_by_id(db, user_id=invitation.inviter_id)
     plaintext = generate_secure_token()

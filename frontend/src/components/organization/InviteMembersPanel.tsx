@@ -12,12 +12,17 @@
  * MEMBER, as the server enforces, and the form offers only those (F-139). A
  * pending invitation holds a seat, so the plan's seat limit is checked when
  * it is sent and the server's refusal is shown as it is worded.
+ *
+ * Campaign session 1: the panel says how many seats are in use before anyone
+ * types an address, and when none is left it says why and where to go next
+ * (buy a seat in Billing on a paid plan, upgrade on Free) instead of a toast.
  */
 
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, MailPlus, RotateCw, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Loader2, MailPlus, RotateCw, XCircle } from "lucide-react";
 
 import {
   createInvitation,
@@ -26,7 +31,11 @@ import {
   revokeInvitation,
 } from "@/services/api/invitations";
 import { listOrganizationWorkspaces } from "@/services/api/organization";
+import { getSubscriptionState } from "@/services/api/billing";
+import { billingKeys } from "@/services/api/queryKeys";
 import { ApiError } from "@/services/api/client";
+import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { organizationBillingPath } from "@/routes/tenantPaths";
 import { formatTimestampDate } from "@/utils/displayTime";
 import { canAssignOrganizationRole } from "@/permissions/organizationPermissions";
 import type { OrganizationRole, WorkspaceRole } from "@/types/tenancy";
@@ -93,7 +102,26 @@ export const InviteMembersPanel: React.FC<{
     return (rows as PendingInvitation[]).filter((row) => row.status === "PENDING");
   }, [pending.data]);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: invitationKeys.pending(organizationId) });
+  // The same numbers the server's seat check uses (owners and admins may read them).
+  const seats = useQuery({
+    queryKey: billingKeys.subscription(organizationId),
+    queryFn: () => getSubscriptionState(organizationId),
+    enabled: Boolean(organizationId),
+    staleTime: 15_000,
+    retry: false,
+  });
+  const organization = useResolvedOrganization();
+  const billingPath = organizationBillingPath(organization.organization.organization_slug);
+  const [seatRefusal, setSeatRefusal] = useState<string | null>(null);
+  const seatsFull = seats.data?.seats_available === 0;
+  const paidSeats = seats.data?.seat_capacity_source === "PURCHASED";
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: invitationKeys.pending(organizationId) }),
+      queryClient.invalidateQueries({ queryKey: billingKeys.subscription(organizationId) }),
+    ]);
+  };
 
   const send = useMutation({
     mutationFn: () =>
@@ -107,9 +135,17 @@ export const InviteMembersPanel: React.FC<{
       setEmail("");
       setRole("MEMBER");
       setGrants({});
+      setSeatRefusal(null);
       await refresh();
     },
-    onError: (error) => toast.error(message(error, "The invitation couldn't be sent.")),
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "SEAT_LIMIT_EXCEEDED") {
+        setSeatRefusal(error.message);
+        void refresh();
+        return;
+      }
+      toast.error(message(error, "The invitation couldn't be sent."));
+    },
   });
   const resend = useMutation({
     mutationFn: (id: string) => resendInvitation(organizationId, id),
@@ -142,7 +178,32 @@ export const InviteMembersPanel: React.FC<{
           They get an email with a personal link; when it expires is shown under each pending
           invitation. A pending invitation holds a seat.
         </p>
+        {seats.data && seats.data.seat_capacity !== null && (
+          <p className="mt-1 text-xs font-medium text-foreground" data-testid="invite-seat-line">
+            {seats.data.seats_used} of {seats.data.seat_capacity} seats in use
+            {seats.data.seats_pending_invitations > 0 &&
+              ` (${seats.data.seats_pending_invitations} by pending invitations)`}
+            .
+          </p>
+        )}
       </header>
+
+      {(seatsFull || seatRefusal) && (
+        <div role="status" className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2.5 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <div>
+            <p>
+              {seatRefusal ??
+                (paidSeats
+                  ? "Every seat on the subscription is taken. Add a seat to invite someone."
+                  : "Every seat the plan includes is taken. Upgrade the plan to invite someone.")}
+            </p>
+            <Link to={billingPath} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+              {paidSeats ? "Add seats in Billing" : "See plans in Billing"}
+            </Link>
+          </div>
+        </div>
+      )}
 
       <form
         className="space-y-3"
@@ -239,7 +300,7 @@ export const InviteMembersPanel: React.FC<{
 
         <button
           type="submit"
-          disabled={!validEmail || send.isPending}
+          disabled={!validEmail || send.isPending || seatsFull}
           className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {send.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailPlus className="h-3.5 w-3.5" />}

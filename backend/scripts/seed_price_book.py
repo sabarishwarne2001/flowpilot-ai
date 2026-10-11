@@ -227,6 +227,28 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_source": "ZERO_BYOK",
         "notes": "Non-billable document counter.",
     },
+    # --- Plan allowances counted in documents and messages (campaign session 1) ---
+    # Counts a plan card promises ("25 documents a month"). Their compute is priced
+    # on its own meters (OCR pages, tokens, storage), so the count itself is a
+    # declared zero, never an unknown.
+    {
+        "event_type": "document.upload",
+        "provider": "internal",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Document allowance counter; its OCR, tokens and storage are priced separately.",
+    },
+    {
+        "event_type": "assistant.message",
+        "provider": "internal",
+        "model": None,
+        "unit_price_micros": "0",
+        "cost_basis_micros": "0",
+        "cost_basis_source": "ZERO_BYOK",
+        "notes": "Assistant message allowance counter; its tokens are priced separately.",
+    },
     # --- Overage Pricing Entries ---
     {
         "event_type": "storage.gb_month.overage",
@@ -267,6 +289,32 @@ PLACEHOLDER_ENTRIES: list[dict[str, Any]] = [
         "cost_basis_micros": "0.079000000",
         "cost_basis_source": "SUPPLIER_RATE_CARD",
         "notes": "Overage rate for Groq output tokens.",
+    },
+    # Campaign session 1 (D.3, F-250). Gemini is served on the platform's own key
+    # (GEMINI_API_KEY) and is metered against the token allowances, but had no
+    # overage rate: usage past an ALLOW_AND_BILL ceiling was logged as unpriced and
+    # never billed. Each rate is at least twice the provider's cost basis
+    # (tests/scripts/test_every_overage_is_priced.py). OpenAI, Anthropic, Azure and
+    # Mistral run only on the customer's own key and bill no overage (N-048).
+    {
+        "event_type": "llm.input_token.overage",
+        "provider": "gemini",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "0.500000000",
+        "cost_basis_micros": "0.075000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Overage rate for Gemini input tokens.",
+    },
+    {
+        "event_type": "llm.output_token.overage",
+        "provider": "gemini",
+        "model": None,
+        "tier_key": "overage",
+        "unit_price_micros": "1.500000000",
+        "cost_basis_micros": "0.300000000",
+        "cost_basis_source": "SUPPLIER_RATE_CARD",
+        "notes": "Overage rate for Gemini output tokens.",
     },
     # --- Self-hosted model (sovereign edition), N-031 ---
     # The operator's own model on the operator's own hardware: the platform buys

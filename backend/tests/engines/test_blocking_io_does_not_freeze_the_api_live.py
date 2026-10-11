@@ -208,6 +208,7 @@ def test_an_automation_rule_test(
 ) -> None:
     from app.services.automation import flow_service
 
+    put_on_plan(db_session, tenant.organization, "developer")  # N-049: automations need a paid plan
     rule = rule_factory(actions=[{"action_type": "add_tag", "config": {"tag": "probe"}}])
     work_item = work_item_factory()
     db_session.commit()

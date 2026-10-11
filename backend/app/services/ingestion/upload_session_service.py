@@ -150,8 +150,28 @@ def receive_part(
     session_id: uuid.UUID,
     part_number: int,
     data: bytes,
+    max_total_bytes: Optional[int] = None,
 ) -> UploadSession:
     session = _locked_session(db, workspace_id=workspace_id, session_id=session_id)
+
+    # Campaign session 1. Parts were bounded one by one but never in total: up to
+    # 10,000 parts of the maximum part size reached storage before anything was
+    # checked, past any plan's file size. The session now knows the bytes each part
+    # holds; a part that would take the total past the declared size or the largest
+    # file the plan accepts is refused before it is stored.
+    sizes = {str(number): int(size) for number, size in (session.part_sizes or {}).items()}
+    total_after = sum(size for number, size in sizes.items() if number != str(part_number)) + len(data)
+    declared = int(session.total_size) if session.total_size is not None else None
+    if declared is not None and total_after > declared:
+        raise UploadSessionError(
+            "PART_BEYOND_FILE_SIZE", "This part would make the file larger than its declared size."
+        )
+    if max_total_bytes is not None and total_after > int(max_total_bytes):
+        raise UploadSessionError(
+            "PART_BEYOND_FILE_SIZE",
+            f"This part would make the file larger than the {int(max_total_bytes) // (1024 * 1024)} MB "
+            "your plan accepts.",
+        )
 
     if session.status != "ACTIVE":
         raise UploadSessionError(
@@ -180,6 +200,7 @@ def receive_part(
     # sent.
     if part_number not in session.parts_received:
         session.parts_received = sorted([*session.parts_received, part_number])
+    session.part_sizes = {**sizes, str(part_number): len(data)}
     db.flush([session])
     return session
 

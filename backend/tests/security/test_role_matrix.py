@@ -185,6 +185,43 @@ def test_a_workspace_contributor_cannot_use_workspace_admin_routes(
     assert not escaped, "a CONTRIBUTOR used a workspace-admin route:\n  " + "\n  ".join(escaped)
 
 
+def test_the_billing_role_reaches_only_the_routes_that_name_it(
+    client: TestClient, db_session: Session, tenant: Fixture, sweep: Sweep
+) -> None:
+    """BILLING sits outside the rank ladder (campaign session 1, E.3): a finance contact
+    with no workspace grant is refused on every workspace route and on every
+    organization route whose role set does not list BILLING."""
+    from sqlalchemy import delete, select
+
+    from app.models.organization import OrganizationMember
+    from app.models.workspace import WorkspaceMember
+
+    put_on_plan(db_session, tenant.organization, "enterprise")
+    membership = db_session.execute(select(OrganizationMember).where(
+        OrganizationMember.organization_id == tenant.organization.id,
+        OrganizationMember.user_id == tenant.viewer.user.id)).scalar_one()
+    membership.role = OrganizationRole.BILLING
+    db_session.execute(delete(WorkspaceMember).where(WorkspaceMember.user_id == tenant.viewer.user.id))
+    db_session.commit()
+    ids = _ids(tenant.organization.id, tenant.workspace.id)
+    requirements = _requirements()
+    escaped, probed = [], 0
+    for op in sweep.operations():
+        org_roles, ws_role = requirements.get(op.key, (None, None))
+        workspace_bound = ws_role is not None and "workspace_id" in op.path_params
+        organization_bound = (
+            org_roles is not None and OrganizationRole.BILLING not in org_roles and "organization_id" in op.path_params
+        )
+        if not (workspace_bound or organization_bound) or op.path.endswith(DESTRUCTIVE_SUFFIXES):
+            continue
+        response = _call(client, db_session, sweep, op, tenant.viewer, ids)
+        probed += 1
+        if response.status_code not in DENIED and response.status_code != 422:
+            escaped.append(f"billing: {op.key.replace('/api/v1', '')} -> {response.status_code}")
+    assert probed > 300, probed
+    assert not escaped, "the BILLING role used a route that does not name it:\n  " + "\n  ".join(escaped)
+
+
 def test_the_owner_is_not_refused_by_the_role_layer(
     client: TestClient, db_session: Session, tenant: Fixture, sweep: Sweep
 ) -> None:

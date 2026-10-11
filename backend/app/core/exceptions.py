@@ -56,6 +56,36 @@ class SpendLimitMisconfiguredError(SpendControlError):
     pass
 
 
+#: What a customer calls each meter in a refusal (campaign session 1).
+_QUOTA_WORDS: dict[str, str] = {
+    "document.upload": "documents this month",
+    "assistant.message": "assistant messages this month",
+    "ocr.page": "OCR pages this month",
+    "storage.gb_month": "GB of storage",
+    "llm.input_token": "AI input tokens this month",
+    "llm.output_token": "AI output tokens this month",
+    "*": "usage cost this month",
+}
+
+
+def _quota_message(
+    limit_key: str, period: str, dimension: str, ceiling: str, current: str, requested: str, source: Optional[str]
+) -> str:
+    words = _QUOTA_WORDS.get(limit_key)
+    if words is None or dimension != "quantity":
+        return (
+            f"Spend limit reached for '{limit_key}' ({period}): "
+            f"{current} + {requested} exceeds {ceiling} {dimension}."
+        )
+    whose = "your organization's own limit" if source == "ORGANIZATION" else "your plan"
+    ceiling_text = ceiling.rstrip("0").rstrip(".") if "." in ceiling else ceiling
+    return (
+        f"Spend limit reached: {whose} allows {ceiling_text} {words}, and this would go past it. "
+        + ("Raise the limit in Billing, or wait for the next period." if source == "ORGANIZATION"
+           else "Upgrade the plan in Billing, or wait for the next period.")
+    )
+
+
 class SpendLimitExceededError(SpendControlError):
     """The operation would take the tenant past a configured ceiling.
 
@@ -77,11 +107,10 @@ class SpendLimitExceededError(SpendControlError):
         requested: str,
         resets_at: Optional[datetime] = None,
         is_platform_default: bool = False,
+        source: Optional[str] = None,
+        plan: Optional[str] = None,
     ) -> None:
-        super().__init__(
-            f"Spend limit reached for '{limit_key}' ({period}): "
-            f"{current} + {requested} exceeds {ceiling} {dimension}."
-        )
+        super().__init__(_quota_message(limit_key, period, dimension, ceiling, current, requested, source))
         self.limit_key = limit_key
         self.period = period
         self.dimension = dimension
@@ -90,6 +119,30 @@ class SpendLimitExceededError(SpendControlError):
         self.requested = requested
         self.resets_at = resets_at
         self.is_platform_default = is_platform_default
+        self.source = source
+        self.plan = plan
+
+    @property
+    def details(self) -> dict:
+        """Campaign session 1. Why, machine-readably: what ran out, and what to do next.
+
+        `remedy` is UPGRADE_PLAN when the plan's allowance (or the platform default)
+        ran out, RAISE_SPEND_LIMIT when the organization's own limit did, and
+        `resets_at` says when the period starts over either way.
+        """
+        return {
+            "reason": "QUOTA_EXCEEDED",
+            "limit_key": self.limit_key,
+            "period": self.period,
+            "dimension": self.dimension,
+            "ceiling": self.ceiling,
+            "current": self.current,
+            "requested": self.requested,
+            "resets_at": self.resets_at.isoformat() if self.resets_at else None,
+            "plan": self.plan,
+            "source": self.source or ("PLATFORM_DEFAULT" if self.is_platform_default else None),
+            "remedy": "RAISE_SPEND_LIMIT" if self.source == "ORGANIZATION" else "UPGRADE_PLAN",
+        }
 
     @property
     def response_headers(self) -> dict[str, str]:
@@ -138,6 +191,13 @@ class OrganizationPermissionDeniedError(OrganizationError):
 class OrganizationMemberError(OrganizationError):
     """Raised when an organization membership constraint is violated."""
     pass
+
+
+class OrganizationStillPaysError(OrganizationError):
+    """Campaign session 1 (F-254). Archiving would leave a live paid subscription charging."""
+
+    status_code = 409
+    code = "SUBSCRIPTION_STILL_ACTIVE"
 
 
 class LastOwnerError(OrganizationMemberError):
@@ -300,8 +360,14 @@ class InvitationSsoRequiredError(InvitationError):
 class SeatLimitExceededError(InvitationError):
     """
     Raised when an organization has no seat available for a new member.
+
+    `details` (campaign session 1) says why and what to do next, machine-readably:
+    capacity, seats used, the plan, and whether seats can be bought on it.
     """
-    pass
+
+    def __init__(self, message: str = "No seat is available.", details: dict | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
 
 
 class InvitationGrantError(InvitationError):

@@ -1,6 +1,83 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-10 (owner decisions N-034 to N-039 applied; F-230 to F-235)_
+_Last updated: 2026-10-11 (pre-launch campaign, session 1 of 4 finished)_
+
+## Current phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
+Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
+sessions run one after another; the hand-over notes between them are in `docs/hardening/HANDOFF.md`.
+Owner delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 1)`.
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. P0 money/access, found by reading before the stack was up (to be proven):
+   - a new organization is put on no plan at all (no Free tier assigned): AI is refused and the
+     platform-wide defaults (20x Free) apply instead of Free's allowance;
+   - seat changes on paid organizations never reach the payment gateway (the internal outbox
+     queue that carries `billing.seat_added/removed` has no consumer), so members are not billed;
+   - `organizations.seat_limit` is never written, so every organization, Free included, can add
+     unlimited members.
+2. One seat model, enforced at every entry path (invitation, direct add, reactivation, SCIM, SSO
+   JIT, ownership transfer, partner tenancy): Free capped by the plan; paid organizations hold a
+   purchased seat quantity; adding past it buys a seat after the price is shown and confirmed, or
+   is refused with the way to buy; Owner and Billing can buy seats.
+3. Free made deliberately small: new meters `document.upload` and `assistant.message`, per-plan
+   file size, pages per document, workspaces and seats; enforced on every path (browser, multipart,
+   API key, batch, public link, re-processing, the assistant) and in the worker; charged at upload
+   (reserve) so nothing is left half-processed; one Free organization per account; atomic.
+4. The paid ladder: same counts on Developer/Business/Enterprise, a monotonic test over the seed,
+   unit economics against the margin service, overage policies doing what they say.
+5. `docs/hardening/TENANCY-AND-PLANS.md` generated from the code, with a drift test.
+6. Role matrix on the server; removal revokes every kind of access; restricted screens name who
+   to ask.
+7. Subscription lifecycle through the webhook paths (Stripe test signatures, Dodo), downgrade
+   handling (N-003), archive/delete with an active subscription.
+8. Live concurrency tests (seats, quota units, webhooks), the worker's tenant gate, revenue truth,
+   the admin area refusing tenants, plan cards from the source of truth.
+
+**Session 1 finished (2026-10-11).** All eight plan items done; PR #19 marked ready.
+- **Fixed, each with a test that failed first (FINDINGS.md F-236 to F-255):** new organizations
+  start on Free; seats enforced on every entry path and purchasable by Owner, Admin and Billing; the
+  decided plan table enforced on every upload path, the assistant, workspaces and the worker
+  (charged once, at acceptance); one Free allowance per owner account; resumable uploads bounded in
+  total; the paid ladder monotonic and every paid seat at least 60% gross margin at its ceilings
+  (50% on the dearest platform model); Gemini overage billed and own-key tokens never billed as
+  overage; automations from Developer up; a paying organization is never sold a second
+  subscription; an organization cannot be deleted while its subscription renews; no automations
+  or engine work for an organization that has not paid; allowance shown where it is spent; every
+  "ask someone" line names the owners; calendar feeds for owners and admins; an invitation race
+  deadlock removed. Proven with no defect: role escalation, Billing-role sweep, add-on lifecycle,
+  promo codes (live race).
+- **Owner decisions:** N-040 to N-051 taken under delegated authority; **N-052 (the owner's own
+  decision): Free becomes a one-week trial, then subscribe. Not built in session 1; the spec and
+  the build plan for sessions 2 to 4 are in HANDOFF.md.**
+- **Open:** F-256 (P3, late usage into an empty hour not disclosed; the late-usage test fails at
+  minute 59), refunds not modelled, plan switching depends on the Stripe portal setting (N-050).
+- **Verification:** full backend suite 3,760 passed, 1 failed (F-256's minute-59 case; passes on
+  rerun and in sequence), 9 skipped; full browser suite on a fresh e2e database, production bundle with the production CSP enforced: 400 passed, 1 failed, 1 skipped on the final bundle (the one failure was a test-isolation flaw, another test signing C.admin out everywhere; fixed, and both specs repeated three times in parallel pass 45/45). The first full run's 11 failures were two regressions in this session's own F-252/F-253 work, caught and fixed; all 11 pass; `tsc -b`, browser-test typecheck, `npm run
+  lint`, `npm run check:self`, `npm run build` clean; pip-audit and `npm audit --omit=dev` no known
+  vulnerabilities; one Alembic head (`s1b1_calendar_feed_org_member`), up/down/up on a fresh
+  database; no new model drift; live API and worker logs 0 tracebacks, 0 ERROR, the only 5xx the deliberate 503 for buying seats with no gateway configured; 643 background jobs SUCCEEDED, none failed.
+- **Next:** session 2 (documents, AI, engines, jobs), starting with the owner's trial (HANDOFF.md).
+
+**Progress (checkpoint 1, 2026-10-11):** items 1 to 5 done and pushed; item 6 partly.
+- Fixed, each with a test that failed first (FINDINGS.md F-236 to F-249): new organizations start
+  on Free; seats enforced on every entry path and purchasable by Owner and Billing; the decided plan
+  table (N-040 to N-047) enforced on every upload path, the assistant, workspaces and the worker
+  (charged once, at acceptance, under the organization's lock); one Free allowance per owner
+  account; resumable uploads bounded in total (migration s1a1); the paid ladder monotonic and every
+  paid seat at least 60% gross margin at its ceilings; allowance shown where it is spent; every
+  "ask someone" line names the person; calendar feeds work for owners and admins (migration s1b1);
+  an invitation race deadlock removed.
+- `TENANCY-AND-PLANS.md` is generated from the code (drift test).
+- Verification so far: targeted backend runs 1,076 passed and 580 passed; full browser suite
+  397 passed, 3 failed (all one cause, the billing role refused the summary: fixed and tested),
+  1 skipped; live logs 0 tracebacks, 0 ERROR, one deliberate 503 (seat purchase with no gateway
+  configured, F-213's answer). One Alembic head (s1b1), up/down/up verified, no new model drift.
+- Next: E.3 rest (self-escalation, last owner, viewer cannot write), D (overage policies proven,
+  add-ons, frontend parity), F (subscription lifecycle via webhooks), G (worker tenant gate,
+  webhook concurrency, cache keys, per-tenant rate limits), H (revenue truth, /admin refusal),
+  COVERAGE.csv, then the finish checks.
+
 
 ## Latest pass — owner decisions N-034 to N-039 applied (2026-10-10)
 The owner delegated founder authority for the six open questions; engineering decided and built
@@ -91,8 +168,8 @@ Verified: `tsc -b`, eslint on both files, `npm run build`. Unverified: the brows
 look (route titles `/ERP posting/` and `/Process intelligence/` in `e2e/support/routes.ts` still
 match the same `<h1>` text).
 
-## Current phase
-**Phase 3 — Final commercial hardening: COMPLETE, in review.** Branch
+## Earlier phase — Phase 3 (complete)
+**Phase 3 — Final commercial hardening: COMPLETE, merged.** Branch
 `hardening/phase-3-final-commercial-hardening`; PR #13
 (https://github.com/sabarishwarne2001/flowpilot-ai/pull/13). Builds on Phase 2 (merged
 into `main`).

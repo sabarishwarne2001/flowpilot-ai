@@ -16,6 +16,9 @@ export interface ResolvedOrganization {
 
 const OrganizationContext = createContext<ResolvedOrganization | null>(null);
 
+/** The resolved organization when mounted under an OrganizationGuard, otherwise null (never throws). */
+export const useOptionalResolvedOrganization = (): ResolvedOrganization | null => useContext(OrganizationContext);
+
 export const useResolvedOrganization = (): ResolvedOrganization => {
   const value = useContext(OrganizationContext);
   if (!value) {

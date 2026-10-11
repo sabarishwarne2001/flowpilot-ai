@@ -16,6 +16,7 @@ from app.core.exceptions import (
     OrganizationAlreadyExistsError,
     OrganizationNotFoundError,
     OrganizationPermissionDeniedError,
+    OrganizationStillPaysError,
     TenantSuspendedError,
 )
 from app.core.organization_permissions import (
@@ -45,6 +46,7 @@ logger = logging.getLogger("app.services.organization_service")
 
 MAX_ORGANIZATIONS_PER_USER: int = 3
 DEFAULT_WORKSPACE_NAME: str = "General"
+FREE_PLAN_KEY: str = "free"
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,8 @@ def provision_organization(
             )
         )
 
+        _start_on_free_plan(db, organization_id=organization.id)
+
         audit_service.record(
             db,
             organization_id=organization.id,
@@ -193,6 +197,25 @@ def provision_organization(
             user_id,
             str(exc),
             exc=exc,
+        )
+
+
+def _start_on_free_plan(db: Session, *, organization_id: uuid.UUID) -> None:
+    """Every new organization starts on the Free plan (campaign session 1).
+
+    Without a plan an organization resolves no tier: AI is refused (no platform-key
+    entitlement) and the metered limits fall back to the platform defaults instead of
+    Free's allowance. A deployment whose seed never published Free cannot do better
+    than say so loudly; the organization is still created.
+    """
+    from app.services import quota_service
+
+    try:
+        quota_service.assign_tier(db, organization_id=organization_id, tier_key=FREE_PLAN_KEY)
+    except quota_service.QuotaTierValidationError:
+        logger.error(
+            "organization.free_plan_unpublished",
+            extra={"organization_id": str(organization_id)},
         )
 
 
@@ -344,6 +367,17 @@ def archive_organization(
     if not can_delete_organization(actor_role):
         raise OrganizationPermissionDeniedError(
             "Only an organization owner can delete the organization."
+        )
+
+    # Campaign session 1 (F-254). Archiving turns off access but not the gateway: a live
+    # paid subscription would go on charging for an organization its owner deleted.
+    from app.services.billing import subscription_service
+
+    live = subscription_service.live_subscription_for_organization(db, organization_id=organization.id)
+    if live is not None and not live.cancel_at_period_end:
+        raise OrganizationStillPaysError(
+            "This organization still has a paid subscription that renews. Cancel it in the "
+            "billing portal first, so it stops charging; then you can delete the organization."
         )
 
     try:

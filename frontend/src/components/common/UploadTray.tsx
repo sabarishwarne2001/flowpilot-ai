@@ -25,7 +25,9 @@ import { toast } from "sonner";
 import { workItemApi } from "@/services/api/workItem";
 import { ApiError } from "@/services/api/client";
 import { getDocumentSettings } from "@/services/api/document-settings";
-import { settingsKeys } from "@/services/api/queryKeys";
+import { settingsKeys, usageKeys } from "@/services/api/queryKeys";
+import { getPlanAllowance } from "@/services/api/billing";
+import PlanAllowance from "@/components/billing/PlanAllowance";
 import { formatBytes } from "@/utils/formatters";
 import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 
@@ -96,7 +98,18 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
     const base = configured.length > 0 ? configured : [...DEFAULT_EXTENSIONS];
     return Array.from(new Set(base.flatMap((ext) => EXTENSION_ALIASES[ext] ?? [ext])));
   }, [settings.data?.allowed_file_types]);
-  const maxMb = settings.data?.max_upload_size ?? DEFAULT_MAX_MB;
+  // Campaign session 1: the plan's file size bounds the workspace setting (Free: 10 MB).
+  const allowance = useQuery({
+    queryKey: usageKeys.allowance(workspaceId ?? ""),
+    queryFn: () => getPlanAllowance(workspaceId!),
+    enabled: Boolean(workspaceId),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const workspaceMb = settings.data?.max_upload_size ?? DEFAULT_MAX_MB;
+  const planMb = allowance.data?.max_file_mb;
+  const maxMb = planMb !== undefined ? Math.min(workspaceMb, planMb) : workspaceMb;
+  const planBinds = planMb !== undefined && planMb < workspaceMb;
   const maxBytes = maxMb * 1024 * 1024;
   const typesLabel = useMemo(
     () => Array.from(new Set(extensions.map((ext) => (ext === "jpeg" ? "jpg" : ext === "tif" ? "tiff" : ext))))
@@ -110,7 +123,9 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
       return `"${file.name}" is not a supported file type. This workspace accepts ${typesLabel}.`;
     }
     if (file.size > maxBytes) {
-      return `"${file.name}" is larger than this workspace's ${maxMb} MB limit.`;
+      return planBinds
+        ? `"${file.name}" is larger than the ${maxMb} MB your ${allowance.data?.plan_name ?? ""} plan accepts.`
+        : `"${file.name}" is larger than this workspace's ${maxMb} MB limit.`;
     }
     if (file.size === 0) {
       return `"${file.name}" is empty.`;
@@ -237,6 +252,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
 
   return (
     <div className={`space-y-4 ${className}`}>
+      {workspaceId && <PlanAllowance workspaceId={workspaceId} meters={["document.upload", "ocr.page"]} />}
       <div
         role="button"
         tabIndex={isUploading ? -1 : 0}

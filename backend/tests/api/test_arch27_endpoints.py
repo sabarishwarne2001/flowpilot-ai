@@ -580,6 +580,14 @@ class TestMarketplacePublishing:
 
 
 class TestMarketplaceInstallation:
+    @pytest.fixture(autouse=True)
+    def _on_a_plan_with_automations(self, db_session, tenant) -> None:
+        # N-049 (campaign session 1): a workflow installs as an automation rule, which
+        # needs a plan with automations (Developer and up).
+        from tests.security.plans import put_on_plan
+
+        put_on_plan(db_session, tenant.organization, "developer")
+
     def _catalog_url(self, tenant) -> str:
         return f"/api/v1/organizations/{tenant.organization.id}/marketplace"
 

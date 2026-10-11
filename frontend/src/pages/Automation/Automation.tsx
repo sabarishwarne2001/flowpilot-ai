@@ -32,7 +32,10 @@ import { ApiError } from "@/services/api/client";
 import type { AutomationRule, AutomationLog, AutomationErrorPolicy } from "@/types/automation";
 import { formatCostMicros, formatDurationMs } from "@/types/automation";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { useActiveWorkspace, useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
+import { CAPABILITY } from "@/constants/capabilities";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { automationKeys, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 import { pollUnlessRefused } from "@/services/api/polling";
 import {
@@ -97,6 +100,11 @@ const RuleErrorPolicyBadge: React.FC<{
 export const Automation: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useActiveWorkspaceId();
+  // N-049 (campaign session 1): automations are Developer and up. Without them the
+  // rules stay visible and can be switched off or deleted (N-003); nothing else.
+  const organizationId = useActiveWorkspace()?.organizationId ?? "";
+  const automations = useCapabilityAccess(organizationId, CAPABILITY.automations);
+  const planLocked = !automations.isLoading && !automations.isError && !automations.granted;
 
   // Dialog overlay controller states
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -501,6 +509,7 @@ export const Automation: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PlanLockBanner capability={CAPABILITY.automations} feature="Automations" />
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0 select-none">
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight">
@@ -528,7 +537,7 @@ export const Automation: React.FC = () => {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            disabled={isDeletingRule || isUpdatingRule}
+            disabled={isDeletingRule || isUpdatingRule || planLocked}
             className="fp-btn-primary flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground font-semibold text-xs rounded-lg hover:bg-primary/95 transition-all active:scale-[0.98] disabled:opacity-50"
           >
             <Plus className="h-4 w-4 mr-1.5 flex-shrink-0" />
@@ -859,7 +868,8 @@ export const Automation: React.FC = () => {
                       disabled={
                         togglingRuleId === rule.id ||
                         isDeletingRule ||
-                        isUpdatingRule
+                        isUpdatingRule ||
+                        (planLocked && !rule.is_active)
                       }
                       title={
                         rule.is_active ? "Deactivate rule" : "Activate rule"
@@ -971,7 +981,7 @@ export const Automation: React.FC = () => {
                     <div className="flex items-center space-x-1 self-end sm:self-auto">
                       <button
                         type="button"
-                        disabled={isDeletingRule || isUpdatingRule}
+                        disabled={isDeletingRule || isUpdatingRule || planLocked}
                         onClick={() => handleOpenTestDialog(rule)}
                         className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Test automation rule"
@@ -981,7 +991,7 @@ export const Automation: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        disabled={isDeletingRule || isUpdatingRule}
+                        disabled={isDeletingRule || isUpdatingRule || planLocked}
                         onClick={() => handleOpenDuplicateForm(rule)}
                         className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Duplicate automation rule"
@@ -991,7 +1001,7 @@ export const Automation: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        disabled={isDeletingRule || isUpdatingRule}
+                        disabled={isDeletingRule || isUpdatingRule || planLocked}
                         onClick={() => handleOpenEditForm(rule)}
                         className="p-2 rounded-lg bg-background border border-border/40 hover:bg-muted/80 hover:border-border text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Edit rule configurations"

@@ -116,10 +116,12 @@ def can_manage_seats(role: OrganizationRole) -> bool:
     Whether the role may purchase or release seats.
 
     Available to ADMIN because seat changes are an operational consequence of
-    hiring, not a contractual decision. BILLING is excluded: it may observe
-    spend, not cause it.
+    hiring, not a contractual decision. Campaign session 1: and to BILLING, the
+    finance contact who holds the payment method (a billing manager buys seats in
+    GitHub and Atlassian too); a seat is bought only after its price is shown, so
+    the spend is deliberate. Changing the plan itself stays with OWNER.
     """
-    return role in ADMINISTRATIVE_ROLES
+    return role in ADMINISTRATIVE_ROLES or role is OrganizationRole.BILLING
 
 
 # ===========================================================================

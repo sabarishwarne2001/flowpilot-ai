@@ -565,6 +565,12 @@ def _record(
 
     from app.services import quota_service
 
+    if byok_zero:
+        # N-048 (campaign session 1). Overage recovers what the platform pays its
+        # suppliers; the customer's own provider account paid for these tokens, so
+        # nothing is billed past the allowance (the seat price covers the service).
+        return True
+
     quota_service.bill_overage_if_any(
         db,
         organization_id=reservation.organization_id,

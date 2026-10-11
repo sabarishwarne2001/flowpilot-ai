@@ -121,6 +121,22 @@ def _active_member(db: Session, workspace_id: uuid.UUID, user_id: Optional[uuid.
     return row is not None and str(status) == "ACTIVE"
 
 
+def _has_workspace_access(db: Session, workspace_id: uuid.UUID, user_id: Optional[uuid.UUID]) -> bool:
+    """Any effective access: an explicit grant, or organization owner/admin (F-249).
+
+    A calendar feed is the member's own view of the workspace, so it follows the same
+    resolution as every other read (`resolve_effective_workspace_role`), not the
+    explicit-grant check `_active_member` keeps for assignment (an obligation owner).
+    """
+    if user_id is None:
+        return False
+    from app.models.workspace import Workspace
+    from app.services.workspace_member_service import resolve_workspace_access
+
+    workspace = db.get(Workspace, workspace_id)
+    return workspace is not None and resolve_workspace_access(db, workspace=workspace, user_id=user_id).has_access
+
+
 def owner_email(db: Session, user_id: Optional[uuid.UUID]) -> str:
     if user_id is None:
         return ""
@@ -1025,7 +1041,7 @@ def resolve_feed(db: Session, token: str) -> Optional[CalendarFeedToken]:
         .scalar_one_or_none()
     if row is None or row.revoked_at is not None or (row.expires_at is not None and row.expires_at <= now()):
         return None
-    if not _active_member(db, row.workspace_id, row.user_id):
+    if not _has_workspace_access(db, row.workspace_id, row.user_id):
         return None
     from app.models.user import User
 

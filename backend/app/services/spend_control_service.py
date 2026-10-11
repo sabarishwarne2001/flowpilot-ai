@@ -171,14 +171,40 @@ def _platform_defaults(limit_key: str) -> list[EffectiveLimit]:
 
 
 def _lock_organization(db: Session, organization_id: uuid.UUID) -> None:
+    # Campaign session 1: the lock is the usage pool's (a Free allowance is shared
+    # by every Free organization one account owns), so two uploads racing for the
+    # last unit in two organizations of one pool are serialised too.
+    anchor = quota_service.usage_pool(db, organization_id=organization_id)[0]
     db.execute(
         select(
             func.pg_advisory_xact_lock(
                 _ADVISORY_LOCK_NAMESPACE,
-                func.hashtext(str(organization_id)),
+                func.hashtext(str(anchor)),
             )
         )
     )
+
+
+def pooled_usage(
+    db: Session,
+    *,
+    pool: tuple[uuid.UUID, ...],
+    since: datetime,
+    limit_key: str,
+    now: Optional[datetime] = None,
+) -> tuple[Decimal, int]:
+    """Quantity and cost of `limit_key` since `since`, summed over a usage pool."""
+    quantity, cost = Decimal(0), 0
+    for member in pool:
+        if limit_key == TOTAL_COST_KEY:
+            cost += usage_service.total_cost_micros_bounded(db, organization_id=member, since=since, now=now)
+            continue
+        member_qty, member_cost = usage_service.usage_totals_bounded(
+            db, organization_id=member, since=since, event_types=[limit_key], now=now
+        ).get(limit_key, (Decimal(0), 0))
+        quantity += member_qty
+        cost += member_cost
+    return quantity, cost
 
 
 def explicit_limits(
@@ -367,22 +393,16 @@ def ensure_within_limits(
             )
         )
 
+    pool = quota_service.usage_pool(db, organization_id=organization_id) if checks else (organization_id,)
     for limit in checks:
         since = period_start(limit.period)
 
-        if limit.limit_key == TOTAL_COST_KEY:
-            current_cost = usage_service.total_cost_micros_bounded(
-                db, organization_id=organization_id, since=since
-            )
-            current_qty = Decimal(0)
-        else:
-            totals = usage_service.usage_totals_bounded(
-                db,
-                organization_id=organization_id,
-                since=since,
-                event_types=[limit.limit_key],
-            ).get(limit.limit_key, (Decimal(0), 0))
-            current_qty, current_cost = totals
+        # An explicit organization limit is the organization's own; a tier limit
+        # is the pool's (campaign session 1: one Free allowance per owner account).
+        members = (organization_id,) if limit.source == "ORGANIZATION" else pool
+        current_qty, current_cost = pooled_usage(
+            db, pool=members, since=since, limit_key=limit.limit_key
+        )
 
         quantity_ceiling = limit.max_quantity
         if quantity_ceiling is not None and limit.grace_quantity:
@@ -454,6 +474,8 @@ def _deny_or_warn(
         requested=str(requested),
         resets_at=period_end(limit.period),
         is_platform_default=limit.is_default,
+        source=limit.source,
+        plan=limit.quota_tier_key,
     )
 
 

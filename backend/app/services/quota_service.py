@@ -23,7 +23,7 @@ from app.core.usage_events import (
     overage_type_for,
     is_overage_type,
 )
-from app.core import entitlements
+from app.core import entitlements, plan_limits
 from app.models.organization import Organization
 from app.models.quota_tier import (
     POLICIES_REQUIRING_PRICE,
@@ -336,6 +336,52 @@ def resolve_tier(
     return covering[0]
 
 
+#: The plan whose metered allowance is pooled per owner account (campaign session 1).
+FREE_TIER_KEY: str = "free"
+
+
+def _live_seats(db: Session, organization_id: uuid.UUID) -> Optional[int]:
+    """Seats on the organization's live subscription, or None without one."""
+    from app.models.billing_account import BillingAccount
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+
+    return db.execute(
+        select(Subscription.seats_purchased)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(
+            BillingAccount.organization_id == organization_id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+        )
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def seat_factor(db: Session, *, organization_id: uuid.UUID, tier: Optional[_TierSnapshot] = None) -> int:
+    """How many times a per-seat allowance the organization holds (campaign session 1).
+
+    A paid plan is priced per seat, so its metered allowances are per seat and
+    pooled across the organization: the tier's number times the seats the live
+    subscription holds. Free (and any unpriced tier) is per organization: 1.
+    """
+    if tier is None:
+        tier = resolve_tier(db, organization_id=organization_id)
+    if tier is None or not tier.unit_amount_micros:
+        return 1
+    seats = _live_seats(db, organization_id)
+    return max(1, int(seats or 1))
+
+
+def _scaled(entry: TierLimit, factor: int) -> TierLimit:
+    from dataclasses import replace
+
+    return replace(
+        entry,
+        max_quantity=(entry.max_quantity * factor if entry.max_quantity is not None else None),
+        max_cost_micros=(entry.max_cost_micros * factor if entry.max_cost_micros is not None else None),
+    )
+
+
 def tier_limits(
     db: Session,
     *,
@@ -343,10 +389,60 @@ def tier_limits(
     limit_key: str,
     at: Optional[datetime] = None,
 ) -> list[TierLimit]:
+    """The tier rows for `limit_key`, as they apply to this organization.
+
+    Campaign session 1: a metered row of a per-seat plan is multiplied by the
+    seats the subscription holds (`seat_factor`); entitlements and static plan
+    limits are never scaled. Every reader of an allowance (enforcement, overage
+    billing, the usage screens) comes through here, so they cannot disagree.
+    """
     tier = resolve_tier(db, organization_id=organization_id, at=at)
     if tier is None:
         return []
-    return [entry for entry in tier.entries if entry.limit_key == limit_key]
+    entries = [entry for entry in tier.entries if entry.limit_key == limit_key]
+    if not entries or not is_limit_key(limit_key):
+        return entries
+    factor = seat_factor(db, organization_id=organization_id, tier=tier)
+    if factor == 1:
+        return entries
+    return [_scaled(entry, factor) for entry in entries]
+
+
+def usage_pool(db: Session, *, organization_id: uuid.UUID) -> tuple[uuid.UUID, ...]:
+    """The organizations whose usage counts against this one's allowance.
+
+    Campaign session 1. The Free allowance belongs to the owner ACCOUNT: every Free
+    organization the same person owns (archived ones included, so archiving and
+    recreating resets nothing) draws on one pool. A paid organization is its own
+    pool. Sorted, so the first member is a stable lock anchor for the whole pool.
+    """
+    from app.models.organization import MembershipStatus, OrganizationMember, OrganizationRole
+
+    tier = resolve_tier(db, organization_id=organization_id)
+    if tier is None or tier.key != FREE_TIER_KEY:
+        return (organization_id,)
+    owners = select(OrganizationMember.user_id).where(
+        OrganizationMember.organization_id == organization_id,
+        OrganizationMember.role == OrganizationRole.OWNER,
+        OrganizationMember.status == MembershipStatus.ACTIVE,
+    )
+    candidates = db.execute(
+        select(OrganizationMember.organization_id)
+        .where(
+            OrganizationMember.user_id.in_(owners),
+            OrganizationMember.role == OrganizationRole.OWNER,
+            OrganizationMember.status == MembershipStatus.ACTIVE,
+        )
+        .distinct()
+    ).scalars().all()
+    pool = {organization_id}
+    for candidate in candidates:
+        if candidate in pool:
+            continue
+        other = resolve_tier(db, organization_id=candidate)
+        if other is not None and other.key == FREE_TIER_KEY:
+            pool.add(candidate)
+    return tuple(sorted(pool, key=str))
 
 
 def tier_limit_for(
@@ -362,6 +458,29 @@ def tier_limit_for(
     ):
         if entry.period == period:
             return entry
+    return None
+
+
+def plan_limit(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    limit_key: str,
+    at: Optional[datetime] = None,
+) -> Optional[int]:
+    """The organization's plan limit `limit_key` (`limit.*`), or None when its plan sets none.
+
+    None also when the organization resolves no plan at all (an organization created
+    before every organization started on Free; the plan seed repairs those).
+    """
+    if not plan_limits.is_plan_limit_key(limit_key):
+        raise ValueError(f"{limit_key!r} is not a registered plan limit.")
+    tier = resolve_tier(db, organization_id=organization_id, at=at)
+    if tier is None:
+        return None
+    for entry in tier.entries:
+        if entry.limit_key == limit_key and entry.max_quantity is not None:
+            return int(entry.max_quantity)
     return None
 
 
@@ -595,6 +714,7 @@ def quota_status(
 
     moment = _as_utc(at or datetime.now(timezone.utc))
     tier = resolve_tier(db, organization_id=organization_id, at=moment)
+    pool = usage_pool(db, organization_id=organization_id)
 
     keys = [TOTAL_COST_KEY] + [
         name for name in sorted(USAGE_EVENT_TYPES) if is_limit_key(name)
@@ -606,19 +726,16 @@ def quota_status(
             db, organization_id=organization_id, limit_key=limit_key, lock=False
         ):
             since = spend.period_start(limit.period, now=moment)
-            if limit_key == TOTAL_COST_KEY:
-                current_qty = Decimal(0)
-                current_cost = usage_service.total_cost_micros_bounded(
-                    db, organization_id=organization_id, since=since, now=moment
-                )
-            else:
-                current_qty, current_cost = usage_service.usage_totals_bounded(
-                    db,
-                    organization_id=organization_id,
-                    since=since,
-                    event_types=[limit_key],
-                    now=moment,
-                ).get(limit_key, (Decimal(0), 0))
+            # Campaign session 1: a tier allowance is the usage pool's (one Free
+            # allowance per owner account); an explicit limit is this organization's.
+            members = (
+                (organization_id,)
+                if getattr(limit, "source", None) == "ORGANIZATION"
+                else pool
+            )
+            current_qty, current_cost = spend.pooled_usage(
+                db, pool=members, since=since, limit_key=limit_key, now=moment
+            )
 
             statuses.append(
                 QuotaStatus(
@@ -683,6 +800,27 @@ def _validate(
                     f"Duplicate entry {entitlement_scope!r}."
                 )
             seen.add(entitlement_scope)
+            validated.append(spec)
+            continue
+
+        # Campaign session 1. Static plan limits (`limit.*`): a ceiling on a size, not
+        # consumption, validated by their own shape rule like entitlements are.
+        if plan_limits.is_plan_limit_key(spec.limit_key):
+            violation = plan_limits.shape_violation(
+                limit_key=spec.limit_key,
+                period=spec.period,
+                max_quantity=spec.max_quantity,
+                max_cost_micros=spec.max_cost_micros,
+                overage_policy=spec.overage_policy,
+                overage_price_tier_key=spec.overage_price_tier_key,
+                grace_quantity=spec.grace_quantity,
+            )
+            if violation is not None:
+                raise QuotaTierValidationError(violation)
+            limit_scope = (spec.limit_key, spec.period.value)
+            if limit_scope in seen:
+                raise QuotaTierValidationError(f"Duplicate entry {limit_scope!r}.")
+            seen.add(limit_scope)
             validated.append(spec)
             continue
 
@@ -955,7 +1093,11 @@ def published_tier_by_key(
 
 
 __all__ = [
+    "FREE_TIER_KEY",
     "OverageOutcome",
+    "plan_limit",
+    "seat_factor",
+    "usage_pool",
     "published_tier_by_key",
     "OveragePolicy",
     "QuotaError",

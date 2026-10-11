@@ -76,6 +76,8 @@ _DISPLAY_NAMES = {
     entitlements.EGRESS_LOCKDOWN_CAPABILITY: "Egress lockdown",
     # N-021:capability-display
     entitlements.BYOK_CAPABILITY: "Bring your own AI key (BYOK)",
+    # Campaign session 1, N-049
+    entitlements.AUTOMATIONS_CAPABILITY: "Automations",
     # PHASE1:capability-display
     entitlements.BATCH_DISPATCH_CAPABILITY: "Batch operations and integrity-verified export packages",
     # PHASE2:capability-display

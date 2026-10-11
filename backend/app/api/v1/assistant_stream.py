@@ -24,6 +24,7 @@ from app.services.assistant_stream import (
 )
 from app.services.llm_metering import LLMMeteringError
 from app.services.stream_concurrency import generation_slot
+from app.services import plan_admission
 
 logger = logging.getLogger("app.api.v1.assistant_stream")
 
@@ -48,6 +49,14 @@ def _prepare_plan(
     user_agent: Optional[str],
 ) -> StreamPlan:
     try:
+        # Campaign session 1: one assistant message of the plan's allowance, charged
+        # in this transaction (rolled back with it if preparing fails) and refused
+        # with the reason before anything else runs.
+        plan_admission.admit_assistant_message(
+            db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
         plan = assistant_stream_service.prepare(
             db,
             conversation_id=conversation_id,
@@ -70,14 +79,9 @@ def _prepare_plan(
             "assistant.stream_quota_blocked",
             extra={"conversation_id": str(conversation_id), "limit_key": exc.limit_key},
         )
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=(
-                "This workspace has reached its monthly AI usage limit. "
-                "Retrieval still works; generation is paused until the limit "
-                "resets or is raised."
-            ),
-        ) from exc
+        # The standard 402 envelope: which allowance ran out (an assistant message,
+        # tokens, the cost ceiling), when it resets, and what to do (campaign session 1).
+        raise
 
     except LLMMeteringError as exc:
         db.rollback()

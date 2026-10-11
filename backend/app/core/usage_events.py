@@ -181,6 +181,35 @@ _BASE_TYPES: tuple[UsageEventType, ...] = (
         default_provider="internal",
         description="One anomaly radar sweep that produced or refreshed a finding.",
     ),
+    # Campaign session 1 — the two meters a customer counts in.
+    #
+    # Tokens, pages and gigabytes are what the platform pays for; nobody plans
+    # their month in them. "25 documents" and "30 assistant messages" are what a
+    # plan card can promise and a person can check against, so the user-facing
+    # allowance is set in these, with the token and cost ceilings kept underneath
+    # as the platform's safety net.
+    #
+    # Both are REQUEST-unit occurrences charged at the moment the work is
+    # accepted (a document at upload, a message when it is sent), in the same
+    # transaction, under the organization's quota lock: two uploads racing for the
+    # last unit cannot both pass, a refused upload leaves nothing half-processed,
+    # and deleting the document or the conversation refunds nothing.
+    UsageEventType(
+        name="document.upload",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One document accepted for processing (any upload path).",
+    ),
+    UsageEventType(
+        name="assistant.message",
+        unit=UsageUnit.REQUEST,
+        emission=EmissionKind.OCCURRENCE,
+        billable=True,
+        default_provider="internal",
+        description="One question sent to the workspace assistant.",
+    ),
 )
 
 OVERAGE_SUFFIX: str = ".overage"

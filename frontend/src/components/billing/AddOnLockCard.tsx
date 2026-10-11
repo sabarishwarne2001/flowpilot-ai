@@ -6,6 +6,7 @@ import { createAddonCheckoutSession } from "@/services/api/entitlements";
 import { BUTTON_PRIMARY, HINT, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
 import type { AddonAccess } from "@/types/entitlements";
 import { formatTimestampDate } from "@/utils/displayTime";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 /**
  * ARCH-30 Tranche 2 (D-8, D-6) — what an organization sees in place of an
@@ -52,7 +53,7 @@ const PurchaseAction: React.FC<PurchaseProps> = ({
   });
 
   if (!canPurchase) {
-    return <p className={HINT}>Ask an organization owner to add it.</p>;
+    return <p className={HINT}><AskPlanOwners toDo="add it" /></p>;
   }
 
   if (!addon.purchasable) {

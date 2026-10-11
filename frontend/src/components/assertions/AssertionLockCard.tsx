@@ -3,6 +3,7 @@ import { Lock } from "lucide-react";
 
 import { HINT, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 /**
  * ARCH-33 — what a workspace sees in place of clause assertions it does not
@@ -34,7 +35,7 @@ export const AssertionLockCard: React.FC<{ readonly canChangePlan: boolean }> = 
     <p className={HINT}>
       {canChangePlan
         ? "It's included on higher plans. Change your plan to turn it on."
-        : "It's included on higher plans. Ask an organization owner to change your plan."}
+        : <>It&apos;s included on higher plans. <AskPlanOwners /></>}
     </p>
     <ViewPlansAction />
   </section>

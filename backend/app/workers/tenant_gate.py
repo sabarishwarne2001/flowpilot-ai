@@ -64,6 +64,12 @@ TENANT_ACTIVITY_JOB_TYPES: frozenset[str] = frozenset(
     }
 )
 
+#: Campaign session 1 (F-255). Work an organization that has not paid does not get: read-only
+#: for non-payment (dunning RESTRICTED or SUSPENDED) refuses its writes in the API, and its
+#: automations and engines stop too. Exports keep running (export stays allowed in every
+#: billing state) and so does delivering an ERP posting approved before the restriction.
+BILLING_GATED_JOB_TYPES: frozenset[str] = TENANT_ACTIVITY_JOB_TYPES - {"analytics.export_sync", "erp.deliver_posting"}
+
 _WORK_ITEM_KEYS = ("work_item_id", "invoice_work_item_id", "source_work_item_id")
 
 
@@ -106,7 +112,38 @@ def inactive_reason(
     return None
 
 
-def _reason_for(payload: dict[str, Any]) -> Optional[str]:
+def _organization_of(
+    db: Any,
+    *,
+    organization_id: Optional[uuid.UUID],
+    workspace_id: Optional[uuid.UUID],
+    work_item_id: Optional[uuid.UUID],
+) -> Optional[uuid.UUID]:
+    from app.models.work_item import WorkItem
+    from app.models.workspace import Workspace
+
+    if organization_id is not None:
+        return organization_id
+    if workspace_id is None and work_item_id is not None:
+        item = db.get(WorkItem, work_item_id)
+        workspace_id = item.workspace_id if item is not None else None
+    workspace = db.get(Workspace, workspace_id) if workspace_id is not None else None
+    return workspace.organization_id if workspace is not None else None
+
+
+def unpaid_reason(db: Any, *, organization_id: Optional[uuid.UUID]) -> Optional[str]:
+    """Why an organization that has not paid may not run this work, or None (F-255)."""
+    from app.services.billing import dunning_service
+
+    if organization_id is None:
+        return None
+    state = dunning_service.access_state(db, organization_id=organization_id)
+    if state.writes_allowed:
+        return None
+    return f"billing {state.value.lower()}: a payment is overdue"
+
+
+def _reason_for(payload: dict[str, Any], job_type: str = "") -> Optional[str]:
     from app.db import session as session_module
     from app.models.job import Job
 
@@ -123,19 +160,27 @@ def _reason_for(payload: dict[str, Any]) -> Optional[str]:
             organization_id = job.organization_id if job is not None else None
         if organization_id is None and workspace_id is None and work_item_id is None:
             return None  # a sweep across tenants: it filters archived tenants itself
-        return inactive_reason(
+        reason = inactive_reason(
             db,
             organization_id=organization_id,
             workspace_id=workspace_id,
             work_item_id=work_item_id,
         )
+        if reason is None and job_type in BILLING_GATED_JOB_TYPES:
+            reason = unpaid_reason(
+                db,
+                organization_id=_organization_of(
+                    db, organization_id=organization_id, workspace_id=workspace_id, work_item_id=work_item_id
+                ),
+            )
+        return reason
 
 
 def gated(job_type: str, handler: Handler) -> Handler:
     """`handler`, but a job for a tenant that is not ACTIVE is skipped (and succeeds)."""
 
     def run(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
-        reason = _reason_for(payload or {})
+        reason = _reason_for(payload or {}, job_type)
         if reason is not None:
             logger.info(
                 "jobs.skipped_inactive_tenant",
@@ -151,4 +196,4 @@ def gated(job_type: str, handler: Handler) -> Handler:
     return run
 
 
-__all__ = ["TENANT_ACTIVITY_JOB_TYPES", "gated", "inactive_reason"]
+__all__ = ["BILLING_GATED_JOB_TYPES", "TENANT_ACTIVITY_JOB_TYPES", "gated", "inactive_reason", "unpaid_reason"]

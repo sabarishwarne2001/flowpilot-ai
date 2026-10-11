@@ -181,6 +181,14 @@ def install(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Admit a signed manifest. OWNER-gated; invariants 5 and 6 re-checked."""
+    # N-049: a marketplace workflow installs as an automation rule, which needs the
+    # plan's automations; browsing the catalog stays open on every plan (N-002).
+    from app.api import capability_gate
+    from app.core import entitlements
+
+    capability_gate.require_capability(
+        db, context=context, capability_key=entitlements.AUTOMATIONS_CAPABILITY, operation="marketplace.install"
+    )
     try:
         installation = marketplace_service.install_manifest(
             db,

@@ -223,6 +223,18 @@ def reactivate_member(db, *, organization_id, user_id, role: str,
                       principal: IdentityPrincipal | None = None,
                       identity: DirectoryIdentity | None = None,
                       commit: bool = True) -> bool:
+    # Campaign session 1. Coming back takes a seat like joining does: refused when
+    # the organization has none free (SeatLimitExceededError, a SCIM 409).
+    deactivated = db.execute(
+        sql_text(f"SELECT 1 FROM {TBL_ORG_MEMBERS} WHERE organization_id = :oid "
+                 f"AND user_id = :uid AND status = 'DEACTIVATED'"),
+        {"oid": str(organization_id), "uid": str(user_id)},
+    ).first()
+    if deactivated is not None:
+        from app.services import seat_capacity_service
+
+        seat_capacity_service.assert_seat_available(db, organization_id=organization_id)
+
     changed = db.execute(
         sql_text(
             f"UPDATE {TBL_ORG_MEMBERS} SET status = 'ACTIVE', role = :role, "

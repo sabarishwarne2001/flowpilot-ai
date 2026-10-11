@@ -167,6 +167,20 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
         if not rules:
             return {"outcome": Outcome.SKIPPED, "reason": "no matching rules"}
 
+        # N-049 (campaign session 1). The plan's automations, checked where rules run,
+        # not only where they are built: a rule kept after a downgrade does not run.
+        from app.api import capability_gate
+        from app.core import entitlements
+
+        if not capability_gate.has_capability(
+            db, organization_id=organization_id, capability_key=entitlements.AUTOMATIONS_CAPABILITY
+        ):
+            logger.info(
+                "automation.skipped_not_on_plan",
+                extra={"organization_id": str(organization_id), "rules": len(rules)},
+            )
+            return {"outcome": Outcome.SKIPPED, "reason": "automations are not on this organization's plan"}
+
         from app import crud
 
         ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)

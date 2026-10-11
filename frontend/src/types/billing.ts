@@ -182,6 +182,23 @@ export interface SubscriptionStateResponse {
   readonly seats_purchased: number;
   readonly seat_drift_delta: number;
   readonly access_state: string;
+  /** Campaign session 1: what the server's seat check enforces. */
+  readonly plan_key: string | null;
+  /** The plan's seats on Free, the purchased quantity on a paid plan; null = no limit. */
+  readonly seat_capacity: number | null;
+  readonly seat_capacity_source: "PURCHASED" | "PLAN" | "OVERRIDE" | "UNLIMITED";
+  readonly seats_pending_invitations: number;
+  /** Active members plus pending invitations. */
+  readonly seats_used: number;
+  readonly seats_available: number | null;
+  /** The caller may buy or release seats (owner, admin, billing on a paid plan). */
+  readonly can_manage_seats: boolean;
+}
+
+export interface SeatChangeRequest {
+  readonly seats: number;
+  /** The per-seat price that was shown; any other price is refused (SEAT_PRICE_CHANGED). */
+  readonly confirmed_unit_price_micros?: number | null;
 }
 
 export interface BillingAccessResponse {
@@ -345,4 +362,34 @@ export interface SeatPriceBookResponse {
 
   readonly period_start: string | null;
   readonly period_end: string | null;
+}
+
+
+/**
+ * Campaign session 1 — what the organization's plan admits, readable by every
+ * member of a workspace (GET /workspaces/{id}/plan-allowance): the counts a
+ * person plans by, the per-file limits, whether the caller may upgrade, and
+ * whom to ask otherwise. No money, no invoices.
+ */
+export type AllowanceState = "OK" | "NEAR" | "REACHED" | "OVER";
+
+export interface AllowanceMeter {
+  readonly key: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly hard_stop: boolean;
+  readonly overage_policy: string;
+  readonly resets_at: string;
+  readonly state: AllowanceState;
+}
+
+export interface PlanAllowanceResponse {
+  readonly plan_key: string | null;
+  readonly plan_name: string | null;
+  readonly max_file_mb: number;
+  readonly max_pages_per_document: number;
+  readonly meters: readonly AllowanceMeter[];
+  readonly can_upgrade: boolean;
+  /** Owners and billing managers, by name: who to ask for more. */
+  readonly ask: readonly string[];
 }

@@ -36,6 +36,19 @@ from app.schemas.automation import (
 
 
 router = APIRouter(tags=["Automation"])
+
+
+def _require_automations(db: Session, context: deps.TenantContext, operation: str) -> None:
+    """N-049 (campaign session 1). Building, changing, testing or running a rule needs the
+    plan's automations; seeing, switching off and deleting one never does (N-003)."""
+    from app.api import capability_gate
+    from app.core import entitlements
+
+    capability_gate.require_capability(
+        db, context=context, capability_key=entitlements.AUTOMATIONS_CAPABILITY, operation=operation
+    )
+
+
 logger = logging.getLogger("app.api.v1.automation")
 
 
@@ -397,6 +410,7 @@ def create_rule(
     from app.models.audit_log import AuditAction
     from app.services.automation import catalog_service, flow_service, rule_triggers
 
+    _require_automations(db, context, "automation.rule.create")
     authoring = catalog_service.authoring_for(db, context=context)
     try:
         normalised = flow_service.normalise(rule_in.model_dump(mode="json"), authoring)
@@ -611,6 +625,8 @@ def update_rule(
     from app.services.automation import catalog_service, flow_service, rule_triggers
 
     changes = rule_in.model_dump(exclude_unset=True, mode="json")
+    if changes != {"is_active": False}:
+        _require_automations(db, context, "automation.rule.update")
     structural = set(changes) - {"is_active", "name", "priority"}
     enabling = changes.get("is_active") is True and not rule.is_active
 
@@ -704,6 +720,7 @@ def test_rule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Automation rule not found or you do not have permission to access it."
         )
+    _require_automations(db, context, "automation.rule.test")
 
     work_item = crud.get_work_item(
         db,

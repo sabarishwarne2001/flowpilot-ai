@@ -127,25 +127,38 @@ class TestGate157PortalIsOwnerOnly:
         from app.api.v1 import billing as billing_api
         from app.main import app
 
+        # Contract authority (plan, payment method, reconciling to membership) is the
+        # owner's. Campaign session 1: buying or releasing seats (PUT .../seats) is
+        # also open to admins and billing managers, after the price is shown; it is
+        # checked below with its exact role set.
         mutating = {
-            "/api/v1/organizations/{organization_id}/billing/portal-session",
-            "/api/v1/organizations/{organization_id}/billing/checkout-session",
-            "/api/v1/organizations/{organization_id}/billing/seats",
+            ("/api/v1/organizations/{organization_id}/billing/portal-session", "POST"),
+            ("/api/v1/organizations/{organization_id}/billing/checkout-session", "POST"),
+            ("/api/v1/organizations/{organization_id}/billing/seats", "POST"),
         }
+        seat_purchase = ("/api/v1/organizations/{organization_id}/billing/seats", "PUT")
         seen = set()
         for route in app.routes:
             path = getattr(route, "path", None)
-            if path not in mutating:
-                continue
-            seen.add(path)
-            deps = [
-                d.call
-                for d in getattr(route, "dependant", None).dependencies
-                if getattr(d, "call", None) is not None
-            ]
-            assert RequireOrgOwner in deps, f"{path} is not owner-only"
+            for method in getattr(route, "methods", None) or ():
+                key = (path, method)
+                if key not in mutating and key != seat_purchase:
+                    continue
+                seen.add(key)
+                deps = [
+                    d.call
+                    for d in getattr(route, "dependant", None).dependencies
+                    if getattr(d, "call", None) is not None
+                ]
+                if key == seat_purchase:
+                    assert billing_api.RequireSeatManager in deps, f"{key} is not gated by RequireSeatManager"
+                else:
+                    assert RequireOrgOwner in deps, f"{key} is not owner-only"
 
-        assert seen == mutating, f"missing billing routes: {mutating - seen}"
+        assert seen == mutating | {seat_purchase}, f"missing billing routes: {(mutating | {seat_purchase}) - seen}"
+        assert billing_api.RequireSeatManager.allowed_roles == frozenset(
+            {OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.BILLING}
+        )
 
         reader = billing_api.RequireOrgBillingReader
         assert reader.allowed_roles == frozenset(

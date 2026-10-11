@@ -47,6 +47,9 @@ import type { ManifestNode, MarketplaceItem } from "@/types/partner";
 import { errorMessage } from "@/services/api/errors";
 import { ErrorState } from "@/components/common/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
+import { CAPABILITY } from "@/constants/capabilities";
+import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 
 const NODE_TONE: Record<ManifestNode["node_type"], string> = {
   trigger: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -68,6 +71,9 @@ export default function MarketplaceCatalog() {
   const organizationId =
     state.status === "ready" ? state.organization.organization_id : "";
   const workspaceId = state.status === "ready" ? state.workspace.id : "";
+  // N-049: a workflow installs as an automation rule, Developer and up. Browsing stays open.
+  const automations = useCapabilityAccess(organizationId, CAPABILITY.automations);
+  const planLocked = !automations.isLoading && !automations.isError && !automations.granted;
   const queryClient = useQueryClient();
   const [inspecting, setInspecting] = useState<MarketplaceItem | null>(null);
 
@@ -136,6 +142,7 @@ export default function MarketplaceCatalog() {
         title="Partner marketplace"
         description="Signed automation workflows published by FlowPilot partners. Every manifest is cryptographically verified before it can be installed."
       />
+      <PlanLockBanner capability={CAPABILITY.automations} feature="Automations" />
 
       {installationsQuery.data && installationsQuery.data.length > 0 ? (
         <section className="space-y-2">
@@ -353,7 +360,8 @@ export default function MarketplaceCatalog() {
                 disabled={
                   !detailQuery.data?.signature_verified ||
                   !workspaceId ||
-                  installMutation.isPending
+                  installMutation.isPending ||
+                  planLocked
                 }
                 onClick={() => installMutation.mutate()}
                 className="inline-flex items-center gap-2 rounded-md text-muted-foreground px-3 py-1.5 text-sm font-medium text-white disabled:text-muted-foreground disabled:text-muted-foreground"

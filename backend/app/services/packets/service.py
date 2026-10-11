@@ -261,7 +261,9 @@ def apply(db: Session, *, split_id: uuid.UUID) -> dict[str, Any]:
             with validated:
                 result = document_intake_service.ingest_validated(
                     db, validated, organization_id=split.organization_id, workspace_id=split.workspace_id,
-                    uploader_id=split.decided_by_user_id or parent.created_by_user_id, enqueue_extraction=False)
+                    uploader_id=split.decided_by_user_id or parent.created_by_user_id, enqueue_extraction=False,
+                    # Carved out of a packet already charged as one upload.
+                    meter_upload=False)
             child = result.work_item
             child.parent_work_item_id = parent.id
             child.parent_page_start, child.parent_page_end = segment.page_start, segment.page_end

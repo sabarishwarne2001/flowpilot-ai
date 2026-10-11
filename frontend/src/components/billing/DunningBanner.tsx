@@ -3,6 +3,7 @@ import { AlertOctagon, ExternalLink, Loader2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { createPortalSession, getBillingAccess } from "@/services/api/billing";
+import { useAskPlanOwners } from "@/components/billing/AskPlanOwners";
 import { billingKeys } from "@/services/api/queryKeys";
 import { pollUnlessRefused } from "@/services/api/polling";
 import { formatTimestampDate } from "@/utils/displayTime";
@@ -28,6 +29,9 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
     refetchOnWindowFocus: true,
     staleTime: 30_000,
   });
+
+  // Campaign session 1 (E.4): the people who can update the payment method, by name.
+  const askOwners = useAskPlanOwners("update the payment method", organizationId);
 
   const portal = useMutation({
     mutationFn: () =>
@@ -60,7 +64,7 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
               until {formatTimestampDate(access.grace_ends_at)} while the payment is retried.
               {canManageBilling
                 ? " Update the payment method to avoid interruption."
-                : " Ask an owner or billing admin to update the payment method."}
+                : ` ${askOwners}`}
             </p>
             {canManageBilling ? (
               <button
@@ -158,9 +162,8 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
                 )}
               </button>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Ask an organization owner or billing administrator to update
-                the payment method.
+              <p className="text-xs text-muted-foreground" data-testid="ask-plan-owners">
+                {askOwners}
               </p>
             )}
 

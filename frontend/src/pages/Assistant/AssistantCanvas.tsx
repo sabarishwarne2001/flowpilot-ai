@@ -7,6 +7,7 @@ import MessageStream from "@/components/chat/MessageStream";
 import PdfViewer from "@/components/pdf/PdfViewer";
 import ProvenanceDrawer from "@/components/provenance/ProvenanceDrawer";
 import UploadDropzone from "@/components/upload/UploadDropzone";
+import PlanAllowance from "@/components/billing/PlanAllowance";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { getDocumentSettings } from "@/services/api/document-settings";
 import { settingsKeys } from "@/services/api/queryKeys";
@@ -271,6 +272,9 @@ export const AssistantCanvas: React.FC<AssistantCanvasProps> = ({
           </div>
 
           <div className="border-t border-border p-2 sm:p-3">
+            {workspaceId && (
+              <PlanAllowance workspaceId={workspaceId} meters={["assistant.message"]} className="mb-2" />
+            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={prompt}

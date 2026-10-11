@@ -257,6 +257,7 @@ def bulk_reprocess(
 
     items = _scoped_items(db, workspace_id=workspace_id, ids=ids)
     results: list[ItemResult] = _missing(ids, items)
+    admitted_pages = 0
 
     for item in items:
         if item.uploaded_file_id is None:
@@ -269,6 +270,21 @@ def bulk_reprocess(
                 )
             )
             continue
+        # Campaign session 1: re-extraction runs OCR (and is charged) again; a
+        # document whose pages no longer fit is refused with the reason, the others
+        # still go.
+        from app.core.exceptions import SpendLimitExceededError
+        from app.services import plan_admission
+
+        try:
+            plan_admission.assert_reprocess_admitted(
+                db, organization_id=organization_id, page_count=item.page_count,
+                also_reserved=admitted_pages,
+            )
+        except SpendLimitExceededError as exc:
+            results.append(ItemResult(str(item.id), "refused", "QUOTA_EXCEEDED", str(exc)[:500]))
+            continue
+        admitted_pages += max(1, int(item.page_count or 1))
         try:
             job_service.enqueue(
                 db,

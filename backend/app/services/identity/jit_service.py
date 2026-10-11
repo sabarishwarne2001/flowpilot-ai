@@ -115,7 +115,7 @@ def resolve_seat_cap(db, *, config: EnterpriseIdpConfig) -> int | None:
             sql_text(
                 "SELECT qte.max_quantity FROM organizations o "
                 "JOIN quota_tier_entries qte ON qte.quota_tier_id = o.quota_tier_id "
-                "WHERE o.id = :oid AND qte.limit_key = 'seats' LIMIT 1"
+                "WHERE o.id = :oid AND qte.limit_key = 'limit.seats' LIMIT 1"
             ),
             {"oid": str(config.organization_id)},
         ).first()
@@ -286,6 +286,11 @@ def provision_or_link(
                     f"seat cap reached: {seats}/{cap}",
                     outcome="REJECTED_SEAT_CAP")
 
+    # Campaign session 1. The organization's own seats (the plan's on Free, the
+    # purchased quantity on a paid plan) bound every way in, single sign-on and SCIM
+    # included; CAPPED above is an additional, administrator-set ceiling.
+    _assert_organization_seat(db, config=config, principal=principal)
+
     user_id = user_row[0] if user_row is not None else _create_user(
         db, email=email, display_name=_display_name(attributes))
     created_user = user_row is None
@@ -314,6 +319,29 @@ def provision_or_link(
 
     db.flush()
     return ProvisionResult(identity, user_id, role, created_user, True, True)
+
+
+def _assert_organization_seat(db, *, config: EnterpriseIdpConfig, principal) -> None:
+    from app.core.exceptions import SeatLimitExceededError
+    from app.services import seat_capacity_service
+
+    try:
+        seat_capacity_service.assert_seat_available(db, organization_id=config.organization_id)
+    except SeatLimitExceededError as exc:
+        details = getattr(exc, "details", {}) or {}
+        emit_event(db, event_type="identity.jit_cap_reached",
+                   organization_id=config.organization_id,
+                   payload={"seats": details.get("seats_used"), "cap": details.get("seat_capacity"),
+                            "idp_config_id": str(config.id)})
+        write_audit(db, organization_id=config.organization_id,
+                    action="CREATED", resource_type="DIRECTORY_IDENTITY",
+                    resource_id=None, principal=principal, outcome="DENIED",
+                    details={"reason": "organization_seats_full",
+                             "seats": details.get("seats_used"), "cap": details.get("seat_capacity")})
+        db.commit()
+        raise IdentityRefused(
+            f"no seat available: {details.get('seats_used')}/{details.get('seat_capacity')}",
+            outcome="REJECTED_SEAT_CAP") from exc
 
 
 def _create_user(db, *, email: str, display_name: str | None):

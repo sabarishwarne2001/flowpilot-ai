@@ -28,6 +28,8 @@ from app.schemas.assistant import (
     ConversationResponse,
     ConversationUpdate,
 )
+from app.core.exceptions import SpendLimitExceededError
+from app.services import plan_admission
 from app.services.assistant_service import assistant_service
 
 logger = logging.getLogger("app.api.v1.assistant")
@@ -329,6 +331,14 @@ def post_chat_query(
             user_id=context.user_id,
         )
 
+        # Campaign session 1: one assistant message of the plan's allowance, charged
+        # when it is accepted and refused (402 with the reason) before the model runs.
+        plan_admission.admit_assistant_message(
+            db,
+            organization_id=context.organization_id,
+            workspace_id=context.workspace_id,
+        )
+
         response = assistant_service.send_chat_message(
             db=db,
             conversation_id=conversation_id,
@@ -371,6 +381,10 @@ def post_chat_query(
         )
 
     except HTTPException:
+        raise
+
+    except SpendLimitExceededError:
+        db.rollback()
         raise
 
     except Exception:

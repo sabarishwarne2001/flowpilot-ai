@@ -5,8 +5,10 @@ import { Lock } from "lucide-react";
 import { joinPlanNames } from "@/components/billing/UpgradePlanDialog";
 import type { CapabilityKey } from "@/constants/capabilities";
 import { useGrantedCapabilities } from "@/hooks/useGrantedCapabilities";
-import { useResolvedOrganization } from "@/routes/OrganizationGuard";
+import { useOptionalResolvedOrganization } from "@/routes/OrganizationGuard";
+import { useTenant } from "@/hooks/useTenant";
 import { organizationBillingPath } from "@/routes/tenantPaths";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 interface PlanLockBannerProps {
   readonly capability: CapabilityKey;
@@ -24,9 +26,15 @@ interface PlanLockBannerProps {
  * the capability is held, so an entitled tenant never sees it flash.
  */
 export const PlanLockBanner: React.FC<PlanLockBannerProps> = ({ capability, feature }) => {
-  const { organizationId, organization, organizationRole } = useResolvedOrganization();
+  // Organization pages resolve the organization from the route; workspace pages (the
+  // Automation page, campaign session 1) from the active session. Never throws.
+  const resolved = useOptionalResolvedOrganization();
+  const { state } = useTenant();
+  const organization = resolved?.organization ?? (state.status === "ready" ? state.organization : null);
+  const organizationId = resolved?.organizationId ?? organization?.organization_id ?? "";
+  const organizationRole = resolved?.organizationRole ?? organization?.role ?? "";
   const { granted, plansFor, isLoading, isError } = useGrantedCapabilities(organizationId);
-  if (isLoading || isError || granted.has(capability)) {
+  if (!organization || isLoading || isError || granted.has(capability)) {
     return null;
   }
   const role = String(organizationRole).toUpperCase();
@@ -53,7 +61,7 @@ export const PlanLockBanner: React.FC<PlanLockBannerProps> = ({ capability, feat
           View plans
         </Link>
       ) : (
-        <p className="text-xs text-muted-foreground">Ask an organization owner to upgrade.</p>
+        <p className="text-xs text-muted-foreground"><AskPlanOwners toDo="upgrade" /></p>
       )}
     </section>
   );
