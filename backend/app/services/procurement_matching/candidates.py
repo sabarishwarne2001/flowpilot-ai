@@ -111,6 +111,43 @@ def _as_candidate(row: Any) -> Candidate:
     )
 
 
+#: How many of a vendor's receipts in the window are considered for one invoice.
+RECEIPT_CANDIDATES = 10
+
+
+def _receipt_for_order(
+    db: Any, rows: Sequence[Any], order_number: Optional[str]
+) -> tuple[Optional[Candidate], int]:
+    """The receipt that goes with this order, and how many naming another order were skipped.
+
+    Campaign session 2 (F-274). A receipt was taken by vendor and date window alone, on the
+    assumption that receipts name no order; most do. One naming this order wins; one naming no
+    order is still found by vendor and dates; one naming a different order belongs to that
+    order's case and is never attached here (it would be counted against two invoices).
+    """
+    if not rows:
+        return None, 0
+    from sqlalchemy import select
+
+    from app.models.work_item import WorkItem
+    from app.services.procurement_matching.line_extraction import po_reference_of
+
+    entities = dict(db.execute(
+        select(WorkItem.id, WorkItem.extracted_entities).where(WorkItem.id.in_([r.work_item_id for r in rows]))
+    ).all())
+    unreferenced: Optional[Any] = None
+    skipped = 0
+    for row in rows:
+        named = po_reference_of(entities.get(row.work_item_id) or {})
+        if named is None:
+            unreferenced = unreferenced or row
+        elif order_number is not None and named == order_number:
+            return _as_candidate(row), skipped
+        else:
+            skipped += 1
+    return (_as_candidate(unreferenced) if unreferenced is not None else None), skipped
+
+
 def _role_rows(
     db: Any,
     *,
@@ -271,10 +308,23 @@ def find_candidates(
                 anchor - timedelta(days=window_days),
                 anchor + timedelta(days=window_days),
             ),
-            limit=1,
+            limit=RECEIPT_CANDIDATES,
         )
-        if rows:
-            goods_receipt = _as_candidate(rows[0])
+        order_number = (
+            purchase_order.document_number if purchase_order is not None else po_reference
+        )
+        goods_receipt, skipped = _receipt_for_order(db, rows, order_number)
+        if skipped:
+            findings.append(
+                {
+                    "code": "RECEIPT_NAMES_ANOTHER_PO",
+                    "detail": (
+                        "a goods receipt from this vendor in the window names a different "
+                        "purchase order; it was not used"
+                    ),
+                    "skipped_receipts": skipped,
+                }
+            )
 
     if purchase_order is None and goods_receipt is None:
         findings.append(
