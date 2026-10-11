@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-10 (pre-launch campaign, session 1 of 4 started)_
+_Last updated: 2026-10-11 (pre-launch campaign, session 1 of 4, checkpoint 1)_
 
 ## Current phase — Pre-launch campaign, session 1 of 4: tenancy, roles, plans, seats, billing, usage limits
 Branch `claude/new-session-ejp1sm` (the session's assigned branch), draft PR opened early. The four
@@ -34,7 +34,24 @@ Owner delegated founder authority: decisions are taken, built and recorded in NE
 8. Live concurrency tests (seats, quota units, webhooks), the worker's tenant gate, revenue truth,
    the admin area refusing tenants, plan cards from the source of truth.
 
-**Progress:** start-up done (stack being stood up). Nothing fixed yet.
+**Progress (checkpoint 1, 2026-10-11):** items 1 to 5 done and pushed; item 6 partly.
+- Fixed, each with a test that failed first (FINDINGS.md F-236 to F-249): new organizations start
+  on Free; seats enforced on every entry path and purchasable by Owner and Billing; the decided plan
+  table (N-040 to N-047) enforced on every upload path, the assistant, workspaces and the worker
+  (charged once, at acceptance, under the organization's lock); one Free allowance per owner
+  account; resumable uploads bounded in total (migration s1a1); the paid ladder monotonic and every
+  paid seat at least 60% gross margin at its ceilings; allowance shown where it is spent; every
+  "ask someone" line names the person; calendar feeds work for owners and admins (migration s1b1);
+  an invitation race deadlock removed.
+- `TENANCY-AND-PLANS.md` is generated from the code (drift test).
+- Verification so far: targeted backend runs 1,076 passed and 580 passed; full browser suite
+  397 passed, 3 failed (all one cause, the billing role refused the summary: fixed and tested),
+  1 skipped; live logs 0 tracebacks, 0 ERROR, one deliberate 503 (seat purchase with no gateway
+  configured, F-213's answer). One Alembic head (s1b1), up/down/up verified, no new model drift.
+- Next: E.3 rest (self-escalation, last owner, viewer cannot write), D (overage policies proven,
+  add-ons, frontend parity), F (subscription lifecycle via webhooks), G (worker tenant gate,
+  webhook concurrency, cache keys, per-tenant rate limits), H (revenue truth, /admin refusal),
+  COVERAGE.csv, then the finish checks.
 
 
 ## Latest pass — owner decisions N-034 to N-039 applied (2026-10-10)
