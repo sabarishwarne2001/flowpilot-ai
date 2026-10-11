@@ -183,3 +183,48 @@ def test_a_stranded_streaming_answer_is_closed_by_the_sweep(engines: Engines, mo
     [answer] = _assistant_messages(engines, conversation_id)
     assert answer.stream_state is StreamState.ABORTED, "a stranded answer is never closed"
     assert answer.finish_reason == "deadline_exceeded"
+
+
+def _three_chunks(*args, **kwargs):
+    from app.services.byok.provider_clients import CredentialUse
+
+    def chunks():
+        # Long enough to pass the output filter's look-behind window, so streaming shows.
+        for piece in ("The total of the invoice for the safety gloves and the boots " * 4,
+                      "is 1,234.50 including tax, as printed on the second page of the document " * 4,
+                      "USD."):
+            yield llm_stream.StreamChunk(text=piece)
+        yield llm_stream.StreamChunk(
+            usage=TokenUsage(provider="groq", model="openai/gpt-oss-120b", prompt_tokens=200, completion_tokens=9,
+                             total_tokens=209, estimated_cost=0.0),
+            finish_reason="stop",
+        )
+
+    return llm_stream.StreamSession(
+        chunks=chunks(),
+        credential_use=CredentialUse(source=SOURCE_PLATFORM, provider="GROQ", organization_id=uuid.uuid4(), reason="t"),
+    )
+
+
+def test_with_streaming_off_the_answer_arrives_whole(engines: Engines, monkeypatch) -> None:
+    """Campaign session 2 (F-266). Settings -> AI -> Streaming responses was read by nothing."""
+    from app import crud
+
+    monkeypatch.setattr(llm_stream, "open_stream", _three_chunks)
+    _ask(engines)  # creates the default settings
+    settings_row = crud.get_ai_settings(engines.db, workspace_id=engines.ws)
+    settings_row.enable_streaming = False
+    engines.db.commit()
+
+    body, _ = _ask(engines)
+
+    tokens = [line for line in body.splitlines() if line.startswith("event: token")]
+    assert len(tokens) == 1, f"the answer was streamed in {len(tokens)} pieces with streaming off"
+    assert "USD." in body and "is 1,234.50 including tax" in body
+
+
+def test_with_streaming_on_the_answer_arrives_as_it_is_written(engines: Engines, monkeypatch) -> None:
+    monkeypatch.setattr(llm_stream, "open_stream", _three_chunks)
+    body, _ = _ask(engines)
+    tokens = [line for line in body.splitlines() if line.startswith("event: token")]
+    assert len(tokens) >= 2

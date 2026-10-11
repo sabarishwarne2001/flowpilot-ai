@@ -518,6 +518,12 @@ class AssistantStreamService:
                     },
                 )
 
+                # Campaign session 2 (F-266): Settings -> AI -> Streaming responses. Off, the
+                # answer is filtered in full and sent as one piece when it is complete (for
+                # teams that must not show text before the whole answer is checked).
+                whole_answer = not bool(getattr(plan.ai_settings, "enable_streaming", True))
+                held: list[str] = []
+
                 # ARCH39-S1:stream-retry — one smaller retry when the provider
                 # refuses the request size before any token was emitted.
                 attempt = 0
@@ -529,7 +535,9 @@ class AssistantStreamService:
                                 usage = chunk.usage
                             if chunk.text:
                                 safe = redactor.feed(chunk.text)
-                                if safe:
+                                if safe and whole_answer:
+                                    held.append(safe)
+                                elif safe:
                                     yield emit("token", {"text": safe})
                             if chunk.finish_reason == "length":
                                 finish = FinishReason.OUTPUT_CEILING.value
@@ -588,7 +596,11 @@ class AssistantStreamService:
                         )
 
                 tail = redactor.flush()
-                if tail:
+                if whole_answer:
+                    whole = "".join(held) + (tail or "")
+                    if whole:
+                        yield emit("token", {"text": whole})
+                elif tail:
                     yield emit("token", {"text": tail})
 
                 envelope = provenance_service.build_envelope(
