@@ -850,3 +850,19 @@ priced for every provider the platform pays and never billed on the customer's o
   new rates as the next price book version.
 - Reversible: if the owner wants own-key overage billed as a platform fee, add `.overage` rates for
   those providers and remove the BYOK early return in `llm_metering._record`.
+
+## N-049 — Automations on Free
+**DECIDED (campaign session 1): automations are Developer and up; Free has none.** The campaign
+brief defines Free as "no API keys, webhooks, automations, batch or Business engines". This
+supersedes the part of N-002 that said "the automation engine, which every plan has".
+- Every automation action is work the platform does for the customer (emails, webhooks, AI
+  extraction, review items), so it is a paid capability: `capability.automations`, granted on
+  Developer, Business and Enterprise.
+- On Free: creating, changing or test-running a rule, and installing a marketplace workflow (it
+  installs as a rule), answer 402 CAPABILITY_REQUIRED. The worker also refuses to run a rule for an
+  organization without the capability, so a rule kept after a downgrade does not run.
+- After a downgrade (N-003) rules stay visible and can be switched off and deleted. Browsing the
+  marketplace stays open on every plan (N-002).
+- Deploy note: `seed_quota_tiers.py` publishes the paid tiers with the new capability; existing Free
+  organizations with active rules stop running them from the deploy. Clause checks (Enterprise)
+  run through the same engine and are covered by the Enterprise plan.
