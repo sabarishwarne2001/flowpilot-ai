@@ -89,6 +89,7 @@ class RecordedLLM:
     recordings: dict[str, Recording] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
     memory_contexts: list[Optional[str]] = field(default_factory=list)
+    preset_contexts: list[Optional[str]] = field(default_factory=list)
 
     agent_turns: dict[str, int] = field(default_factory=dict)
     agent_prompts: list[str] = field(default_factory=list)
@@ -113,6 +114,7 @@ class RecordedLLM:
     def extract_entities(self, text: str, document_class: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("entities", text[:40]))
         self.memory_contexts.append(kwargs.get("memory_context"))
+        self.preset_contexts.append(kwargs.get("preset_context"))
         found = self._find(text)
         return dict(found.entities) if found else {}
 
