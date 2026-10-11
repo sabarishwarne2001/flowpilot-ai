@@ -120,10 +120,49 @@ async def get_current_user(
             request.state.api_key_id = authenticated.key.id
             request.state.api_key_obj = authenticated.key
             request.state.api_key_membership = authenticated.membership
+            _assert_api_key_route_scope(request, authenticated.key, authenticated.membership)
         if authenticated.session_id is not None:
             request.state.session_id = authenticated.session_id
 
     return authenticated.user
+
+
+def _route_scope(request: Request) -> Optional[ApiKeyScope]:
+    """The scope an API key needs for the matched route, or None when no scope covers it.
+
+    A route that declares `RequireScope(<scope>)` names its own; otherwise ROUTE_SCOPE_MAP
+    does, keyed by the route's template (not the raw path), so `/work-items/{id}` can never
+    match `/work-items` by accident.
+    """
+    route = request.scope.get("route")
+    for dependency in getattr(route, "dependencies", None) or []:
+        call = getattr(dependency, "dependency", None)
+        if isinstance(call, RequireScope) and call.required_scope is not None:
+            return call.required_scope
+    template = getattr(route, "path_format", None) or getattr(route, "path", None) or request.url.path
+    prefix = getattr(settings, "API_V1_STR", "")
+    if prefix and template.startswith(prefix):
+        template = template[len(prefix):]
+    method = request.method.upper()
+    return ROUTE_SCOPE_MAP.get((method, template)) or ROUTE_SCOPE_MAP.get((method, template.rstrip("/")))
+
+
+def _assert_api_key_route_scope(request: Request, key: Any, membership: Any) -> None:
+    """Campaign session 2. An API key may call only routes a scope covers, and only with that scope.
+
+    Before, scopes were checked only on routes that declared `RequireScope`; every other
+    tenant route accepted any key with the full rights of the member who issued it, so a
+    read-only key could upload, delete documents and read the member list.
+    """
+    required = _route_scope(request)
+    if required is None:
+        raise OrganizationPermissionDeniedError(
+            "API keys cannot call this route: no API key scope covers it."
+        )
+    if required not in effective_scopes(key, membership):
+        raise OrganizationPermissionDeniedError(
+            f"API key lacks the required scope: {required.value}"
+        )
 
 
 def _authenticate(db: Session, token: str) -> _Authenticated:

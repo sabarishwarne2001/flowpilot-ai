@@ -991,3 +991,15 @@ stop; and flagging the copies where the reviewer decides is more useful than a s
 A case a copy opened before this change leaves the queue (superseded) the next time any copy of
 that invoice is scored; a case someone already approved or disputed is left as decided. The
 forensic radar still reports duplicates as findings, as before.
+
+## N-056 — What an API key may call
+**DECIDED (campaign session 2), with F-271.** An API key may call only a route that one of its
+scopes covers, and nothing else (default deny), which is what the key screen and the code always
+promised; until now only the webhook routes checked, so any key acted with the full rights of the
+admin who issued it. `work_items:read` covers listing documents, one document and its extracted
+content; `work_items:write` covers uploading, reprocessing and deleting documents ("upload and
+modify documents", as the key screen says). Organization management (members, invitations,
+settings, keys, billing changes) and the assistant stay human-only: no scope covers them. The full
+list is `ROUTE_SCOPE_MAP` in `backend/app/core/scopes.py`. Why: a key is a long-lived secret
+pasted into other systems; a leaked read key must not be able to delete records or read who works
+here. A customer who needs more from the API asks for a scope to be added, deliberately.
