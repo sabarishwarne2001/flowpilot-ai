@@ -124,6 +124,7 @@ Free is per organization, and **one Free allowance is shared by every Free organ
 | Capability | Free | Developer | Business | Enterprise |
 |---|---|---|---|---|
 | Forensic audit radar (`capability.anomaly_radar`) | — | — | yes | yes |
+| Automations (`capability.automations`) | — | yes | yes | yes |
 | Batch operations and integrity-verified export packages (`capability.batch_dispatch`) | — | — | yes | yes |
 | Bring your own AI key (BYOK) (`capability.byok`) | — | — | yes | yes |
 | Calibrated autonomy (`capability.calibrated_autonomy`) | — | — | — | yes |

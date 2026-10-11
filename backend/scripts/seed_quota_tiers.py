@@ -110,6 +110,7 @@ DEVELOPER_FEATURES = [
     _capability("capability.developer_api"),
     _capability("capability.outgoing_webhooks"),
     _capability("capability.custom_branding"),
+    _capability("capability.automations"),  # campaign session 1, N-049: not on Free
     ADDON_CUSTOM_DOMAIN,
 ]
 BUSINESS_CAPABILITIES = [
