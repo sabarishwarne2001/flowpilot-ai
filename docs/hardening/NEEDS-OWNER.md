@@ -799,7 +799,8 @@ stay per organization.
 - **Enterprise ($799):** 10,000 documents (warn), 100,000 OCR pages (bill; ten seats hold the
   1,000,000 the card used to promise per organization), assistant messages fair use under the token
   ceilings, 1,000 GB storage per seat (bill; was 10,000 GB, see N-046), unlimited workspaces, files
-  and pages up to the platform maximum (100 MB, 500 pages).
+  and pages up to the platform maximum (100 MB, 500 pages); tokens 500M in / 125M out per seat (bill;
+  were 1B / 250M, see N-046).
 - The ladder is monotonic in every row (`tests/scripts/test_plan_ladder_is_monotonic.py`).
 - Existing paid subscribers keep the version they bought (grandfathering): `seed_quota_tiers.py
   --carry-forward` moves a subscriber only to a version that costs the same and takes nothing away,
@@ -814,6 +815,15 @@ cost $230. Enterprise storage is now 1,000 GB per seat (still four times Busines
 at the ceilings, a 63% margin. Typical use is far below the ceilings. Guarded by
 `tests/scripts/test_plan_unit_economics.py`.
 
+**Also decided: at least 50% even when every token goes to the dearest model the platform pays for.**
+The platform's own keys serve Groq's larger models and Gemini (input up to $0.15 and output up to
+$0.30 per million tokens, three times the 20B model). Used to its ceilings on those, a Business seat
+keeps 55%, but an Enterprise seat kept only 44% with 1B input and 250M output tokens included. Enterprise
+now includes 500M input and 125M output tokens per seat (still over three and six times Business);
+tokens past them are billed at the overage rate, which is at least twice the cost (N-048). At the
+dearest model an Enterprise seat keeps about 58%. Guarded by
+`test_a_paid_seat_on_the_dearest_platform_model_still_keeps_half`.
+
 ## N-047 — When a document is charged
 **DECIDED (campaign session 1): when it is accepted, never midway.** A document is charged one
 `document.upload` at upload, in the transaction that creates it, under the usage pool's lock; its
@@ -822,3 +832,21 @@ waiting for OCR (a reservation), and its bytes the storage ceiling. A document t
 is refused at the door with a 402 that says why; an accepted one is never stranded in "processing"
 by a count. Re-processing runs OCR again and is checked the same way before it is queued. A packet's
 split children are carved out of an upload already charged and are not charged again.
+
+## N-048 — What overage bills, and for which provider
+**DECIDED (campaign session 1): overage recovers what the platform pays its suppliers, so it is
+priced for every provider the platform pays and never billed on the customer's own key.**
+- The platform holds keys for Groq and Gemini only (`byok_providers.platform_key_for`); OpenAI,
+  Anthropic, Azure OpenAI and Mistral run only on a customer's own key (BYOK). Gemini had no overage
+  rate, so tokens past an ALLOW_AND_BILL ceiling served by Gemini were logged as unpriced and never
+  billed (F-250). Gemini now has overage rates of $0.50 per million input tokens and $1.50 per
+  million output tokens (at least twice its cost basis, as Groq's already were).
+- Tokens served on the customer's own key still count toward the allowance shown on the usage
+  screens, but bill no overage: the customer already pays their provider, and the seat price covers
+  the platform's service. (Before, each such overage raised a CRITICAL "unpriced" alarm and billed
+  nothing by accident; now it is a decision, and silent.)
+- Every overage rate must be at least twice the provider's cost basis
+  (`tests/scripts/test_every_overage_is_priced.py`); `seed_price_book.py --version auto` publishes the
+  new rates as the next price book version.
+- Reversible: if the owner wants own-key overage billed as a platform fee, add `.overage` rates for
+  those providers and remove the BYOK early return in `llm_metering._record`.
