@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import queue
 import functools
 import json
 import logging
@@ -47,6 +48,8 @@ REPLAY_TTL_SECONDS = 900
 REPLAY_MAX_FRAMES = 20_000
 REPLAY_IDLE_TIMEOUT_SECONDS = 60.0
 REPLAY_POLL_INTERVAL_SECONDS = 0.15
+#: How long sealing a stream's buffer waits for its writer to drain (off the event loop).
+CLOSE_DRAIN_SECONDS = 5.0
 
 _FRAMES_KEY = "stream:frames:{message_id}"
 _STATE_KEY = "stream:state:{message_id}"
@@ -79,14 +82,27 @@ def sse(event: str, data: Any, *, seq: Optional[int] = None) -> bytes:
 
 @dataclass
 class StreamFrameBuffer:
+    """The resumable stream's frames in Redis, written by a per-stream writer thread.
+
+    Campaign session 2. Every token used to be appended to Redis with a blocking round
+    trip on the event loop, so a slow Redis slowed every request on the API (bounded
+    only by the 250 ms Redis timeout per call). The loop now only queues; one thread per
+    stream owns the Redis calls and runs them in order (open, frames, close), so the
+    ARCH-0V proof holds: the state turns CLOSED, with its sequence marker, only after
+    every frame before it is written. A failure disables the buffer the same way as
+    before (sequence marker UNKNOWN, so a resume refuses rather than truncates).
+    """
+
     message_id: uuid.UUID
     enabled: bool = True
     frames_written: int = 0
     _client: Any = field(default=None, repr=False)
+    _queue: "queue.Queue[Any]" = field(default=None, repr=False)  # type: ignore[assignment]
+    _thread: Optional[threading.Thread] = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         try:
-            self._client = get_redis_client()
+            self._client = get_redis_client()  # lazy: no network until a command
         except Exception:  # noqa: BLE001
             self._client = None
 
@@ -96,6 +112,12 @@ class StreamFrameBuffer:
                 "stream.replay_buffer_unavailable",
                 extra={"message_id": str(self.message_id)},
             )
+            return
+        self._queue = queue.Queue(maxsize=REPLAY_MAX_FRAMES + 16)
+        self._thread = threading.Thread(
+            target=self._write_loop, name=f"stream-buffer-{self.message_id}", daemon=True
+        )
+        self._thread.start()
 
     @property
     def _frames_key(self) -> str:
@@ -109,22 +131,22 @@ class StreamFrameBuffer:
     def _lastseq_key(self) -> str:
         return _LASTSEQ_KEY.format(message_id=self.message_id)
 
+    # -- the event loop's side: never touches Redis -------------------------
+
+    def _enqueue(self, op: tuple[Any, ...]) -> None:
+        try:
+            self._queue.put_nowait(op)
+        except queue.Full:
+            # Cannot happen while frames stay under REPLAY_MAX_FRAMES (the queue holds more);
+            # if it ever does, buffering stops and the marker `open` set (UNKNOWN) stands,
+            # so a resume refuses rather than truncates. Never blocks the event loop.
+            self.enabled = False
+            logger.warning("stream.replay_buffer_backlog", extra={"message_id": str(self.message_id)})
+
     def open(self) -> None:
         if not self.enabled:
             return
-        try:
-            pipe = self._client.pipeline()
-            pipe.delete(self._frames_key)
-            # UNKNOWN until close(). A turn that dies mid-flight leaves
-            # this sentinel behind, and a resume against it correctly
-            # refuses rather than claiming the client is current.
-            pipe.set(
-                self._lastseq_key, _LASTSEQ_UNKNOWN, ex=REPLAY_TTL_SECONDS
-            )
-            pipe.set(self._state_key, _STATE_OPEN, ex=REPLAY_TTL_SECONDS)
-            pipe.execute()
-        except Exception:  # noqa: BLE001
-            self._disable("open")
+        self._enqueue(("open",))
 
     def append(self, *, seq: int, event: str, data: Any) -> None:
         if not self.enabled:
@@ -138,7 +160,8 @@ class StreamFrameBuffer:
                     "frames": self.frames_written,
                 },
             )
-            self._disable("overflow")
+            self.enabled = False
+            self._enqueue(("disable", "overflow"))
             return
 
         try:
@@ -147,34 +170,101 @@ class StreamFrameBuffer:
                 ensure_ascii=False,
                 default=str,
             )
-            pipe = self._client.pipeline()
-            pipe.rpush(self._frames_key, record)
-            pipe.expire(self._frames_key, REPLAY_TTL_SECONDS)
-            pipe.execute()
-            self.frames_written += 1
         except Exception:  # noqa: BLE001
-            self._disable("append")
+            self.enabled = False
+            self._enqueue(("disable", "append"))
+            return
+        self._enqueue(("append", record))
+        self.frames_written += 1
 
-    def close(self, *, last_seq: int) -> None:
+    def close(self, *, last_seq: int, timeout: float = CLOSE_DRAIN_SECONDS) -> None:
         """Seal the buffer, recording how many frames the turn emitted.
 
         `last_seq` is what makes a later resume provable. It is written
         in the same pipeline as the state flip so a reader never sees
-        CLOSED without a companion sequence number.
+        CLOSED without a companion sequence number. Queued after every
+        frame, so it is written after them; returns once the writer has
+        drained (bounded by `timeout`). Blocking: the stream calls it from
+        a worker thread, never on the event loop.
         """
-        if not self.enabled:
+        if self._queue is None:
             return
+        if self.enabled:
+            self._enqueue(("close", int(last_seq)))
+        self._queue.put(_BUFFER_DONE)
+        self.flush(timeout)
+
+    def flush(self, timeout: float = CLOSE_DRAIN_SECONDS) -> bool:
+        """Wait until every queued Redis write is done (or `timeout` passes)."""
+        if self._queue is None:
+            return True
+        deadline = time.monotonic() + timeout
+        with self._queue.all_tasks_done:
+            while self._queue.unfinished_tasks:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._queue.all_tasks_done.wait(remaining)
+        return True
+
+    # -- the writer thread: the only code that talks to Redis --------------
+
+    def _write_loop(self) -> None:
+        healthy = True
+        while True:
+            try:
+                op = self._queue.get(timeout=REPLAY_TTL_SECONDS)
+            except queue.Empty:
+                return  # the stream never closed (a crashed request); the keys expire on their own
+            try:
+                if op is _BUFFER_DONE:
+                    return
+                healthy = self._write(op, healthy)
+            finally:
+                self._queue.task_done()
+
+    def _write(self, op: tuple[Any, ...], healthy: bool) -> bool:
+        """One queued operation, on the writer thread. Returns whether the buffer is still healthy."""
+        kind = op[0]
+        if kind == "disable":
+            if healthy:
+                self._disable_now(op[1])
+            return False
+        if not healthy:
+            return False
         try:
             pipe = self._client.pipeline()
-            pipe.set(self._lastseq_key, int(last_seq), ex=REPLAY_TTL_SECONDS)
-            pipe.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
+            if kind == "open":
+                pipe.delete(self._frames_key)
+                # UNKNOWN until close(). A turn that dies mid-flight leaves
+                # this sentinel behind, and a resume against it correctly
+                # refuses rather than claiming the client is current.
+                pipe.set(self._lastseq_key, _LASTSEQ_UNKNOWN, ex=REPLAY_TTL_SECONDS)
+                pipe.set(self._state_key, _STATE_OPEN, ex=REPLAY_TTL_SECONDS)
+            elif kind == "append":
+                pipe.rpush(self._frames_key, op[1])
+                pipe.expire(self._frames_key, REPLAY_TTL_SECONDS)
+            else:  # close
+                pipe.set(self._lastseq_key, op[1], ex=REPLAY_TTL_SECONDS)
+                pipe.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
             pipe.execute()
         except Exception:  # noqa: BLE001
-            self._disable("close")
+            self.enabled = False
+            self._disable_now(kind)
+            return False
+        return True
 
     def _disable(self, phase: str) -> None:
-        if not self.enabled:
+        """Stop buffering and mark the turn unprovable, in order after what was queued."""
+        self.enabled = False
+        writer = self._thread
+        if writer is not None and writer.is_alive() and threading.current_thread() is not writer:
+            self._queue.put(("disable", phase))
+            self.flush()
             return
+        self._disable_now(phase)
+
+    def _disable_now(self, phase: str) -> None:
         self.enabled = False
         logger.warning(
             "stream.replay_buffer_disabled",
@@ -192,6 +282,10 @@ class StreamFrameBuffer:
             self._client.set(self._state_key, _STATE_CLOSED, ex=REPLAY_TTL_SECONDS)
         except Exception:  # noqa: BLE001
             pass
+
+
+#: Ends a buffer's writer thread.
+_BUFFER_DONE = object()
 
 
 @dataclass
@@ -537,7 +631,12 @@ class AssistantStreamService:
             finally:
                 emitted = redactor.emitted_text + redactor.flush()
                 truncated = finish != FinishReason.COMPLETED.value
-                buffer.close(last_seq=seq_counter["value"])
+                # Campaign session 2: sealing waits for the buffer's writer thread to drain,
+                # so it runs off the event loop (shielded: a disconnect must not skip it).
+                with anyio.CancelScope(shield=True):
+                    await anyio.to_thread.run_sync(
+                        functools.partial(buffer.close, last_seq=seq_counter["value"])
+                    )
 
                 sources: list[dict[str, Any]] = []
                 if plan.results:
@@ -613,10 +712,12 @@ class AssistantStreamService:
         state_key = _STATE_KEY.format(message_id=message_id)
         lastseq_key = _LASTSEQ_KEY.format(message_id=message_id)
 
+        def _snapshot() -> tuple[Any, Any, Any]:
+            return client.get(state_key), client.llen(frames_key), client.get(lastseq_key)
+
         try:
-            state = client.get(state_key)
-            buffered = client.llen(frames_key)
-            raw_last_seq = client.get(lastseq_key)
+            # Campaign session 2: Redis reads run off the event loop.
+            state, buffered, raw_last_seq = await anyio.to_thread.run_sync(_snapshot)
         except Exception as exc:  # noqa: BLE001
             raise ReplayUnavailableError(
                 "Stream resumption is unavailable. Refetch the message instead."
@@ -683,9 +784,10 @@ class AssistantStreamService:
                 },
             )
 
+            sealed = False
             while True:
                 try:
-                    records = client.lrange(frames_key, cursor, -1)
+                    records = await anyio.to_thread.run_sync(client.lrange, frames_key, cursor, -1)
                 except Exception:  # noqa: BLE001
                     logger.warning(
                         "stream.replay_read_failed",
@@ -715,13 +817,27 @@ class AssistantStreamService:
 
                     idle_since = time.monotonic()
 
+                if sealed:
+                    # The pass after CLOSED: frames written just before the seal are in.
+                    logger.info(
+                        "stream.replay_completed",
+                        extra={"message_id": str(message_id), "last_seq": cursor},
+                    )
+                    return
+
                 try:
-                    state = client.get(state_key)
+                    state = await anyio.to_thread.run_sync(client.get, state_key)
                 except Exception:  # noqa: BLE001
                     state = None
 
                 if isinstance(state, bytes):
                     state = state.decode("utf-8", "replace")
+
+                if state == _STATE_CLOSED:
+                    # Campaign session 2: read once more. A frame appended between the
+                    # read above and the seal would otherwise be lost to this client.
+                    sealed = True
+                    continue
 
                 if state != _STATE_OPEN:
                     logger.info(
