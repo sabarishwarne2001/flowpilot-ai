@@ -346,15 +346,18 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "max_cost_micros": 10_000_000_000,
                 "overage_policy": "ALLOW_AND_WARN",
             },
+            # Per seat. 1B in / 250M out a seat, all on the dearest model the platform
+            # pays for, took a seat to a 44% margin (N-046); past these, tokens are
+            # billed at the overage rate.
             {
                 "limit_key": "llm.input_token",
-                "max_quantity": "1000000000",
+                "max_quantity": "500000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
             {
                 "limit_key": "llm.output_token",
-                "max_quantity": "250000000",
+                "max_quantity": "125000000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },

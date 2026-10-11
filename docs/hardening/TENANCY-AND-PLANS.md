@@ -106,8 +106,8 @@ Free is per organization, and **one Free allowance is shared by every Free organ
 | OCR pages | 50 (refuse) | 5,000 / seat (bill overage) | 50,000 / seat (bill overage) | 100,000 / seat (bill overage) |
 | Assistant messages | 30 (refuse) | 1,000 / seat (refuse) | 10,000 / seat (warn) | no ceiling |
 | Storage (GB, a hard ceiling only where REFUSE) | 0.25 (refuse) | 25 / seat (bill overage) | 250 / seat (bill overage) | 1,000 / seat (bill overage) |
-| AI input tokens (safety net) | 300,000 (refuse) | 15,000,000 / seat (refuse) | 150,000,000 / seat (bill overage) | 1,000,000,000 / seat (bill overage) |
-| AI output tokens (safety net) | 60,000 (refuse) | 2,000,000 / seat (refuse) | 20,000,000 / seat (refuse) | 250,000,000 / seat (bill overage) |
+| AI input tokens (safety net) | 300,000 (refuse) | 15,000,000 / seat (refuse) | 150,000,000 / seat (bill overage) | 500,000,000 / seat (bill overage) |
+| AI output tokens (safety net) | 60,000 (refuse) | 2,000,000 / seat (refuse) | 20,000,000 / seat (refuse) | 125,000,000 / seat (bill overage) |
 | Usage cost ceiling, USD (safety net) | $1 (refuse) | $25 / seat (refuse) | $500 / seat (refuse) | $10,000 / seat (warn) |
 
 ### 4.3 Per-organization limits
