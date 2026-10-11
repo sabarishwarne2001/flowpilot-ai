@@ -121,6 +121,9 @@ request resolves its organization and plan is `docs/hardening/TENANCY-AND-PLANS.
 - Refunds are not modelled: a Stripe `charge.refunded` is recorded as "credit note not modelled",
   so invoices stay "paid" and RevOps revenue does not subtract refunds (Dodo, as merchant of
   record, owns refunds). Unverified how far this skews the revenue dashboard; needs a decision.
+- Browser-suite isolation: a test that signs a shared persona out everywhere breaks other tests
+  running as that persona in parallel. Session 1 changed `30-auth`'s "session ended elsewhere" to end
+  only its own sign-in (`DELETE /auth/sessions/{sid}`); keep new tests to that pattern.
 - The admin RevOps / COGS endpoints are proven to refuse tenants; their operator behaviour was not
   exercised end to end in session 1.
 
