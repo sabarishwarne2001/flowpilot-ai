@@ -179,6 +179,11 @@ class UploadSession(Base):
     parts_received: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default=text("'{}'::int[]")
     )
+    #: Campaign session 1 (migration s1a1): bytes held per part number, so the
+    #: session is bounded in total (a re-sent part replaces its earlier size).
+    part_sizes: Mapped[dict[str, int]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
     expected_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

@@ -179,7 +179,27 @@ def ingest_validated(
     uploader_id: Optional[uuid.UUID],
     principal: Optional[Principal] = None,
     enqueue_extraction: bool = True,
+    meter_upload: bool = True,
 ) -> IntakeResult:
+    """Store a validated file and create its document, charged to the plan.
+
+    Campaign session 1: every upload path (browser, API key, multipart sessions,
+    batch archives, public document-request links) comes through here, so this is
+    where a document is charged (`plan_admission`): a cheap refusal before the
+    bytes are stored, then the authoritative check and charge under the usage
+    pool's lock in this transaction. `meter_upload=False` only for documents carved
+    out of one already charged (a packet's split children).
+    """
+    from app.services import plan_admission
+
+    if meter_upload:
+        plan_admission.precheck_document(
+            db,
+            organization_id=organization_id,
+            size_bytes=int(validated.size),
+            page_count=validated.page_count,
+        )
+
     driver = get_storage_driver()
     file_id = uuid.uuid4()
     key = tenant_key(
@@ -199,6 +219,16 @@ def ingest_validated(
     )
 
     try:
+        if meter_upload:
+            plan_admission.admit_document(
+                db,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                size_bytes=int(stored.size),
+                page_count=validated.page_count,
+                principal=principal,
+                idempotency_key=f"document.upload:{file_id}",
+            )
         original_filename = fit_filename(validated.original_filename)
         duplicate_of: Optional[WorkItem] = None
         if duplicate_detection_enabled(db, workspace_id=workspace_id):

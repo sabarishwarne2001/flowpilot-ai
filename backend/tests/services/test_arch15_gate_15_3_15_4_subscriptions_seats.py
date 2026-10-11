@@ -533,6 +533,17 @@ class TestGate154Seats:
         assert drift.delta == -2
         assert drift.direction == "OVER_BILLED"
 
+        # Campaign session 1: a paid organization holds the seats it bought, so
+        # unused seats are detected (above) but are not a fault the sweep reports.
+        assert seat_service.report_drift(db) == []
+
+        # Members past the purchased seats are: reported and a re-assert requested.
+        for _ in range(4):
+            add_member(db, organization)
+        db.flush()
+        from app.workers.handlers import register_all
+
+        register_all()
         reported = seat_service.report_drift(db)
         db.flush()
         assert [d.organization_id for d in reported] == [organization.id]
@@ -543,7 +554,7 @@ class TestGate154Seats:
             )
         ).scalar_one()
         assert event.payload["reason"] == "drift_detected"
-        assert event.payload["drift"]["delta"] == -2
+        assert event.payload["drift"]["delta"] == 2
 
     def test_under_billing_drift_is_named_as_such(self, db, gateway, billing_org):
         organization = billing_org["organization"]

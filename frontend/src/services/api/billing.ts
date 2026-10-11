@@ -7,8 +7,10 @@ import type {
   InvoiceDetailResponse,
   InvoiceListResponse,
   InvoiceReproductionResponse,
+  PlanAllowanceResponse,
   PlanListResponse,
   PortalSessionRequest,
+  SeatChangeRequest,
   SeatSyncRequest,
   SubscriptionStateResponse,
   UsageGranularity,
@@ -78,6 +80,8 @@ export const BILLING_ENDPOINTS = {
     `/workspaces/${ws(workspaceId)}/usage/summary`,
   workspaceUsageSeries: (workspaceId: string) =>
     `/workspaces/${ws(workspaceId)}/usage/series`,
+  planAllowance: (workspaceId: string) =>
+    `/workspaces/${ws(workspaceId)}/usage/plan-allowance`,
 } as const;
 
 export const getPlans = async (
@@ -119,6 +123,11 @@ export interface BillingAccessSummary {
   readonly state: "ACTIVE" | "GRACE" | "RESTRICTED";
   readonly is_read_only: boolean;
   readonly grace_ends_at: string | null;
+  /**
+   * Campaign session 1: who can change the plan (the owners), by name, so an
+   * "ask someone" screen names them.
+   */
+  readonly plan_contacts?: readonly string[];
 }
 
 export const getBillingAccessSummary = async (
@@ -272,6 +281,27 @@ export const syncSeats = async (
   payload: SeatSyncRequest = {},
 ): Promise<SubscriptionStateResponse> => {
   const response = await apiClient.post<SubscriptionStateResponse>(
+    BILLING_ENDPOINTS.seats(organizationId),
+    payload,
+  );
+  return response.data;
+};
+
+/** Campaign session 1 — the plan's allowance, for any member of the workspace. */
+export const getPlanAllowance = async (workspaceId: string): Promise<PlanAllowanceResponse> => {
+  const { data } = await apiClient.get<PlanAllowanceResponse>(BILLING_ENDPOINTS.planAllowance(workspaceId));
+  return data;
+};
+
+/**
+ * Campaign session 1 — buy or release seats on the paid subscription. The caller
+ * shows the price first (`fetchSeatPriceBook`) and sends the unit price it showed.
+ */
+export const changeSeats = async (
+  organizationId: string,
+  payload: SeatChangeRequest,
+): Promise<SubscriptionStateResponse> => {
+  const response = await apiClient.put<SubscriptionStateResponse>(
     BILLING_ENDPOINTS.seats(organizationId),
     payload,
   );

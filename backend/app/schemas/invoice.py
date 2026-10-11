@@ -177,6 +177,32 @@ class SubscriptionStateResponse(BaseModel):
         )
     )
     access_state: str
+    # Campaign session 1: what the seat check enforces, so the page and the
+    # server cannot disagree about whether someone can be added.
+    plan_key: Optional[str] = None
+    seat_capacity: Optional[int] = Field(
+        default=None,
+        description="Seats the organization holds: the plan's on Free, the purchased quantity on a paid plan. Null: no limit.",
+    )
+    seat_capacity_source: str = "UNLIMITED"
+    seats_pending_invitations: int = 0
+    seats_used: int = Field(default=0, description="Active members plus pending invitations.")
+    seats_available: Optional[int] = None
+    can_manage_seats: bool = False
+
+
+class SeatChangeRequest(BaseModel):
+    """Campaign session 1. Buy or release seats on the live paid subscription."""
+
+    seats: int = Field(..., ge=1, le=10_000, description="The seat quantity to hold after the change.")
+    confirmed_unit_price_micros: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The per-seat price the person was shown (GET .../billing/price-book/seat). "
+            "A purchase at any other price is refused (409 SEAT_PRICE_CHANGED)."
+        ),
+    )
 
 
 class BillingAccessResponse(BaseModel):
@@ -227,6 +253,11 @@ class BillingAccessSummaryResponse(BaseModel):
         description="When the grace window closes, if there is one. "
         "Null in ACTIVE and in RESTRICTED, where it has already "
         "closed.",
+    )
+    # Campaign session 1 (E.4): every "ask someone" screen names who to ask.
+    plan_contacts: list[str] = Field(
+        default_factory=list,
+        description="Who can change the plan, by name: the organization owners (at most three).",
     )
 
 

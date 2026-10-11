@@ -53,13 +53,25 @@ export type MeterKey =
   | "ocr.page"
   | "storage.gb_month"
   | "api.request"
-  | "embedding.token";
+  | "embedding.token"
+  // Campaign session 1: the counts a customer plans in, and the static plan limits.
+  | "document.upload"
+  | "assistant.message"
+  | "limit.seats"
+  | "limit.workspaces"
+  | "limit.file_size_mb"
+  | "limit.pages_per_document";
 
 interface MeterDisplay {
   /** Noun phrase, sentence case, no leading count. */
   readonly label: string;
   /** How the quantity is rendered. */
-  readonly unit: "tokens" | "pages" | "gigabytes" | "requests" | "count" | "none";
+  readonly unit: "tokens" | "pages" | "gigabytes" | "requests" | "count" | "none" | "megabytes";
+  /**
+   * Campaign session 1. A static plan limit (`limit.*`): a ceiling at any moment,
+   * per organization, never per period and never per seat. `phrase` renders it.
+   */
+  readonly staticLimit?: (value: number) => string;
   /**
    * Meters that describe a capability rather than a quantity. Their presence
    * IS the grant, so a count would be meaningless.
@@ -109,6 +121,34 @@ export const KNOWN_METERS: Record<MeterKey, MeterDisplay> = {
     label: "Search indexing",
     unit: "tokens",
   },
+  "document.upload": {
+    label: "Documents uploaded",
+    unit: "count",
+  },
+  "assistant.message": {
+    label: "Assistant messages",
+    unit: "count",
+  },
+  "limit.seats": {
+    label: "Seats",
+    unit: "count",
+    staticLimit: (value) => `${value.toLocaleString()} ${value === 1 ? "seat" : "seats"} (owner included)`,
+  },
+  "limit.workspaces": {
+    label: "Workspaces",
+    unit: "count",
+    staticLimit: (value) => `${value.toLocaleString()} ${value === 1 ? "workspace" : "workspaces"}`,
+  },
+  "limit.file_size_mb": {
+    label: "File size",
+    unit: "megabytes",
+    staticLimit: (value) => `Files up to ${value.toLocaleString()} MB`,
+  },
+  "limit.pages_per_document": {
+    label: "Pages per document",
+    unit: "pages",
+    staticLimit: (value) => `Documents up to ${value.toLocaleString()} pages`,
+  },
   "addon.custom_domain": {
     label: "Custom vanity domain",
     unit: "none",
@@ -152,7 +192,10 @@ function formatQuantity(unit: MeterDisplay["unit"], value: number): string {
     case "tokens":
       return formatTokenCount(value);
     case "gigabytes":
-      return `${value.toLocaleString()} GB`;
+      // 0.25 GB reads better as 256 MB (GB = 1,024 MB, as the server counts).
+      return value < 1 ? `${Math.round(value * 1024).toLocaleString()} MB` : `${value.toLocaleString()} GB`;
+    case "megabytes":
+      return `${value.toLocaleString()} MB`;
     case "pages":
     case "requests":
     case "count":
@@ -243,6 +286,7 @@ export function describeEntitlement(
   eventType: string,
   limitQuantity: number | null,
   period: string,
+  options: { readonly perSeat?: boolean } = {},
 ): EntitlementLine | null {
   const known = (KNOWN_METERS as Record<string, MeterDisplay | undefined>)[
     eventType
@@ -270,13 +314,46 @@ export function describeEntitlement(
     return { key: eventType, text: known.label };
   }
 
+  if (known.staticLimit) {
+    return limitQuantity === null ? null : { key: eventType, text: known.staticLimit(limitQuantity) };
+  }
+
   if (limitQuantity === null) {
     return { key: eventType, text: `Unlimited ${inSentence(known.label)}` };
   }
 
   const quantity = formatQuantity(known.unit, limitQuantity);
+  // Campaign session 1: a paid plan's allowance is per seat, pooled across the organization.
+  const scope = options.perSeat ? ` / ${periodLabel} per seat` : ` / ${periodLabel}`;
+  if (known.unit === "gigabytes") {
+    return { key: eventType, text: `${quantity} ${inSentence(known.label)}${options.perSeat ? " per seat" : ""}` };
+  }
   return {
     key: eventType,
-    text: `${quantity} ${inSentence(known.label)} / ${periodLabel}`,
+    text: `${quantity} ${inSentence(known.label)}${scope}`,
   };
+}
+
+/**
+ * Campaign session 1. The order a plan card lists allowances in: what a customer
+ * plans by first (documents, pages, messages, people, workspaces, file size,
+ * storage), the platform's token ceilings last.
+ */
+export const ENTITLEMENT_ORDER: readonly string[] = [
+  "document.upload",
+  "ocr.page",
+  "assistant.message",
+  "limit.seats",
+  "limit.workspaces",
+  "limit.file_size_mb",
+  "limit.pages_per_document",
+  "storage.gb_month",
+  "llm.platform_key",
+  "llm.input_token",
+  "llm.output_token",
+];
+
+export function entitlementRank(eventType: string): number {
+  const index = ENTITLEMENT_ORDER.indexOf(eventType);
+  return index === -1 ? ENTITLEMENT_ORDER.length : index;
 }

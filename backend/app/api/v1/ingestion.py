@@ -64,7 +64,7 @@ from app.schemas.ingestion import (
     UploadSessionCreateRequest,
     UploadSessionResponse,
 )
-from app.services import audit_service, document_intake_service, file_validation_service
+from app.services import audit_service, document_intake_service, file_validation_service, plan_admission
 from app.services.ingestion import (
     batch_service,
     bulk_service,
@@ -90,6 +90,8 @@ def _fail(exc: Any, default_status: int = status.HTTP_400_BAD_REQUEST) -> HTTPEx
     code = getattr(exc, "code", None)
     if code in {"SESSION_NOT_FOUND", "BATCH_NOT_FOUND", "ITEM_NOT_FOUND", "PRESET_NOT_FOUND"}:
         return HTTPException(status.HTTP_404_NOT_FOUND, str(getattr(exc, "message", exc)))
+    if code == "PART_BEYOND_FILE_SIZE":
+        return HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(getattr(exc, "message", exc)))
     return HTTPException(default_status, str(getattr(exc, "message", exc)))
 
 
@@ -106,6 +108,12 @@ def create_upload_session(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> UploadSessionResponse:
+    # Campaign session 1: a declared size past the plan's file size is refused
+    # before any part is stored.
+    if payload.total_size is not None:
+        plan_admission.assert_file_fits_plan(
+            db, organization_id=context.organization_id, size_bytes=payload.total_size, page_count=None
+        )
     try:
         session = upload_session_service.create(
             db,
@@ -192,6 +200,12 @@ async def put_part(
     )
 
 
+def _organization_of(db: Session, workspace_id: uuid.UUID) -> uuid.UUID:
+    from app.models.workspace import Workspace
+
+    return db.execute(select(Workspace.organization_id).where(Workspace.id == workspace_id)).scalar_one()
+
+
 def _store_part(
     db: Session,
     *,
@@ -207,6 +221,7 @@ def _store_part(
             session_id=session_id,
             part_number=part_number,
             data=data,
+            max_total_bytes=plan_admission.max_upload_bytes(db, organization_id=_organization_of(db, workspace_id)),
         )
     except upload_session_service.UploadSessionError as exc:
         db.rollback()

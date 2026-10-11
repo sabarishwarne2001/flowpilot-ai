@@ -131,6 +131,11 @@ def create_workspace_in_organization(
             "You do not have permission to create workspaces in this organization."
         )
 
+    # Campaign session 1: the plan's workspaces (Free 1, Developer 3, Business 20).
+    from app.services import plan_admission
+
+    plan_admission.assert_workspace_available(db, organization_id=organization.id)
+
     existing_count = workspace_crud.count_workspaces_for_organization(
         db,
         organization_id=organization.id,
@@ -448,6 +453,11 @@ def restore_workspace(
         raise WorkspacePermissionDeniedError(
             f"This workspace is {workspace.status.value.lower()}; only an archived workspace can be restored."
         )
+    # Campaign session 1: restoring takes a workspace of the plan's allowance too.
+    from app.services import plan_admission
+
+    plan_admission.assert_workspace_available(db, organization_id=workspace.organization_id)
+
     active_count = workspace_crud.count_workspaces_for_organization(
         db,
         organization_id=workspace.organization_id,

@@ -19,6 +19,7 @@ from app.models.identity import (
     DirectoryIdentity, EnterpriseIdpConfig, ProvisionedVia, ScimApiKey,
     ScimGroup, ScimGroupMember,
 )
+from app.core.exceptions import SeatLimitExceededError
 from app.services.identity import deprovision_service, jit_service
 from app.services.identity._integration import (
     TBL_ORG_MEMBERS, TBL_USERS, commit_and_refresh, get_settings,
@@ -316,6 +317,15 @@ def get_user(db, *, key: ScimApiKey, resource_id) -> DirectoryIdentity:
     return identity
 
 
+def _no_seat() -> ScimError:
+    """Campaign session 1. The organization's seats are full: a SCIM error, not a crash."""
+    return ScimError(
+        403,
+        "The organization has no seat available for this user. Add seats in FlowPilot "
+        "(Billing -> Seats) or upgrade the plan, then retry.",
+    )
+
+
 def create_user(db, *, key: ScimApiKey, payload: dict) -> DirectoryIdentity:
     config = db.get(EnterpriseIdpConfig, key.idp_config_id)
     if config is None:
@@ -349,9 +359,14 @@ def create_user(db, *, key: ScimApiKey, payload: dict) -> DirectoryIdentity:
                 if isinstance(v, (str, int, float)):
                     attributes[k] = [str(v)]
 
-    result = jit_service.provision_or_link(
-        db, config=config, external_id=str(external_id), email=email,
-        attributes=attributes, provisioned_via=ProvisionedVia.SCIM.value)
+    try:
+        result = jit_service.provision_or_link(
+            db, config=config, external_id=str(external_id), email=email,
+            attributes=attributes, provisioned_via=ProvisionedVia.SCIM.value)
+    except IdentityRefused as exc:
+        if exc.outcome == "REJECTED_SEAT_CAP":
+            raise _no_seat() from exc
+        raise
 
     if payload.get("active") is False:
         deprovision_service.deprovision_member(
@@ -593,9 +608,13 @@ def patch_user(db, *, key: ScimApiKey, resource_id, payload: dict) -> DirectoryI
         config = db.get(EnterpriseIdpConfig, key.idp_config_id)
         role = jit_service.resolve_org_role(
             db, config=config, attributes=identity.attributes or {})
-        deprovision_service.reactivate_member(
-            db, organization_id=key.organization_id, user_id=identity.user_id,
-            role=role, principal=principal, identity=identity, commit=False)
+        try:
+            deprovision_service.reactivate_member(
+                db, organization_id=key.organization_id, user_id=identity.user_id,
+                role=role, principal=principal, identity=identity, commit=False)
+        except SeatLimitExceededError as exc:
+            db.rollback()
+            raise _no_seat() from exc
 
     identity.last_synced_at = utcnow()
     db.commit()

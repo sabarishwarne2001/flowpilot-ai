@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 # ARCH30-T4F:access-summary-deps-import — A5.
 from app.api.deps import (
     OrganizationContext,
-    RequireOrgMember,
+    RequireAnyOrgRole,
     RequireOrgOwner,
     RequireOrgRole,
     get_db,
@@ -35,6 +35,7 @@ from app.schemas.invoice import (
     InvoiceReproductionResponse,
     InvoiceSummary,
     PortalSessionRequest,
+    SeatChangeRequest,
     SeatSyncRequest,
     SubscriptionStateResponse,
 )
@@ -247,6 +248,10 @@ def get_subscription_state(
     )
     drift = seat_service.detect_drift(db, organization_id=context.organization_id)
 
+    from app.core.organization_permissions import can_manage_seats
+    from app.services import seat_capacity_service
+
+    capacity = seat_capacity_service.seat_capacity(db, organization_id=context.organization_id)
     return SubscriptionStateResponse(
         organization_id=context.organization_id,
         has_billing_account=account is not None,
@@ -264,6 +269,13 @@ def get_subscription_state(
         access_state=dunning_service.access_state(
             db, organization_id=context.organization_id
         ).value,
+        plan_key=capacity.plan_key,
+        seat_capacity=capacity.capacity,
+        seat_capacity_source=capacity.source,
+        seats_pending_invitations=capacity.pending_invitations,
+        seats_used=capacity.used,
+        seats_available=capacity.available,
+        can_manage_seats=can_manage_seats(context.role) and capacity.can_purchase,
     )
 
 
@@ -311,7 +323,9 @@ def get_billing_access(
 )
 def get_billing_access_summary(
     organization_id: uuid.UUID,
-    context: OrganizationContext = Depends(RequireOrgMember),
+    # F-247: every role, BILLING included. The "ask <name> to change the plan" line
+    # reads this on any page with a plan lock, whoever is looking at it.
+    context: OrganizationContext = Depends(RequireAnyOrgRole),
     db: Session = Depends(get_db),
 ) -> BillingAccessSummaryResponse:
     """The member-readable half of `/billing/access`.
@@ -356,10 +370,13 @@ def get_billing_access_summary(
         summary_state = "ACTIVE"
         exposed_grace = None
 
+    from app.services import plan_admission
+
     return BillingAccessSummaryResponse(
         state=summary_state,  # type: ignore[arg-type]
         is_read_only=not state.writes_allowed,
         grace_ends_at=exposed_grace,
+        plan_contacts=plan_admission.plan_contacts(db, organization_id=context.organization_id),
     )
 
 
@@ -529,6 +546,11 @@ def create_checkout_session(
             cancel_url=payload.cancel_url,
             **({"discount_code": prepared.discount_code} if prepared is not None and prepared.discount_code else {}),
         )
+    except portal_service.PaidSubscriptionActiveError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "PAID_SUBSCRIPTION_ACTIVE", "message": str(exc), "details": {}},
+        ) from exc
     except CheckoutConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -730,7 +752,113 @@ def sync_seats(
     return get_subscription_state(organization_id, context=context, db=db)
 
 
-__all__ = ["RequireOrgBillingReader", "router"]
+#: Campaign session 1. Who may buy or release seats: owners, admins and billing
+#: managers (`can_manage_seats`).
+RequireSeatManager = RequireOrgRole(
+    [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.BILLING]
+)
+
+
+def _gateway_refusal(exc: Exception, organization_id: uuid.UUID) -> HTTPException:
+    """F-213's answers for a gateway that is unconfigured, unreachable or refusing."""
+    from app.services.billing import payment_gateway as _payment_gateway
+    from app.services.billing import stripe_gateway as _stripe
+
+    if isinstance(exc, (_stripe.StripeNotConfiguredError, GatewayNotConfiguredError)):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_NOT_CONFIGURED",
+                "message": "Billing is not configured in this environment, so seats cannot be changed.",
+                "details": {},
+            },
+        )
+    if isinstance(exc, (_stripe.StripeTransientError, _payment_gateway.GatewayTransientError)):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BILLING_GATEWAY_UNAVAILABLE",
+                "message": "The payment provider could not be reached. Your seats are unchanged; please try again.",
+                "details": {},
+            },
+        )
+    logger.warning(
+        "billing.seat_change_refused",
+        extra={"organization_id": str(organization_id), "error": type(exc).__name__},
+    )
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "BILLING_GATEWAY_REFUSED",
+            "message": "The payment provider refused the seat change. Your seats are unchanged.",
+            "details": {"reason": str(exc)[:300]},
+        },
+    )
+
+
+@router.put(
+    "/organizations/{organization_id}/billing/seats",
+    response_model=SubscriptionStateResponse,
+    summary="Buy or release seats on the paid subscription (owner, admin, billing)",
+)
+def change_seats(
+    organization_id: uuid.UUID,
+    payload: SeatChangeRequest,
+    context: OrganizationContext = Depends(RequireSeatManager),
+    db: Session = Depends(get_db),
+) -> SubscriptionStateResponse:
+    """Campaign session 1. Set the purchased seat quantity; the gateway prorates.
+
+    The seat check (`seat_capacity_service`) refuses a new member past the purchased
+    seats; this is how a seat is added. The caller saw the price first
+    (`GET .../billing/price-book/seat`) and sends the unit price it showed: a different
+    price is refused, never charged. Releasing never goes below members plus pending
+    invitations.
+    """
+    from app.services.billing import payment_gateway as _payment_gateway
+    from app.services.billing import stripe_gateway as _stripe
+
+    # NoPaidSubscriptionError, SeatsInUseError and SeatPriceChangedError are domain
+    # errors: 409 with their code and details through the global handler.
+    refusals = (
+        seat_service.NoPaidSubscriptionError,
+        seat_service.SeatsInUseError,
+        seat_service.SeatPriceChangedError,
+    )
+    try:
+        result = seat_service.set_purchased_seats(
+            db,
+            organization_id=context.organization_id,
+            seats=payload.seats,
+            confirmed_unit_price_micros=payload.confirmed_unit_price_micros,
+        )
+    except refusals:
+        raise
+    except (
+        _stripe.StripeNotConfiguredError,
+        GatewayNotConfiguredError,
+        _stripe.StripeTransientError,
+        _payment_gateway.GatewayTransientError,
+        _stripe.StripeGatewayError,
+        _payment_gateway.PaymentGatewayError,
+        seat_service.SeatError,
+    ) as exc:
+        raise _gateway_refusal(exc, organization_id) from exc
+
+    if result.get("outcome") != "UNCHANGED":
+        audit_service.record(
+            db,
+            organization_id=context.organization_id,
+            actor_id=context.user_id,
+            resource_type=AuditResourceType.SUBSCRIPTION,
+            action=AuditAction.SEATS_CHANGED,
+            details=result,
+        )
+    db.commit()
+    return get_subscription_state(organization_id, context=context, db=db)
+
+
+__all__ = ["RequireOrgBillingReader", "RequireSeatManager", "router"]
 
 # ---------------------------------------------------------------------------
 # ARCH50-S1:tenant-revops. A promo code quote before checkout, and the

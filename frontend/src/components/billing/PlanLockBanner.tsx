@@ -7,6 +7,7 @@ import type { CapabilityKey } from "@/constants/capabilities";
 import { useGrantedCapabilities } from "@/hooks/useGrantedCapabilities";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { organizationBillingPath } from "@/routes/tenantPaths";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 interface PlanLockBannerProps {
   readonly capability: CapabilityKey;
@@ -53,7 +54,7 @@ export const PlanLockBanner: React.FC<PlanLockBannerProps> = ({ capability, feat
           View plans
         </Link>
       ) : (
-        <p className="text-xs text-muted-foreground">Ask an organization owner to upgrade.</p>
+        <p className="text-xs text-muted-foreground"><AskPlanOwners toDo="upgrade" /></p>
       )}
     </section>
   );

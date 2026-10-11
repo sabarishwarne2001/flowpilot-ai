@@ -16,6 +16,7 @@ import { workspacePath } from "@/routes/tenantPaths";
 import { ApiError } from "@/services/api/client";
 import { getMeContext } from "@/services/api/me";
 import { createWorkspace } from "@/services/api/organization";
+import ViewPlansAction from "@/components/billing/ViewPlansAction";
 import { useAuthStore } from "@/store/useAuthStore";
 
 /**
@@ -96,6 +97,7 @@ export const CreateWorkspacePage: React.FC = () => {
     (candidate) => candidate.organization_slug === orgSlug,
   );
 
+  const [planLimit, setPlanLimit] = useState<string | null>(null);
   const { mutateAsync: provision, isPending } = useMutation({
     mutationFn: (data: CreateWorkspaceFormData) =>
       createWorkspace(organization?.organization_id as string, {
@@ -127,6 +129,12 @@ export const CreateWorkspacePage: React.FC = () => {
         replace: true,
       });
     } catch (error) {
+      // Campaign session 1: the plan's workspaces are used up. A card that stays,
+      // with the way on (upgrade, or who to ask), rather than a toast that goes.
+      if (error instanceof ApiError && error.code === "PLAN_LIMIT_EXCEEDED") {
+        setPlanLimit(error.message);
+        return;
+      }
       toast.error(
         error instanceof ApiError
           ? error.message
@@ -192,6 +200,13 @@ export const CreateWorkspacePage: React.FC = () => {
             </p>
           </div>
         </header>
+
+        {planLimit && (
+          <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            <p className="font-medium text-foreground">{planLimit}</p>
+            <ViewPlansAction organizationSlug={organization.organization_slug} organizationRole={organization.role} />
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
           <div className="space-y-2">

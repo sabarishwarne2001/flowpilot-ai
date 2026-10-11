@@ -125,6 +125,7 @@ __all__ = [
     "BYOK_CAPABILITY",
     # PHASE1:capability-batch-dispatch-export
     "BATCH_DISPATCH_CAPABILITY",
+    "AUTOMATIONS_CAPABILITY",
     # PHASE2:capability-truthmesh-export
     "TRUTHMESH_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
@@ -284,6 +285,13 @@ TABLE_INTELLIGENCE_CAPABILITY: str = "capability.table_intelligence"
 #: and verification stored; packages are zip and hash work on the LIGHT worker.
 BATCH_DISPATCH_CAPABILITY: str = "capability.batch_dispatch"
 
+#: Campaign session 1 (decision N-049). Automation rules: building, changing, testing and
+#: running them (marketplace workflows install as rules). Every action is work the
+#: platform does on the customer's behalf (emails, webhooks, AI extraction, review
+#: items), so Free has none; Developer and up. After a downgrade rules can still be
+#: listed, switched off and deleted (N-003), and the worker no longer runs them.
+AUTOMATIONS_CAPABILITY: str = "capability.automations"
+
 #: PHASE2:capability-truthmesh. TruthMesh, the cross-document digital twin: typed links between a
 #: tenant's documents (identifiers, parties, semantic similarity), relation-aware conflicts across
 #: them, what-if ripple simulation and the executive cockpit. ONE key. Not metered: it reads stored
@@ -379,6 +387,7 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     EGRESS_LOCKDOWN_CAPABILITY,  # ARCH50-S1:capability-keys
     BYOK_CAPABILITY,  # N-021:capability-keys
     BATCH_DISPATCH_CAPABILITY,  # PHASE1:capability-keys
+    AUTOMATIONS_CAPABILITY,  # campaign session 1, N-049
     TRUTHMESH_CAPABILITY,  # PHASE2:capability-keys
 )
 
@@ -518,6 +527,14 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "Table intelligence: complex, multi-page and rotated tables extracted "
             "into typed cells with confidence, arithmetic validation and "
             "CSV/XLSX export. Bundled into a tier."
+        ),
+    ),
+    # Campaign session 1, N-049
+    Entitlement(
+        name=AUTOMATIONS_CAPABILITY,
+        description=(
+            "Automation rules and marketplace workflows: building, changing, testing "
+            "and running them. Bundled into a tier (Developer and up)."
         ),
     ),
     # PHASE1:capability-batch-dispatch-entitlement

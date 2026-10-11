@@ -42,6 +42,7 @@ import {
 import type { MemoryMode } from "@/types/extractionMemory";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 import { CapabilityLoading } from "@/components/common/CapabilityLoading";
+import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 const MODES: ReadonlyArray<{ readonly mode: MemoryMode; readonly label: string; readonly help: string }> = [
   { mode: "OFF", label: "Off", help: "Nothing is learned and nothing is applied." },
@@ -113,7 +114,7 @@ const LockedView: React.FC<{ readonly workspaceId: string; readonly canChangePla
       <p className={HINT}>
         {canChangePlan
           ? "It's included on the Business and Enterprise plans. Change your plan to turn it on."
-          : "It's included on the Business and Enterprise plans. Ask an organization owner to change your plan."}
+          : <>It&apos;s included on the Business and Enterprise plans. <AskPlanOwners /></>}
       </p>
       <ViewPlansAction />
     </section>

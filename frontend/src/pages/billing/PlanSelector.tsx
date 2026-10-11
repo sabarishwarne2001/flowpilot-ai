@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createCheckoutSession, getPlans } from "@/services/api/billing";
+import { createCheckoutSession, createPortalSession, getPlans } from "@/services/api/billing";
 // ARCH50-S2:plan-selector-interval — annual billing, INR and promo codes.
 import { quotePromoCode } from "@/services/api/revops";
 import { REVOPS_MESSAGES, money, type PromoQuote, type RevOpsCode } from "@/types/revops";
@@ -11,7 +11,7 @@ import { ApiError } from "@/services/api/client";
 import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
 import type { PlanOption, PlanPriceOption } from "@/types/billing";
-import { describeEntitlement } from "@/types/planEntitlements";
+import { describeEntitlement, entitlementRank } from "@/types/planEntitlements";
 import {
   CORE_FEATURES,
   PLAN_FEATURE_LABELS,
@@ -26,6 +26,8 @@ interface PlanSelectorProps {
   readonly canManageBilling: boolean;
   readonly hasSubscription: boolean;
   readonly currentSeats: number;
+  /** Campaign session 1: members plus pending invitations; checkout cannot sell fewer. */
+  readonly minimumSeats?: number;
 }
 
 const isFreePlan = (plan: PlanOption): boolean => plan.is_priced && plan.unit_amount === 0;
@@ -56,10 +58,12 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   canManageBilling,
   hasSubscription,
   currentSeats,
+  minimumSeats = 1,
 }) => {
   const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [seats, setSeats] = useState<number>(Math.max(currentSeats, 1));
+  const floor = Math.max(1, minimumSeats);
+  const [seats, setSeats] = useState<number>(Math.max(currentSeats, floor));
   const [confirming, setConfirming] = useState(false);
   const [interval, setBillingInterval] = useState<"month" | "year">("month");
   const [currency, setCurrency] = useState<"USD" | "INR">("USD");
@@ -101,6 +105,20 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
       setPromoQuote(null);
       const code = error instanceof ApiError ? error.code : undefined;
       setPromoError((code && REVOPS_MESSAGES[code as RevOpsCode]) || "That promo code can't be used.");
+    },
+  });
+
+  // Campaign session 1 (F-253): a subscriber changes plans on the live subscription, in
+  // the portal; a second checkout would create (and charge) a second subscription.
+  const portal = useMutation({
+    mutationFn: () => createPortalSession(organizationId, { return_url: window.location.href }),
+    onSuccess: (session) => {
+      window.location.assign(session.url);
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "Couldn't open the billing portal. Try again in a moment.",
+      );
     },
   });
 
@@ -195,7 +213,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   const selectedBlocked = selected !== null && !selectedIsFree && !checkoutAvailable;
 
   return (
-    <section className="rounded-lg border border-border bg-card">
+    <section id="plans" className="scroll-mt-4 rounded-lg border border-border bg-card">
       <header className="border-b border-border px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">
@@ -214,7 +232,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {hasSubscription
-            ? "Switching to a paid plan starts a new checkout; your current plan stays active until it completes. To move to Free, cancel in the billing portal."
+            ? "Plans are changed in the billing portal: it moves this subscription and prorates the difference, so nothing is charged twice. To move to Free, cancel there."
             : "Free starts immediately. Paid plans open a secure checkout."}
         </p>
         {hasPriceBooks && (
@@ -367,9 +385,13 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <button
                       type="button"
                       data-testid={`plan-cta-${plan.key}`}
-                      disabled={!checkoutAvailable}
+                      disabled={hasSubscription ? !canManageBilling || portal.isPending : !checkoutAvailable}
                       onClick={(event) => {
                         event.preventDefault();
+                        if (hasSubscription) {
+                          portal.mutate();
+                          return;
+                        }
                         if (plan.key !== selectedKey) {
                           setPromoQuote(null);
                           setPromoError(null);
@@ -383,6 +405,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       {(TIER_RANK[plan.key] ?? 0) > (TIER_RANK[currentKey ?? "free"] ?? 0)
                         ? `Upgrade to ${plan.display_name}`
                         : `Switch to ${plan.display_name}`}
+                      {hasSubscription ? " in the billing portal" : null}
                     </button>
                   ) : null}
                 </div>
@@ -402,17 +425,18 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               <input
                 id="seat-count"
                 type="number"
-                min={1}
+                min={floor}
                 max={10000}
                 value={seats}
                 onChange={(event) => {
                   const next = Number.parseInt(event.target.value, 10);
-                  setSeats(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), 10000));
+                  setSeats(Number.isNaN(next) ? floor : Math.min(Math.max(next, floor), 10000));
                   setConfirming(false);
                 }}
                 className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <span className="text-xs text-muted-foreground">
+                {floor > 1 ? `At least ${floor}: everyone in the organization and pending invitations hold a seat. ` : ""}
                 You&apos;ll see the total at checkout, before you pay.
               </span>
             </div>
@@ -497,9 +521,17 @@ const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: 
   const own = featuresOf(plan);
   const inherited = previous ? featuresOf(previous) : new Set<string>();
   const added = PLAN_FEATURE_ORDER.filter((key) => own.has(key) && !inherited.has(key));
-  const meters = plan.entitlements
+  // Campaign session 1: a paid plan's metered allowances are per seat; the counts a
+  // customer plans by come first, and every allowance is listed (they are promises).
+  const perSeat = (plan.unit_amount ?? 0) > 0;
+  const meters = [...plan.entitlements]
     .filter((entry) => !isPlanFeatureKey(entry.event_type))
-    .map((entry) => describeEntitlement(entry.event_type, entry.limit_quantity, entry.period))
+    .sort((a, b) => entitlementRank(a.event_type) - entitlementRank(b.event_type))
+    .map((entry) =>
+      describeEntitlement(entry.event_type, entry.limit_quantity, entry.period, {
+        perSeat: perSeat && !entry.event_type.startsWith("limit."),
+      }),
+    )
     .filter((line): line is NonNullable<typeof line> => line !== null);
 
   return (
@@ -526,7 +558,7 @@ const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: 
       </ul>
       {meters.length > 0 ? (
         <ul className="space-y-0.5" aria-label={`${plan.display_name} allowances`}>
-          {meters.slice(0, 6).map((line) => (
+          {meters.map((line) => (
             <li key={line.key} className="text-[11px] text-muted-foreground">
               {line.text}
             </li>

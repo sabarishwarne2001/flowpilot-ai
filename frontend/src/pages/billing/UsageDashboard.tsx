@@ -15,7 +15,7 @@ import {
   parseQuantity,
 } from "@/types/billing";
 import type { UsageGranularity, UsageLimit } from "@/types/billing";
-import { meterLabel, overageLabel, unitFor } from "@/types/planEntitlements";
+import { entitlementRank, meterLabel, overageLabel, unitFor } from "@/types/planEntitlements";
 
 const GRANULARITIES: readonly UsageGranularity[] = ["HOUR", "DAY", "MONTH"];
 
@@ -165,7 +165,9 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({
           </p>
         ) : (
           <ul className="mt-2 space-y-2">
-            {limitsQuery.data?.limits.map((limit) => (
+            {[...(limitsQuery.data?.limits ?? [])]
+              .sort((a, b) => entitlementRank(a.limit_key) - entitlementRank(b.limit_key))
+              .map((limit) => (
               <LimitRow
                 key={`${limit.limit_key}:${limit.period}`}
                 limit={limit}
@@ -337,12 +339,31 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
         )}
       </div>
 
-      {over && (
-        <p className="mt-1.5 text-xs font-medium text-destructive">
-          {limit.hard_stop
-            ? "Limit reached. Requests against this limit are being refused."
-            : "Over the included amount. Overage applies."}
+      {near && (
+        <p className="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          {Math.round((utilisation ?? 0) * 100)}% used.
+          {limit.hard_stop ? " At 100% this stops until the period resets or the plan is upgraded." : ""}
         </p>
+      )}
+
+      {over && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium text-destructive">
+            {limit.hard_stop
+              ? "Limit reached. Requests against this limit are being refused."
+              : limit.overage_policy.toUpperCase() === "ALLOW_AND_WARN"
+                ? "Over the included amount. Still allowed on your plan, at no extra charge."
+                : "Over the included amount. Overage is billed at the price-book rate."}
+          </p>
+          {limit.hard_stop && limit.source !== "ORGANIZATION" && (
+            <a
+              href="#plans"
+              className="fp-btn-primary rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90"
+            >
+              Upgrade plan
+            </a>
+          )}
+        </div>
       )}
     </li>
   );

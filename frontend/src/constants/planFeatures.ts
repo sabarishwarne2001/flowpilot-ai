@@ -16,6 +16,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.developerApi]: "Developer API keys",
   [CAPABILITY.outgoingWebhooks]: "Outgoing webhooks",
   [CAPABILITY.customBranding]: "Custom branding",
+  // Campaign session 1 (N-049)
+  [CAPABILITY.automations]: "Automations (rules that act on documents as they arrive; marketplace workflows)",
   "addon.custom_domain": "Vanity domains",
   [CAPABILITY.reconciliation]: "Autonomous three-way reconciliation",
   [CAPABILITY.anomalyRadar]: "Forensic anomaly & duplicate radar",
@@ -59,6 +61,7 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.developerApi,
   CAPABILITY.outgoingWebhooks,
   CAPABILITY.customBranding,
+  CAPABILITY.automations,
   "addon.custom_domain",
   CAPABILITY.reconciliation,
   CAPABILITY.anomalyRadar,

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
@@ -264,3 +264,27 @@ __all__ = [
     "UsageSeriesResponse",
     "UsageSummaryResponse",
 ]
+
+
+class AllowanceMeterResponse(BaseModel):
+    """Campaign session 1. One meter a person plans by, as the refusals count it."""
+
+    key: str
+    used: int
+    limit: int
+    hard_stop: bool
+    overage_policy: str
+    resets_at: datetime
+    state: Literal["OK", "NEAR", "REACHED", "OVER"]
+
+
+class PlanAllowanceResponse(BaseModel):
+    """Campaign session 1. What the plan admits, for any member of a workspace."""
+
+    plan_key: Optional[str] = None
+    plan_name: Optional[str] = None
+    max_file_mb: int
+    max_pages_per_document: int
+    meters: list[AllowanceMeterResponse]
+    can_upgrade: bool
+    ask: list[str]

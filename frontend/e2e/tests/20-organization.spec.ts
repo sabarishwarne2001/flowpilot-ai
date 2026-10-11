@@ -378,14 +378,21 @@ test.describe("Billing", () => {
   });
 
   test("the seat count is shown with the plan picker (changes need checkout)", async ({ page }) => {
+    // Campaign session 1: a paid plan holds the seats it bought; the picker starts from them.
+    const owner = await loginAs("C.owner");
+    const context = await api<{ organizations: Array<{ organization_id: string; organization_slug: string }> }>(
+      owner, "GET", "/me/context",
+    );
+    const id = context.body.organizations.find((o) => o.organization_slug === TENANTS.C.org)?.organization_id;
+    const state = await api<{ seats_purchased: number }>(owner, "GET", `/organizations/${id}/billing/subscription`);
     await page.goto(org("C", "billing"));
     await page.getByRole("radio", { name: /^Business/ }).check(); // the seat field belongs to the plan picker
     const seats = page.getByRole("spinbutton", { name: /Seats/ });
-    await expect(seats).toHaveValue("4"); // follows membership: 4 seeded members
+    await expect(seats).toHaveValue(String(state.body.seats_purchased));
     await seats.fill("6");
     // Applying a seat change goes through the gateway; with no Stripe key here it stays disabled.
     await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
-    await seats.fill("4");
+    await seats.fill(String(state.body.seats_purchased));
   });
 
   test("a promo code can be entered at checkout and is priced for the chosen plan (N-020 item 3)", async ({ page, problems }) => {

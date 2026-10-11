@@ -729,3 +729,167 @@ first SSO sign-in to an unverified account marks it verified, replaces its passw
 unusable one (the owner signs in through SSO, or sets a password with "Forgot your password?"),
 ends every session and writes an audit record. Verified accounts are linked as before.
 
+
+---
+
+# Pre-launch campaign, session 1 (2026-10-11): the money and access model
+
+The owner delegated founder authority for the campaign ("decide the way a Tier-1 B2B SaaS would,
+implement it, record it"). Each item below is **DECIDED (campaign session 1)**, built and tested on
+branch `claude/new-session-ejp1sm` (PR #19). The plan table itself is generated from the code in
+`docs/hardening/TENANCY-AND-PLANS.md`; change it in `backend/scripts/seed_quota_tiers.py`.
+
+## N-040 — Does every invited member need their own subscription?
+**DECIDED (campaign session 1): no.** The organization is the customer and holds one subscription
+(plan + seats). Every member occupies one seat; members never pay or hold a plan. A person in several
+organizations gets, in each, that organization's plan and their role there. This was already the
+data model; session 1 made every path follow it (new organizations now start on Free, F-236; seats
+are enforced on every way in, F-237).
+
+## N-041 — How seats work on a paid plan
+**DECIDED (campaign session 1): purchased seats, bought on purpose, price shown first.** A paid
+organization holds the seat quantity its subscription bought (chosen at checkout, never fewer than
+the people already in it). Adding someone past it needs a seat bought first; owners, admins and
+**billing managers** can buy (the Billing role is the finance contact who holds the payment method,
+as in GitHub and Atlassian) after the unit price and the prorated charge are shown, and a purchase at
+any price other than the one shown is refused. Removing a member frees the seat for someone else; the
+bill drops when unused seats are released (one click in Billing → Seats; the gateway credits the
+rest of the period). **Why not "members are billed automatically as they join"?** A customer's bill
+should never change without someone deciding it: an admin inviting a colleague should not be able to
+raise a $299-a-month line by accident, and swapping one person for another should not produce a
+credit and a charge. Changing the plan itself stays with the owner.
+
+## N-042 — The Free plan
+**DECIDED (campaign session 1): small on purpose, at the owner's target.** Per month: 25 document
+uploads, 50 OCR pages, 30 assistant messages; 10 MB per file, 10 pages per document; 256 MB (0.25 GB)
+stored; 1 workspace; 2 seats (owner + one); core extraction, review and workspace chat only (no API
+keys, webhooks, batch or any Business/Enterprise engine). Everything refuses at its ceiling (no
+overage on Free). The token and cost ceilings stay underneath as the platform's safety net, raised
+from 100k/25k to 300k/60k tokens so that using the 25 documents and 30 messages never hits an opaque
+token wall first (the cost of that headroom is about 2 US cents a month per Free account). A Free
+account used to every limit costs the platform about $0.13 a month (`tests/scripts/test_plan_unit_economics.py`).
+
+## N-043 — Several Free organizations on one account
+**DECIDED (campaign session 1): one shared Free allowance per account, not one Free organization per
+account.** An account may still own up to three organizations (unchanged), but every Free
+organization the same person owns, archived ones included, draws on one pool of documents, pages,
+messages, tokens and storage (`quota_service.usage_pool`). Refusing a second Free organization would
+have forced a "no plan yet" state on any new organization (a dead end in the product); pooling keeps
+creation simple and closes the abuse completely. Archiving and recreating resets nothing (archived
+organizations stay in the pool and there is no organization delete), deleting documents refunds
+nothing, and accounts must verify their email before any workspace route (uploads included) works.
+
+## N-044 — Paid allowances: per organization or per seat?
+**DECIDED (campaign session 1): per seat, pooled across the organization.** Prices are per seat, so a
+paid plan's monthly allowances are the plan's figure times the seats held, shared by everyone in the
+organization (`quota_service.seat_factor`). A 1-seat and a 20-seat Business organization paying $299
+and $5,980 would otherwise get identical allowances; per-seat allowances keep the same margin at any
+size, as Datadog's per-host allotments do. Static limits (workspaces, file size, pages per document)
+stay per organization.
+
+## N-045 — The paid ladder
+**DECIDED (campaign session 1).** Per seat per month (see TENANCY-AND-PLANS.md §4 for every row):
+- **Developer ($49):** 500 documents (refuse), 5,000 OCR pages (bill overage), 1,000 assistant
+  messages (refuse), 25 GB storage (bill), 3 workspaces, 50 MB files, 100 pages per document. Its AI
+  token ceilings now refuse (they used to "warn", i.e. give free overage, while Business billed it, so
+  the cheaper plan was more generous) and were raised to 15M in / 2M out so the counts are reachable.
+- **Business ($299):** 5,000 documents and 10,000 assistant messages (warn: continues free, shown on
+  the usage screens), 50,000 OCR pages (bill), 250 GB (bill), 20 workspaces, 100 MB files, 500 pages;
+  tokens 150M in (bill) / 20M out (refuse).
+- **Enterprise ($799):** 10,000 documents (warn), 100,000 OCR pages (bill; ten seats hold the
+  1,000,000 the card used to promise per organization), assistant messages fair use under the token
+  ceilings, 1,000 GB storage per seat (bill; was 10,000 GB, see N-046), unlimited workspaces, files
+  and pages up to the platform maximum (100 MB, 500 pages); tokens 500M in / 125M out per seat (bill;
+  were 1B / 250M, see N-046).
+- The ladder is monotonic in every row (`tests/scripts/test_plan_ladder_is_monotonic.py`).
+- Existing paid subscribers keep the version they bought (grandfathering): `seed_quota_tiers.py
+  --carry-forward` moves a subscriber only to a version that costs the same and takes nothing away,
+  and these changes lower some ceilings, so they apply to new subscriptions and plan changes.
+
+## N-046 — Unit economics
+**DECIDED (campaign session 1): every paid plan keeps at least 60% gross margin used to its limits.**
+At the price book's own cost bases (OCR $0.002 a page, Groq GPT-OSS 20B, $0.023 a GB-month),
+a seat used to every ceiling costs about $11.60 on Developer (76% margin), $115.50 on Business (61%)
+and, before this decision, $505.50 on Enterprise (37%): Enterprise's 10 TB of storage per seat alone
+cost $230. Enterprise storage is now 1,000 GB per seat (still four times Business): about $298.50
+at the ceilings, a 63% margin. Typical use is far below the ceilings. Guarded by
+`tests/scripts/test_plan_unit_economics.py`.
+
+**Also decided: at least 50% even when every token goes to the dearest model the platform pays for.**
+The platform's own keys serve Groq's larger models and Gemini (input up to $0.15 and output up to
+$0.30 per million tokens, three times the 20B model). Used to its ceilings on those, a Business seat
+keeps 55%, but an Enterprise seat kept only 44% with 1B input and 250M output tokens included. Enterprise
+now includes 500M input and 125M output tokens per seat (still over three and six times Business);
+tokens past them are billed at the overage rate, which is at least twice the cost (N-048). At the
+dearest model an Enterprise seat keeps about 58%. Guarded by
+`test_a_paid_seat_on_the_dearest_platform_model_still_keeps_half`.
+
+## N-047 — When a document is charged
+**DECIDED (campaign session 1): when it is accepted, never midway.** A document is charged one
+`document.upload` at upload, in the transaction that creates it, under the usage pool's lock; its
+pages must fit the OCR allowance left after the pages already used *and* those of documents still
+waiting for OCR (a reservation), and its bytes the storage ceiling. A document the plan cannot process
+is refused at the door with a 402 that says why; an accepted one is never stranded in "processing"
+by a count. Re-processing runs OCR again and is checked the same way before it is queued. A packet's
+split children are carved out of an upload already charged and are not charged again.
+
+## N-048 — What overage bills, and for which provider
+**DECIDED (campaign session 1): overage recovers what the platform pays its suppliers, so it is
+priced for every provider the platform pays and never billed on the customer's own key.**
+- The platform holds keys for Groq and Gemini only (`byok_providers.platform_key_for`); OpenAI,
+  Anthropic, Azure OpenAI and Mistral run only on a customer's own key (BYOK). Gemini had no overage
+  rate, so tokens past an ALLOW_AND_BILL ceiling served by Gemini were logged as unpriced and never
+  billed (F-250). Gemini now has overage rates of $0.50 per million input tokens and $1.50 per
+  million output tokens (at least twice its cost basis, as Groq's already were).
+- Tokens served on the customer's own key still count toward the allowance shown on the usage
+  screens, but bill no overage: the customer already pays their provider, and the seat price covers
+  the platform's service. (Before, each such overage raised a CRITICAL "unpriced" alarm and billed
+  nothing by accident; now it is a decision, and silent.)
+- Every overage rate must be at least twice the provider's cost basis
+  (`tests/scripts/test_every_overage_is_priced.py`); `seed_price_book.py --version auto` publishes the
+  new rates as the next price book version.
+- Reversible: if the owner wants own-key overage billed as a platform fee, add `.overage` rates for
+  those providers and remove the BYOK early return in `llm_metering._record`.
+
+## N-049 — Automations on Free
+**DECIDED (campaign session 1): automations are Developer and up; Free has none.** The campaign
+brief defines Free as "no API keys, webhooks, automations, batch or Business engines". This
+supersedes the part of N-002 that said "the automation engine, which every plan has".
+- Every automation action is work the platform does for the customer (emails, webhooks, AI
+  extraction, review items), so it is a paid capability: `capability.automations`, granted on
+  Developer, Business and Enterprise.
+- On Free: creating, changing or test-running a rule, and installing a marketplace workflow (it
+  installs as a rule), answer 402 CAPABILITY_REQUIRED. The worker also refuses to run a rule for an
+  organization without the capability, so a rule kept after a downgrade does not run.
+- After a downgrade (N-003) rules stay visible and can be switched off and deleted. Browsing the
+  marketplace stays open on every plan (N-002).
+- Deploy note: `seed_quota_tiers.py` publishes the paid tiers with the new capability; existing Free
+  organizations with active rules stop running them from the deploy. Clause checks (Enterprise)
+  run through the same engine and are covered by the Enterprise plan.
+
+## N-050 — How a paying customer changes plans
+**DECIDED (campaign session 1): in the billing portal, on the subscription they already have.**
+A checkout always creates a new subscription at the gateway, and an organization holds one live
+subscription, so a paying customer who checked out again was charged twice and the second
+subscription could never be recorded (F-253). While a paid subscription is live, checkout now answers
+409 PAID_SUBSCRIPTION_ACTIVE and the plan page sends the owner to the billing portal, which moves the
+subscription and prorates the difference.
+- **Owner action (one-time, in the Stripe Dashboard, test mode first):** Settings → Billing →
+  Customer portal → "Customers can switch plans": on, with the Developer, Business and Enterprise
+  prices as the products a customer may switch between, proration "Prorate charges and credits".
+  On Dodo Payments, enable plan changes for the same products. Until this is on, the portal shows
+  no plan switch, and a customer upgrades by contacting you.
+
+## N-051 — Annual billing and trials
+**DECIDED (campaign session 1).**
+- **Trial: none on paid plans; Free is the trial.** Free never expires, so nobody needs a clock to
+  evaluate the product, and a time-limited paid trial adds a card-capture flow, a conversion email
+  sequence and a "trial ended" state that nothing in the product needs today. For a prospect who
+  needs more than Free to evaluate, sales issues a first-subscription promo code (a percentage off
+  for a set number of months, `first_subscription_only`), which the promo rules already enforce.
+- **Annual: offered on Developer and Business at ten times the monthly price (two months free);
+  Enterprise annually through an invoiced contract.** The checkout already sells a yearly interval
+  from a published plan price book (ARCH-50). **Owner action:** in Platform admin → RevOps → Price
+  books, publish a plan price book with the yearly prices (Developer $490, Business $2,990 per seat
+  per year) and create the matching yearly prices in Stripe test mode first; the plan page then
+  shows the Monthly / Yearly switch.
