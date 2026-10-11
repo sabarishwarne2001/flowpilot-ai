@@ -16,6 +16,7 @@ from app.core.exceptions import (
     OrganizationAlreadyExistsError,
     OrganizationNotFoundError,
     OrganizationPermissionDeniedError,
+    OrganizationStillPaysError,
     TenantSuspendedError,
 )
 from app.core.organization_permissions import (
@@ -366,6 +367,17 @@ def archive_organization(
     if not can_delete_organization(actor_role):
         raise OrganizationPermissionDeniedError(
             "Only an organization owner can delete the organization."
+        )
+
+    # Campaign session 1 (F-254). Archiving turns off access but not the gateway: a live
+    # paid subscription would go on charging for an organization its owner deleted.
+    from app.services.billing import subscription_service
+
+    live = subscription_service.live_subscription_for_organization(db, organization_id=organization.id)
+    if live is not None and not live.cancel_at_period_end:
+        raise OrganizationStillPaysError(
+            "This organization still has a paid subscription that renews. Cancel it in the "
+            "billing portal first, so it stops charging; then you can delete the organization."
         )
 
     try:

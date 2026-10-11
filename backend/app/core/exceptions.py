@@ -193,6 +193,13 @@ class OrganizationMemberError(OrganizationError):
     pass
 
 
+class OrganizationStillPaysError(OrganizationError):
+    """Campaign session 1 (F-254). Archiving would leave a live paid subscription charging."""
+
+    status_code = 409
+    code = "SUBSCRIPTION_STILL_ACTIVE"
+
+
 class LastOwnerError(OrganizationMemberError):
     """
     Raised when an operation would leave an organization without an active
