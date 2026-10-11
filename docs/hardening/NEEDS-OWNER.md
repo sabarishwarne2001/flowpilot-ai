@@ -729,3 +729,96 @@ first SSO sign-in to an unverified account marks it verified, replaces its passw
 unusable one (the owner signs in through SSO, or sets a password with "Forgot your password?"),
 ends every session and writes an audit record. Verified accounts are linked as before.
 
+
+---
+
+# Pre-launch campaign, session 1 (2026-10-11): the money and access model
+
+The owner delegated founder authority for the campaign ("decide the way a Tier-1 B2B SaaS would,
+implement it, record it"). Each item below is **DECIDED (campaign session 1)**, built and tested on
+branch `claude/new-session-ejp1sm` (PR #19). The plan table itself is generated from the code in
+`docs/hardening/TENANCY-AND-PLANS.md`; change it in `backend/scripts/seed_quota_tiers.py`.
+
+## N-040 — Does every invited member need their own subscription?
+**DECIDED (campaign session 1): no.** The organization is the customer and holds one subscription
+(plan + seats). Every member occupies one seat; members never pay or hold a plan. A person in several
+organizations gets, in each, that organization's plan and their role there. This was already the
+data model; session 1 made every path follow it (new organizations now start on Free, F-236; seats
+are enforced on every way in, F-237).
+
+## N-041 — How seats work on a paid plan
+**DECIDED (campaign session 1): purchased seats, bought on purpose, price shown first.** A paid
+organization holds the seat quantity its subscription bought (chosen at checkout, never fewer than
+the people already in it). Adding someone past it needs a seat bought first; owners, admins and
+**billing managers** can buy (the Billing role is the finance contact who holds the payment method,
+as in GitHub and Atlassian) after the unit price and the prorated charge are shown, and a purchase at
+any price other than the one shown is refused. Removing a member frees the seat for someone else; the
+bill drops when unused seats are released (one click in Billing → Seats; the gateway credits the
+rest of the period). **Why not "members are billed automatically as they join"?** A customer's bill
+should never change without someone deciding it: an admin inviting a colleague should not be able to
+raise a $299-a-month line by accident, and swapping one person for another should not produce a
+credit and a charge. Changing the plan itself stays with the owner.
+
+## N-042 — The Free plan
+**DECIDED (campaign session 1): small on purpose, at the owner's target.** Per month: 25 document
+uploads, 50 OCR pages, 30 assistant messages; 10 MB per file, 10 pages per document; 256 MB (0.25 GB)
+stored; 1 workspace; 2 seats (owner + one); core extraction, review and workspace chat only (no API
+keys, webhooks, batch or any Business/Enterprise engine). Everything refuses at its ceiling (no
+overage on Free). The token and cost ceilings stay underneath as the platform's safety net, raised
+from 100k/25k to 300k/60k tokens so that using the 25 documents and 30 messages never hits an opaque
+token wall first (the cost of that headroom is about 2 US cents a month per Free account). A Free
+account used to every limit costs the platform about $0.13 a month (`tests/scripts/test_plan_unit_economics.py`).
+
+## N-043 — Several Free organizations on one account
+**DECIDED (campaign session 1): one shared Free allowance per account, not one Free organization per
+account.** An account may still own up to three organizations (unchanged), but every Free
+organization the same person owns, archived ones included, draws on one pool of documents, pages,
+messages, tokens and storage (`quota_service.usage_pool`). Refusing a second Free organization would
+have forced a "no plan yet" state on any new organization (a dead end in the product); pooling keeps
+creation simple and closes the abuse completely. Archiving and recreating resets nothing (archived
+organizations stay in the pool and there is no organization delete), deleting documents refunds
+nothing, and accounts must verify their email before any workspace route (uploads included) works.
+
+## N-044 — Paid allowances: per organization or per seat?
+**DECIDED (campaign session 1): per seat, pooled across the organization.** Prices are per seat, so a
+paid plan's monthly allowances are the plan's figure times the seats held, shared by everyone in the
+organization (`quota_service.seat_factor`). A 1-seat and a 20-seat Business organization paying $299
+and $5,980 would otherwise get identical allowances; per-seat allowances keep the same margin at any
+size, as Datadog's per-host allotments do. Static limits (workspaces, file size, pages per document)
+stay per organization.
+
+## N-045 — The paid ladder
+**DECIDED (campaign session 1).** Per seat per month (see TENANCY-AND-PLANS.md §4 for every row):
+- **Developer ($49):** 500 documents (refuse), 5,000 OCR pages (bill overage), 1,000 assistant
+  messages (refuse), 25 GB storage (bill), 3 workspaces, 50 MB files, 100 pages per document. Its AI
+  token ceilings now refuse (they used to "warn", i.e. give free overage, while Business billed it, so
+  the cheaper plan was more generous) and were raised to 15M in / 2M out so the counts are reachable.
+- **Business ($299):** 5,000 documents and 10,000 assistant messages (warn: continues free, shown on
+  the usage screens), 50,000 OCR pages (bill), 250 GB (bill), 20 workspaces, 100 MB files, 500 pages;
+  tokens 150M in (bill) / 20M out (refuse).
+- **Enterprise ($799):** 10,000 documents (warn), 100,000 OCR pages (bill; ten seats hold the
+  1,000,000 the card used to promise per organization), assistant messages fair use under the token
+  ceilings, 1,000 GB storage per seat (bill; was 10,000 GB, see N-046), unlimited workspaces, files
+  and pages up to the platform maximum (100 MB, 500 pages).
+- The ladder is monotonic in every row (`tests/scripts/test_plan_ladder_is_monotonic.py`).
+- Existing paid subscribers keep the version they bought (grandfathering): `seed_quota_tiers.py
+  --carry-forward` moves a subscriber only to a version that costs the same and takes nothing away,
+  and these changes lower some ceilings, so they apply to new subscriptions and plan changes.
+
+## N-046 — Unit economics
+**DECIDED (campaign session 1): every paid plan keeps at least 60% gross margin used to its limits.**
+At the price book's own cost bases (OCR $0.002 a page, Groq GPT-OSS 20B, $0.023 a GB-month),
+a seat used to every ceiling costs about $11.60 on Developer (76% margin), $115.50 on Business (61%)
+and, before this decision, $505.50 on Enterprise (37%): Enterprise's 10 TB of storage per seat alone
+cost $230. Enterprise storage is now 1,000 GB per seat (still four times Business): about $298.50
+at the ceilings, a 63% margin. Typical use is far below the ceilings. Guarded by
+`tests/scripts/test_plan_unit_economics.py`.
+
+## N-047 — When a document is charged
+**DECIDED (campaign session 1): when it is accepted, never midway.** A document is charged one
+`document.upload` at upload, in the transaction that creates it, under the usage pool's lock; its
+pages must fit the OCR allowance left after the pages already used *and* those of documents still
+waiting for OCR (a reservation), and its bytes the storage ceiling. A document the plan cannot process
+is refused at the door with a 402 that says why; an accepted one is never stranded in "processing"
+by a count. Re-processing runs OCR again and is checked the same way before it is queued. A packet's
+split children are carved out of an upload already charged and are not charged again.
