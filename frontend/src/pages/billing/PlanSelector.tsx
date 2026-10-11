@@ -115,6 +115,11 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
     onSuccess: (session) => {
       window.location.assign(session.url);
     },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "Couldn't open the billing portal. Try again in a moment.",
+      );
+    },
   });
 
   const checkout = useMutation({
