@@ -287,6 +287,13 @@ def create_invitation(
                 "That person is already a member of this organization."
             )
 
+    # Campaign session 1. The seat lock comes first, before any invitation row is
+    # touched: superseding a pending invitation locks its row, and taking the seat
+    # lock only afterwards deadlocked against a concurrent invitation to the same
+    # address that held the seat lock and waited on that row through the
+    # one-pending-invitation-per-address index.
+    seat_capacity_service.lock_seats(db, organization_id=organization.id)
+
     existing_pending = invitation_crud.get_pending_invitation_for_email(
         db, organization_id=organization.id, email=normalized
     )
