@@ -300,6 +300,34 @@ export const ThreeWayComparison: React.FC = () => {
 
       <DocumentStrip detail={detail} />
 
+      {detail.duplicate_copies && detail.duplicate_copies.length > 0 ? (
+        <section
+          className={`${SURFACE} space-y-2 border-amber-500/40 p-4`}
+          data-testid="duplicate-copies"
+          role="status"
+        >
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <TriangleAlert className="h-4 w-4 text-amber-600" aria-hidden />
+            This invoice arrived {detail.duplicate_copies.length + 1} times
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            The later copies have the same supplier and invoice number (or are the same file). They are
+            matched here, once, so the invoice is not paid twice.
+          </p>
+          <ul className="space-y-1 text-xs">
+            {detail.duplicate_copies.map((copy) => (
+              <li key={copy.work_item_id} className="flex gap-2">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 truncate font-medium">{copy.original_filename ?? "Copy"}</span>
+                {copy.received_at ? (
+                  <span className="text-muted-foreground">received {formatTimestamp(copy.received_at)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {detail.header_findings.length > 0 ? (
         <section className={`${SURFACE} space-y-2 border-amber-500/40 p-4`}>
           <h2 className="flex items-center gap-2 text-sm font-semibold">

@@ -80,6 +80,24 @@ def _score_one(
     """Discover counterparts for one invoice and score the set."""
     from app.models.work_item import WorkItem
 
+    if forced_po_work_item_id is None and forced_receipt_work_item_id is None:
+        # Campaign session 2 (F-264, N-055): a later copy of an invoice opens no case; the
+        # first copy's case lists it. A case such a copy opened before is retired.
+        first_copy = case_service.first_copy_of(
+            db, workspace_id=role_row.workspace_id, invoice_work_item_id=role_row.work_item_id
+        )
+        # Every later copy's stale case leaves the queue, whichever copy is being scored.
+        retired = case_service.retire_later_copy_cases(
+            db, workspace_id=role_row.workspace_id, invoice_work_item_id=role_row.work_item_id
+        )
+        if first_copy is not None:
+            return {
+                "work_item_id": str(role_row.work_item_id),
+                "skipped": "duplicate_copy",
+                "first_copy_work_item_id": str(first_copy),
+                "retired_case_ids": [str(case_id) for case_id in retired],
+            }
+
     policy = policy_module.resolve_policy(db, workspace_id=role_row.workspace_id)
 
     po_reference: Optional[str] = None

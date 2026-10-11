@@ -181,6 +181,9 @@ const TABLE_CSV = [
   "",
 ].join("\n");
 
+/** Campaign session 2: invoice INV-E2E-1001 as a rescanned second copy (different bytes, same number). */
+export const INVOICE_1001_RESCAN: readonly Page[] = [[...INVOICE_1001, "Scanned copy received by post"]];
+
 /** The invoice whose bank details changed, for tests that need a fresh disputed copy. */
 export const DISPUTED_INVOICE_PAGE: Page = INVOICE_1002_CHANGED_BANK;
 

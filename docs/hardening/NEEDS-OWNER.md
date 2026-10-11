@@ -978,3 +978,16 @@ pages (F-261, F-262).
 - **Owner action:** none in code. On deploy re-run `seed_price_book.py --version auto` and
   `seed_quota_tiers.py` (RUNBOOK 9.3). Spot-check the Groq and Google prices on their pricing pages
   before launch; this environment could only read them through third-party trackers.
+
+## N-055 — The matching queue and copies of one invoice
+**DECIDED (campaign session 2), the known leftover "one case per copy of an invoice".** The same
+invoice often arrives twice: emailed and then posted, rescanned, re-sent by a supplier chasing
+payment, or split out of a scanned packet. **One case per invoice, the first copy to arrive;
+later copies open no case and are listed on it** ("This invoice arrived 3 times", with each
+copy's file and date, and a "2 more copies" badge in the queue). An invoice is the same invoice
+when it has the same supplier and invoice number in the same workspace, or is the same file.
+Why: two cases for one bill invite paying it twice, the exact loss three-way matching exists to
+stop; and flagging the copies where the reviewer decides is more useful than a separate list.
+A case a copy opened before this change leaves the queue (superseded) the next time any copy of
+that invoice is scored; a case someone already approved or disputed is left as decided. The
+forensic radar still reports duplicates as findings, as before.

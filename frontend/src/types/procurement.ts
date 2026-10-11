@@ -99,6 +99,14 @@ export interface CaseSummary {
   readonly receipt_filename?: string | null;
   readonly invoice_total_micros?: number | null;
   readonly po_total_micros?: number | null;
+  /** Campaign session 2 (F-264): later copies of this invoice; they open no case of their own. */
+  readonly duplicate_count?: number;
+}
+
+export interface DuplicateCopy {
+  readonly work_item_id: string;
+  readonly original_filename: string | null;
+  readonly received_at: string | null;
 }
 
 /** F-171: header findings that keep a case out of MATCHED (matcher.BLOCKING_HEADER_CODES). */
@@ -110,6 +118,7 @@ export interface CaseDetail extends CaseSummary {
   readonly resolution_reason: string | null;
   readonly resolved_by_user_id: string | null;
   readonly lines: readonly CaseLine[];
+  readonly duplicate_copies?: readonly DuplicateCopy[];
 }
 
 export interface TolerancePolicy {
