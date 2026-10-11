@@ -154,7 +154,9 @@ def test_an_inr_total_in_lakh_grouping_and_a_ddmmyyyy_date_are_read_exactly(engi
 
     if indic_font() is None:
         pytest.skip("no font with Devanagari and Tamil installed (fonts-freefont-ttf)")
-    engines.patch("/document-settings/", {"currency": "INR", "date_format": "DD/MM/YYYY"})
+    settings = engines.client.patch(f"/api/v1/workspaces/{engines.ws}", json={"currency": "INR", "date_format": "DD/MM/YYYY"},
+                                    headers=engines.tenant.owner.headers)
+    assert settings.status_code == 200, settings.text
     engines.llm.record("GST/2026-27/0457", "Invoice", {
         "vendor_name": "Shakti Textiles Private Limited", "invoice_number": "GST/2026-27/0457",
         "date": "15/09/2026", "currency": "INR", "total_amount": "₹1,20,360.00",
