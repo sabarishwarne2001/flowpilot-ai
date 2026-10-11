@@ -785,97 +785,111 @@ class AssistantStreamService:
         cursor = cursor_start
         idle_since = time.monotonic()
 
-        with request_scope(request_id=request_id or str(uuid.uuid4())):
-            logger.info(
-                "stream.replay_started",
-                extra={
-                    "message_id": str(message_id),
-                    "from_seq": cursor,
-                    "buffered_frames": buffered,
-                    "state": state,
-                },
-            )
+        # Campaign session 2: the request scope tags each log line only. Held across the
+        # yields below, it was entered in the request's context (the API reads the first
+        # frame there) and closed in the response task's, which raised at the end of every
+        # replay of a finished answer.
+        scope_id = request_id or str(uuid.uuid4())
 
-            sealed = False
-            while True:
-                try:
-                    records = await anyio.to_thread.run_sync(client.lrange, frames_key, cursor, -1)
-                except Exception:  # noqa: BLE001
-                    logger.warning(
-                        "stream.replay_read_failed",
-                        extra={"message_id": str(message_id)},
-                    )
-                    return
+        def _log(write: Any, event: str, **kwargs: Any) -> None:
+            with request_scope(request_id=scope_id):
+                write(event, **kwargs)
 
-                if records:
-                    for raw in records:
-                        if isinstance(raw, bytes):
-                            raw = raw.decode("utf-8", "replace")
-                        try:
-                            record = json.loads(raw)
-                        except (ValueError, TypeError):
-                            continue
+        _log(
+            logger.info,
+            "stream.replay_started",
+            extra={
+                "message_id": str(message_id),
+                "from_seq": cursor,
+                "buffered_frames": buffered,
+                "state": state,
+            },
+        )
 
-                        seq = int(record.get("seq", 0))
-                        if seq <= cursor:
-                            continue
+        sealed = False
+        while True:
+            try:
+                records = await anyio.to_thread.run_sync(client.lrange, frames_key, cursor, -1)
+            except Exception:  # noqa: BLE001
+                _log(
+                    logger.warning,
+                    "stream.replay_read_failed",
+                    extra={"message_id": str(message_id)},
+                )
+                return
 
-                        cursor = seq
-                        yield sse(
-                            str(record.get("event", "token")),
-                            record.get("data", {}),
-                            seq=seq,
-                        )
+            if records:
+                for raw in records:
+                    if isinstance(raw, bytes):
+                        raw = raw.decode("utf-8", "replace")
+                    try:
+                        record = json.loads(raw)
+                    except (ValueError, TypeError):
+                        continue
 
-                    idle_since = time.monotonic()
+                    seq = int(record.get("seq", 0))
+                    if seq <= cursor:
+                        continue
 
-                if sealed:
-                    # The pass after CLOSED: frames written just before the seal are in.
-                    logger.info(
-                        "stream.replay_completed",
-                        extra={"message_id": str(message_id), "last_seq": cursor},
-                    )
-                    return
-
-                try:
-                    state = await anyio.to_thread.run_sync(client.get, state_key)
-                except Exception:  # noqa: BLE001
-                    state = None
-
-                if isinstance(state, bytes):
-                    state = state.decode("utf-8", "replace")
-
-                if state == _STATE_CLOSED:
-                    # Campaign session 2: read once more. A frame appended between the
-                    # read above and the seal would otherwise be lost to this client.
-                    sealed = True
-                    continue
-
-                if state != _STATE_OPEN:
-                    logger.info(
-                        "stream.replay_completed",
-                        extra={"message_id": str(message_id), "last_seq": cursor},
-                    )
-                    return
-
-                if time.monotonic() - idle_since > REPLAY_IDLE_TIMEOUT_SECONDS:
-                    logger.warning(
-                        "stream.replay_idle_timeout",
-                        extra={"message_id": str(message_id), "last_seq": cursor},
-                    )
+                    cursor = seq
                     yield sse(
-                        "error",
-                        {
-                            "code": "REPLAY_IDLE_TIMEOUT",
-                            "message": (
-                                "The generation stopped producing output. "
-                                "Refetch the message to see what was saved."
-                            ),
-                        },
+                        str(record.get("event", "token")),
+                        record.get("data", {}),
+                        seq=seq,
                     )
-                    return
 
-                await asyncio.sleep(REPLAY_POLL_INTERVAL_SECONDS)
+                idle_since = time.monotonic()
+
+            if sealed:
+                # The pass after CLOSED: frames written just before the seal are in.
+                _log(
+                    logger.info,
+                    "stream.replay_completed",
+                    extra={"message_id": str(message_id), "last_seq": cursor},
+                )
+                return
+
+            try:
+                state = await anyio.to_thread.run_sync(client.get, state_key)
+            except Exception:  # noqa: BLE001
+                state = None
+
+            if isinstance(state, bytes):
+                state = state.decode("utf-8", "replace")
+
+            if state == _STATE_CLOSED:
+                # Campaign session 2: read once more. A frame appended between the
+                # read above and the seal would otherwise be lost to this client.
+                sealed = True
+                continue
+
+            if state != _STATE_OPEN:
+                _log(
+                    logger.info,
+                    "stream.replay_completed",
+                    extra={"message_id": str(message_id), "last_seq": cursor},
+                )
+                return
+
+            if time.monotonic() - idle_since > REPLAY_IDLE_TIMEOUT_SECONDS:
+                _log(
+                    logger.warning,
+                    "stream.replay_idle_timeout",
+                    extra={"message_id": str(message_id), "last_seq": cursor},
+                )
+                yield sse(
+                    "error",
+                    {
+                        "code": "REPLAY_IDLE_TIMEOUT",
+                        "message": (
+                            "The generation stopped producing output. "
+                            "Refetch the message to see what was saved."
+                        ),
+                    },
+                )
+                return
+
+            await asyncio.sleep(REPLAY_POLL_INTERVAL_SECONDS)
 
     async def _drain(self, plan: StreamPlan) -> AsyncIterator[StreamChunk]:
         loop = asyncio.get_running_loop()
