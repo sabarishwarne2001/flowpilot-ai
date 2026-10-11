@@ -879,3 +879,17 @@ subscription and prorates the difference.
   prices as the products a customer may switch between, proration "Prorate charges and credits".
   On Dodo Payments, enable plan changes for the same products. Until this is on, the portal shows
   no plan switch, and a customer upgrades by contacting you.
+
+## N-051 — Annual billing and trials
+**DECIDED (campaign session 1).**
+- **Trial: none on paid plans; Free is the trial.** Free never expires, so nobody needs a clock to
+  evaluate the product, and a time-limited paid trial adds a card-capture flow, a conversion email
+  sequence and a "trial ended" state that nothing in the product needs today. For a prospect who
+  needs more than Free to evaluate, sales issues a first-subscription promo code (a percentage off
+  for a set number of months, `first_subscription_only`), which the promo rules already enforce.
+- **Annual: offered on Developer and Business at ten times the monthly price (two months free);
+  Enterprise annually through an invoiced contract.** The checkout already sells a yearly interval
+  from a published plan price book (ARCH-50). **Owner action:** in Platform admin → RevOps → Price
+  books, publish a plan price book with the yearly prices (Developer $490, Business $2,990 per seat
+  per year) and create the matching yearly prices in Stripe test mode first; the plan page then
+  shows the Monthly / Yearly switch.
