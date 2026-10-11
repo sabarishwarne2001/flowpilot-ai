@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence, Type
 
-from sqlalchemy import func, select, text, true as sa_true, update
+from sqlalchemy import and_, func, select, text, true as sa_true, update
 from sqlalchemy.orm import Session
 
 from app.models.job import CLAIMABLE_JOB_STATUSES, Job, JobStatus
@@ -234,7 +234,7 @@ def _rank_fair_ids(
     batch_size: int,
     type_filter: Any = None,
 ) -> list[Any]:
-    from sqlalchemy import Float, and_, cast, literal, or_
+    from sqlalchemy import Float, cast, literal, or_
     from sqlalchemy.dialects.postgresql import UUID as PgUUID
 
     from app.models.packets import TenantQueueWeight
@@ -566,12 +566,93 @@ def mark_delivery_dead(
     return WebhookDeliveryStatus.DEAD
 
 
-def mark_job_succeeded(
-    db: Session, job_id: uuid.UUID, *, result: Optional[dict] = None
-) -> None:
-    db.execute(
+def _still_ours(job_id: uuid.UUID, worker_id: Optional[str]) -> Any:
+    """The settle fence: no fence without a worker id (tests, sweeps), else this worker's claim.
+
+    A job this worker ran may have been reaped (FAILED, still naming this worker) but not yet
+    claimed again: its result still counts. Once another worker has claimed it, it is theirs.
+    """
+    if worker_id is None:
+        return Job.id == job_id
+    return and_(
+        Job.id == job_id,
+        Job.claimed_by == worker_id,
+        Job.status.in_((JobStatus.CLAIMED, JobStatus.FAILED)),
+    )
+
+
+def start_job(
+    db: Session, job_id: uuid.UUID, *, worker_id: str, lease_seconds: int
+) -> bool:
+    """Begin (or keep running) a claimed job; False once it is no longer this worker's.
+
+    Campaign session 2. A batch is claimed under one lease and its jobs run one after
+    another, so a job still waiting in the batch may have been reaped and claimed by another
+    worker; it is then theirs and must not run here as well. Starting, and every heartbeat
+    while the handler runs, renews the lease from now, so a long job is never reaped live.
+    """
+    row = db.execute(
         update(Job)
-        .where(Job.id == job_id)
+        .where(
+            Job.id == job_id,
+            Job.status == JobStatus.CLAIMED,
+            Job.claimed_by == worker_id,
+        )
+        .values(
+            claim_expires_at=func.now() + text(f"interval '{int(lease_seconds)} seconds'"),
+            updated_at=func.now(),
+        )
+        .returning(Job.id)
+        .execution_options(synchronize_session=False)
+    ).first()
+    return row is not None
+
+
+renew_job_lease = start_job
+
+
+def release_unstarted_jobs(
+    db: Session, job_ids: Sequence[uuid.UUID], *, worker_id: str
+) -> int:
+    """Hand back jobs a stopping worker claimed and never started (campaign session 2).
+
+    Claimable again at once (not after the lease) and not counted as an attempt, since
+    nothing ran.
+    """
+    if not job_ids:
+        return 0
+    rows = db.execute(
+        update(Job)
+        .where(
+            Job.id.in_(list(job_ids)),
+            Job.status == JobStatus.CLAIMED,
+            Job.claimed_by == worker_id,
+        )
+        .values(
+            status=JobStatus.PENDING,
+            claimed_at=None,
+            claimed_by=None,
+            claim_expires_at=None,
+            attempts=func.greatest(Job.attempts - 1, 0),
+            available_at=func.now(),
+            updated_at=func.now(),
+        )
+        .returning(Job.id)
+        .execution_options(synchronize_session=False)
+    ).fetchall()
+    return len(rows)
+
+
+def mark_job_succeeded(
+    db: Session,
+    job_id: uuid.UUID,
+    *,
+    result: Optional[dict] = None,
+    worker_id: Optional[str] = None,
+) -> bool:
+    return _settled(db.execute(
+        update(Job)
+        .where(_still_ours(job_id, worker_id))
         .values(
             status=JobStatus.SUCCEEDED,
             succeeded_at=func.now(),
@@ -580,17 +661,33 @@ def mark_job_succeeded(
             result=result,
             updated_at=func.now(),
         )
+        .returning(Job.id)
         .execution_options(synchronize_session=False)
+    ), job_id, worker_id)
+
+
+def _settled(result: Any, job_id: uuid.UUID, worker_id: Optional[str]) -> bool:
+    if result.first() is not None:
+        return True
+    logger.warning(
+        "jobs.settled_elsewhere",
+        extra={"job_id": str(job_id), "worker": worker_id},
     )
+    return False
 
 
 def mark_job_failed(
-    db: Session, job_id: uuid.UUID, *, attempts: int, error: str
-) -> None:
+    db: Session,
+    job_id: uuid.UUID,
+    *,
+    attempts: int,
+    error: str,
+    worker_id: Optional[str] = None,
+) -> bool:
     delay = _full_jitter_delay(attempts)
-    db.execute(
+    return _settled(db.execute(
         update(Job)
-        .where(Job.id == job_id)
+        .where(_still_ours(job_id, worker_id))
         .values(
             status=JobStatus.FAILED,
             claim_expires_at=None,
@@ -598,22 +695,26 @@ def mark_job_failed(
             last_error=_truncate(error),
             updated_at=func.now(),
         )
+        .returning(Job.id)
         .execution_options(synchronize_session=False)
-    )
+    ), job_id, worker_id)
 
 
-def mark_job_dead(db: Session, job_id: uuid.UUID, *, error: str) -> None:
-    db.execute(
+def mark_job_dead(
+    db: Session, job_id: uuid.UUID, *, error: str, worker_id: Optional[str] = None
+) -> bool:
+    return _settled(db.execute(
         update(Job)
-        .where(Job.id == job_id)
+        .where(_still_ours(job_id, worker_id))
         .values(
             status=JobStatus.DEAD,
             claim_expires_at=None,
             last_error=_truncate(error),
             updated_at=func.now(),
         )
+        .returning(Job.id)
         .execution_options(synchronize_session=False)
-    )
+    ), job_id, worker_id)
 
 
 def claim_batch(
