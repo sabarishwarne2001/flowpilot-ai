@@ -88,6 +88,8 @@ export const settingsKeys = {
   all: (workspaceId: string) => [...workspaceScope(workspaceId), "settings"] as const,
   ai: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai"] as const,
   aiModels: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-models"] as const,
+  aiModelAvailability: (workspaceId: string) =>
+    [...settingsKeys.all(workspaceId), "ai-model-availability"] as const,
   aiProviders: (workspaceId: string) => [...settingsKeys.all(workspaceId), "ai-providers"] as const,
   email: (workspaceId: string) => [...settingsKeys.all(workspaceId), "email"] as const,
   // ARCH40-S2:settings-keys

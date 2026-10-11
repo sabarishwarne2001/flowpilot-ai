@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.api import deps
-from app.core.ai_models import AI_MODELS
+from app.core.ai_models import AI_MODELS, requires_own_key
+from app.core.exceptions import FlowPilotError
 from app.schemas.ai_connection_test import AIConnectionTestResponse
 from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdate
 from app.schemas.available_providers import AvailableProvidersResponse
@@ -57,6 +58,7 @@ def upsert_ai_settings(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> AISettingsResponse:
+    _assert_model_available(db, organization_id=context.organization_id, settings_in=settings_in)
     settings_obj = crud.upsert_ai_settings(
         db,
         workspace_id=context.workspace_id,
@@ -71,6 +73,71 @@ def upsert_ai_settings(
     )
 
     return settings_obj
+
+
+class OwnKeyRequiredError(FlowPilotError):
+    """The model runs on the organization's own provider key, which it has not added (N-054)."""
+
+    status_code = 422
+    code = "OWN_KEY_REQUIRED"
+
+    def __init__(self, message: str, *, details: dict) -> None:
+        super().__init__(message)
+        self.details = details
+
+
+_PROVIDER_LABELS = {"GROQ": "Groq", "GEMINI": "Google Gemini"}
+
+
+def _own_key_ready(db: Session, *, organization_id, provider: str) -> bool:
+    from app.services.byok import credential_service
+
+    credential = credential_service.resolve_active(db, organization_id=organization_id, provider=provider)
+    return credential is not None and not credential.validation_error
+
+
+def _assert_model_available(db: Session, *, organization_id, settings_in: AISettingsUpdate) -> None:
+    """Campaign session 2 (N-054). Only listed models; a premium one only with the organization's own key."""
+    provider = settings_in.provider.value
+    listed = AI_MODELS.get(settings_in.provider, [])
+    if settings_in.model not in listed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"{settings_in.model} is not a model FlowPilot offers on "
+                f"{_PROVIDER_LABELS.get(provider, provider)}. Choose one of: {', '.join(listed)}."
+            ),
+        )
+    if requires_own_key(provider, settings_in.model) and not _own_key_ready(
+        db, organization_id=organization_id, provider=provider
+    ):
+        label = _PROVIDER_LABELS.get(provider, provider)
+        raise OwnKeyRequiredError(
+            f"{settings_in.model} runs on your organization's own {label} key, which has not been added. "
+            f"An organization admin can add one under Organization settings, AI provider keys; until then "
+            f"choose GPT-OSS 20B or GPT-OSS 120B, which FlowPilot runs within your plan.",
+            details={"provider": provider, "model": settings_in.model, "remedy": "ADD_PROVIDER_KEY"},
+        )
+
+
+@router.get(
+    "/models/availability",
+    summary="Which models this workspace can run now, and on whose key",
+)
+def get_model_availability(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> dict[str, dict[str, str]]:
+    """PLATFORM (inside the plan), OWN_KEY_READY (the organization's key is added) or OWN_KEY_NEEDED."""
+    out: dict[str, dict[str, str]] = {}
+    for provider, models in AI_MODELS.items():
+        ready = _own_key_ready(db, organization_id=context.organization_id, provider=provider.value)
+        out[provider.value] = {
+            model: ("PLATFORM" if not requires_own_key(provider, model) else
+                    "OWN_KEY_READY" if ready else "OWN_KEY_NEEDED")
+            for model in models
+        }
+    return out
 
 
 @router.get(

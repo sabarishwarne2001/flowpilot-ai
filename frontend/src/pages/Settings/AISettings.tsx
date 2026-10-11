@@ -38,6 +38,7 @@ import {
   getAISettings,
   getAvailableProviders,
   getResolvedAISettings,
+  getModelAvailability,
   getSupportedModels,
   testAIConnection,
   updateAISettings,
@@ -227,6 +228,11 @@ export const AISettings: React.FC = () => {
     queryFn: () => getSupportedModels(workspaceId),
     staleTime: 300_000,
   });
+  const availabilityQuery = useQuery({
+    queryKey: settingsKeys.aiModelAvailability(workspaceId),
+    queryFn: () => getModelAvailability(workspaceId),
+    staleTime: 60_000,
+  });
   const providersQuery = useQuery({
     queryKey: settingsKeys.aiProviders(workspaceId),
     queryFn: () => getAvailableProviders(workspaceId),
@@ -257,13 +263,20 @@ export const AISettings: React.FC = () => {
   );
   const providers = providersQuery.data?.providers ?? ["GROQ", "GEMINI"];
 
+  // Campaign session 2 (N-054): a model that needs the organization's own key, not yet added,
+  // cannot be chosen (the server refuses it); the first model this workspace can run is picked.
+  const availability = availabilityQuery.data?.[provider] ?? {};
+  const needsKey = (model: string): boolean => availability[model] === "OWN_KEY_NEEDED";
+  const usable = models.filter((model) => !needsKey(model));
+
   useEffect(() => {
     const current = getValues("model");
-    const first = models[0];
-    if (models.length > 0 && first !== undefined && !models.includes(current)) {
+    const first = usable[0] ?? models[0];
+    if (models.length > 0 && first !== undefined && (!models.includes(current) || needsKey(current))) {
       setValue("model", first, { shouldDirty: true });
     }
-  }, [models, getValues, setValue]);
+    // `usable` and `needsKey` derive from `models` and the availability read.
+  }, [models, availabilityQuery.data, getValues, setValue]);
 
   const save = useMutation({
     mutationFn: (values: AISettingsFormData) => updateAISettings(workspaceId, values),
@@ -382,10 +395,27 @@ export const AISettings: React.FC = () => {
             >
               {models.length === 0 && <option value={getValues("model")}>{getValues("model")}</option>}
               {models.map((value) => (
-                <option key={value} value={value}>{value}</option>
+                <option key={value} value={value} disabled={needsKey(value)}>
+                  {value}
+                  {availability[value] === "PLATFORM"
+                    ? " (included in your plan)"
+                    : availability[value] === "OWN_KEY_READY"
+                      ? " (your own key)"
+                      : availability[value] === "OWN_KEY_NEEDED"
+                        ? " (needs your own key)"
+                        : ""}
+                </option>
               ))}
             </select>
             {errors.model && <p className="text-xs text-destructive">{errors.model.message}</p>}
+            {models.some(needsKey) ? (
+              <p className="text-xs text-muted-foreground" data-testid="ai-model-own-key-hint">
+                {usable.length === 0
+                  ? "These models run on your organization's own provider key, which has not been added. "
+                  : "Models marked “needs your own key” run on your organization's own provider key. "}
+                An organization admin can add one under Organization settings, AI provider keys.
+              </p>
+            ) : null}
           </div>
           {numberField("temperature", "0.05")}
           {numberField("top_p", "0.05")}

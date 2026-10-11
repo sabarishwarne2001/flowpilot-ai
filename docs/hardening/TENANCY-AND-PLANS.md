@@ -98,16 +98,16 @@ Owners and admins of the organization are admins of every workspace. Billing man
 
 ### 4.2 Monthly allowances
 
-Free is per organization, and **one Free allowance is shared by every Free organization an account owns** (archived ones included): `app.services.quota_service.usage_pool`. A paid plan's allowances are **per seat, pooled across the organization**: the figure times the seats the subscription holds (`app.services.quota_service.seat_factor`). Documents, OCR pages, assistant messages and storage are what a customer plans by; the token and cost ceilings are the platform's safety net above them. Overage: *refuse* stops at the ceiling, *bill overage* continues and bills each unit above it at the price book's overage price, *warn* continues free of charge and the usage screens show the overrun.
+Free is per organization, and **one Free allowance is shared by every Free organization an account owns** (archived ones included): `app.services.quota_service.usage_pool`. A paid plan's allowances are **per seat, pooled across the organization**: the figure times the seats the subscription holds (`app.services.quota_service.seat_factor`). Documents, OCR pages, assistant messages and storage are what a customer plans by; the token and cost ceilings are the platform's safety net above them. Overage: *refuse* stops at the ceiling, *bill overage* continues and bills each unit above it at the price book's overage price, *warn* continues free of charge and the usage screens show the overrun. Token allowances cover the models the platform serves on its own keys (`openai/gpt-oss-20b` on Groq, `openai/gpt-oss-120b` on Groq); every other listed model runs on the organization's own provider key, and a call that would put one on the platform's key is answered by the platform default (N-054, `app.core.ai_models.platform_safe`).
 
 | Per month | Free | Developer | Business | Enterprise |
 |---|---|---|---|---|
 | Document uploads | 25 (refuse) | 500 / seat (refuse) | 5,000 / seat (warn) | 10,000 / seat (warn) |
-| OCR pages | 50 (refuse) | 5,000 / seat (bill overage) | 50,000 / seat (bill overage) | 100,000 / seat (bill overage) |
+| OCR pages | 50 (refuse) | 5,000 / seat (bill overage) | 40,000 / seat (bill overage) | 100,000 / seat (bill overage) |
 | Assistant messages | 30 (refuse) | 1,000 / seat (refuse) | 10,000 / seat (warn) | no ceiling |
 | Storage (GB, a hard ceiling only where REFUSE) | 0.25 (refuse) | 25 / seat (bill overage) | 250 / seat (bill overage) | 1,000 / seat (bill overage) |
-| AI input tokens (safety net) | 300,000 (refuse) | 15,000,000 / seat (refuse) | 150,000,000 / seat (bill overage) | 500,000,000 / seat (bill overage) |
-| AI output tokens (safety net) | 60,000 (refuse) | 2,000,000 / seat (refuse) | 20,000,000 / seat (refuse) | 125,000,000 / seat (bill overage) |
+| AI input tokens (safety net) | 300,000 (refuse) | 15,000,000 / seat (refuse) | 100,000,000 / seat (bill overage) | 300,000,000 / seat (bill overage) |
+| AI output tokens (safety net) | 60,000 (refuse) | 2,000,000 / seat (refuse) | 20,000,000 / seat (refuse) | 75,000,000 / seat (bill overage) |
 | Usage cost ceiling, USD (safety net) | $1 (refuse) | $25 / seat (refuse) | $500 / seat (refuse) | $10,000 / seat (warn) |
 
 ### 4.3 The free trial

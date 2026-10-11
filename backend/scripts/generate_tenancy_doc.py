@@ -262,6 +262,12 @@ def _addon_table(seed: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _served_models() -> list[str]:
+    from app.core.ai_models import PLATFORM_SERVED_MODELS
+
+    return [f"`{model}` on {provider.capitalize()}" for provider, models in PLATFORM_SERVED_MODELS.items() for model in models]
+
+
 def _trial_days() -> int:
     from app.core.config import settings
 
@@ -365,7 +371,10 @@ def render() -> str:
         " Documents, OCR pages, assistant messages and storage are what a customer plans by; the token and"
         " cost ceilings are the platform's safety net above them. Overage: *refuse* stops at the ceiling,"
         " *bill overage* continues and bills each unit above it at the price book's overage price, *warn*"
-        " continues free of charge and the usage screens show the overrun.",
+        " continues free of charge and the usage screens show the overrun. Token allowances cover the models"
+        " the platform serves on its own keys (" + ", ".join(_served_models()) + "); every other listed"
+        " model runs on the organization's own provider key, and a call that would put one on the platform's"
+        " key is answered by the platform default (N-054, " + _ref("app.core.ai_models.platform_safe") + ").",
         "",
         _allowance_table(seed),
         "",

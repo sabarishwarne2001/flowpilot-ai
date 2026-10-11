@@ -380,6 +380,26 @@ def open_stream(
         prefer_tenant_key=prefer_tenant_key,
     )
 
+    # Campaign session 2 (N-054, F-261). The platform's own key serves only the models the
+    # plans are priced for; a premium (or retired) model selected without the
+    # organization's own key is answered by the platform default instead.
+    from app.core.ai_models import platform_safe
+
+    if credential_use.source == SOURCE_PLATFORM:
+        safe = platform_safe(ai_settings)
+        if safe is not ai_settings:
+            logger.warning(
+                "llm.model_needs_own_key_served_by_default",
+                extra={"organization_id": str(organization_id), "selected": safe.substituted_from,
+                       "served_by": f"{safe.provider.value.lower()}/{safe.model}"},
+            )
+            ai_settings = safe
+            provider = normalize_provider(ai_settings.provider.value)
+            adapter = _STREAM_ADAPTERS[provider]
+            client, credential_use = ProviderClientFactory.build(
+                db, organization_id=organization_id, provider=provider, prefer_tenant_key=False,
+            )
+
     breaker = tenant_breaker(
         organization_id=(
             organization_id if credential_use.is_zero_cogs else None

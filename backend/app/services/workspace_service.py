@@ -34,7 +34,7 @@ from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.services import audit_service
 
-from app.core.ai_models import AI_MODELS
+from app.core.ai_models import PLATFORM_DEFAULT_MODEL
 from app.schemas.ai_settings import AISettingsUpdate, AIProvider
 from app.schemas.document_settings import DocumentSettingsCreate
 
@@ -60,7 +60,7 @@ def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid
                 provider=AIProvider.GROQ,
                 # F-196. Was "mixtral-8x7b-32768": retired by Groq (March 2025), absent from
                 # AI_MODELS and from the price book. The platform's listed default instead.
-                model=AI_MODELS[AIProvider.GROQ][0],
+                model=PLATFORM_DEFAULT_MODEL,
                 temperature=0.7,
                 max_output_tokens=2048,
                 top_p=1.0,

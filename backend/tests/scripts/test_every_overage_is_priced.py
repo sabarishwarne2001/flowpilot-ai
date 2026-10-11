@@ -20,9 +20,12 @@ from decimal import Decimal
 import pytest
 
 from app.core import byok_providers
+from app.core.ai_models import PLATFORM_SERVED_MODELS
 from tests.security.plans import _price_book_seed, _seed
 
 ZERO_COST_SOURCES = {"ZERO_BYOK"}
+#: Model providers: their cost is per model, and only PLATFORM_SERVED_MODELS run on our keys.
+_MODEL_PROVIDERS = {"groq", "gemini"}
 MIN_OVERAGE_MARKUP = Decimal(2)
 
 
@@ -53,6 +56,12 @@ def _paid_costs(event_type: str) -> dict[str, Decimal]:
         if row.get("cost_basis_source") in ZERO_COST_SOURCES or row.get("cost_basis_micros") is None:
             continue
         provider = row["provider"]
+        if provider in _MODEL_PROVIDERS and row.get("model") not in PLATFORM_SERVED_MODELS.get(provider, ()):
+            # Campaign session 2 (N-054): a model the platform's keys never serve (it runs on
+            # the customer's key, N-048, or is answered by the platform default) is no cost
+            # the platform pays; the provider-wide default row prices only unlisted models,
+            # which the platform's keys never serve either.
+            continue
         costs[provider] = max(costs.get(provider, Decimal(0)), Decimal(str(row["cost_basis_micros"])))
     return costs
 
