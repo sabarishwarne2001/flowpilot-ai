@@ -494,6 +494,45 @@ test.describe("Webhooks", () => {
     await expect(page.getByText(/Test event queued/)).toBeVisible({ timeout: 15_000 });
     await expectHealthyPage(page);
   });
+
+  // Campaign session 3 (F-302): Redeliver reused attempt 1, so the worker failed to record the
+  // attempt after sending it. A test event to an address the sandbox cannot reach fails; the
+  // Redeliver button requeues it and the next attempt is recorded as attempt 2.
+  test("a failed delivery can be redelivered, and its attempts keep counting (F-302)", async ({ page, problems }) => {
+    problems.allowHttp(/\/webhooks\//, [400, 409, 422, 502], "the receiver is unreachable from the sandbox");
+    const owner = await loginAs("C.owner");
+    const { organizationId } = await resolveWorkspaceId(owner, TENANTS.C.org, TENANTS.C.ws);
+    const url = `https://hooks.caretakers.example.com/redeliver-${runId()}`;
+    const created = await api<{ endpoint: { id: string } }>(owner, "POST", `/organizations/${organizationId}/webhooks/endpoints`, {
+      url, event_types: ["work_item.created"],
+    });
+    expect(created.status, created.text).toBe(201);
+    const endpointId = created.body.endpoint.id;
+    const deliveriesPath = `/organizations/${organizationId}/webhooks/endpoints/${endpointId}/deliveries`;
+    try {
+      expect((await api(owner, "POST", `/organizations/${organizationId}/webhooks/endpoints/${endpointId}/test`)).status).toBe(202);
+      type Delivery = { id: string; status: string; attempts: number };
+      const first = async (): Promise<Delivery | undefined> =>
+        (await api<Delivery[]>(owner, "GET", deliveriesPath)).body[0];
+      await expect.poll(async () => (await first())?.status, { timeout: 60_000 }).toMatch(/FAILED|DEAD/);
+
+      await page.goto(org("C", "webhooks"));
+      const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${url}` }) });
+      await row.getByRole("button", { name: "Deliveries" }).click();
+      await row.getByRole("button", { name: "Redeliver webhook.test" }).click();
+      await expect(row.getByText(/couldn't be requeued|disabled/i)).toHaveCount(0);
+
+      const delivery = (await first())!;
+      await expect.poll(async () => {
+        const attempts = await api<{ attempt_number: number }[]>(
+          owner, "GET", `/organizations/${organizationId}/webhooks/deliveries/${delivery.id}/attempts`);
+        return attempts.body.map((attempt) => attempt.attempt_number).sort();
+      }, { timeout: 60_000 }).toEqual([1, 2]);
+      await expectHealthyPage(page);
+    } finally {
+      await api(owner, "DELETE", `/organizations/${organizationId}/webhooks/endpoints/${endpointId}`);
+    }
+  });
 });
 
 test.describe("Enterprise identity", () => {
