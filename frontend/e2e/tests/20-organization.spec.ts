@@ -22,10 +22,14 @@ test.describe("General", () => {
     await expect(name).toHaveValue(TENANTS.C.name); // loaded before editing
     const patched = () =>
       page.waitForResponse((r) => r.request().method() === "PATCH" && /\/organizations\/[0-9a-f-]+$/.test(r.url()));
-    await name.fill(`Caretakers Global Inc ${runId()}`);
+    const renamed = `Caretakers Global Inc ${runId()}`;
+    await name.fill(renamed);
     let saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
     expect((await saved).status()).toBe(200);
+    // The new name is what the server keeps: a reload shows it.
+    await page.reload();
+    await expect(name).toHaveValue(renamed, { timeout: 15_000 });
     await name.fill(TENANTS.C.name);
     saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
