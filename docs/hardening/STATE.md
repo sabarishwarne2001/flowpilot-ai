@@ -47,6 +47,21 @@ checkpoint's first half: 3985 passed. **Next:** SSRF probes, tokens, enumeration
 redirects, audit immutability, then `SECURITY-REVIEW.md`; the formatting layer and
 `SETTINGS-LEDGER.md`; §3.2 carry-overs; ledger rows; CI.
 
+**Progress (checkpoint 2, 2026-10-12, evening):** items 1, 2, 4 and 5 done. CI green on every
+complete run (§3.1 ticked). Security review written (`SECURITY-REVIEW.md`, F-291 to F-295). The
+display layer is one module per side (F-298, N-064) and `SETTINGS-LEDGER.md` lists every setting
+with its reader, effect and test; on the way, settings that changed nothing or said more than they
+did were fixed, each with a failing test first: chunking controls (F-299), brand colours (F-300,
+N-065), data residency's promise (F-301, N-066), webhook redelivery crashing the worker (F-302),
+the transfer form's double password dialog (F-303), audit log retention ignored and a fixed
+400-day delete (F-304, N-067, High), the organization mail page (F-305), workspace reply-to
+(F-306), AI settings reach (F-307), the identifier's support promise (F-308). Partner portal
+routes proven end to end; a partner's rate could never change (F-309) and a new partner could
+never be used (F-310). Proven with no defect: egress lockdown, document controls, the step-up
+dialog (F-117). Ledger: 88 session 3 rows open (from 145). **Next:** platform consoles as an
+operator (RevOps, Unit economics, Sovereign, Audit explorer), the partner portal page and nav,
+host crons (arch07, arch09, identity, invitations), remaining ledger rows, HANDOFF, finish line.
+
 ## Before session 3 — campaign review (2026-10-12)
 A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
 a session handed on: 711 coverage rows still `smoke` or `untested`, 9 pieces of code with no ledger

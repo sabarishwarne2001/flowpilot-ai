@@ -59,13 +59,19 @@ migrations, integrations, operations and certification.
 ## 3. Session 3: consoles, identity, settings truthfulness, security
 
 ### 3.1 First: make CI trustworthy (it gates both remaining pull requests)
-- [ ] Open this session's pull request early, let CI run, read its annotations, and fix every failing
+- [x] Open this session's pull request early, let CI run, read its annotations, and fix every failing
       or flaky test with the evidence rule. At least one test is flaky: PR #20's last commit and `main`
       after its merge have the identical tree (`cfd2590`), and pytest failed on the first and passed on
       the second. Known candidate: F-256, the late-usage rollup test that fails when it runs at
       minute 59 (reproduction in HANDOFF.md, "Session 1 → later sessions"; the fix is in how rollup
       windows are sealed). Fix it here if it is what turns CI red; otherwise it stays with session 4.
-- [ ] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
+      _Done (session 3): PR #22's full CI (pytest, browser, migrations, frontend, encodings, audits)
+      was green on every complete run of this session (`9d426ebe`, `1b17ec9b`, `155b6f93`); F-256 did
+      not turn it red, so it stays with session 4._
+- [x] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
+      _Session 3: no flaky test seen in CI. One local browser run failed a profile-name step in
+      `14-configuration` once; it did not reproduce (alone or in two full reruns) and is noted in
+      HANDOFF for watching._
 
 ### 3.2 Carried over from sessions 1 and 2 (HANDOFF.md)
 - [x] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
