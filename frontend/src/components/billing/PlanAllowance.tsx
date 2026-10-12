@@ -8,7 +8,7 @@ import { getPlanAllowance } from "@/services/api/billing";
 import { usageKeys } from "@/services/api/queryKeys";
 import { organizationBillingPath } from "@/routes/tenantPaths";
 import type { AllowanceMeter, PlanAllowanceResponse } from "@/types/billing";
-import { formatTimestampDate } from "@/utils/displayTime";
+import { formatNumber, formatTimestampDate } from "@/utils/displayTime";
 
 const NOUNS: Readonly<Record<string, { one: string; many: string }>> = {
   "document.upload": { one: "document", many: "documents" },
@@ -93,7 +93,7 @@ export const PlanAllowance: React.FC<PlanAllowanceProps> = ({ workspaceId, meter
 
 const MeterText: React.FC<{ readonly meter: AllowanceMeter }> = ({ meter }) => (
   <span className="tabular-nums">
-    {meter.used.toLocaleString()} of {meter.limit.toLocaleString()} {noun(meter.key, meter.limit)} this month
+    {formatNumber(meter.used)} of {formatNumber(meter.limit)} {noun(meter.key, meter.limit)} this month
   </span>
 );
 

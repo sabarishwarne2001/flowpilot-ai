@@ -5,7 +5,7 @@ import { Clock, Loader2, Lock } from "lucide-react";
 import { createAddonCheckoutSession } from "@/services/api/entitlements";
 import { BUTTON_PRIMARY, HINT, SECTION_TITLE, SURFACE } from "@/components/ui/primitives";
 import type { AddonAccess } from "@/types/entitlements";
-import { formatTimestampDate } from "@/utils/displayTime";
+import { formatTimestampDate, numberFormat } from "@/utils/displayTime";
 import AskPlanOwners from "@/components/billing/AskPlanOwners";
 
 /**
@@ -18,7 +18,7 @@ import AskPlanOwners from "@/components/billing/AskPlanOwners";
  */
 
 const formatPrice = (micros: number, currency: string): string =>
-  new Intl.NumberFormat(undefined, {
+  numberFormat({
     style: "currency",
     currency,
     maximumFractionDigits: 0,

@@ -107,6 +107,10 @@ class WorkspaceSummary(BaseModel):
     status: WorkspaceStatus
     logo_file_id: Optional[UUID] = None
     effective_role: WorkspaceRole
+    #: Campaign session 3 (N-064): what the display layer needs from the workspace. Calendar
+    #: dates read in its date format; its time zone is the clock for people who never set one.
+    timezone: Optional[str] = None
+    date_format: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

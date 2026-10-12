@@ -28,11 +28,12 @@ import {
   CHANNEL_LABELS, REASON_LABELS, TENANT_CHANNELS, type Channel, type EgressDecision, type RefusalReason,
   type TenantChannel,
 } from "@/types/sovereign";
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp } from "@/utils/displayTime";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 
 const channelLabel = (channel: string | null): string =>
   channel ? (CHANNEL_LABELS[channel as Channel] ?? channel) : "Any governed channel";

@@ -110,10 +110,12 @@ migrations, integrations, operations and certification.
       browser journey in `e2e/tests/40-identity-security.spec.ts`._
 - [x] **`idp_session_sync`** is stored and shown but read by nothing (the identity console says so in
       a comment). Wire it or remove it. _Done (session 3): removed (N-058, migration s3a1)._
-- [ ] **Workspace date format, time zone, currency:** `date_format` is read only as a parsing hint by
+- [x] **Workspace date format, time zone, currency:** `date_format` is read only as a parsing hint by
       procurement matching (ARCH-30 A2); no screen, email, export or feed formats a date with it, and
       the frontend has 87 ad-hoc `toLocale*` / `Intl` calls. Build the one formatting layer the
       session 3 prompt describes.
+      _Done (session 3): N-064, F-298; `frontend/src/utils/displayTime.ts` and
+      `backend/app/core/display_format.py`; `npm run check:self` keeps it the only layer._
 - [x] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
       _Done (session 3): proven and fixed (`tests/services/test_scim_token_key_is_secret.py`)._
 - [ ] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).

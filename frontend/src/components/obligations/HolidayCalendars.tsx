@@ -17,6 +17,7 @@ import {
 } from "@/services/api/obligations";
 import { errorMessage } from "@/services/api/errors";
 import { WEEKDAY_LABELS, formatDay, type HolidayCalendarCreate, type HolidayRow } from "@/types/obligations";
+import { formatNumber } from "@/utils/displayTime";
 
 type Source = "TEMPLATE" | "MANUAL" | "ICS";
 
@@ -191,7 +192,7 @@ export const HolidayCalendars: React.FC<Props> = ({ workspaceId, isAdmin }) => {
                 <span className={HINT}>Years to expand yearly repeats into</span>
                 <input className={INPUT} value={years} onChange={(e) => setYears(e.target.value)} />
               </label>
-              <span className={HINT}>{ics ? `${ics.length.toLocaleString()} characters loaded` : "No file chosen"}</span>
+              <span className={HINT}>{ics ? `${formatNumber(ics.length)} characters loaded` : "No file chosen"}</span>
             </div>
           ) : null}
           <fieldset className="flex flex-wrap items-center gap-2 text-xs">

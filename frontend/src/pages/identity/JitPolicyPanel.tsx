@@ -10,6 +10,7 @@ import { listIdpConfigs } from "@/services/api/identity";
 import { billingKeys, identityKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import type { IdpConfigRead, JitProvisioningMode } from "@/types/identity";
+import { numberFormat } from "@/utils/displayTime";
 
 /**
  * Render a backend-supplied micros figure. Formatting only — no arithmetic on
@@ -17,7 +18,7 @@ import type { IdpConfigRead, JitProvisioningMode } from "@/types/identity";
  * disclosed figure and the issued invoice the same number.
  */
 const formatMicros = (micros: number, currency: string): string =>
-  new Intl.NumberFormat(undefined, {
+  numberFormat({
     style: "currency",
     currency: currency || "USD",
   }).format(micros / 1_000_000);

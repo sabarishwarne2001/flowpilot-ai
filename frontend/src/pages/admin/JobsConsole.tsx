@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabList, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 import { errorMessage } from "@/services/api/errors";
 import { getDeadJobs, getJobsSummary, platformJobKeys, retryDeadJob } from "@/services/api/platformJobs";
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp } from "@/utils/displayTime";
 
 type Tab = "overview" | "dead";
 const TABS: readonly TabDefinition<Tab>[] = [
@@ -27,7 +27,8 @@ const TABS: readonly TabDefinition<Tab>[] = [
   { id: "dead", label: "Dead jobs", icon: Skull },
 ];
 const TAB_IDS = TABS.map((entry) => entry.id);
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 
 const waited = (value: number | null): string => {
   if (value === null) {

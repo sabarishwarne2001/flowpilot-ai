@@ -60,6 +60,7 @@ import {
 } from "@/types/cogs";
 import { errorMessage } from "@/services/api/errors";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatMoney, formatNumber } from "@/utils/displayTime";
 
 const WINDOWS: readonly { readonly days: number; readonly label: string }[] = [
   { days: 7, label: "Last 7 days" },
@@ -147,14 +148,14 @@ const CoverageBanner: React.FC<{ readonly figures: MarginFigures }> = ({
           {figures.revenue_micros === 0 ? (
             <>
               No revenue was billed in this period, and{" "}
-              {figures.unknown_cost_event_count.toLocaleString()} events have
+              {formatNumber(figures.unknown_cost_event_count)} events have
               no recorded supplier cost.
             </>
           ) : (
             <>
               {formatRatio(figures.unknown_cost_share)} of revenue (
               {formatMicros(figures.unknown_cost_revenue_micros)} across{" "}
-              {figures.unknown_cost_event_count.toLocaleString()} events) came
+              {formatNumber(figures.unknown_cost_event_count)} events) came
               from usage with no recorded supplier cost. A margin computed over
               the remainder would describe a minority of the business.
             </>
@@ -179,7 +180,7 @@ const perMillion = (value: string | number): string => {
     return String(value);
   }
   const digits = amount !== 0 && Math.abs(amount) < 0.01 ? 4 : 2;
-  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return formatMoney(amount, "USD", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
 const MarginCell: React.FC<{ readonly figures: MarginFigures }> = ({
@@ -368,7 +369,7 @@ const InvoiceRow: React.FC<{
             )}
             {latest.unknown_cost_event_count > 0 ? (
               <div className="text-xs text-destructive">
-                {latest.unknown_cost_event_count.toLocaleString()} events in this
+                {formatNumber(latest.unknown_cost_event_count)} events in this
                 period had no cost basis
               </div>
             ) : null}
@@ -563,7 +564,7 @@ export const AdminMarginsHub: React.FC = () => {
             <Stat
               label="Revenue"
               value={formatMicros(figures.revenue_micros)}
-              caption={`${figures.event_count.toLocaleString()} metered events`}
+              caption={`${formatNumber(figures.event_count)} metered events`}
             />
             <Stat
               label="Modelled COGS"
@@ -573,7 +574,7 @@ export const AdminMarginsHub: React.FC = () => {
                   : formatMicros(figures.cost_basis_micros)
               }
               isUnknown={figures.known_cost_event_count === 0}
-              caption={`${figures.known_cost_event_count.toLocaleString()} events with a cost basis`}
+              caption={`${formatNumber(figures.known_cost_event_count)} events with a cost basis`}
             />
             <Stat
               label="Gross margin"
@@ -594,14 +595,14 @@ export const AdminMarginsHub: React.FC = () => {
               value={formatMicros(figures.unknown_cost_revenue_micros)}
               caption={`${formatRatio(
                 figures.unknown_cost_share,
-              )} of revenue · ${figures.unknown_cost_event_count.toLocaleString()} events`}
+              )} of revenue · ${formatNumber(figures.unknown_cost_event_count)} events`}
             />
             <Stat
               label="BYOK traffic"
               value={formatMicros(figures.zero_byok_revenue_micros)}
               caption={`${formatRatio(
                 figures.zero_byok_share,
-              )} of revenue · $0.00 provider cost · ${figures.zero_byok_event_count.toLocaleString()} events`}
+              )} of revenue · $0.00 provider cost · ${formatNumber(figures.zero_byok_event_count)} events`}
             />
           </section>
         </>
@@ -760,7 +761,7 @@ export const AdminMarginsHub: React.FC = () => {
                           : "text-muted-foreground"
                       }`}
                     >
-                      {entry.unknown_cost_event_count.toLocaleString()}
+                      {formatNumber(entry.unknown_cost_event_count)}
                     </td>
                   </tr>
                 ))}

@@ -1078,3 +1078,19 @@ lowered, they are deactivated, they leave, the directory removes them), the revi
 go back to the queue unassigned and their obligations lose their owner, at once, so nothing waits on
 a person who cannot open it.
 
+## N-064 — Whose settings decide how dates, times, numbers and money read
+**DECIDED (campaign session 3).**
+
+| What | Decided by | Example |
+|---|---|---|
+| A moment (uploaded at, signed in at) | The person's time zone; the workspace's if they never set one | "12 Oct 2026, 3:05 pm IST" |
+| A calendar date on a document (due date, invoice date, contract end) | The **workspace's** date format, for everyone in it | "15/12/2026" in a DD/MM/YYYY workspace |
+| Numbers and amounts | The person's language | "1,234.5" or "1.234,5" |
+| Money | Its own currency, in the person's language; no currency means a plain number (never a guessed symbol) | "€1,234.50" |
+| Exports, webhooks, calendar feeds | Always ISO 8601, whatever the settings | "2026-12-15" |
+
+Why the workspace decides document dates: a team should read "03/04/2026" the same way the
+documents and three-way matching do, whoever is looking. Why the person decides the rest: one
+workspace serves people in different countries. Emails the server sends to several people state
+moments in UTC, saying so. This is how Xero and QuickBooks split organisation and user settings.
+

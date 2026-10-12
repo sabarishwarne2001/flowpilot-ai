@@ -26,6 +26,8 @@ from typing import Any, Callable, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app.core.display_format import format_calendar_date, is_iso_date
+
 #: Who may put an action into a rule.
 ROLE_WORKSPACE_ADMIN = "WORKSPACE_ADMIN"
 ROLE_ORGANIZATION_ADMIN = "ORGANIZATION_ADMIN"
@@ -194,10 +196,26 @@ def variables_for(state: Any) -> TemplateValues:
         "rule.name": _scalar(getattr(getattr(state, "rule", None), "name", None)),
         "trigger.label": spec.label if spec else "",
     }
+    # Campaign session 3 (N-064): a calendar date in the event (an obligation's due date, a
+    # contract end) reads in the workspace's date format, as on its documents; webhooks and
+    # exports keep ISO 8601. Moments (timestamps) are left as they are.
+    date_format = _workspace_date_format(state)
     for key, value in payload.items():
-        values[f"event.{key}"] = _scalar(value)
+        text = _scalar(value)
+        values[f"event.{key}"] = format_calendar_date(text, date_format) if is_iso_date(text) else text
     escaped = {k: html.escape(v, quote=True) for k, v in values.items()}
     return TemplateValues(escaped, entities)
+
+
+def _workspace_date_format(state: Any) -> Optional[str]:
+    db = getattr(state, "db", None)
+    workspace_id = getattr(getattr(state, "execution", None), "workspace_id", None)
+    if db is None or workspace_id is None:
+        return None
+    from app.models.workspace import Workspace
+
+    workspace = db.get(Workspace, workspace_id)
+    return getattr(workspace, "date_format", None)
 
 
 def render(template: str, values: Mapping[str, str]) -> str:

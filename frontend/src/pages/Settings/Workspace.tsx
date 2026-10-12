@@ -690,10 +690,11 @@ export const Workspace: React.FC = () => {
                 {/* ARCH30-T4:ws-clock-hint — A1. The old copy said exports
                     always run on UTC. That stopped being true in Tranche 4;
                     a hint that lies is worse than no hint. */}
-                The workspace clock. Warehouse export schedules can be set to
-                follow it — daylight saving included — instead of UTC. Changing
-                this timezone moves every schedule that follows this workspace
-                to the new local hour.
+                The workspace clock. Times are shown on it for members who have not
+                set their own timezone (campaign session 3, N-064), and warehouse
+                export schedules can be set to follow it — daylight saving
+                included — instead of UTC. Changing this timezone moves every
+                schedule that follows this workspace to the new local hour.
               </p>
             </div>
 
@@ -704,8 +705,9 @@ export const Workspace: React.FC = () => {
             <div className="space-y-2 rounded-lg border border-border/60 bg-muted/40 p-3">
               <p className="text-sm font-medium text-foreground">Language is a personal setting</p>
               <p className="text-xs text-muted-foreground">
-                Each member picks their language and display timezone in their own profile, so
-                one workspace can serve people in different countries.
+                Each member picks their language (how numbers and amounts read) and display
+                timezone in their own profile, so one workspace can serve people in different
+                countries. Dates on documents follow the workspace&apos;s date format below.
               </p>
             </div>
 
@@ -738,7 +740,7 @@ export const Workspace: React.FC = () => {
               <span className="flex items-center gap-1.5">
                 <label htmlFor="date_format" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date format</label>
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
-                <InfoTooltip label="Date format">Tells three-way matching how to read ambiguous dates on your documents (is 03/04/2026 March or April?). It does not change how dates are displayed.</InfoTooltip>
+                <InfoTooltip label="Date format">How dates on documents read in this workspace (due dates, invoice dates, contract ends), for everyone in it, and how three-way matching reads ambiguous dates on your documents (is 03/04/2026 March or April?). Exports keep ISO dates (2026-04-03) so spreadsheets read them anywhere.</InfoTooltip>
               </span>
               <select
                 id="date_format"

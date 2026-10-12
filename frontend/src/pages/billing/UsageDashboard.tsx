@@ -1,4 +1,4 @@
-import { formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp, formatTimestampDate } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Info, Loader2 } from "lucide-react";
@@ -265,13 +265,13 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({
                   <tr key={line.event_type} className="border-b border-border/50">
                     <td className="py-2 pr-4">{meterLabel(line.event_type)}</td>
                     <td className="py-2 pr-4 tabular-nums">
-                      {parseQuantity(line.quantity).toLocaleString()}{" "}
+                      {formatNumber(parseQuantity(line.quantity))}{" "}
                       <span className="text-xs text-muted-foreground">
                         {unitFor(line.unit, parseQuantity(line.quantity))}
                       </span>
                     </td>
                     <td className="py-2 pr-4 tabular-nums text-muted-foreground">
-                      {line.event_count.toLocaleString()}
+                      {formatNumber(line.event_count)}
                     </td>
                     <td className="py-2 text-right tabular-nums">
                       {formatMicros(line.cost_micros, currency)}
@@ -306,7 +306,7 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
           {limit.max_cost_micros !== null
             ? `${formatMicros(limit.current_cost_micros, currency)} of ${formatMicros(limit.max_cost_micros, currency)}`
             : limit.max_quantity !== null
-              ? `${parseQuantity(limit.current_quantity).toLocaleString()} of ${parseQuantity(limit.max_quantity).toLocaleString()}`
+              ? `${formatNumber(parseQuantity(limit.current_quantity))} of ${formatNumber(parseQuantity(limit.max_quantity))}`
               : "No ceiling"}
         </span>
       </div>

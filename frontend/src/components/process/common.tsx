@@ -12,6 +12,7 @@ import {
   CONFLICT_MESSAGES, STATUS_LABELS, STATUS_TONES, type CostSummary, type ProposalConflictCode, type ProposalStatus,
 } from "@/types/process";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { formatNumber } from "@/utils/displayTime";
 
 export const ProcessLocked: React.FC<{ readonly compact?: boolean }> = ({ compact = false }) =>
   compact ? (
@@ -52,7 +53,8 @@ export const usd = (micros: number | null | undefined): string => {
   return `$${dollars.toFixed(digits)}`;
 };
 
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 
 /** A count, grouped ("12,480"). */
 export const num = (value: number): string => COUNT.format(value);

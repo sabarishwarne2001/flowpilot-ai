@@ -27,7 +27,7 @@ import {
   CONTRACT_INTERVALS, CURRENCIES, PLAN_INTERVALS, PROMO_DURATIONS, REVOPS_MESSAGES, money,
   type ContractInterval, type Currency, type PlanInterval, type PromoDuration, type RevOpsCode,
 } from "@/types/revops";
-import { formatCalendarDate, formatTimestamp } from "@/utils/displayTime";
+import { formatCalendarDate, formatNumber, formatTimestamp } from "@/utils/displayTime";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
@@ -40,7 +40,8 @@ const TABS: readonly TabDefinition<Tab>[] = [
   { id: "contracts", label: "Contracts", icon: FileSignature },
 ];
 const TAB_IDS = TABS.map((tab) => tab.id);
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 const ACT_DONE: Readonly<Record<"activate" | "issue" | "end" | "pay" | "void", string>> = {
   activate: "Contract activated. The organization is on the contract's plan.",
   issue: "Every invoice that is due has been issued.",

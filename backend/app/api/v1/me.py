@@ -119,6 +119,8 @@ def get_my_context(
                     status=workspace.status,
                     logo_file_id=workspace.logo_file_id,
                     effective_role=effective_role,
+                    timezone=workspace.timezone,
+                    date_format=workspace.date_format,
                 )
             )
 

@@ -30,7 +30,7 @@ import {
 import {
   CHANNELS, CHANNEL_LABELS, LICENCE_STATUS_LABELS, REASON_LABELS, type Channel, type EgressDecision, type RefusalReason,
 } from "@/types/sovereign";
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp } from "@/utils/displayTime";
 
 type Tab = "overview" | "egress" | "model" | "licence" | "release" | "recovery";
 const TABS: readonly TabDefinition<Tab>[] = [
@@ -42,7 +42,8 @@ const TABS: readonly TabDefinition<Tab>[] = [
   { id: "recovery", label: "Recovery", icon: LifeBuoy },
 ];
 const TAB_IDS = TABS.map((entry) => entry.id);
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 
 const seconds = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) {

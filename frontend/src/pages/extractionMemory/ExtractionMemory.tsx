@@ -43,6 +43,7 @@ import type { MemoryMode } from "@/types/extractionMemory";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import AskPlanOwners from "@/components/billing/AskPlanOwners";
+import { formatNumber } from "@/utils/displayTime";
 
 const MODES: ReadonlyArray<{ readonly mode: MemoryMode; readonly label: string; readonly help: string }> = [
   { mode: "OFF", label: "Off", help: "Nothing is learned and nothing is applied." },
@@ -105,9 +106,9 @@ const LockedView: React.FC<{ readonly workspaceId: string; readonly canChangePla
       </p>
       {potential.data && potential.data.corrected_fields > 0 ? (
         <p className="text-sm">
-          Your reviewers have already corrected {potential.data.corrected_fields.toLocaleString()} field
+          Your reviewers have already corrected {formatNumber(potential.data.corrected_fields)} field
           {potential.data.corrected_fields === 1 ? "" : "s"} across{" "}
-          {potential.data.reviewed_documents.toLocaleString()} reviewed document
+          {formatNumber(potential.data.reviewed_documents)} reviewed document
           {potential.data.reviewed_documents === 1 ? "" : "s"}.
         </p>
       ) : null}

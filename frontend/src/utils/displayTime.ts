@@ -18,9 +18,26 @@ export interface DisplayPreferences {
   readonly locale?: string | undefined;
 }
 
+/**
+ * Campaign session 3 (N-064) — the workspace's part. A CALENDAR date (a due
+ * date, an invoice date) reads in the workspace's date format, the setting that
+ * also tells three-way matching how to read that workspace's documents; the
+ * workspace's time zone is the clock for a person who never set their own.
+ * Numbers and money read in the person's language (`formatNumber`,
+ * `formatMoney`); an amount keeps its own currency and never gets a guessed one.
+ */
+export interface WorkspaceDisplay {
+  readonly dateFormat?: string | undefined;
+  readonly timeZone?: string | undefined;
+}
+
+/** The formats Settings > Workspace > Date format offers. */
+export const DATE_FORMATS = ["YYYY-MM-DD", "DD-MM-YYYY", "MM-DD-YYYY", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY/MM/DD"] as const;
+
 type TimestampInput = string | number | Date | null | undefined;
 
 let current: DisplayPreferences = {};
+let workspace: WorkspaceDisplay = {};
 
 const validTimeZone = (value?: string | null): string | undefined => {
   if (!value) {
@@ -56,6 +73,18 @@ export const applyDisplayPreferences = (
 
 export const getDisplayPreferences = (): DisplayPreferences => current;
 
+/** Apply the open workspace's settings. Returns a key that changes when they change. */
+export const applyWorkspaceDisplay = (dateFormat?: string | null, timeZone?: string | null): string => {
+  workspace = {
+    dateFormat: dateFormat && (DATE_FORMATS as readonly string[]).includes(dateFormat) ? dateFormat : undefined,
+    timeZone: validTimeZone(timeZone),
+  };
+  return `${workspace.dateFormat ?? "locale"}|${workspace.timeZone ?? "none"}`;
+};
+
+/** The clock a moment is shown on: the person's zone, else the workspace's, else the browser's. */
+const zone = (): string | undefined => current.timeZone ?? workspace.timeZone;
+
 const toDate = (value: TimestampInput): Date | null => {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -76,7 +105,7 @@ export const formatTimestamp = (value: TimestampInput, fallback = "—"): string
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: current.timeZone,
+    timeZone: zone(),
     timeZoneName: "short",
   }).format(date);
 };
@@ -91,7 +120,7 @@ export const formatTimestampDate = (value: TimestampInput, fallback = "—"): st
     year: "numeric",
     month: "short",
     day: "numeric",
-    timeZone: current.timeZone,
+    timeZone: zone(),
   }).format(date);
 };
 
@@ -107,15 +136,16 @@ export const formatTimestampTime = (
   }
   return new Intl.DateTimeFormat(current.locale, {
     ...options,
-    timeZone: current.timeZone,
+    timeZone: zone(),
   }).format(date);
 };
 
 /**
  * ARCH46-S2:calendar-dates — a CALENDAR date ("2026-02-28": a due date, a
  * holiday), not an instant. It is the same day for every reader, so it is
- * formatted in the profile's language but never shifted by a zone (UTC is only
- * the arithmetic frame): "28 Feb 2026".
+ * never shifted by a zone (UTC is only the arithmetic frame). Campaign session
+ * 3 (N-064): in the workspace's date format ("28/02/2026") when one is set,
+ * else in the profile's language ("28 Feb 2026").
  */
 export const formatCalendarDate = (iso?: string | null, fallback = "—"): string => {
   if (!iso) {
@@ -124,6 +154,12 @@ export const formatCalendarDate = (iso?: string | null, fallback = "—"): strin
   const [y, m, d] = iso.slice(0, 10).split("-").map((x) => Number.parseInt(x, 10));
   if (!y || !m || !d) {
     return iso;
+  }
+  if (workspace.dateFormat) {
+    return workspace.dateFormat
+      .replace("YYYY", String(y).padStart(4, "0"))
+      .replace("MM", String(m).padStart(2, "0"))
+      .replace("DD", String(d).padStart(2, "0"));
   }
   return new Intl.DateTimeFormat(current.locale, {
     year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
@@ -134,3 +170,80 @@ export const formatCalendarDate = (iso?: string | null, fallback = "—"): strin
 export const formatCalendarMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat(current.locale, { month: "long", year: "numeric", timeZone: "UTC" })
     .format(Date.UTC(year, month - 1, 1));
+
+
+/**
+ * Campaign session 3 (N-064). Numbers in the person's language ("1,234.5",
+ * "1.234,5"): every count, quantity and amount on screen goes through here or
+ * `formatMoney`, never `toLocaleString()`, which reads the browser.
+ */
+export const numberFormat = (options?: Intl.NumberFormatOptions): Intl.NumberFormat => {
+  try {
+    return new Intl.NumberFormat(current.locale, options);
+  } catch {
+    return new Intl.NumberFormat(undefined, options);
+  }
+};
+
+export const formatNumber = (
+  value: number | null | undefined,
+  options?: Intl.NumberFormatOptions,
+  fallback = "—",
+): string => (value === null || value === undefined || !Number.isFinite(value) ? fallback : numberFormat(options).format(value));
+
+/**
+ * An amount in its own currency, in the person's language: "₹1,234.50",
+ * "1.234,50 €". Without a valid ISO currency it is a plain number with two
+ * decimals: printing a guessed symbol is worse than printing none (F-172).
+ */
+export const formatMoney = (
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  options: Intl.NumberFormatOptions = {},
+  fallback = "—",
+): string => {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) {
+    return fallback;
+  }
+  if (currency && /^[A-Za-z]{3}$/.test(currency)) {
+    try {
+      return numberFormat({ style: "currency", currency: currency.toUpperCase(), ...options }).format(amount);
+    } catch {
+      // an ISO-shaped code the runtime does not know: a plain number below
+    }
+  }
+  return numberFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2, ...options }).format(amount);
+};
+
+/**
+ * Campaign session 3 (N-064). Run by `npm run check:self`: the rules above,
+ * exercised with a German reader and a DD/MM/YYYY workspace on India's clock.
+ * Restores the previous preferences before returning.
+ */
+export const runDisplayFormatSelfCheck = (): string[] => {
+  const failures: string[] = [];
+  const saved = { current, workspace };
+  const expect = (label: string, actual: string, wanted: string | RegExp): void => {
+    const ok = typeof wanted === "string" ? actual === wanted : wanted.test(actual);
+    if (!ok) {
+      failures.push(`${label}: got ${JSON.stringify(actual)}, wanted ${String(wanted)}`);
+    }
+  };
+  try {
+    applyDisplayPreferences(undefined, "de-DE");
+    applyWorkspaceDisplay("DD/MM/YYYY", "Asia/Kolkata");
+    expect("a number in the person's language", formatNumber(1234.5), "1.234,5");
+    expect("money in its own currency", formatMoney(1234.5, "EUR"), /^1\.234,50\s€$/);
+    expect("no guessed currency", formatMoney(12, null), "12,00");
+    expect("a calendar date in the workspace's format", formatCalendarDate("2026-12-05"), "05/12/2026");
+    expect("the workspace's clock when the person has none", formatTimestampTime("2026-01-01T00:00:00Z", { hour: "2-digit", minute: "2-digit" }), "05:30");
+    applyDisplayPreferences("Europe/Berlin", "de-DE");
+    expect("the person's own clock wins", formatTimestampTime("2026-01-01T00:00:00Z", { hour: "2-digit", minute: "2-digit" }), "01:00");
+    applyWorkspaceDisplay("not-a-format", undefined);
+    expect("an unknown date format falls back to the language", formatCalendarDate("2026-12-05"), /^5\.\s?Dez\.?\s2026$/);
+  } finally {
+    current = saved.current;
+    workspace = saved.workspace;
+  }
+  return failures;
+};

@@ -19,6 +19,7 @@ import {
   TIER_RANK,
   isPlanFeatureKey,
 } from "@/constants/planFeatures";
+import { numberFormat } from "@/utils/displayTime";
 
 interface PlanSelectorProps {
   readonly organizationId: string;
@@ -580,7 +581,7 @@ function formatBookPrice(price: PlanPriceOption | null, interval: string, curren
   if (price === null) {
     return `Not sold ${interval === "year" ? "annually" : "monthly"} in ${currency} — contact sales`;
   }
-  const amount = new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency.toUpperCase() })
+  const amount = numberFormat({ style: "currency", currency: price.currency.toUpperCase() })
     .format(price.unit_amount / 100);
   const suffix = price.price_id ? "" : " (contact sales)";
   return `${amount} per seat / ${price.interval}${suffix}`;
@@ -595,7 +596,7 @@ function formatPrice(plan: PlanOption): string {
     return "Free";
   }
 
-  const amount = new Intl.NumberFormat(undefined, {
+  const amount = numberFormat({
     style: "currency",
     currency: plan.currency.toUpperCase(),
   }).format(plan.unit_amount / 100);

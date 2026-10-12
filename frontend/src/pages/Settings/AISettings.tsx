@@ -57,6 +57,7 @@ import { InfoTooltip } from "@/components/forms/InfoTooltip";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { formatNumber } from "@/utils/displayTime";
 
 const DEFAULTS: AISettingsFormData = {
   provider: "GROQ",
@@ -75,7 +76,7 @@ const formatRate = (micros: number | null, currency: string | null): string => {
     return "Not priced";
   }
   const amount = micros / 1_000_000;
-  return `${currency ?? ""} ${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}`.trim();
+  return `${currency ?? ""} ${formatNumber(amount, { maximumFractionDigits: 4 })}`.trim();
 };
 
 const FieldLabel: React.FC<{ readonly htmlFor: string; readonly field: keyof typeof AI_FIELD_HELP }> = ({

@@ -10,7 +10,7 @@
  * modules (they are plain TypeScript, no React) and node runs them.
  */
 import { build } from "esbuild";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -27,11 +27,13 @@ import { runTenantResolutionSelfCheck } from "@/hooks/tenantResolution";
 import { runTenantPathSelfCheck } from "@/routes/tenantPaths";
 import { runTenantReconciliationSelfCheck } from "@/routes/tenantReconciliation";
 import { runPermissionSelfCheck } from "@/permissions/selfCheck";
+import { runDisplayFormatSelfCheck } from "@/utils/displayTime";
 export const checks = {
   "tenant resolution": runTenantResolutionSelfCheck,
   "tenant paths": runTenantPathSelfCheck,
   "tenant reconciliation": runTenantReconciliationSelfCheck,
   "permission parity": runPermissionSelfCheck,
+  "display formatting": runDisplayFormatSelfCheck,
 };
 `,
 );
@@ -57,6 +59,35 @@ try {
       failed += failures.length;
       console.log(`FAIL  ${name}\n${failures.map((f) => `        - ${f}`).join("\n")}`);
     }
+  }
+
+  // Campaign session 3 (N-064): dates, times, numbers and money go through the display layer
+  // (src/utils/displayTime.ts), which reads the person's language and clock and the workspace's
+  // date format. A bare toLocale*String() or new Intl.*Format() reads the browser instead.
+  const BYPASS = /\.toLocale(?:Date|Time)?String\(|new Intl\.(?:NumberFormat|DateTimeFormat)\(/;
+  const ALLOWED = new Set([path.join("src", "utils", "displayTime.ts")]);
+  const bypasses = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(name) && !name.endsWith(".d.ts")) {
+        const relative = path.relative(ROOT, full);
+        if (ALLOWED.has(relative)) continue;
+        readFileSync(full, "utf8").split("\n").forEach((line, index) => {
+          const code = line.replace(/\/\/.*$/, "").replace(/\{\/\*.*\*\/\}/, "");
+          if (BYPASS.test(code)) bypasses.push(`${relative}:${index + 1}: ${line.trim()}`);
+        });
+      }
+    }
+  };
+  walk(path.join(ROOT, "src"));
+  if (bypasses.length === 0) {
+    console.log("ok    one display layer");
+  } else {
+    failed += bypasses.length;
+    console.log(`FAIL  one display layer\n${bypasses.map((f) => `        - ${f}`).join("\n")}`);
   }
   process.exitCode = failed ? 1 : 0;
 } finally {

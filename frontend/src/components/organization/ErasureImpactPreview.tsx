@@ -6,6 +6,7 @@ import { previewErasure } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
 import { totalDestroyed } from "@/types/compliance";
 import { errorMessage as apiErrorMessage } from "@/services/api/errors";
+import { formatNumber } from "@/utils/displayTime";
 
 const TABLE_LABELS: Readonly<Record<string, string>> = {
   work_items: "Documents",
@@ -134,7 +135,7 @@ export const ErasureImpactPreview: React.FC<ErasureImpactPreviewProps> = ({
                         {labelFor(table)}
                       </td>
                       <td className="py-1 text-right font-medium tabular-nums text-foreground">
-                        {count.toLocaleString()}
+                        {formatNumber(count)}
                       </td>
                     </tr>
                   ))}
@@ -143,7 +144,7 @@ export const ErasureImpactPreview: React.FC<ErasureImpactPreviewProps> = ({
                       Total records
                     </td>
                     <td className="py-1 text-right font-semibold tabular-nums text-destructive">
-                      {total.toLocaleString()}
+                      {formatNumber(total)}
                     </td>
                   </tr>
                 </tbody>

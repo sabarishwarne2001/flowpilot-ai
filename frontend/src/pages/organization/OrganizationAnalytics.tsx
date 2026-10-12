@@ -71,6 +71,7 @@ import {
 } from "@/types/analytics";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
+import { formatNumber } from "@/utils/displayTime";
 
 const CARD =
   "rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm";
@@ -1111,7 +1112,7 @@ const OrganizationAnalytics: React.FC = () => {
                   <div>
                     <p className={HINT}>Metered events</p>
                     <p className="text-2xl font-semibold">
-                      {consumption.data.total_event_count.toLocaleString()}
+                      {formatNumber(consumption.data.total_event_count)}
                     </p>
                   </div>
                 </div>

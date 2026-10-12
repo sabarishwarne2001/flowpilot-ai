@@ -47,6 +47,7 @@ import { canEditOwnContent } from "@/permissions/workspacePermissions";
 import type { WorkspaceRole } from "@/types/tenancy";
 import { ApiError } from "@/services/api/client";
 import type { WorkItemStatus } from "@/types/workItem";
+import { formatNumber } from "@/utils/displayTime";
 
 type DetailTab = "document" | "summary" | "entities" | "obligations" | "postings" | "ocr" | "chat";
 
@@ -545,8 +546,8 @@ export const WorkItemDetails: React.FC = () => {
                           )}
                           {documentText.data?.truncated && (
                             <p className="mt-2 text-xs text-muted-foreground">
-                              Showing the first {documentText.data.text.length.toLocaleString()} of{" "}
-                              {documentText.data.characters.toLocaleString()} characters.
+                              Showing the first {formatNumber(documentText.data.text.length)} of{" "}
+                              {formatNumber(documentText.data.characters)} characters.
                             </p>
                           )}
                         </div>

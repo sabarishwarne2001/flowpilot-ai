@@ -9,6 +9,7 @@ import type {
   FlowActionEntry,
   FlowConditionGroup,
 } from "@/types/automationFlow";
+import { numberFormat } from "@/utils/displayTime";
 
 /** The stored `event` column: a catalog key, or an ARCH-13 legacy value. */
 export type AutomationEvent = string;
@@ -126,7 +127,7 @@ export const formatCostMicros = (micros: number | null | undefined): string => {
   }
   const dollars = micros / 1_000_000;
   const decimals = dollars !== 0 && Math.abs(dollars) < 0.01 ? 4 : 2;
-  return new Intl.NumberFormat(undefined, {
+  return numberFormat({
     style: "currency",
     currency: "USD",
     minimumFractionDigits: decimals,
