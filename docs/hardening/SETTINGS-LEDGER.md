@@ -58,9 +58,9 @@ The display layer is one module on each side: `FE/utils/displayTime.ts` (checked
 | Setting | Read by, and what it changes | Proof | Status |
 |---|---|---|---|
 | Provider, model | Which model answers and reads documents | `backend/tests/services/test_platform_served_models.py` | Proven |
-| Temperature | Ask AI answers only (reading documents uses fixed low temperatures); the page says so | `e2e/tests/46-settings-truthfulness.spec.ts` (wording) | Fixed (F-307); effect unproven |
-| Top P, maximum output length | Every model call for the workspace (`llm_service`) | none | Reader, unproven |
-| Frequency and presence penalty | Groq models only; read-only with the reason when Gemini is chosen | `e2e/tests/46-settings-truthfulness.spec.ts` (wording) | Fixed (F-307); effect unproven |
+| Temperature | Ask AI answers only (reading documents uses fixed low temperatures); the page says so | `e2e/tests/46-settings-truthfulness.spec.ts` (wording); `backend/tests/services/test_workspace_ai_settings_reach_the_provider.py` (reading calls never take it) | Fixed (F-307); the assistant's use unproven |
+| Top P, maximum output length | Every model call for the workspace (`llm_service`) | `backend/tests/services/test_workspace_ai_settings_reach_the_provider.py` (classify, extract and summarise each send them) | Proven |
+| Frequency and presence penalty | Groq models only; read-only with the reason when Gemini is chosen | `e2e/tests/46-settings-truthfulness.spec.ts` (wording); `backend/tests/services/test_workspace_ai_settings_reach_the_provider.py` (sent to Groq) | Fixed (F-307); proven |
 | Streaming | Ask AI answers arrive whole when off | `tests/engines/test_assistant_stream_provider_errors_live.py` | Proven |
 
 ## Workspace > Documents
@@ -163,7 +163,7 @@ dropping it is a cleanup for a later session (HANDOFF).
 
 ## Still unproven (for a later session)
 
-AI top P, length and the penalties' effect; dispatch tagging off; extraction memory off; SLA
+The assistant's use of the temperature; dispatch tagging off; extraction memory off; SLA
 at-risk probability and alerts; every agent policy field; procurement amount, quantity, pair-cost
 and candidate-window tolerances; conversation retention; legal name after the payment customer
 exists. Each has a reader; none has a test of its effect.

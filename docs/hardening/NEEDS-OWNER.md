@@ -1141,3 +1141,16 @@ evidence, deleting them cannot be undone, and regulated customers commonly need 
 ever matters, a default period can be introduced deliberately, announced to customers and shown on
 the screen, rather than applied silently.
 
+
+## N-068 — Which time zones and currencies a workspace can use
+**DECIDED (campaign session 3), with F-320 and F-321.**
+
+Any real time zone (the full IANA list, the same one the profile offers) and any three-letter ISO
+4217 currency. The workspace page offered ten of each, chosen for the first customers, so a
+workspace in Zurich, São Paulo or Toronto could not set its own clock or the currency three-way
+matching falls back to. The common ten stay at the top of the currency list.
+
+The server now refuses anything it cannot honour (an unknown zone, a currency that is not a code,
+a date format the product does not render), where before it stored any text and quietly fell back.
+Nothing about prices or billing currency changes: this is the workspace's operating currency for
+reading documents, not what FlowPilot charges in.

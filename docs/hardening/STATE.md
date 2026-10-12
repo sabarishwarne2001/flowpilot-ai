@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 running: consoles, identity, settings truthfulness, security)_
+_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 finished: consoles, identity, settings truthfulness, security; session 4 next)_
 
 ## Current phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
@@ -61,6 +61,20 @@ never be used (F-310). Proven with no defect: egress lockdown, document controls
 dialog (F-117). Ledger: 88 session 3 rows open (from 145). **Next:** platform consoles as an
 operator (RevOps, Unit economics, Sovereign, Audit explorer), the partner portal page and nav,
 host crons (arch07, arch09, identity, invitations), remaining ledger rows, HANDOFF, finish line.
+
+**Final checkpoint (session 3 finished, 2026-10-12, night):** all seven items done. Platform
+consoles proven as an operator (RevOps, Unit economics, Sovereign, audit explorer: F-311 to F-317);
+partner portal page and suspended read-only state (F-319); profile save no longer pins the clock
+(F-318, the 14-configuration CI failure); workspace regional settings checked and every zone and
+currency offered (F-320, F-321, N-068); the settings page keeps its section (F-322); a public-API
+workflow trigger now reaches the engine (F-323, High); erasure by a person's name, not an unseen
+user ID (F-325). F-324 (a verification/automation race) is recorded as **unverified** and handed
+to session 4. Host crons (arch07, arch09, identity, invitations) proven. New tests: console routes
+by effect, custom domains and TLS, warehouse connectors on the wire, DNS lookup, AI settings at the
+provider, browser specs 48 (console effects) and 49 (account changes and emailed links).
+`campaign_slices --check 3` exits 0 (one row, `branding.domain`, blocked with its reason).
+HANDOFF.md has "Session 3 → later sessions". **Next action:** session 4 (CAMPAIGN-MAP §4); the PR
+is marked ready once CI is green on its last commit.
 
 ## Before session 3 — campaign review (2026-10-12)
 A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
@@ -365,11 +379,12 @@ plan card price; **N-031** local model at a declared zero.
 _Updated 2026-10-12. The earlier list here (merge PR #18; the Redis frame buffer; one matching case
 per invoice copy) is done: PR #18 merged, the buffer moved off the event loop (F-263), one case per
 invoice (F-264, N-055)._
-1. Session 3 (consoles, identity, settings truthfulness, security), with its section of
-   `docs/hardening/CAMPAIGN-MAP.md`; then session 4 (experience, performance, operations,
-   certification), with its section.
-2. Still open from earlier passes, each now assigned in the map: `idp_session_sync` unread and F-124
-   (session 3); the main JavaScript chunk's size, measured fresh, and the Tailwind 4 move (session 4).
+1. Session 3 is done (its PR is "Campaign session 3: consoles, identity, settings and security").
+   Next: session 4 (experience, performance, operations, certification), with its section of
+   `docs/hardening/CAMPAIGN-MAP.md`, starting from HANDOFF.md "Session 3 → later sessions"
+   (F-324 to verify first).
+2. Still open from earlier passes, assigned to session 4 in the map: the main JavaScript chunk's
+   size, measured fresh, and the Tailwind 4 move.
 3. The owner's own launch steps (Stripe test prices and webhook secret F-125, Postmark N-027, rolling
    the keys pasted into chats, the first deploy RUNBOOK §9, and the rest) are collected in section 5
    of the campaign map; session 4 turns them into the final "Owner launch checklist".
