@@ -185,6 +185,8 @@ class SecurityPolicyRead(BaseModel):
     idp_session_sync: bool
     platform_max_session_age_s: int
     idle_timeout_s: int
+    your_address: str | None = None
+    ip_allowlist_available: bool = True
 
 
 class DirectoryIdentityRead(ORMModel):

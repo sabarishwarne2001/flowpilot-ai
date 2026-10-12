@@ -152,6 +152,10 @@ export interface SecurityPolicyRead {
   /** F-204. The platform's own limits, which apply on top of the organization's. */
   readonly platform_max_session_age_s: number;
   readonly idle_timeout_s: number;
+  /** Campaign session 3. The address the allowlist is checked against for this browser. */
+  readonly your_address?: string | null;
+  /** False until the deployment's proxy hop count is confirmed: addresses cannot be trusted. */
+  readonly ip_allowlist_available?: boolean;
 }
 
 export interface SecurityPolicyUpdate {

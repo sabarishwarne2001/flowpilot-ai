@@ -582,11 +582,15 @@ def revoke_scim_key(organization_id: str, key_id: str,
 # ==========================================================================
 
 @router.get("/security-policy")
-def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
+def get_policy(organization_id: str, request: Request, membership=Depends(deps.RequireOrgAdmin),
                db=Depends(deps.get_db)):
     policy = session_policy_service.get_or_create_policy(
         db, organization_id=organization_id)
     return {
+        # Campaign session 3. The address an allowlist is checked against for this request, so
+        # the console can show it and an owner never saves a list that leaves themselves out.
+        "your_address": trusted_client_ip(request),
+        "ip_allowlist_available": session_policy_service.ip_allowlist_trustworthy(),
         "require_sso": policy.require_sso,
         "sso_bypass_for_owners": policy.sso_bypass_for_owners,
         "ip_pinning": str(policy.ip_pinning.value if hasattr(policy.ip_pinning, "value") else policy.ip_pinning),
@@ -636,7 +640,7 @@ def update_policy(organization_id: str, request: Request, payload: dict = Body(.
         ],
         actor=user,
     )
-    return get_policy(organization_id, membership=membership, db=db)
+    return get_policy(organization_id, request, membership=membership, db=db)
 
 
 @router.get("/directory")

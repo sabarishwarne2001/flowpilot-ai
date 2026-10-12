@@ -157,6 +157,75 @@ const SessionLifetime: React.FC<{
   );
 };
 
+/**
+ * Campaign session 3 (F-277). The allowlist was accepted by the API, stored, and enforced
+ * nowhere, with no place in the console. It is enforced now on every request into the
+ * organization (people and API keys), so it is edited here, with the address it will be checked
+ * against shown first: the server refuses a list that leaves the person saving it outside.
+ */
+const AllowedNetworks: React.FC<{
+  readonly policy: SecurityPolicyRead;
+  readonly saving: boolean;
+  readonly onSave: (networks: string[]) => void;
+}> = ({ policy, saving, onSave }) => {
+  const saved = policy.ip_allowlist.join("\n");
+  const [draft, setDraft] = useState(saved);
+  const [lastSaved, setLastSaved] = useState(saved);
+  if (saved !== lastSaved) {
+    setLastSaved(saved);
+    setDraft(saved);
+  }
+  const networks = draft
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const unchanged = networks.join("\n") === saved;
+  const available = policy.ip_allowlist_available !== false;
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4">
+      <label htmlFor="ip-allowlist" className="block text-sm font-medium">
+        Allowed networks
+      </label>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        When this list is not empty, people and API keys can reach this organization only from
+        these networks. One network per line, like 203.0.113.0/24; a single address is one
+        computer. Leave it empty to allow every network.
+      </p>
+      <p className="mt-2 text-xs text-foreground">
+        Your address now:{" "}
+        <span className="font-mono">{policy.your_address ?? "unknown"}</span>
+      </p>
+      {!available ? (
+        <p className="mt-2 text-xs font-medium text-foreground">
+          Unavailable on this deployment until its proxy settings are confirmed: until then the
+          addresses requests come from cannot be trusted.
+        </p>
+      ) : null}
+      <textarea
+        id="ip-allowlist"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        rows={3}
+        disabled={saving || !available}
+        spellCheck={false}
+        placeholder="203.0.113.0/24"
+        className="mt-2 w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs disabled:opacity-60"
+      />
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={() => onSave(networks)}
+          disabled={saving || unchanged || (!available && networks.length > 0)}
+          className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground disabled:opacity-50"
+        >
+          {networks.length === 0 && saved !== "" ? "Allow every network" : "Save allowed networks"}
+        </button>
+      </div>
+    </section>
+  );
+};
+
 const SecurityPolicyPanel: React.FC = () => {
   const { organizationId } = useResolvedOrganization();
   const queryClient = useQueryClient();
@@ -357,6 +426,11 @@ const SecurityPolicyPanel: React.FC = () => {
         </div>
       </section>
 
+      <AllowedNetworks
+        policy={policy}
+        saving={update.isPending}
+        onSave={(networks) => update.mutate({ ip_allowlist: networks })}
+      />
       <SessionLifetime
         policy={policy}
         saving={update.isPending}
