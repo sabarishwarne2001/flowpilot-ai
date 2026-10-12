@@ -157,6 +157,40 @@ test.describe("Revenue operations: invoiced contracts (F-186)", () => {
     expect(prompts).toBe(0);
     await expectHealthyPage(page);
   });
+
+  // Campaign session 3 (F-312): the dialog said the organization "keeps its current plan until it
+  // is changed"; cancelling an active contract moves it to Free (unless it has its own
+  // subscription), as `contracts.end` does and `test_revops_console_live.py` proves.
+  test("cancelling an active contract says the organization moves to Free", async ({ page, session }) => {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8")) as { seed: { tenants: Record<string, { organization_id: string }> } };
+    const orgId = state.seed.tenants.P!.organization_id;
+    const contracts = await api<{ id: string; organization_id: string; status: string }[]>(session, "GET", "/admin/revops/contracts");
+    for (const row of contracts.body.filter((c) => c.organization_id === orgId && c.status === "ACTIVE")) {
+      expect((await api(session, "POST", `/admin/revops/contracts/${row.id}/end`, { reason: "CANCELLED" })).status).toBe(200);
+    }
+    const number = `ENT-E2E-${runId()}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const later = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+    const drafted = await api<{ id: string }>(session, "POST", "/admin/revops/contracts", {
+      organization_id: orgId, contract_number: number, tier_key: "business", seats: 5, currency: "INR",
+      billing_interval: "year", amount_per_period: 120000, term_start: today, term_end: later,
+    });
+    expect(drafted.status, drafted.text).toBe(201);
+    try {
+      expect((await api(session, "POST", `/admin/revops/contracts/${drafted.body.id}/activate`)).status).toBe(200);
+      await page.goto("/admin/revops?tab=contracts");
+      await page.getByRole("row").filter({ hasText: number }).click();
+      const detail = page.getByTestId("contract-detail");
+      await detail.getByRole("button", { name: "Cancel contract" }).click();
+      const confirm = page.getByRole("alertdialog", { name: /Cancel contract/ });
+      await expect(confirm).toContainText(/Free plan/);
+      await expect(confirm).not.toContainText(/keeps its current plan/);
+      await confirm.getByRole("button", { name: "Keep the contract" }).click();
+      await expectHealthyPage(page);
+    } finally {
+      await api(session, "POST", `/admin/revops/contracts/${drafted.body.id}/end`, { reason: "CANCELLED" });
+    }
+  });
 });
 
 test.describe("Billing speaks in the customer's words (F-187)", () => {

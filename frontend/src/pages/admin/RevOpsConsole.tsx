@@ -310,7 +310,7 @@ const ContractsTab: React.FC = () => {
   // asked nothing at all. Each now opens a dialog, and nothing is sent until it is confirmed.
   const [pending, setPending] = useState<
     | { readonly kind: "pay" | "void"; readonly id: string; readonly number: string }
-    | { readonly kind: "end"; readonly id: string; readonly number: string }
+    | { readonly kind: "end"; readonly id: string; readonly number: string; readonly status: string }
     | null
   >(null);
   const [answer, setAnswer] = useState("");
@@ -381,7 +381,7 @@ const ContractsTab: React.FC = () => {
             <div className="flex gap-2">
               {c.status === "DRAFT" ? <button type="button" className={BUTTON_PRIMARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "activate", id: c.id })}>Activate</button> : null}
               {c.status === "ACTIVE" ? <button type="button" className={BUTTON_SECONDARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "issue", id: c.id })}>Issue due invoices</button> : null}
-              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => setPending({ kind: "end", id: c.id, number: c.contract_number })}>Cancel contract</button> : null}
+              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => setPending({ kind: "end", id: c.id, number: c.contract_number, status: c.status })}>Cancel contract</button> : null}
             </div>
           </div>
           <p className={HINT}>{money(c.amount_per_period_micros, c.currency)} per {c.billing_interval} · tax {(c.tax_rate_bps / 100).toFixed(2)}% · net {c.payment_terms_days} days{c.po_number ? ` · PO ${c.po_number}` : ""}</p>
@@ -452,7 +452,9 @@ const ContractsTab: React.FC = () => {
         message={
           pending?.kind === "pay" ? `Invoice ${pending.number} is marked paid with the reference you enter, as the record of the transfer.`
             : pending?.kind === "void" ? "A void invoice stays on the contract as a record and is never collected. Say why."
-              : "The contract ends now: no further invoices are issued and the organization keeps its current plan until it is changed. Invoices already issued stay open."
+              : pending?.kind === "end" && pending.status === "ACTIVE"
+                ? "The contract ends now: no further invoices are issued, and the organization moves to the Free plan unless it has its own subscription. Invoices already issued stay open."
+                : "The draft is cancelled. Nothing was invoiced and the organization's plan does not change."
         }
         tone={pending?.kind === "pay" ? "primary" : "danger"}
         confirmText={pending?.kind === "pay" ? "Mark paid" : pending?.kind === "void" ? "Void invoice" : "Cancel contract"}
