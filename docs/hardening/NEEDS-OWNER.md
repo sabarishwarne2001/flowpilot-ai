@@ -1042,3 +1042,12 @@ refused everywhere in the organization until they turn it on, which they can do 
 itself; people who sign in through the organization's identity provider are not asked (the
 provider's own two-factor check applies); API keys are not people; and nobody can turn off their
 second factor while an organization they belong to requires it. Migration `s3a2_require_two_factor`.
+
+## N-061 — Request limits for people in the browser (the per-tenant question)
+**DECIDED (campaign session 3).** Signed-in people are limited **per person** (600 requests a
+minute, `RATE_LIMIT_USER_PER_MINUTE`), anonymous traffic per network address, API keys per key (as
+before). There is **no organization-wide request ceiling**: cost is already bounded by each plan's
+allowances, and a ceiling shared by a whole organization would let one runaway script block every
+colleague. Before this, every browser request was counted per address (the per-person limit
+existed and nothing used it), so a company behind one office address shared one allowance. This is
+how GitHub and Linear count.

@@ -211,7 +211,9 @@ class Settings(BaseSettings):
     # only once the production ingress hop count has actually been verified.
     TRUSTED_PROXY_HOPS_CONFIRMED: bool = False
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
-    RATE_LIMIT_USER_PER_MINUTE: int = 300
+    # Campaign session 3 (N-061): signed-in requests are counted per person; 600 matches the
+    # allowance each person effectively had when every request was counted per address.
+    RATE_LIMIT_USER_PER_MINUTE: int = 600
     # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
     # allowance the product had in effect while each attempt was counted twice
     # against a limit of 20; the owner chooses the final value (N-018).
