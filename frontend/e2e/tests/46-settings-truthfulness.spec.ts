@@ -5,7 +5,8 @@
  * said more than the product did.
  */
 import { test, expect, expectHealthyPage } from "../support/fixtures";
-import { org, ws } from "../support/env";
+import { api, resolveWorkspaceId } from "../support/api";
+import { TENANTS, org, ws } from "../support/env";
 
 test.describe("Organization mail server", () => {
   test.use({ user: "C.owner" });
@@ -79,5 +80,63 @@ test.describe("Profile time zone (F-318)", () => {
     await name.fill("Cleo Member");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.locator("body")).toContainText(/saved/i, { timeout: 10_000 });
+  });
+});
+
+test.describe("Workspace clock and currency (F-320, F-321)", () => {
+  test.use({ user: "C.owner" });
+
+  // The workspace page offered ten time zones and ten currencies, while the server stored any
+  // text it was sent. A workspace in Zurich could not choose its own clock or currency, and one
+  // holding a value outside the ten could not save the page at all. A new workspace is created
+  // here (through the product), so the shared workspaces' clocks are left alone.
+  test("a new workspace takes any real zone and currency, and keeps them", async ({ page, session }) => {
+    if (!session) {
+      throw new Error("this test needs a signed-in owner");
+    }
+    const name = `Zurich ${Date.now()}`;
+    await page.goto(`${org("C")}/workspaces/new`);
+    await page.locator("#workspace_name").fill(name);
+    await page.getByRole("button", { name: "Create workspace" }).click();
+    await expect(page).toHaveURL(new RegExp(`/${TENANTS.C.org}/zurich-\\d+`), { timeout: 15_000 });
+    const workspaceSlug = new URL(page.url()).pathname.split("/")[2]!;
+    const { workspaceId } = await resolveWorkspaceId(session, TENANTS.C.org, workspaceSlug);
+
+    try {
+      await page.goto(`/${TENANTS.C.org}/${workspaceSlug}/settings`);
+      await expect(async () => {
+        await page.getByRole("button", { name: /^General Name, locale and members/ }).click();
+        await expect(page.getByRole("textbox", { name: "Workspace name" })).toHaveValue(name, { timeout: 3_000 });
+      }).toPass({ timeout: 30_000 });
+
+      const clock = page.locator("#timezone");
+      await clock.fill("Mars/Olympus");
+      await expect(clock).toHaveAttribute("aria-invalid", "true");
+      await clock.fill("Europe/Zurich");
+      await expect(clock).toHaveAttribute("aria-invalid", "false");
+      await page.locator("#currency").selectOption("CHF");
+      await expect(page.locator("#currency option:checked")).toHaveText(/Swiss Franc \(CHF\)/);
+
+      const sent = page.waitForRequest((request) => request.method() === "PATCH" && request.url().endsWith(`/workspaces/${workspaceId}`));
+      await page.getByRole("button", { name: "Save workspace" }).click();
+      const body = (await sent).postDataJSON() as Record<string, unknown>;
+      expect([body.timezone, body.currency]).toEqual(["Europe/Zurich", "CHF"]);
+      // F-322: a new clock re-renders the workspace's pages; the person stays where they were.
+      await expect(page.locator("body")).toContainText(/workspace settings saved/i, { timeout: 10_000 });
+      await expect(page).toHaveURL(/[?&]section=workspace\b/);
+      await expect(page.getByRole("button", { name: "Save workspace" })).toBeDisabled({ timeout: 10_000 });
+
+      const stored = await api<{ timezone: string; currency: string }>(session, "GET", `/workspaces/${workspaceId}`);
+      expect([stored.body.timezone, stored.body.currency]).toEqual(["Europe/Zurich", "CHF"]);
+      await page.reload();
+      await expect(page.locator("#timezone")).toHaveValue("Europe/Zurich", { timeout: 15_000 });
+      await expect(page.locator("#currency")).toHaveValue("CHF");
+
+      // The server refuses what it cannot honour, whoever sends it.
+      const refused = await api(session, "PATCH", `/workspaces/${workspaceId}`, { timezone: "Mars/Olympus" });
+      expect(refused.status).toBe(422);
+    } finally {
+      await api(session, "POST", `/workspaces/${workspaceId}/archive`);
+    }
   });
 });

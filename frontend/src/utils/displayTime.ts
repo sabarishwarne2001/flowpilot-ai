@@ -51,6 +51,9 @@ const validTimeZone = (value?: string | null): string | undefined => {
   }
 };
 
+/** A zone this browser can show times in (the workspace form's check, F-321). */
+export const isUsableTimeZone = (value: string): boolean => validTimeZone(value) !== undefined;
+
 const validLocale = (value?: string | null): string | undefined => {
   if (!value) {
     return undefined;

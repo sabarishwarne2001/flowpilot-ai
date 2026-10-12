@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { isCurrencyCode } from "@/utils/currencies";
+import { isUsableTimeZone } from "@/utils/displayTime";
+
 export const workspaceSchema = z.object({
   workspace_name: z
     .string()
@@ -13,46 +16,20 @@ export const workspaceSchema = z.object({
     .nullable()
     .or(z.literal("")),
 
-  timezone: z.enum([
-    "Asia/Kolkata",
-    "Asia/Dubai",
-    "Europe/London",
-    "Europe/Berlin",
-    "America/New_York",
-    "America/Chicago",
-    "America/Los_Angeles",
-    "Asia/Singapore",
-    "Australia/Sydney",
-    "UTC",
-  ]),
+  // F-321: any zone and currency the server accepts (F-320), not a short list of each. A
+  // workspace holding a value outside a short list could not save this page at all.
+  timezone: z
+    .string()
+    .trim()
+    .refine(isUsableTimeZone, "Choose a timezone from the list (IANA name, e.g. Asia/Kolkata)."),
 
-  language: z.enum([
-    "en",
-    "hi",
-    "ta",
-    "ml",
-    "te",
-    "kn",
-    "ar",
-    "de",
-    "fr",
-    "es",
-    "ja",
-    "zh",
-  ]),
+  // Sent back unchanged: language is each person's own setting (profile), kept for the API.
+  language: z.string().trim().min(2),
 
-  currency: z.enum([
-    "INR",
-    "USD",
-    "EUR",
-    "GBP",
-    "AED",
-    "SGD",
-    "AUD",
-    "CAD",
-    "JPY",
-    "CNY",
-  ]),
+  currency: z
+    .string()
+    .trim()
+    .refine(isCurrencyCode, "Choose a currency from the list."),
 
   date_format: z.enum([
     "DD-MM-YYYY",

@@ -54,6 +54,8 @@ import type {
   WorkspaceRole,
 } from "@/types/tenancy";
 import { InfoTooltip } from "@/components/forms/InfoTooltip";
+import { TimezoneField } from "@/components/forms/TimezoneField";
+import { currencyLabel, currencyOptions } from "@/utils/currencies";
 import { LegalHoldsPanel } from "@/components/compliance/LegalHoldsPanel";
 
 const workspaceInitials = (name: string): string =>
@@ -99,6 +101,7 @@ export const Workspace: React.FC = () => {
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors, isDirty },
   } = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
@@ -116,6 +119,8 @@ export const Workspace: React.FC = () => {
     queryKey: ["workspaces", "detail", workspaceId],
     queryFn: () => getWorkspaceById(workspaceId),
   });
+
+  const currencies = useMemo(() => currencyOptions(workspaceDetail?.currency), [workspaceDetail?.currency]);
 
   const { data: memberList, isLoading: isLoadingMembers } = useQuery({
     queryKey: ["workspaces", "members", workspaceId],
@@ -136,9 +141,9 @@ export const Workspace: React.FC = () => {
     reset({
       workspace_name: workspaceDetail.workspace_name,
       company_logo_url: workspaceDetail.company_logo_url ?? "",
-      timezone: workspaceDetail.timezone as WorkspaceFormData["timezone"],
-      language: workspaceDetail.language as WorkspaceFormData["language"],
-      currency: workspaceDetail.currency as WorkspaceFormData["currency"],
+      timezone: workspaceDetail.timezone,
+      language: workspaceDetail.language,
+      currency: workspaceDetail.currency,
       date_format: workspaceDetail.date_format as WorkspaceFormData["date_format"],
     });
 
@@ -306,9 +311,9 @@ export const Workspace: React.FC = () => {
     reset({
       workspace_name: workspaceDetail.workspace_name,
       company_logo_url: workspaceDetail.company_logo_url ?? "",
-      timezone: workspaceDetail.timezone as WorkspaceFormData["timezone"],
-      language: workspaceDetail.language as WorkspaceFormData["language"],
-      currency: workspaceDetail.currency as WorkspaceFormData["currency"],
+      timezone: workspaceDetail.timezone,
+      language: workspaceDetail.language,
+      currency: workspaceDetail.currency,
       date_format: workspaceDetail.date_format as WorkspaceFormData["date_format"],
     });
 
@@ -669,23 +674,13 @@ export const Workspace: React.FC = () => {
                 {/* HARDENING-T2:D14. Say which engine this setting configures. */}
                 <InfoTooltip label="Scheduling timezone">Sets the clock for analytics warehouse sync windows. The timestamps you see follow your own profile timezone, not this one.</InfoTooltip>
               </span>
-              <select
+              <TimezoneField
                 id="timezone"
+                value={watch("timezone") ?? ""}
                 disabled={!canEditWorkspace}
-                {...register("timezone")}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
-              >
-                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                <option value="Europe/London">Europe/London (GMT/BST)</option>
-                <option value="Europe/Berlin">Europe/Berlin (CET)</option>
-                <option value="America/New_York">America/New_York (EST)</option>
-                <option value="America/Chicago">America/Chicago (CST)</option>
-                <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
-                <option value="UTC">UTC</option>
-              </select>
+                allowEmpty={false}
+                onChange={(value) => setValue("timezone", value, { shouldDirty: true, shouldValidate: true })}
+              />
               <p className="text-xs text-muted-foreground">
                 {/* ARCH30-T4:ws-clock-hint — A1. The old copy said exports
                     always run on UTC. That stopped being true in Tranche 4;
@@ -723,16 +718,16 @@ export const Workspace: React.FC = () => {
                 {...register("currency")}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               >
-                <option value="INR">Indian Rupee (INR)</option>
-                <option value="USD">US Dollar (USD)</option>
-                <option value="EUR">Euro (EUR)</option>
-                <option value="GBP">British Pound (GBP)</option>
-                <option value="AED">UAE Dirham (AED)</option>
-                <option value="SGD">Singapore Dollar (SGD)</option>
-                <option value="AUD">Australian Dollar (AUD)</option>
-                <option value="CAD">Canadian Dollar (CAD)</option>
-                <option value="JPY">Japanese Yen (JPY)</option>
-                <option value="CNY">Chinese Yuan (CNY)</option>
+                <optgroup label="Common">
+                  {currencies.common.map((code) => (
+                    <option key={code} value={code}>{currencyLabel(code)}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="All currencies">
+                  {currencies.others.map((code) => (
+                    <option key={code} value={code}>{currencyLabel(code)}</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
