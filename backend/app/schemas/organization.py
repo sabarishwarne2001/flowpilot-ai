@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.slugs import MAX_SLUG_LENGTH, MIN_SLUG_LENGTH
 from app.schemas import regional
@@ -61,7 +61,10 @@ class UserSummary(BaseModel):
     to adding a field, and a real cost to exposing one nobody asked for.
     """
     id: UUID
-    email: EmailStr
+    # F-326: `str`, not `EmailStr`. This is output: what the database holds, not input to check.
+    # An erased person's address is `erased+<id>@erased.invalid` (a reserved domain on purpose),
+    # which `EmailStr` rejects, so every member list naming them answered 500.
+    email: str
     is_active: bool
     display_name: str | None = None
     timezone: str | None = None
