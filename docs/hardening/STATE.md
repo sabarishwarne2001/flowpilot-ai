@@ -29,6 +29,24 @@ this branch and its open pull request, from the first unticked box in CAMPAIGN-M
    consoles as an operator, the partner portal.
 7. Ledger rows (`campaign_slices.py --check 3`), host sweeps, finish checks, HANDOFF, PR ready.
 
+**Progress (checkpoint 1, 2026-10-12):** items 2 (largely), 3 and 4 done and committed; item 1
+waiting on the first CI run's pytest job (every other job green). Fixed and proven, each with a
+failing test first (FINDINGS.md, session 3 section): F-276 (require SSO enforced nowhere, critical),
+F-277 (IP allowlist never read), F-124 (SCIM token key), F-278 (live review WebSocket skipped the
+sign-in policy), F-279 to F-282 (SCIM and SSO after a downgrade, read-only or archive), F-283
+(invalid IdP certificates accepted), F-284 (partner standing self-declared), F-285 (markup and
+header injection in emails), F-286 (per-person rate limits), F-287 to F-290 (billing and security
+notices emailed, notification preferences, Stripe announcements, 80%/100% limit alerts, addresses
+in logs). Built and decided: N-057 to N-062 (sign-in policy everywhere, `idp_session_sync` removed,
+SCIM/SSO after downgrade, require two-factor, per-person limits, which notifications are emailed).
+Proven with no defect: non-human principals default deny, IDOR sweeps (attackers B and an
+enterprise X against C: 353 reads, 832 writes, 789 as an API key, an ungranted workspace), privilege
+escalation as a viewer and as billing, SAML/OIDC attacks, CSV formula neutralisation, image uploads
+re-encoded, git-history secret scan (placeholders only). Local full backend suite on the
+checkpoint's first half: 3985 passed. **Next:** SSRF probes, tokens, enumeration, cookies/CORS/
+redirects, audit immutability, then `SECURITY-REVIEW.md`; the formatting layer and
+`SETTINGS-LEDGER.md`; §3.2 carry-overs; ledger rows; CI.
+
 ## Before session 3 — campaign review (2026-10-12)
 A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
 a session handed on: 711 coverage rows still `smoke` or `untested`, 9 pieces of code with no ledger
