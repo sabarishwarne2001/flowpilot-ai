@@ -1126,3 +1126,18 @@ an infrastructure step rather than a code change. Until one exists the screen sa
 setting covers, the EU option no longer claims to satisfy GDPR agreements, and a test keeps the
 statement equal to the code. When a regional deployment is stood up, list it on the card and in
 the contract wording; nothing else needs to change.
+
+## N-067 — How long an organization's audit log is kept
+**DECIDED (campaign session 3).**
+
+The organization decides, on `Compliance > Retention`: any period of at least 400 days, or blank to
+keep the log indefinitely, exactly as the screen says. The nightly sweep deletes, per organization,
+only entries older than the period it chose. Nothing is deleted for an organization that has not
+chosen a period.
+
+Why not a platform default (say 400 days) for everyone who never opens the page: audit entries are
+evidence, deleting them cannot be undone, and regulated customers commonly need several years
+(seven for financial records is usual). Keeping them costs little (they are small rows). If storage
+ever matters, a default period can be introduced deliberately, announced to customers and shown on
+the screen, rather than applied silently.
+
