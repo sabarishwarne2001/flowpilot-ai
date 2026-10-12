@@ -306,3 +306,34 @@ def test_a_licence_that_does_not_verify_is_refused_with_its_reason(engines: Engi
         assert refused.json()["code"] == "LICENCE_REQUIRED"
         assert status in refused.text, (status, refused.text)
     assert _current(engines) == ["LIC-OK"], "a refused licence leaves the installed one in force"
+
+
+# ---------------------------------------------------------------------------------------------
+# The operator's egress test
+# ---------------------------------------------------------------------------------------------
+
+
+def test_the_operator_egress_test_answers_for_the_organization_asked_about(engines: Engines) -> None:
+    from app.core import egress
+
+    _superadmin(engines)
+    engines.plan("enterprise")
+    assert engines.put("/egress", {"lockdown_enabled": True}, org=True).status_code == 200
+
+    def ask(organization=None, persona=None):
+        body = {"channel": egress.WEBHOOK, "destination": "https://hooks.acme-operator.example.com/in"}
+        if organization is not None:
+            body["organization_id"] = str(organization)
+        return engines.client.post(f"{API}/admin/sovereign/egress-test", json=body,
+                                   headers=(persona or engines.tenant.non_member).headers)
+
+    locked = ask(engines.org)
+    assert locked.status_code == 200, locked.text
+    assert locked.json()["allowed"] is False and locked.json()["reason"] == egress.REASON_TENANT_LOCKDOWN
+    assert ask().json()["allowed"] is True, "the deployment itself has no lockdown in the hosted edition"
+
+    rule = engines.post("/egress/rules", {"channel": egress.WEBHOOK, "host_pattern": "hooks.acme-operator.example.com"},
+                        org=True)
+    assert rule.status_code in (200, 201), rule.text
+    assert ask(engines.org).json()["allowed"] is True, "the operator sees the organization's own rule"
+    assert ask(engines.org, engines.tenant.owner).status_code == 404, "tenants never reach the operator console"
