@@ -5,7 +5,7 @@
  * said more than the product did.
  */
 import { test, expect, expectHealthyPage } from "../support/fixtures";
-import { org } from "../support/env";
+import { org, ws } from "../support/env";
 
 test.describe("Organization mail server", () => {
   test.use({ user: "C.owner" });
@@ -20,6 +20,28 @@ test.describe("Organization mail server", () => {
     await expect(page.getByText(/delivery for team invitations, password resets and security notices/i)).toHaveCount(0);
     await expect(page.getByTestId("org-email-scope")).toContainText(/password resets/i);
     await expect(page.getByTestId("org-email-scope")).toContainText(/platform/i);
+    await expectHealthyPage(page);
+  });
+});
+
+test.describe("Workspace AI settings", () => {
+  test.use({ user: "C.owner" });
+
+  // F-307: temperature reached only Ask AI answers (reading documents uses fixed, low
+  // temperatures), and the two penalties never reach Gemini models. The page said neither.
+  test("the page says what each tuning control reaches", async ({ page }) => {
+    await page.goto(ws("C", "settings?section=ai"));
+    await expect(page.locator("#ai-temperature")).toBeVisible();
+    await expect(page.getByTestId("ai-temperature-scope")).toContainText(/ask ai/i);
+    const provider = page.locator("#ai-provider");
+    const offered = await provider.locator("option").evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
+    if (offered.includes("GEMINI")) {
+      await provider.selectOption("GEMINI");
+      await expect(page.locator("#ai-frequency_penalty")).toHaveAttribute("readonly", "");
+      await expect(page.getByTestId("ai-penalty-scope")).toContainText(/gemini/i);
+    } else {
+      await expect(page.getByTestId("ai-penalty-scope")).toContainText(/gemini/i);
+    }
     await expectHealthyPage(page);
   });
 });
