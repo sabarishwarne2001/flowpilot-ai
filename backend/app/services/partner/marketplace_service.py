@@ -748,6 +748,17 @@ def install_manifest(
             "cannot be installed."
         )
 
+    # Campaign session 3. A partner FlowPilot has suspended or terminated publishes nothing new
+    # into a tenant: its items stay visible to tenants who installed them, but cannot be installed.
+    from app.models.partner import Partner
+
+    publisher = db.get(Partner, item.partner_id) if getattr(item, "partner_id", None) else None
+    if publisher is not None and str(publisher.status) != "ACTIVE":
+        raise PartnerConflict(
+            "Its publisher is not currently in good standing with FlowPilot, so this item "
+            "cannot be installed."
+        )
+
     workspace = db.get(Workspace, workspace_id)
     if workspace is None or workspace.organization_id != organization_id:
         # Same 404 for "does not exist" and "belongs to someone else". A

@@ -110,11 +110,23 @@ class PartnerCreate(BaseModel):
 
 
 class PartnerUpdate(BaseModel):
+    """What a partner's own owner may change (campaign session 3): its name and billing contact.
+
+    The standing (`status`) and the platform's `notes` are FlowPilot's to set
+    (`PartnerPlatformUpdate`); a partner marking itself ACTIVE again after a suspension is refused
+    here as an unknown field (422).
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
-    status: Optional[Literal["ACTIVE", "SUSPENDED", "TERMINATED"]] = None
     billing_email: Optional[str] = Field(default=None, max_length=320)
+
+
+class PartnerPlatformUpdate(PartnerUpdate):
+    """What platform staff may change: everything a partner may, plus its standing and notes."""
+
+    status: Optional[Literal["ACTIVE", "SUSPENDED", "TERMINATED"]] = None
     notes: Optional[str] = Field(default=None, max_length=4000)
 
 

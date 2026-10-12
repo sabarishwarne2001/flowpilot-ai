@@ -40,7 +40,9 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -71,6 +73,7 @@ from app.schemas.partner import (
     PartnerMemberCreate,
     PartnerMemberResponse,
     PartnerResponse,
+    PartnerPlatformUpdate,
     PartnerUpdate,
     PayoutPeriodCompute,
     PayoutPeriodMarkPaid,
@@ -108,7 +111,15 @@ def _partner_ctx(
     partner_id: uuid.UUID,
     user: User,
     allowed_roles: frozenset[str],
+    acting: bool = False,
 ) -> Partner:
+    """The partner, for a member holding one of `allowed_roles`.
+
+    Campaign session 3. `acting` marks a route that adds or changes what the partner does (assign
+    an organization, publish to the marketplace, register a key, compute a payout, add a member,
+    rename): a partner the platform has suspended or terminated is read-only, so those answer 409.
+    Removing access (a member, a book entry, a signing key) always works.
+    """
     try:
         tenancy_service.require_membership(
             db,
@@ -116,9 +127,18 @@ def _partner_ctx(
             user_id=user.id,
             allowed_roles=allowed_roles,
         )
-        return tenancy_service.get_partner(db, partner_id=partner_id)
+        partner = tenancy_service.get_partner(db, partner_id=partner_id)
     except PartnerError as exc:
         raise _http(exc) from exc
+    if acting and str(partner.status) != "ACTIVE":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This partner is {str(partner.status).lower()} by FlowPilot, so it is read-only: "
+                "contact FlowPilot to restore it."
+            ),
+        )
+    return partner
 
 
 # ---------------------------------------------------------------------------
@@ -183,17 +203,32 @@ def get_partner(
 @router.patch("/{partner_id}", response_model=PartnerResponse)
 def update_partner(
     partner_id: uuid.UUID,
-    payload: PartnerUpdate,
     current_user: CurrentUser,
+    payload: dict = Body(...),
     db: Session = Depends(get_db),
 ) -> Partner:
-    partner = _partner_ctx(
-        db,
-        partner_id=partner_id,
-        user=current_user,
-        allowed_roles=ROLES_MANAGING_MEMBERS,
-    )
-    data = payload.model_dump(exclude_unset=True)
+    """Campaign session 3. Platform staff set the partner's standing (and notes); the partner's own
+    owner may change only its name and billing contact, and not while it is suspended."""
+    if getattr(current_user, "is_superuser", False):
+        schema: type[PartnerUpdate] = PartnerPlatformUpdate
+        try:
+            partner = tenancy_service.get_partner(db, partner_id=partner_id)
+        except PartnerError as exc:
+            raise _http(exc) from exc
+    else:
+        schema = PartnerUpdate
+        partner = _partner_ctx(
+            db,
+            partner_id=partner_id,
+            user=current_user,
+            allowed_roles=ROLES_MANAGING_MEMBERS,
+            acting=True,
+        )
+    try:
+        validated = schema.model_validate(payload)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors(include_url=False, include_context=False)) from exc
+    data = validated.model_dump(exclude_unset=True)
     for field_name, value in data.items():
         setattr(partner, field_name, value)
     db.commit()
@@ -244,6 +279,7 @@ def add_member(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_MEMBERS,
+        acting=True,
     )
     if db.get(User, payload.user_id) is None:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -326,6 +362,7 @@ def assign_organization(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_BOOK,
+        acting=True,
     )
     try:
         tenancy_service.assign_organization(
@@ -411,6 +448,7 @@ def register_signing_key(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_MEMBERS,
+        acting=True,
     )
     try:
         resolved = marketplace_service.algorithm_for_key(payload.public_key_pem)
@@ -588,6 +626,7 @@ def compute_payout_period(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_BOOK,
+        acting=True,
     )
     try:
         period = rev_share_service.compute_period(
@@ -777,6 +816,7 @@ def create_catalog_item(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_CATALOG,
+        acting=True,
     )
     try:
         item = marketplace_service.create_item(
@@ -828,6 +868,7 @@ def publish_manifest(
         partner_id=partner_id,
         user=current_user,
         allowed_roles=ROLES_MANAGING_CATALOG,
+        acting=True,
     )
     try:
         item = marketplace_service.get_item(db, item_id=item_id)
@@ -986,7 +1027,8 @@ def update_catalog_item(
     installable behind it is a dead entry in every tenant's catalog.
     """
     partner = _partner_ctx(
-        db, partner_id=partner_id, user=current_user, allowed_roles=ROLES_MANAGING_CATALOG
+        db, partner_id=partner_id, user=current_user, allowed_roles=ROLES_MANAGING_CATALOG,
+        acting=True,
     )
     item = _owned_item(db, partner_id=partner_id, item_id=item_id)
     changes = payload.model_dump(exclude_unset=True)
