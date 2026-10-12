@@ -81,6 +81,7 @@ from app.schemas.partner import (
     PayoutPeriodSeal,
     PayoutStatementResponse,
     RevShareAgreementCreate,
+    RevShareAgreementEnd,
     RevShareAgreementResponse,
     RevShareLedgerLine,
     SigningKeyCreate,
@@ -563,10 +564,10 @@ def create_agreement(
         raise HTTPException(
             status_code=409,
             detail=(
-                "This partner already has an ACTIVE agreement. End it with an "
-                "effective_to date before writing a replacement — two "
-                "overlapping active agreements make 'which rate applies' "
-                "planner-dependent."
+                "This partner already has an ACTIVE agreement. End it first "
+                f"(POST /partners/{partner_id}/agreements/{existing.id}/end with "
+                "its last day) before writing a replacement: two overlapping "
+                "active agreements make 'which rate applies' planner-dependent."
             ),
         )
 
@@ -589,6 +590,45 @@ def create_agreement(
     logger.info(
         "partner.agreement_created",
         extra={"partner_id": str(partner_id), "operator": str(operator.id)},
+    )
+    return agreement
+
+
+@router.post(
+    "/{partner_id}/agreements/{agreement_id}/end",
+    response_model=RevShareAgreementResponse,
+)
+def end_agreement(
+    partner_id: uuid.UUID,
+    agreement_id: uuid.UUID,
+    payload: RevShareAgreementEnd,
+    operator: User = Depends(require_superadmin),
+    db: Session = Depends(get_db),
+) -> Any:
+    """Campaign session 3 (F-309): end an agreement on its last day, so a new rate can follow.
+
+    Writing a replacement was refused while one agreement was ACTIVE, and nothing could end
+    one: a partner's rate could never change. Ending keeps the agreement (statements for the
+    days it covered are computed under it, see `rev_share_service.agreement_in_force`).
+    """
+    agreement = db.get(PartnerRevShareAgreement, agreement_id)
+    if agreement is None or agreement.partner_id != partner_id:
+        raise HTTPException(status_code=404, detail="Agreement not found.")
+    if agreement.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="This agreement has already ended.")
+    if payload.effective_to < agreement.effective_from:
+        raise HTTPException(
+            status_code=422,
+            detail=f"An agreement cannot end before it starts ({agreement.effective_from}).",
+        )
+    agreement.effective_to = payload.effective_to
+    agreement.status = "ENDED"
+    db.commit()
+    db.refresh(agreement)
+    logger.info(
+        "partner.agreement_ended",
+        extra={"partner_id": str(partner_id), "agreement_id": str(agreement_id),
+               "operator": str(operator.id)},
     )
     return agreement
 

@@ -300,6 +300,14 @@ class RevShareAgreementCreate(BaseModel):
         return value.strip().upper()
 
 
+class RevShareAgreementEnd(BaseModel):
+    """Campaign session 3 (F-309): the last day an agreement applies (inclusive)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    effective_to: date
+
+
 class PayoutPeriodCompute(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
