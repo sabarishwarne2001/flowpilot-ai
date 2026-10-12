@@ -72,13 +72,17 @@ migrations, integrations, operations and certification.
       the public gateway's own key check each reach only their own routes (default deny, like N-056).
       _Done (session 3), no defect: `backend/tests/security/test_non_human_principals_default_deny.py`.
       The partner portal has no token of its own (partner members are signed-in people)._
-- [ ] **Access screens name people:** `NoAccess` and `AccessRestricted` still say "Contact an
+- [x] **Access screens name people:** `NoAccess` and `AccessRestricted` still say "Contact an
       organization owner"; use `useAskPlanOwners` where the viewer is a member.
+      _Done (session 3): `useAccessContacts` names the workspace's administrators or the
+      organization's owners/admins (who can grant access; plan owners are a different question);
+      `frontend/e2e/tests/41-notifications.spec.ts`._
 - [ ] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
       be assigned review items or obligations. Decide (likely: effective access, as F-249 did for
       calendar feeds) and implement.
-- [ ] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
+- [x] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
       Decide whether one is needed; implement if so.
+      _Done (session 3): N-061 decided per person, no organization ceiling; F-286 built and proved._
 - [ ] **The trial's screens, settings and emails (N-052, N-053):** write the wording of the two trial
       emails (session 3 owns it); check the banner, the dismissible "Continue read-only" notice and
       every console a read-only organization can still use (members, archive, export, billing).
@@ -123,9 +127,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
 
 ### 3.5 The session 3 prompt's own deliverables
 - [ ] `docs/hardening/SETTINGS-LEDGER.md`: every setting, its reader, its effect, its test.
-- [ ] `docs/hardening/SECURITY-REVIEW.md`: the ASVS level-2 pass, including the IDOR sweep over all
+- [x] `docs/hardening/SECURITY-REVIEW.md`: the ASVS level-2 pass, including the IDOR sweep over all
       621 operations, SSRF, uploads, tokens, enumeration, browser security, audit and the git-history
       secret scan (`docs/hardening/tools/scan_history_for_secrets.py`).
+      _Done (session 3): 20 defects fixed (F-276 to F-295), no cross-tenant leak in the sweeps._
 
 ## 4. Session 4: experience, performance, operations, certification
 
