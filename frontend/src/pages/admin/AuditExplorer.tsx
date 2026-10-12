@@ -1,5 +1,5 @@
 import { formatTimestamp } from "@/utils/displayTime";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, Download, Filter, Loader2, User, ScrollText } from "lucide-react";
@@ -7,11 +7,13 @@ import { Bot, Download, Filter, Loader2, User, ScrollText } from "lucide-react";
 import {
   downloadBlob,
   exportAuditLogs,
+  getAuditVocabulary,
   listAuditLogs,
 } from "@/services/api/audit";
+import { listOrganizationMembers } from "@/services/api/organization";
 import type { AuditExportFormat, AuditLogQuery, AuditLogRead } from "@/services/api/audit";
 import AuditDetailInspector from "@/components/organization/AuditDetailInspector";
-import { auditKeys } from "@/services/api/queryKeys";
+import { auditKeys, organizationKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
@@ -48,8 +50,44 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) 
     staleTime: 30_000,
   });
 
+  // F-311. The filters offer what the server accepts: its vocabulary of resource types and
+  // actions, and the organization's people by name (the log stores ids).
+  const vocabulary = useQuery({
+    queryKey: auditKeys.vocabulary(organizationId),
+    queryFn: () => getAuditVocabulary(organizationId),
+    enabled: Boolean(organizationId),
+    staleTime: Infinity,
+  });
+  const members = useQuery({
+    queryKey: organizationKeys.members(organizationId, false),
+    queryFn: () => listOrganizationMembers(organizationId),
+    enabled: Boolean(organizationId),
+    staleTime: 60_000,
+  });
+  const people = useMemo(
+    () =>
+      (members.data?.items ?? [])
+        .map((member) => ({ id: member.user.id, name: member.user.display_name?.trim() || member.user.email }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [members.data],
+  );
+  const nameOf = useMemo(() => new Map(people.map((person) => [person.id, person.name])), [people]);
+  const labelOf = useMemo(
+    () => new Map([...(vocabulary.data?.actions ?? []), ...(vocabulary.data?.resource_types ?? [])].map((e) => [e.value, e.label])),
+    [vocabulary.data],
+  );
+
+  // An emptied choice removes its key, so "Clear" shows only while something is filtered.
   const applyFilter = useCallback((patch: AuditLogQuery) => {
-    setFilters((current) => ({ ...current, ...patch }));
+    setFilters((current) => {
+      const next: Record<string, unknown> = { ...current, ...patch };
+      for (const [key, value] of Object.entries(next)) {
+        if (value === undefined || value === "") {
+          delete next[key];
+        }
+      }
+      return next as AuditLogQuery;
+    });
     setCursor(null);
     setHistory([]);
   }, []);
@@ -148,43 +186,51 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) 
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2.5">
         <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
 
-        <input
+        <select
           value={filters.resource_type ?? ""}
           onChange={(e) => applyFilter({ resource_type: e.target.value })}
-          placeholder="resource type"
           aria-label="Resource type"
-          className="w-36 rounded border border-border bg-background px-2 py-1 text-xs"
-        />
-        <input
+          className="w-44 rounded border border-border bg-background px-2 py-1 text-xs"
+        >
+          <option value="">Any resource</option>
+          {(vocabulary.data?.resource_types ?? []).map((entry) => (
+            <option key={entry.value} value={entry.value}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+        <select
           value={filters.action ?? ""}
           onChange={(e) => applyFilter({ action: e.target.value })}
-          placeholder="action"
           aria-label="Action"
-          className="w-32 rounded border border-border bg-background px-2 py-1 text-xs"
-        />
-        <input
+          className="w-44 rounded border border-border bg-background px-2 py-1 text-xs"
+        >
+          <option value="">Any action</option>
+          {(vocabulary.data?.actions ?? []).map((entry) => (
+            <option key={entry.value} value={entry.value}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+        <select
           value={filters.actor_id ?? ""}
           onChange={(e) => applyFilter({ actor_id: e.target.value })}
-          placeholder="actor id"
           aria-label="Actor"
-          className="w-56 rounded border border-border bg-background px-2 py-1 font-mono text-xs"
-        />
+          className="w-48 rounded border border-border bg-background px-2 py-1 text-xs"
+        >
+          <option value="">Anyone</option>
+          {people.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name}
+            </option>
+          ))}
+        </select>
         <input
           type="date"
-          onChange={(e) => {
-            if (e.target.value) {
-              applyFilter({
-                date_from: new Date(e.target.value).toISOString(),
-              });
-            } else {
-              setFilters((current) => {
-                const { date_from: _removed, ...rest } = current;
-                return rest;
-              });
-              setCursor(null);
-              setHistory([]);
-            }
-          }}
+          value={filters.date_from ? filters.date_from.slice(0, 10) : ""}
+          onChange={(e) =>
+            applyFilter({ date_from: e.target.value ? new Date(e.target.value).toISOString() : "" })
+          }
           aria-label="From date"
           className="rounded border border-border bg-background px-2 py-1 text-xs"
         />
@@ -246,7 +292,7 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) 
                       <span className="inline-flex items-center gap-1.5">
                         <Bot className="h-3.5 w-3.5 text-muted-foreground" />
                         <span>
-                          <span className="block">Directory sync</span>
+                          <span className="block">API key</span>
                           <span className="block font-mono text-[11px] text-muted-foreground">
                             {row.api_key_id.slice(0, 8)}
                           </span>
@@ -255,19 +301,23 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) 
                     ) : row.actor_id ? (
                       <span className="inline-flex items-center gap-1.5">
                         <User className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-mono text-[11px]">
-                          {row.actor_id.slice(0, 8)}
-                        </span>
+                        {nameOf.get(row.actor_id) ? (
+                          <span>{nameOf.get(row.actor_id)}</span>
+                        ) : (
+                          <span className="font-mono text-[11px]">
+                            {row.actor_id.slice(0, 8)}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">System</span>
                     )}
                   </td>
 
-                  <td className="px-3 py-2 text-xs font-medium">{row.action}</td>
+                  <td className="px-3 py-2 text-xs font-medium">{labelOf.get(row.action) ?? row.action}</td>
 
                   <td className="px-3 py-2 text-xs">
-                    <span className="block">{row.resource_type}</span>
+                    <span className="block">{labelOf.get(row.resource_type) ?? row.resource_type}</span>
                     {row.resource_id && (
                       <span className="block font-mono text-[11px] text-muted-foreground">
                         {row.resource_id.slice(0, 8)}
@@ -313,7 +363,7 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({ asPage = false }) 
         </button>
 
         <span className="text-xs text-muted-foreground">
-          {rows.length} {rows.length === 1 ? "entry" : "entries"}
+          {rows.length} {rows.length === 1 ? "entry" : "entries"} on this page
           {history.length > 0 && ` · page ${history.length + 1}`}
         </span>
 

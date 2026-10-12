@@ -558,10 +558,11 @@ test.describe("Audit log", () => {
   test("filter by action and actor, inspect an entry, export CSV and NDJSON", async ({ page }) => {
     const owner = await loginAs("C.owner");
     await page.goto(org("C", "audit"));
-    await page.getByRole("textbox", { name: "Action" }).fill("UPDATED");
-    await page.getByRole("textbox", { name: "Actor" }).fill(String(owner.me.id));
+    // F-311: the filters are choices (the server's codes, the organization's people).
+    await page.getByLabel("Action", { exact: true }).selectOption("UPDATED");
+    await page.getByLabel("Actor", { exact: true }).selectOption(String(owner.me.id));
     await settle(page);
-    await page.getByRole("textbox", { name: "Actor" }).fill("");
+    await page.getByLabel("Actor", { exact: true }).selectOption("");
     await page.getByRole("button", { name: "Inspect" }).first().click();
     await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
     await page.getByRole("button", { name: "Close" }).click();

@@ -81,6 +81,33 @@ def _filters(
 
 
 # ============================================================================
+# Filter vocabulary (campaign session 3, F-311; declared above /{audit_log_id})
+# ============================================================================
+
+
+def _label(code: str) -> str:
+    """`MEMBERSHIP_ROLE_CHANGED` → "Membership role changed"."""
+    words = code.replace("_", " ").strip().lower()
+    return words[:1].upper() + words[1:]
+
+
+@router.get(
+    "/organizations/{organization_id}/audit-logs/vocabulary",
+    summary="The resource types and actions the audit filters accept, with labels",
+)
+def audit_log_vocabulary(
+    organization_id: uuid.UUID,
+    context=Depends(RequireOrgAdmin),
+) -> dict[str, list[dict[str, str]]]:
+    """The filters' choices. They were free text checked against these enums, so a partial or
+    lowercase word was refused (422) on every keystroke."""
+    return {
+        "resource_types": [{"value": v, "label": _label(v)} for v in sorted(m.value for m in AuditResourceType)],
+        "actions": [{"value": v, "label": _label(v)} for v in sorted(m.value for m in AuditAction)],
+    }
+
+
+# ============================================================================
 # Export Route (MUST BE DECLARED ABOVE /{audit_log_id})
 # ============================================================================
 

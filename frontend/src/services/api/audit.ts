@@ -63,6 +63,8 @@ export const AUDIT_ENDPOINTS = {
     `/organizations/${org(organizationId)}/audit-logs/${seg(auditLogId)}`,
   export: (organizationId: string) =>
     `/organizations/${org(organizationId)}/audit-logs/export`,
+  vocabulary: (organizationId: string): string =>
+    `/organizations/${org(organizationId)}/audit-logs/vocabulary`,
 } as const;
 
 const clean = (query: AuditLogQuery): Record<string, string | number> => {
@@ -84,6 +86,22 @@ export const listAuditLogs = async (
     AUDIT_ENDPOINTS.list(organizationId),
     { params: clean(query) },
   );
+  return response.data;
+};
+
+/** F-311: the codes the filters accept, with labels (`UPDATED` → "Updated"). */
+export interface AuditVocabularyEntry {
+  readonly value: string;
+  readonly label: string;
+}
+
+export interface AuditVocabulary {
+  readonly resource_types: readonly AuditVocabularyEntry[];
+  readonly actions: readonly AuditVocabularyEntry[];
+}
+
+export const getAuditVocabulary = async (organizationId: string): Promise<AuditVocabulary> => {
+  const response = await apiClient.get<AuditVocabulary>(AUDIT_ENDPOINTS.vocabulary(organizationId));
   return response.data;
 };
 

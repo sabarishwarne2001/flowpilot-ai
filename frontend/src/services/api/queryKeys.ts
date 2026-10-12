@@ -346,6 +346,8 @@ export const auditKeys = {
     [...auditKeys.all(organizationId), "list", filters] as const,
   detail: (organizationId: string, auditLogId: string) =>
     [...auditKeys.all(organizationId), "detail", auditLogId] as const,
+  vocabulary: (organizationId: string) =>
+    [...auditKeys.all(organizationId), "vocabulary"] as const,
 };
 
 export const verificationKeys = {
