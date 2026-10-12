@@ -1,6 +1,18 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-11 (pre-launch campaign, session 2 of 4 complete; next: merge PR #20, then session 3)_
+_Last updated: 2026-10-12 (pre-launch campaign: sessions 1 and 2 merged as PRs #19 and #20; the campaign map for sessions 3 and 4 is written; next: session 3)_
+
+## Before session 3 — campaign review (2026-10-12)
+A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
+a session handed on: 711 coverage rows still `smoke` or `untested`, 9 pieces of code with no ledger
+row, dead or unbuilt features (billing and limit emails, notification preferences, the date-format
+setting, `idp_session_sync`), host cron sweeps never run against the compose stack, and CI red on most
+runs since 2026-10-06 without any session noticing (F-275). **Everything left is assigned, item by
+item, in `docs/hardening/CAMPAIGN-MAP.md`; read it right after this file.** Who owns each open
+ledger row is computed by `python docs/hardening/tools/campaign_slices.py` (session 3: 145 rows;
+session 4: 575, of which 282 configuration variables and 163 migrations). A session is finished
+only when `campaign_slices.py --check <its number>` exits 0, every box in its section of the map is
+ticked or in BLOCKERS.md, and CI is green on its pull request.
 
 ## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
 Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
@@ -290,18 +302,17 @@ launch, Dodo selectable; **N-027** Postmark before the first paying customer; **
 plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
-1. Owner: review and merge PR #18 (branch `claude/jolly-keller-d0jscd`: F-208 to F-235, the CI
-   relay, N-032 to N-039). On deploy run `python scripts/seed_quota_tiers.py --carry-forward` so
-   Business subscriptions get TruthMesh (RUNBOOK 9.3). The release adds one migration
-   (`r1a1_invitation_delivery`); rebuild the CPU image for the torch 2.13 upgrade (N-038).
-2. Engineering, small and left for a later pass: the stream's Redis frame buffer still writes on
-   the event loop (each call bounded by the 250 ms Redis timeout; moving it needs a per-stream
-   writer); the main JavaScript chunk is 412 KB
-   gzipped; `idp_session_sync` is stored but unread; the matching queue lists one case per copy of
-   an invoice (product choice).
-3. Carried over, still yours to do: Stripe test-mode prices and webhook secret (F-125), the
-   Postmark server (N-027), roll the keys pasted into chats, the first deploy
-   (`docs/RUNBOOK.md` §9), F-124 before the first SCIM customer, the Tailwind 4 move.
+_Updated 2026-10-12. The earlier list here (merge PR #18; the Redis frame buffer; one matching case
+per invoice copy) is done: PR #18 merged, the buffer moved off the event loop (F-263), one case per
+invoice (F-264, N-055)._
+1. Session 3 (consoles, identity, settings truthfulness, security), with its section of
+   `docs/hardening/CAMPAIGN-MAP.md`; then session 4 (experience, performance, operations,
+   certification), with its section.
+2. Still open from earlier passes, each now assigned in the map: `idp_session_sync` unread and F-124
+   (session 3); the main JavaScript chunk's size, measured fresh, and the Tailwind 4 move (session 4).
+3. The owner's own launch steps (Stripe test prices and webhook secret F-125, Postmark N-027, rolling
+   the keys pasted into chats, the first deploy RUNBOOK §9, and the rest) are collected in section 5
+   of the campaign map; session 4 turns them into the final "Owner launch checklist".
 
 How to bring the test stack up in a fresh sandbox: `frontend/e2e/scripts/start-db.sh` (pgvector
 0.8.0 built from source: `apt-get update && apt-get install postgresql-server-dev-16`, then
