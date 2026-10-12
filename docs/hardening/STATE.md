@@ -1,6 +1,33 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-12 (pre-launch campaign: sessions 1 and 2 merged as PRs #19 and #20; the campaign map for sessions 3 and 4 is written; next: session 3)_
+_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 running: consoles, identity, settings truthfulness, security)_
+
+## Current phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
+Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
+`3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
+Draft PR titled `Campaign session 3: consoles, identity, settings and security`. Owner delegated
+founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 3)`. **If this session is cut off, re-run the same prompt: continue on
+this branch and its open pull request, from the first unticked box in CAMPAIGN-MAP.md §3.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. CI trustworthy (CAMPAIGN-MAP §3.1): read the PR's check runs and annotations, fix every red or
+   flaky test at its cause.
+2. P0 security: non-human principals default deny (SCIM tokens, the public gateway, partner
+   portal), F-124 (SCIM token key), the IDOR sweep over all 621 operations as tenant A with
+   tenant B's ids (and as an API key, and in an ungranted workspace), privilege escalation and
+   mass assignment, SSRF on every customer-chosen URL, uploads, tokens, enumeration, browser
+   security, audit; git-history secret scan. Result: `SECURITY-REVIEW.md`.
+3. Enterprise identity live: SCIM (13 endpoints) and SAML (5) against a self-signed test IdP,
+   the identity console (domains, certificates, dry-run, activation, SCIM keys).
+4. Unbuilt logic (§3.3): notification preferences, billing and plan-limit emails, organization
+   "require two-factor", `idp_session_sync`, data residency truthfulness, the step-up dialog test.
+5. Settings truthfulness: one formatting layer (workspace date format, time zone, currency; the
+   person's own profile wins in the app) replacing the ad-hoc calls; `SETTINGS-LEDGER.md`.
+6. Carry-overs (§3.2): access screens name people, assignment without an explicit grant, a
+   per-tenant request limit decision, the trial's emails and read-only consoles, the platform
+   consoles as an operator, the partner portal.
+7. Ledger rows (`campaign_slices.py --check 3`), host sweeps, finish checks, HANDOFF, PR ready.
 
 ## Before session 3 — campaign review (2026-10-12)
 A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
@@ -14,7 +41,7 @@ session 4: 575, of which 282 configuration variables and 163 migrations). A sess
 only when `campaign_slices.py --check <its number>` exits 0, every box in its section of the map is
 ticked or in BLOCKERS.md, and CI is green on its pull request.
 
-## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
+## Previous phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
 Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
 Based on `main` at `340a8c4` (session 1's PR #19 is merged; HANDOFF.md has its section). Owner
 delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
