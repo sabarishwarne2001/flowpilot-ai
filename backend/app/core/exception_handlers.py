@@ -41,6 +41,8 @@ from app.core.exceptions import (
     OrganizationMemberError,
     OrganizationNotFoundError,
     OrganizationPermissionDeniedError,
+    OrganizationSsoRequiredError,
+    OrganizationNetworkNotAllowedError,
     OwnershipTransferError,
     PendingTransferExistsError,
     RateLimitExceededError,
@@ -109,6 +111,8 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     # --- Organizations -----------------------------------------------------
     OrganizationNotFoundError: (404, "RESOURCE_NOT_FOUND"),
     OrganizationAccessDeniedError: (404, "RESOURCE_NOT_FOUND"),
+    OrganizationSsoRequiredError: (403, "ORGANIZATION_SSO_REQUIRED"),
+    OrganizationNetworkNotAllowedError: (403, "ORGANIZATION_NETWORK_NOT_ALLOWED"),
     OrganizationPermissionDeniedError: (403, "PERMISSION_DENIED"),
     OrganizationAlreadyExistsError: (409, "ORGANIZATION_ALREADY_EXISTS"),
     LastOwnerError: (409, "LAST_OWNER"),

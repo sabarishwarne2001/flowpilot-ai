@@ -64,7 +64,11 @@ import type {
 } from "axios";
 
 import { useAuthStore, type User } from "@/store/useAuthStore";
-import { useSessionGuardStore } from "@/store/useSessionGuardStore";
+import {
+  ORGANIZATION_POLICY_CODES,
+  type OrganizationPolicyCode,
+  useSessionGuardStore,
+} from "@/store/useSessionGuardStore";
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ApiError, parseErrorEnvelope } from "@/services/api/errors";
 import { buildLoginRedirect } from "@/utils/security";
@@ -603,6 +607,17 @@ apiClient.interceptors.response.use(
           resourcePath: config.url,
         });
 
+        return reject();
+      }
+
+      // Campaign session 3. The organization's sign-in policy (single sign-on)
+      // refused this session; every request into it will be refused the same
+      // way, so one notice says why and how to get back in.
+      if (parsed.code && ORGANIZATION_POLICY_CODES.has(parsed.code)) {
+        useSessionGuardStore.getState().setOrganizationPolicy({
+          code: parsed.code as OrganizationPolicyCode,
+          message: parsed.message,
+        });
         return reject();
       }
 

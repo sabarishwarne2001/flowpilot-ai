@@ -13,6 +13,7 @@ import { Toaster } from "sonner";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { LoadingScreen } from "@/components/common/LoadingScreen";
+import OrganizationPolicyNotice from "@/components/auth/OrganizationPolicyNotice";
 import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
@@ -571,6 +572,7 @@ export default function App() {
         duration={4000}
       />
       <StepUpReauthModal />
+      <OrganizationPolicyNotice />
       <UnsavedChangesDialogHost />
 
       <RouterProvider router={router} />

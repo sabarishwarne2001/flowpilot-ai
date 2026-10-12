@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from app.api import deps
 from app.models.identity import (
@@ -28,6 +28,7 @@ from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
 from app.models.identity import JitProvisioningMode  # HM-S1:idp-jit-default
 from app.core import entitlements as _ent
 from app.core.config import settings
+from app.core.client_ip import trusted_client_ip
 from app.schemas.identity import SecurityPolicyUpdate
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -601,7 +602,7 @@ def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
 
 
 @router.put("/security-policy")
-def update_policy(organization_id: str, payload: dict = Body(...),
+def update_policy(organization_id: str, request: Request, payload: dict = Body(...),
                   membership=Depends(deps.RequireOrgOwner),
                   db=Depends(deps.get_db),
                   user=Depends(deps.get_current_active_user)):
@@ -617,7 +618,8 @@ def update_policy(organization_id: str, payload: dict = Body(...),
         db, organization_id=organization_id)
     try:
         policy = session_policy_service.update_policy(
-            db, policy=policy, changes=changes, principal=_principal(user))
+            db, policy=policy, changes=changes, principal=_principal(user),
+            requester_ip=trusted_client_ip(request))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     # ARCH30-T4F:emit-security-policy — A8. Field names, never values:

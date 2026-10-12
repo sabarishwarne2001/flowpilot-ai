@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 from datetime import datetime
 from typing import Literal
 
@@ -147,11 +149,29 @@ class SecurityPolicyUpdate(BaseModel):
     ip_pinning: Literal["OFF", "PREFIX", "STRICT"] | None = None
     ip_prefix_v4: int | None = Field(default=None, ge=8, le=32)
     ip_prefix_v6: int | None = Field(default=None, ge=32, le=128)
-    ip_allowlist: list[str] | None = None
+    # Campaign session 3. Networks in CIDR form ("203.0.113.0/24", "2001:db8::/48"; a bare
+    # address is one host). Validated here: the list used to reach the database's CIDR column
+    # unchecked, and a typo was a database error.
+    ip_allowlist: list[str] | None = Field(default=None, max_length=100)
     # F-204. Enforced at every refresh, so a value below five minutes signs members out before
     # their first refresh. Strict: true and "3600" are not session ages. Null removes the limit.
     max_session_age_s: int | None = Field(default=None, ge=300, le=366 * 86400, strict=True)
     idp_session_sync: bool | None = None
+
+    @field_validator("ip_allowlist")
+    @classmethod
+    def _networks(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        networks: list[str] = []
+        for entry in value:
+            try:
+                network = ipaddress.ip_network(str(entry).strip(), strict=False)
+            except ValueError as exc:
+                raise ValueError(f"'{entry}' is not a network (use CIDR, like 203.0.113.0/24).") from exc
+            if str(network) not in networks:
+                networks.append(str(network))
+        return networks
 
 
 class SecurityPolicyRead(BaseModel):

@@ -113,6 +113,32 @@ export interface RateLimitState {
 }
 
 /* ==========================================================================
+ * Organization sign-in policy
+ * ========================================================================== */
+
+/**
+ * Campaign session 3. The organization's own sign-in policy refused this
+ * session: it requires single sign-on and the session did not come from the
+ * organization's identity provider, or it allows only approved networks. Every request into that organization is
+ * refused the same way until the person signs in again, so it is held and
+ * shown once, like a quota refusal, instead of failing each page silently.
+ */
+export type OrganizationPolicyCode =
+  | "ORGANIZATION_SSO_REQUIRED"
+  | "ORGANIZATION_NETWORK_NOT_ALLOWED";
+
+export interface OrganizationPolicyRefusal {
+  readonly code: OrganizationPolicyCode;
+  /** Server-authored prose. Displayed verbatim. */
+  readonly message: string;
+}
+
+export const ORGANIZATION_POLICY_CODES: ReadonlySet<string> = new Set<OrganizationPolicyCode>([
+  "ORGANIZATION_SSO_REQUIRED",
+  "ORGANIZATION_NETWORK_NOT_ALLOWED",
+]);
+
+/* ==========================================================================
  * Store
  * ========================================================================== */
 
@@ -120,6 +146,7 @@ interface SessionGuardState {
   readonly stepUp: StepUpChallenge | null;
   readonly quota: QuotaRefusal | null;
   readonly rateLimit: RateLimitState | null;
+  readonly organizationPolicy: OrganizationPolicyRefusal | null;
 
   /**
    * Raises a step-up challenge.
@@ -149,6 +176,9 @@ interface SessionGuardState {
   readonly setRateLimit: (state: RateLimitState) => void;
   readonly clearRateLimit: () => void;
 
+  readonly setOrganizationPolicy: (refusal: OrganizationPolicyRefusal) => void;
+  readonly clearOrganizationPolicy: () => void;
+
   /** Drops everything. Called on sign-out and on tenant switch. */
   readonly resetSessionGuards: () => void;
 }
@@ -159,6 +189,7 @@ export const useSessionGuardStore = create<SessionGuardState>()(
       stepUp: null,
       quota: null,
       rateLimit: null,
+      organizationPolicy: null,
 
       requireStepUp: (challenge) => {
         if (get().stepUp !== null) {
@@ -193,9 +224,15 @@ export const useSessionGuardStore = create<SessionGuardState>()(
 
       clearRateLimit: () => set({ rateLimit: null }, false, "clearRateLimit"),
 
+      setOrganizationPolicy: (refusal) =>
+        set({ organizationPolicy: refusal }, false, "setOrganizationPolicy"),
+
+      clearOrganizationPolicy: () =>
+        set({ organizationPolicy: null }, false, "clearOrganizationPolicy"),
+
       resetSessionGuards: () =>
         set(
-          { stepUp: null, quota: null, rateLimit: null },
+          { stepUp: null, quota: null, rateLimit: null, organizationPolicy: null },
           false,
           "resetSessionGuards",
         ),

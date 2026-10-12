@@ -20,6 +20,8 @@ from app.core import security
 from app.core.audit_routes import resolve_route_audit
 from app.core.config import settings
 from app.core.exceptions import (
+    OrganizationNetworkNotAllowedError,
+    OrganizationSsoRequiredError,
     OrganizationAccessDeniedError,
     OrganizationPermissionDeniedError,
     WorkspaceAccessDeniedError,
@@ -387,16 +389,40 @@ class TenantContext:
         return self.effective_workspace_role
 
 
+def _security_policy(db: Session, organization_id: uuid.UUID):
+    """The organization's sign-in policy, read without creating one (most have none)."""
+    from app.models.identity import TenantSecurityPolicy
+
+    return (
+        db.query(TenantSecurityPolicy)
+        .filter(TenantSecurityPolicy.organization_id == organization_id)
+        .one_or_none()
+    )
+
+
 def _assert_sso_compliance(
     db: Session,
     *,
     organization_id: uuid.UUID,
     membership: OrganizationMember,
     session_id: Optional[uuid.UUID],
+    policy: Any = None,
 ) -> None:
-    policy = session_policy_service.get_or_create_policy(
-        db, organization_id=organization_id
-    )
+    """Refuse a person whose session does not satisfy the organization's "Require SSO".
+
+    Campaign session 3. This check existed but no route called it, so "Require single sign-on"
+    was shown as in force while password sessions kept full access. It now runs on every
+    organization- and workspace-scoped request (`_assert_organization_access_policy`), reads the
+    policy without creating one, and accepts only a session opened through one of THIS
+    organization's identity providers: a SAML or OIDC session from another organization's
+    provider proves nothing about this one.
+    """
+    from app.models.identity import EnterpriseIdpConfig
+
+    if policy is None:
+        policy = _security_policy(db, organization_id)
+    if policy is None:
+        return
 
     role_str = (
         membership.role.value
@@ -407,32 +433,95 @@ def _assert_sso_compliance(
     if not session_policy_service.sso_required_for(policy, org_role=role_str):
         return
 
+    refusal = OrganizationSsoRequiredError(
+        "This organization requires SSO authentication. Sign in through your organization's "
+        "identity provider to continue."
+    )
     if session_id is None:
-        raise OrganizationPermissionDeniedError(
-            "This organization requires SSO authentication."
-        )
+        raise refusal
 
     user_session = (
         db.query(UserSession)
         .filter(UserSession.id == session_id, UserSession.revoked_at.is_(None))
         .one_or_none()
     )
-
     if user_session is None:
-        raise OrganizationPermissionDeniedError(
-            "This organization requires SSO authentication."
-        )
+        raise refusal
 
     auth_method = (
         user_session.auth_method.value
         if hasattr(user_session.auth_method, "value")
         else str(user_session.auth_method)
     )
+    if auth_method == "PASSWORD" or user_session.idp_config_id is None:
+        raise refusal
 
-    if auth_method == "PASSWORD":
-        raise OrganizationPermissionDeniedError(
-            "This organization requires SSO authentication."
+    idp_organization_id = db.execute(
+        select(EnterpriseIdpConfig.organization_id).where(
+            EnterpriseIdpConfig.id == user_session.idp_config_id
         )
+    ).scalar_one_or_none()
+    if idp_organization_id != organization_id:
+        raise refusal
+
+
+def _assert_network_allowed(request: Optional[Request], policy: Any) -> None:
+    """Campaign session 3. The organization's IP allowlist, for people and API keys alike.
+
+    The address is the strictly resolved client address (`trusted_client_ip`): behind a proxy
+    whose forwarding chain cannot be trusted it is unknown, and an unknown address is refused.
+    """
+    if policy is None or not policy.ip_allowlist:
+        return
+    from app.core.client_ip import trusted_client_ip
+
+    address = trusted_client_ip(request) if request is not None else None
+    if session_policy_service.ip_allowed(policy, address):
+        return
+    raise OrganizationNetworkNotAllowedError(
+        "This organization allows access only from its approved networks, and your address "
+        f"({address or 'unknown'}) is not one of them. Connect from an approved network, or ask "
+        "an owner to add yours."
+    )
+
+
+def _is_api_key_request(request: Optional[Request]) -> bool:
+    principal = (getattr(request.state, "principal", None) if request is not None else None) or (
+        get_current_principal()
+    )
+    return bool(
+        principal and (principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY)
+    )
+
+
+def _assert_organization_access_policy(
+    request: Optional[Request],
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    membership: OrganizationMember,
+) -> None:
+    """The organization's sign-in policy, checked on every request into it (campaign session 3).
+
+    Called by every organization- and workspace-scoped context dependency (and, for the network
+    allowlist, by the public API's key dependency), so a route added later is covered without
+    anyone remembering a guard. The allowlist applies to people and API keys; single sign-on to
+    people only.
+    """
+    policy = _security_policy(db, organization_id)
+    if policy is None:
+        return
+    _assert_network_allowed(request, policy)
+    if _is_api_key_request(request):
+        return
+    session_id = getattr(request.state, "session_id", None) if request is not None else None
+    _assert_sso_compliance(
+        db,
+        organization_id=organization_id,
+        membership=membership,
+        session_id=session_id,
+        policy=policy,
+    )
 
 
 # F-218. The context dependencies below query the database and hold no context
@@ -458,52 +547,9 @@ def get_organization_context(
         raise OrganizationAccessDeniedError("Organization not found.")
 
     organization_service.assert_organization_operational(organization)
-
-    # ARCH-30 Tranche 3 (D-11). Read-only billing states refuse writes here,
-    # once, for every organization-scoped route.
-    from app.api.billing_write_gate import assert_billing_writes_allowed
-
-    assert_billing_writes_allowed(request, db, organization_id=organization.id)
-
-    return OrganizationContext(
-        user=current_user,
-        organization=organization,
-        membership=membership,
+    _assert_organization_access_policy(
+        request, db, organization_id=organization.id, membership=membership
     )
-
-
-def get_sso_compliant_organization_context(
-    request: Request,
-    organization_id: uuid.UUID = Path(..., description="Organization identifier"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_verified_user),
-    token: str = Depends(oauth2_scheme),
-) -> OrganizationContext:
-    organization = organization_service.get_organization_or_raise(
-        db, organization_id=organization_id
-    )
-
-    membership = crud.get_organization_member(
-        db,
-        organization_id=organization.id,
-        user_id=current_user.id,
-        statuses=ACTIVE_ONLY,
-    )
-    if membership is None:
-        raise OrganizationAccessDeniedError("Organization not found.")
-
-    principal = getattr(request.state, "principal", None) or get_current_principal()
-    if not (principal and (principal.kind == "API_KEY" or principal.kind is PrincipalKind.API_KEY)):
-        claims = security.decode_access_token_claims(token)
-        session_id = claims.session_id if claims else None
-        _assert_sso_compliance(
-            db,
-            organization_id=organization.id,
-            membership=membership,
-            session_id=session_id,
-        )
-
-    organization_service.assert_organization_operational(organization)
 
     # ARCH-30 Tranche 3 (D-11). Read-only billing states refuse writes here,
     # once, for every organization-scoped route.
@@ -522,6 +568,7 @@ def get_billing_organization_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
 ) -> OrganizationContext:
     organization = organization_service.get_organization_or_raise(
         db, organization_id=organization_id
@@ -535,6 +582,9 @@ def get_billing_organization_context(
     )
     if membership is None:
         raise OrganizationAccessDeniedError("Organization not found.")
+    _assert_organization_access_policy(
+        request, db, organization_id=organization.id, membership=membership
+    )
 
     return OrganizationContext(
         user=current_user,
@@ -565,6 +615,12 @@ def get_workspace_context(
 
     assert access.organization_membership is not None
     assert access.effective_role is not None
+    _assert_organization_access_policy(
+        request,
+        db,
+        organization_id=workspace.organization_id,
+        membership=access.organization_membership,
+    )
 
     # ARCH-30 Tranche 3 (D-11). Same gate for every workspace-scoped route.
     from app.api.billing_write_gate import assert_billing_writes_allowed
@@ -585,6 +641,7 @@ def get_archived_workspace_context(
     workspace_id: uuid.UUID = Path(..., description="Workspace identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
 ) -> TenantContext:
     """The workspace context WITHOUT the "is it active" check, for restoring it and nothing else.
 
@@ -604,6 +661,12 @@ def get_archived_workspace_context(
 
     assert access.organization_membership is not None
     assert access.effective_role is not None
+    _assert_organization_access_policy(
+        request,
+        db,
+        organization_id=workspace.organization_id,
+        membership=access.organization_membership,
+    )
     return TenantContext(
         user=current_user,
         organization=workspace.organization,
@@ -618,6 +681,7 @@ def get_archived_organization_owner_context(
     organization_id: uuid.UUID = Path(..., description="Organization identifier"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_verified_user),
+    request: Request = None,  # type: ignore[assignment]  # injected by FastAPI
 ) -> OrganizationContext:
     """The organization context WITHOUT the "is it active" check, for its owner to restore it.
 
@@ -639,6 +703,9 @@ def get_archived_organization_owner_context(
         raise OrganizationPermissionDeniedError(
             "Only an organization owner can restore the organization."
         )
+    _assert_organization_access_policy(
+        request, db, organization_id=organization.id, membership=membership
+    )
     return OrganizationContext(
         user=current_user,
         organization=organization,
@@ -647,7 +714,6 @@ def get_archived_organization_owner_context(
 
 
 OrgContext = Annotated[OrganizationContext, Depends(get_organization_context)]
-SSOCompliantOrgContext = Annotated[OrganizationContext, Depends(get_sso_compliant_organization_context)]
 WorkspaceCtx = Annotated[TenantContext, Depends(get_workspace_context)]
 
 
@@ -938,7 +1004,7 @@ async def require_api_key(
     # ARCH30-T4F:api-key-billing-gate — A6.
     #
     # The D-11 audit found the read-only gate wired into
-    # `get_organization_context`, `get_sso_compliant_organization_context`
+    # `get_organization_context`
     # and `get_workspace_context` — and nowhere on the API-key path. A
     # LAPSED organization could still POST /v1/query (which spends LLM
     # and embedding quota) and POST /v1/workflows/{id}/trigger (which
@@ -955,6 +1021,11 @@ async def require_api_key(
 
     await run_in_threadpool(
         assert_billing_writes_allowed, request, db, organization_id=organization.id
+    )
+
+    # Campaign session 3. The organization's IP allowlist binds its API keys too.
+    await run_in_threadpool(
+        lambda: _assert_network_allowed(request, _security_policy(db, organization.id))
     )
 
     return PublicApiPrincipal(
