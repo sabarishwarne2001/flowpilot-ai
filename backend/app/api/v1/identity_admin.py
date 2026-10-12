@@ -44,16 +44,27 @@ def _principal(user) -> IdentityPrincipal:
 
 
 def _fingerprint(pem: str) -> str:
+    """The SHA-256 fingerprint of an X.509 certificate in PEM form.
+
+    Campaign session 3 (F-283). This only base64-decoded the body, so any base64 text between
+    the PEM markers ("AAAA") was saved as the provider's signing certificate; the connection then
+    activated and refused every sign-in with "no configured certificate verified the signature".
+    The certificate is parsed now, and anything that is not one is a 422 at the moment it is
+    pasted.
+    """
     import hashlib
-    import base64
-    body = (pem.replace("-----BEGIN CERTIFICATE-----", "")
-               .replace("-----END CERTIFICATE-----", "")
-               .replace("\n", "").strip())
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
     try:
-        der = base64.b64decode(body)
+        certificate = x509.load_pem_x509_certificate(pem.strip().encode("utf-8"))
     except Exception as exc:
-        raise HTTPException(422, "Certificate is not valid PEM.") from exc
-    return hashlib.sha256(der).hexdigest()
+        raise HTTPException(
+            422, "That is not a valid X.509 certificate in PEM form. Paste the identity "
+            "provider's signing certificate, from -----BEGIN CERTIFICATE----- to "
+            "-----END CERTIFICATE-----.") from exc
+    return hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
 #: Roles a mapping or a just-in-time default may grant. Never OWNER: ownership
