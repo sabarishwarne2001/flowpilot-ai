@@ -45,3 +45,16 @@ test.describe("Workspace AI settings", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Organization identifier", () => {
+  test.use({ user: "C.owner" });
+
+  // F-308: the page said the identifier "is changed through support"; support has no such tool.
+  test("the page does not promise a support path that does not exist", async ({ page }) => {
+    await page.goto(org("C", "settings"));
+    await expect(page.locator("#org-slug")).toBeVisible();
+    await expect(page.getByText(/changed through support/i)).toHaveCount(0);
+    await expect(page.getByText(/cannot be changed on this page/i)).toBeVisible();
+    await expectHealthyPage(page);
+  });
+});
