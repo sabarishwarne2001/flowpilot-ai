@@ -84,7 +84,7 @@ _TRIAL_CACHE_ATTR = "billing_trial_status"
 
 #: N-052 (campaign session 2). After a free trial ends the organization is read-only like an
 #: unpaid one, and also keeps managing its people: inviting the colleague who will pay,
-#: changing roles, removing someone. Archiving (the owner's delete) stays open too.
+#: changing roles, removing someone. Archiving (the owner's delete) and restoring stay open too.
 TRIAL_ENDED_ALSO_PERMITTED: tuple[re.Pattern[str], ...] = tuple(
     re.compile(pattern)
     for pattern in (
@@ -92,6 +92,11 @@ TRIAL_ENDED_ALSO_PERMITTED: tuple[re.Pattern[str], ...] = tuple(
         r"/organizations/[^/]+/invitations(/|$)",
         r"/workspaces/[^/]+/members(/|$)",
         r"/organizations/[^/]+/archive$",
+        # Campaign session 3 (F-297): archiving a workspace is the same housekeeping. Restoring
+        # passes this gate too; the plan then decides (Free includes one active workspace, so
+        # bringing a second back asks to subscribe, with that reason).
+        r"/workspaces/[^/]+/(archive|restore)$",
+        r"/organizations/[^/]+/restore$",
     )
 )
 

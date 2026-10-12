@@ -84,9 +84,12 @@ migrations, integrations, operations and certification.
 - [x] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
       Decide whether one is needed; implement if so.
       _Done (session 3): N-061 decided per person, no organization ceiling; F-286 built and proved._
-- [ ] **The trial's screens, settings and emails (N-052, N-053):** write the wording of the two trial
+- [x] **The trial's screens, settings and emails (N-052, N-053):** write the wording of the two trial
       emails (session 3 owns it); check the banner, the dismissible "Continue read-only" notice and
       every console a read-only organization can still use (members, archive, export, billing).
+      _Done (session 3): the two emails' wording reviewed and kept (escaped and one-line subjects
+      since F-285); banner and notice in `e2e/tests/33-free-trial.spec.ts`; consoles in
+      `test_free_trial.py` and `test_trial_ended_consoles_stay_usable.py` (F-297 fixed)._
 - [ ] **Platform consoles:** RevOps (10 endpoints only `smoke`), Unit economics, Sovereign and the
       audit explorer, as an operator, end to end. Session 1 checked the money numbers, not the consoles.
 
