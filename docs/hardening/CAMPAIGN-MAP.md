@@ -118,7 +118,8 @@ migrations, integrations, operations and certification.
       `backend/app/core/display_format.py`; `npm run check:self` keeps it the only layer._
 - [x] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
       _Done (session 3): proven and fixed (`tests/services/test_scim_token_key_is_secret.py`)._
-- [ ] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
+- [x] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
+      _Done (session 3): `e2e/tests/45-step-up.spec.ts`; it also found F-303._
 - [x] **Data residency:** the region setting exists; check whether it decides where anything is
       stored, and if not, say so truthfully on the screen (N-029).
       _Done (session 3): it pins export archives and branding files only; the card now says so and

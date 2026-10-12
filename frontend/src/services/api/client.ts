@@ -518,16 +518,18 @@ apiClient.interceptors.response.use(
       // maps to 401, not 403, so this check must run before the refresh path —
       // refreshing would succeed, replay, and get refused identically, because
       // refresh carries `auth_time` forward rather than restamping it.
-      if (
-        config &&
-        !config._skipStepUp &&
-        isStepUpChallenge(response, parsed.code, parsed.details)
-      ) {
-        useSessionGuardStore.getState().requireStepUp({
-          reason: parsed.message,
-          retry: null,
-          resourcePath: config.url,
-        });
+      if (config && isStepUpChallenge(response, parsed.code, parsed.details)) {
+        // F-303: a caller that asked for the password itself (`_skipStepUp`)
+        // gets the refusal as its own error. Either way this is never a
+        // session failure: refreshing would replay the same wrong password,
+        // and the second refusal would sign the person out.
+        if (!config._skipStepUp) {
+          useSessionGuardStore.getState().requireStepUp({
+            reason: parsed.message,
+            retry: null,
+            resourcePath: config.url,
+          });
+        }
         return reject();
       }
 
