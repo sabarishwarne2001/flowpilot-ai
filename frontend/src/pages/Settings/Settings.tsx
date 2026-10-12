@@ -107,8 +107,11 @@ const isSection = (value: string | null): value is SettingsSection =>
   SECTIONS.some((section) => section.id === value);
 
 const Settings: React.FC = () => {
-  // `?section=sessions` opens a section directly (the account menu links here).
-  const [searchParams] = useSearchParams();
+  // `?section=sessions` opens a section directly (the account menu links here). Choosing a
+  // section writes it there too (F-322): saving a workspace's clock or date format re-renders the
+  // workspace's pages under the new settings (N-064), and a reload does the same, so the page
+  // has to remember where the person was or it falls back to Profile mid-task.
+  const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get("section");
   const [active, setActive] = useState<SettingsSection>(isSection(requested) ? requested : "profile");
   useEffect(() => {
@@ -116,6 +119,17 @@ const Settings: React.FC = () => {
       setActive(requested);
     }
   }, [requested]);
+  const choose = (section: SettingsSection): void => {
+    setActive(section);
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.set("section", section);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const { workspace, workspaceRole, organization, organizationRole } = useResolvedTenant();
 
   const canSeeWorkspace = isAtLeast(workspaceRole, "CONTRIBUTOR");
@@ -177,7 +191,7 @@ const Settings: React.FC = () => {
                       <li key={section.id}>
                         <button
                           type="button"
-                          onClick={() => setActive(section.id)}
+                          onClick={() => choose(section.id)}
                           aria-current={selected ? "page" : undefined}
                           className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
                             selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(var(--primary-on-dark))]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
