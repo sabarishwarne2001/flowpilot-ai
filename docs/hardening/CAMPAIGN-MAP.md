@@ -136,7 +136,9 @@ warehouses, BYOK providers, iCal feeds, marketplace signing); jobs `notification
 retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row yet).
 
 ### 3.5 The session 3 prompt's own deliverables
-- [ ] `docs/hardening/SETTINGS-LEDGER.md`: every setting, its reader, its effect, its test.
+- [x] `docs/hardening/SETTINGS-LEDGER.md`: every setting, its reader, its effect, its test.
+      _Done (session 3): with F-299 to F-308 fixed on the way; its last section lists what is still
+      unproven._
 - [x] `docs/hardening/SECURITY-REVIEW.md`: the ASVS level-2 pass, including the IDOR sweep over all
       621 operations, SSRF, uploads, tokens, enumeration, browser security, audit and the git-history
       secret scan (`docs/hardening/tools/scan_history_for_secrets.py`).
