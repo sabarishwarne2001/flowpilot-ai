@@ -51,10 +51,21 @@ _QUIRKS = {
 
 
 def _pepper() -> bytes:
+    """The key SCIM token secrets are hashed with (F-124, campaign session 3).
+
+    This read an undeclared SCIM_TOKEN_PEPPER (always None) and fell back to
+    `str(JWT_SECRET_KEY)`, which for a SecretStr is the mask "**********": every deployment
+    hashed SCIM tokens with the same public constant. The key is now derived from the API key
+    pepper (a declared secret the production guard requires) under its own label, so a SCIM
+    hash never equals an API key hash of the same text.
+    """
     settings = get_settings()
-    secret = getattr(settings, "SCIM_TOKEN_PEPPER", None) or \
-        getattr(settings, "JWT_SECRET_KEY", "")
-    return str(secret).encode("utf-8")
+    pepper = settings.API_KEY_PEPPER
+    if pepper is None:
+        raise RuntimeError("API_KEY_PEPPER is not configured; SCIM tokens cannot be hashed.")
+    return hmac.new(
+        pepper.get_secret_value().encode("utf-8"), b"flowpilot.scim-token.v1", hashlib.sha256
+    ).digest()
 
 
 def hash_secret(secret: str) -> bytes:
