@@ -1,16 +1,16 @@
 export const DOCUMENT_FIELD_HELP = {
-  chunk_size: {
-    title: "Chunk Size",
+  chunk_size_tokens: {
+    title: "Chunk size (tokens)",
     description:
-      "Maximum number of characters in each text chunk before embeddings are generated.",
-    recommended: "500 characters works well for most document types.",
+      "How much text goes into each searchable piece of a document, in model tokens (32 to 254). Smaller pieces make answers cite more precisely; larger ones keep more context together. Applies to documents processed or re-indexed after the change.",
+    recommended: "220 tokens works well for most documents.",
   },
 
-  chunk_overlap: {
-    title: "Chunk Overlap",
+  chunk_overlap_pct: {
+    title: "Chunk overlap (%)",
     description:
-      "Number of characters shared between consecutive chunks to preserve context.",
-    recommended: "100 characters preserves context between chunks.",
+      "How much of each piece repeats at the start of the next (0 to 40%), so a sentence split across two pieces is still found.",
+    recommended: "10% preserves context between pieces.",
   },
 
   embedding_model: {

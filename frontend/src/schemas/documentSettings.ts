@@ -1,15 +1,17 @@
 import { z } from "zod";
 
 export const documentSettingsSchema = z.object({
-    chunk_size: z
+    chunk_size_tokens: z
         .number()
-        .min(100)
-        .max(4000),
+        .int()
+        .min(32)
+        .max(254),
 
-    chunk_overlap: z
+    chunk_overlap_pct: z
         .number()
+        .int()
         .min(0)
-        .max(1000),
+        .max(40),
 
     embedding_model: z
         .string()
