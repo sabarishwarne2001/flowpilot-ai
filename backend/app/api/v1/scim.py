@@ -77,8 +77,42 @@ def scim_key(request: Request, authorization: str | None = Header(None),
 
 
 def assert_write_allowed(db, *, organization_id, operation: str) -> None:
+    """Refuse a directory write that would ADD access, when the organization may not add any.
+
+    Campaign session 3 (F-279 to F-281). Offboarding (deactivate, delete, removing someone from
+    a group) is never refused: a security control must keep working whatever the organization's
+    plan or billing state. Adding access is refused when:
+      * the organization is not active (archived or suspended): nobody joins it;
+      * its plan no longer includes enterprise identity (left Enterprise): the token stays able
+        to offboard, so an identity provider wired to it never leaves people behind;
+      * it is read-only for non-payment (ARCH-16, the original rule).
+    """
     if operation not in _SEAT_CONSUMING:
         return
+    from app.models.organization import Organization, OrganizationStatus
+
+    organization = db.get(Organization, organization_id)
+    if organization is None or organization.status != OrganizationStatus.ACTIVE:
+        raise ScimError(
+            403,
+            "This organization is archived or suspended; nobody can be added to it. "
+            "Deactivation and removal remain available.",
+            scim_type="mutability",
+        )
+    from app.api import capability_gate
+    from app.core import entitlements
+
+    if not capability_gate.has_capability(
+        db, organization_id=organization_id,
+        capability_key=entitlements.ENTERPRISE_IDENTITY_CAPABILITY,
+    ):
+        raise ScimError(
+            403,
+            "Directory sync is included on the Enterprise plan, and this organization's plan no "
+            "longer includes it, so new users cannot be provisioned or reactivated. Deactivation "
+            "and removal remain available.",
+            scim_type="mutability",
+        )
     try:
         from app.services.billing.dunning_service import access_state
         state = access_state(db, organization_id=organization_id)
@@ -94,6 +128,18 @@ def assert_write_allowed(db, *, organization_id, operation: str) -> None:
         raise
     except Exception:
         return
+
+
+def _patch_activates(payload: dict) -> bool:
+    """Whether a PATCH would set active=true (Okta's and Entra's dialects alike)."""
+    target = None
+    for op in scim_service._normalise_patch_ops(payload):  # noqa: SLF001 - the service's own parser
+        if str(op.get("op", "")).lower() not in ("replace", "add", "remove"):
+            continue
+        value = scim_service._patch_active_value(op)  # noqa: SLF001
+        if value is not None:
+            target = value
+    return target is True
 
 
 # ==========================================================================
@@ -181,6 +227,8 @@ def replace_user(resource_id: str, payload: dict = Body(...),
                  key=Depends(scim_key), db=Depends(deps.get_db)) -> JSONResponse:
     try:
         active = payload.get("active")
+        if isinstance(active, str):
+            active = active.strip().lower() == "true"
         if active is True:
             assert_write_allowed(db, organization_id=key.organization_id,
                                  operation="activate_user")
@@ -195,6 +243,11 @@ def replace_user(resource_id: str, payload: dict = Body(...),
 def patch_user(resource_id: str, payload: dict = Body(...),
                key=Depends(scim_key), db=Depends(deps.get_db)) -> JSONResponse:
     try:
+        # F-280. Reactivation through PATCH (how Okta and Entra reactivate) skipped the gate that
+        # PUT and create apply.
+        if _patch_activates(payload):
+            assert_write_allowed(db, organization_id=key.organization_id,
+                                 operation="activate_user")
         identity = scim_service.patch_user(db, key=key, resource_id=resource_id,
                                            payload=payload)
         return _scim_response(scim_service.user_to_scim(db, identity))
