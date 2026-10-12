@@ -28,12 +28,14 @@ import { runTenantPathSelfCheck } from "@/routes/tenantPaths";
 import { runTenantReconciliationSelfCheck } from "@/routes/tenantReconciliation";
 import { runPermissionSelfCheck } from "@/permissions/selfCheck";
 import { runDisplayFormatSelfCheck } from "@/utils/displayTime";
+import { runBrandColourSelfCheck } from "@/utils/brandTheme";
 export const checks = {
   "tenant resolution": runTenantResolutionSelfCheck,
   "tenant paths": runTenantPathSelfCheck,
   "tenant reconciliation": runTenantReconciliationSelfCheck,
   "permission parity": runPermissionSelfCheck,
   "display formatting": runDisplayFormatSelfCheck,
+  "brand colours": runBrandColourSelfCheck,
 };
 `,
 );

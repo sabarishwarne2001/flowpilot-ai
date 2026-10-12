@@ -26,7 +26,7 @@ export default function InfoTooltip({
 
           {recommended && (
             <div className="rounded-md border border-primary/25 bg-primary/[0.08] p-2">
-              <p className="text-xs font-medium text-primary dark:text-[hsl(213_94%_72%)]">
+              <p className="text-xs font-medium text-primary dark:text-[hsl(var(--primary-on-dark))]">
                 Recommended
               </p>
 

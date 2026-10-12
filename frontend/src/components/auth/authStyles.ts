@@ -19,7 +19,7 @@ export const AUTH_PRIMARY = "fp-btn fp-btn-primary h-10 w-full text-sm font-semi
 export const AUTH_SECONDARY = "fp-btn fp-btn-secondary h-10 w-full text-sm";
 
 export const AUTH_LINK =
-  "font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(213_94%_72%)]";
+  "font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--primary-on-dark))]";
 
 export const AUTH_MUTED_LINK =
   "text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50";

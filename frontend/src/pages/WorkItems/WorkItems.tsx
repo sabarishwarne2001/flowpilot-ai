@@ -51,7 +51,7 @@ const filterFormSchema = z.object({
 type FilterFormInput = z.infer<typeof filterFormSchema>;
 
 const STATUS_BADGE_MAP: Record<WorkItemStatus, string> = {
-  QUEUED: "bg-primary/[0.08] text-primary border-primary/20 dark:text-[hsl(213_94%_72%)]",
+  QUEUED: "bg-primary/[0.08] text-primary border-primary/20 dark:text-[hsl(var(--primary-on-dark))]",
   PROCESSING: "bg-amber-500/[0.08] text-amber-600 border-amber-500/25 dark:text-amber-400",
   COMPLETED: "bg-emerald-500/[0.08] text-emerald-600 border-emerald-500/25 dark:text-emerald-400",
   FAILED: "bg-destructive/[0.08] text-destructive border-destructive/25",

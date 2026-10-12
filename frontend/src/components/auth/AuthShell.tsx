@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 import { Brand } from "@/components/branding/Brand";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
+import { isHexColour } from "@/utils/brandTheme";
 import { DocumentShowcase } from "./DocumentShowcase";
 
 /**
@@ -14,15 +15,41 @@ import { DocumentShowcase } from "./DocumentShowcase";
  * beside the tenant's logo tells the tenant's employees which vendor they are
  * typing their password into — which is the thing white-label is sold to hide.
  *
- * Theme colours from the manifest are NOT applied here. The authenticated
- * application's theming path is where colour tokens belong, and applying them
- * pre-auth in a second place is a second implementation to keep in step.
+ * Campaign session 3 (F-300, N-065): the tenant's colours apply too. The
+ * primary and accent colours reach every page on the domain through
+ * BrandTheme; here the background and text colours paint the backdrop, the
+ * side pane glows in the primary and accent colours, and the colour scheme
+ * decides light or dark while a sign-in page is open (inside the app light or
+ * dark stays each person's own choice). The form card keeps the palette's own
+ * card colours, so a dark backdrop never leaves dark text on a white card.
  */
 export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ children }) => {
   const manifest = usePublicBrandingManifest({ enabled: true });
   const custom = manifest?.has_custom_branding ? manifest : null;
   const brandLabel = custom?.brand_name ?? "FlowPilot AI";
   const year = new Date().getFullYear();
+  const scheme = custom?.color_scheme ?? "SYSTEM";
+
+  useEffect(() => {
+    if (scheme === "SYSTEM") {
+      return undefined;
+    }
+    const root = document.documentElement;
+    const before = root.classList.contains("dark");
+    root.classList.toggle("dark", scheme === "DARK");
+    return () => {
+      root.classList.toggle("dark", before);
+    };
+  }, [scheme]);
+
+  const backdrop: React.CSSProperties = {
+    ...(isHexColour(custom?.background_color) ? { backgroundColor: custom.background_color } : {}),
+    ...(isHexColour(custom?.foreground_color) ? { color: custom.foreground_color } : {}),
+  };
+  // Eight-digit hex: the colour at 22% and 18% opacity, as the default glow.
+  const glow = (hex: string | null | undefined, fallback: string, alpha: string): string =>
+    isHexColour(hex) ? `${hex}${alpha}` : fallback;
+  const sideGlow = `radial-gradient(52rem 32rem at 85% -5%, ${glow(custom?.primary_color, "rgba(59,130,246,0.22)", "38")}, transparent 62%), radial-gradient(40rem 28rem at -5% 105%, ${glow(custom?.accent_color, "rgba(139,92,246,0.18)", "2e")}, transparent 60%)`;
 
   const footer = (
     <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -34,7 +61,7 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
   );
 
   return (
-    <main className="grid min-h-dvh grid-cols-1 bg-background text-foreground lg:grid-cols-12">
+    <main className="grid min-h-dvh grid-cols-1 bg-background text-foreground lg:grid-cols-12" style={backdrop}>
       {/* The form */}
       <section className="relative flex min-h-dvh flex-col overflow-hidden px-5 py-6 sm:px-10 lg:col-span-5 xl:px-14">
         <div className="pointer-events-none absolute inset-0 fp-ambient opacity-80" aria-hidden="true" />
@@ -46,7 +73,7 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
 
         <div className="relative z-10 flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-[420px] animate-slide-up">
-            <div className="rounded-2xl border border-border/80 bg-card/85 p-6 shadow-elevation-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/80 sm:p-8">
+            <div className="rounded-2xl border border-border/80 bg-card/85 p-6 text-card-foreground shadow-elevation-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/80 sm:p-8">
               {children}
             </div>
           </div>
@@ -62,10 +89,7 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
-          style={{
-            backgroundImage:
-              "radial-gradient(52rem 32rem at 85% -5%, rgba(59,130,246,0.22), transparent 62%), radial-gradient(40rem 28rem at -5% 105%, rgba(139,92,246,0.18), transparent 60%)",
-          }}
+          style={{ backgroundImage: sideGlow }}
         />
         <div className="pointer-events-none absolute inset-0 fp-grid opacity-70" aria-hidden="true" />
 

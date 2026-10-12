@@ -180,13 +180,13 @@ const Settings: React.FC = () => {
                           onClick={() => setActive(section.id)}
                           aria-current={selected ? "page" : undefined}
                           className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                            selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(213_94%_72%)]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                            selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(var(--primary-on-dark))]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                           }`}
                         >
                           <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="min-w-0">
                             <span className="block whitespace-nowrap text-sm font-semibold">{section.label}</span>
-                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(213_94%_72%)]/70" : "text-muted-foreground/80"}`}>
+                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(var(--primary-on-dark)/0.7)]" : "text-muted-foreground/80"}`}>
                               {section.hint}
                             </span>
                           </span>

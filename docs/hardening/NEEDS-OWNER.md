@@ -1094,3 +1094,19 @@ documents and three-way matching do, whoever is looking. Why the person decides 
 workspace serves people in different countries. Emails the server sends to several people state
 moments in UTC, saying so. This is how Xero and QuickBooks split organisation and user settings.
 
+## N-065 — Where an organization's brand colours show
+**DECIDED (campaign session 3).**
+
+White-label branding is sold for the organization's own address (a verified custom domain), so
+that is where the brand shows. On the platform's own address everyone sees FlowPilot's colours.
+
+| Setting | Where it shows on a verified domain |
+|---|---|
+| Primary colour | Buttons, links and focus rings, on the sign-in pages and in the app |
+| Accent colour | The glow behind the sign-in pages |
+| Background and text colours | The sign-in pages' backdrop (the app's own surfaces stay, so text never lands on a background it was not designed for) |
+| Colour scheme (light, dark, system) | The sign-in pages. Inside the app, light or dark stays each person's own choice, as accessibility settings should |
+
+The text on a primary-coloured button is worked out from the colour (white or near-black,
+whichever contrasts more), so a pale brand colour still gives readable buttons. This is how
+Okta and Zendesk treat custom-domain branding.
