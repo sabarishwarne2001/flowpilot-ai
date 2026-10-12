@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/primitives";
 import { errorMessage } from "@/services/api/errors";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { TabList, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
+import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 import {
   getAllRefusals, getLocalModelHealth, getReleaseStatus, getSovereignStatus, installLicence, operatorEgressTest,
   sovereignKeys,
@@ -106,6 +106,8 @@ const SovereignConsole: React.FC = () => {
         }
       />
       <TabList label="Sovereign console" idBase="sovereign" tabs={TABS} value={tab} onChange={setTab} />
+      {/* F-317: the tabs' aria-controls point at this panel; it did not exist. */}
+      <TabPanel idBase="sovereign" id={tab} className="space-y-4">
 
       {status.isLoading ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div> : null}
       {status.isError ? <p role="alert" className="text-sm text-destructive">{errorMessage(status.error, "The status could not be loaded.")}</p> : null}
@@ -121,7 +123,7 @@ const SovereignConsole: React.FC = () => {
                 hint={s.licence.max_organizations ? `Licensed: ${COUNT.format(s.licence.max_organizations)} orgs · ${COUNT.format(s.licence.max_seats ?? 0)} seats` : undefined} />
           <Stat label="Local model" value={String(s.local_llm["mode"] ?? "off")} hint={s.local_llm["model"] ? `${String(s.local_llm["model"])} @ ${String(s.local_llm["host"] ?? "")}` : "Not configured"} />
           <Stat label="Last recovery drill" value={s.dr.latest["PITR"]?.outcome ?? "none"}
-                hint={s.dr.latest["PITR"] ? `RPO ${seconds(s.dr.latest["PITR"]?.rpo_seconds)} · RTO ${seconds(s.dr.latest["PITR"]?.rto_seconds)}` : "Run dr_pitr.py drill"} />
+                hint={s.dr.latest["PITR"] ? `RPO ${seconds(s.dr.latest["PITR"]?.rpo_seconds)} · RTO ${seconds(s.dr.latest["PITR"]?.rto_seconds)}` : "Run scripts/dr_pitr.py drill"} />
           <Stat label="Heartbeat lag" value={seconds(s.dr.heartbeat.lag_seconds)} hint={s.dr.heartbeat.latest ? formatTimestamp(s.dr.heartbeat.latest) : "No heartbeat yet"} />
           <Stat label="Recovery objectives" value={s.dr.meets_targets ? "Met" : "Not demonstrated"}
                 hint={`RPO ≤ ${seconds(s.dr.targets.rpo_seconds)}, RTO ≤ ${seconds(s.dr.targets.rto_seconds)}`} />
@@ -153,13 +155,13 @@ const SovereignConsole: React.FC = () => {
               test.mutate();
             }}>
               <label className="space-y-1"><span className={FIELD_LABEL}>Channel</span>
-                <select className={SELECT} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
+                <select className={SELECT} value={channel} onChange={(e) => { setChannel(e.target.value as Channel); setDecision(null); }}>
                   {CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABELS[c]}</option>)}
                 </select></label>
               <label className="space-y-1"><span className={FIELD_LABEL}>URL or host</span>
-                <input className={INPUT} value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="api.groq.com:443" /></label>
+                <input className={INPUT} value={destination} onChange={(e) => { setDestination(e.target.value); setDecision(null); }} placeholder="api.groq.com:443" /></label>
               <label className="space-y-1"><span className={FIELD_LABEL}>As organization (id, optional)</span>
-                <input className={INPUT} value={asOrg} onChange={(e) => setAsOrg(e.target.value)} /></label>
+                <input className={INPUT} value={asOrg} onChange={(e) => { setAsOrg(e.target.value); setDecision(null); }} /></label>
               <button type="submit" className={BUTTON_SECONDARY} disabled={test.isPending || destination.trim() === ""}>Test</button>
             </form>
             {decision ? (
@@ -269,6 +271,7 @@ const SovereignConsole: React.FC = () => {
           </table>
         </section>
       ) : null}
+      </TabPanel>
     </div>
   );
 };

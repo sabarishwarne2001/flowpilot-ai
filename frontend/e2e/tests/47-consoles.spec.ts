@@ -150,3 +150,25 @@ test.describe("RevOps price books (F-315)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Sovereign console (F-317)", () => {
+  test.use({ user: "P.superadmin" });
+
+  // The tabs pointed (aria-controls) at panels that did not exist, so a screen reader could not
+  // follow a tab to its content; and an egress test's answer stayed on screen after the
+  // destination changed, answering a question no longer asked.
+  test("each tab opens a labelled panel, and a test answer goes when the question changes", async ({ page }) => {
+    await page.goto("/admin/sovereign?tab=egress");
+    const panel = page.getByRole("tabpanel", { name: "Egress" });
+    await expect(panel).toBeVisible();
+    await panel.getByLabel("URL or host").fill("api.groq.com:443");
+    await panel.getByRole("button", { name: "Test", exact: true }).click();
+    const answer = panel.getByRole("status");
+    await expect(answer).toContainText(/Allowed|Refused/);
+    await panel.getByLabel("URL or host").fill("api.example.org:443");
+    await expect(answer).toHaveCount(0);
+    await page.getByRole("tab", { name: "Recovery" }).click();
+    await expect(page.getByRole("tabpanel", { name: "Recovery" })).toBeVisible();
+    await expectHealthyPage(page);
+  });
+});
