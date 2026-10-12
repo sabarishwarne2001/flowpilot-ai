@@ -2,8 +2,8 @@
  * Campaign session 3 — the consoles people run the product from, as they are used.
  */
 import { test, expect, expectHealthyPage } from "../support/fixtures";
-import { api } from "../support/api";
-import { org } from "../support/env";
+import { api, loginAs, resolveWorkspaceId } from "../support/api";
+import { TENANTS, org, ws } from "../support/env";
 
 test.describe("Audit log filters (F-311)", () => {
   test.use({ user: "C.owner" });
@@ -170,5 +170,47 @@ test.describe("Sovereign console (F-317)", () => {
     await page.getByRole("tab", { name: "Recovery" }).click();
     await expect(page.getByRole("tabpanel", { name: "Recovery" })).toBeVisible();
     await expectHealthyPage(page);
+  });
+});
+
+test.describe("Partner portal (session 3)", () => {
+  test.use({ user: "A.owner" });
+
+  // The portal and its nav item had no browser test, and a partner FlowPilot suspended saw every
+  // control as usual and learned it was read-only only from refusals.
+  test("a partner owner reaches the portal from the sidebar; suspended, it reads but changes nothing", async ({ page, session }) => {
+    const operator = await loginAs("P.superadmin");
+    const { organizationId } = await resolveWorkspaceId(session!, TENANTS.A.org, TENANTS.A.ws);
+    const mine = await api<{ id: string; status: string }[]>(session, "GET", "/partners");
+    let partnerId = mine.body[0]?.id;
+    if (!partnerId) {
+      const created = await api<{ id: string }>(operator, "POST", "/partners", {
+        slug: `devco-partners-${Date.now().toString(36)}`, name: "DevCo Partners",
+        owner_organization_id: organizationId, owner_user_id: String(session!.me.id),
+      });
+      expect(created.status, created.text).toBe(201);
+      partnerId = created.body.id;
+    }
+    try {
+      await page.goto(ws("A"));
+      await page.getByRole("link", { name: "Partner portal" }).first().click();
+      await expect(page).toHaveURL(/\/partners$/);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      for (const tab of ["Book of business", "Payout statements", "Workflow manifests"]) {
+        await page.getByRole("button", { name: tab }).click();
+        await expect(page.getByText(/could not be loaded/i)).toHaveCount(0);
+      }
+      await expect(page.getByRole("button", { name: "Register public key" })).toBeVisible();
+      await expect(page.getByTestId("partner-read-only")).toHaveCount(0);
+
+      expect((await api(operator, "PATCH", `/partners/${partnerId}`, { status: "SUSPENDED" })).status).toBe(200);
+      await page.reload();
+      await expect(page.getByTestId("partner-read-only")).toContainText(/suspended/i);
+      await page.getByRole("button", { name: "Workflow manifests" }).click();
+      await expect(page.getByRole("button", { name: "Register public key" })).toBeDisabled();
+      await expectHealthyPage(page);
+    } finally {
+      await api(operator, "PATCH", `/partners/${partnerId}`, { status: "ACTIVE" });
+    }
   });
 });

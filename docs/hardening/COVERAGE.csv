@@ -37,7 +37,7 @@ page,/admin,SuperAdminGuard shell (no index route),any,superadmin,,untested,,F-0
 page,/admin/margins,AdminMarginsHub (Unit economics),any,superadmin,frontend/e2e/tests/01-page-smoke.spec.ts;backend/tests/services/test_cogs_margin_service.py,deep,"pass (Phase 3, live, 2026-10-08)",F-202
 page,/admin/sovereign,SovereignConsole,any,superadmin,frontend/e2e/tests/01-page-smoke.spec.ts,smoke,pass (e2e 1),
 page,/admin/revops,RevOpsConsole,any,superadmin,frontend/e2e/tests/01-page-smoke.spec.ts;frontend/e2e/tests/26-phase3-consoles.spec.ts,deep,"pass (Phase 3, live, 2026-10-08)",F-186
-page,/partners,PartnerPortal (+PartnerManifestConsole),any,partner member,,untested,,
+page,/partners,PartnerPortal (+PartnerManifestConsole),any,partner member,frontend/e2e/tests/47-consoles.spec.ts;backend/tests/api/test_partner_lifecycle.py,deep,pass (campaign session 3): tabs load; suspended reads but changes nothing,F-319
 page,/,LegacyRouteRedirect,any,signed-in,frontend/e2e/tests/01-page-smoke.spec.ts,smoke,pass (e2e 1),
 page,/work-items/*,LegacyRouteRedirect,any,signed-in,frontend/e2e/tests/01-page-smoke.spec.ts,smoke,pass (e2e 1),
 page,/assistant/*,LegacyRouteRedirect,any,signed-in,frontend/e2e/tests/01-page-smoke.spec.ts,smoke,pass (e2e 1),
@@ -124,7 +124,7 @@ nav_item,org:audit,[CRITICAL:audit-log] Organization > Audit log,any,org:OWNER,f
 nav_item,platform:margins,Platform > Unit economics,any,superadmin,frontend/e2e/tests/03-role-matrix.spec.ts,smoke,pass (e2e 10),
 nav_item,platform:sovereign,Platform > Sovereign edition,any,superadmin,frontend/e2e/tests/03-role-matrix.spec.ts,smoke,pass (e2e 10),
 nav_item,platform:revops,Platform > Revenue operations,any,superadmin,frontend/e2e/tests/03-role-matrix.spec.ts;frontend/e2e/tests/03-role-matrix.spec.ts;backend/tests/security/test_superadmin_only.py,deep,"pass (campaign session 1, 2026-10-11): works/real/right/safe: tenants refused",
-nav_item,partner:portal,Partner > Partner portal (shown only to partner members),any,partner member,,untested,,
+nav_item,partner:portal,Partner > Partner portal (shown only to partner members),any,partner member,frontend/e2e/tests/47-consoles.spec.ts,deep,pass (campaign session 3): shown to a partner member; opens the portal,F-319
 nav_item,global:search,Global search / command palette (Ctrl+K),any,signed-in,frontend/e2e/tests/14-configuration.spec.ts,smoke,pass (e2e 1),
 nav_item,global:workspace-switcher,Org/workspace switcher (OrgWorkspaceSwitcher),any,signed-in,frontend/e2e/tests/14-configuration.spec.ts,smoke,pass (e2e 1),
 nav_item,global:sign-out,[CRITICAL:auth] Sign out,any,signed-in,frontend/e2e/tests/30-auth.spec.ts,deep,pass (e2e 1),

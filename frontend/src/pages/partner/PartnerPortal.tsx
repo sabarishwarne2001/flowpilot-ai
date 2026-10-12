@@ -198,6 +198,9 @@ export default function PartnerPortal() {
   }
 
   const partner = partnersQuery.data?.[0];
+  // Campaign session 3: FlowPilot suspends or terminates a partner (its standing is the
+  // platform's, F-284); the partner can still read everything but change nothing.
+  const readOnly = Boolean(partner && partner.status !== "ACTIVE");
 
   return (
     <div className="space-y-6 p-6">
@@ -209,6 +212,16 @@ export default function PartnerPortal() {
           Book of business, revenue share, payout statements and signed workflow manifests.
         </p>
       </header>
+      {readOnly ? (
+        <div role="status" data-testid="partner-read-only" className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+          <p>
+            This partner account is {String(partner?.status).toLowerCase()} by FlowPilot, so it is read-only:
+            your book, team, statements and catalog stay readable, and nothing can be added or changed
+            until FlowPilot restores it. Revoking a signing key still works.
+          </p>
+        </div>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
@@ -497,7 +510,7 @@ export default function PartnerPortal() {
         </section>
       ) : null}
 
-      {tab === "manifests" ? <PartnerManifestConsole partnerId={partnerId} /> : null}
+      {tab === "manifests" ? <PartnerManifestConsole partnerId={partnerId} readOnly={readOnly} /> : null}
     </div>
   );
 }
