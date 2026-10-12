@@ -214,6 +214,9 @@ def upsert_from_stripe(
     """
     status = _coerce_status(snapshot.status)
     existing = get_by_stripe_id(db, stripe_subscription_id=snapshot.id)
+    # Read before the write: `expire_all` below discards them.
+    previous_status = existing.status if existing is not None else None
+    previous_tier_key = existing.quota_tier_key if existing is not None else None
 
     tier, book = _resolve_pins(db, snapshot=snapshot, existing=existing)
 
@@ -280,6 +283,13 @@ def upsert_from_stripe(
         # cancelled subscription re-pinned the organization to the tier it
         # had stopped paying for.
         apply_tier_for_status(db, account=account, subscription=subscription)
+        _announce(
+            db,
+            account=account,
+            subscription=subscription,
+            previous_status=previous_status,
+            previous_tier_key=previous_tier_key,
+        )
 
     logger.info(
         "subscription.reconciled",
@@ -294,6 +304,52 @@ def upsert_from_stripe(
         },
     )
     return subscription, True
+
+
+#: Left to dunning, which sends its own notices for a failed payment and for
+#: the organization turning read-only; announcing them here too would send two
+#: emails for one failed payment.
+_DUNNING_STATUSES: frozenset[str] = frozenset({"past_due", "unpaid"})
+
+
+def _announce(
+    db: Session,
+    *,
+    account: BillingAccount,
+    subscription: Subscription,
+    previous_status: Any,
+    previous_tier_key: Optional[str],
+) -> None:
+    """Tell the organization its subscription started, ended or changed plan.
+
+    Campaign session 3 (N-062). The Dodo path did this
+    (`dodo_reconcile_service`) and the Stripe path wrote the new state and told
+    nobody, so a cancelled card subscription dropped the organization to Free
+    in silence. Same notices, same recipients, one rule per gateway.
+    """
+    from app.services import organization_notification_service as notices
+
+    status = getattr(subscription.status, "value", subscription.status)
+    before = getattr(previous_status, "value", previous_status)
+    tier = db.get(QuotaTier, subscription.quota_tier_id) if subscription.quota_tier_id else None
+    plan_name = tier.display_name if tier is not None else subscription.quota_tier_key
+
+    if before != status and status not in _DUNNING_STATUSES:
+        notices.notify_subscription_state_changed(
+            db,
+            organization_id=account.organization_id,
+            plan_name=plan_name,
+            previous_status=before,
+            status=status,
+            grace_ends_on=None,
+        )
+    if previous_tier_key is not None and previous_tier_key != subscription.quota_tier_key:
+        notices.notify_plan_changed(
+            db,
+            organization_id=account.organization_id,
+            previous_plan_key=previous_tier_key,
+            plan_name=plan_name,
+        )
 
 
 def _resolve_pins(
