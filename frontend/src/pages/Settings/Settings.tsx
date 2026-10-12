@@ -1,7 +1,7 @@
 /**
  * ARCH40-S2:settings-hub. One settings surface, grouped by scope.
  *
- *   Account        yours, everywhere: profile, sessions
+ *   Account        yours, everywhere: profile, notifications, sessions
  *   Workspace      this workspace: general, AI defaults, email, documents
  *   Organization   shortcuts to the organization console, for the roles
  *                  that can act there: email, keys and routing, billing
@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  Bell,
   Building2,
   Cpu,
   CreditCard,
@@ -36,6 +37,7 @@ import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
 import SessionManagement from "./SessionManagement";
 import ProfileSettings from "./ProfileSettings";
+import NotificationPreferences from "./NotificationPreferences";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { ADMINISTRATIVE_ROLES, canViewBilling } from "@/permissions/organizationPermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
@@ -56,7 +58,7 @@ export const PermissionDenied: React.FC = () => (
   />
 );
 
-type SettingsSection = "profile" | "sessions" | "workspace" | "ai" | "email" | "document";
+type SettingsSection = "profile" | "notifications" | "sessions" | "workspace" | "ai" | "email" | "document";
 type SettingsScope = "account" | "workspace";
 
 interface SectionConfig {
@@ -69,6 +71,7 @@ interface SectionConfig {
 
 const SECTIONS: readonly SectionConfig[] = [
   { id: "profile", scope: "account", label: "Profile", hint: "Name, avatar, email and password", icon: UserRound },
+  { id: "notifications", scope: "account", label: "Notifications", hint: "What is also emailed to you", icon: Bell },
   { id: "sessions", scope: "account", label: "Active sessions", hint: "Where you are signed in", icon: MonitorSmartphone },
   { id: "workspace", scope: "workspace", label: "General", hint: "Name, locale and members", icon: Building2 },
   { id: "ai", scope: "workspace", label: "AI", hint: "What runs, and the defaults", icon: Cpu },
@@ -124,6 +127,8 @@ const Settings: React.FC = () => {
     switch (active) {
       case "profile":
         return <ProfileSettings />;
+      case "notifications":
+        return <NotificationPreferences />;
       case "sessions":
         return <SessionManagement />;
       case "workspace":

@@ -71,6 +71,8 @@ export const PROFILE_ENDPOINTS = {
   // ARCH30-T4:ts-detected-tz-endpoint — A3.
   detectedTimezone: "/me/profile/detected-timezone",
   avatar: "/me/avatar",
+  // Campaign session 3 (N-062).
+  notificationPreferences: "/me/notification-preferences",
   userAvatar: (userId: string): string => `/users/${seg(userId)}/avatar`,
 } as const;
 

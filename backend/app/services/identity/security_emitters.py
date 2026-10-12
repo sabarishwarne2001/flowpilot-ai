@@ -134,6 +134,9 @@ def _emit(
         message=message,
         notification_type=NotificationType.SECURITY,
         priority=NotificationPriority.WARNING,
+        # Campaign session 3 (N-062): also emailed, always, with a link to the identity console.
+        category=notifications.email_choices.SECURITY,
+        action="identity",
     )
 
 

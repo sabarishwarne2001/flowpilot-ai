@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from app.api import deps
 from app.core.workspace_permissions import resolve_effective_workspace_role
@@ -26,6 +26,10 @@ from app.schemas.me import (
     MeUser,
     OrganizationMembershipSummary,
 )
+from app.schemas.notification import (
+    NotificationPreferencesRead,
+    NotificationPreferenceUpdate,
+)
 from app.schemas.organization import OrganizationResponse
 from app.schemas.user import (  # ARCH30-T4:detected-timezone-import
     DetectedTimezoneRequest,
@@ -35,6 +39,7 @@ from app.schemas.user import (  # ARCH30-T4:detected-timezone-import
 )
 from app.schemas.workspace import WorkspaceGrantSummary, WorkspaceSummary
 from app.models.organization import OrganizationStatus
+from app.services import notification_preferences_service
 from app.services import organization_service
 from app.services import user_service
 from app.services import workspace_service
@@ -270,3 +275,59 @@ def offer_detected_timezone(
         timezone=user.timezone,
         timezone_source=user.timezone_source,
     )
+
+
+# ============================================================================
+# Notification email preferences (campaign session 3, N-062)
+# ============================================================================
+
+
+@router.get(
+    "/me/notification-preferences",
+    response_model=NotificationPreferencesRead,
+    summary="Which Notifications I Get By Email",
+)
+def get_my_notification_preferences(
+    db: deps.DbSession,
+    current_user: deps.CurrentUser,
+) -> Any:
+    """Every category, whether it is emailed to me, and whether I can change that.
+
+    Every notification appears in the app whatever is chosen here. Security and
+    Billing are always emailed (`locked`).
+    """
+    return {
+        "categories": notification_preferences_service.list_for_user(
+            db, user_id=current_user.id
+        )
+    }
+
+
+@router.put(
+    "/me/notification-preferences",
+    response_model=NotificationPreferencesRead,
+    summary="Choose Whether A Category Is Emailed To Me",
+)
+def update_my_notification_preference(
+    payload: NotificationPreferenceUpdate,
+    db: deps.DbSession,
+    current_user: deps.CurrentUser,
+) -> Any:
+    """Turn email for one optional category on or off; 422 for Security and Billing."""
+    try:
+        notification_preferences_service.set_email(
+            db,
+            user_id=current_user.id,
+            category_key=payload.category,
+            enabled=payload.email,
+        )
+    except notification_preferences_service.PreferenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    db.commit()
+    return {
+        "categories": notification_preferences_service.list_for_user(
+            db, user_id=current_user.id
+        )
+    }

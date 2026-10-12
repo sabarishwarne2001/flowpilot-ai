@@ -103,6 +103,7 @@ export const profileKeys = {
   all: ["profile"] as const,
   me: () => [...profileKeys.all, "me"] as const,
   avatar: (userId: string) => [...profileKeys.all, "avatar", userId] as const,
+  notificationPreferences: () => [...profileKeys.all, "notification-preferences"] as const,
 };
 
 export const meInvitationKeys = {

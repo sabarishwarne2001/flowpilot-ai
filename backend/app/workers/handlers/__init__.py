@@ -578,6 +578,20 @@ def _gate_tenant_activity() -> dict[str, Any]:
 _REGISTERED = _gate_tenant_activity()
 
 
+def ensure_registered(job_type: str) -> None:
+    """Register one job type's handler, the same object `register_all` would, if this
+    process has not (campaign session 3).
+
+    The API registers every handler at startup and the worker before it claims. A code
+    path that enqueues from anywhere else (a script, a test, a one-off command) would
+    otherwise fail with UnknownJobTypeError, and for the notification outbox that means
+    a billing or security change that refuses to commit because its email could not be
+    queued.
+    """
+    if job_service.JOB_HANDLERS.get(job_type) is None:
+        job_service.register_handler(job_type, _REGISTERED[job_type])
+
+
 def register_all(*, replace: bool = False) -> list[str]:
     registered: list[str] = []
     for job_type, handler in _REGISTERED.items():
@@ -600,6 +614,7 @@ def register_all(*, replace: bool = False) -> list[str]:
 
 
 __all__ = [
+    "ensure_registered",
     "ARCH10_JOB_TYPES",
     "ARCH11_JOB_TYPES",
     "ARCH12_JOB_TYPES",

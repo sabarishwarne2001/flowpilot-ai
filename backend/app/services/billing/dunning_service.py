@@ -23,7 +23,7 @@ from app.models.dunning_action import (
     DunningStep,
 )
 from app.models.invoice import Invoice, InvoiceStatus
-from app.models.notification import NotificationPriority, NotificationType
+from app.models.notification import NotificationPriority
 from app.models.organization import (
     MembershipStatus,
     OrganizationMember,
@@ -229,12 +229,6 @@ def _notify(
 ) -> int:
     from app.services import organization_notification_service
 
-    recipients = organization_notification_service.recipients_with_roles(
-        db,
-        organization_id=organization_id,
-        roles=organization_notification_service.BILLING_ROLES,
-    )
-
     amount = invoice.amount_due_micros / 1_000_000
     messages = {
         DunningStep.NOTIFY_1: (
@@ -271,22 +265,19 @@ def _notify(
     }
     title, message = messages[step]
 
-    for user_id in recipients:
-        organization_notification_service.emit(
-            db,
-            organization_id=organization_id,
-            user_id=user_id,
-            title=title,
-            message=message,
-            notification_type=NotificationType.SYSTEM,
-            priority=(
-                NotificationPriority.WARNING
-                if step in RESTRICTIVE_STEPS
-                else NotificationPriority.INFO
-            ),
-        )
-
-    return len(recipients)
+    # Campaign session 3 (N-062): in-app to owners, administrators and Billing
+    # members, and emailed (always) to owners and Billing members.
+    return organization_notification_service.emit_billing(
+        db,
+        organization_id=organization_id,
+        title=title,
+        message=message,
+        priority=(
+            NotificationPriority.WARNING
+            if step in RESTRICTIVE_STEPS
+            else NotificationPriority.INFO
+        ),
+    )
 
 
 def on_payment_failed(

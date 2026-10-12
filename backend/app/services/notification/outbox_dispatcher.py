@@ -98,19 +98,28 @@ class DispatchResult:
 
 
 def resolve_preferences(
-    db: Session, *, user: User, notification: Notification
+    db: Session,
+    *,
+    user: User,
+    notification: Notification,
+    category: Optional[str] = None,
 ) -> list[ChannelPreference]:
     """Which channels this user gets this notification on.
 
-    Deliberately conservative until ARCH-16 gives users a preferences UI:
-    in-app always, email only for WARNING and ERROR priorities. Escalating a
-    routine DOCUMENT notification to email is how a product teaches its users
-    to filter its mail to a folder they never read.
+    In-app always. Email by `notification_preferences_service.should_email`
+    (campaign session 3, N-062): Security and Billing always; the optional
+    categories for WARNING and ERROR only, and only while the person keeps them
+    on. Escalating a routine DOCUMENT notification to email is how a product
+    teaches its users to filter its mail to a folder they never read.
     """
+    from app.services import notification_preferences_service as email_choices
+
     preferences = [ChannelPreference(channel=NotificationChannel.IN_APP)]
 
-    priority = getattr(notification.priority, "value", str(notification.priority))
-    if priority in ("WARNING", "ERROR") and getattr(user, "email", None):
+    key = category or email_choices.infer_category(notification.notification_type)
+    if getattr(user, "email", None) and email_choices.should_email(
+        db, user_id=user.id, category_key=key, priority=notification.priority
+    ):
         preferences.append(
             ChannelPreference(channel=NotificationChannel.EMAIL, target=user.email)
         )
@@ -137,18 +146,35 @@ def dispatch(
     workspace_id: Optional[uuid.UUID] = None,
     preferences: Optional[Sequence[ChannelPreference]] = None,
     idempotency_prefix: Optional[str] = None,
+    category: Optional[str] = None,
+    action_path: Optional[str] = None,
+    action_label: Optional[str] = None,
 ) -> DispatchResult:
     """Create one delivery per channel and enqueue the external ones.
 
     Must be called inside an open transaction. `job_service.enqueue` enforces
     that; the same requirement applies to the delivery rows themselves, which
     is why nothing here commits.
+
+    `category` (a `notification_preferences_service` key; inferred when not
+    given) decides the email rule and the relay; `action_path` is an in-product
+    path the email links to (the frontend origin is added at send time).
     """
-    resolved = list(preferences or resolve_preferences(db, user=user, notification=notification))
+    from app.services import notification_preferences_service as email_choices
+
+    key = category or email_choices.infer_category(notification.notification_type)
+    resolved = list(
+        preferences
+        or resolve_preferences(db, user=user, notification=notification, category=key)
+    )
     tally = RedactionTally()
     payload = _filtered_payload(
         title=notification.title, message=notification.message, tally=tally
     )
+    payload["category"] = key
+    if action_path:
+        payload["action_path"] = action_path
+        payload["action_label"] = action_label
 
     result = DispatchResult(notification_id=notification.id, redactions=dict(tally.counts))
 
@@ -202,6 +228,9 @@ def dispatch(
         # existing delivery and then queues a SECOND send job for it, which
         # is how a retry turns into a duplicate email.
         if created and preference.channel is not NotificationChannel.IN_APP:
+            from app.workers.handlers import ensure_registered
+
+            ensure_registered(JOB_TYPE)
             job_service.enqueue(
                 db,
                 job_type=JOB_TYPE,
@@ -319,27 +348,66 @@ async def send_delivery(db: Session, delivery: NotificationDelivery) -> bool:
 async def _send_email(
     db: Session, delivery: NotificationDelivery, *, title: str, body: str
 ) -> bool:
+    from app.core.config import settings as app_settings
+    from app.core.platform_email import platform_smtp_config
     from app.core.smtp import resolve_smtp_config
+    from app.models.organization import Organization
+    from app.services import notification_preferences_service as email_choices
     from app.services.notification.dispatcher import notification_dispatcher
+    from app.templates.emails.account_notice import render_account_notice
 
     if not delivery.target:
         raise ValueError("email delivery has no target address")
 
-    # ARCH40-S1:dispatcher-org-tier. `organization_id` was omitted here and in
-    # notification_service, so the organization email settings tier was
-    # unreachable from every email the product actually sent. Passing it makes
-    # the ladder in `email_resolution` real rather than notional.
-    smtp = resolve_smtp_config(
-        db,
-        workspace_id=delivery.workspace_id,
-        organization_id=getattr(delivery, "organization_id", None),
+    payload = delivery.payload or {}
+    category = email_choices.category(
+        str(payload.get("category") or email_choices.WORKFLOW)
+    )
+
+    if category.essential:
+        # Campaign session 3 (N-062). Security and billing mail is FlowPilot
+        # writing to a person about their account, like a password reset: it
+        # goes through the platform relay, never a tenant's own SMTP, which an
+        # administrator can misconfigure (or point elsewhere) and which is
+        # exactly what is in question when the notice is about that tenant.
+        # Not configured: this raises, the attempt fails, and it is retried.
+        smtp = platform_smtp_config()
+    else:
+        # ARCH40-S1:dispatcher-org-tier. `organization_id` was omitted here and
+        # in notification_service, so the organization email settings tier was
+        # unreachable from every email the product actually sent. Passing it
+        # makes the ladder in `email_resolution` real rather than notional.
+        smtp = resolve_smtp_config(
+            db,
+            workspace_id=delivery.workspace_id,
+            organization_id=getattr(delivery, "organization_id", None),
+        )
+
+    organization = (
+        db.get(Organization, delivery.organization_id)
+        if delivery.organization_id
+        else None
+    )
+    frontend = app_settings.FRONTEND_URL.rstrip("/")
+    action_path = payload.get("action_path")
+    subject, html_body, text_body = render_account_notice(
+        title=title,
+        body=body,
+        organization_name=organization.name if organization is not None else None,
+        category_label=category.label,
+        essential=category.essential,
+        action_url=f"{frontend}{action_path}" if action_path else None,
+        action_label=payload.get("action_label"),
+        preferences_url=f"{frontend}/settings?section=notifications",
+        brand_name=app_settings.PROJECT_NAME,
     )
     return await notification_dispatcher.send(
         action_type="email",
         settings=smtp,
         recipient=delivery.target,
-        title=title,
-        body=body,
+        title=subject,
+        body=text_body,
+        html_body=html_body,
     )
 
 
