@@ -41,6 +41,8 @@ export const ORGANIZATION_ENDPOINTS = {
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
   member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
+  /** Campaign session 3: whether the organization requires two-factor sign-in. */
+  twoFactorPolicy: (organizationId: string): string => `/organizations/${seg(organizationId)}/two-factor-policy`,
 } as const;
 
 export const ORG_EMAIL_ENDPOINTS = {

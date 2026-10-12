@@ -20,6 +20,7 @@ from app.core import security
 from app.core.audit_routes import resolve_route_audit
 from app.core.config import settings
 from app.core.exceptions import (
+    OrganizationMfaRequiredError,
     OrganizationNetworkNotAllowedError,
     OrganizationSsoRequiredError,
     OrganizationAccessDeniedError,
@@ -417,8 +418,6 @@ def _assert_sso_compliance(
     organization's identity providers: a SAML or OIDC session from another organization's
     provider proves nothing about this one.
     """
-    from app.models.identity import EnterpriseIdpConfig
-
     if policy is None:
         policy = _security_policy(db, organization_id)
     if policy is None:
@@ -433,36 +432,65 @@ def _assert_sso_compliance(
     if not session_policy_service.sso_required_for(policy, org_role=role_str):
         return
 
-    refusal = OrganizationSsoRequiredError(
-        "This organization requires SSO authentication. Sign in through your organization's "
-        "identity provider to continue."
-    )
-    if session_id is None:
-        raise refusal
+    if not _session_from_organization_idp(db, session_id=session_id, organization_id=organization_id):
+        raise OrganizationSsoRequiredError(
+            "This organization requires SSO authentication. Sign in through your organization's "
+            "identity provider to continue."
+        )
 
+
+def _session_from_organization_idp(
+    db: Session, *, session_id: Optional[uuid.UUID], organization_id: uuid.UUID
+) -> bool:
+    """Whether the session was opened through one of this organization's identity providers."""
+    from app.models.identity import EnterpriseIdpConfig
+
+    if session_id is None:
+        return False
     user_session = (
         db.query(UserSession)
         .filter(UserSession.id == session_id, UserSession.revoked_at.is_(None))
         .one_or_none()
     )
     if user_session is None:
-        raise refusal
-
+        return False
     auth_method = (
         user_session.auth_method.value
         if hasattr(user_session.auth_method, "value")
         else str(user_session.auth_method)
     )
     if auth_method == "PASSWORD" or user_session.idp_config_id is None:
-        raise refusal
-
+        return False
     idp_organization_id = db.execute(
         select(EnterpriseIdpConfig.organization_id).where(
             EnterpriseIdpConfig.id == user_session.idp_config_id
         )
     ).scalar_one_or_none()
-    if idp_organization_id != organization_id:
-        raise refusal
+    return idp_organization_id == organization_id
+
+
+def _assert_two_factor(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    membership: OrganizationMember,
+    session_id: Optional[uuid.UUID],
+    policy: Any,
+) -> None:
+    """Campaign session 3. "Require two-factor": a password session needs a second factor on the
+    account; a session from the organization's own identity provider relies on the provider's."""
+    if not getattr(policy, "require_mfa", False):
+        return
+    from app.services import mfa_service
+
+    if mfa_service.is_enabled(db, membership.user_id):
+        return
+    if _session_from_organization_idp(db, session_id=session_id, organization_id=organization_id):
+        return
+    raise OrganizationMfaRequiredError(
+        "This organization requires two-factor sign-in. Turn on two-factor sign-in for your "
+        "account to continue."
+    )
 
 
 def _assert_network_allowed(address: Optional[str], policy: Any) -> None:
@@ -493,7 +521,8 @@ def assert_organization_sign_in_policy(
 ) -> None:
     """The organization's sign-in policy for one caller (campaign session 3).
 
-    The IP allowlist applies to people and API keys; single sign-on to people only. Shared by
+    The IP allowlist applies to people and API keys; single sign-on and two-factor to people
+    only. Shared by
     every organization- and workspace-scoped dependency and by the live review WebSocket's gate,
     which authenticates outside the dependency system.
     """
@@ -504,6 +533,13 @@ def assert_organization_sign_in_policy(
     if api_key:
         return
     _assert_sso_compliance(
+        db,
+        organization_id=organization_id,
+        membership=membership,
+        session_id=session_id,
+        policy=policy,
+    )
+    _assert_two_factor(
         db,
         organization_id=organization_id,
         membership=membership,

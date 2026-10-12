@@ -7,7 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     ARRAY, Boolean, CHAR, CheckConstraint, Column, DateTime, Enum, ForeignKey,
-    Index, Integer, LargeBinary, PrimaryKeyConstraint, Text, UniqueConstraint,
+    Index, Integer, LargeBinary, PrimaryKeyConstraint, Text, UniqueConstraint, text,
     func,
 )
 from sqlalchemy.dialects.postgresql import CIDR, ENUM, INET, JSONB, UUID
@@ -381,6 +381,8 @@ class TenantSecurityPolicy(Base):
     ip_allowlist = Column(ARRAY(CIDR))
 
     max_session_age_s = Column(Integer)
+    # Campaign session 3. Password sessions need a second factor (SSO sessions use the IdP's).
+    require_mfa = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     updated_by_user_id = Column(UUID(as_uuid=True),
                                 ForeignKey("users.id", ondelete="SET NULL"))

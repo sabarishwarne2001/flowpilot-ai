@@ -117,6 +117,8 @@ export const organizationKeys = {
   all: (organizationId: string) => organizationScope(organizationId),
   members: (organizationId: string, includeInactive: boolean) =>
     [...organizationScope(organizationId), "members", { includeInactive }] as const,
+  twoFactorPolicy: (organizationId: string) =>
+    [...organizationScope(organizationId), "two-factor-policy"] as const,
 };
 
 export const orgEmailKeys = {

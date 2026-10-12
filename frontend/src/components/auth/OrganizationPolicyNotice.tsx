@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { KeyRound, Loader2, ShieldOff } from "lucide-react";
+import { KeyRound, Loader2, ShieldCheck, ShieldOff } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
+import TwoFactorPanel from "@/pages/Settings/TwoFactorPanel";
+import { MFA_STATUS_KEY, getMfaStatus } from "@/services/api/mfa";
 import { discoverSso, emailDomain, ssoStartHref } from "@/services/api/sso";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
@@ -18,7 +21,10 @@ import { sanitizeRedirectPath } from "@/utils/security";
  * (they return to the page they were on), or go to another organization.
  * An organization that allows only approved networks refuses the same way
  * (`ORGANIZATION_NETWORK_NOT_ALLOWED`); signing in again does not help there,
- * so only the reason and the way out are shown.
+ * so only the reason and the way out are shown. An organization that requires
+ * two-factor sign-in (`ORGANIZATION_MFA_REQUIRED`) is answered here too: the
+ * setup itself is in the notice (personal settings live inside a workspace,
+ * which is exactly what is refused), and "Continue" appears once it is on.
  *
  * Mounted beside the step-up dialog, outside the router, so it navigates with
  * `window.location` like the SSO start does anyway.
@@ -76,6 +82,7 @@ const OrganizationPolicyNotice: React.FC = () => {
   }
 
   const needsSso = refusal.code === "ORGANIZATION_SSO_REQUIRED";
+  const needsMfa = refusal.code === "ORGANIZATION_MFA_REQUIRED";
 
   return (
     <div
@@ -94,17 +101,29 @@ const OrganizationPolicyNotice: React.FC = () => {
             aria-hidden="true"
             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
           >
-            {needsSso ? <KeyRound className="h-5 w-5" /> : <ShieldOff className="h-5 w-5" />}
+            {needsSso ? (
+              <KeyRound className="h-5 w-5" />
+            ) : needsMfa ? (
+              <ShieldCheck className="h-5 w-5" />
+            ) : (
+              <ShieldOff className="h-5 w-5" />
+            )}
           </span>
           <div className="min-w-0">
             <h2 id="org-policy-title" className="text-base font-semibold text-foreground">
-              {needsSso ? "Single sign-on required" : "Not available from this network"}
+              {needsSso
+                ? "Single sign-on required"
+                : needsMfa
+                  ? "Two-factor sign-in required"
+                  : "Not available from this network"}
             </h2>
             <p id="org-policy-reason" className="mt-1 text-sm text-muted-foreground">
               {refusal.message}
             </p>
           </div>
         </div>
+
+        {needsMfa ? <MfaSetup /> : null}
 
         {problem ? (
           <p role="alert" className="mt-4 text-sm text-destructive">
@@ -134,6 +153,28 @@ const OrganizationPolicyNotice: React.FC = () => {
           ) : null}
         </div>
       </div>
+    </div>
+  );
+};
+
+/** The two-factor setup, then "Continue" (a reload) once the account has it on. */
+const MfaSetup: React.FC = () => {
+  // The panel refreshes this same query when the second factor is confirmed.
+  const status = useQuery({ queryKey: MFA_STATUS_KEY, queryFn: getMfaStatus });
+  return (
+    <div className="mt-4 max-h-[60vh] overflow-y-auto">
+      <TwoFactorPanel />
+      {status.data?.enabled ? (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Continue
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -1031,3 +1031,14 @@ remove from a group) and people already in the organization still sign in. Why: 
 removable whatever the plan or billing state, and nobody should be locked out by a plan change;
 adding people is what the plan pays for. The same holds while an organization is read-only for
 non-payment.
+
+## N-060 — Organization-wide "require two-factor" (N-017 decided again)
+**DECIDED (campaign session 3): built, on every plan.** An owner can require two-factor sign-in
+for the whole organization (Organization → General). It is a security baseline, not an upsell:
+GitHub and Slack offer it on their free plans. Rules: the owner must have two-factor on their own
+account first (so the switch cannot lock them out); the card lists who has not turned it on before
+confirming; from then on a person who signed in with a password and has no second factor is
+refused everywhere in the organization until they turn it on, which they can do from the notice
+itself; people who sign in through the organization's identity provider are not asked (the
+provider's own two-factor check applies); API keys are not people; and nobody can turn off their
+second factor while an organization they belong to requires it. Migration `s3a2_require_two_factor`.

@@ -196,6 +196,14 @@ class OrganizationNetworkNotAllowedError(OrganizationPermissionDeniedError):
     pass
 
 
+class OrganizationMfaRequiredError(OrganizationPermissionDeniedError):
+    """
+    Campaign session 3. The organization requires two-factor sign-in and this person signed in
+    with a password and has no second factor turned on.
+    """
+    pass
+
+
 class OrganizationSsoRequiredError(OrganizationPermissionDeniedError):
     """
     Campaign session 3. The organization requires single sign-on for this member's role and the

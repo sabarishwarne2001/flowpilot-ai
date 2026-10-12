@@ -119,12 +119,14 @@ export interface RateLimitState {
 /**
  * Campaign session 3. The organization's own sign-in policy refused this
  * session: it requires single sign-on and the session did not come from the
- * organization's identity provider, or it allows only approved networks. Every request into that organization is
+ * organization's identity provider, it requires two-factor sign-in and the
+ * account has none, or it allows only approved networks. Every request into that organization is
  * refused the same way until the person signs in again, so it is held and
  * shown once, like a quota refusal, instead of failing each page silently.
  */
 export type OrganizationPolicyCode =
   | "ORGANIZATION_SSO_REQUIRED"
+  | "ORGANIZATION_MFA_REQUIRED"
   | "ORGANIZATION_NETWORK_NOT_ALLOWED";
 
 export interface OrganizationPolicyRefusal {
@@ -135,6 +137,7 @@ export interface OrganizationPolicyRefusal {
 
 export const ORGANIZATION_POLICY_CODES: ReadonlySet<string> = new Set<OrganizationPolicyCode>([
   "ORGANIZATION_SSO_REQUIRED",
+  "ORGANIZATION_MFA_REQUIRED",
   "ORGANIZATION_NETWORK_NOT_ALLOWED",
 ]);
 

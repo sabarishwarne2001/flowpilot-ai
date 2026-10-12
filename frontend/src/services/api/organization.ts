@@ -110,6 +110,37 @@ export const updateOrganization = async (
   return response.data;
 };
 
+/** Campaign session 3. A member who has no second factor yet. */
+export interface MemberWithoutTwoFactor {
+  readonly user_id: string;
+  readonly email: string;
+  readonly display_name: string | null;
+  readonly role: string;
+}
+
+export interface TwoFactorPolicy {
+  readonly required: boolean;
+  readonly members_without_two_factor: readonly MemberWithoutTwoFactor[];
+}
+
+/** Whether the organization requires two-factor sign-in, and who has none yet. Owners and admins. */
+export const getTwoFactorPolicy = async (organizationId: string): Promise<TwoFactorPolicy> => {
+  const response = await apiClient.get<TwoFactorPolicy>(ORGANIZATION_ENDPOINTS.twoFactorPolicy(organizationId));
+  return response.data;
+};
+
+/** Requires (or stops requiring) two-factor sign-in. Owners only, with two-factor on themselves. */
+export const setTwoFactorPolicy = async (
+  organizationId: string,
+  required: boolean,
+): Promise<TwoFactorPolicy> => {
+  const response = await apiClient.put<TwoFactorPolicy>(
+    ORGANIZATION_ENDPOINTS.twoFactorPolicy(organizationId),
+    { required },
+  );
+  return response.data;
+};
+
 /**
  * Soft-deletes the organization.
  *

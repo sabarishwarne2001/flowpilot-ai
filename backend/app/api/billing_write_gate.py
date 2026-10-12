@@ -68,6 +68,8 @@ ALWAYS_PERMITTED: tuple[re.Pattern[str], ...] = tuple(
         r"/organizations/[^/]+/billing(/|$)",
         r"/organizations/[^/]+/compliance(/|$)",
         r"/organizations/[^/]+/identity(/|$)",
+        # Campaign session 3: the two-factor requirement is a security setting, like /identity.
+        r"/organizations/[^/]+/two-factor-policy$",
         r"/organizations/[^/]+/members/[^/]+/deactivate$",
         r"/workspaces/[^/]+/members/[^/]+/revoke$",
         r"/organizations/[^/]+/invitations/[^/]+/revoke$",

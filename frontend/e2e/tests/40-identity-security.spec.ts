@@ -3,9 +3,12 @@
  * way an owner uses them. Each test is named after its finding (docs/hardening/FINDINGS.md,
  * "Pre-launch campaign, session 3").
  */
-import { test, expect, expectHealthyPage } from "../support/fixtures";
+import { ProblemTracker, attachProblemListeners, test, expect, expectHealthyPage } from "../support/fixtures";
 import { api, resolveWorkspaceId } from "../support/api";
-import { TENANTS, org } from "../support/env";
+import { PASSWORD, TENANTS, org, runId } from "../support/env";
+import { linkFrom, waitForMail } from "../support/mail";
+import { openAs, signUpVerified, tokenOf } from "../support/accounts";
+import { totpCode } from "../support/totp";
 
 test.describe("Allowed networks on the identity console (F-277)", () => {
   test.use({ user: "C.owner" });
@@ -57,5 +60,77 @@ test.describe("Allowed networks on the identity console (F-277)", () => {
     } finally {
       await reset();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Requiring two-factor sign-in (N-017, decided again in session 3), between two people who sign
+// up for this test, so no seeded account is asked for a second factor while other tests run.
+// ---------------------------------------------------------------------------------------------
+test.describe("Requiring two-factor sign-in", () => {
+  test.setTimeout(240_000);
+
+  test("an owner requires it; a member without it sets it up from the notice and carries on", async ({ browser }) => {
+    const id = runId();
+    const ownerEmail = `mfa-owner-${id}@e2e.example.com`;
+    const memberEmail = `mfa-member-${id}@e2e.example.com`;
+    const owner = await signUpVerified(ownerEmail);
+    const member = await signUpVerified(memberEmail);
+    const slug = `mfa-${id}`.toLowerCase().slice(0, 40);
+    const created = await api<{ id: string }>(owner, "POST", "/organizations", {
+      organization_name: `MFA Co ${id}`,
+      organization_slug: slug,
+    });
+    expect(created.status, created.text).toBeLessThan(300);
+    const orgId = created.body.id;
+    const since = Date.now() - 1_000;
+    const invited = await api(owner, "POST", `/organizations/${orgId}/invitations`, { email: memberEmail, organization_role: "MEMBER" });
+    expect(invited.status, invited.text).toBeLessThan(300);
+    const invitation = await waitForMail(memberEmail, /invitations\/accept/, since);
+    const accepted = await api(member, "POST", "/invitations/accept", { token: tokenOf(linkFrom(invitation, /invitations\/accept/)) });
+    expect(accepted.status, accepted.text).toBeLessThan(300);
+
+    // The owner turns on two-factor for their own account (required before requiring it).
+    const setup = await api<{ secret: string }>(owner, "POST", "/me/mfa/setup", { password: PASSWORD });
+    expect(setup.status, setup.text).toBe(200);
+    const confirmed = await api(owner, "POST", "/me/mfa/confirm", { code: totpCode(setup.body.secret) });
+    expect(confirmed.status, confirmed.text).toBe(200);
+
+    // The owner requires it from General, after seeing who will be asked.
+    const ownerSide = await openAs(browser, owner);
+    const ownerProblems = new ProblemTracker();
+    attachProblemListeners(ownerSide.page, ownerProblems);
+    await ownerSide.page.goto(`/organizations/${slug}/settings`);
+    const card = ownerSide.page.locator("section", { hasText: "Two-factor sign-in" });
+    await expect(card.getByRole("list", { name: "Members without two-factor sign-in" })).toContainText(memberEmail);
+    await card.getByRole("button", { name: "Require two-factor sign-in…" }).click();
+    await card.getByRole("button", { name: "Require two-factor sign-in", exact: true }).click();
+    await expect(card).toContainText("Required for every member.");
+
+    // The member is stopped by one notice, sets it up inside it, and carries on.
+    const memberSide = await openAs(browser, member);
+    const memberProblems = new ProblemTracker();
+    memberProblems.allowHttp(/\/api\/v1\/(workspaces|organizations)\//, [403], "the organization requires two-factor sign-in");
+    attachProblemListeners(memberSide.page, memberProblems);
+    // A member without a workspace grant: the organization's Members page is theirs to open.
+    await memberSide.page.goto(`/organizations/${slug}/members`);
+    const notice = memberSide.page.getByRole("dialog", { name: "Two-factor sign-in required" });
+    await expect(notice).toBeVisible({ timeout: 20_000 });
+    const panel = notice.getByRole("region", { name: "Two-factor sign-in" });
+    await panel.getByRole("button", { name: "Turn on two-factor sign-in" }).click();
+    await panel.getByLabel("Current password").fill(PASSWORD);
+    await panel.getByRole("button", { name: "Continue" }).click();
+    const secret = (await panel.getByTestId("mfa-secret").innerText()).replace(/\s/g, "");
+    await panel.getByLabel("6-digit code from the app").fill(totpCode(secret));
+    await panel.getByRole("button", { name: "Turn on", exact: true }).click();
+    await panel.getByRole("button", { name: "I have saved them" }).click();
+    await notice.getByRole("button", { name: "Continue", exact: true }).last().click();
+    await expect(memberSide.page.getByRole("dialog", { name: "Two-factor sign-in required" })).toHaveCount(0, { timeout: 20_000 });
+    await expect(memberSide.page.locator("main")).toContainText(memberEmail, { timeout: 20_000 });
+
+    expect(ownerProblems.unexpected(), ownerProblems.summary()).toEqual([]);
+    expect(memberProblems.unexpected(), memberProblems.summary()).toEqual([]);
+    await ownerSide.context.close();
+    await memberSide.context.close();
   });
 });

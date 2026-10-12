@@ -96,15 +96,18 @@ migrations, integrations, operations and certification.
       notification preferences below. (Session 4 then render-checks them.)
 - [ ] **Notification preferences do not exist** (only the inbox endpoints). Decide: per-user email
       preferences for non-essential notifications; security and billing mail always sent.
-- [ ] **Organization-wide "require two-factor"** was deferred to after launch (N-017). Enterprise
+- [x] **Organization-wide "require two-factor"** was deferred to after launch (N-017). Enterprise
       buyers ask for it on the first call; decide again and build it if small.
-- [ ] **`idp_session_sync`** is stored and shown but read by nothing (the identity console says so in
-      a comment). Wire it or remove it.
+      _Done (session 3): N-060, built on every plan; `tests/engines/test_require_two_factor_live.py`,
+      browser journey in `e2e/tests/40-identity-security.spec.ts`._
+- [x] **`idp_session_sync`** is stored and shown but read by nothing (the identity console says so in
+      a comment). Wire it or remove it. _Done (session 3): removed (N-058, migration s3a1)._
 - [ ] **Workspace date format, time zone, currency:** `date_format` is read only as a parsing hint by
       procurement matching (ARCH-30 A2); no screen, email, export or feed formats a date with it, and
       the frontend has 87 ad-hoc `toLocale*` / `Intl` calls. Build the one formatting layer the
       session 3 prompt describes.
-- [ ] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
+- [x] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
+      _Done (session 3): proven and fixed (`tests/services/test_scim_token_key_is_secret.py`)._
 - [ ] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
 - [ ] **Data residency:** the region setting exists; check whether it decides where anything is
       stored, and if not, say so truthfully on the screen (N-029).
