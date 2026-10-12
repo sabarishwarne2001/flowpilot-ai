@@ -37,6 +37,11 @@ def _sso(db) -> tuple[EnterpriseIdpConfig, str]:
     org = Organization(name="Acme", slug=f"acme-jit-{suffix}")
     db.add(org)
     db.flush()
+    # Single sign-on is an Enterprise feature; since campaign session 3 (F-282) nobody is
+    # provisioned through an identity provider into an organization whose plan lacks it.
+    from tests.security.plans import put_on_plan
+
+    put_on_plan(db, org, "enterprise")
     domain = VerifiedDomain(
         organization_id=org.id, domain=domain_name, status="VERIFIED", challenge_token="tok",
         challenge_expires_at=_utc(days=1), first_verified_at=_utc(days=-1), is_sso_binding=True,

@@ -172,3 +172,27 @@ def test_redirect_path_cannot_send_the_browser_elsewhere(engines: Engines, idp: 
     location = urlparse(landed.headers["location"])
     assert location.netloc in ("", urlparse(get_settings().FRONTEND_URL).netloc)
     assert parse_qs(location.query).get("next", ["/"]) == ["/"]
+
+
+def test_sso_adds_nobody_once_the_organization_has_left_enterprise(engines: Engines, idp: TestIdp) -> None:
+    """Campaign session 3. Like SCIM (F-279): new people are not provisioned below Enterprise."""
+    engines.plan("business")
+    email = f"newcomer-{uuid.uuid4().hex[:6]}@{idp.domain}"
+    landed, _ = _sign_in(engines, idp, email)
+    assert landed.status_code == 401, landed.text
+    assert engines.db.query(User).filter_by(email=email).one_or_none() is None
+
+
+def test_sso_adds_nobody_to_an_archived_organization(engines: Engines, idp: TestIdp) -> None:
+    from app.models.organization import OrganizationStatus
+
+    engines.tenant.organization.status = OrganizationStatus.ARCHIVED
+    engines.db.commit()
+    try:
+        email = f"archived-{uuid.uuid4().hex[:6]}@{idp.domain}"
+        landed, _ = _sign_in(engines, idp, email)
+        assert landed.status_code == 401, landed.text
+        assert engines.db.query(User).filter_by(email=email).one_or_none() is None
+    finally:
+        engines.tenant.organization.status = OrganizationStatus.ACTIVE
+        engines.db.commit()
