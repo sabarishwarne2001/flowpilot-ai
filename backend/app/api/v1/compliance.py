@@ -100,6 +100,8 @@ def _residency_payload(context: OrganizationContext) -> DataResidencyResponse:
     return DataResidencyResponse(
         region=residency_service.region_for_organization(context.organization),
         available_regions=options,
+        pinned=list(residency_service.PINNED_DATA),
+        not_pinned=list(residency_service.NOT_PINNED_DATA),
     )
 
 

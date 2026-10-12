@@ -119,8 +119,11 @@ migrations, integrations, operations and certification.
 - [x] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
       _Done (session 3): proven and fixed (`tests/services/test_scim_token_key_is_secret.py`)._
 - [ ] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
-- [ ] **Data residency:** the region setting exists; check whether it decides where anything is
+- [x] **Data residency:** the region setting exists; check whether it decides where anything is
       stored, and if not, say so truthfully on the screen (N-029).
+      _Done (session 3): it pins export archives and branding files only; the card now says so and
+      lists what stays where the deployment runs (F-301, N-066,
+      `tests/api/test_residency_says_what_it_pins.py`, `e2e/tests/44-data-residency.spec.ts`)._
 
 ### 3.4 Ledger rows (145): `campaign_slices.py --session 3`
 Largest groups: partner portal 14 endpoints + the page and nav item; SCIM 13 endpoints (12 never

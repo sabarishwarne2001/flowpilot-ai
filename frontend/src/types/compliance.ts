@@ -29,6 +29,10 @@ export interface ResidencyRegionOption {
 export interface DataResidency {
   readonly region: DataResidencyRegion;
   readonly available_regions: readonly ResidencyRegionOption[];
+  /** What the region decides the storage location of (F-301, N-066). */
+  readonly pinned?: readonly string[];
+  /** What stays where this deployment runs, whatever the region. */
+  readonly not_pinned?: readonly string[];
 }
 
 export interface DataResidencyUpdateRequest {
@@ -126,11 +130,10 @@ export const REGION_LABELS: Readonly<Record<DataResidencyRegion, string>> = {
 export const REGION_DESCRIPTIONS: Readonly<
   Record<DataResidencyRegion, string>
 > = {
-  US: "Objects are written to a US-pinned bucket.",
-  EU: "Objects are written to an EU-pinned bucket. Required by most GDPR data processing agreements.",
-  APAC: "Objects are written to an Asia Pacific bucket.",
-  GLOBAL:
-    "The platform default bucket. Choose a pinned region if your contract requires one.",
+  US: "New export archives and branding files are written to storage in the United States.",
+  EU: "New export archives and branding files are written to storage in the European Union.",
+  APAC: "New export archives and branding files are written to storage in Asia Pacific.",
+  GLOBAL: "Export archives and branding files are written to this deployment's own storage.",
 };
 
 export const isDownloadable = (record: ComplianceExport): boolean => {

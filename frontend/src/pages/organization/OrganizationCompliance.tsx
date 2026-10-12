@@ -66,9 +66,11 @@ const ResidencyCard: React.FC<{
   organizationId: string;
   region: DataResidencyRegion;
   options: readonly { region: DataResidencyRegion; configured: boolean }[];
+  pinned: readonly string[];
+  notPinned: readonly string[];
   canWrite: boolean;
   onChanged: () => void;
-}> = ({ organizationId, region, options, canWrite, onChanged }) => {
+}> = ({ organizationId, region, options, pinned, notPinned, canWrite, onChanged }) => {
   const [selected, setSelected] = useState<DataResidencyRegion>(region);
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +100,31 @@ const ResidencyCard: React.FC<{
         <div>
           <h2 className="text-base font-semibold">Data residency</h2>
           <p className={HINT}>
-            Where this tenant&rsquo;s documents, avatars and export archives are
-            physically stored.
+            Where some of this organization&rsquo;s files are stored. The region
+            does not move documents or the database; see what it covers below.
           </p>
         </div>
       </header>
+
+      {/* F-301, N-066: the server's statement of what the region pins, kept equal to the code. */}
+      <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2" data-testid="residency-scope">
+        <div className="rounded-md border border-border p-3">
+          <p className="font-medium text-foreground">Stored in the chosen region</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground" data-testid="residency-pinned">
+            {pinned.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <p className="font-medium text-foreground">Stored where this deployment runs, whatever the region</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground" data-testid="residency-not-pinned">
+            {notPinned.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
       <div className="mt-4 space-y-3">
         <div>
@@ -813,6 +835,8 @@ const OrganizationCompliance: React.FC = () => {
         organizationId={organizationId}
         region={overview.data.residency.region}
         options={residencyOptions}
+        pinned={overview.data.residency.pinned ?? []}
+        notPinned={overview.data.residency.not_pinned ?? []}
         canWrite={isOwner}
         onChanged={invalidateAll}
       />

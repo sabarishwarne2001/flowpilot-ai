@@ -44,6 +44,8 @@ from app.models.organization import Organization
 logger = logging.getLogger("app.services.compliance.residency")
 
 __all__ = [
+    "NOT_PINNED_DATA",
+    "PINNED_DATA",
     "ResidencyError",
     "ResidencyNotConfiguredError",
     "UnknownRegionError",
@@ -69,6 +71,22 @@ class UnknownRegionError(ResidencyError):
 class ResidencyNotConfiguredError(ResidencyError):
     """A tenant is pinned to a region with no bucket provisioned for it."""
 
+
+#: Campaign session 3 (F-301, N-066): what an organization's region decides today, in the words
+#: the compliance screen shows. These are the files written through `driver_for_organization` /
+#: `driver_for_region`; `tests/api/test_residency_says_what_it_pins.py` keeps the list equal to the
+#: modules that do so.
+PINNED_DATA: tuple[str, ...] = (
+    "Compliance export archives",
+    "Branding files (logo and favicon)",
+)
+#: Everything else stays where this deployment runs, whatever the region.
+NOT_PINNED_DATA: tuple[str, ...] = (
+    "Documents and their pages, and redacted copies",
+    "Extracted text, fields and the search index (stored in the database)",
+    "Profile pictures",
+    "Everything else in the database: members, settings, audit log",
+)
 
 _regional_drivers: dict[str, StorageDriver] = {}
 _lock = threading.Lock()

@@ -1110,3 +1110,19 @@ that is where the brand shows. On the platform's own address everyone sees FlowP
 The text on a primary-coloured button is worked out from the colour (white or near-black,
 whichever contrasts more), so a pale brand colour still gives readable buttons. This is how
 Okta and Zendesk treat custom-domain branding.
+
+## N-066 — What "data residency" means on this deployment
+**DECIDED (campaign session 3).**
+
+The region an owner picks decides where two things are written: **compliance export archives** and
+the organization's **branding files** (logo, favicon). Everything else (documents and their pages,
+redacted copies, profile pictures, and the database with extracted text, fields, the search index,
+members, settings and the audit log) is stored where this deployment runs.
+
+Moving only document files to a regional bucket would not deliver residency either, because a
+document's text and search index live in the database. Real residency for documents means a
+**regional deployment** (a separate copy of the stack, database included, in that region), which is
+an infrastructure step rather than a code change. Until one exists the screen says exactly what the
+setting covers, the EU option no longer claims to satisfy GDPR agreements, and a test keeps the
+statement equal to the code. When a regional deployment is stood up, list it on the card and in
+the contract wording; nothing else needs to change.

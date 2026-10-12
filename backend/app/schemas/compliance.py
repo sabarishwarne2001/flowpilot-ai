@@ -36,6 +36,14 @@ class ResidencyRegionOption(BaseModel):
 class DataResidencyResponse(BaseModel):
     region: DataResidencyRegion
     available_regions: list[ResidencyRegionOption]
+    pinned: list[str] = Field(
+        default_factory=list,
+        description="What the region decides the storage location of (F-301, N-066).",
+    )
+    not_pinned: list[str] = Field(
+        default_factory=list,
+        description="What stays where this deployment runs, whatever the region.",
+    )
 
 
 class DataResidencyUpdate(BaseModel):
