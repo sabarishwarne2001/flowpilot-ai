@@ -46,8 +46,12 @@ const ROLE_WORDS: Readonly<Record<WorkspaceRole, string>> = {
 };
 
 // F-053: the same Access restricted screen the organization pages use.
-const PermissionDenied: React.FC<{ minimum: WorkspaceRole }> = ({ minimum }) => (
-  <AccessRestricted allowedFor={ROLE_WORDS[minimum]} askWho="a workspace administrator" />
+const PermissionDenied: React.FC<{ minimum: WorkspaceRole; workspaceId: string }> = ({ minimum, workspaceId }) => (
+  <AccessRestricted
+    allowedFor={ROLE_WORDS[minimum]}
+    askWho="a workspace administrator"
+    contacts={{ workspaceId }}
+  />
 );
 
 export const RequireWorkspaceRole: React.FC<RequireWorkspaceRoleProps> = ({
@@ -55,10 +59,10 @@ export const RequireWorkspaceRole: React.FC<RequireWorkspaceRoleProps> = ({
   children,
   fallback,
 }) => {
-  const { workspaceRole } = useResolvedTenant();
+  const { workspace, workspaceRole } = useResolvedTenant();
 
   if (!isAtLeast(workspaceRole, minimum)) {
-    return <>{fallback === undefined ? <PermissionDenied minimum={minimum} /> : fallback}</>;
+    return <>{fallback === undefined ? <PermissionDenied minimum={minimum} workspaceId={workspace.id} /> : fallback}</>;
   }
 
   return <>{children}</>;

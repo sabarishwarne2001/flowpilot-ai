@@ -51,12 +51,16 @@ import {
 
 /** The workspace sections, for a VIEWER: the shared Access restricted screen (was a red
  * "Permission Denied" that spoke of "privilege levels"). */
-export const PermissionDenied: React.FC = () => (
-  <AccessRestricted
-    allowedFor="workspace contributors and administrators"
-    askWho="a workspace administrator"
-  />
-);
+export const PermissionDenied: React.FC = () => {
+  const { workspace } = useResolvedTenant();
+  return (
+    <AccessRestricted
+      allowedFor="workspace contributors and administrators"
+      askWho="a workspace administrator"
+      contacts={{ workspaceId: workspace.id }}
+    />
+  );
+};
 
 type SettingsSection = "profile" | "notifications" | "sessions" | "workspace" | "ai" | "email" | "document";
 type SettingsScope = "account" | "workspace";

@@ -56,6 +56,7 @@ export const IdentityAdminHub: React.FC = () => {
       <AccessRestricted
         allowedFor="organization owners (identity and directory settings decide who can sign in)"
         askWho="an organization owner"
+        contacts={{ organizationId: organization.organization_id, roles: ["OWNER"] }}
         backTo={{ path: organizationMembersPath(organization.organization_slug), label: "Back to members" }}
       />
     );

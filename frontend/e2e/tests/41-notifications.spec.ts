@@ -4,8 +4,8 @@
  * whose email travels API → notification outbox → worker → platform relay → the mail sink.
  */
 import { test, expect, expectHealthyPage } from "../support/fixtures";
-import { api } from "../support/api";
-import { runId, ws } from "../support/env";
+import { api, resolveWorkspaceId } from "../support/api";
+import { TENANTS, USERS, org, runId, ws } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
 import { signUpVerified, tokenOf } from "../support/accounts";
 
@@ -85,5 +85,50 @@ test.describe("Security notices by email", () => {
     expect(mail.text).toContain("from MEMBER to ADMIN");
     expect(mail.text).toContain("cannot be turned off");
     expect(mail.text).toContain("/settings?section=notifications");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Access screens name the people who can grant access (HANDOFF carry-over, campaign session 3).
+// ---------------------------------------------------------------------------------------------
+interface Person {
+  readonly role: string;
+  readonly status: string;
+  readonly user: { readonly id: string; readonly email: string; readonly display_name?: string | null };
+}
+
+const nameOf = (person: Person): string => person.user.display_name?.trim() || person.user.email;
+
+test.describe("Access restricted names who to ask (workspace)", () => {
+  test.use({ user: "C.viewer" });
+
+  test("a viewer on a workspace settings section is told which administrators to ask", async ({ page, session }) => {
+    const { workspaceId } = await resolveWorkspaceId(session!, TENANTS.C.org, TENANTS.C.ws);
+    const people = await api<{ items: Person[] }>(session, "GET", `/workspaces/${workspaceId}/members`);
+    const admins = people.body.items
+      .filter((p) => p.role === "ADMIN" && p.status === "ACTIVE" && p.user.email !== USERS["C.viewer"].email)
+      .map(nameOf);
+    expect(admins.length).toBeGreaterThan(0);
+
+    await page.goto(`${ws("C", "settings")}?section=workspace`);
+    const ask = page.getByTestId("access-restricted-ask");
+    await expect(ask).toContainText(admins[0]!, { timeout: 15_000 });
+    await expect(ask).not.toContainText("a workspace administrator");
+  });
+});
+
+test.describe("Access restricted names who to ask (organization)", () => {
+  test.use({ user: "C.member" });
+
+  test("a member on the identity console is told which owner to ask", async ({ page, session }) => {
+    const { organizationId } = await resolveWorkspaceId(session!, TENANTS.C.org, TENANTS.C.ws);
+    const people = await api<{ items: Person[] }>(session, "GET", `/organizations/${organizationId}/members`);
+    const owners = people.body.items.filter((p) => p.role === "OWNER" && p.status === "ACTIVE").map(nameOf);
+    expect(owners.length).toBeGreaterThan(0);
+
+    await page.goto(org("C", "identity"));
+    const ask = page.getByTestId("access-restricted-ask");
+    await expect(ask).toContainText(owners[0]!, { timeout: 15_000 });
+    await expect(ask).not.toContainText("an organization owner");
   });
 });
