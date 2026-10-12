@@ -106,9 +106,9 @@ def render_ownership_transfer_declined(
         # and "<" is not one. Every ARCH-03 and ARCH-04 template passes the raw
         # subject here and shares the gap; see the Step 2 verification notes.
         title=esc(subject),
-        brand_name=brand_name,
+        brand_name=esc(brand_name),
         content_html=content_html,
-        footer_text=footer_text,
+        footer_text=esc(footer_text),
     )
 
     return subject, html_body, text_body
