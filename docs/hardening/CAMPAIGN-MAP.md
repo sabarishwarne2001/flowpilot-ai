@@ -20,7 +20,7 @@ with evidence, or moved to `BLOCKERS.md` with the reason and what would unblock 
 | Session 3 owns | 145 open or missing rows (79 endpoints, 16 pages, 16 nav items, 15 integrations, 13 UI actions, 6 jobs). |
 | Session 4 owns | 575 open or missing rows (282 config variables, 163 migrations, 36 endpoints, 26 nav items, 25 pages, 17 integrations, 16 jobs, 10 UI actions). |
 | Code with no ledger row | 4 endpoints, 2 migrations, 3 job types (`campaign_slices.py --missing`). |
-| CI | Runs on every pull request (214 runs so far). Red on most runs since 2026-10-06, including `main` right after PR #19 merged (pytest) and the last two runs of PR #20 (browser tests, then pytest). See F-275. |
+| CI | Runs on every pull request (214 runs so far). Red on most runs since 2026-10-06, including `main` right after PR #19 merged (pytest) and the last two completed runs of PR #20 (browser tests, then pytest). See F-275. |
 
 Live numbers, any time: `python docs/hardening/tools/campaign_slices.py`. Who owns a row is decided
 by the rules at the top of that tool, not by judgement: session 3 owns identity, the organization,
@@ -30,10 +30,11 @@ migrations, integrations, operations and certification.
 
 ## 2. Rules for both sessions
 
-1. **Your session is finished only when** `python docs/hardening/tools/campaign_slices.py --check <3|4>`
-   exits 0, every box in your section below is ticked (or the item is in `BLOCKERS.md` with its
-   reason), and **CI is green on your pull request's last commit**. Until then, keep going; if the
-   context runs out, the owner re-runs the same prompt and you continue here.
+1. **Your session is finished only when** `python docs/hardening/tools/campaign_slices.py --check 3`
+   (session 4, the last one: `--check all`) exits 0, every box in your section below is ticked (or the
+   item is in `BLOCKERS.md` with its reason), and **CI is green on your pull request's last commit**.
+   Until then, keep going; if the context runs out, the owner re-runs the same prompt and you continue
+   here.
 2. **CI: read check runs, not commit statuses.** GitHub Actions reports through check runs:
    `gh pr checks <number>`, or `gh api repos/sabarishwarne2001/flowpilot-ai/commits/<sha>/check-runs`,
    then `.../check-runs/<id>/annotations`. (Sessions 1 and 2 looked at the commit status API, saw
@@ -45,8 +46,8 @@ migrations, integrations, operations and certification.
    test (Stripe and Dodo signatures are HMACs over the body); `backend/scripts/erp_mock_targets.py`
    (QuickBooks, Zoho, Business Central, S/4 and SFTP targets); the local MinIO for the S3-bundle
    warehouse; the model stand-in (`E2E_LLM=1`) and its `/__stats` and `/__fail` endpoints; the mail
-   sink; a test SAML identity provider that signs its own assertions (`signxml`/`xmlsec` with a
-   self-signed certificate); SCIM driven directly against `/scim/v2`. Rows that need a real customer
+   sink; a test SAML identity provider that signs its own assertions (`signxml`, already a backend
+   dependency, with a self-signed certificate); SCIM driven directly against `/scim/v2`. Rows that need a real customer
    account (BigQuery, Snowflake, Databricks, live Groq or Gemini, live Stripe) stay blocked **with
    that reason** and go on the owner's spot-check list.
 4. **Add the missing rows.** Anything `--missing` lists gets a ledger row in your first ledger commit.
@@ -61,9 +62,9 @@ migrations, integrations, operations and certification.
 - [ ] Open this session's pull request early, let CI run, read its annotations, and fix every failing
       or flaky test with the evidence rule. At least one test is flaky: PR #20's last commit and `main`
       after its merge have the identical tree (`cfd2590`), and pytest failed on the first and passed on
-      the second. Known candidate: F-256, the late-usage rollup test that
-      fails when it runs at minute 59 (reproduction in HANDOFF.md, "Session 1 → later sessions"; the
-      fix is in how rollup windows are sealed). Move it here from session 4 if it is what turns CI red.
+      the second. Known candidate: F-256, the late-usage rollup test that fails when it runs at
+      minute 59 (reproduction in HANDOFF.md, "Session 1 → later sessions"; the fix is in how rollup
+      windows are sealed). Fix it here if it is what turns CI red; otherwise it stays with session 4.
 - [ ] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
 
 ### 3.2 Carried over from sessions 1 and 2 (HANDOFF.md)
@@ -138,6 +139,8 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       process proposals, three-way comparison, assistant canvas, notifications, legacy redirects).
 - [ ] **Refunds are not recorded:** a Stripe `charge.refunded` leaves the invoice "paid" and RevOps
       revenue unchanged. Decide (Tier-1: a credit note and negative revenue) and implement if small.
+- [ ] **F-256 (Low), if session 3 did not fix it in §3.1:** late usage recorded into an hour that had
+      no earlier usage is not disclosed as late (the rollup window is never sealed).
 - [ ] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
       alert on it and write the refund playbook in RUNBOOK.md.
 - [ ] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
