@@ -95,8 +95,12 @@ migrations, integrations, operations and certification.
       _Done (session 3): the two emails' wording reviewed and kept (escaped and one-line subjects
       since F-285); banner and notice in `e2e/tests/33-free-trial.spec.ts`; consoles in
       `test_free_trial.py` and `test_trial_ended_consoles_stay_usable.py` (F-297 fixed)._
-- [ ] **Platform consoles:** RevOps (10 endpoints only `smoke`), Unit economics, Sovereign and the
+- [x] **Platform consoles:** RevOps (10 endpoints only `smoke`), Unit economics, Sovereign and the
       audit explorer, as an operator, end to end. Session 1 checked the money numbers, not the consoles.
+      _Done (session 3): RevOps routes driven for their effect in `test_revops_console_live.py` and
+      `26-phase3-consoles` (F-312, F-315); Unit economics, Sovereign and the audit explorer in
+      `47-consoles` (F-311, F-313, F-314, F-316, F-317); the operator's egress test and licence
+      install in `test_console_routes_take_effect_live.py`. `campaign_slices --check 3` exits 0._
 
 ### 3.3 Dead or unbuilt logic found in the 2026-10-12 review
 - [x] **Billing and limit emails do not exist.** Dunning steps, "payment failed", "subscription
