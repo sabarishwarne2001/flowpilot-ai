@@ -58,3 +58,26 @@ test.describe("Organization identifier", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Profile time zone (F-318)", () => {
+  test.use({ user: "C.member" });
+
+  // Saving the profile re-sent the time zone on screen, and the server records any time zone it
+  // is sent as the person's choice: renaming yourself pinned your clock to UTC when you had never
+  // chosen one (you saw the workspace's), and the app re-rendered under the new clock, wiping the
+  // "Saved" message (the CI flake in 14-configuration).
+  test("saving a new display name sends only the name, and says it saved", async ({ page }) => {
+    await page.goto(ws("C", "settings"));
+    const name = page.locator("#profile-name");
+    await expect(name).toBeVisible();
+    const sent = page.waitForRequest((request) => request.method() === "PATCH" && /\/me\/profile$/.test(request.url()));
+    await name.fill(`Cleo Member ${Date.now()}`);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    const body = (await sent).postDataJSON() as Record<string, unknown>;
+    expect(Object.keys(body)).toEqual(["display_name"]);
+    await expect(page.locator("body")).toContainText(/saved/i, { timeout: 10_000 });
+    await name.fill("Cleo Member");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.locator("body")).toContainText(/saved/i, { timeout: 10_000 });
+  });
+});

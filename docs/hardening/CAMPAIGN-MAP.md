@@ -69,9 +69,8 @@ migrations, integrations, operations and certification.
       was green on every complete run of this session (`9d426ebe`, `1b17ec9b`, `155b6f93`); F-256 did
       not turn it red, so it stays with session 4._
 - [x] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
-      _Session 3: no flaky test seen in CI. One local browser run failed a profile-name step in
-      `14-configuration` once; it did not reproduce (alone or in two full reruns) and is noted in
-      HANDOFF for watching._
+      _Session 3: the one intermittent failure (`14-configuration`, profile name, failing on a fresh
+      database and passing on reruns) was a real defect, not chance: F-318, fixed at its cause._
 
 ### 3.2 Carried over from sessions 1 and 2 (HANDOFF.md)
 - [x] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
