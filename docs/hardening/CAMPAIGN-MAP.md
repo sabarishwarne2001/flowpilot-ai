@@ -68,8 +68,10 @@ migrations, integrations, operations and certification.
 - [ ] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
 
 ### 3.2 Carried over from sessions 1 and 2 (HANDOFF.md)
-- [ ] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
+- [x] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
       the public gateway's own key check each reach only their own routes (default deny, like N-056).
+      _Done (session 3), no defect: `backend/tests/security/test_non_human_principals_default_deny.py`.
+      The partner portal has no token of its own (partner members are signed-in people)._
 - [ ] **Access screens name people:** `NoAccess` and `AccessRestricted` still say "Contact an
       organization owner"; use `useAskPlanOwners` where the viewer is a member.
 - [ ] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
