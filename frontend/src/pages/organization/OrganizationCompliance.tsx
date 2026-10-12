@@ -26,6 +26,9 @@ import {
   updateRetentionPolicy,
 } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
+import { listOrganizationMembers } from "@/services/api/organization";
+import { useAuthStore } from "@/store/useAuthStore";
+import type { OrganizationMember } from "@/types/tenancy";
 import StatusPill from "@/components/ui/StatusPill";
 import { OVERLAY } from "@/components/ui/primitives";
 import { ErasureImpactPreview } from "@/components/organization/ErasureImpactPreview";
@@ -510,12 +513,33 @@ const ExportsCard: React.FC<{
 // Erasure
 // ---------------------------------------------------------------------------
 
+const personLabel = (member: OrganizationMember): string => {
+  const name = member.user.display_name?.trim();
+  const who = name ? `${name} — ${member.user.email}` : member.user.email;
+  if (member.status === "DEACTIVATED") {
+    return `${who} (former member)`;
+  }
+  return member.status === "SUSPENDED" ? `${who} (suspended)` : who;
+};
+
 const ErasureModal: React.FC<{
   organizationId: string;
   onClose: () => void;
   onErased: () => void;
 }> = ({ organizationId, onClose, onErased }) => {
   const [subjectUserId, setSubjectUserId] = useState("");
+  const me = useAuthStore((state) => state.user);
+  const members = useQuery({
+    queryKey: ["organizations", "members", organizationId, "with-former"],
+    queryFn: () => listOrganizationMembers(organizationId, true),
+  });
+  const erasable = useMemo(
+    () =>
+      (members.data?.items ?? [])
+        .filter((member) => member.role !== "OWNER" && member.user.id !== me?.id)
+        .sort((a, b) => personLabel(a).localeCompare(personLabel(b))),
+    [members.data, me?.id],
+  );
   const [ticket, setTicket] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [typedPhrase, setTypedPhrase] = useState("");
@@ -586,15 +610,35 @@ const ErasureModal: React.FC<{
         <div className="mt-4 space-y-3">
           <div>
             <label className={LABEL} htmlFor="erasure-subject">
-              Subject user ID
+              Person
             </label>
-            <input
+            {/* F-325: chosen by name and address. The form asked for a user ID, which no page of
+                the console shows, so a data-subject request could not be answered from it. */}
+            <select
               id="erasure-subject"
               className={INPUT}
               value={subjectUserId}
+              disabled={members.isPending || mutation.isPending}
               onChange={(event) => setSubjectUserId(event.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
+            >
+              <option value="">
+                {members.isPending ? "Loading the organization's people…" : "Choose a current or former member"}
+              </option>
+              {erasable.map((member) => (
+                <option key={member.user.id} value={member.user.id}>
+                  {personLabel(member)}
+                </option>
+              ))}
+            </select>
+            <p className={HINT}>
+              Current and former members of this organization. Owners are not listed (ownership is
+              transferred first), and neither are you.
+            </p>
+            {members.isError ? (
+              <p className="mt-1 text-xs text-destructive">
+                The member list could not be loaded: {errorMessage(members.error)}
+              </p>
+            ) : null}
           </div>
 
           <ErasureImpactPreview

@@ -9,8 +9,10 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect, settle } from "../support/fixtures";
-import { api, resolveWorkspaceId, type ApiSession } from "../support/api";
+import { api, apiLogin, resolveWorkspaceId, type ApiSession } from "../support/api";
+import { signUpVerified, tokenOf } from "../support/accounts";
 import { TENANTS, org, runId } from "../support/env";
+import { linkFrom, waitForMail } from "../support/mail";
 
 test.use({ user: "C.owner" });
 
@@ -204,5 +206,42 @@ test.describe("Enterprise BYOK and models", () => {
     await expect(card()).toContainText("Key retired.", { timeout: 15_000 });
     await expect(card()).not.toContainText("••••WXYZ");
     await expect(card().getByRole("button", { name: "Add key", exact: true })).toBeVisible();
+  });
+});
+
+test.describe("Data governance and compliance", () => {
+  test.setTimeout(120_000);
+
+  // F-325: the erasure form asked for a "Subject user ID", which no page of the console shows; an
+  // administrator answering a data-subject request could not fill it in. The person is now chosen
+  // by name and address from the organization's members (former members included).
+  test("a member chosen by name is erased: they cannot sign in and the erasure is on the record", async ({ page, session }) => {
+    const { organizationId, session: owner } = await ids(session);
+    const email = `erase-me-${runId()}@e2e.example.com`;
+    const subject = await signUpVerified(email);
+    const since = Date.now() - 1_000;
+    const invited = await api(owner, "POST", `/organizations/${organizationId}/invitations`, { email, organization_role: "MEMBER" });
+    expect(invited.status, invited.text).toBeLessThan(300);
+    const token = tokenOf(linkFrom(await waitForMail(email, /invitations\/accept/, since), /invitations\/accept/));
+    const accepted = await api(subject, "POST", "/invitations/accept", { token });
+    expect(accepted.status, accepted.text).toBeLessThan(300);
+
+    await page.goto(org("C", "compliance"));
+    await page.getByRole("button", { name: "Erase a subject" }).click();
+    const dialog = page.getByRole("dialog", { name: "Erase a data subject" });
+    const person = dialog.getByLabel("Person");
+    await expect(person.locator("option", { hasText: email })).toHaveCount(1);
+    await person.selectOption(String(subject.me.id));
+    await dialog.getByRole("button", { name: "Run impact preview" }).click();
+    await expect(dialog).toContainText(/document|record|session|membership|impact/i, { timeout: 20_000 });
+    const ticket = `DSAR-${runId()}`;
+    await dialog.getByLabel("Confirm their email address").fill(email);
+    await dialog.getByLabel("Erasure ticket reference").fill(ticket);
+    await dialog.getByLabel("Type ERASE to confirm").fill("ERASE");
+    await dialog.getByRole("button", { name: "Erase permanently" }).click();
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
+
+    await expect(page.locator("main")).toContainText(ticket, { timeout: 15_000 });
+    await expect(apiLogin(email)).rejects.toThrow(/HTTP 4\d\d/);
   });
 });

@@ -209,7 +209,8 @@ test.describe("Data governance and compliance", () => {
     const member = await loginAs("C.member");
     await page.goto(org("C", "compliance"));
     await page.getByRole("button", { name: "Erase a subject" }).click();
-    await page.getByRole("textbox", { name: "Subject user ID" }).fill(String(member.me.id));
+    // F-325: the person is chosen by name and address, not typed in as an ID.
+    await page.getByLabel("Person").selectOption(String(member.me.id));
     await page.getByRole("button", { name: "Run impact preview" }).click();
     await expect(page.locator("main")).toContainText(/document|record|session|membership|impact/i, { timeout: 20_000 });
     await page.getByRole("button", { name: "Cancel" }).click();
