@@ -160,7 +160,7 @@ jobs:
           PLATFORM_SMTP_PASSWORD: ci-relay-password
           PLATFORM_SMTP_ENCRYPTION: NONE
         run: |
-          pytest -q -p no:cacheprovider \
+          pytest -q -p no:cacheprovider --junitxml=test-reports/phase2-proofs.xml \
             tests/security \
             tests/core/test_production_config_guard.py \
             tests/infra/test_production_env_template.py \
@@ -206,7 +206,7 @@ jobs:
           PLATFORM_SMTP_PASSWORD: ci-relay-password
           PLATFORM_SMTP_ENCRYPTION: NONE
         run: |
-          pytest -q -p no:cacheprovider \
+          pytest -q -p no:cacheprovider --junitxml=test-reports/phase4-engines.xml \
             tests/engines \
             tests/isolation/test_data_isolation.py \
             tests/isolation/test_notification_organization_scope.py \
@@ -272,7 +272,14 @@ jobs:
           PLATFORM_SMTP_USERNAME: ci-relay
           PLATFORM_SMTP_PASSWORD: ci-relay-password
           PLATFORM_SMTP_ENCRYPTION: NONE
-        run: pytest -q --maxfail=5
+        run: pytest -q --maxfail=5 --junitxml=test-reports/full-suite.xml
+
+      - name: Name the failing tests
+        # Without this a red run says only "exit code 1": the failing tests' names are in the raw
+        # log, which not every tool that checks a pull request can read. One annotation per
+        # failing test (readable through the check-runs API) and the full list in the job summary.
+        if: failure()
+        run: python .github/scripts/annotate_test_failures.py backend/test-reports/*.xml
 
   # ---------------------------------------------------------------------
   # Migrations — head discipline, per invariant I10.
@@ -545,6 +552,11 @@ jobs:
         env:
           CI: "1"
         run: npx playwright test -c e2e
+
+      - name: Name the failing browser tests
+        # Same reason as in the pytest job: annotations are readable where the raw log is not.
+        if: failure()
+        run: python .github/scripts/annotate_test_failures.py frontend/e2e/test-results/results.json
 
       - name: Upload the report, screenshots and logs
         if: always()

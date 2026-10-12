@@ -38,6 +38,9 @@ MOUNTS = {
     ("email_settings.py", "router"): f"/api/v1{WS}/email-settings",
     ("document_settings.py", "router"): f"/api/v1{WS}/document-settings",
     ("upload.py", "router"): f"/api/v1{WS}/upload",
+    # Mounted under /work-items in router.py (PHASE 4 review evidence; N-020 items 6/7).
+    ("document_evidence.py", "router"): f"/api/v1{WS}/work-items",
+    ("document_fields.py", "router"): f"/api/v1{WS}/work-items",
     ("usage.py", "workspace_router"): f"/api/v1{WS}/usage",
     ("verifications.py", "router"): f"/api/v1{WS}/verifications",
     ("review.py", "router"): f"/api/v1{WS}/review",
@@ -49,6 +52,39 @@ DEFAULT_PREFIX = "/api/v1"
 
 def src(node):
     return ast.unparse(node) if node is not None else ""
+
+
+def imported_constant(tree, node):
+    """Resolve `alias.NAME` when `alias` is a module imported in this file.
+
+    e.g. review_collab.py: `from app.services.collab import vocabulary as v` and
+    `@router.websocket(v.WS_SUFFIX)`. Reads the module's source and returns the
+    string assigned to NAME, or None when it cannot be resolved statically.
+    """
+    if not (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)):
+        return None
+    alias, name = node.value.id, node.attr
+    module = None
+    for stmt in tree.body:
+        if isinstance(stmt, ast.ImportFrom) and stmt.module:
+            for a in stmt.names:
+                if (a.asname or a.name) == alias:
+                    module = f"{stmt.module}.{a.name}"
+        elif isinstance(stmt, ast.Import):
+            for a in stmt.names:
+                if a.asname == alias:
+                    module = a.name
+    if module is None:
+        return None
+    path = ROOT / (module.replace(".", "/") + ".py")
+    if not path.exists():
+        return None
+    m = re.search(
+        r"^" + re.escape(name) + r"\s*(?::[^=\n]+)?=\s*[\"']([^\"']*)[\"']",
+        path.read_text(encoding="utf-8-sig"),
+        re.M,
+    )
+    return m.group(1) if m else None
 
 
 def router_decls(tree):
@@ -232,7 +268,8 @@ def main():
                         try:
                             path = eval(src(dec.args[0]), {"__builtins__": {}}, consts)
                         except Exception:
-                            path = src(dec.args[0])
+                            resolved = imported_constant(tree, dec.args[0])
+                            path = resolved if resolved is not None else src(dec.args[0])
                 dec_deps = ""
                 status = ""
                 for kw in dec.keywords:

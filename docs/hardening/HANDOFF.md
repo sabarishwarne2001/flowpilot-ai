@@ -49,15 +49,17 @@ spec, with what already exists to build on:
 
 ## For session 2 (documents, AI, engines, background jobs)
 
-_Nothing yet._
+_Session 2 is finished (PR #20); nothing was left here._
 
 ## For session 3 (organization, identity and governance consoles, security)
 
-_Nothing yet._
+Everything left for session 3, including what sessions 1 and 2 handed on below, is itemised in
+`docs/hardening/CAMPAIGN-MAP.md` §3 (written 2026-10-12, before session 3 started).
 
 ## For session 4 (shell, experience, performance, operations, journeys, certification)
 
-_Nothing yet._
+Everything left for session 4 is itemised in `docs/hardening/CAMPAIGN-MAP.md` §4, and the owner's
+launch steps collected so far in §5.
 
 ## Session 1 → later sessions
 
@@ -211,3 +213,25 @@ N-053 to N-056 (NEEDS-OWNER.md, each `DECIDED (campaign session 2)`).
   `backend/tests/engines/test_item_actions_*.py`; `docs/hardening/tools/coverage_from_engines.py`
   turns a test run's route log into ledger rows (engine tests: `ENGINE_ROUTE_LOG`; API tests:
   `API_ROUTE_LOG`).
+
+## Campaign review before session 3 (2026-10-12)
+
+Not a session: a review of the whole repository between sessions 2 and 3, so that sessions 3 and 4
+cover what no prompt named. Its output is `docs/hardening/CAMPAIGN-MAP.md` (every open item with
+its owner session, why, and how to close it) and `docs/hardening/tools/campaign_slices.py` (which
+session owns each coverage row that is not `deep`; `--check <3|4|all>` is the finish line).
+
+What later sessions must know:
+- **CI runs on every pull request, and has been red on most runs since 2026-10-06** (F-275). Sessions
+  1 and 2 read the commit status API, found nothing and wrote "no CI runs on this repo's PRs";
+  Actions reports through check runs (`gh pr checks <number>`). A red pytest or browser job now
+  names each failing test in an annotation and in the job summary
+  (`.github/scripts/annotate_test_failures.py`). A session's pull request is ready only when CI is
+  green on its last commit.
+- `docs/hardening/tools/extract_endpoints.py` now mounts `document_evidence.py` and
+  `document_fields.py` under `/work-items` and resolves an imported path constant (the review
+  WebSocket's `v.WS_SUFFIX`), so its output matches the code: 621 operations, of which 4 have no
+  ledger row yet.
+- Re-running a session prompt after a cut-off: continue on the open pull request of that session
+  (title starts "Campaign session 3" or "Campaign session 4"), not on a new branch from `main`;
+  the unticked boxes in CAMPAIGN-MAP.md are where to resume.

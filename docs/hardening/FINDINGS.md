@@ -3142,3 +3142,12 @@ without failing the accepted document. Every item action on obligations, assista
 collaborative review, matching cases, tables, entities, ERP targets and postings, anomalies, legal
 holds, resumable uploads and the public API was used for real by new live tests
 (`backend/tests/engines/test_item_actions_*.py`); that push found F-272 to F-274.
+
+## Campaign review before session 3 (2026-10-12)
+
+A read of the whole repository between sessions 2 and 3 (not a test session: nothing in the product
+was changed). Its plan for sessions 3 and 4 is `docs/hardening/CAMPAIGN-MAP.md`.
+
+| ID | Severity | Area | Finding | Evidence | Status |
+|---|---|---|---|---|---|
+| F-275 | Medium | CI, process | **CI was red and nobody saw it.** GitHub Actions runs on every pull request and every push to `main` (214 runs), and most runs since 2026-10-06 failed: `main` right after PR #19 merged (pytest), and PR #20's last two runs (browser tests, then pytest). PR #20's last commit and `main` after its merge hold the identical tree (`cfd2590`): pytest failed on the first and passed on the second, so at least one test is flaky. Sessions 1 and 2 checked the commit status API, which Actions does not use, and reported "no CI runs on this repo's PRs"; their local runs were green. A red run also could not say which test failed: the names were only in the raw log, which the sessions' tools cannot read. Now each failing pytest or browser test becomes an annotation and a job-summary line (`.github/scripts/annotate_test_failures.py`, JUnit and Playwright JSON reports), readable through the check-runs API; the prompts for sessions 3 and 4 require CI green on their last commit. | Actions runs 38175804335 (PR #20, pytest failure, annotations say only "exit code 1") and the push run on `main` after PR #19 (pytest failure); the new script run against sample JUnit and Playwright reports. | Partly fixed: failures are now named; the failing tests themselves are session 3's first item (CAMPAIGN-MAP.md §3.1) |
