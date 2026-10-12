@@ -68,7 +68,8 @@ partner portal page and suspended read-only state (F-319); profile save no longe
 (F-318, the 14-configuration CI failure); workspace regional settings checked and every zone and
 currency offered (F-320, F-321, N-068); the settings page keeps its section (F-322); a public-API
 workflow trigger now reaches the engine (F-323, High); erasure by a person's name, not an unseen
-user ID (F-325). F-324 (a verification/automation race) is recorded as **unverified** and handed
+user ID (F-325), and member lists no longer fail once someone has been erased (F-326, found by
+the full browser run). F-324 (a verification/automation race) is recorded as **unverified** and handed
 to session 4. Host crons (arch07, arch09, identity, invitations) proven. New tests: console routes
 by effect, custom domains and TLS, warehouse connectors on the wire, DNS lookup, AI settings at the
 provider, browser specs 48 (console effects) and 49 (account changes and emailed links).
