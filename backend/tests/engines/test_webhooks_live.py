@@ -153,3 +153,55 @@ def test_send_test_event_pings_the_endpoint_through_the_signed_path(engines: Eng
     assert envelope["type"] == "webhook.test" and envelope["data"]["endpoint_id"] == endpoint_id, envelope
     deliveries = engines.get(f"/webhooks/endpoints/{endpoint_id}/deliveries", org=True).json()
     assert [(d["event_type"], d["status"]) for d in deliveries] == [("webhook.test", "DELIVERED")], deliveries
+
+
+def _signed_by(secret: str, request: dict) -> bool:
+    pieces = [p.split("=", 1) for p in request["headers"]["X-FlowPilot-Signature"].split(",")]
+    stamp = next(value for key, value in pieces if key == "t")
+    expected = hmac.new(secret.encode(), f"{stamp}.{request['body'].decode()}".encode(), hashlib.sha256).hexdigest()
+    return any(hmac.compare_digest(value, expected) for key, value in pieces if key == "v1")
+
+
+def test_an_endpoint_is_rotated_moved_redelivered_and_removed(engines: Engines, receiver: _Receiver) -> None:
+    """Campaign session 3 (ledger): the endpoint controls after creation do what they say.
+
+    Rotating returns a new secret and, for the overlap, deliveries carry a signature for both, so
+    a receiver still holding the old one keeps verifying; moving the URL sends the next delivery
+    there; a failed delivery redelivered goes out again at once; a removed endpoint is gone and
+    gets nothing more.
+    """
+    created = engines.post("/webhooks/endpoints", {"url": URL, "event_types": ["document.completed"]}, org=True)
+    assert created.status_code == 201, created.text
+    old, endpoint_id = created.json()["secret"], created.json()["endpoint"]["id"]
+
+    rotated = engines.post(f"/webhooks/endpoints/{endpoint_id}/rotate-secret", org=True)
+    assert rotated.status_code == 200, rotated.text
+    new = rotated.json()["secret"]
+    assert new != old and rotated.json()["previous_secret_valid_until"]
+    assert engines.post(f"/webhooks/endpoints/{endpoint_id}/test", org=True).status_code == 202
+    _deliver()
+    assert _signed_by(new, receiver.requests[-1]) and _signed_by(old, receiver.requests[-1])
+
+    moved_to = "https://hooks2.acme.example.com/in"
+    moved = engines.patch(f"/webhooks/endpoints/{endpoint_id}", {"url": moved_to}, org=True)
+    assert moved.status_code == 200, moved.text
+    receiver.answers = [500]
+    assert engines.post(f"/webhooks/endpoints/{endpoint_id}/test", org=True).status_code == 202
+    _deliver()
+    assert receiver.requests[-1]["url"] == moved_to
+    sent = len(receiver.requests)
+    failed = [d for d in engines.get(f"/webhooks/endpoints/{endpoint_id}/deliveries", org=True).json()
+              if d["status"] == "FAILED"]
+    assert len(failed) == 1, failed
+
+    again = engines.post(f"/webhooks/deliveries/{failed[0]['id']}/redeliver", org=True)
+    assert again.status_code == 200, again.text
+    _deliver()
+    assert len(receiver.requests) == sent + 1, "a redelivered event goes out without waiting for its backoff"
+    assert json.loads(receiver.requests[-1]["body"])["id"] == json.loads(receiver.requests[-2]["body"])["id"]
+
+    assert engines.delete(f"/webhooks/endpoints/{endpoint_id}", org=True).status_code in (200, 204)
+    assert engines.get(f"/webhooks/endpoints/{endpoint_id}", org=True).status_code == 404
+    assert engines.post(f"/webhooks/endpoints/{endpoint_id}/test", org=True).status_code == 404
+    _deliver()
+    assert len(receiver.requests) == sent + 1

@@ -618,7 +618,11 @@ def redeliver(
         )
 
     delivery.status = WebhookDeliveryStatus.PENDING
-    delivery.attempts = 0
+    # Campaign session 3 (F-302): the attempt count is kept. The worker numbers the next attempt
+    # `attempts + 1`, and attempt numbers are unique per delivery; resetting the count to 0 made
+    # the redelivery reuse attempt 1, so recording it failed after the request had been sent, the
+    # delivery loop stopped, and the lease reaper handed the delivery out again (a duplicate each
+    # time). Redelivering now adds the next attempt to the same history: one more try, now.
     delivery.available_at = datetime.now(timezone.utc)
     delivery.claim_expires_at = None
     delivery.claimed_at = None
