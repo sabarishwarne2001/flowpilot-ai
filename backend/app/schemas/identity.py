@@ -144,6 +144,9 @@ class ScimKeyIssued(BaseModel):
 
 
 class SecurityPolicyUpdate(BaseModel):
+    # Campaign session 3. A misspelt or retired field (idp_session_sync) is refused, not ignored.
+    model_config = ConfigDict(extra="forbid")
+
     require_sso: bool | None = None
     sso_bypass_for_owners: bool | None = None
     ip_pinning: Literal["OFF", "PREFIX", "STRICT"] | None = None
@@ -156,7 +159,6 @@ class SecurityPolicyUpdate(BaseModel):
     # F-204. Enforced at every refresh, so a value below five minutes signs members out before
     # their first refresh. Strict: true and "3600" are not session ages. Null removes the limit.
     max_session_age_s: int | None = Field(default=None, ge=300, le=366 * 86400, strict=True)
-    idp_session_sync: bool | None = None
 
     @field_validator("ip_allowlist")
     @classmethod
@@ -182,7 +184,6 @@ class SecurityPolicyRead(BaseModel):
     ip_prefix_v6: int
     ip_allowlist: list[str]
     max_session_age_s: int | None = None
-    idp_session_sync: bool
     platform_max_session_age_s: int
     idle_timeout_s: int
     your_address: str | None = None

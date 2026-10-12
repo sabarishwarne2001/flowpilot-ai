@@ -1003,3 +1003,31 @@ settings, keys, billing changes) and the assistant stay human-only: no scope cov
 list is `ROUTE_SCOPE_MAP` in `backend/app/core/scopes.py`. Why: a key is a long-lived secret
 pasted into other systems; a leaked read key must not be able to delete records or read who works
 here. A customer who needs more from the API asks for a scope to be added, deliberately.
+
+## N-057 — How an organization's sign-in policy applies
+**DECIDED (campaign session 3), with F-276 to F-278.** "Require single sign-on" and the IP
+allowlist hold on every request into the organization: every organization and workspace page and
+API route, and the live review channel. Single sign-on applies to people, not to API keys (a key is
+not a person and cannot sign in through an identity provider); the session must come from **this**
+organization's provider, not any provider. Owners keep password access while "Owners can bypass
+SSO" (break-glass) is on, as the console says. The IP allowlist applies to people **and** API keys;
+saving a list that leaves out the person saving it is refused, and the list cannot be turned on
+until the deployment's proxy setting is confirmed (otherwise the address cannot be trusted). Links
+that carry their own token are not bound by the allowlist: a calendar feed is fetched by Google's or
+Microsoft's servers, and a document request is answered by an outside supplier. Why: this is what
+Okta, GitHub Enterprise and Slack Enterprise do, and a security switch shown as "on" must be on.
+
+## N-058 — The "IdP session sync" flag
+**DECIDED (campaign session 3): removed.** It was stored, shown and read by nothing. A signed
+single-logout request from the organization's identity provider always ends that person's FlowPilot
+sessions (F-205), and that is not something a security policy should let anyone turn off. The
+column is dropped (migration `s3a1_drop_idp_session_sync`).
+
+## N-059 — Directory sync and single sign-on after a downgrade or an archive
+**DECIDED (campaign session 3), with F-279 to F-282.** When an organization leaves Enterprise, or
+is archived or suspended, its identity provider and SCIM token **never add anyone** (no new member
+by sign-in, no SCIM create or reactivation), but **offboarding always works** (deactivate, delete,
+remove from a group) and people already in the organization still sign in. Why: a leaver must be
+removable whatever the plan or billing state, and nobody should be locked out by a plan change;
+adding people is what the plan pays for. The same holds while an organization is read-only for
+non-payment.

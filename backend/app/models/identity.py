@@ -381,7 +381,6 @@ class TenantSecurityPolicy(Base):
     ip_allowlist = Column(ARRAY(CIDR))
 
     max_session_age_s = Column(Integer)
-    idp_session_sync = Column(Boolean, nullable=False, default=False)
 
     updated_by_user_id = Column(UUID(as_uuid=True),
                                 ForeignKey("users.id", ondelete="SET NULL"))

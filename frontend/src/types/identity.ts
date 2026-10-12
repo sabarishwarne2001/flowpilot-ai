@@ -148,7 +148,6 @@ export interface SecurityPolicyRead {
   readonly ip_pinning: string;
   readonly ip_allowlist: readonly string[];
   readonly max_session_age_s: number | null;
-  readonly idp_session_sync: boolean;
   /** F-204. The platform's own limits, which apply on top of the organization's. */
   readonly platform_max_session_age_s: number;
   readonly idle_timeout_s: number;
@@ -165,7 +164,6 @@ export interface SecurityPolicyUpdate {
   readonly ip_allowlist?: readonly string[];
   /** Null removes the organization's limit; the platform's still applies. */
   readonly max_session_age_s?: number | null;
-  readonly idp_session_sync?: boolean;
 }
 
 export interface DirectoryIdentityRead {

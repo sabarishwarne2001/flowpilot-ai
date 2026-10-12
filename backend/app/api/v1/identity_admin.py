@@ -609,7 +609,6 @@ def get_policy(organization_id: str, request: Request, membership=Depends(deps.R
         "ip_prefix_v6": policy.ip_prefix_v6,
         "ip_allowlist": [str(c) for c in (policy.ip_allowlist or [])],
         "max_session_age_s": policy.max_session_age_s,
-        "idp_session_sync": policy.idp_session_sync,
         # F-204. What applies when the organization sets nothing, or something longer.
         "platform_max_session_age_s": settings.SESSION_ABSOLUTE_LIFETIME_HOURS * 3600,
         "idle_timeout_s": settings.SESSION_IDLE_TIMEOUT_MINUTES * 60,

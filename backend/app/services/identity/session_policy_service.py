@@ -211,7 +211,7 @@ def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
 
     for field in ("require_sso", "sso_bypass_for_owners", "ip_pinning",
                   "ip_prefix_v4", "ip_prefix_v6", "ip_allowlist",
-                  "max_session_age_s", "idp_session_sync"):
+                  "max_session_age_s"):
         # F-204. A null session age removes the limit; for every other field null means "as is".
         if field in changes and (changes[field] is not None or field == "max_session_age_s"):
             setattr(policy, field, changes[field])
