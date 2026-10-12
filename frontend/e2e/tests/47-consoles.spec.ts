@@ -68,3 +68,29 @@ test.describe("Unit economics (F-313)", () => {
     await expect(page.getByRole("row", { name: /^gemini \$/ })).toContainText("$2.50");
   });
 });
+
+test.describe("Platform consoles say when a list could not be loaded (F-314)", () => {
+  test.use({ user: "P.superadmin" });
+
+  // Each list read only "is it empty", so a failed request showed "No contracts.", "Nothing
+  // refused in this window." or "No metered usage in this period.": an outage read as a fact.
+  test("a failed list is reported as a failure, never as an empty list", async ({ page, problems }) => {
+    problems.allowHttp(/\/admin\//, [500], "these lists are made to fail");
+    await page.route(/\/admin\/revops\/(contracts|promo-codes|price-books)(\?|$)/, (route) => route.fulfill({ status: 500, body: "{}" }));
+    await page.route(/\/admin\/sovereign\/refusals(\?|$)/, (route) => route.fulfill({ status: 500, body: "{}" }));
+    await page.route(/\/admin\/cogs\/margins\/tenants(\?|$)/, (route) => route.fulfill({ status: 500, body: "{}" }));
+
+    const cases: [string, string, RegExp][] = [
+      ["/admin/revops?tab=contracts", "No contracts.", /contracts could not be loaded/i],
+      ["/admin/revops?tab=promos", "No promo codes.", /promo codes could not be loaded/i],
+      ["/admin/revops?tab=books", "No price book yet.", /price books could not be loaded/i],
+      ["/admin/sovereign?tab=egress", "Nothing refused in this window.", /refused connections could not be loaded/i],
+      ["/admin/margins", "No metered usage in this period.", /tenants could not be loaded/i],
+    ];
+    for (const [path, empty, failed] of cases) {
+      await page.goto(path);
+      await expect(page.getByText(failed)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(empty, { exact: true })).toHaveCount(0);
+    }
+  });
+});

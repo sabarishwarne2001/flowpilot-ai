@@ -14,6 +14,7 @@
  * fiction. The banner says so in words.
  */
 
+import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ReconciliationHistory,
@@ -694,6 +695,10 @@ export const AdminMarginsHub: React.FC = () => {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading tenants…
           </div>
+        ) : tenants.isError ? (
+          <p className="mt-3">
+            <LoadFailed what="Tenants" onRetry={() => void tenants.refetch()} />
+          </p>
         ) : tenants.data && tenants.data.entries.length > 0 ? (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
@@ -796,6 +801,10 @@ export const AdminMarginsHub: React.FC = () => {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading invoices…
           </div>
+        ) : invoices.isError ? (
+          <p className="mt-3">
+            <LoadFailed what="Supplier invoices" onRetry={() => void invoices.refetch()} />
+          </p>
         ) : invoices.data && invoices.data.entries.length > 0 ? (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">

@@ -7,6 +7,7 @@
  *   Promo codes  percent or amount off, once / repeating / forever, caps, deadlines, scope
  *   Contracts    invoiced enterprise contracts: draft, activate (assigns the plan), issue, pay, void, end
  */
+import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, BookOpen, FileSignature, Loader2, RefreshCw, TicketPercent, TrendingUp } from "lucide-react";
@@ -165,7 +166,7 @@ const BooksTab: React.FC = () => {
               </button>
             </li>
           ))}
-          {(books.data?.length ?? 0) === 0 ? <li className={HINT}>No price book yet.</li> : null}
+          {books.isError ? <li><LoadFailed what="Price books" onRetry={() => void books.refetch()} /></li> : books.isLoading ? null : (books.data?.length ?? 0) === 0 ? <li className={HINT}>No price book yet.</li> : null}
         </ul>
         <form className={`${SURFACE_INSET} space-y-2 p-3`} onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
           <label className="block space-y-1"><span className={FIELD_LABEL}>New book code</span>
@@ -267,7 +268,7 @@ const PromosTab: React.FC = () => {
                 </td>
               </tr>
             ))}
-            {(promos.data?.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>No promo codes.</td></tr> : null}
+            {promos.isError ? <tr><td colSpan={6} className="py-3"><LoadFailed what="Promo codes" onRetry={() => void promos.refetch()} /></td></tr> : promos.isLoading ? null : (promos.data?.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>No promo codes.</td></tr> : null}
           </tbody>
         </table>
       </section>
@@ -370,7 +371,7 @@ const ContractsTab: React.FC = () => {
                 <td className="pr-3 text-right tabular-nums">{COUNT.format(row.open_invoices)} / {COUNT.format(row.overdue_invoices)}</td>
               </tr>
             ))}
-            {(contracts.data?.length ?? 0) === 0 ? <tr><td colSpan={7} className={`py-3 ${HINT}`}>No contracts.</td></tr> : null}
+            {contracts.isError ? <tr><td colSpan={7} className="py-3"><LoadFailed what="Contracts" onRetry={() => void contracts.refetch()} /></td></tr> : contracts.isLoading ? null : (contracts.data?.length ?? 0) === 0 ? <tr><td colSpan={7} className={`py-3 ${HINT}`}>No contracts.</td></tr> : null}
           </tbody>
         </table>
       </section>

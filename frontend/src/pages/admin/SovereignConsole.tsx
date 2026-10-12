@@ -11,6 +11,7 @@
  *
  * Nothing here changes the egress mode or the local model: those are the operator's environment.
  */
+import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Cpu, LayoutDashboard, LifeBuoy, Loader2, Network, PackageCheck, RefreshCw, ShieldCheck } from "lucide-react";
@@ -188,7 +189,7 @@ const SovereignConsole: React.FC = () => {
                     <td className="pr-3 text-right tabular-nums">{COUNT.format(r.count)}</td>
                   </tr>
                 ))}
-                {(refusals.data?.refusals.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>Nothing refused in this window.</td></tr> : null}
+                {refusals.isError ? <tr><td colSpan={6} className="py-3"><LoadFailed what="Refused connections" onRetry={() => void refusals.refetch()} /></td></tr> : refusals.isLoading ? null : (refusals.data?.refusals.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>Nothing refused in this window.</td></tr> : null}
               </tbody>
             </table>
           </section>
