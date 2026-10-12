@@ -45,10 +45,9 @@ class EmailNotificationProvider(NotificationProvider):
         Supports both plain-text and multipart HTML email formats.
         """
 
-        logger.info(
-            "Sending email notification to '%s'.",
-            recipient,
-        )
+        # Not the address: application logs are not where people's email addresses belong,
+        # and the delivery row already records the target (campaign session 3).
+        logger.info("Sending email notification.")
 
         if html_body:
             success, message = await asyncio.to_thread(
