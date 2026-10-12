@@ -40,3 +40,31 @@ test.describe("Audit log filters (F-311)", () => {
     await expectHealthyPage(page);
   });
 });
+
+test.describe("Unit economics (F-313)", () => {
+  test.use({ user: "P.superadmin" });
+
+  // The page's own rule: an unknown cost is never shown as a number. The supplier table printed
+  // "$0.00" for a supplier none of whose events had a cost basis.
+  test("a supplier whose cost is unknown reads 'unknown', not $0.00", async ({ page }) => {
+    await page.route(/\/admin\/cogs\/margins\/providers(\?|$)/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          period_start: "2026-09-12T00:00:00Z", period_end: "2026-10-12T00:00:00Z",
+          entries: [
+            { provider: "groq", cost_basis_micros: 0, revenue_micros: 12_000_000, event_count: 40, unknown_cost_event_count: 40 },
+            { provider: "gemini", cost_basis_micros: 2_500_000, revenue_micros: 9_000_000, event_count: 10, unknown_cost_event_count: 0 },
+          ],
+        }),
+      }),
+    );
+    await page.goto("/admin/margins");
+    await expect(page.getByRole("heading", { name: "Modelled cost by supplier" })).toBeVisible();
+    const unknown = page.getByRole("row", { name: /^groq / });
+    await expect(unknown).toContainText(/unknown/i);
+    await expect(unknown).not.toContainText("$0.00");
+    await expect(page.getByRole("row", { name: /^gemini \$/ })).toContainText("$2.50");
+  });
+});

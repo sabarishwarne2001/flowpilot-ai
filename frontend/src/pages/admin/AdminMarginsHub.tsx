@@ -752,7 +752,12 @@ export const AdminMarginsHub: React.FC = () => {
                       {formatMicros(entry.revenue_micros)}
                     </td>
                     <td className="py-2 pr-4 text-right tabular-nums">
-                      {formatMicros(entry.cost_basis_micros)}
+                      {/* F-313: no event with a cost basis means the cost is unknown, never $0.00. */}
+                      {entry.event_count - entry.unknown_cost_event_count <= 0 ? (
+                        <span className="text-muted-foreground">unknown</span>
+                      ) : (
+                        formatMicros(entry.cost_basis_micros)
+                      )}
                     </td>
                     <td
                       className={`py-2 text-right tabular-nums ${
