@@ -70,6 +70,29 @@ test.describe("Unit economics (F-313)", () => {
   });
 });
 
+test.describe("Unit economics refresh (F-316)", () => {
+  test.use({ user: "P.superadmin" });
+
+  // Refresh re-asked for the window computed when the page opened, so a page left open all day
+  // showed yesterday's "last 30 days" after every Refresh.
+  test("Refresh asks for the window ending now", async ({ page }) => {
+    const ends: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.endsWith("/admin/cogs/margins/summary")) {
+        ends.push(url.searchParams.get("period_end") ?? "");
+      }
+    });
+    await page.goto("/admin/margins");
+    await expect.poll(() => ends.length).toBeGreaterThan(0);
+    const first = ends[ends.length - 1]!;
+    await page.waitForTimeout(1_500);
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect.poll(() => ends.length).toBeGreaterThan(1);
+    expect(Date.parse(ends[ends.length - 1]!)).toBeGreaterThan(Date.parse(first) + 1_000);
+  });
+});
+
 test.describe("Platform consoles say when a list could not be loaded (F-314)", () => {
   test.use({ user: "P.superadmin" });
 

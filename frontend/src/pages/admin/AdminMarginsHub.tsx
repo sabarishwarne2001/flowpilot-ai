@@ -415,8 +415,13 @@ export const AdminMarginsHub: React.FC = () => {
   const [order, setOrder] = useState<MarginOrder>("MARGIN_ASC");
   const [error, setError] = useState<string | null>(null);
 
-  const window = useMemo<MarginWindow>(() => trailingWindow(days), [days]);
-  const key = useMemo(() => windowKey(window), [window]);
+  // F-316. Refresh moves the window to end now; it used to re-ask for the window computed when
+  // the page opened (or the window was last changed).
+  const [refreshedAt, setRefreshedAt] = useState(0);
+  const window = useMemo<MarginWindow>(() => trailingWindow(days), [days, refreshedAt]);
+  // The window key is minute-grained; the refresh moment keeps a refreshed window from reusing
+  // the cached one.
+  const key = useMemo(() => `${windowKey(window)}@${refreshedAt}`, [window, refreshedAt]);
 
   const summary = useQuery({
     queryKey: cogsKeys.marginSummary(key),
@@ -525,7 +530,10 @@ export const AdminMarginsHub: React.FC = () => {
               </select>
               <button
                 type="button"
-                onClick={() => void invalidate()}
+                onClick={() => {
+                  setRefreshedAt(Date.now());
+                  void invalidate();
+                }}
                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-sm hover:bg-muted"
               >
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
