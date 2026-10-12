@@ -406,7 +406,9 @@ def resolve_email_identity(
             )
         )
 
-    smtp = smtp.model_copy(update={"from_email": from_address, "sender_name": sender_name})
+    smtp = smtp.model_copy(
+        update={"from_email": from_address, "sender_name": sender_name, "reply_to": reply_to}
+    )
 
     return ResolvedEmailIdentity(
         message_kind=message_kind,
