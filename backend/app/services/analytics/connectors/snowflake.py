@@ -281,7 +281,7 @@ class SnowflakeConnector(WarehouseConnector):
                     region=region,
                     access_key_id=str(
                         self.require(
-                            credential,
+                            {**config, **credential},
                             "stage_access_key_id",
                             where="Snowflake credential",
                         )

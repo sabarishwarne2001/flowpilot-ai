@@ -342,7 +342,12 @@ class WarehouseConnector(abc.ABC):
     def require(
         source: Mapping[str, Any], key: str, *, where: str
     ) -> Any:
-        """Read a required key, failing with the field name rather than a KeyError."""
+        """Read a required key, failing with the field name rather than a KeyError.
+
+        An access key ID is an identifier, not a secret: saving a destination puts it in
+        `config` (`_SECRET_FIELD_NAMES`), so a connector reads it from `{**config,
+        **credential}`, never from the secret half alone (F-292).
+        """
         value = source.get(key)
         if value in (None, ""):
             raise ConnectorConfigError(

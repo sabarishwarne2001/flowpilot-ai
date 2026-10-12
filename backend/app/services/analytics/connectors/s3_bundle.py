@@ -216,7 +216,7 @@ class S3BundleConnector(WarehouseConnector):
                 region=str(self.require(config, "region", where="S3 config")),
                 access_key_id=str(
                     self.require(
-                        credential, "access_key_id", where="S3 credential"
+                        {**config, **credential}, "access_key_id", where="S3 credential"
                     )
                 ),
                 secret_access_key=str(
@@ -241,7 +241,7 @@ class S3BundleConnector(WarehouseConnector):
         try:
             _client(
                 region=str(config["region"]),
-                access_key_id=str(credential["access_key_id"]),
+                access_key_id=str({**config, **credential}["access_key_id"]),
                 secret_access_key=str(credential["secret_access_key"]),
                 endpoint_url=config.get("endpoint_url"),
             ).delete_object(Bucket=bucket, Key=key)
@@ -266,7 +266,7 @@ class S3BundleConnector(WarehouseConnector):
         region = str(self.require(config, "region", where="S3 config"))
         prefix = str(config.get("prefix") or "flowpilot/").strip("/")
         access_key_id = str(
-            self.require(credential, "access_key_id", where="S3 credential")
+            self.require({**config, **credential}, "access_key_id", where="S3 credential")
         )
         secret_access_key = str(
             self.require(credential, "secret_access_key", where="S3 credential")
