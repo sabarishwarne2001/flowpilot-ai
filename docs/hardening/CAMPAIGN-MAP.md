@@ -86,7 +86,7 @@ migrations, integrations, operations and certification.
       audit explorer, as an operator, end to end. Session 1 checked the money numbers, not the consoles.
 
 ### 3.3 Dead or unbuilt logic found in the 2026-10-12 review
-- [ ] **Billing and limit emails do not exist.** Dunning steps, "payment failed", "subscription
+- [x] **Billing and limit emails do not exist.** Dunning steps, "payment failed", "subscription
       ended" and plan changes reach people only as in-app notifications
       (`dunning_service._notify` → `organization_notification_service.emit`, channel `IN_APP`), so an
       owner who does not sign in never hears that a payment failed. Nothing emails anyone at 80% or
@@ -94,7 +94,7 @@ migrations, integrations, operations and certification.
       invitations, ownership and the trial only. Decide and build: billing contacts and owners
       emailed for dunning and limits, through the existing mail and outbox path, honouring the
       notification preferences below. (Session 4 then render-checks them.)
-- [ ] **Notification preferences do not exist** (only the inbox endpoints). Decide: per-user email
+- [x] **Notification preferences do not exist** (only the inbox endpoints). Decide: per-user email
       preferences for non-essential notifications; security and billing mail always sent.
 - [x] **Organization-wide "require two-factor"** was deferred to after launch (N-017). Enterprise
       buyers ask for it on the first call; decide again and build it if small.

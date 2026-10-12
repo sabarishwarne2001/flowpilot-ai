@@ -1051,3 +1051,21 @@ allowances, and a ceiling shared by a whole organization would let one runaway s
 colleague. Before this, every browser request was counted per address (the per-person limit
 existed and nothing used it), so a company behind one office address shared one allowance. This is
 how GitHub and Linear count.
+
+## N-062 — Which notifications are emailed, and to whom
+**DECIDED (campaign session 3).** Every notification appears in the app. By email:
+
+| Category | Emailed | Who | Can it be turned off? |
+|---|---|---|---|
+| **Security** (roles, SSO and identity provider changes, SCIM keys, verified domains, the sign-in policy) | always | owners and administrators; a role change to the person | No |
+| **Billing** (payment failed and each dunning step, read-only, subscription started/ended/paused, plan changes, add-ons, a plan limit reached) | always | owners and Billing members (administrators see it in the app) | No |
+| **Usage warnings** (80% of a monthly plan limit) | yes | owners (they can change the plan) | Yes, per person |
+| **Documents and automations** (a document that failed, an automation paused or failing) | warnings and errors only | the people the notice is for | Yes, per person |
+
+Security and billing mail goes through FlowPilot's own mail relay, never an organization's SMTP
+settings (those can be misconfigured, and are what is in question when the notice is about that
+organization). Each email has a button to the right page and a link to the person's choices
+(Settings → Notifications). Limit alerts go once per meter, limit and month. A routine notice is
+never emailed. This is how Stripe, Linear and Slack do it: you cannot unsubscribe from "your
+payment failed" or "someone changed your role".
+

@@ -54,7 +54,7 @@ S3_ENDPOINT_MODULES = {
     "ownership_transfers.py", "upload.py",  # upload.py = the workspace logo routes
     "compliance.py", "developer.py", "byok.py", "tenant_branding.py", "custom_domains.py",
     "warehouse_sync.py", "egress.py", "webhooks.py", "api_keys.py", "identity_admin.py",
-    "audit_logs.py", "slos.py", "entitlements.py", "usage.py",
+    "audit_logs.py", "slos.py", "entitlements.py", "usage.py", "organization_two_factor.py",
     # governance and platform
     "admin/sovereign.py", "admin/revops.py", "admin/cogs.py", "internal_tls.py", "health.py",
     "public/gateway.py", "marketplace.py", "partner.py",
@@ -75,7 +75,7 @@ S3_UI_PREFIXES = {
 S3_JOBS = {
     "cron:arch07", "cron:identity", "cron:invitations", "cron:arch09", "cron:compliance",
     "notification.deliver", "analytics.export_sync", "analytics.warehouse_push",
-    "trial.reminders", "domain.verify_dns", "tls.renew_sweep",
+    "trial.reminders", "domain.verify_dns", "tls.renew_sweep", "usage.limit_alerts",
 }
 S3_JOB_PREFIXES = ("identity.", "partner.")
 S3_INTEGRATIONS = {

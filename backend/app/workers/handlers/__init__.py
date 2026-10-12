@@ -90,6 +90,8 @@ BATCH_ENGINE_JOB_TYPES: frozenset[str] = frozenset(
 TRUTHMESH_JOB_TYPES: frozenset[str] = frozenset({"truthmesh.index_document", "truthmesh.rebuild_workspace"})
 #: Campaign session 2 (N-052): the free-trial emails.
 TRIAL_JOB_TYPES: frozenset[str] = frozenset({"trial.reminders"})
+#: Campaign session 3 (N-062): owners are told at 80% and 100% of a monthly plan limit.
+USAGE_ALERT_JOB_TYPES: frozenset[str] = frozenset({"usage.limit_alerts"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -130,6 +132,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | BATCH_ENGINE_JOB_TYPES
     | TRUTHMESH_JOB_TYPES
     | TRIAL_JOB_TYPES
+    | USAGE_ALERT_JOB_TYPES
 )
 
 
@@ -426,6 +429,11 @@ def _trial_reminders(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_reminders(payload)
 
 
+def _usage_limit_alerts(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.usage_alerts import handle_limit_alerts
+    return handle_limit_alerts(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -536,6 +544,7 @@ _HANDLERS = {
     "truthmesh.rebuild_workspace": _truthmesh_rebuild_workspace,
     # Campaign session 2 (N-052). On the LIGHT profile; hourly in DEFAULT_SCHEDULE.
     "trial.reminders": _trial_reminders,
+    "usage.limit_alerts": _usage_limit_alerts,
 }
 
 
