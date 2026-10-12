@@ -23,7 +23,8 @@ from app.core.webhook_events import WEBHOOK_EVENT_TYPES, sorted_event_types
 from app.models.webhook_delivery import WebhookDelivery, WebhookDeliveryStatus
 from app.models.webhook_delivery_attempt import WebhookDeliveryAttempt
 from app.models.webhook_endpoint import WebhookEndpoint, WebhookEndpointStatus
-from app.services import circuit_breaker, webhook_service
+from app.models.audit_log import AuditAction, AuditResourceType
+from app.services import audit_service, circuit_breaker, webhook_service
 from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
 from app.core import entitlements as _ent
 
@@ -246,6 +247,32 @@ def _serialise_attempt(attempt: WebhookDeliveryAttempt, *, include_sensitive: bo
 # ======================================================================
 # Endpoints — CRUD
 # ======================================================================
+def _audit_endpoint(
+    db: Session, *, organization_id: uuid.UUID, endpoint_id: uuid.UUID, action: AuditAction, **details: Any
+) -> None:
+    """Campaign session 3 (F-295): who pointed the organization's events where, and when.
+
+    An endpoint is a destination for the organization's data, so adding, re-pointing,
+    re-keying or removing one is audited like an API key. The URL is recorded as its host
+    only: webhook URLs often carry a token in the query string. The actor (a person or an
+    API key) comes from the request's principal.
+    """
+    audit_service.record(
+        db,
+        organization_id=organization_id,
+        resource_type=AuditResourceType.WEBHOOK_ENDPOINT,
+        resource_id=endpoint_id,
+        action=action,
+        details=details or None,
+    )
+
+
+def _host(url: str) -> Optional[str]:
+    from urllib.parse import urlsplit
+
+    return urlsplit(url).hostname
+
+
 @router.post(
     "/endpoints",
     response_model=EndpointCreated,
@@ -273,6 +300,10 @@ def create_endpoint(
     except webhook_service.InvalidEventTypesError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    _audit_endpoint(
+        db, organization_id=context.organization_id, endpoint_id=endpoint.id, action=AuditAction.CREATED,
+        host=_host(endpoint.url), event_types=list(endpoint.event_types or []),
+    )
     db.commit()
     db.refresh(endpoint)
     return EndpointCreated(endpoint=EndpointOut.of(endpoint), secret=secret)
@@ -323,15 +354,19 @@ def update_endpoint(
 ) -> EndpointOut:
     _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.update")
     endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
+    changed: dict[str, Any] = {}
 
     if body.url is not None and body.url != endpoint.url:
         try:
             webhook_service._preflight_check_url(body.url)
         except webhook_service.InvalidURLError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        changed["host"] = {"from": _host(endpoint.url), "to": _host(body.url)}
         endpoint.url = body.url
 
     if body.event_types is not None:
+        if list(body.event_types) != list(endpoint.event_types or []):
+            changed["event_types"] = list(body.event_types)
         endpoint.event_types = body.event_types
     if body.description is not None:
         endpoint.description = body.description
@@ -345,10 +380,15 @@ def update_endpoint(
                 reason="Manually disabled by an administrator.",
             )
             endpoint.auto_disabled = False
+            changed["status"] = "DISABLED"
         elif body.status == "ACTIVE" and not endpoint.is_active:
             webhook_service.enable_endpoint(db, endpoint)
             circuit_breaker.reset_breaker(db, endpoint)
+            changed["status"] = "ACTIVE"
 
+    if changed:
+        _audit_endpoint(db, organization_id=context.organization_id, endpoint_id=endpoint.id,
+                        action=AuditAction.UPDATED, **changed)
     db.commit()
     db.refresh(endpoint)
     return EndpointOut.of(endpoint)
@@ -365,6 +405,8 @@ def delete_endpoint(
     db: DbSession,
 ) -> Response:
     endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
+    _audit_endpoint(db, organization_id=context.organization_id, endpoint_id=endpoint.id,
+                    action=AuditAction.DELETED, host=_host(endpoint.url))
     db.delete(endpoint)
     db.commit()
     return Response(status_code=204)
@@ -387,6 +429,8 @@ def rotate_secret(
     _cap_gate.require_capability(db, context=context, capability_key=_ent.OUTGOING_WEBHOOKS_CAPABILITY, operation="webhook.endpoint.rotate_secret")
     endpoint = _get_endpoint(db, context.organization_id, endpoint_id)
     secret = webhook_service.rotate_secret(db, endpoint, overlap_days=overlap_days)
+    _audit_endpoint(db, organization_id=context.organization_id, endpoint_id=endpoint.id,
+                    action=AuditAction.ROTATED, overlap_days=overlap_days)
     db.commit()
     db.refresh(endpoint)
     return RotateSecretOut(
