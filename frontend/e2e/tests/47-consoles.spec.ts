@@ -2,6 +2,7 @@
  * Campaign session 3 — the consoles people run the product from, as they are used.
  */
 import { test, expect, expectHealthyPage } from "../support/fixtures";
+import { api } from "../support/api";
 import { org } from "../support/env";
 
 test.describe("Audit log filters (F-311)", () => {
@@ -92,5 +93,37 @@ test.describe("Platform consoles say when a list could not be loaded (F-314)", (
       await expect(page.getByText(failed)).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText(empty, { exact: true })).toHaveCount(0);
     }
+  });
+});
+
+test.describe("RevOps price books (F-315)", () => {
+  test.use({ user: "P.superadmin" });
+
+  // A price set by mistake in a draft book could not be removed (the route existed, the page had
+  // no control), and Publish (irreversible: the book is frozen and the one in force retired) ran
+  // on one click. Publishing is not completed here: it would change the prices other tests read.
+  test("a draft's price can be removed, and publishing asks first, naming what it retires", async ({ page, session }) => {
+    const code = `E2E-${Date.now().toString(36)}`.toUpperCase();
+    const book = await api<{ id: string }>(session, "POST", "/admin/revops/price-books", { code, currency: "USD", notes: null });
+    expect(book.status, book.text).toBe(201);
+    for (const interval of ["month", "year"]) {
+      const set = await api(session, "PUT", `/admin/revops/price-books/${book.body.id}/entries`, {
+        tier_key: "business", interval, unit_amount: interval === "month" ? 2900 : 29000, gateway_price_id: null,
+      });
+      expect(set.status, set.text).toBe(200);
+    }
+    await page.goto("/admin/revops?tab=books");
+    await page.getByRole("button", { name: new RegExp(`^${code} ·`) }).click();
+    await page.getByRole("button", { name: "Remove business year" }).click();
+    await expect(page.getByRole("button", { name: "Remove business year" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Remove business month" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    const confirm = page.getByRole("alertdialog", { name: new RegExp(`Publish ${code}`) });
+    await expect(confirm).toContainText(/cannot be changed/i);
+    await expect(confirm).toContainText(/retired|first USD price book/i);
+    await confirm.getByRole("button", { name: "Keep the draft" }).click();
+    await expect(page.getByRole("heading", { name: new RegExp(`${code} · USD · DRAFT`) })).toBeVisible();
+    await expectHealthyPage(page);
   });
 });

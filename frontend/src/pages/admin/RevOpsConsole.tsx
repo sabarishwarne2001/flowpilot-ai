@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/primitives";
 import { ApiError, errorMessage } from "@/services/api/errors";
 import {
-  activateContract, createContract, createPriceBook, createPromoCode, endContract, getContract, getPriceBook,
+  activateContract, createContract, createPriceBook, createPromoCode, deletePriceEntry, endContract, getContract, getPriceBook,
   getRevenueMetrics, issueContractInvoices, listContracts, listPriceBooks, listPromoCodes, listRevOpsOrganizations,
   payInvoice,
   publishPriceBook, revopsKeys, runRevOpsSweep, setPriceEntry, setPromoActive, voidInvoice,
@@ -148,12 +148,27 @@ const BooksTab: React.FC = () => {
     onSuccess: async () => { setAmount(""); setPriceId(""); await refresh(); },
     onError: (error) => toast.error(failure(error, "The price could not be set.")),
   });
+  const detail = book.data;
+  // F-315. Publishing freezes the book and retires the one in force for its currency, so it
+  // asks first and says which book (if any) it retires.
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const inForce = (books.data ?? []).find(
+    (b) => detail && b.id !== detail.id && b.currency === detail.currency && b.status === "PUBLISHED",
+  );
   const publish = useMutation({
     mutationFn: () => publishPriceBook(selected ?? ""),
-    onSuccess: async (result) => { await refresh(); toast.success(`${result.code} is published; the previous ${result.currency} book is retired.`); },
+    onSuccess: async (result) => {
+      setConfirmPublish(false);
+      await refresh();
+      toast.success(inForce ? `${result.code} is published; ${inForce.code} is retired.` : `${result.code} is published.`);
+    },
     onError: (error) => toast.error(failure(error, "The price book could not be published.")),
   });
-  const detail = book.data;
+  const removeEntry = useMutation({
+    mutationFn: (entryId: string) => deletePriceEntry(selected ?? "", entryId),
+    onSuccess: async () => { await refresh(); },
+    onError: (error) => toast.error(failure(error, "The price could not be removed.")),
+  });
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
       <section className={`${SURFACE} space-y-3 p-4`}>
@@ -184,18 +199,24 @@ const BooksTab: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className={SECTION_TITLE}><span className="font-mono">{detail.code}</span> · {detail.currency} · {detail.status}</h2>
               {detail.status === "DRAFT" ? (
-                <button type="button" className={BUTTON_PRIMARY} disabled={publish.isPending || detail.entries.length === 0} onClick={() => publish.mutate()}>Publish</button>
+                <button type="button" className={BUTTON_PRIMARY} disabled={publish.isPending || detail.entries.length === 0} onClick={() => setConfirmPublish(true)}>Publish</button>
               ) : <span className={HINT}>Published {formatTimestamp(detail.published_at)} · digest {detail.content_digest?.slice(0, 12)}</span>}
             </div>
             <div className={SCROLL_X}>
               <table className="w-full text-sm">
-                <thead><tr className={TABLE_HEAD}><th className="py-2 pr-3">Plan</th><th className="pr-3">Interval</th><th className="pr-3 text-right">Price per seat</th><th className="pr-3">Gateway price</th></tr></thead>
+                <thead><tr className={TABLE_HEAD}><th className="py-2 pr-3">Plan</th><th className="pr-3">Interval</th><th className="pr-3 text-right">Price per seat</th><th className="pr-3">Gateway price</th>{detail.status === "DRAFT" ? <th className="pr-3"><span className="sr-only">Remove</span></th> : null}</tr></thead>
                 <tbody>
                   {detail.entries.map((e) => (
                     <tr key={e.id} className={TABLE_ROW}>
                       <td className="py-2 pr-3">{e.tier_key}</td><td className="pr-3">{e.billing_interval}</td>
                       <td className="pr-3 text-right tabular-nums">{money(e.unit_amount_micros, detail.currency)}</td>
                       <td className="pr-3 font-mono text-xs">{e.gateway_price_id ?? "— (not sold online)"}</td>
+                      {detail.status === "DRAFT" ? (
+                        <td className="pr-3 text-right">
+                          <button type="button" className={BUTTON_SECONDARY} aria-label={`Remove ${e.tier_key} ${e.billing_interval}`}
+                            disabled={removeEntry.isPending} onClick={() => removeEntry.mutate(e.id)}>Remove</button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -217,6 +238,20 @@ const BooksTab: React.FC = () => {
           </>
         ) : <p className={HINT}>Choose a book, or draft one.</p>}
       </section>
+      <ConfirmDialog
+        open={confirmPublish && Boolean(detail)}
+        title={`Publish ${detail?.code ?? ""}?`}
+        message={`${detail?.code ?? "This book"} becomes the ${detail?.currency ?? ""} price list in force and cannot be changed afterwards. ${
+          inForce ? `${inForce.code}, in force now, is retired.` : `It is the first ${detail?.currency ?? ""} price book.`
+        }`}
+        tone="primary"
+        confirmText="Publish"
+        cancelText="Keep the draft"
+        loading={publish.isPending}
+        loadingText="Publishing…"
+        onConfirm={() => publish.mutate()}
+        onCancel={() => { if (!publish.isPending) { setConfirmPublish(false); } }}
+      />
     </div>
   );
 };
