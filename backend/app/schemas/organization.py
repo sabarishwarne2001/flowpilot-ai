@@ -12,9 +12,10 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.slugs import MAX_SLUG_LENGTH, MIN_SLUG_LENGTH
+from app.schemas import regional
 from app.models.organization import (
     MembershipStatus,
     OrganizationRole,
@@ -112,6 +113,27 @@ class OrganizationCreate(BaseModel):
     language: str = Field(default="en", max_length=20)
     currency: str = Field(default="USD", max_length=10)
     date_format: str = Field(default="YYYY-MM-DD", max_length=30)
+
+    # F-320: only values the clocks, the matching engine and the renderer can use.
+    @field_validator("timezone")
+    @classmethod
+    def check_timezone(cls, v: str | None) -> str | None:
+        return regional.check_timezone(v)
+
+    @field_validator("currency")
+    @classmethod
+    def check_currency(cls, v: str | None) -> str | None:
+        return regional.check_currency(v)
+
+    @field_validator("date_format")
+    @classmethod
+    def check_date_format(cls, v: str | None) -> str | None:
+        return regional.check_date_format(v)
+
+    @field_validator("language")
+    @classmethod
+    def check_language(cls, v: str | None) -> str | None:
+        return regional.check_language(v)
 
 
 class OrganizationUpdate(BaseModel):
