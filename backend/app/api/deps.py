@@ -465,23 +465,50 @@ def _assert_sso_compliance(
         raise refusal
 
 
-def _assert_network_allowed(request: Optional[Request], policy: Any) -> None:
+def _assert_network_allowed(address: Optional[str], policy: Any) -> None:
     """Campaign session 3. The organization's IP allowlist, for people and API keys alike.
 
-    The address is the strictly resolved client address (`trusted_client_ip`): behind a proxy
+    `address` is the strictly resolved client address (`trusted_client_ip`): behind a proxy
     whose forwarding chain cannot be trusted it is unknown, and an unknown address is refused.
     """
     if policy is None or not policy.ip_allowlist:
         return
-    from app.core.client_ip import trusted_client_ip
-
-    address = trusted_client_ip(request) if request is not None else None
     if session_policy_service.ip_allowed(policy, address):
         return
     raise OrganizationNetworkNotAllowedError(
         "This organization allows access only from its approved networks, and your address "
         f"({address or 'unknown'}) is not one of them. Connect from an approved network, or ask "
         "an owner to add yours."
+    )
+
+
+def assert_organization_sign_in_policy(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    membership: OrganizationMember,
+    session_id: Optional[uuid.UUID],
+    client_address: Optional[str],
+    api_key: bool = False,
+) -> None:
+    """The organization's sign-in policy for one caller (campaign session 3).
+
+    The IP allowlist applies to people and API keys; single sign-on to people only. Shared by
+    every organization- and workspace-scoped dependency and by the live review WebSocket's gate,
+    which authenticates outside the dependency system.
+    """
+    policy = _security_policy(db, organization_id)
+    if policy is None:
+        return
+    _assert_network_allowed(client_address, policy)
+    if api_key:
+        return
+    _assert_sso_compliance(
+        db,
+        organization_id=organization_id,
+        membership=membership,
+        session_id=session_id,
+        policy=policy,
     )
 
 
@@ -503,24 +530,18 @@ def _assert_organization_access_policy(
 ) -> None:
     """The organization's sign-in policy, checked on every request into it (campaign session 3).
 
-    Called by every organization- and workspace-scoped context dependency (and, for the network
-    allowlist, by the public API's key dependency), so a route added later is covered without
-    anyone remembering a guard. The allowlist applies to people and API keys; single sign-on to
-    people only.
+    Called by every organization- and workspace-scoped context dependency, so a route added later
+    is covered without anyone remembering a guard.
     """
-    policy = _security_policy(db, organization_id)
-    if policy is None:
-        return
-    _assert_network_allowed(request, policy)
-    if _is_api_key_request(request):
-        return
-    session_id = getattr(request.state, "session_id", None) if request is not None else None
-    _assert_sso_compliance(
+    from app.core.client_ip import trusted_client_ip
+
+    assert_organization_sign_in_policy(
         db,
         organization_id=organization_id,
         membership=membership,
-        session_id=session_id,
-        policy=policy,
+        session_id=getattr(request.state, "session_id", None) if request is not None else None,
+        client_address=trusted_client_ip(request) if request is not None else None,
+        api_key=_is_api_key_request(request),
     )
 
 
@@ -1024,8 +1045,10 @@ async def require_api_key(
     )
 
     # Campaign session 3. The organization's IP allowlist binds its API keys too.
+    from app.core.client_ip import trusted_client_ip
+
     await run_in_threadpool(
-        lambda: _assert_network_allowed(request, _security_policy(db, organization.id))
+        lambda: _assert_network_allowed(trusted_client_ip(request), _security_policy(db, organization.id))
     )
 
     return PublicApiPrincipal(

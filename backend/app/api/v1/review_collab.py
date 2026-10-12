@@ -321,11 +321,11 @@ def break_lock(kind: str, item_id: uuid.UUID, db: Session = Depends(deps.get_db)
 # ---------------------------------------------------------------------------
 
 
-def _authenticate(token: str, workspace_id: uuid.UUID) -> gate.LivePrincipal:
+def _authenticate(token: str, workspace_id: uuid.UUID, client_address: str | None) -> gate.LivePrincipal:
     from app.db import session as session_module
 
     with session_module.SessionLocal() as db:
-        return gate.authenticate(db, token=token, workspace_id=workspace_id)
+        return gate.authenticate(db, token=token, workspace_id=workspace_id, client_address=client_address)
 
 
 @router.websocket(v.WS_SUFFIX)
@@ -338,7 +338,9 @@ async def live(websocket: WebSocket, workspace_id: uuid.UUID) -> None:
         await hub_module.in_thread(gate.check_host, headers.get("host"))
         gate.check_origin(headers.get("origin"), headers.get("host"))
         token, offered = gate.extract_token(headers, dict(websocket.query_params))
-        principal = await hub_module.in_thread(_authenticate, token, workspace_id)
+        from app.core.client_ip import trusted_client_ip
+
+        principal = await hub_module.in_thread(_authenticate, token, workspace_id, trusted_client_ip(websocket))
     except gate.LiveRefused as exc:
         logger.info("collab.handshake_refused", extra={"reason": exc.reason, "workspace_id": str(workspace_id)})
         await websocket.close(code=v.CLOSE_POLICY)
