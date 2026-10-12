@@ -17,10 +17,11 @@ import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.organization import Organization, OrganizationStatus
+from app.models.organization import Organization, OrganizationRole, OrganizationStatus
 from app.services.partner import marketplace_service
 from tests.api.test_arch27_endpoints import PARTNERS, _publish, keypair, partner  # noqa: F401 (fixtures)
 from tests.api.test_partner_status_belongs_to_the_platform import _platform_operator
+from tests.conftest import _seat
 
 NODES = [
     {"node_key": "start", "node_type": "trigger", "config": {"event": "document.created"}},
@@ -29,17 +30,33 @@ NODES = [
 EDGES = [{"from_node_key": "start", "to_node_key": "notify", "branch": "default"}]
 
 
-def test_the_platform_creates_a_partner_and_only_the_platform_can(
+def test_the_platform_creates_a_partner_with_its_first_owner(
     client: TestClient, db_session: Session, tenant
 ) -> None:
+    """F-310: a partner was created with no members, and only a partner owner can add one.
+
+    The platform now names the first owner, a person in the reseller's own organization, who
+    can open the portal at once; someone outside that organization cannot be made its owner.
+    """
     home = Organization(slug=f"agency-{uuid.uuid4().hex[:8]}", name="Agency", status=OrganizationStatus.ACTIVE)
     db_session.add(home)
+    db_session.flush()
+    _seat(db_session, home, tenant.contributor, OrganizationRole.OWNER)
     db_session.commit()
-    body = {"slug": f"agency-{uuid.uuid4().hex[:8]}", "name": "Agency Partners", "owner_organization_id": str(home.id)}
+    operator = _platform_operator(db_session, tenant)
+    body = {"slug": f"agency-{uuid.uuid4().hex[:8]}", "name": "Agency Partners", "owner_organization_id": str(home.id),
+            "owner_user_id": str(tenant.contributor.user.id)}
     assert client.post(PARTNERS, headers=tenant.owner.headers, json=body).status_code in (403, 404)
-    created = client.post(PARTNERS, headers=_platform_operator(db_session, tenant), json=body)
+    outsider = client.post(PARTNERS, headers=operator, json={**body, "owner_user_id": str(tenant.viewer.user.id)})
+    assert outsider.status_code in (409, 422), outsider.text
+    created = client.post(PARTNERS, headers=operator, json=body)
     assert created.status_code == 201, created.text
     assert created.json()["status"] == "ACTIVE" and created.json()["name"] == "Agency Partners"
+
+    partner_url = f"{PARTNERS}/{created.json()['id']}"
+    assert client.get(partner_url, headers=tenant.contributor.headers).status_code == 200
+    members = client.get(f"{partner_url}/members", headers=tenant.contributor.headers).json()
+    assert [(m["user_id"], m["role"]) for m in members] == [(str(tenant.contributor.user.id), "OWNER")], members
 
 
 def test_the_partner_manages_its_team(client: TestClient, tenant, partner) -> None:  # noqa: F811

@@ -56,7 +56,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
-from app.models.organization import Organization, OrganizationStatus
+from app.models.organization import MembershipStatus, Organization, OrganizationMember, OrganizationStatus
 from app.models.partner import (
     Partner,
     PartnerMember,
@@ -281,16 +281,21 @@ def create_partner(
     slug: str,
     name: str,
     owner_organization_id: uuid.UUID,
+    first_owner_user_id: uuid.UUID,
     billing_email: Optional[str] = None,
     notes: Optional[str] = None,
     actor_id: Optional[uuid.UUID] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Partner:
-    """Create a reseller tier above one or more tenants.
+    """Create a reseller tier above one or more tenants, with its first OWNER.
 
     Platform operation: gated by `require_superadmin` at the API layer, not by
     a partner role, because the first partner has no members to authorize it.
+    Campaign session 3 (F-310): for the same reason the platform seats the first
+    OWNER here; only a partner OWNER or ADMIN can add members afterwards, so a
+    partner created without one could never be used. The first owner must be an
+    active member of the owner organization (the reseller's own staff).
     """
     owner = db.get(Organization, owner_organization_id)
     if owner is None:
@@ -299,6 +304,18 @@ def create_partner(
         raise PartnerConflict(
             "A partner's owner organization must be ACTIVE. A reseller tier "
             "over a suspended tenant has nowhere to anchor its audit trail."
+        )
+    seated = db.execute(
+        select(OrganizationMember.id).where(
+            OrganizationMember.organization_id == owner_organization_id,
+            OrganizationMember.user_id == first_owner_user_id,
+            OrganizationMember.status == MembershipStatus.ACTIVE,
+        )
+    ).first()
+    if seated is None:
+        raise PartnerError(
+            "The partner's first owner must be an active member of its owner organization.",
+            status_code=422,
         )
 
     partner = Partner(
@@ -319,6 +336,9 @@ def create_partner(
             "partner. Both are globally unique."
         ) from exc
 
+    db.add(PartnerMember(partner_id=partner.id, user_id=first_owner_user_id, role="OWNER", status="ACTIVE"))
+    db.flush()
+
     audit_service.record(
         db,
         organization_id=owner_organization_id,
@@ -331,6 +351,7 @@ def create_partner(
             "partner_id": str(partner.id),
             "partner_slug": partner.slug,
             "partner_name": partner.name,
+            "first_owner_user_id": str(first_owner_user_id),
         },
         ip_address=ip_address,
         user_agent=user_agent,

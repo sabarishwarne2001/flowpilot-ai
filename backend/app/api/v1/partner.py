@@ -178,6 +178,7 @@ def create_partner(
             slug=payload.slug,
             name=payload.name,
             owner_organization_id=payload.owner_organization_id,
+            first_owner_user_id=payload.owner_user_id,
             billing_email=payload.billing_email,
             notes=payload.notes,
             actor_id=operator.id,

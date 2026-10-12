@@ -100,6 +100,14 @@ class PartnerCreate(BaseModel):
             "book of business."
         ),
     )
+    owner_user_id: uuid.UUID = Field(
+        ...,
+        description=(
+            "Campaign session 3 (F-310): the partner's first OWNER, an active member of the "
+            "owner organization. Only a partner OWNER or ADMIN can add members, so a partner "
+            "created without one could never be used."
+        ),
+    )
     billing_email: Optional[str] = Field(default=None, max_length=320)
     notes: Optional[str] = Field(default=None, max_length=4000)
 
