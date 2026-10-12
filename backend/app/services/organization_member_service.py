@@ -45,6 +45,14 @@ from app.services.billing import seat_service as billing_seat_service
 logger = logging.getLogger("app.services.organization_member_service")
 
 
+def _release_assignments(db: Session, *, organization: Organization, user_id: uuid.UUID) -> None:
+    """Campaign session 3 (F-296): review items held where this person can no longer work
+    them go back to the queue (a lowered role, a deactivation, someone leaving)."""
+    from app.services.review.resolution import release_unreachable_assignments
+
+    release_unreachable_assignments(db, user_id=user_id, organization_id=organization.id)
+
+
 def get_membership_or_raise(
     db: Session,
     *,
@@ -178,6 +186,7 @@ def change_member_role(
             },
             **context,
         )
+        _release_assignments(db, organization=organization, user_id=target_membership.user_id)
 
         commit_and_refresh(db, updated)
         return updated
@@ -322,6 +331,7 @@ def deactivate_member(
             user_id=target_membership.user_id,
             cause="membership_deactivated",
         )
+        _release_assignments(db, organization=organization, user_id=target_membership.user_id)
 
         commit_and_refresh(db, deactivated)
         return deactivated

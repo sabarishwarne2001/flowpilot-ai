@@ -1069,3 +1069,12 @@ organization). Each email has a button to the right page and a link to the perso
 never emailed. This is how Stripe, Linear and Slack do it: you cannot unsubscribe from "your
 payment failed" or "someone changed your role".
 
+## N-063 — Who can be given review work and own obligations
+**DECIDED (campaign session 3).** Whoever can work in the workspace: review items go to its
+contributors and administrators, and obligations to anyone who can open it, **including the
+organization's owners and administrators**, who administer every workspace without a separate
+grant (as calendar feeds already did, F-249). When someone loses access (their grant is revoked or
+lowered, they are deactivated, they leave, the directory removes them), the review items they held
+go back to the queue unassigned and their obligations lose their owner, at once, so nothing waits on
+a person who cannot open it.
+

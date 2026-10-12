@@ -213,6 +213,10 @@ def deprovision_member(
                 resource_type="MEMBERSHIP", resource_id=user_id,
                 principal=principal, details={"reason": reason,
                                               **result.as_details()})
+    # Campaign session 3 (F-296): review items they held go back to the queue.
+    from app.services.review.resolution import release_unreachable_assignments
+
+    release_unreachable_assignments(db, user_id=user_id, organization_id=organization_id)
 
     if commit:
         db.commit()

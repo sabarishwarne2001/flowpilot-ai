@@ -54,9 +54,14 @@ ASSIGNMENT
 `assign` and `unassign` live here rather than in their own module because an
 assignment is only meaningful against an item the caller can see, and
 `projection.load_item` is the only workspace-scoped way to establish that.
-The database enforces the rest: the composite foreign key onto
-`workspace_members (user_id, workspace_id)` refuses an assignee who is not a
-member, and cascades the assignment away when their membership ends.
+
+Campaign session 3 (N-063, F-296): who can hold an item follows EFFECTIVE
+access (`can_hold_review_items`): a contributor or administrator of the
+workspace, which includes the organization's owners and admins without a
+stored grant. It used to be a composite foreign key onto the stored grant,
+which refused owners and admins and, because a revoked grant is marked
+inactive rather than deleted, never released anything.
+`release_unreachable_assignments` hands items back when someone loses access.
 """
 
 from __future__ import annotations
@@ -914,13 +919,7 @@ def assign(
     assignee_user_id: uuid.UUID,
     assigned_by_user_id: uuid.UUID,
 ) -> None:
-    """Give an item to a workspace member, replacing any earlier owner.
-
-    Membership is not re-checked in Python. The composite foreign key onto
-    `workspace_members (user_id, workspace_id)` refuses a non-member, so a
-    Python check would be a second, weaker copy of a rule the database already
-    holds — and the kind that drifts.
-    """
+    """Give an item to someone who can work it, replacing any earlier owner."""
     from sqlalchemy.exc import IntegrityError
 
     from app.models.review import ReviewAssignment
@@ -928,6 +927,11 @@ def assign(
     item = load_item(db, workspace_id=workspace_id, kind=kind, item_id=item_id)
     if item is None:
         raise LookupError("Review item not found in this workspace.")
+    if not can_hold_review_items(db, workspace_id=workspace_id, user_id=assignee_user_id):
+        raise ReviewResolutionError(
+            "That person is not a member of this workspace, so they cannot be "
+            "assigned an item in it."
+        )
 
     existing = db.execute(
         select(ReviewAssignment).where(
@@ -966,6 +970,85 @@ def assign(
                                 assignee_user_id=assignee_user_id)
 
 
+def can_hold_review_items(db: Session, *, workspace_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    """A contributor or administrator of the workspace, by effective role (the hub's own rule)."""
+    from app.core.workspace_permissions import is_at_least
+    from app.models.workspace import Workspace, WorkspaceRole
+    from app.services.workspace_member_service import resolve_workspace_access
+
+    workspace = db.get(Workspace, workspace_id)
+    if workspace is None:
+        return False
+    role = resolve_workspace_access(db, workspace=workspace, user_id=user_id).effective_role
+    return role is not None and is_at_least(role, WorkspaceRole.CONTRIBUTOR)
+
+
+def release_unreachable_assignments(
+    db: Session, *, user_id: uuid.UUID, organization_id: Optional[uuid.UUID] = None,
+    workspace_id: Optional[uuid.UUID] = None,
+) -> int:
+    """Hand back (unassign) what `user_id` holds where they can no longer work it.
+
+    Called inside the transaction that took the access away: a revoked or lowered
+    workspace grant, a deactivated or lowered organization membership, someone leaving.
+    """
+    from app.models.review import ReviewAssignment
+    from app.models.workspace import Workspace
+
+    stmt = select(ReviewAssignment).where(ReviewAssignment.assignee_user_id == user_id)
+    if workspace_id is not None:
+        stmt = stmt.where(ReviewAssignment.workspace_id == workspace_id)
+    elif organization_id is not None:
+        stmt = stmt.where(ReviewAssignment.workspace_id.in_(
+            select(Workspace.id).where(Workspace.organization_id == organization_id)
+        ))
+    db.flush()
+    rows = list(db.execute(stmt).scalars())
+    reachable: dict[uuid.UUID, bool] = {}
+    released = 0
+    for row in rows:
+        if row.workspace_id not in reachable:
+            reachable[row.workspace_id] = can_hold_review_items(db, workspace_id=row.workspace_id, user_id=user_id)
+        if not reachable[row.workspace_id]:
+            clear_assignment(db, workspace_id=row.workspace_id, kind=row.kind, item_id=row.item_id)
+            released += 1
+    released += _release_unreachable_obligations(
+        db, user_id=user_id, organization_id=organization_id, workspace_id=workspace_id
+    )
+    if released:
+        logger.info("review.assignments_released", extra={"user_id": str(user_id), "count": released})
+    return released
+
+
+def _release_unreachable_obligations(
+    db: Session, *, user_id: uuid.UUID, organization_id: Optional[uuid.UUID], workspace_id: Optional[uuid.UUID],
+) -> int:
+    """An obligation owned by someone who can no longer open its workspace loses its owner."""
+    from app.models.obligations import Obligation
+    from app.models.workspace import Workspace
+    from app.services.workspace_member_service import resolve_workspace_access
+
+    stmt = select(Obligation).where(Obligation.owner_user_id == user_id)
+    if workspace_id is not None:
+        stmt = stmt.where(Obligation.workspace_id == workspace_id)
+    elif organization_id is not None:
+        stmt = stmt.where(Obligation.workspace_id.in_(
+            select(Workspace.id).where(Workspace.organization_id == organization_id)
+        ))
+    reachable: dict[uuid.UUID, bool] = {}
+    cleared = 0
+    for obligation in db.execute(stmt).scalars():
+        if obligation.workspace_id not in reachable:
+            workspace = db.get(Workspace, obligation.workspace_id)
+            reachable[obligation.workspace_id] = workspace is not None and resolve_workspace_access(
+                db, workspace=workspace, user_id=user_id).has_access
+        if not reachable[obligation.workspace_id]:
+            obligation.owner_user_id = None
+            cleared += 1
+    db.flush()
+    return cleared
+
+
 def clear_assignment(
     db: Session, *, workspace_id: uuid.UUID, kind: str, item_id: uuid.UUID, announce: bool = True
 ) -> bool:
@@ -998,6 +1081,8 @@ __all__ = [
     "ItemLockedError",
     "ResolutionOutcome",
     "ResolvePayload",
+    "can_hold_review_items",
+    "release_unreachable_assignments",
     "ReviewResolutionError",
     "StaleVersionError",
     "assign",

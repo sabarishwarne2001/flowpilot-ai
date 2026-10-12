@@ -89,7 +89,6 @@ op.drop_constraint('fk_process_event_objects_event', 'process_event_objects', ty
 op.drop_constraint('fk_process_events_workspace', 'process_events', type_='foreignkey')
 op.drop_constraint('fk_process_model_runs_workspace', 'process_model_runs', type_='foreignkey')
 op.drop_constraint('fk_process_predictions_workspace', 'process_predictions', type_='foreignkey')
-op.drop_constraint('fk_review_assignments_assignee_membership', 'review_assignments', type_='foreignkey')
 op.drop_constraint('fk_review_comments_thread', 'review_comments', type_='foreignkey')
 op.drop_constraint('fk_review_threads_work_item', 'review_threads', type_='foreignkey')
 op.drop_constraint('fk_review_threads_workspace', 'review_threads', type_='foreignkey')

@@ -69,6 +69,14 @@ class WorkspaceAccess:
         return self.effective_role is not None
 
 
+def _release_assignments(db: Session, *, workspace: Workspace, user_id: uuid.UUID) -> None:
+    """Campaign session 3 (F-296): what someone held here goes back to the queue once they
+    can no longer work it (an organization owner or admin keeps theirs)."""
+    from app.services.review.resolution import release_unreachable_assignments
+
+    release_unreachable_assignments(db, user_id=user_id, workspace_id=workspace.id)
+
+
 def resolve_workspace_access(
     db: Session,
     *,
@@ -246,6 +254,7 @@ def change_workspace_member_role(
                 "workspace_slug": workspace.slug,
             },
         )
+        _release_assignments(db, workspace=workspace, user_id=target_membership.user_id)
 
         commit_and_refresh(db, updated)
         return updated
@@ -302,6 +311,7 @@ def revoke_workspace_access(
                 "workspace_slug": workspace.slug,
             },
         )
+        _release_assignments(db, workspace=workspace, user_id=target_membership.user_id)
 
         commit_and_refresh(db, revoked)
         return revoked
@@ -348,6 +358,7 @@ def leave_workspace(
                 "self_initiated": True,
             },
         )
+        _release_assignments(db, workspace=workspace, user_id=left.user_id)
 
         commit_and_refresh(db, left)
         return left

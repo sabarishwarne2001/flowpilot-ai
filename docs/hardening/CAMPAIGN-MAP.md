@@ -77,9 +77,10 @@ migrations, integrations, operations and certification.
       _Done (session 3): `useAccessContacts` names the workspace's administrators or the
       organization's owners/admins (who can grant access; plan owners are a different question);
       `frontend/e2e/tests/41-notifications.spec.ts`._
-- [ ] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
+- [x] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
       be assigned review items or obligations. Decide (likely: effective access, as F-249 did for
       calendar feeds) and implement.
+      _Done (session 3): N-063, F-296; revoked people also release what they held._
 - [x] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
       Decide whether one is needed; implement if so.
       _Done (session 3): N-061 decided per person, no organization ceiling; F-286 built and proved._
