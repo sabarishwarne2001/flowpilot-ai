@@ -7,7 +7,7 @@ import base64
 import logging
 import secrets
 from datetime import timedelta
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -180,14 +180,13 @@ def _sp_urls():
 
 
 def is_safe_redirect_path(path: str | None) -> bool:
-    if not path:
-        return True
-    if not path.startswith("/") or path.startswith("//") or path.startswith("/\\"):
-        return False
-    if "\\" in path or "\n" in path or "\r" in path:
-        return False
-    parsed = urlparse(path)
-    return not (parsed.scheme or parsed.netloc)
+    """The one strict in-app path check (`app.core.redirects`); no path means the default page.
+
+    Campaign session 3: this module had its own, looser copy that let control characters through.
+    """
+    from app.core.redirects import is_safe_redirect_path as strict
+
+    return not path or strict(path)
 
 
 def _live_idp_certs(db, config_id) -> list[str]:
