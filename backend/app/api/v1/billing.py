@@ -44,7 +44,7 @@ from app.schemas.usage import (
     PlanListResponse,
     PlanOption,
 )
-from app.services import audit_service, quota_service
+from app.services import audit_service, plan_catalog, quota_service
 from app.services.billing import (
     account_service,
     dunning_service,
@@ -159,7 +159,8 @@ def list_plans(
         entitlements = [
             PlanEntitlement(
                 event_type=entry.limit_key,
-                limit_quantity=int(entry.max_quantity) if entry.max_quantity is not None else None,
+                # Campaign session 4: Free's 0.25 GB of storage reached the card as 0.
+                limit_quantity=plan_catalog.allowance_quantity(entry.max_quantity),
                 limit_cost_micros=entry.max_cost_micros,
                 overage_policy=entry.overage_policy,
                 period=entry.period.value if hasattr(entry.period, "value") else str(entry.period),

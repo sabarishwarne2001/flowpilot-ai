@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
@@ -169,7 +169,8 @@ class SpendLimitResponse(BaseModel):
 
 class PlanEntitlement(BaseModel):
     event_type: str
-    limit_quantity: Optional[int] = None
+    #: Whole numbers stay integers; a fraction (Free's 0.25 GB of storage) is kept.
+    limit_quantity: Optional[Union[int, float]] = None
     limit_cost_micros: Optional[int] = None
     overage_policy: str
     period: str
