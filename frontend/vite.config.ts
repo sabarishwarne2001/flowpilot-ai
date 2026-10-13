@@ -121,7 +121,7 @@ export default defineConfig(({ mode, command }) => {
           // downloaded marked, DOMPurify and highlight.js (~76 KB gzipped) on the login screen.
           // Ungrouped, they load with the page that renders markdown (the assistant canvas).
           manualChunks: {
-            pdf: ["pdfjs-dist"],
+            pdf: ["pdfjs-dist/legacy/build/pdf.mjs"],
           },
         },
       },

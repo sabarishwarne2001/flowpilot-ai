@@ -6,13 +6,16 @@ import React, {
   useState,
 } from "react";
 import { AlertTriangle, Loader2, Minus, Plus } from "lucide-react";
-import * as pdfjs from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// F-359. The legacy build: pdf.js's default build calls Map.prototype.getOrInsertComputed, which
+// browsers of 2025 (Chromium 141 among them) do not have, so every page drew blank and the
+// rejection surfaced as an error. The legacy build carries the polyfills pdf.js needs.
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
   PDFPageProxy,
-} from "pdfjs-dist";
+} from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import BboxOverlay from "@/components/pdf/BboxOverlay";
 import type { OverlayBox } from "@/components/pdf/BboxOverlay";
