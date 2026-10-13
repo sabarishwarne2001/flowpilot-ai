@@ -167,7 +167,7 @@ guard), and the comment written above it in the code.
 | `DOMAIN_VERIFICATION_RECHECK_INTERVAL_HOURS` | `int` | `24` | — |  |
 | `JIT_SEAT_CAP_DEFAULT` | `Optional[int]` | `None` | — | : JIT seat cap when the organization's tier has no seat dimension. |
 | `SAML_XSW_DEFENCE_ENABLED` | `bool` | `True` | guard | The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if settings cannot be read at all, hardening_policy_from_settings() returns the hardened policy. A GA platform needs a switch for the night a real IdP turns o… |
-| `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | ---- DNS resolution (shared with ARCH-16 identity domain checks) ---- |
+| `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | The DNS servers asked when a customer verifies a domain: comma-separated, each `address` (port 53) or `address:port` (for a resolver on another port, such as a local caching resolver). |
 | `DNS_TIMEOUT_S` | `float` | `5.0` | — |  |
 | `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'flowpilot-site-verification'` | example |  |
 | `DOMAIN_VERIFICATION_TOKEN_TTL_DAYS` | `int` | `30` | example |  |

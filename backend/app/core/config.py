@@ -475,6 +475,7 @@ class Settings(BaseSettings):
     # ======================================================================
 
     # ---- DNS resolution (shared with ARCH-16 identity domain checks) ----
+    # Comma-separated resolvers, each `address` (port 53) or `address:port` / `[ipv6]:port`.
     DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
     DNS_TIMEOUT_S: float = 5.0
     DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"
