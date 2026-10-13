@@ -54,3 +54,22 @@ def test_a_hold_that_asks_for_every_field_does_not_ask_for_the_line_items(engine
                             {"values": _scalar_decision(engines, verification, review_all=True)})
     assert resolved.status_code == 200, resolved.text
     assert engines.item(work_item_id).extracted_entities["line_items"] == LINES
+
+
+def test_the_exception_agents_proposal_for_it_is_applied(engines: Engines) -> None:
+    """Campaign session 4 (F-360). The exception agent proposed "accept the extractors' majority
+    reading" with a choice for every field under review, the line items included, and approving
+    it always failed: the resolve refuses a document fragment (F-273). It now leaves them out the
+    same way, so the proposal applies and the line items keep their extracted value."""
+    work_item_id, _verification_row = _held(engines, review_all=True)
+    engines.plan("enterprise")  # the exception agent is an Enterprise capability
+    assert engines.put("/process/agent/policy", {"planning_enabled": True}).status_code == 200
+    assert engines.post("/process/sweep").status_code == 200
+    proposals = engines.get("/process/agent/proposals").json()["items"]
+    consensus = [p for p in proposals if p["proposal_kind"] == "extraction.approve_consensus" and p["status"] == "PROPOSED"]
+    assert consensus, proposals
+
+    approved = engines.post(f"/process/agent/proposals/{consensus[0]['id']}/approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["proposal"]["status"] == "APPLIED", approved.json()
+    assert engines.item(work_item_id).extracted_entities["line_items"] == LINES
