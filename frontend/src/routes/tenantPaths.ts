@@ -43,6 +43,11 @@ export const RESERVED_ROUTE_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "forgot-password",
   "reset-password",
   "confirm-email-change",
+  // Campaign session 4. The public pricing and legal pages; app/core/slugs.py
+  // already reserves all three, so no organization can hold one as a slug.
+  "pricing",
+  "privacy",
+  "terms",
   "settings",
   "work-items",
   "workspaces",
@@ -554,6 +559,10 @@ export const runTenantPathSelfCheck = (): string[] => {
   expect(
     "organization routes are NOT parsed as workspace routes",
     parseTenantPath("/organizations/acme/settings") === null,
+  );
+  expect(
+    "the public pricing and legal pages are NOT parsed as tenant paths",
+    ["/pricing/x", "/terms/x", "/privacy/x"].every((path) => parseTenantPath(path) === null),
   );
   expect(
     "the invitation route is NOT parsed as a tenant path",

@@ -18,6 +18,10 @@ export const ROUTES = {
   WORKSPACES: "/workspaces",
   NO_ACCESS: "/no-access",
   INVITATION_ACCEPT: "/invitations/accept",
+  // Campaign session 4: public pages, readable signed out and signed in.
+  PRICING: "/pricing",
+  TERMS: "/terms",
+  PRIVACY: "/privacy",
 
   DASHBOARD: "/",
   WORK_ITEMS: "/work-items",

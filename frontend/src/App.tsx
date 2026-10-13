@@ -111,6 +111,10 @@ const CaseDetailPage = lazy(() => import("@/pages/cases/CaseDetail"));
 const PacketSplits = lazy(() => import("@/pages/packets/PacketSplits"));
 const SplitReview = lazy(() => import("@/pages/packets/SplitReview"));
 const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestUpload"));
+// Campaign session 4: the public pricing and legal pages.
+const Pricing = lazy(() => import("@/pages/public/Pricing"));
+const Terms = lazy(() => import("@/pages/public/Terms"));
+const Privacy = lazy(() => import("@/pages/public/Privacy"));
 // ARCH44-S2:lazy-pages
 const Tables = lazy(() => import("@/pages/tables/Tables"));
 const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
@@ -216,6 +220,11 @@ function AppRoutes() {
           <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
           {/* ARCH43-S2:public-request-route. No account: the single-use token is the credential. */}
           <Route path="/request/:token" element={<DocumentRequestUpload />} />
+          {/* Campaign session 4 (CAMPAIGN-MAP 4.3). Outside PublicRoute and PrivateRoute:
+              readable signed out and signed in. */}
+          <Route path={ROUTES.PRICING} element={<Pricing />} />
+          <Route path={ROUTES.TERMS} element={<Terms />} />
+          <Route path={ROUTES.PRIVACY} element={<Privacy />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={<ForgotPassword />}
