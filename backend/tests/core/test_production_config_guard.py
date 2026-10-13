@@ -405,6 +405,31 @@ def test_the_refusal_never_prints_a_secret_value_or_the_input_dictionary(env) ->
     assert "input_value" not in text
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"JWT_SECRET_KEY": None},  # pydantic's own "Field required"
+        {"JWT_SECRET_KEY": "short-secret-9f3c"},  # a field check
+        {"STRIPE_SECRET_KEY": "sk_live_" + "a1B2c3D4" * 4, "STRIPE_WEBHOOK_SECRETS": "whsec_" + "e5F6g7H8" * 4},
+        {"ML_STUBS": "true"},  # a check across settings
+    ],
+    ids=["jwt-missing", "jwt-weak", "stripe-mode-mismatch", "ml-stubs"],
+)
+def test_no_refusal_prints_a_configured_value(env, changes) -> None:
+    """F-352. The refusals pydantic raises itself (a missing JWT secret, a check on one
+    setting, a check across settings) appended `input_value=`: the rejected value in full, or
+    the dictionary of every setting cut to its first and last characters, which end in
+    whichever secret came last. A boot log is not a place for secrets."""
+    values = {**good_production_env(), **changes}
+    text = refusal(env, **changes)
+    assert "input_value" not in text
+    for name, value in values.items():
+        if value and len(value) >= 16:
+            assert value[-12:] not in text, f"the refusal prints the end of {name}"
+    if changes.get("JWT_SECRET_KEY"):
+        assert changes["JWT_SECRET_KEY"] not in text
+
+
 # ---------------------------------------------------------------------------
 # Development and test keep working, without public defaults
 # ---------------------------------------------------------------------------
