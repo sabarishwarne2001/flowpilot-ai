@@ -185,8 +185,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       alert on it and write the refund playbook in RUNBOOK.md.
       _Done (session 4): F-331 (not written, settled as ignored, the owner emailed at once), N-070
       operator alerts, RUNBOOK §9.8 refund playbook._
-- [ ] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
+- [x] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
       gateway keys). Confirm every "change plan" screen leads there.
+      _Done (session 4): `frontend/e2e/tests/50-plan-change-portal.spec.ts` (the plan card, a pick from the
+      list, Free, and "View plans" from a locked feature); found and fixed F-340._
 - [ ] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway
       timeout, move it onto the existing `work_items.bulk` job.
 - [ ] **Dormant handlers** `batch.expand_archive` (zip intake is not offered) and `work_items.bulk`:

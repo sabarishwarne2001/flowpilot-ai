@@ -418,7 +418,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
       {selected && !(selected.is_current || selected.key === currentKey) && (
         <div className="space-y-3 border-t border-border bg-muted/10 p-4">
-          {!selectedIsFree && (
+          {!selectedIsFree && !hasSubscription && (
             <div className="flex flex-wrap items-center gap-3">
               <label htmlFor="seat-count" className="text-sm font-medium text-foreground">
                 Seats:
@@ -453,6 +453,42 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <p className="text-sm text-muted-foreground">
               This plan can&apos;t be purchased here until paid checkout is configured.
             </p>
+          ) : hasSubscription && confirming ? (
+            // Campaign session 4 (N-050): a subscriber's change, picked from the list too, is made
+            // on the live subscription in the portal. This path used to open a second checkout,
+            // which the server refuses (409) because it would charge a second subscription.
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-sm text-foreground">
+                {selectedIsFree ? (
+                  <>
+                    To move to <strong>{selected.display_name}</strong>, cancel your subscription in the billing
+                    portal.
+                  </>
+                ) : (
+                  <>
+                    The billing portal moves your subscription to <strong>{selected.display_name}</strong> and
+                    prorates the difference.
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => portal.mutate()}
+                disabled={!canManageBilling || portal.isPending}
+                className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+              >
+                {portal.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Continue in the billing portal
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={portal.isPending}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
+              >
+                Back
+              </button>
+            </div>
           ) : confirming ? (
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <span className="text-sm text-foreground">
