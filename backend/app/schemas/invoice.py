@@ -213,6 +213,8 @@ class TrialStatusResponse(BaseModel):
     state: Literal["NONE", "ACTIVE", "ENDED"] = "NONE"
     ends_at: Optional[datetime] = None
     days_left: Optional[int] = None
+    #: Campaign session 4 (F-342): ended because a paid subscription ended, not a first trial.
+    lapsed: bool = False
 
 
 class BillingAccessResponse(BaseModel):

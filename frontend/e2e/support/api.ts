@@ -38,8 +38,25 @@ function parseRefreshCookie(response: Response): string {
   throw new Error(`login response carried no ${REFRESH_COOKIE} cookie`);
 }
 
+/**
+ * fetch, retried once when the server had already closed the pooled keep-alive connection
+ * ("other side closed"): uvicorn drops an idle connection after a few seconds, and Node can pick
+ * it up in the same instant. The request never reached the server, so sending it again is safe.
+ */
+export async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+    if (cause?.code === "UND_ERR_SOCKET" || /other side closed/.test(String(cause?.message ?? ""))) {
+      return fetch(url, init);
+    }
+    throw error;
+  }
+}
+
 export async function apiLogin(email: string, password = PASSWORD): Promise<ApiSession> {
-  const response = await fetch(`${API_BASE}/auth/login`, {
+  const response = await fetchOnce(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ username: email, password }).toString(),
@@ -50,7 +67,7 @@ export async function apiLogin(email: string, password = PASSWORD): Promise<ApiS
   }
   const { access_token: accessToken } = JSON.parse(text) as { access_token: string };
   const refreshToken = parseRefreshCookie(response);
-  const meResponse = await fetch(`${API_BASE}/auth/me`, {
+  const meResponse = await fetchOnce(`${API_BASE}/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const me = (await meResponse.json()) as Record<string, unknown>;
@@ -82,7 +99,7 @@ export async function api<T = unknown>(
     payload = JSON.stringify(body);
   }
   const url = pathname.startsWith("http") ? pathname : `${API_BASE}${pathname}`;
-  const response = await fetch(url, { method, headers, body: payload ?? null });
+  const response = await fetchOnce(url, { method, headers, body: payload ?? null });
   const text = await response.text();
   let parsed: unknown = text;
   try {

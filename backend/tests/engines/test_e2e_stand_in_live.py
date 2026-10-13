@@ -88,6 +88,15 @@ def test_the_gateway_stand_in_moves_an_organization_through_its_billing_life(eng
     engines.db.refresh(subscription)
     assert subscription.status is SubscriptionStatus.CANCELED
 
+    # Back on Free with the trial long over: read-only, and worded for a former customer (F-342).
+    from app.services import trial_service
+
+    engines.plan("free")
+    stand_in("trial-ends")
+    trial = trial_service.status(engines.db, organization_id=engines.org)
+    assert trial.ended and trial.lapsed, trial
+    assert str(trial_service.ended_error(trial, organization_id=engines.org)).startswith("Your subscription has ended")
+
 
 def test_the_clock_stand_in_ends_a_trial(engines: Engines, stand_in) -> None:
     from datetime import datetime, timezone

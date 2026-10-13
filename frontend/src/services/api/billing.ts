@@ -127,6 +127,8 @@ export interface TrialStatus {
   readonly state: "NONE" | "ACTIVE" | "ENDED";
   readonly ends_at: string | null;
   readonly days_left: number | null;
+  /** Campaign session 4 (F-342): ENDED because a paid subscription ended, not a first trial. */
+  readonly lapsed?: boolean;
 }
 
 export interface BillingAccessSummary {

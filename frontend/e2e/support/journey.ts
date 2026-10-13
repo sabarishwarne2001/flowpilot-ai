@@ -14,9 +14,10 @@ import path from "node:path";
 
 import { expect, type Page } from "@playwright/test";
 
-import { signUpVerified } from "./accounts";
+import { signUpVerified, tokenOf } from "./accounts";
 import { api, apiLogin, resolveWorkspaceId, type ApiSession } from "./api";
 import { BACKEND_DIR, BROWSER_API_ORIGIN, runId } from "./env";
+import { linkFrom, waitForMail } from "./mail";
 import { buildPdf } from "./sample-docs";
 
 function python(): string {
@@ -142,4 +143,36 @@ export async function documents(customer: Customer): Promise<Array<Record<string
   );
   const body = listed.body;
   return Array.isArray(body) ? body : (body.items ?? []);
+}
+
+/** Upload a document through the API as the customer (fast set-up for journeys that need many). */
+export async function uploadViaApi(customer: Customer, label: string): Promise<string> {
+  const file = invoicePdf(label);
+  const form = new FormData();
+  form.append("file", new Blob([fs.readFileSync(file)], { type: "application/pdf" }), path.basename(file));
+  const response = await api<{ id: string }>(customer.session, "POST", `/workspaces/${customer.wsId}/work-items`, form);
+  expect(response.status, response.text).toBe(201);
+  return response.body.id;
+}
+
+/** Invite a new person into the customer's organization and have them accept by email. */
+export async function addMember(
+  customer: Customer,
+  label: string,
+  organizationRole = "MEMBER",
+  workspaceRole = "CONTRIBUTOR",
+): Promise<{ email: string; session: ApiSession }> {
+  const email = `${label}-${runId()}@e2e.example.com`;
+  const person = await signUpVerified(email);
+  const since = Date.now() - 1_000;
+  const invited = await api(customer.session, "POST", `/organizations/${customer.orgId}/invitations`, {
+    email,
+    organization_role: organizationRole,
+    grants: [{ workspace_id: customer.wsId, role: workspaceRole }],
+  });
+  expect(invited.status, invited.text).toBe(201);
+  const mail = await waitForMail(email, /invitations\/accept/, since);
+  const accepted = await api(person, "POST", "/invitations/accept", { token: tokenOf(linkFrom(mail, /invitations\/accept/)) });
+  expect(accepted.status, accepted.text).toBe(200);
+  return { email, session: await apiLogin(email) };
 }
