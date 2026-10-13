@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { KeyRound, Loader2, ShieldCheck, ShieldOff } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import TwoFactorPanel from "@/pages/Settings/TwoFactorPanel";
 import { MFA_STATUS_KEY, getMfaStatus } from "@/services/api/mfa";
 import { discoverSso, emailDomain, ssoStartHref } from "@/services/api/sso";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useSessionGuardStore } from "@/store/useSessionGuardStore";
 import { sanitizeRedirectPath } from "@/utils/security";
+
+// §B.1 (session 4): lazy, because this notice is mounted on every screen and the panel brings the
+// QR code library; it loads when an organization actually asks for two-factor sign-in.
+const TwoFactorPanel = lazy(() => import("@/pages/Settings/TwoFactorPanel"));
 
 /**
  * Campaign session 3. The organization's sign-in policy refused this session.
@@ -163,7 +166,11 @@ const MfaSetup: React.FC = () => {
   const status = useQuery({ queryKey: MFA_STATUS_KEY, queryFn: getMfaStatus });
   return (
     <div className="mt-4 max-h-[60vh] overflow-y-auto">
-      <TwoFactorPanel />
+      <Suspense
+        fallback={<Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />}
+      >
+        <TwoFactorPanel />
+      </Suspense>
       {status.data?.enabled ? (
         <div className="mt-3 flex justify-end">
           <button
