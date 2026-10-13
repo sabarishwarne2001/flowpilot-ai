@@ -519,6 +519,14 @@ The drill compares row counts and the migration revision with the live database,
 scratch database, and prints the restore time. **That time is how long a recovery takes for a
 database of this size.** It never touches the live database.
 
+**What you can promise (N-012).** You lose at most one day of data: the backup runs nightly at
+02:11 UTC, so the worst case is a failure just before the next one. Measured in campaign session 4,
+on the full stack with the browser suite's data (32 MB, 14 organizations): the encrypted backup took
+under a second and the drill restored it, with every row count matching, in 2 seconds. Expect
+roughly a minute or two per gigabyte on a small server; run the drill after your first real
+month and note the time. Every line of section 9.6's schedule, these two included, runs in the test
+suite against a fresh database exactly as cron runs it (`backend/tests/operational/test_host_cron_lines.py`).
+
 **An off-server copy.** A backup that sits on the server dies with the server. Set
 `FLOWPILOT_BACKUP_MIRROR_CMD` in `sweepers.env` to any command that copies the file whose path
 arrives as `$1`, for example `aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/flowpilot/` or
@@ -603,6 +611,11 @@ FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
 # Is the site up? A check with a 1-minute period and a 5-minute grace (N-017):
 # FLOWPILOT_PUBLIC_URL=https://app.example.com
 # HEARTBEAT_UUID_UPTIME=<check id>
+# Every sweep can ping its own check too: HEARTBEAT_UUID_<NAME> (for example HEARTBEAT_UUID_ERP_POSTINGS).
+# The hourly watchdog reports any of the thirteen sweeps without a success in 26 hours; to be told,
+# point ALERT_WEBHOOK at a Healthchecks.io check's failure address (it accepts the watchdog's POST
+# and emails you):
+# ALERT_WEBHOOK=https://hc-ping.com/<check id>/fail
 EOF
 sudo chown root:flowpilot /etc/flowpilot/sweepers.env && sudo chmod 640 /etc/flowpilot/sweepers.env
 sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-sweepers /etc/cron.d/flowpilot-sweepers
