@@ -244,8 +244,9 @@ class Settings(BaseSettings):
     # only once the production ingress hop count has actually been verified.
     TRUSTED_PROXY_HOPS_CONFIRMED: bool = False
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
-    # Campaign session 3 (N-061): signed-in requests are counted per person; 600 matches the
-    # allowance each person effectively had when every request was counted per address.
+    # Campaign session 3 (N-061): signed-in requests are counted per person (anonymous ones per
+    # address, API keys per key); 600 matches the allowance each person effectively had when
+    # every request was counted per address.
     RATE_LIMIT_USER_PER_MINUTE: int = 600
     # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
     # allowance the product had in effect while each attempt was counted twice
@@ -477,7 +478,9 @@ class Settings(BaseSettings):
     # ======================================================================
 
     # ---- DNS resolution (shared with ARCH-16 identity domain checks) ----
-    # Comma-separated resolvers, each `address` (port 53) or `address:port` / `[ipv6]:port`.
+    # The DNS servers asked when a customer verifies a domain: comma-separated, each `address`
+    # (port 53) or `address:port` / `[ipv6]:port` (for a resolver on another port, such as a
+    # local caching resolver).
     DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
     DNS_TIMEOUT_S: float = 5.0
     DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"

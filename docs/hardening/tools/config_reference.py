@@ -38,7 +38,11 @@ def _comment_above(lines: list[str], lineno: int) -> str:
     out: list[str] = []
     index = lineno - 2
     while index >= 0 and lines[index].strip().startswith("#"):
-        out.append(lines[index].strip().lstrip("#").strip())
+        # `#:` marks a field's own comment; `# ---- Section ----` and `# ====` lines are
+        # decoration for whoever reads config.py, not a description of the setting.
+        text = lines[index].strip().lstrip("#").lstrip(":").strip()
+        if not text.startswith(("----", "====")):
+            out.append(text)
         index -= 1
     text = " ".join(reversed([part for part in out if part]))
     return text.replace("|", "\\|")
@@ -90,6 +94,10 @@ def main() -> None:
         "`guard`, and lists every problem by name. The production compose file passes on every variable",
         "that `.env.production.template` asks for (F-047); a setting outside the template keeps its default",
         "in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.",
+        "",
+        "`backend/tests/infra/test_configuration_contract.py` keeps this honest: it fails when a setting",
+        "is not read by any code, is missing from this page, or is one production cannot run without and",
+        "is missing from `.env.production.template` (or does not stop the app from starting when unset).",
         "",
         f"{len(rows)} settings. Columns: name, type, default, where it appears (`example` =",
         "`.env.example`, `production` = `.env.production.template`, `guard` = checked by the production",

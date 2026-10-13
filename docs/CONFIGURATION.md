@@ -10,7 +10,11 @@ Every setting can be set as an environment variable of the same name (or in `bac
 that `.env.production.template` asks for (F-047); a setting outside the template keeps its default
 in the containers unless you add it to the service's `environment:` in `docker-compose.prod.yml`.
 
-320 settings. Columns: name, type, default, where it appears (`example` =
+`backend/tests/infra/test_configuration_contract.py` keeps this honest: it fails when a setting
+is not read by any code, is missing from this page, or is one production cannot run without and
+is missing from `.env.production.template` (or does not stop the app from starting when unset).
+
+293 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -21,8 +25,6 @@ guard), and the comment written above it in the code.
 | `API_TITLE` | `str` | `'FlowPilot AI Core API'` | example |  |
 | `ENVIRONMENT` | `str` | `'development'` | example, production, guard |  |
 | `API_V1_STR` | `str` | `'/api/v1'` | example |  |
-| `HOST` | `str` | `'0.0.0.0'` | example |  |
-| `PORT` | `int` | `8000` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
 | `LOG_FORMAT` | `str` | `'text'` | example, production | text: one line per event with its context as key=value; json: one JSON object per line. |
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
@@ -45,7 +47,7 @@ guard), and the comment written above it in the code.
 | `PASSWORD_RESET_TTL_MINUTES` | `int` | `60` | example |  |
 | `IDENTITY_TOKEN_MAX_PER_WINDOW` | `int` | `5` | example |  |
 | `IDENTITY_TOKEN_WINDOW_MINUTES` | `int` | `60` | example |  |
-| `INVITATION_TTL_HOURS` | `int` | `168` | — |  |
+| `INVITATION_TTL_HOURS` | `int` | `168` | — | N-037 (owner decision 2026-10-10): an invitation link lasts 7 days. |
 | `INVITATION_RESEND_COOLDOWN_MINUTES` | `int` | `5` | — |  |
 | `INVITATION_MAX_GRANTS` | `int` | `50` | — |  |
 | `INVITATION_RETENTION_DAYS` | `int` | `180` | — |  |
@@ -57,11 +59,9 @@ guard), and the comment written above it in the code.
 | `FILE_RECLAMATION_DAYS` | `int` | `30` | — |  |
 | `MAX_UPLOAD_SIZE` | `int` | `104857600` | example, production |  |
 | `ALLOWED_MIME_TYPES` | `list[str]` | `['application/pdf', 'image/png', 'image/jpeg', 'image/jpg',…` | — |  |
-| `GROQ_API_KEY` | `SecretStr \| None` | `None` | example, production |  |
+| `GROQ_API_KEY` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `GEMINI_API_KEY` | `SecretStr \| None` | `None` | example, production |  |
-| `LLM_PROVIDER` | `str` | `'groq'` | example, production |  |
-| `GROQ_MODEL_NAME` | `str` | `'llama-3.3-70b-versatile'` | example, production |  |
-| `GEMINI_MODEL_NAME` | `str` | `'gemini-3.5-flash'` | example, production |  |
+| `GROQ_MODEL_NAME` | `str` | `'openai/gpt-oss-120b'` | example, production | F-353. The model the platform's own Groq key serves by default: what a new workspace starts with, and what a call falls back to when its workspace chose a model that needs the organization's own key. One of the models t… |
 | `EMBEDDING_MODEL_NAME` | `str` | `'all-MiniLM-L6-v2'` | example |  |
 | `EMBEDDING_BATCH_SIZE` | `int` | `32` | example |  |
 | `OCR_LANGUAGE` | `str` | `'en'` | example |  |
@@ -73,6 +73,9 @@ guard), and the comment written above it in the code.
 | `PLATFORM_SMTP_ENCRYPTION` | `str` | `'TLS'` | example, production |  |
 | `PLATFORM_SMTP_FROM_EMAIL` | `str` | `'noreply@flowpilot.ai'` | example, production |  |
 | `PLATFORM_SMTP_FROM_NAME` | `str` | `'FlowPilot AI'` | example, production |  |
+| `OPERATOR_ALERT_EMAILS` | `str` | `''` | example, production, guard | Who is emailed (through the platform relay) about dead background jobs, gateway events that will never be applied, bursts of server errors and duplicate gateway subscriptions. Comma-separated addresses. Required in prod… |
+| `OPERATOR_ALERT_5XX_THRESHOLD` | `int` | `20` | production | Server errors (5xx answers, all API processes together) in five minutes that count as a burst worth an alert. |
+| `OPERATOR_ALERT_REPEAT_MINUTES` | `int` | `60` | production | The same alert is emailed again at most this often while it keeps happening. |
 | `FRONTEND_URL` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `EMAIL_ENCRYPTION_KEYS` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `RATE_LIMIT_ENABLED` | `bool` | `True` | example, guard |  |
@@ -85,16 +88,16 @@ guard), and the comment written above it in the code.
 | `DATABASE_REPLICA_ENFORCE_READ_ONLY` | `bool` | `True` | example, production | Applies SET default_transaction_read_only on every reader connection. With no standby configured this is what gives development and CI the same failure mode production would have, so a route that drifts into writing on … |
 | `TRUSTED_PROXY_HOPS_CONFIRMED` | `bool` | `False` | example, production | ARCH-08 A.3.4 — read by session_policy_service.update_policy to gate enabling IP pinning. It was read through getattr() with a False default and never declared, so the gate could not be opened at all. Set to true only o… |
 | `RATE_LIMIT_GLOBAL_IP_PER_MINUTE` | `int` | `600` | — |  |
-| `RATE_LIMIT_USER_PER_MINUTE` | `int` | `600` | — | Campaign session 3 (N-061): signed-in requests are counted per person (anonymous ones per address, API keys per key). 600 matches the allowance each person effectively had before. |
+| `RATE_LIMIT_USER_PER_MINUTE` | `int` | `600` | — | Campaign session 3 (N-061): signed-in requests are counted per person (anonymous ones per address, API keys per key); 600 matches the allowance each person effectively had when every request was counted per address. |
 | `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `20` | example, production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). N-018 (deci… |
 | `RATE_LIMIT_CREDENTIAL_PER_HOUR` | `int` | `10` | — |  |
 | `RATE_LIMIT_EXPORT_PER_HOUR` | `int` | `5` | — |  |
 | `RAG_TOP_K` | `int` | `5` | example |  |
 | `RAG_SIMILARITY_THRESHOLD` | `float` | `0.2` | example |  |
-| `LLM_REQUEST_TOKEN_CEILINGS` | `dict[str, int]` | `{'groq': 12000}` | — | ---- ARCH39-S1:settings — request ceilings and retrieval guards -------- : Largest single request (prompt + max_tokens) each provider accepts. : Keys: "provider" or "provider:model". Groq enforces a per-request : tokens… |
+| `LLM_REQUEST_TOKEN_CEILINGS` | `dict[str, int]` | `{'groq': 12000}` | — | Largest single request (prompt + max_tokens) each provider accepts. Keys: "provider" or "provider:model". Groq enforces a per-request tokens-per-minute limit that is far below the model window on lower tiers; set yours,… |
 | `LLM_REQUEST_TOKEN_CEILING_DEFAULT` | `int` | `32768` | — |  |
 | `LLM_TOKEN_ESTIMATE_MARGIN` | `float` | `0.15` | — |  |
-| `RAG_RERANK_FLOOR_ENABLED` | `bool` | `True` | — | : Raw cross-encoder score (ms-marco-MiniLM-L-6-v2 logits) below which a : candidate is not evidence. Calibrate with evaluation/ before changing. |
+| `RAG_RERANK_FLOOR_ENABLED` | `bool` | `True` | — | Raw cross-encoder score (ms-marco-MiniLM-L-6-v2 logits) below which a candidate is not evidence. Calibrate with evaluation/ before changing. |
 | `RAG_RERANK_ABSOLUTE_FLOOR` | `float` | `-5.0` | — |  |
 | `RAG_FILENAME_PRIOR_MAX` | `float` | `0.2` | — |  |
 | `RAG_DOMINANCE_MARGIN` | `float` | `0.25` | — |  |
@@ -102,42 +105,27 @@ guard), and the comment written above it in the code.
 | `RAG_MAX_CONTEXT_LENGTH` | `int` | `15000` | example |  |
 | `MAX_CONVERSATION_MESSAGES` | `int` | `10` | — |  |
 | `MAX_CONVERSATION_TITLE_LENGTH` | `int` | `150` | — |  |
-| `MAX_SOURCE_CITATIONS` | `int` | `5` | — |  |
-| `LLM_TEMPERATURE` | `float` | `0.2` | — |  |
 | `LLM_CLASSIFICATION_TEMPERATURE` | `float` | `0.0` | — |  |
 | `LLM_ENTITY_EXTRACTION_TEMPERATURE` | `float` | `0.1` | — |  |
 | `LLM_SUMMARIZATION_TEMPERATURE` | `float` | `0.3` | — |  |
-| `GROQ_RAG_TEMPERATURE` | `float` | `0.3` | — |  |
-| `GEMINI_RAG_TEMPERATURE` | `float` | `0.2` | — |  |
-| `LLM_MAX_OUTPUT_TOKENS` | `int` | `2048` | — |  |
-| `ENABLE_TOKEN_TRACKING` | `bool` | `True` | example |  |
-| `TOKEN_COST_PER_1K_INPUT` | `float` | `0.0` | — |  |
-| `TOKEN_COST_PER_1K_OUTPUT` | `float` | `0.0` | — |  |
 | `MAX_CONTEXT_CHUNKS_PER_DOCUMENT` | `int` | `3` | — |  |
 | `RERANK_MIN_RESULTS` | `int` | `4` | — |  |
 | `RERANK_MAX_CANDIDATES` | `int` | `15` | — |  |
 | `RERANK_FINAL_RESULTS` | `int` | `8` | — |  |
 | `DOCUMENT_FILTER_MARGIN` | `float` | `0.25` | example |  |
 | `DOCUMENT_SCORE_TOP_K` | `int` | `3` | example |  |
-| `MAX_RESPONSE_CITATIONS` | `int` | `3` | — |  |
-| `CITATION_RERANK_WEIGHT` | `float` | `0.6` | — |  |
-| `CITATION_RRF_WEIGHT` | `float` | `0.25` | — |  |
-| `CITATION_SEMANTIC_WEIGHT` | `float` | `0.15` | — |  |
-| `SNIPPET_MAX_SENTENCES` | `int` | `2` | — |  |
-| `MAX_SNIPPET_LENGTH` | `int` | `240` | — |  |
 | `RETRIEVAL_MIN_RECALL` | `float` | `0.95` | — |  |
 | `RETRIEVAL_MIN_PRECISION` | `float` | `0.9` | — |  |
 | `RETRIEVAL_MIN_MRR` | `float` | `0.85` | — |  |
 | `RETRIEVAL_MAX_CONTAMINATION` | `float` | `0.1` | — |  |
 | `RETRIEVAL_MAX_LATENCY_MS` | `float` | `300.0` | — |  |
-| `RETRIEVAL_FAIL_FAST` | `bool` | `False` | — |  |
 | `SPEND_DEFAULT_MONTHLY_COST_MICROS` | `Optional[int]` | `25000000` | — |  |
 | `SPEND_DEFAULT_DAILY_COST_MICROS` | `Optional[int]` | `5000000` | — |  |
 | `SPEND_DEFAULT_MONTHLY_OCR_PAGES` | `Optional[int]` | `2000` | — |  |
 | `SPEND_DEFAULT_MONTHLY_LLM_INPUT_TOKENS` | `Optional[int]` | `2000000` | — |  |
 | `SPEND_DEFAULT_MONTHLY_LLM_OUTPUT_TOKENS` | `Optional[int]` | `500000` | — |  |
 | `SPEND_DEFAULT_MONTHLY_EMBEDDING_TOKENS` | `Optional[int]` | `5000000` | — |  |
-| `S3_BUCKET` | `Optional[str]` | `None` | example, production |  |
+| `S3_BUCKET` | `Optional[str]` | `None` | example, production, guard |  |
 | `S3_REGION` | `Optional[str]` | `'auto'` | production |  |
 | `S3_ENDPOINT_URL` | `Optional[str]` | `None` | example, production |  |
 | `S3_PREFIX` | `str` | `''` | production |  |
@@ -146,18 +134,18 @@ guard), and the comment written above it in the code.
 | `S3_MULTIPART_THRESHOLD` | `int` | `16 * 1024 * 1024` | — |  |
 | `S3_MULTIPART_CHUNKSIZE` | `int` | `16 * 1024 * 1024` | — |  |
 | `S3_MAX_CONCURRENCY` | `int` | `4` | — |  |
-| `S3_ACCESS_KEY_ID` | `Optional[str]` | `Field(default=None, validation_alias=AliasChoices('S3_ACCES…` | example, production, guard | ====================================================================== RH-1 — object storage credentials. These were never declared. backend/.env.example has shipped AWS_ACCESS_KEY_ID=minioadmin since ARCH-10, but `mode… |
+| `S3_ACCESS_KEY_ID` | `Optional[str]` | `Field(default=None, validation_alias=AliasChoices('S3_ACCES…` | example, production, guard | RH-1 — object storage credentials. These were never declared. backend/.env.example has shipped AWS_ACCESS_KEY_ID=minioadmin since ARCH-10, but `model_config` sets extra="ignore", so pydantic-settings read the key, found… |
 | `S3_SECRET_ACCESS_KEY` | `Optional[SecretStr]` | `Field(default=None, validation_alias=AliasChoices('S3_SECRE…` | example, production, guard |  |
 | `S3_SESSION_TOKEN` | `Optional[SecretStr]` | `Field(default=None, validation_alias=AliasChoices('S3_SESSI…` | — |  |
-| `S3_DEV_FALLBACK_CREDENTIALS` | `bool` | `True` | example | : When true and ENVIRONMENT is development or test, an object-storage : backend with no credentials resolves to the docker-compose MinIO : defaults instead of falling through to botocore's ambient chain. : Ignored outsi… |
+| `S3_DEV_FALLBACK_CREDENTIALS` | `bool` | `True` | example | When true and ENVIRONMENT is development or test, an object-storage backend with no credentials resolves to the docker-compose MinIO defaults instead of falling through to botocore's ambient chain. Ignored outside devel… |
 | `S3_REGIONAL_BUCKETS` | `dict[str, str]` | `{}` | production | ARCH-20 — data residency. Region -> bucket. Empty by default, which leaves every tenant on GLOBAL and the single S3_BUCKET, exactly as before this phase. A tenant pinned to a region with no entry here is REFUSED at writ… |
-| `SAML_CLOCK_SKEW_S` | `int` | `120` | example | ====================================================================== ARCH-28 — SAML settings that ARCH-16 read but never declared. The same defect the ARCH-25 block below documents, four more instances of it. `saml_ga… |
+| `SAML_CLOCK_SKEW_S` | `int` | `120` | example | ARCH-28 — SAML settings that ARCH-16 read but never declared. The same defect the ARCH-25 block below documents, four more instances of it. `saml_gateway` reads SAML_CLOCK_SKEW_S and `app/api/v1/saml.py` reads SAML_RAW_… |
 | `SAML_RAW_ASSERTION_RETENTION_DAYS` | `int` | `30` | — |  |
 | `SAML_CRYPTO_BACKEND` | `Literal['signxml']` | `'signxml'` | — |  |
-| `PUBLIC_API_URL` | `str` | `''` | example, production | ====================================================================== F-123 — the public address identity providers talk to, and the identity settings the env templates document. Same defect as the blocks around this o… |
+| `PUBLIC_API_URL` | `str` | `''` | example, production | F-123 — the public address identity providers talk to, and the identity settings the env templates document. Same defect as the blocks around this one: read through getattr() and never declared, so on every deployment t… |
 | `SAML_SP_ENTITY_ID` | `Optional[str]` | `None` | — |  |
-| `SAML_SP_SIGNING_CERT_PEM` | `str` | `''` | — | : PEM used in the SP metadata when no SP certificate row is live. |
-| `OIDC_REDIRECT_URI` | `str` | `''` | — | : Empty: {public API address}{API_V1_STR}/oidc/callback. |
+| `SAML_SP_SIGNING_CERT_PEM` | `str` | `''` | — | PEM used in the SP metadata when no SP certificate row is live. |
+| `OIDC_REDIRECT_URI` | `str` | `''` | — | Empty: {public API address}{API_V1_STR}/oidc/callback. |
 | `OIDC_DEFAULT_SCOPES` | `str` | `'openid,email,profile'` | — |  |
 | `OIDC_DISCOVERY_TIMEOUT_S` | `float` | `10.0` | — |  |
 | `SCIM_TOKEN_TTL_DAYS` | `int` | `365` | example |  |
@@ -165,31 +153,27 @@ guard), and the comment written above it in the code.
 | `SCIM_MAX_PAGE_SIZE` | `int` | `200` | — |  |
 | `DOMAIN_VERIFICATION_GRACE_DAYS` | `int` | `14` | example |  |
 | `DOMAIN_VERIFICATION_RECHECK_INTERVAL_HOURS` | `int` | `24` | — |  |
-| `JIT_SEAT_CAP_DEFAULT` | `Optional[int]` | `None` | — | : JIT seat cap when the organization's tier has no seat dimension. |
+| `JIT_SEAT_CAP_DEFAULT` | `Optional[int]` | `None` | — | JIT seat cap when the organization's tier has no seat dimension. |
 | `SAML_XSW_DEFENCE_ENABLED` | `bool` | `True` | guard | The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if settings cannot be read at all, hardening_policy_from_settings() returns the hardened policy. A GA platform needs a switch for the night a real IdP turns o… |
-| `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | The DNS servers asked when a customer verifies a domain: comma-separated, each `address` (port 53) or `address:port` (for a resolver on another port, such as a local caching resolver). |
+| `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | The DNS servers asked when a customer verifies a domain: comma-separated, each `address` (port 53) or `address:port` / `[ipv6]:port` (for a resolver on another port, such as a local caching resolver). |
 | `DNS_TIMEOUT_S` | `float` | `5.0` | — |  |
 | `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'flowpilot-site-verification'` | example |  |
 | `DOMAIN_VERIFICATION_TOKEN_TTL_DAYS` | `int` | `30` | example |  |
-| `CUSTOM_DOMAINS_ENABLED` | `bool` | `False` | example, production | ---- Custom domains ------------------------------------------------ OFF by default. A deployment that has not configured an ACME agent and a wildcard-capable ingress cannot serve a vanity host, and letting a tenant cla… |
+| `CUSTOM_DOMAINS_ENABLED` | `bool` | `False` | example, production | OFF by default. A deployment that has not configured an ACME agent and a wildcard-capable ingress cannot serve a vanity host, and letting a tenant claim one on such a deployment produces a VERIFIED domain that 404s fore… |
 | `PLATFORM_RESERVED_HOSTS` | `list[str]` | `[]` | example, production | Hostnames a tenant may never claim, JSON list, matched case-insensitively against the hostname AND against every parent suffix of it. This is what stops a tenant claiming the platform's own origin and having every sessi… |
 | `CUSTOM_DOMAIN_CHALLENGE_TTL_HOURS` | `int` | `168` | example, production | How long a published TXT challenge stays valid. A challenge that never expired would let a token published years ago verify a hostname the tenant has since let lapse. |
 | `CUSTOM_DOMAIN_MAX_PER_ORG` | `int` | `10` | example, production |  |
 | `CUSTOM_DOMAIN_VERIFY_INTERVAL_MINUTES` | `int` | `30` | — |  |
 | `CUSTOM_DOMAIN_MAX_VERIFY_FAILURES` | `int` | `20` | — | After this many consecutive misses a PENDING domain moves to FAILED. Resolver failures do NOT count toward it — that is our outage, not the tenant's, and charging it to them produces a console that blames the customer f… |
-| `ACME_AGENT_URL` | `str` | `''` | example, production | ---- TLS / ACME ---------------------------------------------------- The agent is a local Caddy admin API or an equivalent sidecar. Empty means no issuance is attempted and request_certificate refuses rather than silent… |
-| `ACME_AGENT_TOKEN` | `SecretStr \| None` | `None` | — |  |
-| `ACME_DIRECTORY_URL` | `str` | `'https://acme-v02.api.letsencrypt.org/directory'` | — |  |
-| `ACME_CONTACT_EMAIL` | `str` | `''` | example, production |  |
-| `ACME_REQUEST_TIMEOUT_S` | `float` | `20.0` | — |  |
+| `ACME_AGENT_URL` | `str` | `''` | example, production | The agent is a local Caddy admin API or an equivalent sidecar. Empty means no issuance is attempted and request_certificate refuses rather than silently marking a domain as covered. |
+| `ACME_CONTACT_EMAIL` | `str` | `''` | example, production | Where Let's Encrypt sends certificate expiry warnings. Read by Caddy (deploy/Caddyfile) through docker-compose.prod.yml, not by the app itself. |
 | `TLS_RENEWAL_WINDOW_DAYS` | `int` | `30` | example, production | Renew this many days before expiry. Let's Encrypt issues for 90 days; 30 leaves two full retry windows before anything is user-visible. |
 | `TLS_DEAD_MAN_DAYS` | `int` | `7` | example, production | The dead-man threshold. A certificate this close to expiry that has not renewed is an alert, not a retry — expiry on a customer's vanity domain is a total outage for that tenant with no error in our logs. |
-| `TLS_RENEWAL_SWEEP_INTERVAL_MINUTES` | `int` | `60` | — |  |
-| `BRANDING_MANIFEST_CACHE_SECONDS` | `int` | `60` | — | ---- Branding ------------------------------------------------------ |
+| `BRANDING_MANIFEST_CACHE_SECONDS` | `int` | `60` | — |  |
 | `BRANDING_MAX_LOGO_BYTES` | `int` | `2 * 1024 * 1024` | — |  |
 | `BRANDING_MAX_FAVICON_BYTES` | `int` | `512 * 1024` | — |  |
 | `BRANDING_MAX_IMAGE_DIMENSION` | `int` | `2048` | — |  |
-| `COMPLIANCE_EXPORT_TTL_HOURS` | `int` | `72` | — | : How long a generated DPA archive stays downloadable. |
+| `COMPLIANCE_EXPORT_TTL_HOURS` | `int` | `72` | — | How long a generated DPA archive stays downloadable. |
 | `STORAGE_SAMPLE_INTERVAL_MINUTES` | `int` | `60` | — |  |
 | `MAX_DOCUMENT_PAGES` | `int` | `500` | example |  |
 | `SCRUB_UPLOAD_METADATA` | `bool` | `True` | example |  |
@@ -206,12 +190,9 @@ guard), and the comment written above it in the code.
 | `HNSW_ITERATIVE_SCAN` | `str` | `'relaxed_order'` | — |  |
 | `HNSW_EF_SEARCH` | `int` | `40` | — |  |
 | `APPLY_HNSW_SESSION_DEFAULTS` | `bool` | `True` | — |  |
-| `CHUNK_SIZE_TOKENS` | `int` | `220` | — |  |
-| `CHUNK_OVERLAP_PCT` | `int` | `10` | — |  |
 | `SPEND_PLATFORM_MONTHLY_BACKFILL_TOKENS` | `Optional[int]` | `200000000` | — |  |
 | `LEXICAL_TSVECTOR_CONFIG` | `str` | `'english'` | — |  |
 | `LEXICAL_TRIGRAM_THRESHOLD` | `float` | `0.3` | — |  |
-| `LEXICAL_CANDIDATES` | `int` | `50` | — |  |
 | `HYBRID_CANDIDATES` | `int` | `150` | — |  |
 | `HYBRID_WEIGHT_DENSE` | `float` | `1.0` | — |  |
 | `HYBRID_WEIGHT_FULL_TEXT` | `float` | `1.0` | — |  |
@@ -226,9 +207,9 @@ guard), and the comment written above it in the code.
 | `FLOWPILOT_EDITION` | `str` | `'saas'` | — | ARCH50-S1:settings. The sovereign edition. Every value here is the OPERATOR's: environment only, never a database column and never an API field, so no tenant can widen egress or point the local model elsewhere. FLOWPILO… |
 | `EGRESS_MODE` | `str` | `'open'` | — |  |
 | `EGRESS_OPERATOR_HOSTS` | `str` | `''` | — |  |
-| `LOCAL_LLM_MODE` | `str` | `'off'` | — |  |
-| `LOCAL_LLM_BASE_URL` | `Optional[str]` | `None` | — |  |
-| `LOCAL_LLM_MODEL` | `str` | `''` | — |  |
+| `LOCAL_LLM_MODE` | `str` | `'off'` | production, guard |  |
+| `LOCAL_LLM_BASE_URL` | `Optional[str]` | `None` | guard |  |
+| `LOCAL_LLM_MODEL` | `str` | `''` | guard |  |
 | `LOCAL_LLM_API_KEY` | `Optional[SecretStr]` | `None` | — |  |
 | `LOCAL_LLM_TIMEOUT_SECONDS` | `float` | `120.0` | — |  |
 | `LICENCE_FILE` | `Optional[str]` | `None` | — |  |
@@ -261,40 +242,37 @@ guard), and the comment written above it in the code.
 | `STREAM_MAX_MESSAGES_PER_MINUTE_PER_CONVERSATION` | `int` | `10` | — |  |
 | `PDF_TEXT_LAYER_BBOXES_ENABLED` | `bool` | `True` | — |  |
 | `KNOWLEDGE_DUAL_READ` | `bool` | `True` | — | F-123: read through getattr() and never declared, so the variables had no effect. Declared at the defaults the code already used. |
-| `SCHEDULER_TICK_SECONDS` | `float` | `30.0` | — | : How often the worker scheduler loop wakes, in seconds. |
-| `PRICE_BOOK_CACHE_TTL_SECONDS` | `float` | `300.0` | — | ---- ARCH-14: pricing ------------------------------------------------- |
+| `SCHEDULER_TICK_SECONDS` | `float` | `30.0` | — | How often the worker scheduler loop wakes, in seconds. |
+| `PRICE_BOOK_CACHE_TTL_SECONDS` | `float` | `300.0` | — |  |
 | `ROLLUP_SEAL_GRACE_HOURS` | `int` | `26` | — |  |
 | `ROLLUP_BATCH_SIZE` | `int` | `2000` | — |  |
 | `ROLLUP_MAX_BATCHES` | `int` | `20` | — |  |
 | `SPEND_USE_ROLLUP_READS` | `bool` | `True` | — |  |
 | `QUOTA_TIER_CACHE_TTL_SECONDS` | `float` | `300.0` | — |  |
-| `QUOTA_DEFAULT_TIER_KEY` | `Optional[str]` | `None` | — |  |
-| `RECONCILE_MIN_AGE_DAYS` | `int` | `2` | — | ---- ARCH-14 Step 5: provider reconciliation -------------------------- |
+| `RECONCILE_MIN_AGE_DAYS` | `int` | `2` | — |  |
 | `RECONCILE_BOUNDARY_HOURS` | `int` | `6` | — |  |
 | `RECONCILE_ALERT_BPS` | `int` | `50` | — |  |
-| `COGS_VARIANCE_ALERT_BPS` | `Optional[int]` | `None` | — | ---- ARCH-18: COGS, unit economics & supplier reconciliation ---------- Variance beyond this fraction of modelled cost needs a human. Defaults to RECONCILE_ALERT_BPS when unset so a platform tuned once for ARCH-14 does … |
+| `COGS_VARIANCE_ALERT_BPS` | `Optional[int]` | `None` | — | Variance beyond this fraction of modelled cost needs a human. Defaults to RECONCILE_ALERT_BPS when unset so a platform tuned once for ARCH-14 does not need tuning twice for the same question. |
 | `COGS_INVOICE_MIN_AGE_DAYS` | `Optional[int]` | `None` | — | A period is not reconciled until it has been closed this long. Suppliers issue corrections; a variance against a period still being written to is noise that pages someone at 3am. |
 | `COGS_DEFAULT_WINDOW_DAYS` | `int` | `30` | — | Default reporting window for the margins dashboard, in days. |
 | `COGS_TENANT_RANKING_MAX` | `int` | `500` | — | Hard ceiling on rows a tenant-economics query will return. |
-| `GEMINI_BILLING_LABELS_ENABLED` | `bool` | `False` | — | ---- ARCH-14 Step 14.6: Gemini billing labels ------------------------- |
+| `GEMINI_BILLING_LABELS_ENABLED` | `bool` | `False` | — |  |
 | `GEMINI_USE_VERTEX` | `bool` | `False` | — |  |
-| `GEMINI_VERTEX_PROJECT` | `Optional[str]` | `None` | — |  |
-| `GEMINI_VERTEX_LOCATION` | `str` | `'us-central1'` | — |  |
-| `AUTOMATION_MAX_DEPTH` | `int` | `5` | example | ---- ARCH-13: automation engine --------------------------------------- |
+| `AUTOMATION_MAX_DEPTH` | `int` | `5` | example |  |
 | `AUTOMATION_MAX_NODES` | `int` | `50` | example |  |
 | `AUTOMATION_EXECUTION_TIMEOUT_S` | `int` | `120` | example |  |
 | `AUTOMATION_MAX_ACTIONS_PER_EXECUTION` | `int` | `20` | — |  |
 | `AUTOMATION_DEFAULT_BUDGET_MICROS` | `int` | `50000` | — |  |
 | `AUTOMATION_ENGINE_ENABLED` | `bool` | `True` | example |  |
-| `AUTOMATION_VERIFICATION_AGENTS` | `int` | `2` | example | ---- ARCH-13 Step 13.7/13.8: verification ------------------------------ |
+| `AUTOMATION_VERIFICATION_AGENTS` | `int` | `2` | example |  |
 | `AUTOMATION_AUTO_APPROVE_THRESHOLD` | `float` | `0.85` | example |  |
-| `ARGON2_MEMORY_COST` | `int` | `19456` | example | ---- SEC-1: password hashing ------------------------------------------ |
+| `ARGON2_MEMORY_COST` | `int` | `19456` | example |  |
 | `ARGON2_TIME_COST` | `int` | `2` | example |  |
 | `ARGON2_PARALLELISM` | `int` | `1` | example |  |
-| `AUTH_LOGIN_MIN_DURATION_MS` | `int` | `250` | example | : Floor on how long a login attempt takes, in milliseconds. : : ARCH-0V Tranche 5. This was 0 through ARCH-22, which meant the : floor existed in code and did nothing. The population is mixed: : SEC-1 introduced Argon2i… |
-| `AUTH_LOGIN_MIN_DURATION_FLOOR_MS` | `int` | `200` | — | : The lowest value 0V-G8 will accept. Not independently tunable: : lowering this is how the floor quietly becomes decorative again. |
-| `LOGIN_BACKOFF_ENABLED` | `bool` | `True` | guard | ---- SEC-1 Tranche 3: login failure accounting ------------------------ |
-| `STRIPE_SECRET_KEY` | `SecretStr \| None` | `None` | example, production, guard | ---- ARCH-15: Stripe transport ---------------------------------------- |
+| `AUTH_LOGIN_MIN_DURATION_MS` | `int` | `250` | example | Floor on how long a login attempt takes, in milliseconds. ARCH-0V Tranche 5. This was 0 through ARCH-22, which meant the floor existed in code and did nothing. The population is mixed: SEC-1 introduced Argon2id but `pwd… |
+| `AUTH_LOGIN_MIN_DURATION_FLOOR_MS` | `int` | `200` | — | The lowest value 0V-G8 will accept. Not independently tunable: lowering this is how the floor quietly becomes decorative again. |
+| `LOGIN_BACKOFF_ENABLED` | `bool` | `True` | guard |  |
+| `STRIPE_SECRET_KEY` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `STRIPE_PUBLISHABLE_KEY` | `str \| None` | `None` | example, production, guard |  |
 | `STRIPE_WEBHOOK_SECRETS` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `STRIPE_WEBHOOK_TOLERANCE_SECONDS` | `int` | `300` | — |  |
@@ -306,7 +284,7 @@ guard), and the comment written above it in the code.
 | `STRIPE_INBOUND_BATCH_SIZE` | `int` | `25` | — |  |
 | `STRIPE_INBOUND_LEASE_SECONDS` | `int` | `60` | — |  |
 | `STRIPE_INBOUND_MAX_ATTEMPTS` | `int` | `8` | — |  |
-| `BILLING_GATEWAY` | `str` | `'STRIPE'` | example, production, guard | ---- ARCH-15: billing policy ------------------------------------------ ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carryi… |
+| `BILLING_GATEWAY` | `str` | `'STRIPE'` | example, production, guard | ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carrying both Stripe and Dodo keys during migration must not have its payment … |
 | `DODO_API_KEY` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_WEBHOOK_SECRET` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_API_BASE` | `str` | `''` | example, production | HARDENING-T1:D16. Empty means "derive from DODO_LIVEMODE". The default was the live host while DODO_LIVEMODE defaulted to false, so a test key was sent to the live API (401) with nothing saying why. |
@@ -314,25 +292,24 @@ guard), and the comment written above it in the code.
 | `DODO_WEBHOOK_TOLERANCE_SECONDS` | `int` | `1800` | — | 30 minutes. Must exceed Dodo's early retry intervals (immediate, 5s, 5m, 30m) so a legitimate late delivery still verifies, without leaving a captured request replayable indefinitely. |
 | `DODO_LIVEMODE` | `bool` | `False` | example, production, guard |  |
 | `DODO_MAX_WEBHOOK_BODY_BYTES` | `int` | `512 * 1024` | — |  |
-| `DODO_ADDON_PRODUCT_CUSTOM_DOMAIN` | `str \| None` | `None` | example, production | ---- ARCH-30 Tranche 2: add-ons and delinquency (D-6, D-8, D-11) ------ Dodo product ids for purchasable add-ons. Test and live ids differ, so these are environment values, never literals in code. Unset means the add-on… |
+| `DODO_ADDON_PRODUCT_CUSTOM_DOMAIN` | `str \| None` | `None` | example, production | Dodo product ids for purchasable add-ons. Test and live ids differ, so these are environment values, never literals in code. Unset means the add-on is not self-serve on this deployment and the console says so. |
 | `DODO_ADDON_PRODUCT_WAREHOUSE_SYNC` | `str \| None` | `None` | example, production |  |
 | `BILLING_ADDON_GRACE_DAYS` | `int` | `14` | — | D-6. Days existing add-on resources keep working after the grant ends. |
 | `BILLING_ON_HOLD_GRACE_DAYS` | `int` | `13` | — | D-11. Days of full access after a renewal failure. Matches Dodo's default Payment Retries recovery window, so access ends when retries do. |
 | `BILLING_LAPSED_TIER_KEY` | `str` | `'free'` | — | The tier an organization falls back to when its subscription ends. |
+| `FREE_TRIAL_DAYS` | `int` | `7` | — | N-052 (owner decision). Free is a trial of this many days per owner account, counted from the account's first organization; after it, new work needs a paid plan (app/services/trial_service.py). |
 | `BILLING_DODO_SEAT_PRORATION_MODE` | `str` | `'prorated_immediately'` | example | ARCH-30 Tranche 3. How Dodo bills a mid-cycle seat change. Dodo documents that the three "_immediately" modes charge now and move the renewal date; do_not_bill keeps the date and bills the new quantity at renewal. |
 | `BILLING_DEFAULT_CURRENCY` | `str` | `'USD'` | example, production |  |
 | `BILLING_DEFAULT_QUOTA_TIER_KEY` | `str \| None` | `None` | — |  |
-| `BILLING_SEAT_PRICE_LOOKUP_KEY` | `str \| None` | `None` | — |  |
 | `BILLING_SEAT_SYNC_ENABLED` | `bool` | `True` | example, production |  |
 | `BILLING_SEAT_PRORATION_BEHAVIOR` | `str` | `'create_prorations'` | example, production |  |
-| `BILLING_INVOICE_NUMBER_PREFIX` | `str` | `'FP'` | — | ---- ARCH-15 Tranche 3: invoices -------------------------------------- |
+| `BILLING_INVOICE_NUMBER_PREFIX` | `str` | `'FP'` | — |  |
 | `BILLING_SEAT_EVENT_TYPE` | `str` | `'billing.seat'` | — |  |
 | `BILLING_SEAT_FALLBACK_PRICE_MICROS` | `int` | `0` | — |  |
 | `BILLING_STRIPE_TOTAL_TOLERANCE_MICROS` | `int` | `1` | — |  |
-| `BILLING_REAUTH_WINDOW_S` | `int` | `300` | example | ---- ARCH-15 Tranche 4: portal, checkout, dunning --------------------- |
+| `BILLING_REAUTH_WINDOW_S` | `int` | `300` | example |  |
 | `BILLING_REAUTH_REQUIRED` | `bool` | `True` | example, production |  |
 | `BILLING_PORTAL_RETURN_URL` | `str \| None` | `None` | — |  |
 | `BILLING_CHECKOUT_SUCCESS_URL` | `str \| None` | `None` | — |  |
 | `BILLING_CHECKOUT_CANCEL_URL` | `str \| None` | `None` | — |  |
-| `BILLING_SEAT_PRICE_ID` | `str \| None` | `None` | — | Obsolete since ARCH-29 and ignored: prices are per plan (`GATEWAY_PRICE_ID_*`). Leave unset (N-026). |
 | `BILLING_DUNNING_MAX_STEP` | `str` | `'NOTIFY_3'` | example |  |
