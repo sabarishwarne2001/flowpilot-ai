@@ -139,6 +139,8 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: Path = Path("uploads")
     STORAGE_QUARANTINE_DIR: Path = Path("uploads/quarantine")
+    # A separate database login for the nightly audit-retention sweep (scripts/sweep_arch07.py).
+    # Optional: unset, the sweep uses DATABASE_URL, as the shipped deployment does (F-355).
     AUDIT_SWEEPER_DATABASE_URL: Optional[SecretStr] = None
     FILE_RECLAMATION_DAYS: int = 30
 

@@ -55,7 +55,7 @@ guard), and the comment written above it in the code.
 | `STORAGE_BACKEND` | `str` | `'local'` | example, production, guard |  |
 | `UPLOAD_DIR` | `Path` | `Path('uploads')` | example |  |
 | `STORAGE_QUARANTINE_DIR` | `Path` | `Path('uploads/quarantine')` | example |  |
-| `AUDIT_SWEEPER_DATABASE_URL` | `Optional[SecretStr]` | `None` | — |  |
+| `AUDIT_SWEEPER_DATABASE_URL` | `Optional[SecretStr]` | `None` | — | A separate database login for the nightly audit-retention sweep (scripts/sweep_arch07.py). Optional: unset, the sweep uses DATABASE_URL, as the shipped deployment does (F-355). |
 | `FILE_RECLAMATION_DAYS` | `int` | `30` | — |  |
 | `MAX_UPLOAD_SIZE` | `int` | `104857600` | example, production |  |
 | `ALLOWED_MIME_TYPES` | `list[str]` | `['application/pdf', 'image/png', 'image/jpeg', 'image/jpg',…` | — |  |

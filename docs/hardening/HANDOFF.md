@@ -261,8 +261,9 @@ its reason).
   test fails on a new raw client. An organization's lockdown and rules are enforced (live test).
 - **Audit (F-294, F-295, F-304, N-067).** Identity and webhook changes are audited. The nightly
   ARCH-07 sweep deletes audit entries per organization by its own retention period (blank keeps
-  them). **On deploy:** the host cron needs `AUDIT_SWEEPER_DATABASE_URL` (the sweeper role, the only
-  one allowed to delete audit rows) and the four host crons installed
+  them). **On deploy:** the four host crons installed (session 4, F-355: the sweep deletes through
+  the application's database unless `AUDIT_SWEEPER_DATABASE_URL` names a separate login; before,
+  it skipped or was refused by the audit trigger every night)
   (`backend/deploy/cron.d/flowpilot-sweepers`: arch07, arch09, identity, invitations).
 - **Display layer (N-064, F-298).** One module per side: `frontend/src/utils/displayTime.ts` and
   `backend/app/core/display_format.py`. The person's own zone and language win; the open
