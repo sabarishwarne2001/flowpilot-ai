@@ -13,7 +13,11 @@ and worker. Two things a browser cannot do in a sandbox are played here instead:
   `reconcile_service.reconcile_event`, the code a signed webhook reaches through the `--loop
   stripe` worker, with a gateway that answers its re-fetches from FlowPilot's database (as the
   test suite's fake gateway does). Everything that follows (plan, seats, statements, dunning
-  emails, read-only access) is FlowPilot's real behaviour.
+  emails, read-only access) is FlowPilot's real behaviour;
+* **the customer's DNS provider and identity provider** — `dns-publish` puts a TXT record where
+  the journeys' DNS server (`scripts/e2e_dns.py`) answers FlowPilot's real lookup, and `saml-idp`
+  / `saml-response` play the SAML provider (a signing certificate, then a signed assertion that
+  answers FlowPilot's own AuthnRequest), with the backend's test IdP (`tests/engines/saml_idp.py`).
 
 Development and test databases only: it refuses to run when ENVIRONMENT is production.
 """
@@ -186,16 +190,72 @@ def _plan_price_cents(db, plan: str) -> int:
     return int((tier.unit_amount_micros or 0) // 10_000) if tier else 0
 
 
+def _identity_provider(args: argparse.Namespace) -> int:
+    """The customer's SAML identity provider (Okta, Entra ID), stood in by the backend's test IdP.
+
+    `saml-idp` makes the provider's signing key and certificate (the certificate is what the owner
+    pastes into the identity console); `saml-response` answers FlowPilot's AuthnRequest with a signed
+    assertion for one person, addressed to FlowPilot's own ACS URL, as the provider would after they
+    signed in there.
+    """
+    from tests.engines.saml_idp import TestIdp, keypair
+
+    state = _load()
+    providers = state.setdefault("identity_providers", {})
+    domain = (args.domain or "").lower()
+    entity_id, sso_url = f"http://idp.{domain}/metadata", f"http://idp.{domain}/sso"
+    if args.command == "saml-idp":
+        key, cert = keypair(f"idp.{domain}")
+        providers[domain] = {"key": key, "cert": cert}
+        _save(state)
+        print(json.dumps({"entity_id": entity_id, "sso_url": sso_url, "certificate": cert}))
+        return 0
+    import base64
+    import zlib
+
+    from lxml import etree
+
+    from app.api.v1.saml import _sp_urls
+
+    held = providers[domain]
+    request_id = etree.fromstring(zlib.decompress(base64.b64decode(args.saml_request), -15)).get("ID")
+    sp_entity_id, acs_url, _ = _sp_urls()
+    idp = TestIdp(domain=domain, entity_id=entity_id, sso_url=sso_url, key=held["key"], cert=held["cert"])
+    answer = idp.response(email=args.email, acs_url=acs_url, sp_entity_id=sp_entity_id, in_response_to=request_id,
+                          attributes={"displayName": [args.email.split("@")[0].replace(".", " ").title()]})
+    print(json.dumps({"acs_url": acs_url, "saml_response": answer}))
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="The browser journeys' clock and gateway stand-ins.")
     parser.add_argument("command", choices=[
         "subscribe", "seats", "change-plan", "cancel", "cancel-at-period-end", "renewal-fails", "payment-fails-again", "mark-unpaid",
-        "card-fixed", "trial-ending", "trial-ends", "run-job"])
+        "card-fixed", "trial-ending", "trial-ends", "run-job", "dns-publish", "saml-idp", "saml-response"])
     parser.add_argument("--org", help="organization slug")
     parser.add_argument("--plan", default="developer")
     parser.add_argument("--seats", type=int, default=1)
     parser.add_argument("--job", help="job type for run-job")
+    parser.add_argument("--name", help="dns-publish: the DNS name")
+    parser.add_argument("--value", help="dns-publish: the TXT value")
+    parser.add_argument("--domain", help="saml-idp, saml-response: the customer's email domain")
+    parser.add_argument("--email", help="saml-response: who signs in")
+    parser.add_argument("--saml-request", help="saml-response: the SAMLRequest FlowPilot sent (redirect binding)")
     args = parser.parse_args(argv)
+
+    if args.command == "dns-publish":
+        # The customer publishes the TXT record at their DNS provider; the journeys' DNS server
+        # (scripts/e2e_dns.py, started by start-stack.sh) answers it to FlowPilot's resolver.
+        from scripts import e2e_dns
+
+        records = os.environ.get("E2E_DNS_RECORDS") or str(
+            Path(os.environ.get("E2E_LOG_DIR", "/tmp/flowpilot-e2e-logs")) / "dns-records.json")
+        e2e_dns.publish(Path(records), args.name, args.value)
+        print(json.dumps({"published": args.name, "value": args.value}))
+        return 0
+
+    if args.command in ("saml-idp", "saml-response"):
+        return _identity_provider(args)
 
     if args.command == "run-job":
         # Queue a job for the running worker, as its schedule would. With --org, the job is about
