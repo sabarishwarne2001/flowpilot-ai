@@ -1,8 +1,35 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 finished: consoles, identity, settings truthfulness, security; session 4 next)_
+_Last updated: 2026-10-13 (pre-launch campaign, session 4 of 4 started: experience, performance, operations, launch certification)_
 
-## Current phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
+## Current phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
+Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
+(PR #22, session 3, is merged; HANDOFF.md has "Session 3 → later sessions"). Draft PR titled
+`Campaign session 4: experience, operations and launch certification`. Owner delegated founder
+authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 4)`. **If this session is cut off, re-run the same prompt: continue on
+this branch and its open pull request, from the first unticked box in CAMPAIGN-MAP.md §4.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. CI: keep it green on every push; remove the pytest duplication (F-030) and make the browser job
+   a required check.
+2. Carry-overs that can be wrong money or lost work: F-324 (verify, then fix), F-256 (late usage
+   not disclosed), refunds recorded (credit note, negative revenue), the duplicate gateway
+   subscription alert and its refund playbook, every "change plan" screen leading to the portal.
+3. Operations (§C): configuration contract test and docs, the whole migration chain up/down/up,
+   every host cron line run by hand against the stack the runbook builds, backup and timed restore
+   drill, error and dead-job alerts for the owner, the Windows scripts, `COSTS.md`.
+4. Customer journeys (§D) as Playwright specs against the production bundle with the worker on.
+5. Item actions, the live collaborative-review WebSocket, the engine page journeys, the billing
+   jobs through the fake gateway, ERP delivery through the mock targets (§4.1 rows).
+6. Experience (§A): shell, every page at four widths in light and dark, accessibility (axe-core),
+   first run, public pricing/terms/privacy pages, email rendering.
+7. Performance (§B): bundle split and Lighthouse, Locust load run, N+1 and indexes, 10,000
+   documents, 500-document bulk delete timing; `PERFORMANCE.md`.
+8. Ledger to `--check all` = 0, `PRODUCT-NEXT.md`, the launch certification, the owner launch
+   checklist, HANDOFF, final suites, CI green, PR ready.
+
+## Previous phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
 `3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
 Draft PR titled `Campaign session 3: consoles, identity, settings and security`. Owner delegated
