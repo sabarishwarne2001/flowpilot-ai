@@ -26,6 +26,9 @@ import {
   updateRetentionPolicy,
 } from "@/services/api/compliance";
 import { complianceKeys } from "@/services/api/queryKeys";
+import { listOrganizationMembers } from "@/services/api/organization";
+import { useAuthStore } from "@/store/useAuthStore";
+import type { OrganizationMember } from "@/types/tenancy";
 import StatusPill from "@/components/ui/StatusPill";
 import { OVERLAY } from "@/components/ui/primitives";
 import { ErasureImpactPreview } from "@/components/organization/ErasureImpactPreview";
@@ -66,9 +69,11 @@ const ResidencyCard: React.FC<{
   organizationId: string;
   region: DataResidencyRegion;
   options: readonly { region: DataResidencyRegion; configured: boolean }[];
+  pinned: readonly string[];
+  notPinned: readonly string[];
   canWrite: boolean;
   onChanged: () => void;
-}> = ({ organizationId, region, options, canWrite, onChanged }) => {
+}> = ({ organizationId, region, options, pinned, notPinned, canWrite, onChanged }) => {
   const [selected, setSelected] = useState<DataResidencyRegion>(region);
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +103,31 @@ const ResidencyCard: React.FC<{
         <div>
           <h2 className="text-base font-semibold">Data residency</h2>
           <p className={HINT}>
-            Where this tenant&rsquo;s documents, avatars and export archives are
-            physically stored.
+            Where some of this organization&rsquo;s files are stored. The region
+            does not move documents or the database; see what it covers below.
           </p>
         </div>
       </header>
+
+      {/* F-301, N-066: the server's statement of what the region pins, kept equal to the code. */}
+      <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2" data-testid="residency-scope">
+        <div className="rounded-md border border-border p-3">
+          <p className="font-medium text-foreground">Stored in the chosen region</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground" data-testid="residency-pinned">
+            {pinned.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <p className="font-medium text-foreground">Stored where this deployment runs, whatever the region</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground" data-testid="residency-not-pinned">
+            {notPinned.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
       <div className="mt-4 space-y-3">
         <div>
@@ -488,12 +513,33 @@ const ExportsCard: React.FC<{
 // Erasure
 // ---------------------------------------------------------------------------
 
+const personLabel = (member: OrganizationMember): string => {
+  const name = member.user.display_name?.trim();
+  const who = name ? `${name} — ${member.user.email}` : member.user.email;
+  if (member.status === "DEACTIVATED") {
+    return `${who} (former member)`;
+  }
+  return member.status === "SUSPENDED" ? `${who} (suspended)` : who;
+};
+
 const ErasureModal: React.FC<{
   organizationId: string;
   onClose: () => void;
   onErased: () => void;
 }> = ({ organizationId, onClose, onErased }) => {
   const [subjectUserId, setSubjectUserId] = useState("");
+  const me = useAuthStore((state) => state.user);
+  const members = useQuery({
+    queryKey: ["organizations", "members", organizationId, "with-former"],
+    queryFn: () => listOrganizationMembers(organizationId, true),
+  });
+  const erasable = useMemo(
+    () =>
+      (members.data?.items ?? [])
+        .filter((member) => member.role !== "OWNER" && member.user.id !== me?.id)
+        .sort((a, b) => personLabel(a).localeCompare(personLabel(b))),
+    [members.data, me?.id],
+  );
   const [ticket, setTicket] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [typedPhrase, setTypedPhrase] = useState("");
@@ -564,15 +610,35 @@ const ErasureModal: React.FC<{
         <div className="mt-4 space-y-3">
           <div>
             <label className={LABEL} htmlFor="erasure-subject">
-              Subject user ID
+              Person
             </label>
-            <input
+            {/* F-325: chosen by name and address. The form asked for a user ID, which no page of
+                the console shows, so a data-subject request could not be answered from it. */}
+            <select
               id="erasure-subject"
               className={INPUT}
               value={subjectUserId}
+              disabled={members.isPending || mutation.isPending}
               onChange={(event) => setSubjectUserId(event.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
+            >
+              <option value="">
+                {members.isPending ? "Loading the organization's people…" : "Choose a current or former member"}
+              </option>
+              {erasable.map((member) => (
+                <option key={member.user.id} value={member.user.id}>
+                  {personLabel(member)}
+                </option>
+              ))}
+            </select>
+            <p className={HINT}>
+              Current and former members of this organization. Owners are not listed (ownership is
+              transferred first), and neither are you.
+            </p>
+            {members.isError ? (
+              <p className="mt-1 text-xs text-destructive">
+                The member list could not be loaded: {errorMessage(members.error)}
+              </p>
+            ) : null}
           </div>
 
           <ErasureImpactPreview
@@ -813,6 +879,8 @@ const OrganizationCompliance: React.FC = () => {
         organizationId={organizationId}
         region={overview.data.residency.region}
         options={residencyOptions}
+        pinned={overview.data.residency.pinned ?? []}
+        notPinned={overview.data.residency.not_pinned ?? []}
         canWrite={isOwner}
         onChanged={invalidateAll}
       />

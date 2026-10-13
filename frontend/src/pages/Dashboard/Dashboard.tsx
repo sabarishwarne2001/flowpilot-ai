@@ -37,7 +37,7 @@ import type { DashboardDocTypeDistribution, DashboardEventType } from "@/types/d
 // Each event wears a colour, an icon and its name, never the colour alone.
 const EVENTS: Readonly<Record<DashboardEventType, { readonly tone: string; readonly icon: React.ElementType; readonly label: string }>> = {
   PROCESS_COMPLETED: { tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400", icon: CheckCircle2, label: "Process completed" },
-  UPLOAD_COMPLETED: { tone: "bg-primary/10 text-primary dark:text-[hsl(213_94%_72%)]", icon: UploadCloud, label: "Upload completed" },
+  UPLOAD_COMPLETED: { tone: "bg-primary/10 text-primary dark:text-[hsl(var(--primary-on-dark))]", icon: UploadCloud, label: "Upload completed" },
   AUTOMATION_TRIGGERED: { tone: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300", icon: Zap, label: "Automation triggered" },
   PROCESS_STARTED: { tone: "bg-amber-500/10 text-amber-700 dark:text-amber-400", icon: Clock, label: "Process started" },
   PROCESS_FAILED: { tone: "bg-destructive/10 text-destructive", icon: AlertTriangle, label: "Process failed" },

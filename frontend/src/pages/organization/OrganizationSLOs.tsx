@@ -28,6 +28,7 @@ import {
   type SLOWindow,
 } from "@/types/slo";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatNumber } from "@/utils/displayTime";
 
 const PERIODS: readonly { readonly value: SLOWindow; readonly label: string }[] = [
   { value: "HOUR", label: "Last 24 hours" },
@@ -170,7 +171,7 @@ const SLORow: React.FC<{
         <SourceBadge entry={entry} />
         <span className="tabular-nums">
           {hasSamples
-            ? `${entry.sample_count.toLocaleString()} samples this ${entry.target.window_period.toLowerCase()}`
+            ? `${formatNumber(entry.sample_count)} samples this ${entry.target.window_period.toLowerCase()}`
             : "No traffic in this window"}
           {entry.total_windows > 0
             ? ` · ${entry.total_windows - entry.breached_windows}/${entry.total_windows} windows met`

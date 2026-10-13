@@ -89,11 +89,7 @@ class NotificationDispatcher:
                 f"Unsupported notification provider: '{action_type}'."
             )
 
-        logger.info(
-            "Dispatching notification via '%s' to '%s'.",
-            key,
-            recipient,
-        )
+        logger.info("Dispatching notification via '%s'.", key)
 
         try:
             success = await provider.send(

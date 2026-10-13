@@ -35,8 +35,8 @@ export const DocumentSettings: React.FC = () => {
   } = useForm<DocumentSettingsFormData>({
     resolver: zodResolver(documentSettingsSchema),
     defaultValues: {
-      chunk_size: 500,
-      chunk_overlap: 100,
+      chunk_size_tokens: 220,
+      chunk_overlap_pct: 10,
       embedding_model: "sentence-transformers/all-MiniLM-L6-v2",
       ocr_language: "eng",
       max_upload_size: 50,
@@ -65,8 +65,8 @@ export const DocumentSettings: React.FC = () => {
     }
 
     reset({
-      chunk_size: documentSettings.chunk_size,
-      chunk_overlap: documentSettings.chunk_overlap,
+      chunk_size_tokens: documentSettings.chunk_size_tokens,
+      chunk_overlap_pct: documentSettings.chunk_overlap_pct,
       embedding_model: documentSettings.embedding_model,
       ocr_language: documentSettings.ocr_language,
       max_upload_size: documentSettings.max_upload_size,
@@ -153,32 +153,38 @@ export const DocumentSettings: React.FC = () => {
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Campaign session 3 (F-299): the two fields chunking reads. The page used to edit the
+                deprecated character-based `chunk_size` / `chunk_overlap`, which nothing reads. */}
             <div className="space-y-2">
-              <label htmlFor="chunk_size" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("chunk_size", "Chunk Size")}
+              <label htmlFor="chunk_size_tokens" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {renderLabel("chunk_size_tokens", "Chunk size (tokens)")}
               </label>
               <input
-                id="chunk_size"
+                id="chunk_size_tokens"
                 type="number"
+                min={32}
+                max={254}
                 disabled={!canManageSettings}
-                {...register("chunk_size", { valueAsNumber: true })}
+                {...register("chunk_size_tokens", { valueAsNumber: true })}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
-              {errors.chunk_size && <p className="text-xs text-destructive">{errors.chunk_size.message}</p>}
+              {errors.chunk_size_tokens && <p className="text-xs text-destructive">{errors.chunk_size_tokens.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="chunk_overlap" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {renderLabel("chunk_overlap", "Chunk Overlap")}
+              <label htmlFor="chunk_overlap_pct" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {renderLabel("chunk_overlap_pct", "Chunk overlap (%)")}
               </label>
               <input
-                id="chunk_overlap"
+                id="chunk_overlap_pct"
                 type="number"
+                min={0}
+                max={40}
                 disabled={!canManageSettings}
-                {...register("chunk_overlap", { valueAsNumber: true })}
+                {...register("chunk_overlap_pct", { valueAsNumber: true })}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
               />
-              {errors.chunk_overlap && <p className="text-xs text-destructive">{errors.chunk_overlap.message}</p>}
+              {errors.chunk_overlap_pct && <p className="text-xs text-destructive">{errors.chunk_overlap_pct.message}</p>}
             </div>
 
             {/* HARDENING-T2:D13. The embedding model is platform-wide (and pinned by a

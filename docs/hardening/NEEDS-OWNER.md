@@ -1003,3 +1003,154 @@ settings, keys, billing changes) and the assistant stay human-only: no scope cov
 list is `ROUTE_SCOPE_MAP` in `backend/app/core/scopes.py`. Why: a key is a long-lived secret
 pasted into other systems; a leaked read key must not be able to delete records or read who works
 here. A customer who needs more from the API asks for a scope to be added, deliberately.
+
+## N-057 — How an organization's sign-in policy applies
+**DECIDED (campaign session 3), with F-276 to F-278.** "Require single sign-on" and the IP
+allowlist hold on every request into the organization: every organization and workspace page and
+API route, and the live review channel. Single sign-on applies to people, not to API keys (a key is
+not a person and cannot sign in through an identity provider); the session must come from **this**
+organization's provider, not any provider. Owners keep password access while "Owners can bypass
+SSO" (break-glass) is on, as the console says. The IP allowlist applies to people **and** API keys;
+saving a list that leaves out the person saving it is refused, and the list cannot be turned on
+until the deployment's proxy setting is confirmed (otherwise the address cannot be trusted). Links
+that carry their own token are not bound by the allowlist: a calendar feed is fetched by Google's or
+Microsoft's servers, and a document request is answered by an outside supplier. Why: this is what
+Okta, GitHub Enterprise and Slack Enterprise do, and a security switch shown as "on" must be on.
+
+## N-058 — The "IdP session sync" flag
+**DECIDED (campaign session 3): removed.** It was stored, shown and read by nothing. A signed
+single-logout request from the organization's identity provider always ends that person's FlowPilot
+sessions (F-205), and that is not something a security policy should let anyone turn off. The
+column is dropped (migration `s3a1_drop_idp_session_sync`).
+
+## N-059 — Directory sync and single sign-on after a downgrade or an archive
+**DECIDED (campaign session 3), with F-279 to F-282.** When an organization leaves Enterprise, or
+is archived or suspended, its identity provider and SCIM token **never add anyone** (no new member
+by sign-in, no SCIM create or reactivation), but **offboarding always works** (deactivate, delete,
+remove from a group) and people already in the organization still sign in. Why: a leaver must be
+removable whatever the plan or billing state, and nobody should be locked out by a plan change;
+adding people is what the plan pays for. The same holds while an organization is read-only for
+non-payment.
+
+## N-060 — Organization-wide "require two-factor" (N-017 decided again)
+**DECIDED (campaign session 3): built, on every plan.** An owner can require two-factor sign-in
+for the whole organization (Organization → General). It is a security baseline, not an upsell:
+GitHub and Slack offer it on their free plans. Rules: the owner must have two-factor on their own
+account first (so the switch cannot lock them out); the card lists who has not turned it on before
+confirming; from then on a person who signed in with a password and has no second factor is
+refused everywhere in the organization until they turn it on, which they can do from the notice
+itself; people who sign in through the organization's identity provider are not asked (the
+provider's own two-factor check applies); API keys are not people; and nobody can turn off their
+second factor while an organization they belong to requires it. Migration `s3a2_require_two_factor`.
+
+## N-061 — Request limits for people in the browser (the per-tenant question)
+**DECIDED (campaign session 3).** Signed-in people are limited **per person** (600 requests a
+minute, `RATE_LIMIT_USER_PER_MINUTE`), anonymous traffic per network address, API keys per key (as
+before). There is **no organization-wide request ceiling**: cost is already bounded by each plan's
+allowances, and a ceiling shared by a whole organization would let one runaway script block every
+colleague. Before this, every browser request was counted per address (the per-person limit
+existed and nothing used it), so a company behind one office address shared one allowance. This is
+how GitHub and Linear count.
+
+## N-062 — Which notifications are emailed, and to whom
+**DECIDED (campaign session 3).** Every notification appears in the app. By email:
+
+| Category | Emailed | Who | Can it be turned off? |
+|---|---|---|---|
+| **Security** (roles, SSO and identity provider changes, SCIM keys, verified domains, the sign-in policy) | always | owners and administrators; a role change to the person | No |
+| **Billing** (payment failed and each dunning step, read-only, subscription started/ended/paused, plan changes, add-ons, a plan limit reached) | always | owners and Billing members (administrators see it in the app) | No |
+| **Usage warnings** (80% of a monthly plan limit) | yes | owners (they can change the plan) | Yes, per person |
+| **Documents and automations** (a document that failed, an automation paused or failing) | warnings and errors only | the people the notice is for | Yes, per person |
+
+Security and billing mail goes through FlowPilot's own mail relay, never an organization's SMTP
+settings (those can be misconfigured, and are what is in question when the notice is about that
+organization). Each email has a button to the right page and a link to the person's choices
+(Settings → Notifications). Limit alerts go once per meter, limit and month. A routine notice is
+never emailed. This is how Stripe, Linear and Slack do it: you cannot unsubscribe from "your
+payment failed" or "someone changed your role".
+
+## N-063 — Who can be given review work and own obligations
+**DECIDED (campaign session 3).** Whoever can work in the workspace: review items go to its
+contributors and administrators, and obligations to anyone who can open it, **including the
+organization's owners and administrators**, who administer every workspace without a separate
+grant (as calendar feeds already did, F-249). When someone loses access (their grant is revoked or
+lowered, they are deactivated, they leave, the directory removes them), the review items they held
+go back to the queue unassigned and their obligations lose their owner, at once, so nothing waits on
+a person who cannot open it.
+
+## N-064 — Whose settings decide how dates, times, numbers and money read
+**DECIDED (campaign session 3).**
+
+| What | Decided by | Example |
+|---|---|---|
+| A moment (uploaded at, signed in at) | The person's time zone; the workspace's if they never set one | "12 Oct 2026, 3:05 pm IST" |
+| A calendar date on a document (due date, invoice date, contract end) | The **workspace's** date format, for everyone in it | "15/12/2026" in a DD/MM/YYYY workspace |
+| Numbers and amounts | The person's language | "1,234.5" or "1.234,5" |
+| Money | Its own currency, in the person's language; no currency means a plain number (never a guessed symbol) | "€1,234.50" |
+| Exports, webhooks, calendar feeds | Always ISO 8601, whatever the settings | "2026-12-15" |
+
+Why the workspace decides document dates: a team should read "03/04/2026" the same way the
+documents and three-way matching do, whoever is looking. Why the person decides the rest: one
+workspace serves people in different countries. Emails the server sends to several people state
+moments in UTC, saying so. This is how Xero and QuickBooks split organisation and user settings.
+
+## N-065 — Where an organization's brand colours show
+**DECIDED (campaign session 3).**
+
+White-label branding is sold for the organization's own address (a verified custom domain), so
+that is where the brand shows. On the platform's own address everyone sees FlowPilot's colours.
+
+| Setting | Where it shows on a verified domain |
+|---|---|
+| Primary colour | Buttons, links and focus rings, on the sign-in pages and in the app |
+| Accent colour | The glow behind the sign-in pages |
+| Background and text colours | The sign-in pages' backdrop (the app's own surfaces stay, so text never lands on a background it was not designed for) |
+| Colour scheme (light, dark, system) | The sign-in pages. Inside the app, light or dark stays each person's own choice, as accessibility settings should |
+
+The text on a primary-coloured button is worked out from the colour (white or near-black,
+whichever contrasts more), so a pale brand colour still gives readable buttons. This is how
+Okta and Zendesk treat custom-domain branding.
+
+## N-066 — What "data residency" means on this deployment
+**DECIDED (campaign session 3).**
+
+The region an owner picks decides where two things are written: **compliance export archives** and
+the organization's **branding files** (logo, favicon). Everything else (documents and their pages,
+redacted copies, profile pictures, and the database with extracted text, fields, the search index,
+members, settings and the audit log) is stored where this deployment runs.
+
+Moving only document files to a regional bucket would not deliver residency either, because a
+document's text and search index live in the database. Real residency for documents means a
+**regional deployment** (a separate copy of the stack, database included, in that region), which is
+an infrastructure step rather than a code change. Until one exists the screen says exactly what the
+setting covers, the EU option no longer claims to satisfy GDPR agreements, and a test keeps the
+statement equal to the code. When a regional deployment is stood up, list it on the card and in
+the contract wording; nothing else needs to change.
+
+## N-067 — How long an organization's audit log is kept
+**DECIDED (campaign session 3).**
+
+The organization decides, on `Compliance > Retention`: any period of at least 400 days, or blank to
+keep the log indefinitely, exactly as the screen says. The nightly sweep deletes, per organization,
+only entries older than the period it chose. Nothing is deleted for an organization that has not
+chosen a period.
+
+Why not a platform default (say 400 days) for everyone who never opens the page: audit entries are
+evidence, deleting them cannot be undone, and regulated customers commonly need several years
+(seven for financial records is usual). Keeping them costs little (they are small rows). If storage
+ever matters, a default period can be introduced deliberately, announced to customers and shown on
+the screen, rather than applied silently.
+
+
+## N-068 — Which time zones and currencies a workspace can use
+**DECIDED (campaign session 3), with F-320 and F-321.**
+
+Any real time zone (the full IANA list, the same one the profile offers) and any three-letter ISO
+4217 currency. The workspace page offered ten of each, chosen for the first customers, so a
+workspace in Zurich, São Paulo or Toronto could not set its own clock or the currency three-way
+matching falls back to. The common ten stay at the top of the currency list.
+
+The server now refuses anything it cannot honour (an unknown zone, a currency that is not a code,
+a date format the product does not render), where before it stored any text and quietly fell back.
+Nothing about prices or billing currency changes: this is the workspace's operating currency for
+reading documents, not what FlowPilot charges in.

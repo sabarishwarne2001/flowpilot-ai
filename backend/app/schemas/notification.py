@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -213,3 +213,28 @@ class NotificationPage(BaseModel):
     unread_count: int
     limit: int
     offset: int
+
+
+# ---------------------------------------------------------------------------
+# Campaign session 3 (N-062): which notifications a person also gets by email.
+# ---------------------------------------------------------------------------
+
+
+class NotificationCategoryPreference(BaseModel):
+    key: str
+    label: str
+    description: str
+    email: bool
+    #: Security and Billing: always emailed, no switch.
+    locked: bool
+
+
+class NotificationPreferencesRead(BaseModel):
+    categories: list[NotificationCategoryPreference]
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: Literal["security", "billing", "usage", "workflow"]
+    email: bool

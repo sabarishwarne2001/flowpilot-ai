@@ -174,6 +174,11 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Email owners two days before their free trial ends, and when it ends (N-052).",
     ),
     ScheduledJob(
+        job_type="usage.limit_alerts",
+        interval_seconds=3_600,
+        description="Tell owners at 80% and at 100% of a monthly plan limit, once per period (N-062).",
+    ),
+    ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,
         description="Prune expired SAML replay-guard entries (ARCH-16).",

@@ -46,7 +46,11 @@ def resolve_identity(request: Request) -> RateLimitIdentity:
                 if parsed is not None:
                     return RateLimitIdentity("kid", str(parsed.key_id))
 
-    user_id = getattr(request.state, "user_id", None) if request else None
+    user_id = (
+        (getattr(request.state, "user_id", None) or getattr(request.state, "rate_limit_user_id", None))
+        if request
+        else None
+    )
     if user_id is not None:
         return RateLimitIdentity("uid", str(user_id))
 

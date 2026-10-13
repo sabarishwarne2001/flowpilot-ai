@@ -326,6 +326,28 @@ def active_agreement(
     return agreement
 
 
+def agreement_in_force(
+    db: Session, *, partner_id: uuid.UUID, on: date
+) -> PartnerRevShareAgreement:
+    """Campaign session 3 (F-309): the agreement that applied on `on`, active or since ended.
+
+    A rate change ends one agreement and starts the next, so a period is computed under the
+    terms of its own dates, not whichever agreement is active when it is (re)computed.
+    """
+    agreement = db.execute(
+        select(PartnerRevShareAgreement)
+        .where(
+            PartnerRevShareAgreement.partner_id == partner_id,
+            PartnerRevShareAgreement.effective_from <= on,
+            (PartnerRevShareAgreement.effective_to.is_(None))
+            | (PartnerRevShareAgreement.effective_to >= on),
+        )
+        .order_by(PartnerRevShareAgreement.effective_from.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return agreement or active_agreement(db, partner_id=partner_id)
+
+
 def compute_period(
     db: Session,
     *,
@@ -344,7 +366,7 @@ def compute_period(
     if period_end < period_start:
         raise RevShareError("period_end must not precede period_start.")
 
-    agreement = agreement or active_agreement(db, partner_id=partner.id)
+    agreement = agreement or agreement_in_force(db, partner_id=partner.id, on=period_start)
     window_start, window_end = _window(period_start, period_end)
 
     # INVARIANT 1: the book, bounded by assignment date. `as_of=window_end`

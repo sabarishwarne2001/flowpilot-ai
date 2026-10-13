@@ -41,7 +41,7 @@ export const formatBytes = (
   return `${Number(value.toFixed(precision))} ${FILE_SIZE_UNITS[index]}`;
 };
 
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatMoney, formatTimestamp } from "@/utils/displayTime";
 
 /**
  * Format dates in the reader's profile timezone and language (ARCH-30 D-5).
@@ -69,17 +69,8 @@ export const formatCurrency = (
   amount: number,
   currency = "USD",
 ): string => {
-  try {
-    return new Intl.NumberFormat(
-      navigator.language,
-      {
-        style: "currency",
-        currency: currency.toUpperCase(),
-      },
-    ).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // N-064: the person's language, not the browser's.
+  return formatMoney(amount, currency);
 };
 
 /**
@@ -192,23 +183,7 @@ export const formatMoneyMicros = (
   }
   const amount = micros / 1_000_000;
   const signDisplay = options.signed ? "exceptZero" : "auto";
-  if (currency && /^[A-Za-z]{3}$/.test(currency)) {
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: currency.toUpperCase(),
-        maximumFractionDigits: 2,
-        signDisplay,
-      }).format(amount);
-    } catch {
-      // an ISO-shaped code the browser does not know: fall through to a plain number
-    }
-  }
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    signDisplay,
-  }).format(amount);
+  return formatMoney(amount, currency, { maximumFractionDigits: 2, signDisplay });
 };
 
 /**

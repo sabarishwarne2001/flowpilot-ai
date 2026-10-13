@@ -106,6 +106,16 @@ class AuditResourceType(str, PyEnum):
     # Phase 2 TruthMesh: conflict decisions, link decisions, rebuilds and what-if simulations.
     # Added to the PostgreSQL type by p9a1_truthmesh_engine.
     TRUTH_MESH = "TRUTH_MESH"
+    # Campaign session 3 (F-294): the enterprise identity objects. The identity services wrote
+    # these names before they existed here, and every such write was dropped. Added to the
+    # PostgreSQL type by s3a4_identity_audit_vocabulary.
+    TENANT_SECURITY_POLICY = "TENANT_SECURITY_POLICY"
+    ENTERPRISE_IDP_CONFIG = "ENTERPRISE_IDP_CONFIG"
+    IDP_CERTIFICATE = "IDP_CERTIFICATE"
+    SCIM_API_KEY = "SCIM_API_KEY"
+    SCIM_GROUP = "SCIM_GROUP"
+    VERIFIED_DOMAIN = "VERIFIED_DOMAIN"
+    DIRECTORY_IDENTITY = "DIRECTORY_IDENTITY"
 
 
 class AuditAction(str, PyEnum):

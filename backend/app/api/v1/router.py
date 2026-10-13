@@ -78,6 +78,9 @@ WORKSPACE_PREFIX = "/workspaces/{workspace_id}"
 api_router.include_router(organizations.router)
 api_router.include_router(organization_email_settings.router)
 api_router.include_router(organization_notifications.router)
+from app.api.v1 import organization_two_factor  # noqa: E402  (campaign session 3)
+
+api_router.include_router(organization_two_factor.router)
 api_router.include_router(audit_logs.router)
 api_router.include_router(api_keys.router)
 api_router.include_router(me.router)

@@ -1,0 +1,72 @@
+/**
+ * Campaign session 3 (N-064) — one display layer. A workspace's date format decides how the dates
+ * on its documents read (here: an obligation's due date), for everyone in it; the server's tenant
+ * context carries the setting, and the page re-renders when it changes. Run against C's second
+ * workspace so the main one's settings never move under parallel tests.
+ */
+import { test, expect, expectHealthyPage } from "../support/fixtures";
+import { api, resolveWorkspaceId } from "../support/api";
+import { C_SECOND_WS, TENANTS, runId } from "../support/env";
+
+test.describe("Workspace date format", () => {
+  test.use({ user: "C.owner" });
+
+  test("an obligation's due date reads in the workspace's date format", async ({ page, session }) => {
+    const { workspaceId } = await resolveWorkspaceId(session!, TENANTS.C.org, C_SECOND_WS);
+    const before = await api<{ date_format: string }>(session, "GET", `/workspaces/${workspaceId}`);
+    expect(before.status, before.text).toBe(200);
+    const title = `Display format check ${runId()}`;
+    const created = await api<{ id?: string; obligation?: { id: string } }>(session, "POST", `/workspaces/${workspaceId}/obligations`, {
+      kind: "PAYMENT", title, rule: { kind: "FIXED", date: "2026-12-15" },
+    });
+    expect(created.status, created.text).toBeLessThan(300);
+    const obligationId = created.body.obligation?.id ?? created.body.id;
+    const listPath = `/${TENANTS.C.org}/${C_SECOND_WS}/obligations`;
+
+    try {
+      for (const [format, shown] of [["DD/MM/YYYY", "15/12/2026"], ["MM/DD/YYYY", "12/15/2026"]] as const) {
+        const set = await api(session, "PATCH", `/workspaces/${workspaceId}`, { date_format: format });
+        expect(set.status, set.text).toBe(200);
+        await page.goto(listPath);
+        await page.reload();
+        const row = page.getByRole("row").filter({ hasText: title });
+        await expect(row).toContainText(shown, { timeout: 20_000 });
+      }
+      await expectHealthyPage(page);
+    } finally {
+      await api(session, "PATCH", `/workspaces/${workspaceId}`, { date_format: before.body.date_format });
+      if (obligationId) {
+        await api(session, "DELETE", `/workspaces/${workspaceId}/obligations/${obligationId}`);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Settings truthfulness (campaign session 3, F-299): the Documents section's chunking controls
+// change what chunking actually reads.
+// ---------------------------------------------------------------------------------------------
+test.describe("Document chunking settings", () => {
+  test.use({ user: "C.owner" });
+
+  test("the chunk size and overlap a person saves are the ones chunking reads", async ({ page, session }) => {
+    const { workspaceId } = await resolveWorkspaceId(session!, TENANTS.C.org, C_SECOND_WS);
+    const path = `/workspaces/${workspaceId}/document-settings/`;
+    const before = await api<{ chunk_size_tokens: number; chunk_overlap_pct: number }>(session, "GET", path);
+    expect(before.status, before.text).toBe(200);
+    try {
+      await page.goto(`/${TENANTS.C.org}/${C_SECOND_WS}/settings?section=document`);
+      await page.locator("#chunk_size_tokens").fill("128");
+      await page.locator("#chunk_overlap_pct").fill("15");
+      await page.getByRole("button", { name: /save/i }).first().click();
+      await expect
+        .poll(async () => (await api<{ chunk_size_tokens: number; chunk_overlap_pct: number }>(session, "GET", path)).body)
+        .toMatchObject({ chunk_size_tokens: 128, chunk_overlap_pct: 15 });
+      await expectHealthyPage(page);
+    } finally {
+      await api(session, "PUT", path, {
+        chunk_size_tokens: before.body.chunk_size_tokens, chunk_overlap_pct: before.body.chunk_overlap_pct,
+      });
+    }
+  });
+});

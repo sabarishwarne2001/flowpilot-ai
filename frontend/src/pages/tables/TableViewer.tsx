@@ -31,6 +31,7 @@ import {
 } from "@/types/tables";
 import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
+import { formatNumber } from "@/utils/displayTime";
 
 const ROW_STYLE: Readonly<Record<RowKind, string>> = {
   HEADER: "",
@@ -241,7 +242,7 @@ const TableGrid: React.FC<{
               const matches = entry.total === null ? null : Math.abs(entry.sum - entry.total) < 0.005;
               return (
                 <td key={c.index} className="p-1.5 text-right tabular-nums" data-testid={`column-sum-${c.index}`}>
-                  <span className="font-semibold">{entry.sum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                  <span className="font-semibold">{formatNumber(entry.sum, { maximumFractionDigits: 6 })}</span>
                   {matches === null ? null : matches ? (
                     <span className="ml-1 inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300" title="Matches the table's total row">
                       <CheckCircle2 className="h-3 w-3" aria-hidden /><span className="sr-only">matches the total row</span>
@@ -249,7 +250,7 @@ const TableGrid: React.FC<{
                   ) : (
                     <span className="ml-1 inline-flex items-center gap-0.5 text-destructive" title={`The total row says ${entry.total}`}>
                       <AlertTriangle className="h-3 w-3" aria-hidden />
-                      <span className="text-[10px]">Δ {(entry.sum - (entry.total ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                      <span className="text-[10px]">Δ {formatNumber((entry.sum - (entry.total ?? 0)), { maximumFractionDigits: 6 })}</span>
                     </span>
                   )}
                 </td>

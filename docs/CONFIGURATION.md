@@ -85,7 +85,7 @@ guard), and the comment written above it in the code.
 | `DATABASE_REPLICA_ENFORCE_READ_ONLY` | `bool` | `True` | example, production | Applies SET default_transaction_read_only on every reader connection. With no standby configured this is what gives development and CI the same failure mode production would have, so a route that drifts into writing on … |
 | `TRUSTED_PROXY_HOPS_CONFIRMED` | `bool` | `False` | example, production | ARCH-08 A.3.4 — read by session_policy_service.update_policy to gate enabling IP pinning. It was read through getattr() with a False default and never declared, so the gate could not be opened at all. Set to true only o… |
 | `RATE_LIMIT_GLOBAL_IP_PER_MINUTE` | `int` | `600` | — |  |
-| `RATE_LIMIT_USER_PER_MINUTE` | `int` | `300` | — |  |
+| `RATE_LIMIT_USER_PER_MINUTE` | `int` | `600` | — | Campaign session 3 (N-061): signed-in requests are counted per person (anonymous ones per address, API keys per key). 600 matches the allowance each person effectively had before. |
 | `RATE_LIMIT_LOGIN_IP_PER_5MIN` | `int` | `20` | example, production | F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the allowance the product had in effect while each attempt was counted twice against a limit of 20; the owner chooses the final value (N-018). N-018 (deci… |
 | `RATE_LIMIT_CREDENTIAL_PER_HOUR` | `int` | `10` | — |  |
 | `RATE_LIMIT_EXPORT_PER_HOUR` | `int` | `5` | — |  |

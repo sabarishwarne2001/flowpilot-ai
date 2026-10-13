@@ -1,3 +1,4 @@
+import { numberFormat } from "@/utils/displayTime";
 /**
  * ARCH-27 — partner marketplace, reseller tenancy and revenue share.
  *
@@ -300,7 +301,7 @@ export const formatMicros = (
   if (micros === null || micros === undefined) {
     return "—";
   }
-  return new Intl.NumberFormat(undefined, {
+  return numberFormat({
     style: "currency",
     currency,
     maximumFractionDigits: 2,

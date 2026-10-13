@@ -74,6 +74,9 @@ class LivePrincipal:
     token_expires_at: datetime
     token_issued_at: datetime
     allowed_kinds: tuple[str, ...] = field(default_factory=tuple)
+    #: Campaign session 3. The connection's strictly resolved client address, for the
+    #: organization's IP allowlist at the handshake and at every re-check.
+    client_address: Optional[str] = None
 
     def person(self) -> dict:
         return {"user_id": str(self.user_id), "email": self.email, "name": self.name}
@@ -163,7 +166,24 @@ def check_origin(origin: Optional[str], host_header: Optional[str]) -> None:
     raise LiveRefused("cross-origin WebSocket refused")
 
 
-def authenticate(db: Session, *, token: str, workspace_id: uuid.UUID) -> LivePrincipal:
+def _sign_in_policy(db: Session, *, organization_id: uuid.UUID, membership, session_id,
+                    client_address: Optional[str], close_code: int = v.CLOSE_POLICY) -> None:
+    """Campaign session 3. The organization's sign-in policy (single sign-on, the IP allowlist),
+    as the REST path applies it, so the channel is not a way around it."""
+    from app.api import deps
+    from app.core.exceptions import OrganizationPermissionDeniedError
+
+    try:
+        deps.assert_organization_sign_in_policy(
+            db, organization_id=organization_id, membership=membership, session_id=session_id,
+            client_address=client_address,
+        )
+    except OrganizationPermissionDeniedError as exc:
+        raise LiveRefused("the organization's sign-in policy refuses this session", close_code=close_code) from exc
+
+
+def authenticate(db: Session, *, token: str, workspace_id: uuid.UUID,
+                 client_address: Optional[str] = None) -> LivePrincipal:
     """Everything the REST path checks, plus CONTRIBUTOR and the capability. Raises LiveRefused."""
     from app import crud
     from app.api import deps
@@ -198,6 +218,8 @@ def authenticate(db: Session, *, token: str, workspace_id: uuid.UUID) -> LivePri
         workspace_service.assert_workspace_operational(workspace)
     except Exception as exc:  # noqa: BLE001
         raise LiveRefused("organization or workspace not operational") from exc
+    _sign_in_policy(db, organization_id=workspace.organization_id, membership=access.organization_membership,
+                    session_id=claims.session_id, client_address=client_address)
     if not is_at_least(access.effective_role, WorkspaceRole.CONTRIBUTOR):
         raise LiveRefused("the review hub needs the contributor role")
     # ARCH48-S1:ws-capability-gate. The WebSocket has no 402: the handshake is refused (1008) instead.
@@ -210,6 +232,7 @@ def authenticate(db: Session, *, token: str, workspace_id: uuid.UUID) -> LivePri
         role=str(getattr(role, "value", role)), session_id=claims.session_id, token_expires_at=claims.expires_at,
         token_issued_at=claims.issued_at,
         allowed_kinds=allowed_kinds(db, workspace.organization_id),
+        client_address=client_address,
     )
 
 
@@ -241,6 +264,9 @@ def recheck(db: Session, principal: LivePrincipal) -> None:
     if not access.has_access or access.effective_role is None or not is_at_least(access.effective_role,
                                                                                   WorkspaceRole.CONTRIBUTOR):
         raise LiveRefused("workspace access ended", close_code=v.CLOSE_ACCESS_LOST)
+    _sign_in_policy(db, organization_id=principal.organization_id, membership=access.organization_membership,
+                    session_id=principal.session_id, client_address=principal.client_address,
+                    close_code=v.CLOSE_ACCESS_LOST)
     if not has_collab(db, principal.organization_id):
         raise LiveRefused("the plan no longer includes collaborative review", close_code=v.CLOSE_ACCESS_LOST)
     principal.allowed_kinds = allowed_kinds(db, principal.organization_id)

@@ -16,7 +16,9 @@ import React from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Archive, LifeBuoy } from "lucide-react";
 
+import { joinNames, useAccessContacts } from "@/components/common/useAccessContacts";
 import { ROUTES } from "@/constants/routes";
+import { useTenant } from "@/hooks/useTenant";
 
 type NoAccessReason = "organization_suspended" | "workspace_archived" | "unknown";
 
@@ -52,6 +54,15 @@ export const NoAccess: React.FC = () => {
 
   const copy = REASON_COPY[reason] ?? REASON_COPY.unknown;
 
+  // Campaign session 3: name who can restore it when the organization is known (an archived
+  // workspace: owners and admins; a suspended organization cannot be read, so the generic line stays).
+  const { state: tenant } = useTenant();
+  const names = useAccessContacts(
+    tenant.status === "ready"
+      ? { organizationId: tenant.organization.organization_id, roles: ["OWNER", "ADMIN"] }
+      : null,
+  );
+
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md space-y-6 text-center">
@@ -81,7 +92,9 @@ export const NoAccess: React.FC = () => {
 
           <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-muted-foreground">
             <LifeBuoy className="h-3.5 w-3.5" />
-            Contact an organization owner if you believe this is a mistake.
+            {names.length > 0
+              ? `Contact ${joinNames(names)} if you believe this is a mistake.`
+              : "Contact an organization owner if you believe this is a mistake."}
           </p>
         </div>
       </div>

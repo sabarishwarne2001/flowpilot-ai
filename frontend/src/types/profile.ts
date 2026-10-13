@@ -50,3 +50,19 @@ export interface EmailChangeConfirmResult {
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const AVATAR_MIN_DIMENSION = 32;
 export const AVATAR_MAX_DIMENSION = 1024;
+
+/** Campaign session 3 (N-062). One notification category, and whether it is emailed to me. */
+export type NotificationCategoryKey = "security" | "billing" | "usage" | "workflow";
+
+export interface NotificationCategoryPreference {
+  readonly key: NotificationCategoryKey;
+  readonly label: string;
+  readonly description: string;
+  readonly email: boolean;
+  /** Security and Billing: always emailed, no switch. */
+  readonly locked: boolean;
+}
+
+export interface NotificationPreferences {
+  readonly categories: readonly NotificationCategoryPreference[];
+}

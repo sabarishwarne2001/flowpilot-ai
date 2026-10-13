@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from app.api import deps
 from app.models.identity import (
@@ -28,6 +28,7 @@ from app.api import capability_gate as _cap_gate  # HM-S1:capability-gated
 from app.models.identity import JitProvisioningMode  # HM-S1:idp-jit-default
 from app.core import entitlements as _ent
 from app.core.config import settings
+from app.core.client_ip import trusted_client_ip
 from app.schemas.identity import SecurityPolicyUpdate
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -43,16 +44,27 @@ def _principal(user) -> IdentityPrincipal:
 
 
 def _fingerprint(pem: str) -> str:
+    """The SHA-256 fingerprint of an X.509 certificate in PEM form.
+
+    Campaign session 3 (F-283). This only base64-decoded the body, so any base64 text between
+    the PEM markers ("AAAA") was saved as the provider's signing certificate; the connection then
+    activated and refused every sign-in with "no configured certificate verified the signature".
+    The certificate is parsed now, and anything that is not one is a 422 at the moment it is
+    pasted.
+    """
     import hashlib
-    import base64
-    body = (pem.replace("-----BEGIN CERTIFICATE-----", "")
-               .replace("-----END CERTIFICATE-----", "")
-               .replace("\n", "").strip())
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
     try:
-        der = base64.b64decode(body)
+        certificate = x509.load_pem_x509_certificate(pem.strip().encode("utf-8"))
     except Exception as exc:
-        raise HTTPException(422, "Certificate is not valid PEM.") from exc
-    return hashlib.sha256(der).hexdigest()
+        raise HTTPException(
+            422, "That is not a valid X.509 certificate in PEM form. Paste the identity "
+            "provider's signing certificate, from -----BEGIN CERTIFICATE----- to "
+            "-----END CERTIFICATE-----.") from exc
+    return hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
 #: Roles a mapping or a just-in-time default may grant. Never OWNER: ownership
@@ -581,11 +593,15 @@ def revoke_scim_key(organization_id: str, key_id: str,
 # ==========================================================================
 
 @router.get("/security-policy")
-def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
+def get_policy(organization_id: str, request: Request, membership=Depends(deps.RequireOrgAdmin),
                db=Depends(deps.get_db)):
     policy = session_policy_service.get_or_create_policy(
         db, organization_id=organization_id)
     return {
+        # Campaign session 3. The address an allowlist is checked against for this request, so
+        # the console can show it and an owner never saves a list that leaves themselves out.
+        "your_address": trusted_client_ip(request),
+        "ip_allowlist_available": session_policy_service.ip_allowlist_trustworthy(),
         "require_sso": policy.require_sso,
         "sso_bypass_for_owners": policy.sso_bypass_for_owners,
         "ip_pinning": str(policy.ip_pinning.value if hasattr(policy.ip_pinning, "value") else policy.ip_pinning),
@@ -593,7 +609,6 @@ def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
         "ip_prefix_v6": policy.ip_prefix_v6,
         "ip_allowlist": [str(c) for c in (policy.ip_allowlist or [])],
         "max_session_age_s": policy.max_session_age_s,
-        "idp_session_sync": policy.idp_session_sync,
         # F-204. What applies when the organization sets nothing, or something longer.
         "platform_max_session_age_s": settings.SESSION_ABSOLUTE_LIFETIME_HOURS * 3600,
         "idle_timeout_s": settings.SESSION_IDLE_TIMEOUT_MINUTES * 60,
@@ -601,7 +616,7 @@ def get_policy(organization_id: str, membership=Depends(deps.RequireOrgAdmin),
 
 
 @router.put("/security-policy")
-def update_policy(organization_id: str, payload: dict = Body(...),
+def update_policy(organization_id: str, request: Request, payload: dict = Body(...),
                   membership=Depends(deps.RequireOrgOwner),
                   db=Depends(deps.get_db),
                   user=Depends(deps.get_current_active_user)):
@@ -617,7 +632,8 @@ def update_policy(organization_id: str, payload: dict = Body(...),
         db, organization_id=organization_id)
     try:
         policy = session_policy_service.update_policy(
-            db, policy=policy, changes=changes, principal=_principal(user))
+            db, policy=policy, changes=changes, principal=_principal(user),
+            requester_ip=trusted_client_ip(request))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     # ARCH30-T4F:emit-security-policy — A8. Field names, never values:
@@ -634,7 +650,7 @@ def update_policy(organization_id: str, payload: dict = Body(...),
         ],
         actor=user,
     )
-    return get_policy(organization_id, membership=membership, db=db)
+    return get_policy(organization_id, request, membership=membership, db=db)
 
 
 @router.get("/directory")

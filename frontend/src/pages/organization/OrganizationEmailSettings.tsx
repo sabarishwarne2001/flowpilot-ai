@@ -154,24 +154,30 @@ export const OrganizationEmailSettings: React.FC = () => {
           icon={Mail}
           eyebrow={organization.organization_name}
           title="Organization Transactional Email"
-          description="Custom SMTP delivery for team invitations, password resets and security notices. Automation alerts are configured separately, per workspace, under Settings → Email."
+          description="Your own mail server for team invitations and for the optional notices your members receive (usage and workflow). Automation alerts are configured separately, per workspace, under Settings → Email."
         />
+        <p className="text-sm text-muted-foreground" data-testid="org-email-scope">
+          Password resets, email-address changes and security and billing notices
+          always come from the platform&apos;s mail service, so people can recover
+          their account even when this server is misconfigured.
+        </p>
         {/*
           ARCH-06. Two SMTP screens exist and both said "email settings",
           which is why members could not tell them apart. They are not
           duplicates and neither is redundant:
 
-            organization_email_settings — THIS screen. System and
-            transactional mail: invitations, password resets, email-change
-            handshakes, security notices. Sent to people, about their
-            account.
+            organization_email_settings — THIS screen. Invitations and the
+            optional notices (usage, workflow) sent to members. Password
+            resets, email-change handshakes and security and billing notices
+            go through the platform relay, never this server (campaign
+            session 3, N-062, F-305).
 
             email_settings (workspace) — Settings -> Email inside a
             workspace. Outbound mail for ARCH-13 automation `email.send`
             actions. Sent by a workflow, about a document.
 
           The distinction that matters operationally: if this screen is
-          misconfigured nobody can join or recover an account. If the
+          misconfigured nobody can be invited (recovery still works). If the
           workspace one is, automations stop alerting. Different blast
           radius, different owner, different screen.
         */}

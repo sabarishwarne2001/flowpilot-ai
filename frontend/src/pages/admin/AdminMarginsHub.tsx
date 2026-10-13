@@ -14,6 +14,7 @@
  * fiction. The banner says so in words.
  */
 
+import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ReconciliationHistory,
@@ -60,6 +61,7 @@ import {
 } from "@/types/cogs";
 import { errorMessage } from "@/services/api/errors";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatMoney, formatNumber } from "@/utils/displayTime";
 
 const WINDOWS: readonly { readonly days: number; readonly label: string }[] = [
   { days: 7, label: "Last 7 days" },
@@ -147,14 +149,14 @@ const CoverageBanner: React.FC<{ readonly figures: MarginFigures }> = ({
           {figures.revenue_micros === 0 ? (
             <>
               No revenue was billed in this period, and{" "}
-              {figures.unknown_cost_event_count.toLocaleString()} events have
+              {formatNumber(figures.unknown_cost_event_count)} events have
               no recorded supplier cost.
             </>
           ) : (
             <>
               {formatRatio(figures.unknown_cost_share)} of revenue (
               {formatMicros(figures.unknown_cost_revenue_micros)} across{" "}
-              {figures.unknown_cost_event_count.toLocaleString()} events) came
+              {formatNumber(figures.unknown_cost_event_count)} events) came
               from usage with no recorded supplier cost. A margin computed over
               the remainder would describe a minority of the business.
             </>
@@ -179,7 +181,7 @@ const perMillion = (value: string | number): string => {
     return String(value);
   }
   const digits = amount !== 0 && Math.abs(amount) < 0.01 ? 4 : 2;
-  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return formatMoney(amount, "USD", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 };
 
 const MarginCell: React.FC<{ readonly figures: MarginFigures }> = ({
@@ -368,7 +370,7 @@ const InvoiceRow: React.FC<{
             )}
             {latest.unknown_cost_event_count > 0 ? (
               <div className="text-xs text-destructive">
-                {latest.unknown_cost_event_count.toLocaleString()} events in this
+                {formatNumber(latest.unknown_cost_event_count)} events in this
                 period had no cost basis
               </div>
             ) : null}
@@ -413,8 +415,13 @@ export const AdminMarginsHub: React.FC = () => {
   const [order, setOrder] = useState<MarginOrder>("MARGIN_ASC");
   const [error, setError] = useState<string | null>(null);
 
-  const window = useMemo<MarginWindow>(() => trailingWindow(days), [days]);
-  const key = useMemo(() => windowKey(window), [window]);
+  // F-316. Refresh moves the window to end now; it used to re-ask for the window computed when
+  // the page opened (or the window was last changed).
+  const [refreshedAt, setRefreshedAt] = useState(0);
+  const window = useMemo<MarginWindow>(() => trailingWindow(days), [days, refreshedAt]);
+  // The window key is minute-grained; the refresh moment keeps a refreshed window from reusing
+  // the cached one.
+  const key = useMemo(() => `${windowKey(window)}@${refreshedAt}`, [window, refreshedAt]);
 
   const summary = useQuery({
     queryKey: cogsKeys.marginSummary(key),
@@ -523,7 +530,10 @@ export const AdminMarginsHub: React.FC = () => {
               </select>
               <button
                 type="button"
-                onClick={() => void invalidate()}
+                onClick={() => {
+                  setRefreshedAt(Date.now());
+                  void invalidate();
+                }}
                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-sm hover:bg-muted"
               >
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -563,7 +573,7 @@ export const AdminMarginsHub: React.FC = () => {
             <Stat
               label="Revenue"
               value={formatMicros(figures.revenue_micros)}
-              caption={`${figures.event_count.toLocaleString()} metered events`}
+              caption={`${formatNumber(figures.event_count)} metered events`}
             />
             <Stat
               label="Modelled COGS"
@@ -573,7 +583,7 @@ export const AdminMarginsHub: React.FC = () => {
                   : formatMicros(figures.cost_basis_micros)
               }
               isUnknown={figures.known_cost_event_count === 0}
-              caption={`${figures.known_cost_event_count.toLocaleString()} events with a cost basis`}
+              caption={`${formatNumber(figures.known_cost_event_count)} events with a cost basis`}
             />
             <Stat
               label="Gross margin"
@@ -594,14 +604,14 @@ export const AdminMarginsHub: React.FC = () => {
               value={formatMicros(figures.unknown_cost_revenue_micros)}
               caption={`${formatRatio(
                 figures.unknown_cost_share,
-              )} of revenue · ${figures.unknown_cost_event_count.toLocaleString()} events`}
+              )} of revenue · ${formatNumber(figures.unknown_cost_event_count)} events`}
             />
             <Stat
               label="BYOK traffic"
               value={formatMicros(figures.zero_byok_revenue_micros)}
               caption={`${formatRatio(
                 figures.zero_byok_share,
-              )} of revenue · $0.00 provider cost · ${figures.zero_byok_event_count.toLocaleString()} events`}
+              )} of revenue · $0.00 provider cost · ${formatNumber(figures.zero_byok_event_count)} events`}
             />
           </section>
         </>
@@ -693,6 +703,10 @@ export const AdminMarginsHub: React.FC = () => {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading tenants…
           </div>
+        ) : tenants.isError ? (
+          <p className="mt-3">
+            <LoadFailed what="Tenants" onRetry={() => void tenants.refetch()} />
+          </p>
         ) : tenants.data && tenants.data.entries.length > 0 ? (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
@@ -751,7 +765,12 @@ export const AdminMarginsHub: React.FC = () => {
                       {formatMicros(entry.revenue_micros)}
                     </td>
                     <td className="py-2 pr-4 text-right tabular-nums">
-                      {formatMicros(entry.cost_basis_micros)}
+                      {/* F-313: no event with a cost basis means the cost is unknown, never $0.00. */}
+                      {entry.event_count - entry.unknown_cost_event_count <= 0 ? (
+                        <span className="text-muted-foreground">unknown</span>
+                      ) : (
+                        formatMicros(entry.cost_basis_micros)
+                      )}
                     </td>
                     <td
                       className={`py-2 text-right tabular-nums ${
@@ -760,7 +779,7 @@ export const AdminMarginsHub: React.FC = () => {
                           : "text-muted-foreground"
                       }`}
                     >
-                      {entry.unknown_cost_event_count.toLocaleString()}
+                      {formatNumber(entry.unknown_cost_event_count)}
                     </td>
                   </tr>
                 ))}
@@ -790,6 +809,10 @@ export const AdminMarginsHub: React.FC = () => {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading invoices…
           </div>
+        ) : invoices.isError ? (
+          <p className="mt-3">
+            <LoadFailed what="Supplier invoices" onRetry={() => void invoices.refetch()} />
+          </p>
         ) : invoices.data && invoices.data.entries.length > 0 ? (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">

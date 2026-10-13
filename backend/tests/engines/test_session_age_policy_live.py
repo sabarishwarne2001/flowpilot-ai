@@ -40,7 +40,7 @@ def test_the_session_age_is_set_reported_and_cleared(engines: Engines) -> None:
     assert body["idle_timeout_s"] == settings.SESSION_IDLE_TIMEOUT_MINUTES * 60
 
     # Another field changed alone leaves the limit where it was.
-    assert engines.put(POLICY, {"idp_session_sync": True}, org=True).status_code == 200
+    assert engines.put(POLICY, {"sso_bypass_for_owners": True}, org=True).status_code == 200
     assert engines.get(POLICY, org=True).json()["max_session_age_s"] == 4 * 3600
 
     cleared = engines.put(POLICY, {"max_session_age_s": None}, org=True)

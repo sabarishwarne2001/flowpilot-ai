@@ -20,7 +20,7 @@ import { entityKeys, getEntityPotential, getEntitySummary, listEntities } from "
 import { errorMessage } from "@/services/api/errors";
 import { ENTITY_KIND_LABELS, ENTITY_KINDS, type EntityKind } from "@/types/entities";
 // ARCH46-S2:h8-timestamps — instants follow the reader's profile zone and language (ARCH-30 D-5; verify_arch30_tranche3 H8).
-import { formatTimestampDate } from "@/utils/displayTime";
+import { formatNumber, formatTimestampDate } from "@/utils/displayTime";
 import { CapabilityLoading } from "@/components/common/CapabilityLoading";
 import { ViewPlansAction } from "@/components/billing/ViewPlansAction";
 
@@ -46,7 +46,7 @@ const LockedView: React.FC<{ readonly workspaceId: string }> = ({ workspaceId })
       </p>
       {potential.data && potential.data.documents > 0 ? (
         <p className="text-sm">
-          {potential.data.documents.toLocaleString()} of your documents already name people or organizations the graph would
+          {formatNumber(potential.data.documents)} of your documents already name people or organizations the graph would
           connect.
         </p>
       ) : null}
@@ -98,17 +98,17 @@ const Entities: React.FC = () => {
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Summary">
           <div className={`${SURFACE_INSET} p-3`}>
             <p className={HINT}>Records</p>
-            <p className="text-lg font-semibold">{summary.data.records.toLocaleString()}</p>
+            <p className="text-lg font-semibold">{formatNumber(summary.data.records)}</p>
           </div>
           <div className={`${SURFACE_INSET} p-3`}>
             <p className={HINT}>Documents linked</p>
-            <p className="text-lg font-semibold">{summary.data.documents_linked.toLocaleString()}</p>
+            <p className="text-lg font-semibold">{formatNumber(summary.data.documents_linked)}</p>
           </div>
           {summary.data.models.map((model) => (
             <div key={model.kind} className={`${SURFACE_INSET} p-3`}>
               <p className={HINT}>{model.kind.toLowerCase()} matching</p>
               <p className="text-sm font-semibold">
-                {model.source === "FITTED" ? `Learned v${model.version} from ${model.pair_count.toLocaleString()} pairs` : "Platform defaults"}
+                {model.source === "FITTED" ? `Learned v${model.version} from ${formatNumber(model.pair_count)} pairs` : "Platform defaults"}
               </p>
             </div>
           ))}

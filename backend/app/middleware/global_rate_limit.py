@@ -1,4 +1,11 @@
-"""Global per-IP rate limit middleware (ARCH-08 §6.8)."""
+"""Global rate limit middleware (ARCH-08 §6.8).
+
+Campaign session 3 (N-061). A request carrying a valid access token is counted against that
+person (`POLICY_USER_DEFAULT`, RATE_LIMIT_USER_PER_MINUTE); anything else against the client
+address (`POLICY_GLOBAL_IP`); API keys against the key (the limiter's own identity rule). Before,
+this ran before sign-in was resolved, so every browser request was counted per address: a company
+behind one office address shared one allowance, and one person on many addresses had none.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +15,12 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 
 from app.core.public_route_registry import policy_for
 from app.core.rate_limit.limiter import consume_rate_limit
-from app.core.rate_limit.policy import POLICY_GLOBAL_IP, RateLimitPolicy, resolve_policy
+from app.core.rate_limit.policy import (
+    POLICY_GLOBAL_IP,
+    POLICY_USER_DEFAULT,
+    RateLimitPolicy,
+    resolve_policy,
+)
 
 EXEMPT_PATHS: frozenset[str] = frozenset(
     {
@@ -29,9 +41,12 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
 
         # Consult the public-route registry for special/public routes
         policy_name = policy_for(request.url.path, request.method)
-        policy: RateLimitPolicy = (
-            resolve_policy(policy_name) if policy_name else POLICY_GLOBAL_IP
-        )
+        if policy_name:
+            policy: RateLimitPolicy = resolve_policy(policy_name)
+        elif _signed_in_subject(request) is not None:
+            policy = POLICY_USER_DEFAULT
+        else:
+            policy = POLICY_GLOBAL_IP
 
         decision = consume_rate_limit(request, policy)
         if not decision.allowed:
@@ -61,3 +76,25 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["RateLimit-Remaining"] = str(max(decision.remaining, 0))
         response.headers["RateLimit-Reset"] = str(decision.reset_seconds)
         return response
+
+
+def _signed_in_subject(request: Request) -> str | None:
+    """The person a browser request is from, when it carries a valid access token.
+
+    Signature and expiry only (no database): revocation is decided later, by sign-in itself.
+    Recorded on the request for the limiter's identity rule.
+    """
+    header = request.headers.get("authorization") or ""
+    if not header.startswith("Bearer "):
+        return None
+    token = header[7:].strip()
+    if not token or token.startswith(("fp_live_", "fp_test_")):
+        return None
+    from app.core.security import decode_access_token_claims
+
+    claims = decode_access_token_claims(token)
+    if claims is None:
+        return None
+    subject = str(claims.subject)
+    request.state.rate_limit_user_id = subject
+    return subject

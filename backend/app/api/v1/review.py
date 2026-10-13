@@ -39,7 +39,7 @@ import uuid
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -310,9 +310,10 @@ def list_assignees(
     db: Session = Depends(deps.get_db),
     context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
 ) -> list[ReviewAssigneeResponse]:
+    from app.models.organization import MembershipStatus, OrganizationMember, OrganizationRole
     from app.models.review import ReviewAssignment
     from app.models.user import User
-    from app.models.workspace import WorkspaceMember
+    from app.models.workspace import WorkspaceMember, WorkspaceRole
 
     counts = (
         select(
@@ -324,12 +325,30 @@ def list_assignees(
         .subquery()
     )
 
+    # Campaign session 3 (N-063, F-296): everyone who can work the queue, by EFFECTIVE
+    # role: an active contributor or admin grant, or an organization owner or admin
+    # (who administers every workspace). A revoked grant is not someone to give work to.
+    works_here = (
+        select(WorkspaceMember.user_id)
+        .where(
+            WorkspaceMember.workspace_id == context.workspace_id,
+            WorkspaceMember.status == MembershipStatus.ACTIVE,
+            WorkspaceMember.role.in_([WorkspaceRole.CONTRIBUTOR, WorkspaceRole.ADMIN]),
+        )
+    )
     rows = db.execute(
         select(User.id, User.email, func.coalesce(counts.c.open_items, 0))
-        .select_from(WorkspaceMember)
-        .join(User, User.id == WorkspaceMember.user_id)
+        .select_from(OrganizationMember)
+        .join(User, User.id == OrganizationMember.user_id)
         .outerjoin(counts, counts.c.user_id == User.id)
-        .where(WorkspaceMember.workspace_id == context.workspace_id)
+        .where(
+            OrganizationMember.organization_id == context.organization.id,
+            OrganizationMember.status == MembershipStatus.ACTIVE,
+            or_(
+                OrganizationMember.role.in_([OrganizationRole.OWNER, OrganizationRole.ADMIN]),
+                OrganizationMember.user_id.in_(works_here),
+            ),
+        )
         .order_by(User.email.asc())
     ).all()
 

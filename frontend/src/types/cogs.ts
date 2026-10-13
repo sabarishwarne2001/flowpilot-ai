@@ -1,3 +1,4 @@
+import { numberFormat } from "@/utils/displayTime";
 /**
  * ARCH-18 / ARCH-24 — COGS, unit economics and supplier reconciliation DTOs.
  */
@@ -193,7 +194,7 @@ export const formatMicros = (
   }
   const units = micros / 1_000_000;
   try {
-    return new Intl.NumberFormat(undefined, {
+    return numberFormat({
       style: "currency",
       currency,
       maximumFractionDigits: Math.abs(units) < 1 ? 4 : 2,

@@ -1,4 +1,4 @@
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp } from "@/utils/displayTime";
 import React, { useState, useRef } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -151,7 +151,7 @@ export const ReconciliationHistory: React.FC<{
               <td className="py-1.5 pr-3 text-right tabular-nums">
                 {formatMicros(run.modelled_total_micros, invoice.currency)}
                 <div className="text-[11px] text-muted-foreground">
-                  {run.modelled_event_count.toLocaleString()} events
+                  {formatNumber(run.modelled_event_count)} events
                 </div>
               </td>
               <td className="py-1.5 pr-3 text-right tabular-nums">
@@ -194,7 +194,7 @@ export const ReconciliationHistory: React.FC<{
                 )}
                 {run.unknown_cost_event_count > 0 ? (
                   <div className="mt-0.5 text-[11px] text-destructive">
-                    {run.unknown_cost_event_count.toLocaleString()} events had
+                    {formatNumber(run.unknown_cost_event_count)} events had
                     no cost basis
                   </div>
                 ) : null}
@@ -405,7 +405,7 @@ export const SupplierInvoiceModal: React.FC<{
             />
             <p className={hint}>
               {micros !== null && Number.isFinite(micros)
-                ? `${micros.toLocaleString()} micros`
+                ? `${formatNumber(micros)} micros`
                 : "Currency units, as printed on the invoice."}
             </p>
           </div>

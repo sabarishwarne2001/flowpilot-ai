@@ -207,7 +207,7 @@ const OrganizationSidebarNavigation: React.FC<
                     className={({ isActive }) =>
                       `group relative flex h-8 items-center rounded-md px-2.5 text-[13px] font-medium ${
                         isActive
-                          ? "bg-primary/10 text-primary hover:bg-primary/[0.14] dark:bg-primary/[0.12] dark:text-[hsl(213_94%_72%)] before:absolute before:-left-2.5 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-primary"
+                          ? "bg-primary/10 text-primary hover:bg-primary/[0.14] dark:bg-primary/[0.12] dark:text-[hsl(var(--primary-on-dark))] before:absolute before:-left-2.5 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-primary"
                           : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                       }`
                     }

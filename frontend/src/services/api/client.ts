@@ -64,7 +64,11 @@ import type {
 } from "axios";
 
 import { useAuthStore, type User } from "@/store/useAuthStore";
-import { useSessionGuardStore } from "@/store/useSessionGuardStore";
+import {
+  ORGANIZATION_POLICY_CODES,
+  type OrganizationPolicyCode,
+  useSessionGuardStore,
+} from "@/store/useSessionGuardStore";
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 import { ApiError, parseErrorEnvelope } from "@/services/api/errors";
 import { buildLoginRedirect } from "@/utils/security";
@@ -514,16 +518,18 @@ apiClient.interceptors.response.use(
       // maps to 401, not 403, so this check must run before the refresh path —
       // refreshing would succeed, replay, and get refused identically, because
       // refresh carries `auth_time` forward rather than restamping it.
-      if (
-        config &&
-        !config._skipStepUp &&
-        isStepUpChallenge(response, parsed.code, parsed.details)
-      ) {
-        useSessionGuardStore.getState().requireStepUp({
-          reason: parsed.message,
-          retry: null,
-          resourcePath: config.url,
-        });
+      if (config && isStepUpChallenge(response, parsed.code, parsed.details)) {
+        // F-303: a caller that asked for the password itself (`_skipStepUp`)
+        // gets the refusal as its own error. Either way this is never a
+        // session failure: refreshing would replay the same wrong password,
+        // and the second refusal would sign the person out.
+        if (!config._skipStepUp) {
+          useSessionGuardStore.getState().requireStepUp({
+            reason: parsed.message,
+            retry: null,
+            resourcePath: config.url,
+          });
+        }
         return reject();
       }
 
@@ -603,6 +609,17 @@ apiClient.interceptors.response.use(
           resourcePath: config.url,
         });
 
+        return reject();
+      }
+
+      // Campaign session 3. The organization's sign-in policy (single sign-on)
+      // refused this session; every request into it will be refused the same
+      // way, so one notice says why and how to get back in.
+      if (parsed.code && ORGANIZATION_POLICY_CODES.has(parsed.code)) {
+        useSessionGuardStore.getState().setOrganizationPolicy({
+          code: parsed.code as OrganizationPolicyCode,
+          message: parsed.message,
+        });
         return reject();
       }
 

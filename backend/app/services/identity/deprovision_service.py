@@ -209,10 +209,14 @@ def deprovision_member(
                    organization_id=organization_id,
                    payload={"user_id": str(user_id), "source": "directory"})
 
-    write_audit(db, organization_id=organization_id, action="DEACTIVATED",
-                resource_type="ORGANIZATION_MEMBER", resource_id=user_id,
+    write_audit(db, organization_id=organization_id, action="DISABLED",
+                resource_type="MEMBERSHIP", resource_id=user_id,
                 principal=principal, details={"reason": reason,
                                               **result.as_details()})
+    # Campaign session 3 (F-296): review items they held go back to the queue.
+    from app.services.review.resolution import release_unreachable_assignments
+
+    release_unreachable_assignments(db, user_id=user_id, organization_id=organization_id)
 
     if commit:
         db.commit()
@@ -258,8 +262,8 @@ def reactivate_member(db, *, organization_id, user_id, role: str,
         emit_event(db, event_type="billing.seat_added",
                    organization_id=organization_id,
                    payload={"user_id": str(user_id), "source": "directory"})
-        write_audit(db, organization_id=organization_id, action="UPDATED",
-                    resource_type="ORGANIZATION_MEMBER", resource_id=user_id,
+        write_audit(db, organization_id=organization_id, action="ENABLED",
+                    resource_type="MEMBERSHIP", resource_id=user_id,
                     principal=principal, details={"status": "ACTIVE",
                                                   "source": "directory"})
     db.flush()

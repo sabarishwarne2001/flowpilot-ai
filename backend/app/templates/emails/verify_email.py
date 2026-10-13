@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import html
 
+from app.templates.emails.common import single_line
+
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
 
 
@@ -37,7 +39,7 @@ def render_verify_email(
     Returns:
         (subject, html_body, text_body)
     """
-    subject = f"Verify your {brand_name} email address"
+    subject = single_line(f"Verify your {brand_name} email address")
 
     text_body = (
         f"Hello,\n\n"

@@ -9,6 +9,7 @@ export type BYOKProvider =
   | "ANTHROPIC"
   | "AZURE_OPENAI"
   | "MISTRAL";
+import { formatMoney } from "@/utils/displayTime";
 
 export type BYOKTaskType =
   | "ASSISTANT"
@@ -230,7 +231,4 @@ export const formatLatency = (ms: number | null): string =>
   ms === null || ms === undefined ? "—" : `${ms} ms`;
 
 export const formatMicros = (micros: number): string =>
-  `$${(micros / 1_000_000).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  formatMoney(micros / 1_000_000, "USD", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

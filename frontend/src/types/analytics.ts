@@ -1,4 +1,4 @@
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp, numberFormat } from "@/utils/displayTime";
 /**
  * ARCH-26 — Enterprise Analytics, BI Egress & Warehouse Sync.
  *
@@ -378,7 +378,7 @@ export const formatMicros = (micros: number | null): string => {
   if (micros === null || micros === undefined) {
     return "—";
   }
-  return new Intl.NumberFormat(undefined, {
+  return numberFormat({
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
@@ -393,7 +393,7 @@ export const formatMicros = (micros: number | null): string => {
  * different outcomes and this is where that stays true on screen.
  */
 export const formatCount = (value: number | null): string =>
-  value === null || value === undefined ? "Not counted" : value.toLocaleString();
+  value === null || value === undefined ? "Not counted" : formatNumber(value);
 
 export const formatBytes = (value: number | null): string => {
   if (value === null || value === undefined) {

@@ -110,23 +110,12 @@ def calendar_for(db: Session, ob: Obligation) -> T.Calendar:
     return calendar_of(db.get(HolidayCalendar, ob.calendar_id))
 
 
-def _active_member(db: Session, workspace_id: uuid.UUID, user_id: Optional[uuid.UUID]) -> bool:
-    if user_id is None:
-        return False
-    from app.models.workspace import WorkspaceMember
-
-    row = db.execute(select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id,
-                                                   WorkspaceMember.user_id == user_id)).scalar_one_or_none()
-    status = getattr(getattr(row, "status", None), "value", getattr(row, "status", None))
-    return row is not None and str(status) == "ACTIVE"
-
-
 def _has_workspace_access(db: Session, workspace_id: uuid.UUID, user_id: Optional[uuid.UUID]) -> bool:
     """Any effective access: an explicit grant, or organization owner/admin (F-249).
 
     A calendar feed is the member's own view of the workspace, so it follows the same
-    resolution as every other read (`resolve_effective_workspace_role`), not the
-    explicit-grant check `_active_member` keeps for assignment (an obligation owner).
+    resolution as every other read (`resolve_effective_workspace_role`); since campaign
+    session 3 an obligation's owner does too (`_check_owner`).
     """
     if user_id is None:
         return False
@@ -361,8 +350,8 @@ def extract_for_work_item(db: Session, *, work_item: Any, organization_id: uuid.
     existing = {row.source_key: row for row in db.execute(select(Obligation).where(
         Obligation.work_item_id == work_item.id, Obligation.source_key.is_not(None))).scalars()}
     cal_row = default_calendar(db, work_item.workspace_id)
-    owner = work_item.created_by_user_id if _active_member(db, work_item.workspace_id,
-                                                            work_item.created_by_user_id) else None
+    owner = work_item.created_by_user_id if _has_workspace_access(db, work_item.workspace_id,
+                                                                   work_item.created_by_user_id) else None
     summary = ExtractSummary()
     by_key: dict[str, Obligation] = {}
     seen: set[str] = set()
@@ -472,7 +461,9 @@ def roots_of(db: Session, entity_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, tu
 
 
 def _check_owner(db: Session, workspace_id: uuid.UUID, owner: Optional[uuid.UUID]) -> None:
-    if owner is not None and not _active_member(db, workspace_id, owner):
+    # Campaign session 3 (N-063, F-296): effective access, as for calendar feeds (F-249) and review
+    # items: an organization owner or admin can own an obligation in any of its workspaces.
+    if owner is not None and not _has_workspace_access(db, workspace_id, owner):
         raise ObligationError("OWNER_NOT_MEMBER", "The owner must be an active member of this workspace.")
 
 

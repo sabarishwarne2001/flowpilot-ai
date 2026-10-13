@@ -95,6 +95,9 @@ export interface WorkspaceSummary {
   status: WorkspaceStatus;
   company_logo_url: string | null;
   effective_role: WorkspaceRole;
+  /** Campaign session 3 (N-064): the display layer's workspace settings. */
+  timezone?: string | null;
+  date_format?: string | null;
 }
 
 /**

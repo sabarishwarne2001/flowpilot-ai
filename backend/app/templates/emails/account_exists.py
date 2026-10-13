@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import html
 
+from app.templates.emails.common import single_line
+
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
 
 
@@ -43,7 +45,7 @@ def render_account_exists(
     Returns:
         (subject, html_body, text_body)
     """
-    subject = f"You already have a {brand_name} account"
+    subject = single_line(f"You already have a {brand_name} account")
 
     text_body = (
         f"Hello,\n\n"

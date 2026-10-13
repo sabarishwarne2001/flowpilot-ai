@@ -1,3 +1,4 @@
+import { formatMoney } from "@/utils/displayTime";
 /**
  * ARCH50-S2:types-revops — plan price books (annual, INR), promo codes, invoiced enterprise contracts and revenue
  * metrics. Mirrors app/schemas/revops.py and app/services/revops/vocabulary.py (verify_arch50 W3 proves the parity).
@@ -238,20 +239,12 @@ export interface TenantContract {
   readonly contract: Contract | null;
 }
 
-const MONEY_CACHE = new Map<string, Intl.NumberFormat>();
-
-/** Micros in a currency → "₹1,50,000.00" / "$49.00" (the viewer's locale). */
+/** Micros in a currency → "₹1,50,000.00" / "$49.00" (the viewer's language, N-064). */
 export const money = (micros: number | null | undefined, currency: string | null | undefined): string => {
   if (micros === null || micros === undefined || !currency) {
     return "—";
   }
-  const code = currency.toUpperCase();
-  let format = MONEY_CACHE.get(code);
-  if (!format) {
-    format = new Intl.NumberFormat(undefined, { style: "currency", currency: code });
-    MONEY_CACHE.set(code, format);
-  }
-  return format.format(micros / 1_000_000);
+  return formatMoney(micros / 1_000_000, currency);
 };
 
 export const REVOPS_MESSAGES: Partial<Record<RevOpsCode, string>> = {

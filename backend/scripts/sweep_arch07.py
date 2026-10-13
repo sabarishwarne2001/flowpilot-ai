@@ -2,7 +2,8 @@
 """ARCH-07 Step 11 — consolidated maintenance sweeper (§B.3, §B.7).
 
 Three independent jobs:
-  --audit-retention   delete audit_logs older than RETENTION_DAYS (400)
+  --audit-retention   delete each organization's audit_logs older than the period it chose
+                      (Compliance > Retention; never under RETENTION_DAYS, 400; blank keeps them)
   --reclaim-files     purge soft-deleted uploaded_files + their objects
   --expire-requests   transition lapsed email_change_requests to EXPIRED
 """
@@ -15,7 +16,8 @@ import logging
 import re
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -86,6 +88,29 @@ def _audit_sweeper_session() -> Optional[Session]:
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
 
 
+def audit_retention_cutoffs(session: Session, *, now: datetime) -> list[tuple[uuid.UUID, datetime]]:
+    """Campaign session 3 (F-304, N-067): how far back each organization keeps its audit log.
+
+    `Compliance > Retention > Audit log (days)` is the organization's choice (minimum 400, which
+    the table and the audit trigger both enforce); a blank keeps the log, as the screen says. An
+    organization with no period set therefore has no cutoff and nothing of it is deleted. Read
+    with the application's connection: the sweeper role may touch `audit_logs` and nothing else.
+    """
+    rows = session.execute(
+        text(
+            "SELECT organization_id, audit_retention_days FROM retention_policies "
+            "WHERE audit_retention_days IS NOT NULL"
+        )
+    ).all()
+    return [
+        (organization_id, now - timedelta(days=max(int(days), RETENTION_DAYS)))
+        for organization_id, days in rows
+    ]
+
+
+_PAST_CUTOFF = "organization_id = :organization AND created_at < :cutoff"
+
+
 def sweep_audit_retention(*, dry_run: bool) -> JobResult:
     result = JobResult(job="audit-retention", dry_run=dry_run)
     session = _audit_sweeper_session()
@@ -99,37 +124,36 @@ def sweep_audit_retention(*, dry_run: bool) -> JobResult:
 
     try:
         _assert_retention_window_matches_trigger(session)
+        with SessionLocal() as app_session:
+            cutoffs = audit_retention_cutoffs(app_session, now=datetime.now(timezone.utc))
 
-        result.examined = session.execute(
-            text(
-                "SELECT count(*) FROM audit_logs "
-                "WHERE created_at < now() - make_interval(days => :days)"
-            ),
-            {"days": RETENTION_DAYS},
-        ).scalar_one()
-
+        for organization_id, cutoff in cutoffs:
+            window = {"organization": organization_id, "cutoff": cutoff}
+            result.examined += session.execute(
+                text(f"SELECT count(*) FROM audit_logs WHERE {_PAST_CUTOFF}"), window
+            ).scalar_one()
+            if dry_run:
+                continue
+            while True:
+                deleted = session.execute(
+                    text(
+                        f"""
+                        DELETE FROM audit_logs
+                         WHERE id IN (
+                               SELECT id FROM audit_logs
+                                WHERE {_PAST_CUTOFF}
+                                ORDER BY created_at
+                                LIMIT :batch)
+                        """
+                    ),
+                    {**window, "batch": BATCH_SIZE},
+                ).rowcount
+                session.commit()
+                if not deleted:
+                    break
+                result.affected += deleted
         if dry_run:
             result.affected = result.examined
-            return result
-
-        while True:
-            deleted = session.execute(
-                text(
-                    """
-                    DELETE FROM audit_logs
-                     WHERE id IN (
-                           SELECT id FROM audit_logs
-                            WHERE created_at < now() - make_interval(days => :days)
-                            ORDER BY created_at
-                            LIMIT :batch)
-                    """
-                ),
-                {"days": RETENTION_DAYS, "batch": BATCH_SIZE},
-            ).rowcount
-            session.commit()
-            if not deleted:
-                break
-            result.affected += deleted
         return result
 
     except Exception as exc:

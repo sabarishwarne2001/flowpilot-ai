@@ -40,6 +40,11 @@ class SMTPConfig(BaseModel):
 
     from_email: str | None = None
 
+    #: Campaign session 3 (F-306): the workspace's "Reply-to" (Settings > Email), so every
+    #: message sent through this configuration answers to it. A message that names its own
+    #: Reply-To (an invitation answers to the inviter) keeps that one.
+    reply_to: str | None = None
+
     #: HARDENING-T1:D23. True only for the platform relay, whose host comes
     #: from the server environment. Every tenant-supplied configuration is
     #: untrusted: its host is resolved, checked against private/loopback/

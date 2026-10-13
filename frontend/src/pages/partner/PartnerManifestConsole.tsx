@@ -78,7 +78,7 @@ const parseGraph = (text: string): ManifestGraph => {
 // Signing keys
 // ---------------------------------------------------------------------------
 
-const SigningKeysPanel: React.FC<{ readonly partnerId: string }> = ({ partnerId }) => {
+const SigningKeysPanel: React.FC<{ readonly partnerId: string; readonly readOnly: boolean }> = ({ partnerId, readOnly }) => {
   const queryClient = useQueryClient();
   const keysQuery = useQuery({
     queryKey: partnerKeys.signingKeys(partnerId),
@@ -232,7 +232,7 @@ const SigningKeysPanel: React.FC<{ readonly partnerId: string }> = ({ partnerId 
           />
         </label>
         <div className="sm:col-span-2">
-          <button type="submit" className={BUTTON_PRIMARY} disabled={!keyId.trim() || !pem.trim() || register.isPending}>
+          <button type="submit" className={BUTTON_PRIMARY} disabled={readOnly || !keyId.trim() || !pem.trim() || register.isPending}>
             {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             Register public key
           </button>
@@ -250,7 +250,8 @@ const ManifestPanel: React.FC<{
   readonly partnerId: string;
   readonly item: MarketplaceItem;
   readonly activeKeys: readonly SigningKey[];
-}> = ({ partnerId, item, activeKeys }) => {
+  readonly readOnly: boolean;
+}> = ({ partnerId, item, activeKeys, readOnly }) => {
   const queryClient = useQueryClient();
   const manifestsQuery = useQuery({
     queryKey: partnerKeys.manifests(partnerId, item.id),
@@ -324,24 +325,24 @@ const ManifestPanel: React.FC<{
         </div>
         <div className="flex flex-wrap gap-2">
           {item.status !== "PUBLISHED" ? (
-            <button type="button" className={BUTTON_PRIMARY} disabled={lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "PUBLISHED" })}>
+            <button type="button" className={BUTTON_PRIMARY} disabled={readOnly || lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "PUBLISHED" })}>
               List in marketplace
             </button>
           ) : (
-            <button type="button" className={BUTTON_SECONDARY} disabled={lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "DEPRECATED" })}>
+            <button type="button" className={BUTTON_SECONDARY} disabled={readOnly || lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "DEPRECATED" })}>
               Deprecate
             </button>
           )}
           <button
             type="button"
             className={BUTTON_SECONDARY}
-            disabled={lifecycle.isPending}
+            disabled={readOnly || lifecycle.isPending}
             onClick={() => lifecycle.mutate({ visibility: item.visibility === "PUBLIC" ? "PARTNER_ONLY" : "PUBLIC" })}
           >
             Make {item.visibility === "PUBLIC" ? "partner-only" : "public"}
           </button>
           {item.status !== "WITHDRAWN" ? (
-            <button type="button" className={BUTTON_DESTRUCTIVE} disabled={lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "WITHDRAWN" })}>
+            <button type="button" className={BUTTON_DESTRUCTIVE} disabled={readOnly || lifecycle.isPending} onClick={() => lifecycle.mutate({ status: "WITHDRAWN" })}>
               Withdraw
             </button>
           ) : null}
@@ -468,7 +469,7 @@ const ManifestPanel: React.FC<{
         <button
           type="button"
           className={BUTTON_PRIMARY}
-          disabled={!digest || !signingKeyId || !signature.trim() || !version.trim() || publish.isPending}
+          disabled={readOnly || !digest || !signingKeyId || !signature.trim() || !version.trim() || publish.isPending}
           onClick={() => withGraph((graph) => publish.mutate(graph))}
         >
           {publish.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
@@ -483,7 +484,15 @@ const ManifestPanel: React.FC<{
 // Console
 // ---------------------------------------------------------------------------
 
-export const PartnerManifestConsole: React.FC<{ readonly partnerId: string }> = ({ partnerId }) => {
+/**
+ * Campaign session 3: `readOnly` while FlowPilot has suspended or terminated the partner. The
+ * server refuses every change then (409) except removing access (revoking a key); the console
+ * says so up front instead of letting each action fail.
+ */
+export const PartnerManifestConsole: React.FC<{ readonly partnerId: string; readonly readOnly?: boolean }> = ({
+  partnerId,
+  readOnly = false,
+}) => {
   const queryClient = useQueryClient();
   const catalogQuery = useQuery({
     queryKey: partnerKeys.catalog(partnerId),
@@ -524,7 +533,7 @@ export const PartnerManifestConsole: React.FC<{ readonly partnerId: string }> = 
 
   return (
     <div className="space-y-6">
-      <SigningKeysPanel partnerId={partnerId} />
+      <SigningKeysPanel partnerId={partnerId} readOnly={readOnly} />
 
       <section className={`${SURFACE} space-y-4 p-5`} aria-labelledby="partner-catalog">
         <div className="flex items-center gap-2">
@@ -611,14 +620,14 @@ export const PartnerManifestConsole: React.FC<{ readonly partnerId: string }> = 
             </select>
           </label>
           <div className="flex items-end">
-            <button type="submit" className={BUTTON_PRIMARY} disabled={!slug.trim() || !name.trim() || create.isPending}>
+            <button type="submit" className={BUTTON_PRIMARY} disabled={readOnly || !slug.trim() || !name.trim() || create.isPending}>
               Create catalog item
             </button>
           </div>
         </form>
       </section>
 
-      {selected ? <ManifestPanel partnerId={partnerId} item={selected} activeKeys={activeKeys} /> : null}
+      {selected ? <ManifestPanel partnerId={partnerId} item={selected} activeKeys={activeKeys} readOnly={readOnly} /> : null}
     </div>
   );
 };

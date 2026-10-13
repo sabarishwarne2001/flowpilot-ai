@@ -57,6 +57,7 @@ import { InfoTooltip } from "@/components/forms/InfoTooltip";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
+import { formatNumber } from "@/utils/displayTime";
 
 const DEFAULTS: AISettingsFormData = {
   provider: "GROQ",
@@ -75,7 +76,7 @@ const formatRate = (micros: number | null, currency: string | null): string => {
     return "Not priced";
   }
   const amount = micros / 1_000_000;
-  return `${currency ?? ""} ${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}`.trim();
+  return `${currency ?? ""} ${formatNumber(amount, { maximumFractionDigits: 4 })}`.trim();
 };
 
 const FieldLabel: React.FC<{ readonly htmlFor: string; readonly field: keyof typeof AI_FIELD_HELP }> = ({
@@ -313,6 +314,7 @@ export const AISettings: React.FC = () => {
   const numberField = (
     name: "temperature" | "top_p" | "max_output_tokens" | "frequency_penalty" | "presence_penalty",
     step: string,
+    scope?: { readonly testId: string; readonly text: string; readonly off?: boolean },
   ): React.ReactNode => (
     <div className="space-y-1.5">
       <FieldLabel htmlFor={`ai-${name}`} field={name} />
@@ -321,13 +323,31 @@ export const AISettings: React.FC = () => {
         type="number"
         step={step}
         disabled={disabled}
+        // Read-only, not disabled: a disabled input drops out of the saved values.
+        readOnly={Boolean(scope?.off)}
         {...register(name, { valueAsNumber: true })}
         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
         aria-invalid={Boolean(errors[name])}
       />
+      {scope ? (
+        <p className="text-xs text-muted-foreground" data-testid={scope.testId}>
+          {scope.text}
+        </p>
+      ) : null}
       {errors[name] && <p className="text-xs text-destructive">{errors[name]?.message}</p>}
     </div>
   );
+  // F-307. What each tuning control reaches: temperature only Ask AI answers (reading documents
+  // uses fixed, low temperatures so a document reads the same way every time); the penalties
+  // only Groq models (Gemini models take no penalty setting, so the server never sends one).
+  const penaltiesOff = provider === "GEMINI";
+  const penaltyScope = {
+    testId: "ai-penalty-scope",
+    text: penaltiesOff
+      ? "Gemini models do not take this setting; it applies when a Groq model is chosen."
+      : "Applies to Groq models; Gemini models do not take it.",
+    off: penaltiesOff,
+  };
 
   // HARDENING-T2:D26. A failed request rendered as a blank or permanent spinner.
   if (settingsQuery.isError) {
@@ -417,11 +437,14 @@ export const AISettings: React.FC = () => {
               </p>
             ) : null}
           </div>
-          {numberField("temperature", "0.05")}
+          {numberField("temperature", "0.05", {
+            testId: "ai-temperature-scope",
+            text: "Applies to Ask AI answers. Reading documents (classification, fields, summaries) uses a fixed low temperature.",
+          })}
           {numberField("top_p", "0.05")}
           {numberField("max_output_tokens", "1")}
-          {numberField("frequency_penalty", "0.1")}
-          {numberField("presence_penalty", "0.1")}
+          {numberField("frequency_penalty", "0.1", penaltyScope)}
+          {numberField("presence_penalty", "0.1", { ...penaltyScope, testId: "ai-presence-penalty-scope" })}
           <div className="flex items-start gap-3 rounded-lg border border-border/60 p-3">
             <input
               id="ai-enable_streaming"

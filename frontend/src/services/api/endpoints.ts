@@ -41,6 +41,8 @@ export const ORGANIZATION_ENDPOINTS = {
   members: (organizationId: string): string => `/organizations/${seg(organizationId)}/members`,
   member: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}`,
   deactivateMember: (organizationId: string, membershipId: string): string => `/organizations/${seg(organizationId)}/members/${seg(membershipId)}/deactivate`,
+  /** Campaign session 3: whether the organization requires two-factor sign-in. */
+  twoFactorPolicy: (organizationId: string): string => `/organizations/${seg(organizationId)}/two-factor-policy`,
 } as const;
 
 export const ORG_EMAIL_ENDPOINTS = {
@@ -69,6 +71,8 @@ export const PROFILE_ENDPOINTS = {
   // ARCH30-T4:ts-detected-tz-endpoint — A3.
   detectedTimezone: "/me/profile/detected-timezone",
   avatar: "/me/avatar",
+  // Campaign session 3 (N-062).
+  notificationPreferences: "/me/notification-preferences",
   userAvatar: (userId: string): string => `/users/${seg(userId)}/avatar`,
 } as const;
 

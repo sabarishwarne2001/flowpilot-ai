@@ -10,6 +10,7 @@ import type { SpendLimitPeriod } from "@/types/usage";
 import type { UsageLimit } from "@/types/billing";
 import { errorMessage } from "@/services/api/errors";
 import { meterLabel } from "@/types/planEntitlements";
+import { formatNumber } from "@/utils/displayTime";
 
 interface Props {
   readonly organizationId: string;
@@ -148,7 +149,7 @@ export const SpendLimitForm: React.FC<Props> = ({
               <p className="mt-1 text-xs text-muted-foreground">
                 Currently in force:{" "}
                 {currentEffective.max_quantity !== null
-                  ? `${Number(currentEffective.max_quantity).toLocaleString()} per ${currentEffective.period.toLowerCase()}`
+                  ? `${formatNumber(Number(currentEffective.max_quantity))} per ${currentEffective.period.toLowerCase()}`
                   : currentEffective.max_cost_micros !== null
                     ? `$${(currentEffective.max_cost_micros / MICROS_PER_UNIT).toFixed(2)} per ${currentEffective.period.toLowerCase()}`
                     : "no ceiling"}
@@ -221,7 +222,7 @@ export const SpendLimitForm: React.FC<Props> = ({
             />
             <p className="mt-1 text-xs text-muted-foreground">
               {costMicros !== null
-                ? `Sent as ${costMicros.toLocaleString()} micros.`
+                ? `Sent as ${formatNumber(costMicros)} micros.`
                 : "In your billing currency. Stored as micros."}
             </p>
           </div>
@@ -299,7 +300,7 @@ export const SpendLimitForm: React.FC<Props> = ({
                   </span>{" "}
                   · {limit.period === "DAY" ? "per day" : "per month"}
                   {limit.max_quantity !== null &&
-                    ` · max ${Number(limit.max_quantity).toLocaleString("en-US")}`}
+                    ` · max ${formatNumber(Number(limit.max_quantity))}`}
                   {limit.max_cost_micros !== null &&
                     ` · max $${(limit.max_cost_micros / MICROS_PER_UNIT).toFixed(2)}`}
                   {limit.hard_stop ? " · stops work" : " · bills overage"}

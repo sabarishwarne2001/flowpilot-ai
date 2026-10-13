@@ -1,3 +1,4 @@
+import { formatMoney } from "@/utils/displayTime";
 /**
  * Billing, usage, and invoice DTOs.
  * Mirrors `app/schemas/usage.py` and `app/schemas/invoice.py`.
@@ -293,17 +294,7 @@ export const microsToUnits = (micros: number): number => micros / 1_000_000;
 export const formatMicros = (
   micros: number,
   currency: string = "USD",
-  locale?: string,
-): string => {
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(microsToUnits(micros));
-  } catch {
-    return `${microsToUnits(micros).toFixed(2)} ${currency.toUpperCase()}`;
-  }
-};
+): string => formatMoney(microsToUnits(micros), currency);
 
 export const parseQuantity = (value: string | null | undefined): number => {
   if (!value) {

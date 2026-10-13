@@ -2,6 +2,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
 
+import { joinNames, useAccessContacts } from "@/components/common/useAccessContacts";
+import type { AccessContactsScope } from "@/components/common/useAccessContacts";
+
 interface AccessRestrictedProps {
   /** Who may use the page, in words: "organization owners and administrators". */
   readonly allowedFor: string;
@@ -9,6 +12,8 @@ interface AccessRestrictedProps {
   readonly askWho: string;
   /** Where the "go back" link leads, and its label. */
   readonly backTo?: { readonly path: string; readonly label: string } | undefined;
+  /** Whose names to show instead of `askWho` once they load (campaign session 3). */
+  readonly contacts?: AccessContactsScope | null;
 }
 
 /**
@@ -19,7 +24,9 @@ interface AccessRestrictedProps {
  * outage. This is rendered INSTEAD of the page, so no request is made. It is
  * an affordance, not the boundary: the server still refuses every call.
  */
-export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, askWho, backTo }) => (
+export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, askWho, backTo, contacts = null }) => {
+  const names = useAccessContacts(contacts);
+  return (
   <section
     role="status"
     aria-labelledby="access-restricted-title"
@@ -35,8 +42,10 @@ export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, 
     <p className="text-sm text-muted-foreground">
       This page is available to {allowedFor}. You don&apos;t have access with your current role.
     </p>
-    <p className="text-sm text-muted-foreground">
-      If you need it, contact your administrator: ask {askWho} to change your role.
+    <p className="text-sm text-muted-foreground" data-testid="access-restricted-ask">
+      {names.length > 0
+        ? <>If you need it, ask <span className="font-semibold text-foreground">{joinNames(names)}</span> to change your role.</>
+        : <>If you need it, contact your administrator: ask {askWho} to change your role.</>}
     </p>
     {backTo ? (
       <Link
@@ -47,6 +56,7 @@ export const AccessRestricted: React.FC<AccessRestrictedProps> = ({ allowedFor, 
       </Link>
     ) : null}
   </section>
-);
+  );
+};
 
 export default AccessRestricted;

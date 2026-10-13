@@ -7,6 +7,7 @@
  *   Promo codes  percent or amount off, once / repeating / forever, caps, deadlines, scope
  *   Contracts    invoiced enterprise contracts: draft, activate (assigns the plan), issue, pay, void, end
  */
+import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, BookOpen, FileSignature, Loader2, RefreshCw, TicketPercent, TrendingUp } from "lucide-react";
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/primitives";
 import { ApiError, errorMessage } from "@/services/api/errors";
 import {
-  activateContract, createContract, createPriceBook, createPromoCode, endContract, getContract, getPriceBook,
+  activateContract, createContract, createPriceBook, createPromoCode, deletePriceEntry, endContract, getContract, getPriceBook,
   getRevenueMetrics, issueContractInvoices, listContracts, listPriceBooks, listPromoCodes, listRevOpsOrganizations,
   payInvoice,
   publishPriceBook, revopsKeys, runRevOpsSweep, setPriceEntry, setPromoActive, voidInvoice,
@@ -27,7 +28,7 @@ import {
   CONTRACT_INTERVALS, CURRENCIES, PLAN_INTERVALS, PROMO_DURATIONS, REVOPS_MESSAGES, money,
   type ContractInterval, type Currency, type PlanInterval, type PromoDuration, type RevOpsCode,
 } from "@/types/revops";
-import { formatCalendarDate, formatTimestamp } from "@/utils/displayTime";
+import { formatCalendarDate, formatNumber, formatTimestamp } from "@/utils/displayTime";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
@@ -40,7 +41,8 @@ const TABS: readonly TabDefinition<Tab>[] = [
   { id: "contracts", label: "Contracts", icon: FileSignature },
 ];
 const TAB_IDS = TABS.map((tab) => tab.id);
-const COUNT = new Intl.NumberFormat();
+// N-064: the person's language, read at use (not at import, before preferences load).
+const COUNT = { format: (value: number): string => formatNumber(value) };
 const ACT_DONE: Readonly<Record<"activate" | "issue" | "end" | "pay" | "void", string>> = {
   activate: "Contract activated. The organization is on the contract's plan.",
   issue: "Every invoice that is due has been issued.",
@@ -146,12 +148,27 @@ const BooksTab: React.FC = () => {
     onSuccess: async () => { setAmount(""); setPriceId(""); await refresh(); },
     onError: (error) => toast.error(failure(error, "The price could not be set.")),
   });
+  const detail = book.data;
+  // F-315. Publishing freezes the book and retires the one in force for its currency, so it
+  // asks first and says which book (if any) it retires.
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const inForce = (books.data ?? []).find(
+    (b) => detail && b.id !== detail.id && b.currency === detail.currency && b.status === "PUBLISHED",
+  );
   const publish = useMutation({
     mutationFn: () => publishPriceBook(selected ?? ""),
-    onSuccess: async (result) => { await refresh(); toast.success(`${result.code} is published; the previous ${result.currency} book is retired.`); },
+    onSuccess: async (result) => {
+      setConfirmPublish(false);
+      await refresh();
+      toast.success(inForce ? `${result.code} is published; ${inForce.code} is retired.` : `${result.code} is published.`);
+    },
     onError: (error) => toast.error(failure(error, "The price book could not be published.")),
   });
-  const detail = book.data;
+  const removeEntry = useMutation({
+    mutationFn: (entryId: string) => deletePriceEntry(selected ?? "", entryId),
+    onSuccess: async () => { await refresh(); },
+    onError: (error) => toast.error(failure(error, "The price could not be removed.")),
+  });
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
       <section className={`${SURFACE} space-y-3 p-4`}>
@@ -164,7 +181,7 @@ const BooksTab: React.FC = () => {
               </button>
             </li>
           ))}
-          {(books.data?.length ?? 0) === 0 ? <li className={HINT}>No price book yet.</li> : null}
+          {books.isError ? <li><LoadFailed what="Price books" onRetry={() => void books.refetch()} /></li> : books.isLoading ? null : (books.data?.length ?? 0) === 0 ? <li className={HINT}>No price book yet.</li> : null}
         </ul>
         <form className={`${SURFACE_INSET} space-y-2 p-3`} onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
           <label className="block space-y-1"><span className={FIELD_LABEL}>New book code</span>
@@ -182,18 +199,24 @@ const BooksTab: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className={SECTION_TITLE}><span className="font-mono">{detail.code}</span> · {detail.currency} · {detail.status}</h2>
               {detail.status === "DRAFT" ? (
-                <button type="button" className={BUTTON_PRIMARY} disabled={publish.isPending || detail.entries.length === 0} onClick={() => publish.mutate()}>Publish</button>
+                <button type="button" className={BUTTON_PRIMARY} disabled={publish.isPending || detail.entries.length === 0} onClick={() => setConfirmPublish(true)}>Publish</button>
               ) : <span className={HINT}>Published {formatTimestamp(detail.published_at)} · digest {detail.content_digest?.slice(0, 12)}</span>}
             </div>
             <div className={SCROLL_X}>
               <table className="w-full text-sm">
-                <thead><tr className={TABLE_HEAD}><th className="py-2 pr-3">Plan</th><th className="pr-3">Interval</th><th className="pr-3 text-right">Price per seat</th><th className="pr-3">Gateway price</th></tr></thead>
+                <thead><tr className={TABLE_HEAD}><th className="py-2 pr-3">Plan</th><th className="pr-3">Interval</th><th className="pr-3 text-right">Price per seat</th><th className="pr-3">Gateway price</th>{detail.status === "DRAFT" ? <th className="pr-3"><span className="sr-only">Remove</span></th> : null}</tr></thead>
                 <tbody>
                   {detail.entries.map((e) => (
                     <tr key={e.id} className={TABLE_ROW}>
                       <td className="py-2 pr-3">{e.tier_key}</td><td className="pr-3">{e.billing_interval}</td>
                       <td className="pr-3 text-right tabular-nums">{money(e.unit_amount_micros, detail.currency)}</td>
                       <td className="pr-3 font-mono text-xs">{e.gateway_price_id ?? "— (not sold online)"}</td>
+                      {detail.status === "DRAFT" ? (
+                        <td className="pr-3 text-right">
+                          <button type="button" className={BUTTON_SECONDARY} aria-label={`Remove ${e.tier_key} ${e.billing_interval}`}
+                            disabled={removeEntry.isPending} onClick={() => removeEntry.mutate(e.id)}>Remove</button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -215,6 +238,20 @@ const BooksTab: React.FC = () => {
           </>
         ) : <p className={HINT}>Choose a book, or draft one.</p>}
       </section>
+      <ConfirmDialog
+        open={confirmPublish && Boolean(detail)}
+        title={`Publish ${detail?.code ?? ""}?`}
+        message={`${detail?.code ?? "This book"} becomes the ${detail?.currency ?? ""} price list in force and cannot be changed afterwards. ${
+          inForce ? `${inForce.code}, in force now, is retired.` : `It is the first ${detail?.currency ?? ""} price book.`
+        }`}
+        tone="primary"
+        confirmText="Publish"
+        cancelText="Keep the draft"
+        loading={publish.isPending}
+        loadingText="Publishing…"
+        onConfirm={() => publish.mutate()}
+        onCancel={() => { if (!publish.isPending) { setConfirmPublish(false); } }}
+      />
     </div>
   );
 };
@@ -266,7 +303,7 @@ const PromosTab: React.FC = () => {
                 </td>
               </tr>
             ))}
-            {(promos.data?.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>No promo codes.</td></tr> : null}
+            {promos.isError ? <tr><td colSpan={6} className="py-3"><LoadFailed what="Promo codes" onRetry={() => void promos.refetch()} /></td></tr> : promos.isLoading ? null : (promos.data?.length ?? 0) === 0 ? <tr><td colSpan={6} className={`py-3 ${HINT}`}>No promo codes.</td></tr> : null}
           </tbody>
         </table>
       </section>
@@ -309,7 +346,7 @@ const ContractsTab: React.FC = () => {
   // asked nothing at all. Each now opens a dialog, and nothing is sent until it is confirmed.
   const [pending, setPending] = useState<
     | { readonly kind: "pay" | "void"; readonly id: string; readonly number: string }
-    | { readonly kind: "end"; readonly id: string; readonly number: string }
+    | { readonly kind: "end"; readonly id: string; readonly number: string; readonly status: string }
     | null
   >(null);
   const [answer, setAnswer] = useState("");
@@ -369,7 +406,7 @@ const ContractsTab: React.FC = () => {
                 <td className="pr-3 text-right tabular-nums">{COUNT.format(row.open_invoices)} / {COUNT.format(row.overdue_invoices)}</td>
               </tr>
             ))}
-            {(contracts.data?.length ?? 0) === 0 ? <tr><td colSpan={7} className={`py-3 ${HINT}`}>No contracts.</td></tr> : null}
+            {contracts.isError ? <tr><td colSpan={7} className="py-3"><LoadFailed what="Contracts" onRetry={() => void contracts.refetch()} /></td></tr> : contracts.isLoading ? null : (contracts.data?.length ?? 0) === 0 ? <tr><td colSpan={7} className={`py-3 ${HINT}`}>No contracts.</td></tr> : null}
           </tbody>
         </table>
       </section>
@@ -380,7 +417,7 @@ const ContractsTab: React.FC = () => {
             <div className="flex gap-2">
               {c.status === "DRAFT" ? <button type="button" className={BUTTON_PRIMARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "activate", id: c.id })}>Activate</button> : null}
               {c.status === "ACTIVE" ? <button type="button" className={BUTTON_SECONDARY} disabled={act.isPending} onClick={() => act.mutate({ kind: "issue", id: c.id })}>Issue due invoices</button> : null}
-              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => setPending({ kind: "end", id: c.id, number: c.contract_number })}>Cancel contract</button> : null}
+              {c.status === "ACTIVE" || c.status === "DRAFT" ? <button type="button" className={BUTTON_DESTRUCTIVE} disabled={act.isPending} onClick={() => setPending({ kind: "end", id: c.id, number: c.contract_number, status: c.status })}>Cancel contract</button> : null}
             </div>
           </div>
           <p className={HINT}>{money(c.amount_per_period_micros, c.currency)} per {c.billing_interval} · tax {(c.tax_rate_bps / 100).toFixed(2)}% · net {c.payment_terms_days} days{c.po_number ? ` · PO ${c.po_number}` : ""}</p>
@@ -451,7 +488,9 @@ const ContractsTab: React.FC = () => {
         message={
           pending?.kind === "pay" ? `Invoice ${pending.number} is marked paid with the reference you enter, as the record of the transfer.`
             : pending?.kind === "void" ? "A void invoice stays on the contract as a record and is never collected. Say why."
-              : "The contract ends now: no further invoices are issued and the organization keeps its current plan until it is changed. Invoices already issued stay open."
+              : pending?.kind === "end" && pending.status === "ACTIVE"
+                ? "The contract ends now: no further invoices are issued, and the organization moves to the Free plan unless it has its own subscription. Invoices already issued stay open."
+                : "The draft is cancelled. Nothing was invoiced and the organization's plan does not change."
         }
         tone={pending?.kind === "pay" ? "primary" : "danger"}
         confirmText={pending?.kind === "pay" ? "Mark paid" : pending?.kind === "void" ? "Void invoice" : "Cancel contract"}

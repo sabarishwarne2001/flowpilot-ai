@@ -73,6 +73,7 @@ import { ROUTES } from "@/constants/routes";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import OrganizationDetailPanel from "@/components/organization/OrganizationDetailPanel";
+import { TwoFactorRequirementCard } from "@/components/organization/TwoFactorRequirementCard";
 import {
   archiveOrganization,
   updateOrganization,
@@ -257,8 +258,8 @@ export const OrganizationGeneral: React.FC = () => {
           />
           <p className="text-xs leading-relaxed text-muted-foreground">
             The identifier appears in every URL for this organization. Renaming
-            it breaks existing links and bookmarks, so it is changed through
-            support rather than here.
+            it breaks existing links and bookmarks at once, so it cannot be
+            changed on this page.
           </p>
         </div>
 
@@ -286,6 +287,12 @@ export const OrganizationGeneral: React.FC = () => {
           </p>
         )}
       </section>
+
+      {/* --- Two-factor sign-in (campaign session 3) ----------------------- */}
+
+      {canEdit && !isArchived ? (
+        <TwoFactorRequirementCard organizationId={organizationId} isOwner={role === "OWNER"} />
+      ) : null}
 
       {/* --- Danger zone -------------------------------------------------- */}
 

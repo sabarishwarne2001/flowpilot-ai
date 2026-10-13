@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import html
 
+from app.templates.emails.common import single_line
+
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
 
 
@@ -45,7 +47,7 @@ def render_email_changed_notice(
     Returns:
         (subject, html_body, text_body)
     """
-    subject = f"Your {brand_name} email address was changed"
+    subject = single_line(f"Your {brand_name} email address was changed")
 
     text_body = (
         f"Hello,\n\n"

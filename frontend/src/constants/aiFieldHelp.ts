@@ -25,7 +25,7 @@ export const AI_FIELD_HELP = {
   temperature: {
     title: "Temperature",
     description:
-      "Controls how creative the AI responses are. Lower values produce more consistent answers, while higher values allow more variation.",
+      "Controls how creative Ask AI answers are. Lower values produce more consistent answers, while higher values allow more variation. Reading documents always uses a fixed low temperature.",
     recommended: "0.7 is recommended for most business workflows.",
   },
 
@@ -45,14 +45,14 @@ export const AI_FIELD_HELP = {
 
   frequency_penalty: {
     title: "Frequency Penalty",
-    description: "Reduces repeated words and phrases in generated responses.",
+    description: "Reduces repeated words and phrases in generated responses. Groq models only.",
     recommended: "Leave at 0 unless repetition becomes noticeable.",
   },
 
   presence_penalty: {
     title: "Presence Penalty",
     description:
-      "Encourages the AI to introduce new ideas instead of repeating previous topics.",
+      "Encourages the AI to introduce new ideas instead of repeating previous topics. Groq models only.",
     recommended: "Leave at 0 for most business applications.",
   },
 

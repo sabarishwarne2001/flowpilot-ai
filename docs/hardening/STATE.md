@@ -1,6 +1,81 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-12 (pre-launch campaign: sessions 1 and 2 merged as PRs #19 and #20; the campaign map for sessions 3 and 4 is written; next: session 3)_
+_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 finished: consoles, identity, settings truthfulness, security; session 4 next)_
+
+## Current phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
+Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
+`3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
+Draft PR titled `Campaign session 3: consoles, identity, settings and security`. Owner delegated
+founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 3)`. **If this session is cut off, re-run the same prompt: continue on
+this branch and its open pull request, from the first unticked box in CAMPAIGN-MAP.md §3.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. CI trustworthy (CAMPAIGN-MAP §3.1): read the PR's check runs and annotations, fix every red or
+   flaky test at its cause.
+2. P0 security: non-human principals default deny (SCIM tokens, the public gateway, partner
+   portal), F-124 (SCIM token key), the IDOR sweep over all 621 operations as tenant A with
+   tenant B's ids (and as an API key, and in an ungranted workspace), privilege escalation and
+   mass assignment, SSRF on every customer-chosen URL, uploads, tokens, enumeration, browser
+   security, audit; git-history secret scan. Result: `SECURITY-REVIEW.md`.
+3. Enterprise identity live: SCIM (13 endpoints) and SAML (5) against a self-signed test IdP,
+   the identity console (domains, certificates, dry-run, activation, SCIM keys).
+4. Unbuilt logic (§3.3): notification preferences, billing and plan-limit emails, organization
+   "require two-factor", `idp_session_sync`, data residency truthfulness, the step-up dialog test.
+5. Settings truthfulness: one formatting layer (workspace date format, time zone, currency; the
+   person's own profile wins in the app) replacing the ad-hoc calls; `SETTINGS-LEDGER.md`.
+6. Carry-overs (§3.2): access screens name people, assignment without an explicit grant, a
+   per-tenant request limit decision, the trial's emails and read-only consoles, the platform
+   consoles as an operator, the partner portal.
+7. Ledger rows (`campaign_slices.py --check 3`), host sweeps, finish checks, HANDOFF, PR ready.
+
+**Progress (checkpoint 1, 2026-10-12):** items 2 (largely), 3 and 4 done and committed; item 1
+waiting on the first CI run's pytest job (every other job green). Fixed and proven, each with a
+failing test first (FINDINGS.md, session 3 section): F-276 (require SSO enforced nowhere, critical),
+F-277 (IP allowlist never read), F-124 (SCIM token key), F-278 (live review WebSocket skipped the
+sign-in policy), F-279 to F-282 (SCIM and SSO after a downgrade, read-only or archive), F-283
+(invalid IdP certificates accepted), F-284 (partner standing self-declared), F-285 (markup and
+header injection in emails), F-286 (per-person rate limits), F-287 to F-290 (billing and security
+notices emailed, notification preferences, Stripe announcements, 80%/100% limit alerts, addresses
+in logs). Built and decided: N-057 to N-062 (sign-in policy everywhere, `idp_session_sync` removed,
+SCIM/SSO after downgrade, require two-factor, per-person limits, which notifications are emailed).
+Proven with no defect: non-human principals default deny, IDOR sweeps (attackers B and an
+enterprise X against C: 353 reads, 832 writes, 789 as an API key, an ungranted workspace), privilege
+escalation as a viewer and as billing, SAML/OIDC attacks, CSV formula neutralisation, image uploads
+re-encoded, git-history secret scan (placeholders only). Local full backend suite on the
+checkpoint's first half: 3985 passed. **Next:** SSRF probes, tokens, enumeration, cookies/CORS/
+redirects, audit immutability, then `SECURITY-REVIEW.md`; the formatting layer and
+`SETTINGS-LEDGER.md`; §3.2 carry-overs; ledger rows; CI.
+
+**Progress (checkpoint 2, 2026-10-12, evening):** items 1, 2, 4 and 5 done. CI green on every
+complete run (§3.1 ticked). Security review written (`SECURITY-REVIEW.md`, F-291 to F-295). The
+display layer is one module per side (F-298, N-064) and `SETTINGS-LEDGER.md` lists every setting
+with its reader, effect and test; on the way, settings that changed nothing or said more than they
+did were fixed, each with a failing test first: chunking controls (F-299), brand colours (F-300,
+N-065), data residency's promise (F-301, N-066), webhook redelivery crashing the worker (F-302),
+the transfer form's double password dialog (F-303), audit log retention ignored and a fixed
+400-day delete (F-304, N-067, High), the organization mail page (F-305), workspace reply-to
+(F-306), AI settings reach (F-307), the identifier's support promise (F-308). Partner portal
+routes proven end to end; a partner's rate could never change (F-309) and a new partner could
+never be used (F-310). Proven with no defect: egress lockdown, document controls, the step-up
+dialog (F-117). Ledger: 88 session 3 rows open (from 145). **Next:** platform consoles as an
+operator (RevOps, Unit economics, Sovereign, Audit explorer), the partner portal page and nav,
+host crons (arch07, arch09, identity, invitations), remaining ledger rows, HANDOFF, finish line.
+
+**Final checkpoint (session 3 finished, 2026-10-12, night):** all seven items done. Platform
+consoles proven as an operator (RevOps, Unit economics, Sovereign, audit explorer: F-311 to F-317);
+partner portal page and suspended read-only state (F-319); profile save no longer pins the clock
+(F-318, the 14-configuration CI failure); workspace regional settings checked and every zone and
+currency offered (F-320, F-321, N-068); the settings page keeps its section (F-322); a public-API
+workflow trigger now reaches the engine (F-323, High); erasure by a person's name, not an unseen
+user ID (F-325), and member lists no longer fail once someone has been erased (F-326, found by
+the full browser run). F-324 (a verification/automation race) is recorded as **unverified** and handed
+to session 4. Host crons (arch07, arch09, identity, invitations) proven. New tests: console routes
+by effect, custom domains and TLS, warehouse connectors on the wire, DNS lookup, AI settings at the
+provider, browser specs 48 (console effects) and 49 (account changes and emailed links).
+`campaign_slices --check 3` exits 0 (one row, `branding.domain`, blocked with its reason).
+HANDOFF.md has "Session 3 → later sessions". **Next action:** session 4 (CAMPAIGN-MAP §4); the PR
+is marked ready once CI is green on its last commit.
 
 ## Before session 3 — campaign review (2026-10-12)
 A review of the whole repository after sessions 1 and 2 found work no session prompt named or that
@@ -14,7 +89,7 @@ session 4: 575, of which 282 configuration variables and 163 migrations). A sess
 only when `campaign_slices.py --check <its number>` exits 0, every box in its section of the map is
 ticked or in BLOCKERS.md, and CI is green on its pull request.
 
-## Current phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
+## Previous phase — Pre-launch campaign, session 2 of 4: documents, AI and every engine
 Branch `claude/trusting-ptolemy-yiz005` (the session's assigned branch), draft PR #20 opened early.
 Based on `main` at `340a8c4` (session 1's PR #19 is merged; HANDOFF.md has its section). Owner
 delegated founder authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
@@ -305,11 +380,12 @@ plan card price; **N-031** local model at a declared zero.
 _Updated 2026-10-12. The earlier list here (merge PR #18; the Redis frame buffer; one matching case
 per invoice copy) is done: PR #18 merged, the buffer moved off the event loop (F-263), one case per
 invoice (F-264, N-055)._
-1. Session 3 (consoles, identity, settings truthfulness, security), with its section of
-   `docs/hardening/CAMPAIGN-MAP.md`; then session 4 (experience, performance, operations,
-   certification), with its section.
-2. Still open from earlier passes, each now assigned in the map: `idp_session_sync` unread and F-124
-   (session 3); the main JavaScript chunk's size, measured fresh, and the Tailwind 4 move (session 4).
+1. Session 3 is done (its PR is "Campaign session 3: consoles, identity, settings and security").
+   Next: session 4 (experience, performance, operations, certification), with its section of
+   `docs/hardening/CAMPAIGN-MAP.md`, starting from HANDOFF.md "Session 3 → later sessions"
+   (F-324 to verify first).
+2. Still open from earlier passes, assigned to session 4 in the map: the main JavaScript chunk's
+   size, measured fresh, and the Tailwind 4 move.
 3. The owner's own launch steps (Stripe test prices and webhook secret F-125, Postmark N-027, rolling
    the keys pasted into chats, the first deploy RUNBOOK §9, and the rest) are collected in section 5
    of the campaign map; session 4 turns them into the final "Owner launch checklist".

@@ -1,4 +1,4 @@
-import { formatTimestamp } from "@/utils/displayTime";
+import { formatNumber, formatTimestamp } from "@/utils/displayTime";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -94,13 +94,13 @@ const SavingsCard: React.FC<{ overview: BYOKOverviewResponse }> = ({ overview })
         <div>
           <dt className={HINT}>Your-key events</dt>
           <dd className="text-2xl font-semibold tabular-nums">
-            {savings.byok_events.toLocaleString()}
+            {formatNumber(savings.byok_events)}
           </dd>
         </div>
         <div>
           <dt className={HINT}>FlowPilot-billed events</dt>
           <dd className="text-2xl font-semibold tabular-nums">
-            {savings.platform_events.toLocaleString()}
+            {formatNumber(savings.platform_events)}
           </dd>
         </div>
         <div>

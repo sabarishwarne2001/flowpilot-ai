@@ -6,7 +6,7 @@ const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
   ok: "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-300",
   warn: "border-amber-500/25 bg-amber-500/[0.08] text-amber-700 dark:text-amber-300",
   danger: "border-destructive/25 bg-destructive/[0.08] text-destructive dark:text-red-300",
-  info: "border-primary/25 bg-primary/[0.08] text-primary dark:text-[hsl(213_94%_72%)]",
+  info: "border-primary/25 bg-primary/[0.08] text-primary dark:text-[hsl(var(--primary-on-dark))]",
   neutral: "border-border-strong/60 bg-muted/60 text-muted-foreground",
 };
 

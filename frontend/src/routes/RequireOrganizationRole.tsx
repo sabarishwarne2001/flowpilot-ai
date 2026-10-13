@@ -58,6 +58,10 @@ export const RequireOrganizationRole: React.FC<RequireOrganizationRoleProps> = (
       <AccessRestricted
         allowedFor={describe(allowed)}
         askWho={askWho(allowed)}
+        contacts={{
+          organizationId: organization.organization_id,
+          roles: allowed.includes("ADMIN") ? ["OWNER", "ADMIN"] : ["OWNER"],
+        }}
         backTo={{ path: organizationSettingsPath(organization.organization_slug), label: "Back to organization settings" }}
       />
     );

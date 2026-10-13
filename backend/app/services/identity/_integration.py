@@ -221,8 +221,12 @@ def write_audit(db, *, organization_id, action: str, resource_type: str,
             details=merged,
         )
     except Exception:
-        logger.info("AUDIT | %s %s %s %s %s", action, resource_type,
-                    resource_id, outcome, merged)
+        # F-294: this was an INFO line, so a write the audit log refused (an unknown resource
+        # type, for 23 identity call sites) vanished without a trace. An identity flow still
+        # completes (a sign-in must not fail on its audit row), but the loss is an error now, and
+        # tests/security/test_audit_vocabulary_covers_every_writer.py keeps the names valid.
+        logger.error("identity.audit_write_failed | %s %s %s %s", action, resource_type,
+                     resource_id, outcome, exc_info=True)
 
 
 # ==========================================================================

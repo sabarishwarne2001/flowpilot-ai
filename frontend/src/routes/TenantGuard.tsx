@@ -24,7 +24,7 @@
  *   ready                reconcile the URL against the resolved tenant.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { Loader2, RefreshCw } from "lucide-react";
 
@@ -35,6 +35,23 @@ import { useLoginRedirect } from "@/routes/useLoginRedirect";
 import { reconcileTenantWithUrl } from "@/routes/tenantReconciliation";
 import { TenantContextProvider } from "@/routes/TenantContext";
 import type { TenantRouteParams } from "@/routes/tenantPaths";
+import { applyWorkspaceDisplay } from "@/utils/displayTime";
+
+/**
+ * Campaign session 3 (N-064): the open workspace's date format and time zone
+ * reach the display layer; the subtree re-renders when they change.
+ */
+const WorkspaceDisplay: React.FC<{
+  readonly dateFormat?: string | null | undefined;
+  readonly timeZone?: string | null | undefined;
+  readonly children: React.ReactNode;
+}> = ({ dateFormat, timeZone, children }) => {
+  const key = useMemo(() => applyWorkspaceDisplay(dateFormat, timeZone), [dateFormat, timeZone]);
+  useEffect(() => () => {
+    applyWorkspaceDisplay(undefined, undefined);
+  }, []);
+  return <React.Fragment key={key}>{children}</React.Fragment>;
+};
 
 /**
  * Full-screen splash shown while the bootstrap context is in flight.
@@ -218,7 +235,12 @@ export const TenantGuard: React.FC = () => {
             organizations: state.organizations,
           }}
         >
-          <Outlet />
+          <WorkspaceDisplay
+            dateFormat={reconciliation.workspace.date_format}
+            timeZone={reconciliation.workspace.timezone}
+          >
+            <Outlet />
+          </WorkspaceDisplay>
         </TenantContextProvider>
       );
     }

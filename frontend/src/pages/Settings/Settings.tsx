@@ -1,7 +1,7 @@
 /**
  * ARCH40-S2:settings-hub. One settings surface, grouped by scope.
  *
- *   Account        yours, everywhere: profile, sessions
+ *   Account        yours, everywhere: profile, notifications, sessions
  *   Workspace      this workspace: general, AI defaults, email, documents
  *   Organization   shortcuts to the organization console, for the roles
  *                  that can act there: email, keys and routing, billing
@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  Bell,
   Building2,
   Cpu,
   CreditCard,
@@ -36,6 +37,7 @@ import AISettings from "./AISettings";
 import DocumentSettings from "./DocumentSettings";
 import SessionManagement from "./SessionManagement";
 import ProfileSettings from "./ProfileSettings";
+import NotificationPreferences from "./NotificationPreferences";
 import { isAtLeast } from "@/permissions/workspacePermissions";
 import { ADMINISTRATIVE_ROLES, canViewBilling } from "@/permissions/organizationPermissions";
 import { useResolvedTenant } from "@/routes/TenantContext";
@@ -49,14 +51,18 @@ import {
 
 /** The workspace sections, for a VIEWER: the shared Access restricted screen (was a red
  * "Permission Denied" that spoke of "privilege levels"). */
-export const PermissionDenied: React.FC = () => (
-  <AccessRestricted
-    allowedFor="workspace contributors and administrators"
-    askWho="a workspace administrator"
-  />
-);
+export const PermissionDenied: React.FC = () => {
+  const { workspace } = useResolvedTenant();
+  return (
+    <AccessRestricted
+      allowedFor="workspace contributors and administrators"
+      askWho="a workspace administrator"
+      contacts={{ workspaceId: workspace.id }}
+    />
+  );
+};
 
-type SettingsSection = "profile" | "sessions" | "workspace" | "ai" | "email" | "document";
+type SettingsSection = "profile" | "notifications" | "sessions" | "workspace" | "ai" | "email" | "document";
 type SettingsScope = "account" | "workspace";
 
 interface SectionConfig {
@@ -69,6 +75,7 @@ interface SectionConfig {
 
 const SECTIONS: readonly SectionConfig[] = [
   { id: "profile", scope: "account", label: "Profile", hint: "Name, avatar, email and password", icon: UserRound },
+  { id: "notifications", scope: "account", label: "Notifications", hint: "What is also emailed to you", icon: Bell },
   { id: "sessions", scope: "account", label: "Active sessions", hint: "Where you are signed in", icon: MonitorSmartphone },
   { id: "workspace", scope: "workspace", label: "General", hint: "Name, locale and members", icon: Building2 },
   { id: "ai", scope: "workspace", label: "AI", hint: "What runs, and the defaults", icon: Cpu },
@@ -100,8 +107,11 @@ const isSection = (value: string | null): value is SettingsSection =>
   SECTIONS.some((section) => section.id === value);
 
 const Settings: React.FC = () => {
-  // `?section=sessions` opens a section directly (the account menu links here).
-  const [searchParams] = useSearchParams();
+  // `?section=sessions` opens a section directly (the account menu links here). Choosing a
+  // section writes it there too (F-322): saving a workspace's clock or date format re-renders the
+  // workspace's pages under the new settings (N-064), and a reload does the same, so the page
+  // has to remember where the person was or it falls back to Profile mid-task.
+  const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get("section");
   const [active, setActive] = useState<SettingsSection>(isSection(requested) ? requested : "profile");
   useEffect(() => {
@@ -109,6 +119,17 @@ const Settings: React.FC = () => {
       setActive(requested);
     }
   }, [requested]);
+  const choose = (section: SettingsSection): void => {
+    setActive(section);
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.set("section", section);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const { workspace, workspaceRole, organization, organizationRole } = useResolvedTenant();
 
   const canSeeWorkspace = isAtLeast(workspaceRole, "CONTRIBUTOR");
@@ -124,6 +145,8 @@ const Settings: React.FC = () => {
     switch (active) {
       case "profile":
         return <ProfileSettings />;
+      case "notifications":
+        return <NotificationPreferences />;
       case "sessions":
         return <SessionManagement />;
       case "workspace":
@@ -168,16 +191,16 @@ const Settings: React.FC = () => {
                       <li key={section.id}>
                         <button
                           type="button"
-                          onClick={() => setActive(section.id)}
+                          onClick={() => choose(section.id)}
                           aria-current={selected ? "page" : undefined}
                           className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                            selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(213_94%_72%)]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                            selected ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 dark:text-[hsl(var(--primary-on-dark))]" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                           }`}
                         >
                           <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="min-w-0">
                             <span className="block whitespace-nowrap text-sm font-semibold">{section.label}</span>
-                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(213_94%_72%)]/70" : "text-muted-foreground/80"}`}>
+                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(var(--primary-on-dark)/0.7)]" : "text-muted-foreground/80"}`}>
                               {section.hint}
                             </span>
                           </span>

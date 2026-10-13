@@ -36,7 +36,9 @@ export const DisplayPreferencesBoundary: React.FC<{ readonly children: React.Rea
 
   const waitingForProfile = isAuthenticated && profile.isPending && !profile.isError;
 
-  const timeZone = profile.data?.timezone;
+  // Campaign session 3 (N-064): a zone nobody chose or detected ("DEFAULT", stored as UTC) is
+  // not the person's clock; the open workspace's zone stands in for it.
+  const timeZone = profile.data?.timezone_source === "DEFAULT" ? undefined : profile.data?.timezone;
   const locale = profile.data?.locale;
   const preferenceKey = useMemo(
     () => applyDisplayPreferences(timeZone, locale),

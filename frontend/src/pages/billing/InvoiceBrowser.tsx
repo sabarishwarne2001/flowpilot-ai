@@ -1,4 +1,4 @@
-import { formatTimestampDate } from "@/utils/displayTime";
+import { formatNumber, formatTimestampDate } from "@/utils/displayTime";
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -238,7 +238,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({
                     )}
                 </td>
                 <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">
-                  {parseQuantity(line.quantity).toLocaleString()} {line.unit}
+                  {formatNumber(parseQuantity(line.quantity))} {line.unit}
                 </td>
                 <td className="py-1.5 text-right tabular-nums">
                   {formatMicros(line.amount_micros, invoice.currency)}

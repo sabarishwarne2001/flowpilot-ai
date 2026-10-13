@@ -139,11 +139,46 @@ def sso_required_for(policy: TenantSecurityPolicy, *, org_role: str | None) -> b
     return True
 
 
+def ip_allowlist_trustworthy(settings=None) -> bool:
+    """Whether the client address an allowlist would be checked against can be trusted.
+
+    With no proxy in front (TRUSTED_PROXY_HOPS=0) the socket peer is the client. Behind a proxy,
+    the address comes from X-Forwarded-For and is only as good as the hop count, which an operator
+    confirms once the ingress is known (ARCH-08 A.3.4, the same gate as IP pinning).
+    """
+    settings = settings or get_settings()
+    try:
+        hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 0))
+    except (TypeError, ValueError):
+        hops = 0
+    return hops == 0 or bool(getattr(settings, "TRUSTED_PROXY_HOPS_CONFIRMED", False))
+
+
 def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
-                  principal: IdentityPrincipal) -> TenantSecurityPolicy:
+                  principal: IdentityPrincipal,
+                  requester_ip: str | None = None) -> TenantSecurityPolicy:
     settings = get_settings()
     hops_confirmed = bool(getattr(settings, "TRUSTED_PROXY_HOPS_CONFIRMED", False))
     requested = changes.get("ip_pinning")
+
+    # Campaign session 3. The allowlist is enforced on every request into the organization, so a
+    # list that does not contain the address of the person saving it would lock them out on their
+    # very next click. Refused, with their address, so they can add it.
+    allowlist = changes.get("ip_allowlist")
+    if allowlist:
+        if not ip_allowlist_trustworthy(settings):
+            raise ValueError(
+                "An IP allowlist cannot be enabled until TRUSTED_PROXY_HOPS is confirmed for this "
+                "deployment (set TRUSTED_PROXY_HOPS_CONFIRMED=true once the ingress is verified): "
+                "until then client addresses cannot be trusted."
+            )
+        probe = TenantSecurityPolicy(ip_allowlist=list(allowlist))
+        if not ip_allowed(probe, requester_ip):
+            shown = requester_ip or "unknown"
+            raise ValueError(
+                f"Your current address ({shown}) is not in this list, so saving it would lock you "
+                "out. Add a network that contains it first."
+            )
 
     # F-188. With SSO required, every password session is refused in the organization. With no
     # active identity provider there is no SSO to sign in with, so requiring it locked every
@@ -176,7 +211,7 @@ def update_policy(db, *, policy: TenantSecurityPolicy, changes: dict,
 
     for field in ("require_sso", "sso_bypass_for_owners", "ip_pinning",
                   "ip_prefix_v4", "ip_prefix_v6", "ip_allowlist",
-                  "max_session_age_s", "idp_session_sync"):
+                  "max_session_age_s"):
         # F-204. A null session age removes the limit; for every other field null means "as is".
         if field in changes and (changes[field] is not None or field == "max_session_age_s"):
             setattr(policy, field, changes[field])

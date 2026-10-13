@@ -804,6 +804,13 @@ const OrganizationBranding: React.FC = () => {
           tokens rather than stylesheet input, because these pages are served
           from an origin shared with other tenants.
         </p>
+        <p className={`${HINT} mt-1`} data-testid="brand-colour-reach">
+          On your verified domains, the primary colour is used for buttons,
+          links and focus rings on the sign-in pages and in the app; the accent
+          colour for the glow behind the sign-in pages; the background and text
+          colours and the colour scheme for the sign-in pages. Inside the app,
+          light or dark stays each person&apos;s own choice.
+        </p>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>

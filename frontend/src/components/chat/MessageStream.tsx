@@ -15,6 +15,7 @@ import type {
   ErrorFrame,
   StartFrame,
 } from "@/services/streaming/resumableStream";
+import { formatNumber } from "@/utils/displayTime";
 
 interface FinishPresentation {
   readonly label: string;
@@ -202,7 +203,7 @@ export const MessageStream: React.FC<MessageStreamProps> = ({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {content.length > 0 && (
           <span title="Approximate. Billed usage is measured by the provider.">
-            ~{approxTokens.toLocaleString()} tokens
+            ~{formatNumber(approxTokens)} tokens
           </span>
         )}
 

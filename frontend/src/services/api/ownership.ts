@@ -13,6 +13,10 @@ export const initiateOwnershipTransfer = async (
   const response = await apiClient.post<OwnershipTransfer>(
     OWNERSHIP_ENDPOINTS.transfers(organizationId),
     data,
+    // F-303: the proposal form asks for the password itself, so a wrong one is the form's error
+    // (REAUTHENTICATION_FAILED), not a reason to open the "Confirm it's you" dialog on top of it,
+    // which had nothing to replay once confirmed.
+    { _skipStepUp: true } as never,
   );
   return response.data;
 };

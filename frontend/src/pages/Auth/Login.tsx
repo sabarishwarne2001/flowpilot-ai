@@ -74,7 +74,7 @@ const Steps: React.FC<{ readonly mode: SignInMode }> = ({ mode }) => {
                 done
                   ? "bg-primary text-primary-foreground"
                   : active
-                    ? "bg-primary/15 text-primary ring-1 ring-primary/40 dark:text-[hsl(213_94%_72%)]"
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/40 dark:text-[hsl(var(--primary-on-dark))]"
                     : "bg-muted text-muted-foreground ring-1 ring-border"
               }`}
             >

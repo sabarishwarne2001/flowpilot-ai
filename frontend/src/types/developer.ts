@@ -1,3 +1,4 @@
+import { numberFormat } from "@/utils/displayTime";
 /**
  * ARCH-21 — developer platform contracts.
  *
@@ -196,7 +197,7 @@ export const formatPercent = (
 };
 
 export const formatCount = (value: number): string =>
-  new Intl.NumberFormat(undefined, { notation: "compact" }).format(value);
+  numberFormat({ notation: "compact" }).format(value);
 
 /**
  * Quota bar width. Returns null rather than 0 when the fraction is unknown,

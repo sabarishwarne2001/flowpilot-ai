@@ -4,6 +4,8 @@ import type {
   AvatarUploadResult,
   // ARCH30-T4:ts-detected-tz-import — A3.
   DetectedTimezoneResult,
+  NotificationCategoryKey,
+  NotificationPreferences,
   UserProfile,
   UserProfileUpdateRequest,
 } from "@/types/profile";
@@ -37,6 +39,25 @@ export const offerDetectedTimezone = async (
   const response = await apiClient.post<DetectedTimezoneResult>(
     PROFILE_ENDPOINTS.detectedTimezone,
     { timezone },
+  );
+  return response.data;
+};
+
+/** Campaign session 3 (N-062). Which notifications are also emailed to me. */
+export const getNotificationPreferences = async (): Promise<NotificationPreferences> => {
+  const response = await apiClient.get<NotificationPreferences>(
+    PROFILE_ENDPOINTS.notificationPreferences,
+  );
+  return response.data;
+};
+
+export const setNotificationPreference = async (
+  category: NotificationCategoryKey,
+  email: boolean,
+): Promise<NotificationPreferences> => {
+  const response = await apiClient.put<NotificationPreferences>(
+    PROFILE_ENDPOINTS.notificationPreferences,
+    { category, email },
   );
   return response.data;
 };

@@ -11,8 +11,10 @@ import {
 } from "react-router-dom";
 import { Toaster } from "sonner";
 
+import { BrandTheme } from "@/components/branding/BrandTheme";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { LoadingScreen } from "@/components/common/LoadingScreen";
+import OrganizationPolicyNotice from "@/components/auth/OrganizationPolicyNotice";
 import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
@@ -570,7 +572,9 @@ export default function App() {
         closeButton
         duration={4000}
       />
+      <BrandTheme />
       <StepUpReauthModal />
+      <OrganizationPolicyNotice />
       <UnsavedChangesDialogHost />
 
       <RouterProvider router={router} />

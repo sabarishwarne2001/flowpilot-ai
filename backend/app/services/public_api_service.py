@@ -598,7 +598,11 @@ def trigger_workflow(
     from app.services import outbox_service
 
     minute = datetime.now(UTC).strftime("%Y%m%d%H%M")
-    event = outbox_service.emit_internal(
+    # Campaign session 3 (F-323): `emit_trigger`, not `emit_internal`. Nothing relays INTERNAL
+    # events to the engine, so the event alone was one no rule ever saw: every trigger answered
+    # 202 QUEUED and nothing ran. `emit_trigger` writes the event and its `automation.execute`
+    # job together, as a rule's own field change does.
+    event = outbox_service.emit_trigger(
         db,
         organization_id=organization_id,
         workspace_id=workspace_id,
@@ -620,6 +624,7 @@ def trigger_workflow(
             f"public-trigger:{key.id}:{rule.id}:{item.id}:{minute}"
         ),
     )
+    assert event is not None  # a workspace is always named here
 
     return {
         "outbox_event_id": str(event.id),

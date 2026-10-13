@@ -188,6 +188,31 @@ class OrganizationPermissionDeniedError(OrganizationError):
     pass
 
 
+class OrganizationNetworkNotAllowedError(OrganizationPermissionDeniedError):
+    """
+    Campaign session 3. The organization allows access only from the networks on its IP allowlist,
+    and this request came from somewhere else (or from an address that could not be established).
+    """
+    pass
+
+
+class OrganizationMfaRequiredError(OrganizationPermissionDeniedError):
+    """
+    Campaign session 3. The organization requires two-factor sign-in and this person signed in
+    with a password and has no second factor turned on.
+    """
+    pass
+
+
+class OrganizationSsoRequiredError(OrganizationPermissionDeniedError):
+    """
+    Campaign session 3. The organization requires single sign-on for this member's role and the
+    request's session did not come from the organization's own identity provider. Distinct from a
+    role refusal so the console can offer "Sign in with single sign-on" instead of "ask an owner".
+    """
+    pass
+
+
 class OrganizationMemberError(OrganizationError):
     """Raised when an organization membership constraint is violated."""
     pass

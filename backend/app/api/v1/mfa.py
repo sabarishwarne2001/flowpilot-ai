@@ -83,9 +83,40 @@ def regenerate_recovery_codes(
     return {"recovery_codes": codes}
 
 
+def _organizations_requiring_two_factor(db, user_id) -> list[str]:
+    from sqlalchemy import select
+
+    from app.models.identity import TenantSecurityPolicy
+    from app.models.organization import MembershipStatus, Organization, OrganizationMember
+
+    rows = db.execute(
+        select(Organization.name)
+        .join(OrganizationMember, OrganizationMember.organization_id == Organization.id)
+        .join(TenantSecurityPolicy, TenantSecurityPolicy.organization_id == Organization.id)
+        .where(
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == MembershipStatus.ACTIVE,
+            TenantSecurityPolicy.require_mfa.is_(True),
+        )
+        .order_by(Organization.name)
+    ).scalars().all()
+    return list(rows)
+
+
 @router.post("/me/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, summary="Turn off two-factor sign-in")
 def disable_mfa(payload: MfaDisableRequest, db: deps.DbSession, current_user: deps.CurrentUser) -> Response:
     _check_password(current_user, payload.password)
+    # Campaign session 3. Turning the second factor off would lock the person out of every
+    # organization that requires it, and leave the organization's rule unmet: refused, naming them.
+    requiring = _organizations_requiring_two_factor(db, current_user.id)
+    if requiring:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{', '.join(requiring)} require{'s' if len(requiring) == 1 else ''} two-factor "
+                "sign-in, so it cannot be turned off while you are a member."
+            ),
+        )
     try:
         mfa_service.disable(db, user=current_user, code=payload.code)
     except mfa_service.MfaError as exc:

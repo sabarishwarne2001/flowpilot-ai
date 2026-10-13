@@ -763,3 +763,4 @@ from app.models.truthmesh import (  # noqa: E402,F401
     MeshSimulation,
     MeshState,
 )
+from app.models.notification_preference import UsageLimitAlert, UserNotificationPreference  # noqa: E402,F401

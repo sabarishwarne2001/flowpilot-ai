@@ -28,6 +28,7 @@ import {
   type EvidenceLocation,
 } from "@/services/api/documentEvidence";
 import { useImageFallback } from "@/hooks/useImageFallback";
+import { formatNumber } from "@/utils/displayTime";
 
 export const evidenceKey = (workspaceId: string, workItemId: string) =>
   ["document-evidence", workspaceId, workItemId, "extracted"] as const;
@@ -195,7 +196,7 @@ export const DocumentPageViewer: React.FC<DocumentPageViewerProps> = ({
           )}
           {text.data?.truncated && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Showing the first {text.data.text.length.toLocaleString()} of {text.data.characters.toLocaleString()} characters.
+              Showing the first {formatNumber(text.data.text.length)} of {formatNumber(text.data.characters)} characters.
             </p>
           )}
         </div>

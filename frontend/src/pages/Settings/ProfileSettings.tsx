@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Loader2, ShieldAlert, Trash2, Upload, UserRound } from "lucide-react";
 
 import {
@@ -100,18 +101,26 @@ export const ProfileSettings: React.FC = () => {
   // Remove stays available, so it can be replaced).
   const avatarImage = useImageFallback(avatarSrc);
 
+  // F-318. Only what the person changed is sent. The server records any time zone it is sent as
+  // the person's choice, so re-sending the one on screen pinned a never-chosen clock to UTC (the
+  // person had seen the workspace's), and the app then re-rendered under the new clock.
   const save = useMutation({
-    mutationFn: () =>
-      updateMyProfile({
+    mutationFn: () => {
+      const zone = timezone.trim();
+      const language = locale.trim();
+      return updateMyProfile({
         display_name: displayName.trim() || null,
-        timezone: timezone.trim() || null,
-        locale: locale.trim() || null,
-      }),
+        ...(profile && zone && zone !== profile.timezone ? { timezone: zone } : {}),
+        ...(profile && language && language !== profile.locale ? { locale: language } : {}),
+      });
+    },
     onSuccess: (updated) => {
       setError(null);
       setDirty(false);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
+      // A changed clock or language re-renders the app under it; the toast outlives that.
+      toast.success("Profile saved.");
       queryClient.setQueryData(profileKeys.me(), updated);
     },
     onError: (err) =>
@@ -339,6 +348,11 @@ export const ProfileSettings: React.FC = () => {
                 {Intl.DateTimeFormat().resolvedOptions().timeZone}
               </button>
             </p>
+            {profile?.timezone_source === "DEFAULT" && !dirty ? (
+              <p className="mt-1 text-xs text-muted-foreground" data-testid="profile-tz-default">
+                You have not chosen one yet, so times are shown on the workspace&apos;s clock.
+              </p>
+            ) : null}
           </div>
 
           <div>

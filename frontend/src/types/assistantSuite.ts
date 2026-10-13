@@ -1,3 +1,4 @@
+import { numberFormat } from "@/utils/displayTime";
 /**
  * ARCH-39 — conversation sessions, scope, models and prompt templates.
  * Mirrors app/schemas/assistant_suite.py.
@@ -80,7 +81,7 @@ export const formatModelPrice = (option: AssistantModelOption): string | null =>
   }
   const currency = option.currency ?? "USD";
   const format = (micros: number): string =>
-    new Intl.NumberFormat(undefined, {
+    numberFormat({
       style: "currency",
       currency,
       maximumFractionDigits: 4,

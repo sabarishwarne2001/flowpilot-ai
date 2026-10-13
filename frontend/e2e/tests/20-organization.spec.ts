@@ -22,10 +22,14 @@ test.describe("General", () => {
     await expect(name).toHaveValue(TENANTS.C.name); // loaded before editing
     const patched = () =>
       page.waitForResponse((r) => r.request().method() === "PATCH" && /\/organizations\/[0-9a-f-]+$/.test(r.url()));
-    await name.fill(`Caretakers Global Inc ${runId()}`);
+    const renamed = `Caretakers Global Inc ${runId()}`;
+    await name.fill(renamed);
     let saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
     expect((await saved).status()).toBe(200);
+    // The new name is what the server keeps: a reload shows it.
+    await page.reload();
+    await expect(name).toHaveValue(renamed, { timeout: 15_000 });
     await name.fill(TENANTS.C.name);
     saved = patched();
     await page.getByRole("button", { name: "Save changes" }).click();
@@ -205,7 +209,8 @@ test.describe("Data governance and compliance", () => {
     const member = await loginAs("C.member");
     await page.goto(org("C", "compliance"));
     await page.getByRole("button", { name: "Erase a subject" }).click();
-    await page.getByRole("textbox", { name: "Subject user ID" }).fill(String(member.me.id));
+    // F-325: the person is chosen by name and address, not typed in as an ID.
+    await page.getByLabel("Person").selectOption(String(member.me.id));
     await page.getByRole("button", { name: "Run impact preview" }).click();
     await expect(page.locator("main")).toContainText(/document|record|session|membership|impact/i, { timeout: 20_000 });
     await page.getByRole("button", { name: "Cancel" }).click();
@@ -494,6 +499,45 @@ test.describe("Webhooks", () => {
     await expect(page.getByText(/Test event queued/)).toBeVisible({ timeout: 15_000 });
     await expectHealthyPage(page);
   });
+
+  // Campaign session 3 (F-302): Redeliver reused attempt 1, so the worker failed to record the
+  // attempt after sending it. A test event to an address the sandbox cannot reach fails; the
+  // Redeliver button requeues it and the next attempt is recorded as attempt 2.
+  test("a failed delivery can be redelivered, and its attempts keep counting (F-302)", async ({ page, problems }) => {
+    problems.allowHttp(/\/webhooks\//, [400, 409, 422, 502], "the receiver is unreachable from the sandbox");
+    const owner = await loginAs("C.owner");
+    const { organizationId } = await resolveWorkspaceId(owner, TENANTS.C.org, TENANTS.C.ws);
+    const url = `https://hooks.caretakers.example.com/redeliver-${runId()}`;
+    const created = await api<{ endpoint: { id: string } }>(owner, "POST", `/organizations/${organizationId}/webhooks/endpoints`, {
+      url, event_types: ["work_item.created"],
+    });
+    expect(created.status, created.text).toBe(201);
+    const endpointId = created.body.endpoint.id;
+    const deliveriesPath = `/organizations/${organizationId}/webhooks/endpoints/${endpointId}/deliveries`;
+    try {
+      expect((await api(owner, "POST", `/organizations/${organizationId}/webhooks/endpoints/${endpointId}/test`)).status).toBe(202);
+      type Delivery = { id: string; status: string; attempts: number };
+      const first = async (): Promise<Delivery | undefined> =>
+        (await api<Delivery[]>(owner, "GET", deliveriesPath)).body[0];
+      await expect.poll(async () => (await first())?.status, { timeout: 60_000 }).toMatch(/FAILED|DEAD/);
+
+      await page.goto(org("C", "webhooks"));
+      const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${url}` }) });
+      await row.getByRole("button", { name: "Deliveries" }).click();
+      await row.getByRole("button", { name: "Redeliver webhook.test" }).click();
+      await expect(row.getByText(/couldn't be requeued|disabled/i)).toHaveCount(0);
+
+      const delivery = (await first())!;
+      await expect.poll(async () => {
+        const attempts = await api<{ attempt_number: number }[]>(
+          owner, "GET", `/organizations/${organizationId}/webhooks/deliveries/${delivery.id}/attempts`);
+        return attempts.body.map((attempt) => attempt.attempt_number).sort();
+      }, { timeout: 60_000 }).toEqual([1, 2]);
+      await expectHealthyPage(page);
+    } finally {
+      await api(owner, "DELETE", `/organizations/${organizationId}/webhooks/endpoints/${endpointId}`);
+    }
+  });
 });
 
 test.describe("Enterprise identity", () => {
@@ -519,10 +563,11 @@ test.describe("Audit log", () => {
   test("filter by action and actor, inspect an entry, export CSV and NDJSON", async ({ page }) => {
     const owner = await loginAs("C.owner");
     await page.goto(org("C", "audit"));
-    await page.getByRole("textbox", { name: "Action" }).fill("UPDATED");
-    await page.getByRole("textbox", { name: "Actor" }).fill(String(owner.me.id));
+    // F-311: the filters are choices (the server's codes, the organization's people).
+    await page.getByLabel("Action", { exact: true }).selectOption("UPDATED");
+    await page.getByLabel("Actor", { exact: true }).selectOption(String(owner.me.id));
     await settle(page);
-    await page.getByRole("textbox", { name: "Actor" }).fill("");
+    await page.getByLabel("Actor", { exact: true }).selectOption("");
     await page.getByRole("button", { name: "Inspect" }).first().click();
     await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
     await page.getByRole("button", { name: "Close" }).click();

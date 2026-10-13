@@ -237,6 +237,8 @@ class EmailService:
         message["Subject"] = subject
         message["From"] = f"{config.sender_name} <{config.sender_address}>"
         message["To"] = recipient
+        if getattr(config, "reply_to", None):
+            message["Reply-To"] = config.reply_to
         message.set_content(body)
 
         return self._send_message(config, message)
@@ -257,6 +259,7 @@ class EmailService:
         message["From"] = f"{config.sender_name} <{config.sender_address}>"
         message["To"] = recipient
 
+        reply_to = reply_to or getattr(config, "reply_to", None)
         if reply_to:
             message["Reply-To"] = reply_to
 

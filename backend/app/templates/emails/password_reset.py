@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import html
 
+from app.templates.emails.common import single_line
+
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
 
 
@@ -36,7 +38,7 @@ def render_password_reset(
     Returns:
         (subject, html_body, text_body)
     """
-    subject = f"Reset your {brand_name} password"
+    subject = single_line(f"Reset your {brand_name} password")
 
     text_body = (
         f"Hello,\n\n"

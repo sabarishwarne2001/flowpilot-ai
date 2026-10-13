@@ -61,6 +61,7 @@ export type MeterKey =
   | "limit.workspaces"
   | "limit.file_size_mb"
   | "limit.pages_per_document";
+import { formatNumber } from "@/utils/displayTime";
 
 interface MeterDisplay {
   /** Noun phrase, sentence case, no leading count. */
@@ -132,22 +133,22 @@ export const KNOWN_METERS: Record<MeterKey, MeterDisplay> = {
   "limit.seats": {
     label: "Seats",
     unit: "count",
-    staticLimit: (value) => `${value.toLocaleString()} ${value === 1 ? "seat" : "seats"} (owner included)`,
+    staticLimit: (value) => `${formatNumber(value)} ${value === 1 ? "seat" : "seats"} (owner included)`,
   },
   "limit.workspaces": {
     label: "Workspaces",
     unit: "count",
-    staticLimit: (value) => `${value.toLocaleString()} ${value === 1 ? "workspace" : "workspaces"}`,
+    staticLimit: (value) => `${formatNumber(value)} ${value === 1 ? "workspace" : "workspaces"}`,
   },
   "limit.file_size_mb": {
     label: "File size",
     unit: "megabytes",
-    staticLimit: (value) => `Files up to ${value.toLocaleString()} MB`,
+    staticLimit: (value) => `Files up to ${formatNumber(value)} MB`,
   },
   "limit.pages_per_document": {
     label: "Pages per document",
     unit: "pages",
-    staticLimit: (value) => `Documents up to ${value.toLocaleString()} pages`,
+    staticLimit: (value) => `Documents up to ${formatNumber(value)} pages`,
   },
   "addon.custom_domain": {
     label: "Custom vanity domain",
@@ -184,7 +185,7 @@ function formatTokenCount(value: number): string {
   if (value >= 1_000 && value % 1_000 === 0) {
     return `${value / 1_000}K`;
   }
-  return value.toLocaleString();
+  return formatNumber(value);
 }
 
 function formatQuantity(unit: MeterDisplay["unit"], value: number): string {
@@ -193,13 +194,13 @@ function formatQuantity(unit: MeterDisplay["unit"], value: number): string {
       return formatTokenCount(value);
     case "gigabytes":
       // 0.25 GB reads better as 256 MB (GB = 1,024 MB, as the server counts).
-      return value < 1 ? `${Math.round(value * 1024).toLocaleString()} MB` : `${value.toLocaleString()} GB`;
+      return value < 1 ? `${formatNumber(Math.round(value * 1024))} MB` : `${formatNumber(value)} GB`;
     case "megabytes":
-      return `${value.toLocaleString()} MB`;
+      return `${formatNumber(value)} MB`;
     case "pages":
     case "requests":
     case "count":
-      return value.toLocaleString();
+      return formatNumber(value);
     case "none":
       return "";
   }
@@ -306,7 +307,7 @@ export function describeEntitlement(
       text:
         limitQuantity === null
           ? "Additional allowance included"
-          : `${limitQuantity.toLocaleString()} additional units per ${periodLabel}`,
+          : `${formatNumber(limitQuantity)} additional units per ${periodLabel}`,
     };
   }
 

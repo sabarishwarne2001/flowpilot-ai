@@ -2,8 +2,12 @@ export interface DocumentSettings {
   id: string;
   user_id: string;
 
-  chunk_size: number;
-  chunk_overlap: number;
+  /** Campaign session 3 (F-299): what chunking reads. */
+  chunk_size_tokens: number;
+  chunk_overlap_pct: number;
+  /** Deprecated, read by nothing; kept in the API for old clients. */
+  chunk_size?: number;
+  chunk_overlap?: number;
 
   embedding_model: string;
 

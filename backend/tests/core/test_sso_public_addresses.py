@@ -128,9 +128,9 @@ def test_documented_identity_settings_take_effect(build, name: str, value: str, 
 
 
 #: Read through getattr() but deliberately not settings: FLOWPILOT_DEPLOYMENT_ID is read
-#: from the process environment first (sovereign licence binding), and SCIM_TOKEN_PEPPER
-#: is F-124 (a separate fix, because changing it invalidates issued SCIM tokens).
-NOT_DECLARED_ON_PURPOSE = {"FLOWPILOT_DEPLOYMENT_ID", "SCIM_TOKEN_PEPPER"}
+#: from the process environment first (sovereign licence binding). (SCIM_TOKEN_PEPPER was
+#: exempted here until F-124 was fixed; nothing reads it now.)
+NOT_DECLARED_ON_PURPOSE = {"FLOWPILOT_DEPLOYMENT_ID"}
 
 _GETATTR = re.compile(
     r"getattr\(\s*(?:settings|_settings\(\)|get_settings\(\)|self\._settings)\s*,\s*[\"']([A-Z][A-Z0-9_]+)[\"']"

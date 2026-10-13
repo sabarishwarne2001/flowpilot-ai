@@ -59,32 +59,51 @@ migrations, integrations, operations and certification.
 ## 3. Session 3: consoles, identity, settings truthfulness, security
 
 ### 3.1 First: make CI trustworthy (it gates both remaining pull requests)
-- [ ] Open this session's pull request early, let CI run, read its annotations, and fix every failing
+- [x] Open this session's pull request early, let CI run, read its annotations, and fix every failing
       or flaky test with the evidence rule. At least one test is flaky: PR #20's last commit and `main`
       after its merge have the identical tree (`cfd2590`), and pytest failed on the first and passed on
       the second. Known candidate: F-256, the late-usage rollup test that fails when it runs at
       minute 59 (reproduction in HANDOFF.md, "Session 1 → later sessions"; the fix is in how rollup
       windows are sealed). Fix it here if it is what turns CI red; otherwise it stays with session 4.
-- [ ] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
+      _Done (session 3): PR #22's full CI (pytest, browser, migrations, frontend, encodings, audits)
+      was green on every complete run of this session (`9d426ebe`, `1b17ec9b`, `155b6f93`); F-256 did
+      not turn it red, so it stays with session 4._
+- [x] A flaky test is a defect: fix the cause (ordering, time, shared state), never retry or skip it.
+      _Session 3: the one intermittent failure (`14-configuration`, profile name, failing on a fresh
+      database and passing on reruns) was a real defect, not chance: F-318, fixed at its cause._
 
 ### 3.2 Carried over from sessions 1 and 2 (HANDOFF.md)
-- [ ] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
+- [x] **Other non-human principals (F-271 follow-up):** confirm partner-portal tokens, SCIM tokens and
       the public gateway's own key check each reach only their own routes (default deny, like N-056).
-- [ ] **Access screens name people:** `NoAccess` and `AccessRestricted` still say "Contact an
+      _Done (session 3), no defect: `backend/tests/security/test_non_human_principals_default_deny.py`.
+      The partner portal has no token of its own (partner members are signed-in people)._
+- [x] **Access screens name people:** `NoAccess` and `AccessRestricted` still say "Contact an
       organization owner"; use `useAskPlanOwners` where the viewer is a member.
-- [ ] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
+      _Done (session 3): `useAccessContacts` names the workspace's administrators or the
+      organization's owners/admins (who can grant access; plan owners are a different question);
+      `frontend/e2e/tests/41-notifications.spec.ts`._
+- [x] **Explicit workspace grant for assignment:** organization owners and admins without one cannot
       be assigned review items or obligations. Decide (likely: effective access, as F-249 did for
       calendar feeds) and implement.
-- [ ] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
+      _Done (session 3): N-063, F-296; revoked people also release what they held._
+- [x] **Per-tenant request limit for browser sessions:** rate limits are per IP and per API key only.
       Decide whether one is needed; implement if so.
-- [ ] **The trial's screens, settings and emails (N-052, N-053):** write the wording of the two trial
+      _Done (session 3): N-061 decided per person, no organization ceiling; F-286 built and proved._
+- [x] **The trial's screens, settings and emails (N-052, N-053):** write the wording of the two trial
       emails (session 3 owns it); check the banner, the dismissible "Continue read-only" notice and
       every console a read-only organization can still use (members, archive, export, billing).
-- [ ] **Platform consoles:** RevOps (10 endpoints only `smoke`), Unit economics, Sovereign and the
+      _Done (session 3): the two emails' wording reviewed and kept (escaped and one-line subjects
+      since F-285); banner and notice in `e2e/tests/33-free-trial.spec.ts`; consoles in
+      `test_free_trial.py` and `test_trial_ended_consoles_stay_usable.py` (F-297 fixed)._
+- [x] **Platform consoles:** RevOps (10 endpoints only `smoke`), Unit economics, Sovereign and the
       audit explorer, as an operator, end to end. Session 1 checked the money numbers, not the consoles.
+      _Done (session 3): RevOps routes driven for their effect in `test_revops_console_live.py` and
+      `26-phase3-consoles` (F-312, F-315); Unit economics, Sovereign and the audit explorer in
+      `47-consoles` (F-311, F-313, F-314, F-316, F-317); the operator's egress test and licence
+      install in `test_console_routes_take_effect_live.py`. `campaign_slices --check 3` exits 0._
 
 ### 3.3 Dead or unbuilt logic found in the 2026-10-12 review
-- [ ] **Billing and limit emails do not exist.** Dunning steps, "payment failed", "subscription
+- [x] **Billing and limit emails do not exist.** Dunning steps, "payment failed", "subscription
       ended" and plan changes reach people only as in-app notifications
       (`dunning_service._notify` → `organization_notification_service.emit`, channel `IN_APP`), so an
       owner who does not sign in never hears that a payment failed. Nothing emails anyone at 80% or
@@ -92,20 +111,29 @@ migrations, integrations, operations and certification.
       invitations, ownership and the trial only. Decide and build: billing contacts and owners
       emailed for dunning and limits, through the existing mail and outbox path, honouring the
       notification preferences below. (Session 4 then render-checks them.)
-- [ ] **Notification preferences do not exist** (only the inbox endpoints). Decide: per-user email
+- [x] **Notification preferences do not exist** (only the inbox endpoints). Decide: per-user email
       preferences for non-essential notifications; security and billing mail always sent.
-- [ ] **Organization-wide "require two-factor"** was deferred to after launch (N-017). Enterprise
+- [x] **Organization-wide "require two-factor"** was deferred to after launch (N-017). Enterprise
       buyers ask for it on the first call; decide again and build it if small.
-- [ ] **`idp_session_sync`** is stored and shown but read by nothing (the identity console says so in
-      a comment). Wire it or remove it.
-- [ ] **Workspace date format, time zone, currency:** `date_format` is read only as a parsing hint by
+      _Done (session 3): N-060, built on every plan; `tests/engines/test_require_two_factor_live.py`,
+      browser journey in `e2e/tests/40-identity-security.spec.ts`._
+- [x] **`idp_session_sync`** is stored and shown but read by nothing (the identity console says so in
+      a comment). Wire it or remove it. _Done (session 3): removed (N-058, migration s3a1)._
+- [x] **Workspace date format, time zone, currency:** `date_format` is read only as a parsing hint by
       procurement matching (ARCH-30 A2); no screen, email, export or feed formats a date with it, and
       the frontend has 87 ad-hoc `toLocale*` / `Intl` calls. Build the one formatting layer the
       session 3 prompt describes.
-- [ ] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
-- [ ] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
-- [ ] **Data residency:** the region setting exists; check whether it decides where anything is
+      _Done (session 3): N-064, F-298; `frontend/src/utils/displayTime.ts` and
+      `backend/app/core/display_format.py`; `npm run check:self` keeps it the only layer._
+- [x] **F-124 (unverified):** the SCIM token HMAC may fall back to a constant. Prove or close.
+      _Done (session 3): proven and fixed (`tests/services/test_scim_token_key_is_secret.py`)._
+- [x] **F-117:** the step-up "Confirm it's you" dialog has no test (`auth.step-up` row).
+      _Done (session 3): `e2e/tests/45-step-up.spec.ts`; it also found F-303._
+- [x] **Data residency:** the region setting exists; check whether it decides where anything is
       stored, and if not, say so truthfully on the screen (N-029).
+      _Done (session 3): it pins export archives and branding files only; the card now says so and
+      lists what stays where the deployment runs (F-301, N-066,
+      `tests/api/test_residency_says_what_it_pins.py`, `e2e/tests/44-data-residency.spec.ts`)._
 
 ### 3.4 Ledger rows (145): `campaign_slices.py --session 3`
 Largest groups: partner portal 14 endpoints + the page and nav item; SCIM 13 endpoints (12 never
@@ -117,10 +145,13 @@ warehouses, BYOK providers, iCal feeds, marketplace signing); jobs `notification
 retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row yet).
 
 ### 3.5 The session 3 prompt's own deliverables
-- [ ] `docs/hardening/SETTINGS-LEDGER.md`: every setting, its reader, its effect, its test.
-- [ ] `docs/hardening/SECURITY-REVIEW.md`: the ASVS level-2 pass, including the IDOR sweep over all
+- [x] `docs/hardening/SETTINGS-LEDGER.md`: every setting, its reader, its effect, its test.
+      _Done (session 3): with F-299 to F-308 fixed on the way; its last section lists what is still
+      unproven._
+- [x] `docs/hardening/SECURITY-REVIEW.md`: the ASVS level-2 pass, including the IDOR sweep over all
       621 operations, SSRF, uploads, tokens, enumeration, browser security, audit and the git-history
       secret scan (`docs/hardening/tools/scan_history_for_secrets.py`).
+      _Done (session 3): 20 defects fixed (F-276 to F-295), no cross-tenant leak in the sweeps._
 
 ## 4. Session 4: experience, performance, operations, certification
 

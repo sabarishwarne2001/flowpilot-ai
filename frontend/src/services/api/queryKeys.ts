@@ -103,6 +103,7 @@ export const profileKeys = {
   all: ["profile"] as const,
   me: () => [...profileKeys.all, "me"] as const,
   avatar: (userId: string) => [...profileKeys.all, "avatar", userId] as const,
+  notificationPreferences: () => [...profileKeys.all, "notification-preferences"] as const,
 };
 
 export const meInvitationKeys = {
@@ -117,6 +118,8 @@ export const organizationKeys = {
   all: (organizationId: string) => organizationScope(organizationId),
   members: (organizationId: string, includeInactive: boolean) =>
     [...organizationScope(organizationId), "members", { includeInactive }] as const,
+  twoFactorPolicy: (organizationId: string) =>
+    [...organizationScope(organizationId), "two-factor-policy"] as const,
 };
 
 export const orgEmailKeys = {
@@ -343,6 +346,8 @@ export const auditKeys = {
     [...auditKeys.all(organizationId), "list", filters] as const,
   detail: (organizationId: string, auditLogId: string) =>
     [...auditKeys.all(organizationId), "detail", auditLogId] as const,
+  vocabulary: (organizationId: string) =>
+    [...auditKeys.all(organizationId), "vocabulary"] as const,
 };
 
 export const verificationKeys = {

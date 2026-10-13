@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 from app.core.slugs import MAX_SLUG_LENGTH, MIN_SLUG_LENGTH
 from app.models.organization import OrganizationStatus
 from app.models.workspace import WorkspaceRole, WorkspaceStatus
+from app.schemas import regional
 
 
 # ============================================================================
@@ -46,6 +47,27 @@ class WorkspaceCreate(BaseModel):
             return stripped
         return v
 
+    # F-320: only values the clocks, the matching engine and the renderer can use.
+    @field_validator("timezone")
+    @classmethod
+    def check_timezone(cls, v: str | None) -> str | None:
+        return regional.check_timezone(v)
+
+    @field_validator("currency")
+    @classmethod
+    def check_currency(cls, v: str | None) -> str | None:
+        return regional.check_currency(v)
+
+    @field_validator("date_format")
+    @classmethod
+    def check_date_format(cls, v: str | None) -> str | None:
+        return regional.check_date_format(v)
+
+    @field_validator("language")
+    @classmethod
+    def check_language(cls, v: str | None) -> str | None:
+        return regional.check_language(v)
+
 
 class WorkspaceUpdate(BaseModel):
     workspace_name: str | None = Field(default=None, min_length=1, max_length=100)
@@ -66,6 +88,27 @@ class WorkspaceUpdate(BaseModel):
                 raise ValueError("Field cannot be empty or contain only whitespace.")
             return stripped
         return v
+
+    # F-320: only values the clocks, the matching engine and the renderer can use.
+    @field_validator("timezone")
+    @classmethod
+    def check_timezone(cls, v: str | None) -> str | None:
+        return regional.check_timezone(v)
+
+    @field_validator("currency")
+    @classmethod
+    def check_currency(cls, v: str | None) -> str | None:
+        return regional.check_currency(v)
+
+    @field_validator("date_format")
+    @classmethod
+    def check_date_format(cls, v: str | None) -> str | None:
+        return regional.check_date_format(v)
+
+    @field_validator("language")
+    @classmethod
+    def check_language(cls, v: str | None) -> str | None:
+        return regional.check_language(v)
 
 
 # ============================================================================
@@ -107,6 +150,10 @@ class WorkspaceSummary(BaseModel):
     status: WorkspaceStatus
     logo_file_id: Optional[UUID] = None
     effective_role: WorkspaceRole
+    #: Campaign session 3 (N-064): what the display layer needs from the workspace. Calendar
+    #: dates read in its date format; its time zone is the clock for people who never set one.
+    timezone: Optional[str] = None
+    date_format: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

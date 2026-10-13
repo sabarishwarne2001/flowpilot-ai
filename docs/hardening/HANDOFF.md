@@ -235,3 +235,87 @@ What later sessions must know:
 - Re-running a session prompt after a cut-off: continue on the open pull request of that session
   (title starts "Campaign session 3" or "Campaign session 4"), not on a new branch from `main`;
   the unticked boxes in CAMPAIGN-MAP.md are where to resume.
+
+## Session 3 → later sessions
+
+Session 3 (organization, identity and governance consoles, settings truthfulness, security,
+notifications and email) fixed F-276 to F-325 (FINDINGS.md, session 3 section; F-324 is recorded
+as **unverified**, below), took decisions N-057 to N-068 (NEEDS-OWNER.md, each
+`DECIDED (campaign session 3)`), wrote `SECURITY-REVIEW.md` and `SETTINGS-LEDGER.md`, and closed
+every session 3 ledger row (`campaign_slices --check 3` exits 0; `branding.domain` is blocked with
+its reason).
+
+**Build on these (all sessions):**
+- **Sign-in policy everywhere (N-057, F-276 to F-278).** "Require single sign-on", the IP
+  allowlist and "require two-factor" (N-060, every plan) are enforced at sign-in, on refresh and on
+  the live review WebSocket. The IP allowlist pins SSO sessions only; for password sessions the
+  console shows it as unavailable. A new way to authenticate must go through the same policy check.
+- **Identity after a downgrade (N-059, F-279 to F-282).** SCIM tokens and SSO provisioning stop
+  when an organization leaves Enterprise, is read-only or archived. `idp_session_sync` is gone (N-058).
+- **Notifications (N-062, F-287 to F-290).** Every notice appears in the app; billing and security
+  notices are always emailed, others per the person's preferences (`/me/notification-preferences`).
+  A new notice goes through `organization_notification_service.emit` with a category; plan-limit
+  alerts at 80% and 100% are the `usage.limit_alerts` job.
+- **Rate limits (N-061, F-286).** Signed-in traffic is limited per person, not per network address.
+- **Egress (F-291).** Every outbound connection goes through `app/core/egress.py`; a structural
+  test fails on a new raw client. An organization's lockdown and rules are enforced (live test).
+- **Audit (F-294, F-295, F-304, N-067).** Identity and webhook changes are audited. The nightly
+  ARCH-07 sweep deletes audit entries per organization by its own retention period (blank keeps
+  them). **On deploy:** the host cron needs `AUDIT_SWEEPER_DATABASE_URL` (the sweeper role, the only
+  one allowed to delete audit rows) and the four host crons installed
+  (`backend/deploy/cron.d/flowpilot-sweepers`: arch07, arch09, identity, invitations).
+- **Display layer (N-064, F-298).** One module per side: `frontend/src/utils/displayTime.ts` and
+  `backend/app/core/display_format.py`. The person's own zone and language win; the open
+  workspace's clock and date format stand in. `npm run check:self` ("one display layer") fails on
+  a stray `Intl.DateTimeFormat`. A change to the workspace clock or date format re-renders the
+  workspace's pages; pages keep their place through the address (the settings page writes
+  `?section=`, F-322).
+- **Workspace regional settings (N-068, F-320, F-321).** `app/schemas/regional.py` checks time zone,
+  currency, date format and language on workspace and organization creation and update. Rows saved
+  before F-320 are not migrated: **check once on deploy** that no workspace holds a value outside
+  those checks (one SQL query; the page accepts any value the browser can use).
+- **Brand colours (N-065, F-300)** reach the sign-in pages and the app on a verified domain
+  (`frontend/src/utils/brandTheme.ts`); **data residency (N-066, F-301)** states what the region
+  pins, kept equal to the code by a structural test.
+- **Rules from events.** An event meant for workflow rules must be written with
+  `outbox_service.emit_trigger` (event and `automation.execute` job together). `emit_internal`
+  alone reaches no rule; that is how the public API's trigger did nothing (F-323).
+- **People, not IDs.** Access screens and the erasure form name people (F-325). Anything new that
+  asks an administrator to choose a person should offer a picker from the member list
+  (`include_inactive=true` for former members), never a raw ID.
+- **Partners.** A partner is created with its first owner (`owner_user_id`, F-310); a
+  revenue-share agreement is ended with `POST /partners/{id}/agreements/{agreement_id}/end` (F-309);
+  a suspended partner's portal is read-only (F-319).
+
+**For session 4:**
+- **F-324 (unverified, verify first).** With multi-agent verification on, a document's "Document
+  processed" rules may be skipped for good when the engine job runs while the verify job is
+  mid-flight: the verify job commits a PENDING record before calling the agents, the engine skips
+  rules while one is pending, and the agents' release event is written with `emit_internal` and no
+  engine job (the human-review path re-queues it; this path does not). Not reproduced in tests; a
+  fix must not run rules twice (runs are de-duplicated per rule and event, not per document).
+  `test_verified_documents_run_their_rules_live.py` pins "exactly once" for the ordering that works.
+- **`/no-access`** is registered and now tested by address, but nothing routes there; the guards
+  handle suspended and archived tenants inline (`16-lifecycle`). Wire it to `TENANT_SUSPENDED` or
+  remove it.
+- **Browser-test re-runs on one database.** On a reused local e2e database, `22` and `23` fail on
+  leftover "rescan" documents from earlier runs; CI (fresh database) passes. Make them re-runnable.
+- **Unproven settings** (SETTINGS-LEDGER "Still unproven"): the assistant's temperature, dispatch
+  tagging off, extraction memory off, SLA at-risk and alerts, agent policy fields, procurement
+  tolerances, conversation retention.
+- **Legal name** reaches the payment provider only when the customer is first created; later edits
+  do not (SETTINGS-LEDGER). Decide: push updates, or say so on the page.
+- **Dead or partial:** the `EmailSettings` table is read by nothing; platform staff have no screen
+  for a partner's status or agreements (API only); the organization identifier cannot be changed
+  anywhere (the page says so, F-308; offering a rename is a product choice with redirects to build).
+- **Consistency nits:** OIDC configuration errors answer 400 where SAML answers 422; Unit economics
+  says "0 events" where suppression would read the same; RevOps does not list promo redemptions;
+  the Developer "Issue key" dialog has no `role="dialog"`; BYOK "Retire" has no confirmation.
+- **`branding.domain` (blocked):** the claim/verify screens need a real DNS zone; worth one check on
+  a staging domain before launch. Every route they call is live-tested.
+- **Docs:** CONFIGURATION.md drifts from the settings when regenerated; the Tailwind 4 move and the
+  main chunk's size are still in the map.
+- **Running tests locally:** never run two pytest sessions at once (the conftest truncates the
+  test database at start); after a backend change restart the e2e API (`kill` the pid in
+  `/tmp/flowpilot-e2e-logs/pids/api.pid`, then `E2E_LLM=1 frontend/e2e/scripts/start-stack.sh`)
+  before running browser specs.

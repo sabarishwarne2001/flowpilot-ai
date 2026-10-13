@@ -13,29 +13,25 @@ Assignment is the one fact the three sources cannot hold. None of them has an
 assignee column, adding one to each would put the same concept in three places
 with three migrations, and the hub needs to filter and sort on it in one query.
 
-THE COMPOSITE FOREIGN KEY IS THE ACCESS SWEEP
-=============================================
+WHO MAY HOLD AN ITEM (campaign session 3, F-296)
+================================================
 
-`(assignee_user_id, workspace_id)` references
-`workspace_members (user_id, workspace_id)` — the pair
-`uq_user_workspace_membership` already makes unique — with ON DELETE CASCADE.
+This section used to describe a composite foreign key onto
+`workspace_members (user_id, workspace_id)` as "the access sweep": delete the
+membership row and the assignment goes with it. It never swept anything:
+revoking a grant marks the row inactive and deletes nothing, so a revoked
+person kept their items (and stayed in the assignee list), while the
+organization's owners and admins, who administer every workspace without a
+stored grant, could not be assigned at all.
 
-That is the answer to "what happens when an assignee loses workspace access":
-the membership row is deleted, and the assignment goes with it, in the same
-statement, with no job to schedule and nothing to remember. It is a sweep
-performed by the database.
-
-The alternative, a query-time filter, was rejected. A filtered-out assignment
-is still a row asserting that a person owns an item they cannot open. Every
-report, export and support query that reads the table directly would then
-disagree with the hub about who owns what, and the disagreement would only
-surface when it mattered.
-
-The same constraint carries a second invariant for free: an assignee must be a
-member of the workspace the item belongs to. A CHECK cannot express that — it
-sees one row and cannot consult `workspace_members` — which is exactly the
-reasoning ARCH-38 recorded when it gave `work_items` its
-`(id, workspace_id)` unique key.
+Who may hold an item is now EFFECTIVE access, the hub's own rule: a contributor
+or administrator of the workspace, organization owners and admins included
+(`review.resolution.can_hold_review_items`, checked on every assignment). The
+sweep is explicit: every path that takes access away (a grant revoked or
+lowered, a membership deactivated or lowered, someone leaving, directory
+deprovisioning) calls `release_unreachable_assignments` in its own
+transaction, so a row never asserts that someone owns an item they cannot
+open. The key onto `users` keeps the cascade for a deleted account.
 
 WHY `item_id` HAS NO FOREIGN KEY
 ================================
@@ -104,7 +100,7 @@ _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)
 
 
 class ReviewAssignment(Base, UUIDMixin):
-    """One review item owned by one workspace member."""
+    """One review item held by one person who can work it."""
 
     __tablename__ = "review_assignments"
 
@@ -132,10 +128,12 @@ class ReviewAssignment(Base, UUIDMixin):
         nullable=False,
     )
 
-    #: No single-column FK to users. The composite key onto workspace_members
-    #: is stronger: it asserts membership, not merely existence.
+    #: Campaign session 3 (F-296, s3a5): a key onto the user, not the stored workspace
+    #: grant. Who may hold an item is EFFECTIVE access (organization owners and admins
+    #: included), checked by `review.resolution.can_hold_review_items`; items go back to
+    #: the queue when access ends (`release_unreachable_assignments`).
     assignee_user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), nullable=False
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     assigned_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(

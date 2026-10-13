@@ -201,6 +201,24 @@ def assert_email_on_verified_domain(db, *, config: EnterpriseIdpConfig,
     return domain_row
 
 
+def _assert_organization_may_add_people(db, *, config: EnterpriseIdpConfig) -> None:
+    from app.api import capability_gate
+    from app.core import entitlements
+    from app.models.organization import Organization, OrganizationStatus
+
+    organization = db.get(Organization, config.organization_id)
+    if organization is None or organization.status != OrganizationStatus.ACTIVE:
+        raise IdentityRefused(
+            "the organization is archived or suspended; nobody is provisioned into it")
+    if not capability_gate.has_capability(
+        db, organization_id=config.organization_id,
+        capability_key=entitlements.ENTERPRISE_IDENTITY_CAPABILITY,
+    ):
+        raise IdentityRefused(
+            "the organization's plan no longer includes enterprise identity; "
+            "nobody new is provisioned through its identity provider")
+
+
 def provision_or_link(
     db,
     *,
@@ -257,6 +275,10 @@ def provision_or_link(
                 f"membership for {email} is {membership[1]}; SSO does not reactivate a membership an administrator suspended")
 
     # 3. New Seat Provisioning
+    # Campaign session 3 (F-282). Single sign-on and SCIM add nobody to an organization that is
+    # archived or suspended, or whose plan no longer includes enterprise identity (it left
+    # Enterprise). People already in the organization still sign in: nothing is added for them.
+    _assert_organization_may_add_people(db, config=config)
     if not domain_row.provisioning_allowed:
         raise IdentityRefused(
             f"domain {domain_row.domain} is {domain_row.status}; new user provisioning is suspended",
