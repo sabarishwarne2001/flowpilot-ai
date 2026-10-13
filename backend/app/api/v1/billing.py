@@ -195,14 +195,10 @@ def list_plans(
         # books, plus the tier version's own price when no book covers it.
         from app.schemas.usage import PlanPriceOption
 
+        # Campaign session 4: the public price list reads the same function.
         options = [PlanPriceOption(interval=p.interval, currency=p.currency, unit_amount=p.unit_amount_minor,
                                    price_id=p.gateway_price_id, source=p.source)
-                   for p in book_prices if p.tier_key == tier.key]
-        if tier.unit_amount_micros is not None and not any(
-                (o.interval, o.currency) == (tier.billing_interval or "month", tier.currency or "USD") for o in options):
-            options.append(PlanPriceOption(interval=tier.billing_interval or "month", currency=tier.currency or "USD",
-                                           unit_amount=tier.unit_amount_micros // 10_000,
-                                           price_id=tier.gateway_price_id, source="TIER"))
+                   for p in plan_catalog.prices_for_tier(tier, book_prices)]
 
         plans.append(
             PlanOption(
