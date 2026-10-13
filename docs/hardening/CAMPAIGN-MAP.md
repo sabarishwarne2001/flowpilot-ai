@@ -166,8 +166,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       _Done (session 4): `test_item_actions_assertions_cases_live.py`,
       `test_item_actions_more_engines_live.py`, `test_erp_delivery_through_the_mock_target_live.py`;
       found and fixed F-333 to F-337 on the way._
-- [ ] **Live collaborative review** (`WEBSOCKET …/review/collab/live`, never tested): presence, two
+- [x] **Live collaborative review** (`WEBSOCKET …/review/collab/live`, never tested): presence, two
       reviewers editing one field, a reviewer losing access mid-session.
+      _Done (session 4): `backend/tests/engines/test_live_collaborative_review_live.py`; found and fixed
+      F-338 (a removed reviewer's lock outlived their access by up to ninety seconds)._
 - [ ] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
       (Entities, Entity 360, packet splits, corroboration runs, obligations, ERP postings and targets,
       process proposals, three-way comparison, assistant canvas, notifications, legacy redirects).
