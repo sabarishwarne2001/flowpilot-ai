@@ -304,8 +304,9 @@ def seed(db) -> dict[str, Any]:
         OrganizationStatus,
     )
     from app.models.user import User
+    from app.models.ai_settings import AISettings
     from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
-    from app.services import quota_service
+    from app.services import quota_service, workspace_service
     from sqlalchemy import select
 
     _ensure_catalog(db)
@@ -353,6 +354,12 @@ def seed(db) -> dict[str, Any]:
                 )
                 db.add(workspace)
                 db.flush()
+            # Its AI and document settings, as every workspace the product makes has (F-260).
+            # Without them its first questions were refused until the worker read an upload.
+            if db.execute(
+                select(AISettings.id).where(AISettings.workspace_id == workspace.id)
+            ).first() is None:
+                workspace_service.add_default_settings(db, workspace_id=workspace.id, actor_id=None)
             workspaces.append(workspace)
 
         for spec in tenant.users:

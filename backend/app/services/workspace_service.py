@@ -41,7 +41,7 @@ from app.schemas.document_settings import DocumentSettingsCreate
 logger = logging.getLogger("app.services.workspace_service")
 
 
-def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid.UUID | None) -> None:
     """A new workspace's AI and document settings, inside the caller's transaction.
 
     Every workspace needs both before its first question or upload: the assistant,
