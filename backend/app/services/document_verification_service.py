@@ -406,7 +406,7 @@ def emit_outcome(
         else "work_item.verification_disagreed"
     )
 
-    return outbox_service.emit_internal(
+    event = outbox_service.emit_internal(
         db,
         organization_id=verification.organization_id,
         workspace_id=verification.workspace_id,
@@ -420,6 +420,23 @@ def emit_outcome(
         },
         caused_by=caused_by,
     )
+    if releasing:
+        # Campaign session 4 (F-324). A release must reach the engine: rules held while the
+        # verification was open run now. Before, only a person's review queued this job, so when
+        # the agents agreed while the engine job had already skipped the held rules, nothing ever
+        # ran them. The engine runs a "Document processed" rule once per document whichever of
+        # the two events reaches it first (`automation._already_ran_for_document`), and the key
+        # is the one the review paths use, so queuing it from both places is one job.
+        from app.services import job_service
+
+        job_service.enqueue(
+            db,
+            job_type=outbox_service.AUTOMATION_JOB_TYPE,
+            organization_id=verification.organization_id,
+            payload={"outbox_event_id": str(event.id)},
+            idempotency_key=f"automation:execute:{event.id}",
+        )
+    return event
 
 
 def resolve(
