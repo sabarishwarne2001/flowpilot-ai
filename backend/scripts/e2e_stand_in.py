@@ -59,6 +59,25 @@ NOW = datetime.now(timezone.utc)
 STATE = Path(os.environ.get("E2E_LOG_DIR", "/tmp")) / "e2e-stand-in-gateway.json"
 
 
+_LOCK: Any = None
+
+
+def _hold_state_lock() -> None:
+    """Hold the stand-in's lock until this process exits (campaign session 4).
+
+    The browser suite runs journeys in parallel workers, each calling this script. A command reads
+    the shared state, changes it and writes it back; two at once lost one's change (journey 4's
+    identity provider key vanished under another journey's subscription in CI). Each command is a
+    short process, so holding the lock to the end covers its whole read-change-write.
+    """
+    import fcntl
+
+    global _LOCK
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    _LOCK = open(STATE.with_suffix(".lock"), "w")  # noqa: SIM115 - held until the process exits
+    fcntl.flock(_LOCK, fcntl.LOCK_EX)
+
+
 def _load() -> dict[str, Any]:
     try:
         return json.loads(STATE.read_text())
@@ -242,6 +261,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--email", help="saml-response: who signs in")
     parser.add_argument("--saml-request", help="saml-response: the SAMLRequest FlowPilot sent (redirect binding)")
     args = parser.parse_args(argv)
+
+    if args.command != "run-job":  # run-job waits on the worker and touches no shared state
+        _hold_state_lock()
 
     if args.command == "dns-publish":
         # The customer publishes the TXT record at their DNS provider; the journeys' DNS server

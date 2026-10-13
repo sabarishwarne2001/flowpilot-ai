@@ -104,3 +104,24 @@ def test_the_clock_stand_in_ends_a_trial(engines: Engines, stand_in) -> None:
     stand_in("trial-ends")
     engines.db.refresh(engines.tenant.organization)
     assert engines.tenant.organization.trial_ends_at < datetime.now(timezone.utc)
+
+
+def test_commands_run_at_once_never_lose_each_others_state(tmp_path) -> None:
+    # Campaign session 4: the browser suite's parallel workers call the stand-in at the same time.
+    # Each command read the shared state, changed it and wrote it back, so one could erase another's
+    # change (journey 4's identity provider key vanished in CI: 5 of 10 survived ten at once). Each
+    # command now holds a lock for its whole read-change-write.
+    import os
+    import subprocess
+
+    backend = Path(__file__).resolve().parents[2]
+    env = {**os.environ, "E2E_LOG_DIR": str(tmp_path)}
+    runs = [
+        subprocess.Popen([sys.executable, "scripts/e2e_stand_in.py", "saml-idp", "--domain", f"race-{n}.example"],
+                         cwd=backend, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        for n in range(10)
+    ]
+    for run in runs:
+        assert run.wait(timeout=120) == 0, run.stderr.read().decode()[-1000:] if run.stderr else ""
+    state = json.loads((tmp_path / "e2e-stand-in-gateway.json").read_text())
+    assert sorted(state["identity_providers"]) == sorted(f"race-{n}.example" for n in range(10))
